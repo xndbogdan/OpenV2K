@@ -1,0 +1,10 @@
+[package]
+name = "v2k-core"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+description = "OpenV2K — core types and error handling"
+
+[dependencies]
+thiserror = "2"

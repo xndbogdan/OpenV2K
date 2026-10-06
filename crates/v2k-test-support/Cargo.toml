@@ -1,0 +1,10 @@
+[package]
+name = "v2k-test-support"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+v2k-test-macros = { path = "../v2k-test-macros" }

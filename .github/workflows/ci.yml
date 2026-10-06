@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+
+      - name: Put MinGW-w64 on PATH
+        shell: pwsh
+        run: Add-Content $env:GITHUB_PATH "${{ runner.temp }}\msys64\mingw64\bin"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+          components: rustfmt
+
+      - name: Select the GNU toolchain
+        shell: pwsh
+        run: |
+          rustup default stable-x86_64-pc-windows-gnu
+          rustup component add rustfmt
+          rustc -vV
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: RE progress numbers are current
+        shell: pwsh
+        run: ./scripts/progress.ps1 -Check
+
+      - name: Optional retail test policy
+        shell: pwsh
+        run: ./scripts/test-retail-policy.ps1
+
+      # Retail-data tests report as ignored: CI never has original game files.
+      - name: Tests
+        run: cargo test --workspace

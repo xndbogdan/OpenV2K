@@ -1,0 +1,4 @@
+# Manual per-function status overrides for scripts/progress.ps1.
+# status: implemented | approximated | documented | not-needed
+# not-needed removes a game function from the progress denominator.
+address,status,note

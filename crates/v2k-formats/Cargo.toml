@@ -1,0 +1,16 @@
+[package]
+name = "v2k-formats"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+description = "OpenV2K — OVL parser and section decoders"
+
+[dependencies]
+v2k-core = { path = "../v2k-core" }
+
+[dev-dependencies]
+v2k-test-support = { path = "../v2k-test-support" }
+
+[build-dependencies]
+v2k-test-support = { path = "../v2k-test-support" }

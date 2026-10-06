@@ -1,0 +1,22 @@
+[package]
+name = "v2k-viewer"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+description = "OpenV2K — runtime-backed asset workbench and exporters"
+
+[dependencies]
+v2k-extract = { path = "../v2k-extract" }
+v2k-formats = { path = "../v2k-formats" }
+v2k-game = { path = "../v2k-game" }
+v2k-render = { path = "../v2k-render" }
+sdl2 = "0.38"
+clap = { version = "4", features = ["derive"] }
+png = "0.17"
+
+[dev-dependencies]
+v2k-test-support = { path = "../v2k-test-support" }
+
+[build-dependencies]
+v2k-test-support = { path = "../v2k-test-support" }

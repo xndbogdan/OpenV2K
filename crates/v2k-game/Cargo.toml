@@ -1,0 +1,29 @@
+[package]
+name = "v2k-game"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+description = "OpenV2K — unified level loader and game state"
+
+[dependencies]
+v2k-core = { path = "../v2k-core" }
+v2k-formats = { path = "../v2k-formats" }
+v2k-render = { path = "../v2k-render" }
+sdl2 = "0.38"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+# The setup window must start even when the EXE is alone in an empty folder.
+# Avoid a Windows loader dependency on SDL2.dll before our launcher can run.
+[target.'cfg(windows)'.dependencies]
+sdl2 = { version = "0.38", features = ["static-link", "bundled"] }
+png = "0.17.16"
+
+[dev-dependencies]
+v2k-test-support = { path = "../v2k-test-support" }
+
+[build-dependencies]
+v2k-test-support = { path = "../v2k-test-support" }

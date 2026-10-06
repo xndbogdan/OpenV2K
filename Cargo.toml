@@ -1,0 +1,13 @@
+[workspace]
+members = ["crates/v2k-core", "crates/v2k-extract", "crates/v2k-formats", "crates/v2k-game", "crates/v2k-inspect", "crates/v2k-render", "crates/v2k-viewer", "crates/v2k-test-support", "crates/v2k-test-macros"]
+resolver = "2"
+default-members = ["crates/v2k-game"]
+
+[workspace.package]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/xndbogdan/OpenV2K"
+
+# Full test DWARF exceeds the Windows PE image limit in the game unit harness.
+# Keep file/line backtraces without emitting the oversized type/local debug data.
+[profile.test]
+debug = "line-tables-only"

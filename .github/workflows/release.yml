@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-make
+
+      - name: Put MinGW-w64 on PATH
+        shell: pwsh
+        run: Add-Content $env:GITHUB_PATH "${{ runner.temp }}\msys64\mingw64\bin"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+
+      - name: Select the GNU toolchain
+        shell: pwsh
+        run: rustup default stable-x86_64-pc-windows-gnu
+
+      - name: Build
+        run: cargo build --release -p v2k-game
+
+      - name: Third-party licenses
+        shell: pwsh
+        run: |
+          cargo install cargo-about --locked
+          cargo about generate --fail -o THIRD_PARTY_LICENSES.html about.hbs
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $name = "OpenV2K-${{ github.ref_name }}-windows-x64"
+          New-Item -ItemType Directory $name | Out-Null
+          Copy-Item target/release/v2k-game.exe "$name/OpenV2K.exe"
+          Copy-Item README.md, LAUNCHER.md, LICENSE-MIT, LICENSE-APACHE, THIRD_PARTY_LICENSES.html $name
+          Compress-Archive -Path $name -DestinationPath "$name.zip"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: OpenV2K-*.zip
+          draft: true
+          generate_release_notes: true

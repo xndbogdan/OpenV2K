@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+/.sdl2/
+
+# Scratch output (visual smoke captures, logs)
+/.tmp/
+
+# Private original game data: only the setup notes are tracked.
+/retail/*
+!/retail/README.md
+/demo/*
+!/demo/README.md
+
+# Generated v2k-extract output
+/extracted/
+
+# Local runtime data when running from the repository root
+/Overlay/
+/music/
+/cdaudio/
+*.AVI
+*.avi
+/config.json
+/settings.json
+/port-config.json
+/saves/
+/PRELOAD.DAT

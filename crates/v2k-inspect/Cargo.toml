@@ -1,0 +1,16 @@
+[package]
+name = "v2k-inspect"
+version = "0.1.0"
+edition = "2021"
+license.workspace = true
+repository.workspace = true
+description = "Read-only runtime reverse-engineering probes for retail V2000"
+
+[[bin]]
+name = "v2k-original-inspect"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,0 +1,3624 @@
+{
+  "0x4c1198": {
+    "va": 4985240,
+    "items_va": 5026296,
+    "flags": 17,
+    "cb0c": 4444368,
+    "cb10": 4444672,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          9
+        ],
+        "count": 9
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 4,
+        "draw_cb": 4444320,
+        "string_id": 21,
+        "aux": 0,
+        "select_cb": 4443472,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Host session on this machine"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 0,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Resolution"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 1,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 1,
+        "arg2": 0,
+        "label": "320x240"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 2,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 2,
+        "arg2": 0,
+        "label": "640x480"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 3,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 3,
+        "arg2": 0,
+        "label": "800x600"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 4,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 4,
+        "arg2": 0,
+        "label": "1024x768"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 5,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 5,
+        "arg2": 0,
+        "label": "Display"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 6,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 6,
+        "arg2": 0,
+        "label": "In a Window"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443952,
+        "string_id": 7,
+        "aux": 0,
+        "select_cb": 4443392,
+        "arg1": 7,
+        "arg2": 0,
+        "label": "Full Screen"
+      }
+    ]
+  },
+  "0x4c11d0": {
+    "va": 4985296,
+    "items_va": 5026552,
+    "flags": 113,
+    "cb0c": 4444384,
+    "cb10": 4444672,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          6
+        ],
+        "count": 6
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 4,
+        "draw_cb": 4443888,
+        "string_id": 0,
+        "aux": 0,
+        "select_cb": 4443824,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Resolution"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443888,
+        "string_id": 1,
+        "aux": 0,
+        "select_cb": 4443824,
+        "arg1": 1,
+        "arg2": 0,
+        "label": "320x240"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443888,
+        "string_id": 2,
+        "aux": 0,
+        "select_cb": 4443824,
+        "arg1": 2,
+        "arg2": 0,
+        "label": "640x480"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443888,
+        "string_id": 3,
+        "aux": 0,
+        "select_cb": 4443824,
+        "arg1": 3,
+        "arg2": 0,
+        "label": "800x600"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443888,
+        "string_id": 4,
+        "aux": 0,
+        "select_cb": 4443824,
+        "arg1": 4,
+        "arg2": 0,
+        "label": "1024x768"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4443888,
+        "string_id": 5,
+        "aux": 0,
+        "select_cb": 4443824,
+        "arg1": 5,
+        "arg2": 0,
+        "label": "Display"
+      }
+    ]
+  },
+  "0x4d0ee8": {
+    "va": 5050088,
+    "items_va": 5049808,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          24,
+          3,
+          4,
+          5,
+          10
+        ],
+        "count": 10
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          8,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 1,
+        "draw_cb": 4530208,
+        "string_id": 0,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Resolution"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 1,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "320x240"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 2,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "640x480"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 3,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "800x600"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 4,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "1024x768"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 5,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Display"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 6,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "In a Window"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 7,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Full Screen"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 8,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Rendering"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4530208,
+        "string_id": 9,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Software"
+      }
+    ]
+  },
+  "0x4d0fe8": {
+    "va": 5050344,
+    "items_va": 5050144,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          7
+        ],
+        "count": 7
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          13,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 8,
+        "draw_cb": 4525696,
+        "string_id": 138,
+        "aux": 5047520,
+        "select_cb": 4525424,
+        "arg1": 36,
+        "arg2": 5047520,
+        "label": "Skip to %s World"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4436960,
+        "string_id": 135,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5000008,
+        "label": "Weapons Menu"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4436960,
+        "string_id": 136,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5000288,
+        "label": "Repairs Menu"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4436960,
+        "string_id": 137,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5000488,
+        "label": "Cargo Menu"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4436960,
+        "string_id": 145,
+        "aux": 0,
+        "select_cb": 4547232,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Complete this World"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4436960,
+        "string_id": 146,
+        "aux": 0,
+        "select_cb": 4547328,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Complete All Worlds"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4436960,
+        "string_id": 134,
+        "aux": 0,
+        "select_cb": 4547248,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Disable All Cheats"
+      }
+    ]
+  },
+  "0x4d1090": {
+    "va": 5050512,
+    "items_va": 5050400,
+    "flags": 57,
+    "cb0c": 0,
+    "cb10": 4525664,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          4
+        ],
+        "count": 4
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 37,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": ""
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4525808,
+        "string_id": 62,
+        "aux": 0,
+        "select_cb": 4438128,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Save Game"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 123,
+        "aux": 0,
+        "select_cb": 4546928,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Continue"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 124,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 4985440,
+        "label": "Options"
+      }
+    ]
+  },
+  "0x4d1190": {
+    "va": 5050768,
+    "items_va": 5050568,
+    "flags": 57,
+    "cb0c": 0,
+    "cb10": 4525632,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          7
+        ],
+        "count": 7
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 123,
+        "aux": 0,
+        "select_cb": 4546928,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Continue"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 124,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 4985440,
+        "label": "Options"
+      },
+      {
+        "flags": 2,
+        "draw_cb": 4436960,
+        "string_id": 96,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5050088,
+        "label": "Mission Briefing"
+      },
+      {
+        "flags": 2,
+        "draw_cb": 4436960,
+        "string_id": 109,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5001136,
+        "label": "Player Status"
+      },
+      {
+        "flags": 6,
+        "draw_cb": 4436960,
+        "string_id": 144,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5000824,
+        "label": "Replay this World"
+      },
+      {
+        "flags": 8,
+        "draw_cb": 4436960,
+        "string_id": 133,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5050344,
+        "label": "Cheats"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 125,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 5000656,
+        "label": "Quit"
+      }
+    ]
+  },
+  "0x4c4b48": {
+    "va": 5000008,
+    "items_va": 4999280,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          26
+        ],
+        "count": 26
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 270,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255762,
+        "arg2": 0,
+        "label": "Chain Gun (Infinite Ammo)"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 253,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255757,
+        "arg2": 0,
+        "label": "Plasma Gun (Green)"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 252,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255758,
+        "arg2": 0,
+        "label": "Plasma Gun (Red)"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 254,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255756,
+        "arg2": 0,
+        "label": "Plasma Gun (Blue)"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 261,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255766,
+        "arg2": 0,
+        "label": "Flame Thrower"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 262,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255754,
+        "arg2": 0,
+        "label": "Large Flame Thrower"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 260,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255746,
+        "arg2": 0,
+        "label": "Flares"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 257,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255749,
+        "arg2": 0,
+        "label": "Rockets"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 256,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255761,
+        "arg2": 0,
+        "label": "Guided Missiles"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 259,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255747,
+        "arg2": 0,
+        "label": "Grenades"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 258,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255748,
+        "arg2": 0,
+        "label": "Depth Charges"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 263,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255750,
+        "arg2": 0,
+        "label": "Smart Bombs"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 264,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255763,
+        "arg2": 0,
+        "label": "Napalm Bombs"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 265,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 2569,
+        "arg2": 0,
+        "label": "Proximity Mines"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 255,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255771,
+        "arg2": 0,
+        "label": "Possession Ray"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 268,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255760,
+        "arg2": 0,
+        "label": "Seedpods"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 267,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255751,
+        "arg2": 0,
+        "label": "Antidote"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 266,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255752,
+        "arg2": 0,
+        "label": "Virus"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 283,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255773,
+        "arg2": 0,
+        "label": "Antidote Bomb"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 282,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255772,
+        "arg2": 0,
+        "label": "Virus Bomb"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 269,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255770,
+        "arg2": 0,
+        "label": "Water Cannon"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 277,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 1337,
+        "arg2": 0,
+        "label": "Megablast"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 280,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 16440,
+        "arg2": 0,
+        "label": "Autobot"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 281,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 16184,
+        "arg2": 0,
+        "label": "Defender Ball"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 284,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 255775,
+        "arg2": 0,
+        "label": "Aquatic Plasma Vortex"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 285,
+        "aux": 0,
+        "select_cb": 4546640,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "All weapons"
+      }
+    ]
+  },
+  "0x4c4c60": {
+    "va": 5000288,
+    "items_va": 5000064,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          8
+        ],
+        "count": 8
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 273,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 310,
+        "arg2": 0,
+        "label": "Extra Life"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 276,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 25600051,
+        "arg2": 0,
+        "label": "Extra Fuel"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 272,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 25600053,
+        "arg2": 0,
+        "label": "Shields"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 278,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 25600055,
+        "arg2": 0,
+        "label": "Repairs"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 271,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 60,
+        "arg2": 0,
+        "label": "Targetter"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 274,
+        "aux": 0,
+        "select_cb": 4546512,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Larger Cargo Capacity"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 279,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 63,
+        "arg2": 0,
+        "label": "Level Trophy"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 275,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 62,
+        "arg2": 0,
+        "label": "Turbo Thrusters"
+      }
+    ]
+  },
+  "0x4c4d28": {
+    "va": 5000488,
+    "items_va": 5000344,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          5
+        ],
+        "count": 5
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          13,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 139,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 17464,
+        "arg2": 0,
+        "label": "Add weight to hold"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 140,
+        "aux": 0,
+        "select_cb": 4546544,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Add native to hold"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 141,
+        "aux": 0,
+        "select_cb": 4546592,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Add scientist to hold"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 142,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 21304,
+        "arg2": 0,
+        "label": "Add mini radar"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 143,
+        "aux": 0,
+        "select_cb": 4546384,
+        "arg1": 19000,
+        "arg2": 0,
+        "label": "Add remote beam-out"
+      }
+    ]
+  },
+  "0x4c1260": {
+    "va": 4985440,
+    "items_va": 4985352,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          3
+        ],
+        "count": 3
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 92,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 4986064,
+        "label": "Display"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 94,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 4985584,
+        "label": "Sounds"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 95,
+        "aux": 0,
+        "select_cb": 4438048,
+        "arg1": 0,
+        "arg2": 4985808,
+        "label": "Controls"
+      }
+    ]
+  },
+  "0x4c4fb0": {
+    "va": 5001136,
+    "items_va": 5000880,
+    "flags": 81,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          9
+        ],
+        "count": 9
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          13,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 111,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Rank"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 110,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Lives"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 112,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Trophies collected"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 117,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Worlds Visited"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 118,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Worlds Rescued"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 116,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Damage"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 114,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Shield Strength"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 115,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Fuel"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4526272,
+        "string_id": 113,
+        "aux": 0,
+        "select_cb": 4442912,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Megablasts"
+      }
+    ]
+  },
+  "0x4c4e78": {
+    "va": 5000824,
+    "items_va": 5000712,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          4,
+          4
+        ],
+        "count": 4
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 144,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Replay this World"
+      },
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 37,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": ""
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 130,
+        "aux": 0,
+        "select_cb": 4546976,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Yes"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 131,
+        "aux": 0,
+        "select_cb": 4546928,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "No"
+      }
+    ]
+  },
+  "0x4c4dd0": {
+    "va": 5000656,
+    "items_va": 5000544,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          4,
+          4
+        ],
+        "count": 4
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          13,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 129,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Quit Game?"
+      },
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 37,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": ""
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 130,
+        "aux": 0,
+        "select_cb": 4547392,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Yes"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 131,
+        "aux": 0,
+        "select_cb": 4546928,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "No"
+      }
+    ]
+  },
+  "0x4c14d0": {
+    "va": 4986064,
+    "items_va": 4985864,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          6
+        ],
+        "count": 6
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          13,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4437584,
+        "string_id": 8,
+        "aux": 5026796,
+        "select_cb": 4443248,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Rendering"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4437584,
+        "string_id": 0,
+        "aux": 5026792,
+        "select_cb": 4443120,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Resolution"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437584,
+        "string_id": 11,
+        "aux": 5026800,
+        "select_cb": 4443296,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Bilinear Filtering"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437584,
+        "string_id": 5,
+        "aux": 5026804,
+        "select_cb": 4443344,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Display"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437648,
+        "string_id": 655462,
+        "aux": 5026824,
+        "select_cb": 4437952,
+        "arg1": 10,
+        "arg2": 5026824,
+        "label": "Active Camera [aux=10]"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437584,
+        "string_id": 106,
+        "aux": 5026828,
+        "select_cb": 4437952,
+        "arg1": 1,
+        "arg2": 5026828,
+        "label": "Targetter"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 316,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:screenop>"
+      }
+    ]
+  },
+  "0x4c12f0": {
+    "va": 4985584,
+    "items_va": 4985496,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          2,
+          2
+        ],
+        "count": 2
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4437824,
+        "string_id": 917550,
+        "aux": 5026776,
+        "select_cb": 4442960,
+        "arg1": 15,
+        "arg2": 5026776,
+        "label": "Sound [aux=14]"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437824,
+        "string_id": 917553,
+        "aux": 5026780,
+        "select_cb": 4437952,
+        "arg1": 15,
+        "arg2": 5026780,
+        "label": "Ambient [aux=14]"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 318,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:sfxopt>"
+      }
+    ]
+  },
+  "0x4c13d0": {
+    "va": 4985808,
+    "items_va": 4985640,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          5
+        ],
+        "count": 5
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4437584,
+        "string_id": 55,
+        "aux": 5026816,
+        "select_cb": 4437952,
+        "arg1": 1,
+        "arg2": 5026816,
+        "label": "Absolute Mode"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437648,
+        "string_id": 983098,
+        "aux": 5026820,
+        "select_cb": 4438208,
+        "arg1": 15,
+        "arg2": 5026820,
+        "label": "Sensitivity [aux=15]"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437584,
+        "string_id": 52,
+        "aux": 5026784,
+        "select_cb": 4437952,
+        "arg1": 1,
+        "arg2": 5026784,
+        "label": "Joystick"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4437824,
+        "string_id": 917546,
+        "aux": 5026812,
+        "select_cb": 4437952,
+        "arg1": 15,
+        "arg2": 5026812,
+        "label": "Self Righting [aux=14]"
+      },
+      {
+        "flags": 0,
+        "draw_cb": 4437824,
+        "string_id": 917594,
+        "aux": 5026840,
+        "select_cb": 4437952,
+        "arg1": 15,
+        "arg2": 5026840,
+        "label": "Vibration function [aux=14]"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 322,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:psjoypad>"
+      }
+    ]
+  },
+  "0x4c0cf8": {
+    "va": 4984056,
+    "items_va": 4983856,
+    "flags": 196,
+    "cb0c": 4378320,
+    "cb10": 4378528,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          3,
+          0,
+          4,
+          7,
+          7
+        ],
+        "count": 7
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 4,
+        "draw_cb": 4437008,
+        "string_id": 41,
+        "aux": 26,
+        "select_cb": 4373488,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:player4>"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 28,
+        "select_cb": 4373856,
+        "arg1": 0,
+        "arg2": 4986688,
+        "label": "<prop:slopt>"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4437008,
+        "string_id": 316,
+        "aux": 27,
+        "select_cb": 4373856,
+        "arg1": 0,
+        "arg2": 4986064,
+        "label": "<prop:screenop>"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4437008,
+        "string_id": 318,
+        "aux": 30,
+        "select_cb": 4373856,
+        "arg1": 0,
+        "arg2": 4985584,
+        "label": "<prop:sfxopt>"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4437008,
+        "string_id": 322,
+        "aux": 31,
+        "select_cb": 4373856,
+        "arg1": 0,
+        "arg2": 4985808,
+        "label": "<prop:psjoypad>"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4437008,
+        "string_id": 75,
+        "aux": 66,
+        "select_cb": 4378640,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:optexit>"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4437008,
+        "string_id": 323,
+        "aux": 29,
+        "select_cb": 4373856,
+        "arg1": 0,
+        "arg2": 4985296,
+        "label": "<prop:multipc>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c10f0": {
+    "va": 4985072,
+    "items_va": 4985016,
+    "flags": 17,
+    "cb0c": 4444784,
+    "cb10": 4444672,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          2
+        ],
+        "count": 2
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          12,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 12,
+        "draw_cb": 4436960,
+        "string_id": 22,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Waiting for host to start game"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4444688,
+        "string_id": 23,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Please Wait"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1160": {
+    "va": 4985184,
+    "items_va": 4985128,
+    "flags": 17,
+    "cb0c": 4444800,
+    "cb10": 4444672,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          2
+        ],
+        "count": 2
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 12,
+        "draw_cb": 4436960,
+        "string_id": 22,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Waiting for host to start game"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4436960,
+        "string_id": 23,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Please Wait"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1598": {
+    "va": 4986264,
+    "items_va": 4986120,
+    "flags": 17,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          4,
+          4
+        ],
+        "count": 4
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          13,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 67,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Overwrite game?"
+      },
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 37,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": ""
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 76,
+        "aux": 0,
+        "select_cb": 4438176,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Yes"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 77,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "No"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1660": {
+    "va": 4986464,
+    "items_va": 4986320,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          4,
+          4
+        ],
+        "count": 4
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 68,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Memory Card in Memory Card Slot 1 is unformatted. Format?"
+      },
+      {
+        "flags": 13,
+        "draw_cb": 4436960,
+        "string_id": 37,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": ""
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 76,
+        "aux": 0,
+        "select_cb": 4438272,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Yes"
+      },
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 77,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "No"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c16d0": {
+    "va": 4986576,
+    "items_va": 4986520,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4438432,
+        "string_id": 98,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Accessing Memory Card slot 1"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1740": {
+    "va": 4986688,
+    "items_va": 4986632,
+    "flags": 113,
+    "cb0c": 4438416,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4438432,
+        "string_id": 98,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Accessing Memory Card slot 1"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c17b0": {
+    "va": 4986800,
+    "items_va": 4986744,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4438432,
+        "string_id": 99,
+        "aux": 2,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Saving game"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1820": {
+    "va": 4986912,
+    "items_va": 4986856,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 69,
+        "aux": 0,
+        "select_cb": 4438112,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Game Saved"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1890": {
+    "va": 4987024,
+    "items_va": 4986968,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 71,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Access Failed"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1900": {
+    "va": 4987136,
+    "items_va": 4987080,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 72,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Memory Card full. 2 free blocks required to save game data"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1970": {
+    "va": 4987248,
+    "items_va": 4987192,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 73,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Format Failed"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c19e0": {
+    "va": 4987360,
+    "items_va": 4987304,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 74,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "There is no Memory Card in Memory Card slot 1"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1a50": {
+    "va": 4987472,
+    "items_va": 4987416,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 75,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Memory Card in Memory Card slot 1 has been formatted"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1ac0": {
+    "va": 4987584,
+    "items_va": 4987528,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          5,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 78,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "The Memory Card in Memory Card slot 1 is not formatted"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1b30": {
+    "va": 4987696,
+    "items_va": 4987640,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          4,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 5,
+        "draw_cb": 4436960,
+        "string_id": 70,
+        "aux": 0,
+        "select_cb": 4438096,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "No V2000 game data found"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1d28": {
+    "va": 4988200,
+    "items_va": 4987752,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          15
+        ],
+        "count": 15
+      },
+      {
+        "raw": [
+          3,
+          6,
+          4,
+          1,
+          1
+        ],
+        "count": 1
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          1,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 0,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Resolution"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 1,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 1,
+        "arg2": 0,
+        "label": "320x240"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 2,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 2,
+        "arg2": 0,
+        "label": "640x480"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 3,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 3,
+        "arg2": 0,
+        "label": "800x600"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 4,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 4,
+        "arg2": 0,
+        "label": "1024x768"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 5,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 5,
+        "arg2": 0,
+        "label": "Display"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 6,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 6,
+        "arg2": 0,
+        "label": "In a Window"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 7,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 7,
+        "arg2": 0,
+        "label": "Full Screen"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 8,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 8,
+        "arg2": 0,
+        "label": "Rendering"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 9,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 9,
+        "arg2": 0,
+        "label": "Software"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 10,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 10,
+        "arg2": 0,
+        "label": "Direct3D"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 11,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 11,
+        "arg2": 0,
+        "label": "Bilinear Filtering"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 12,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 12,
+        "arg2": 0,
+        "label": "Disabled"
+      },
+      {
+        "flags": 4,
+        "draw_cb": 4438816,
+        "string_id": 13,
+        "aux": 0,
+        "select_cb": 4440000,
+        "arg1": 13,
+        "arg2": 0,
+        "label": "Enabled"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4438816,
+        "string_id": 14,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Game Type"
+      },
+      {
+        "flags": 12,
+        "draw_cb": 4437008,
+        "string_id": 320,
+        "aux": 1,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "<prop:slopt>"
+      }
+    ],
+    "unlinked": true
+  },
+  "0x4c1f08": {
+    "va": 4988680,
+    "items_va": 4988256,
+    "flags": 113,
+    "cb0c": 0,
+    "cb10": 0,
+    "groups": [
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      },
+      {
+        "raw": [
+          8,
+          3,
+          4,
+          5,
+          15
+        ],
+        "count": 15
+      },
+      {
+        "raw": [
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "count": 0
+      }
+    ],
+    "items": [
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 0,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Resolution"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 1,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 1,
+        "arg2": 0,
+        "label": "320x240"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 2,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 2,
+        "arg2": 0,
+        "label": "640x480"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 3,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 3,
+        "arg2": 0,
+        "label": "800x600"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 4,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 4,
+        "arg2": 0,
+        "label": "1024x768"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 5,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 5,
+        "arg2": 0,
+        "label": "Display"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 6,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 6,
+        "arg2": 0,
+        "label": "In a Window"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 7,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 7,
+        "arg2": 0,
+        "label": "Full Screen"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 8,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 8,
+        "arg2": 0,
+        "label": "Rendering"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 9,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 9,
+        "arg2": 0,
+        "label": "Software"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 10,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 10,
+        "arg2": 0,
+        "label": "Direct3D"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 11,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 11,
+        "arg2": 0,
+        "label": "Bilinear Filtering"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 12,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 12,
+        "arg2": 0,
+        "label": "Disabled"
+      },
+      {
+        "flags": 1,
+        "draw_cb": 4438816,
+        "string_id": 13,
+        "aux": 0,
+        "select_cb": 4439856,
+        "arg1": 13,
+        "arg2": 0,
+        "label": "Enabled"
+      },
+      {
+        "flags": 9,
+        "draw_cb": 4438816,
+        "string_id": 14,
+        "aux": 0,
+        "select_cb": 0,
+        "arg1": 0,
+        "arg2": 0,
+        "label": "Game Type"
+      }
+    ],
+    "unlinked": true
+  }
+}
