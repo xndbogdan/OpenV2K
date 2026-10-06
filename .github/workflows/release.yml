@@ -9,6 +9,9 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # MSYS2's GCC 15 defaults to C23, where SDL2's bundled sources fail to compile
+  # (bool/false keywords). Local MinGW-Builds GCC 13 defaults to C17.
+  CFLAGS: -std=gnu17
 
 jobs:
   release:
