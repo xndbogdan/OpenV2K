@@ -57,3 +57,20 @@ jobs:
       # Retail-data tests report as ignored: CI never has original game files.
       - name: Tests
         run: cargo test --workspace
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Type-check every crate and target for Linux; linking SDL is covered by
+      # the release build, which bundles SDL2 statically.
+      - name: Check
+        run: cargo check --workspace --all-targets
+
+      - name: Parser tests
+        run: cargo test -p v2k-core -p v2k-formats -p v2k-test-support

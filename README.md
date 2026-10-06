@@ -31,16 +31,34 @@ Of the **2,383** game functions in retail `V2000.EXE`,
 
 ## Playing
 
-1. Download `OpenV2K.exe` from the
-   [latest release](https://github.com/xndbogdan/OpenV2K/releases/latest).
-2. Run it. If its folder does not already contain V2000 data, the
+Each [release](https://github.com/xndbogdan/OpenV2K/releases/latest) has
+Windows and Linux (x86-64) builds.
+
+**Windows**
+
+1. Download and extract the `windows-x64` zip.
+2. Run `OpenV2K.exe`. If its folder doesn't already contain V2000 data, the
    [pre-game launcher](LAUNCHER.md) can do one of two things. It can place the
    executable into an existing V2000 installation, or it can install the data
    and music from your BIN/CUE or ISO disc image.
 3. Press Play.
 
-Windows is the supported platform. Releases are unsigned, so Windows SmartScreen
-may warn on first launch.
+Releases are unsigned, so Windows SmartScreen may warn on first launch.
+
+**Linux**
+
+The Linux build has no graphical launcher. Point it at an existing V2000
+installation, or install one from your disc image first:
+
+```sh
+tar -xzf OpenV2K-*-linux-x64.tar.gz && cd OpenV2K-*-linux-x64
+./openv2k --data-dir /path/to/V2000            # play an existing installation
+./openv2k install --image V2000.bin --destination ~/V2000   # or install from disc
+./openv2k --data-dir ~/V2000
+```
+
+SDL2 is built into the binary. Windows is the primary platform; Linux builds
+are newer and less tested.
 
 ## Reverse-engineering notes
 

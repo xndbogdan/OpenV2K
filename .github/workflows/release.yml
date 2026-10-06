@@ -1,5 +1,7 @@
 name: Release
 
+# Push a tag such as v0.1.0 to build Windows and Linux binaries and publish a
+# GitHub Release. Tags with a suffix (v0.2.0-rc1) are marked as pre-releases.
 on:
   push:
     tags: ["v*"]
@@ -9,17 +11,26 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  # MSYS2's GCC 15 defaults to C23, where SDL2's bundled sources fail to compile
-  # (bool/false keywords). Local MinGW-Builds GCC 13 defaults to C17.
-  CFLAGS: -std=gnu17
 
 jobs:
-  release:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+          # The oldest supported runner keeps the Linux binary's glibc
+          # requirement low, so it runs on more distributions.
+          - os: ubuntu-22.04
+            platform: linux-x64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: msys2/setup-msys2@v2
+      # ── Windows: MinGW-w64 GNU toolchain, as for local builds ─────────────
+      - if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
           update: false
@@ -27,38 +38,88 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-make
 
-      - name: Put MinGW-w64 on PATH
+      - if: runner.os == 'Windows'
+        name: Put MinGW-w64 on PATH
         shell: pwsh
         run: Add-Content $env:GITHUB_PATH "${{ runner.temp }}\msys64\mingw64\bin"
 
-      - uses: dtolnay/rust-toolchain@stable
+      - if: runner.os == 'Windows'
+        uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-pc-windows-gnu
 
-      - name: Select the GNU toolchain
+      - if: runner.os == 'Windows'
+        name: Build (Windows)
         shell: pwsh
-        run: rustup default stable-x86_64-pc-windows-gnu
+        env:
+          # MSYS2's GCC 15 defaults to C23, which SDL2's bundled sources reject.
+          CFLAGS: -std=gnu17
+        run: |
+          rustup default stable-x86_64-pc-windows-gnu
+          cargo build --release -p v2k-game
 
-      - name: Build
-        run: cargo build --release -p v2k-game
+      # ── Linux: bundled static SDL2 so players need no SDL install ────────
+      - if: runner.os == 'Linux'
+        name: Install SDL2 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxss-dev libxinerama-dev libxkbcommon-dev libwayland-dev \
+            wayland-protocols libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
 
+      - if: runner.os == 'Linux'
+        uses: dtolnay/rust-toolchain@stable
+
+      - if: runner.os == 'Linux'
+        name: Build (Linux)
+        run: cargo build --release -p v2k-game --features sdl2/bundled,sdl2/static-link
+
+      # ── Shared: licenses and packaging ────────────────────────────────────
       - name: Third-party licenses
-        shell: pwsh
+        shell: bash
         run: |
           cargo install cargo-about --locked
           cargo about generate --fail -o THIRD_PARTY_LICENSES.html about.hbs
 
       - name: Package
-        shell: pwsh
+        shell: bash
         run: |
-          $name = "OpenV2K-${{ github.ref_name }}-windows-x64"
-          New-Item -ItemType Directory $name | Out-Null
-          Copy-Item target/release/v2k-game.exe "$name/OpenV2K.exe"
-          Copy-Item README.md, LAUNCHER.md, LICENSE-MIT, LICENSE-APACHE, THIRD_PARTY_LICENSES.html $name
-          Compress-Archive -Path $name -DestinationPath "$name.zip"
+          name="OpenV2K-${GITHUB_REF_NAME}-${{ matrix.platform }}"
+          mkdir "$name"
+          cp README.md LAUNCHER.md LICENSE-MIT LICENSE-APACHE THIRD_PARTY_LICENSES.html "$name/"
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            cp target/release/v2k-game.exe "$name/OpenV2K.exe"
+            7z a -tzip "$name.zip" "$name" > /dev/null
+          else
+            cp target/release/v2k-game "$name/openv2k"
+            chmod +x "$name/openv2k"
+            tar -czf "$name.tar.gz" "$name"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: |
+            OpenV2K-*.zip
+            OpenV2K-*.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Checksums
+        run: sha256sum OpenV2K-* > SHA256SUMS.txt
 
       - uses: softprops/action-gh-release@v2
         with:
-          files: OpenV2K-*.zip
-          draft: true
+          files: |
+            OpenV2K-*
+            SHA256SUMS.txt
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generate_release_notes: true
