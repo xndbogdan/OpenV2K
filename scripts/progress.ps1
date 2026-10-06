@@ -9,7 +9,7 @@ param(
 # Regenerates RE-progress numbers from function citations in the port and notes.
 # Inputs: docs/progress/retail-functions.csv (complete retail function census)
 # and docs/progress/status.csv (manual per-function status overrides).
-# Outputs: docs/progress/README.md, docs/progress/badge.json and the README.md
+# Outputs: docs/progress/README.md and the README.md
 # block between the progress markers. Output is deterministic: no timestamps.
 
 $ErrorActionPreference = 'Stop'
@@ -86,7 +86,11 @@ $codePct = Format-Percent $codeCount $scope.Count
 $anyPct = Format-Percent $anyCount $scope.Count
 
 # ── Generated outputs ──────────────────────────────────────────────────────
-$badgeUrl = 'https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/xndbogdan/OpenV2K/main/docs/progress/badge.json'
+# A static shields.io badge with the numbers in its URL: it needs no fetch from
+# the repository, so it also renders while the repository is private.
+function Format-BadgePart([string]$Text) { [uri]::EscapeDataString($Text).Replace('-', '--') }
+$badgeUrl = 'https://img.shields.io/badge/' + (Format-BadgePart 'RE coverage') + '-' +
+    (Format-BadgePart "$codePct code / $anyPct notes") + '-orange'
 $block = @"
 <!-- progress:start -->
 [![RE coverage]($badgeUrl)](docs/progress/README.md)
@@ -148,8 +152,6 @@ start. Run ``scripts/progress.ps1 -ListUnresolved`` to list them.
   hook. CI runs ``scripts/progress.ps1 -Check`` and fails if they are stale.
 "@
 
-$badge = '{"schemaVersion":1,"label":"RE coverage","message":"' + $codePct + ' code / ' + $anyPct + ' notes","color":"orange"}'
-
 $readmePath = Join-Path $root 'README.md'
 $readme = Read-Text $readmePath
 $markers = [regex]'(?s)<!-- progress:start -->.*?<!-- progress:end -->'
@@ -158,7 +160,6 @@ $newReadme = $markers.Replace($readme, { param($m) $block.Replace("`r`n", "`n") 
 
 $outputs = [ordered]@{
     'docs/progress/README.md' = $report.Replace("`r`n", "`n") + "`n"
-    'docs/progress/badge.json' = $badge + "`n"
     'README.md' = $newReadme
 }
 
