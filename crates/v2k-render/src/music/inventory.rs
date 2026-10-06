@@ -438,7 +438,10 @@ mod tests {
         ));
         assert!(!inventory.directory_missing);
         assert_eq!(inventory.scan_errors.len(), 1);
-        assert!(inventory.scan_errors[0].contains(&directory.0.display().to_string()));
+        // The inventory reports its canonical directory; on Windows that can
+        // differ from the temp path's 8.3 short form (e.g. RUNNER~1 on CI).
+        let canonical = std::fs::canonicalize(&directory.0).unwrap();
+        assert!(inventory.scan_errors[0].contains(&canonical.display().to_string()));
         assert!(inventory.scan_errors[0].contains("soundtrack directory access denied"));
     }
 
@@ -454,6 +457,7 @@ mod tests {
             SoundtrackAvailability::Unavailable
         );
         assert_eq!(inventory.scan_errors.len(), 1);
-        assert!(inventory.scan_errors[0].contains(&file.display().to_string()));
+        let canonical = std::fs::canonicalize(&file).unwrap();
+        assert!(inventory.scan_errors[0].contains(&canonical.display().to_string()));
     }
 }
