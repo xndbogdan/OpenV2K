@@ -80,7 +80,8 @@ jobs:
       - name: Third-party licenses
         shell: bash
         run: |
-          cargo install cargo-about --locked
+          # cargo-about 0.9 builds its CLI only with the `cli` feature.
+          cargo install cargo-about --locked --version 0.9.2 --features cli
           cargo about generate --fail -o THIRD_PARTY_LICENSES.html about.hbs
 
       - name: Package
