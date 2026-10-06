@@ -1,9 +1,10 @@
 name: CI
 
+# Runs when work lands on main (merged pull requests). Pull requests themselves
+# are validated locally with scripts/check.ps1 to save Actions minutes.
 on:
   push:
     branches: [main]
-  pull_request:
 
 env:
   CARGO_TERM_COLOR: always

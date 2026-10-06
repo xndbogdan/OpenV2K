@@ -89,6 +89,12 @@ are handed off.
 
 ## Commit & Pull Request Guidelines
 
+Never commit directly to `main`. Work on a branch, open a pull request, and
+merge it when it's ready. CI runs only on pushes to `main`, so run
+`scripts/check.ps1` locally before asking for a merge, and state the result in
+the pull request. Releases are cut by pushing a `v*` tag on `main`; the release
+workflow builds and publishes the Windows and Linux binaries.
+
 Use short imperative subjects with an optional scope, for example
 `menu: resolve backdrop model`. Keep commits focused. A pull request should:
 
