@@ -718,11 +718,12 @@ void main() {
         // packs them with RGB565 shifts 7/2/4 and WORD addition. gl_Color
         // transports channel/1024, keeping its components in [0,1].
         vec3 channels = floor(mod(floor(tint * 1024.0), 4096.0) / 16.0) * 16.0;
-        float packed = mod(channels.r * 128.0 + channels.g * 4.0 + channels.b / 16.0, 65536.0);
+        // `packed` is a reserved GLSL word; strict compilers (Mesa) reject it.
+        float rgb565 = mod(channels.r * 128.0 + channels.g * 4.0 + channels.b / 16.0, 65536.0);
         vec3 rgb = vec3(
-            floor(packed / 2048.0) * 8.0,
-            floor(mod(packed, 2048.0) / 32.0) * 4.0,
-            mod(packed, 32.0) * 8.0
+            floor(rgb565 / 2048.0) * 8.0,
+            floor(mod(rgb565, 2048.0) / 32.0) * 4.0,
+            mod(rgb565, 32.0) * 8.0
         ) / 255.0;
         // The far initializer already composed base, light and fog. Applying
         // the ordinary RGB fog mix here would fog these solids twice.
