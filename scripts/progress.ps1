@@ -18,7 +18,8 @@ $root = Split-Path -Parent $PSScriptRoot
 $inv = [Globalization.CultureInfo]::InvariantCulture
 $utf8 = New-Object Text.UTF8Encoding($false)
 
-function Read-Text([string]$Path) { [IO.File]::ReadAllText($Path, $utf8) }
+# Compare and generate with LF line endings: Windows checkouts may convert to CRLF.
+function Read-Text([string]$Path) { [IO.File]::ReadAllText($Path, $utf8).Replace("`r`n", "`n") }
 
 # ── Retail function census ─────────────────────────────────────────────────
 $functions = @{}
