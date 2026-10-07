@@ -7,6 +7,7 @@
 //! and in blending. Each implementation names the retail routine it
 //! reproduces; see `docs/re/SOFTWARE_RASTER.md`.
 
+mod flat;
 mod indexed;
 mod raw;
 
@@ -20,6 +21,9 @@ pub(crate) struct SpanTarget<'a> {
     pub pixels: &'a mut [u16],
     /// Surface pitch in bytes (DirectDraw device `+0x1C`).
     pub pitch: usize,
+    /// Surface size (DirectDraw device `+0x00/+0x04`).
+    pub width: u32,
+    pub height: u32,
 }
 
 impl SpanTarget<'_> {
@@ -42,15 +46,6 @@ impl SpanContext<'_> {
             .material
             .expect("textured span filler without a bound material");
         self.materials.material(id)
-    }
-
-    /// Mask applied to a destination pixel shifted right by one: clears the
-    /// bit each channel's low bit lands in (`0x80 >> (blue-1)`,
-    /// `0x80 << (green+1)`).
-    fn halving_mask(&self) -> u32 {
-        let blue = 0x80u32 >> (u32::from(self.format.blue_shift).wrapping_sub(1) & 31);
-        let green = 0x80u32 << ((u32::from(self.format.green_shift) + 1) & 31);
-        !(blue | green)
     }
 
     /// Per-channel saturating add of two packed 12-bit colours, using the
@@ -145,34 +140,30 @@ impl Span<'_, '_, '_> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SpanFiller {
     Solid,
+    Flat(flat::Filler),
     Indexed(indexed::Filler),
     Raw(raw::Filler),
-    /// A retail filler this port does not implement yet.
-    Unported(u32),
 }
 
 impl SpanFiller {
-    pub(crate) fn from_retail(address: u32) -> Self {
+    /// The port of the retail routine at `address`. `None` for the fillers
+    /// of rows no fill slot binds (3, 15, 24..27), which are not ported.
+    pub(crate) fn from_retail(address: u32) -> Option<Self> {
         if address == 0x0047_3830 {
-            return Self::Solid;
+            return Some(Self::Solid);
         }
-        if let Some(filler) = indexed::Filler::from_retail(address) {
-            return Self::Indexed(filler);
-        }
-        if let Some(filler) = raw::Filler::from_retail(address) {
-            return Self::Raw(filler);
-        }
-        Self::Unported(address)
+        flat::Filler::from_retail(address)
+            .map(Self::Flat)
+            .or_else(|| indexed::Filler::from_retail(address).map(Self::Indexed))
+            .or_else(|| raw::Filler::from_retail(address).map(Self::Raw))
     }
 
     pub(crate) fn fill(self, span: Span<'_, '_, '_>) {
         match self {
             Self::Solid => solid(span),
+            Self::Flat(filler) => filler.fill(span),
             Self::Indexed(filler) => filler.fill(span),
             Self::Raw(filler) => filler.fill(span),
-            Self::Unported(address) => {
-                panic!("software raster span filler {address:08X} is not ported")
-            }
         }
     }
 }

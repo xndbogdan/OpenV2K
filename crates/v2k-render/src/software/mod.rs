@@ -10,6 +10,7 @@
 //! its evidence are in `docs/re/SOFTWARE_RASTER.md`.
 
 mod attr;
+mod direct;
 mod fixed;
 mod fog;
 mod format;
@@ -62,6 +63,20 @@ impl Surface565 {
     }
 }
 
+/// Resolves the dword pixel arrays the word-image slot (`+0x1020`) copies.
+pub trait WordImageSource {
+    fn word_image(&self, id: u32) -> &[u32];
+}
+
+/// A source with no word images, for callers that never use `+0x1020`.
+pub struct NoWordImages;
+
+impl WordImageSource for NoWordImages {
+    fn word_image(&self, id: u32) -> &[u32] {
+        panic!("word image {id} requested from an empty source")
+    }
+}
+
 /// The software raster's persistent state: the Graph2D block plus the
 /// process globals its routines keep between primitives.
 #[derive(Debug, Clone)]
@@ -106,6 +121,11 @@ impl SoftwareRaster {
         self.state.dither
     }
 
+    /// Graph2D `+0x20`: the span row the last polygon draw bound.
+    pub fn span_row(&self) -> SpanRow {
+        self.state.row
+    }
+
     /// Draw one primitive packet through `slot`, as the queue thunk would.
     pub fn draw(
         &mut self,
@@ -113,11 +133,14 @@ impl SoftwareRaster {
         packet: &[u8],
         surface: &mut Surface565,
         materials: &dyn MaterialSource,
+        images: &dyn WordImageSource,
     ) {
         let mut target = SpanTarget {
             pixels: &mut surface.pixels,
             pitch: surface.pitch,
+            width: surface.width,
+            height: surface.height,
         };
-        self.dispatch(slot, packet, &mut target, materials);
+        self.dispatch(slot, packet, &mut target, materials, images);
     }
 }

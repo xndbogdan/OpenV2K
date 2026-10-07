@@ -520,8 +520,13 @@ linkage policy therefore applies to every selected presentation tier.
 `FUN_004A9CE0` (`directx_wrappers.c`, tagged `…\Windows\DDCalls.c`) calls
 **`IDirectDrawSurface::Lock`** (vtable +0x64) for a raw 16-bpp framebuffer
 pointer; scanline fillers write pixels with the classic `push dx` trick (ESP
-redirected to the destination scanline). ~44 in-EXE software fillers
-(`0x47AC30…0x492A10`), 16-bpp variants selected by `piVar3[1]==0x10`.
+redirected to the destination scanline). The 16-bpp software table (mode
+descriptor `+8` zero, `+4` = 16 bits per pixel) consists of the fill-slot handlers
+`0x47AB20…0x480790`, the scan converter `0x472B20` with its helpers, and the
+span-row routines `0x473690…0x47A540`; `0x481240…0x492A10` belongs to the
+alternate/Direct3D table.
+[SOFTWARE_RASTER.md](SOFTWARE_RASTER.md) is the full contract and the state
+of its byte-exact port.
 
 ### Full-frame DirectDraw trace acceptance (2026-07-27)
 
@@ -1284,11 +1289,14 @@ requires affine interpolation (for example linear UV or `q=1`), rather than
 GL's default perspective correction. This does not establish the observed
 alternate/Direct3D consumer's interpolation state or change port defaults.
 
-## 4. Filtering = POINT SAMPLING (no bilinear, no dither)
+## 4. Filtering = POINT SAMPLING (no bilinear)
 
 The audited software fillers fetch one texel per pixel —
 `mov cl,[eax+ecx*1]` — without a four-tap average. This establishes point
 sampling for those software tables, not alternate/Direct3D render state.
+The shaded and fogged indexed fillers do dither, though: they add generator
+noise to the palette shade row and the fog level per pixel (see
+[SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#span-rows-and-fillers)).
 
 The source audit of the "Bilinear Filtering" setting global `0x4CB3F0`
 (toggle handler `FUN_0043CCA0`) found its reference only in the menu handler;

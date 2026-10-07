@@ -52,8 +52,11 @@ impl SpanRow {
         }
     }
 
+    /// The row's span filler. Fill slots bind only rows 0..=2, 4..=14,
+    /// 16..=23 and 28..=35; the fillers of the others are not ported.
     pub(crate) fn filler(self) -> SpanFiller {
         SpanFiller::from_retail(self.routines()[0])
+            .unwrap_or_else(|| panic!("{self:?} is never bound by a fill slot"))
     }
 
     pub(crate) fn class(self) -> AttributeClass {
@@ -302,4 +305,26 @@ const fn flatten_tables() -> [u32; 2 * ROW_COUNT * 6] {
         row += 1;
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Whether any fill-slot handler can select row `index`.
+    fn bound(index: usize) -> bool {
+        !matches!(index, 3 | 15 | 24..=27)
+    }
+
+    #[test]
+    fn every_bound_row_has_a_ported_filler() {
+        for table in [TexelTable::Indexed, TexelTable::Raw] {
+            for index in 0..ROW_COUNT {
+                let row = SpanRow::new(table, index);
+                let ported = SpanFiller::from_retail(row.routines()[0]).is_some();
+                assert_eq!(ported, bound(index), "{row:?}");
+                row.class();
+            }
+        }
+    }
 }

@@ -99,7 +99,11 @@ impl AttributeClass {
             0x0047_5940 => Self::TexturedShadeFade,
             other => panic!("unknown span-row edge initialiser {other:08X}"),
         };
-        debug_assert_eq!(routines[1..], class.retail_routines()[1..]);
+        let expected = class.retail_routines();
+        // Rows 1/13/25 use 00473900, a byte-equivalent copy of 00473690.
+        let clip_matches =
+            routines[1] == expected[1] || (class == Self::Flat && routines[1] == 0x0047_3900);
+        debug_assert!(clip_matches && routines[2..] == expected[2..]);
         class
     }
 

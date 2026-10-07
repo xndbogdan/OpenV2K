@@ -10,7 +10,7 @@
 use super::format::PixelFormat;
 
 /// Process-global state written by `FUN_0047CA20`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FogRamp {
     /// `0x004FBE28`: colour the tables were last built for.
     pub key: u32,
@@ -28,20 +28,6 @@ pub struct FogRamp {
     /// `0x004FBE24`: carry bits shifted down by four (lowest bit of each
     /// 4-bit field).
     pub carry: u32,
-}
-
-impl Default for FogRamp {
-    fn default() -> Self {
-        Self {
-            key: 0,
-            ramp: [0; 18],
-            red: [0; 2],
-            green: [0; 2],
-            blue: [0; 2],
-            mask: 0,
-            carry: 0,
-        }
-    }
 }
 
 impl FogRamp {

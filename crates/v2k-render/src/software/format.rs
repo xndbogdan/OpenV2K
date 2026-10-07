@@ -21,15 +21,12 @@ impl PixelFormat {
         blue_shift: 4,
     };
 
-    /// Graph2D `+0x08`: the bit just above each channel (`FUN_00480D10`).
-    pub fn carry_bits(self) -> u32 {
-        (0x100u32 << ((self.green_shift as u32 + 1) & 31))
-            | (0x100u32 << ((self.red_shift as u32 + 1) & 31))
-            | (0x100u32 >> ((self.blue_shift as u32).wrapping_sub(1) & 31))
-    }
-
-    /// Graph2D `+0x04`: every other bit of the low word.
-    pub fn halving_mask(self) -> u32 {
-        !self.carry_bits() & 0xFFFF
+    /// Mask for a pixel already shifted right by one: clears the bits that
+    /// green's and red's lowest bits land in, `!(0x80 << (green+1) |
+    /// 0x80 >> (blue-1))` (RGB565: `0xFBEF`). Every halving filler and the
+    /// sprite blit build it this way rather than masking before the shift.
+    pub fn halved_pixel_mask(self) -> u16 {
+        !((0x80u32 << ((u32::from(self.green_shift) + 1) & 31))
+            | (0x80u32 >> (u32::from(self.blue_shift).wrapping_sub(1) & 31))) as u16
     }
 }
