@@ -14,7 +14,9 @@
 
 use std::collections::HashMap;
 
-use v2k_formats::models::{ModelFaceCull, ModelFaceShading, ModelFaceVertices};
+use v2k_formats::models::{
+    ModelFaceCull, ModelFaceShading, ModelFaceVertices, ModelVertexProjection,
+};
 
 use crate::gl_backend::{
     authored_face_plane_visible, model_lighting_normals, resolve_model_vertices,
@@ -26,8 +28,8 @@ use crate::renderer::{
     ModelBillboardDraw, ModelDepthFade, ModelDraw, NativeModelFogPass, WorldModelFog,
 };
 use crate::software::model::{
-    construct_billboard, construct_face, BillboardCommand, FaceContext, FacePass, ModelCorner,
-    ModelNormal,
+    construct_billboard, construct_face, screen_midpoint, BillboardCommand, FaceContext, FacePass,
+    ModelCorner, ModelNormal,
 };
 use crate::software::terrain::GroundProjection;
 use crate::software::{material_flags, MaterialId, PrimitiveQueue, QueueError};
@@ -70,11 +72,16 @@ fn colour_word(colour: [f32; 3]) -> u32 {
 
 impl ModelScene {
     /// VIEW point of a world point: the native viewport's Q31 rows over the
-    /// raw delta when the scene has one, else the floating camera.
+    /// raw delta when the scene has one, else the floating camera. Native
+    /// deltas wrap to signed words, as retail forms actor-minus-viewport
+    /// deltas, so any torus image of the point lands beside the eye.
     fn view_raw(&self, world: [f32; 3]) -> [i32; 3] {
         if let Some(native) = self.native {
             let delta: [i32; 3] = std::array::from_fn(|axis| {
-                ((world[axis] * 256.0).round() as i32).wrapping_sub(native.origin_raw[axis])
+                i32::from(
+                    ((world[axis] * 256.0).round() as i32).wrapping_sub(native.origin_raw[axis])
+                        as i16,
+                )
             });
             return native.axes_q31.map(|row| {
                 row.iter().zip(delta).fold(0i32, |sum, (&axis, value)| {
@@ -182,6 +189,64 @@ fn face_flags(blend: WorldSpriteBlend, shade_row: u8) -> u16 {
         }
 }
 
+/// A cache entry the projector rejected at the near plane.
+const REJECTED_CORNER: ModelCorner = ModelCorner {
+    view: [0; 3],
+    screen: [0; 2],
+    clip: 0x40 | 0x80,
+    fade: 0xFF,
+};
+
+/// Project every type-1 vertex from its (recursively projected) sources
+/// with `FUN_0046DC00`. Retail never writes such a vertex's VIEW X/Y; the
+/// constructors read only its depth.
+fn screen_midpoints(
+    corners: &mut [ModelCorner],
+    projections: &[ModelVertexProjection],
+    bounds: [u32; 2],
+) {
+    fn resolve(
+        index: usize,
+        corners: &mut [ModelCorner],
+        projections: &[ModelVertexProjection],
+        bounds: [u32; 2],
+        state: &mut [u8],
+    ) -> ModelCorner {
+        const VISITING: u8 = 1;
+        const DONE: u8 = 2;
+        let Some(&current) = corners.get(index) else {
+            return REJECTED_CORNER;
+        };
+        match state[index] {
+            DONE => return current,
+            // Formats reject cyclic sources; fail closed regardless.
+            VISITING => return REJECTED_CORNER,
+            _ => {}
+        }
+        let Some(ModelVertexProjection::ScreenMidpoint(sources)) = projections.get(index) else {
+            state[index] = DONE;
+            return current;
+        };
+        state[index] = VISITING;
+        let a = resolve(usize::from(sources[0]), corners, projections, bounds, state);
+        let b = resolve(usize::from(sources[1]), corners, projections, bounds, state);
+        let corner = screen_midpoint(a, b, current, bounds);
+        corners[index] = corner;
+        state[index] = DONE;
+        corner
+    }
+    if !projections
+        .iter()
+        .any(|projection| matches!(projection, ModelVertexProjection::ScreenMidpoint(_)))
+    {
+        return;
+    }
+    let mut state = vec![0u8; corners.len()];
+    for index in 0..corners.len() {
+        resolve(index, corners, projections, bounds, &mut state);
+    }
+}
+
 /// Queue the faces of one model body.
 pub(crate) fn queue_model_body(
     queue: &mut PrimitiveQueue,
@@ -201,12 +266,14 @@ pub(crate) fn queue_model_body(
         ..scene.lens
     };
     let resolved = resolve_model_vertices(draw, scene.camera_position, scene.camera_basis);
-    let corners: Vec<ModelCorner> = resolved
+    let mut corners: Vec<ModelCorner> = resolved
         .world
         .iter()
         .zip(&resolved.admitted)
         .map(|(world, &admitted)| match world {
-            Some(world) if admitted => {
+            // A native scene rejects through the native depth's 0x40
+            // outcode; the floating camera may sit in another torus image.
+            Some(world) if admitted || scene.native.is_some() => {
                 let view = scene.view_raw(*world);
                 let point = lens.project_view(view);
                 ModelCorner {
@@ -216,13 +283,10 @@ pub(crate) fn queue_model_body(
                     fade: point.fade,
                 }
             }
-            _ => ModelCorner {
-                clip: 0x40 | 0x80,
-                fade: 0xFF,
-                ..ModelCorner::default()
-            },
+            _ => REJECTED_CORNER,
         })
         .collect();
+    screen_midpoints(&mut corners, mesh.vertex_projection, lens.bounds);
 
     // One command per source face: consecutive triangles of a quad share it.
     let mut normals: Vec<ModelNormal> = Vec::new();
@@ -415,11 +479,11 @@ pub(crate) fn queue_model_billboards(
         scene.camera_position,
         scene.camera_basis[2],
     );
-    let corners: Vec<ModelCorner> = world
+    let mut corners: Vec<ModelCorner> = world
         .iter()
         .zip(&admitted)
         .map(|(world, &admitted)| match world {
-            Some(world) if admitted => {
+            Some(world) if admitted || scene.native.is_some() => {
                 let view = scene.view_raw(*world);
                 let point = lens.project_view(view);
                 ModelCorner {
@@ -429,13 +493,10 @@ pub(crate) fn queue_model_billboards(
                     fade: point.fade,
                 }
             }
-            _ => ModelCorner {
-                clip: 0x40 | 0x80,
-                fade: 0xFF,
-                ..ModelCorner::default()
-            },
+            _ => REJECTED_CORNER,
         })
         .collect();
+    screen_midpoints(&mut corners, draw.vertex_projection, lens.bounds);
     let mut colours = Vec::new();
     let mut sprites = Vec::new();
     let mut sizes = Vec::new();
@@ -492,4 +553,71 @@ pub(crate) fn queue_model_billboards(
 #[derive(Default)]
 pub(crate) struct DerivedMaterials {
     pub(crate) by_flags: HashMap<(u32, u16), MaterialId>,
+}
+
+/// Queue camera-facing world sprites (`FUN_0043D410`'s particle quads):
+/// an axis-aligned textured quad around the projected centre, keyed by the
+/// sprite's retail painter key, `+0x1098` near or `+0x109C` with the
+/// sprite's far fade byte. The port supplies sprites after its own
+/// presentation choices, so sizes come from the sprite's world extent.
+pub(crate) fn queue_world_sprites(
+    queue: &mut PrimitiveQueue,
+    sprites: &[crate::renderer::WorldSprite],
+    scene: &ModelScene,
+    materials: &mut dyn ModelMaterials,
+) -> Result<(), QueueError> {
+    use crate::renderer::SpriteFog;
+    use crate::software::FillSlot;
+    let fog_colour = scene.world_fog.map_or(0, |fog| colour_word(fog.color));
+    for sprite in sprites {
+        if !sprite.position.iter().all(|v| v.is_finite())
+            || !sprite.size.iter().all(|v| v.is_finite() && *v > 0.0)
+        {
+            continue;
+        }
+        let view = scene.view_raw(sprite.position);
+        let centre = scene.lens.project_view(view);
+        if centre.clip & 0x40 != 0 {
+            continue;
+        }
+        let depth = view[2] as f32;
+        let half = |extent: f32, focal: i32| -> i32 {
+            ((extent * 0.5 * 256.0 * focal as f32 / depth) as i32).max(1)
+        };
+        let hx = half(sprite.size[0], scene.lens.focal[0]);
+        let hy = half(sprite.size[1], scene.lens.focal[1]);
+        let [cx, cy] = centre.screen.map(i32::from);
+        let corners = [
+            (cx - hx, cy - hy),
+            (cx + hx, cy - hy),
+            (cx + hx, cy + hy),
+            (cx - hx, cy + hy),
+        ];
+        let outcode = corners.iter().fold(0u8, |code, &(x, y)| {
+            code | crate::software::terrain::outcode_of(x, y, scene.lens.bounds)
+        });
+        if crate::software::terrain::OUTCODE_VISIBLE[usize::from(outcode)] == 0 {
+            continue;
+        }
+        let flags = face_flags(sprite.blend, sprite.flat_shade_row);
+        let Some(material) = materials.face_material(sprite.texture.0, flags) else {
+            continue;
+        };
+        let (slot, bytes, fade) = match sprite.fog {
+            SpriteFog::Near => (FillSlot::TexturedQuad, 0x18, None),
+            SpriteFog::Far { fade_byte } => (FillSlot::TexturedFogQuad, 0x20, Some(fade_byte)),
+        };
+        let payload = queue.push(sprite.sort_key_raw, slot, bytes)?;
+        for (index, (x, y)) in corners.into_iter().enumerate() {
+            payload[4 * index..4 * index + 2].copy_from_slice(&(x as i16).to_le_bytes());
+            payload[4 * index + 2..4 * index + 4].copy_from_slice(&(y as i16).to_le_bytes());
+        }
+        payload[0x10..0x14].copy_from_slice(&material.to_le_bytes());
+        payload[0x14..0x18].copy_from_slice(&0u32.to_le_bytes());
+        if let Some(fade) = fade {
+            payload[0x18..0x1C].copy_from_slice(&fog_colour.to_le_bytes());
+            payload[0x1C..0x20].fill(fade);
+        }
+    }
+    Ok(())
 }

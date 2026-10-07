@@ -157,6 +157,35 @@ impl FaceOp {
     }
 }
 
+/// `FUN_0046DC00`, the type-1 vertex projector: average the two projected
+/// sources' screen points (truncating), keep the nearer source's depth and
+/// fade and take a fresh outcode from the averaged point. Either source's
+/// near flag rejects the vertex instead: its outcode becomes 0x40 and its
+/// depth 0. Fields retail does not write are kept from `current`.
+pub fn screen_midpoint(
+    a: ModelCorner,
+    b: ModelCorner,
+    current: ModelCorner,
+    bounds: [u32; 2],
+) -> ModelCorner {
+    if (a.clip | b.clip) & 0x40 != 0 {
+        return ModelCorner {
+            view: [current.view[0], current.view[1], 0],
+            clip: 0x40,
+            ..current
+        };
+    }
+    let x = ((i32::from(a.screen[0]) + i32::from(b.screen[0])) / 2) as i16;
+    let y = ((i32::from(a.screen[1]) + i32::from(b.screen[1])) / 2) as i16;
+    let nearer = if a.view[2] < b.view[2] { a } else { b };
+    ModelCorner {
+        view: [current.view[0], current.view[1], nearer.view[2]],
+        screen: [x, y],
+        clip: super::terrain::outcode_of(i32::from(x), i32::from(y), bounds),
+        fade: nearer.fade,
+    }
+}
+
 /// Run the constructor for `opcode` on the command `words` following it.
 /// Returns the words consumed, or `None` when `opcode` is not a face.
 pub fn construct_face(

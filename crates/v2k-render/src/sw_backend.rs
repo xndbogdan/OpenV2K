@@ -36,7 +36,8 @@ use crate::software::{
     SoftwareRaster, Surface565, WORLD_ARENA_BYTES,
 };
 use crate::sw_model::{
-    queue_model_billboards, queue_model_body, DerivedMaterials, ModelMaterials, ModelScene,
+    queue_model_billboards, queue_model_body, queue_world_sprites, DerivedMaterials,
+    ModelMaterials, ModelScene,
 };
 use crate::terrain_tiles::InfectionTerrainAnimation;
 
@@ -629,6 +630,23 @@ impl Renderer for SoftwareRenderer {
 
     fn supports_models(&self) -> bool {
         true
+    }
+
+    fn draw_world_sprites(&mut self, sprites: &[crate::renderer::WorldSprite]) {
+        let Some(scene) = self.model_scene() else {
+            return;
+        };
+        let mut materials = BackendMaterials {
+            store: &mut self.materials,
+            derived: &mut self.derived,
+        };
+        if let Err(error) = queue_world_sprites(&mut self.queue, sprites, &scene, &mut materials) {
+            if !self.model_error_reported {
+                self.model_error_reported = true;
+                eprintln!("software sprites: {error:?}; later ones this frame are dropped");
+            }
+        }
+        self.queued = true;
     }
 
     fn draw_model_billboards(&mut self, draw: crate::renderer::ModelBillboardDraw<'_>) {
