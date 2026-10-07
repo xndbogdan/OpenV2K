@@ -18,6 +18,15 @@ pub(super) struct ActorExternalSlotPoint {
 
 pub(super) enum ModelTreeExternalFrame<'a> {
     Fixed(ExternalFrameMode),
+    /// A fixed callback frame whose nodes keep their source-owned VIEW
+    /// frames, as `FUN_00427090` submits static terrain objects.
+    NativeFixed {
+        mode: ExternalFrameMode,
+        native_context: Option<(
+            crate::native_model_frame::NativeModelFrame,
+            crate::native_model_frame::NativeWorldViewport,
+        )>,
+    },
     SubH(SubHPresentation<'a>),
     SubM(SubMPresentation<'a>),
     Emitter(crate::actor_emitter_external_frame::ActorEmitterModelPresentation<'a>),
@@ -25,6 +34,12 @@ pub(super) enum ModelTreeExternalFrame<'a> {
 
 pub(super) enum ModelTreeNativeParentFrame {
     None,
+    NativeFixed(
+        Option<(
+            crate::native_model_frame::NativeModelFrame,
+            crate::native_model_frame::NativeWorldViewport,
+        )>,
+    ),
     SubM(Option<crate::native_model_frame::NativeModelFrame>),
     SubH(
         Option<(
@@ -41,7 +56,16 @@ pub(super) enum ModelTreeNativeParentFrame {
 
 impl ModelTreeExternalFrame<'_> {
     pub(super) fn needs_live_materialization(&self) -> bool {
-        matches!(self, Self::SubH(_) | Self::SubM(_) | Self::Emitter(_))
+        matches!(
+            self,
+            Self::SubH(_)
+                | Self::SubM(_)
+                | Self::Emitter(_)
+                | Self::NativeFixed {
+                    native_context: Some(_),
+                    ..
+                }
+        )
     }
 
     pub(super) fn owns_external_vertices(&self) -> bool {
@@ -64,6 +88,9 @@ impl ModelTreeExternalFrame<'_> {
                 .emitter
                 .current_node_owned
                 .then_some(presentation.emitter.frame.origin_view_raw),
+            Self::NativeFixed { native_context, .. } => native_context
+                .as_ref()
+                .map(|(frame, _)| frame.origin_view_raw),
             Self::Fixed(_) => None,
         }
     }
@@ -76,6 +103,8 @@ impl ModelTreeExternalFrame<'_> {
     )> {
         match self {
             Self::SubH(presentation) => presentation.native_context.clone(),
+            Self::SubM(presentation) => presentation.native_context(),
+            Self::NativeFixed { native_context, .. } => native_context.clone(),
             Self::Emitter(presentation) => presentation.emitter.current_node_owned.then(|| {
                 (
                     presentation.emitter.frame.clone(),
@@ -181,6 +210,9 @@ impl ModelTreeExternalFrame<'_> {
                 .emitter
                 .current_node_owned
                 .then(|| presentation.emitter.frame.view_selection()),
+            Self::NativeFixed { native_context, .. } => native_context
+                .as_ref()
+                .map(|(frame, _)| frame.view_selection()),
             Self::Fixed(_) => None,
         }
     }
@@ -216,6 +248,25 @@ impl ModelTreeExternalFrame<'_> {
                     .map(|child| (child, *viewport))
             });
             ModelTreeNativeParentFrame::SubH(previous)
+        } else if let Self::NativeFixed { native_context, .. } = self {
+            // 67410/676C0 derive each reached child's frame from its
+            // parent's; a child without one keeps the float path.
+            let previous = native_context.take();
+            *native_context = previous.as_ref().and_then(|(frame, viewport)| {
+                let surface = if world {
+                    crate::native_model_frame::NativeSlotSurface::World {
+                        viewport: *viewport,
+                        terrain,
+                    }
+                } else {
+                    crate::native_model_frame::NativeSlotSurface::Intrinsic
+                };
+                authored
+                    .then(|| frame.child_with_surface(model, instance, vars, surface))
+                    .flatten()
+                    .map(|child| (child, *viewport))
+            });
+            ModelTreeNativeParentFrame::NativeFixed(previous)
         } else if let Self::Emitter(presentation) = self {
             let emitter = &mut presentation.emitter;
             let previous = emitter.frame.clone();
@@ -269,6 +320,10 @@ impl ModelTreeExternalFrame<'_> {
                 presentation.native_context = previous
             }
             (
+                Self::NativeFixed { native_context, .. },
+                ModelTreeNativeParentFrame::NativeFixed(previous),
+            ) => *native_context = previous,
+            (
                 Self::Emitter(presentation),
                 ModelTreeNativeParentFrame::Emitter(previous, owned, sources),
             ) => {
@@ -289,6 +344,7 @@ impl ModelTreeExternalFrame<'_> {
     ) -> ExternalFrameMode {
         match self {
             Self::Fixed(frame) => *frame,
+            Self::NativeFixed { mode, .. } => *mode,
             // Live E selectors were resolved and stamped by the command-time
             // vertex owner. Deferred backend submission cannot replay them.
             Self::Emitter(_) => ExternalFrameMode::Raw,

@@ -284,11 +284,19 @@ and rejects a node wholly beyond the far plane
   anchor.
 
 The adapter (`crates/v2k-render/src/sw_model.rs`) rebuilds these inputs
-from the port's materialized model: VIEW points from the scene's native
+from the port's materialized model, one command per source polygon and
+edge. A node whose producer owns its integer frame (`FUN_00465870`'s origin
+and axes) supplies each vertex's VIEW point from that frame's slot cache
+(`FUN_0046D610` and the native generators), and its light in model axes
+(`FUN_00466160`), which the adapter dots with the raw pool normals as
+`FUN_0046D3F0` does. Static terrain objects own their frames: the node
+record `FUN_00427090` fills at `0x004CA3C0` holds Q31 one on the basis
+diagonal, which `FUN_00464F90` multiplies into the viewport axes. So do
+actor bodies at their physical pose, plain or with Sub-H or Sub-M
+presentations. Other vertices take VIEW points from the scene's native
 viewport (only the node's delta wraps to signed words; vertex offsets add
 in VIEW space) or the floating camera (256 VIEW units per world unit, 100
-for frontend models), lighting from the authored normals, and one command
-per source polygon and edge.
+for frontend models), and shade from the authored unit normals.
 
 ## Painter programs
 
@@ -421,16 +429,16 @@ ribbons are skipped and its lid is drawn.
 - Particle positions come from the port's floating-point particle state,
   rounded to world words; world sprites without particle inputs still use
   an approximate quad.
-- Model VIEW points come from the port's floating-point materialized world
-  points, not retail's Q31 node transforms, so they can differ by a unit.
-  Shade bins likewise dot floating-point VIEW normals with the context's
-  light ([model light table](RENDER_PIPELINE.md#model-light-table)), so a
-  normal on a bin edge can land one bin off. Billboards still queue after
-  their body rather than at their command when no painter program carries
-  them.
+- Nodes without an owned integer frame (a cinematic pose proxy,
+  camera-facing actors, the free camera) still take VIEW points from the
+  port's floating-point world points, so they can differ by a unit, and dot
+  floating-point VIEW normals with the context's light
+  ([model light table](RENDER_PIPELINE.md#model-light-table)), so a normal
+  on a bin edge can land one bin off. Billboards still queue after their
+  body rather than at their command when no painter program carries them.
 - The backend adapts RGBA-only port images (overlays, fades) at its
   boundary; those adapters are not retail evidence.
-- Full frames have been compared with the accepted retail DirectDraw trace
-  only at approximate Intro2 poses: sky, fog, texture sampling and dither
-  agree, and the comparison found the world model light, now corrected.
-  Matched-pose comparison remains open.
+- Full frames compared with a TTD-recorded retail Intro2 at its own camera
+  (ticks 50, 98 and 129, recorded stack page): sky, terrain, every static
+  object and the Sub-M hut are pixel-identical. The walking actors'
+  simulated positions and the emblem's animation phase still differ.

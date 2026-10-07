@@ -4,13 +4,14 @@
 //! Retail executes the model's command stream against a vertex cache of
 //! VIEW points it projects with the node's axes. The port materializes the
 //! stream instead, so this adapter rebuilds the constructors' inputs from a
-//! [`ModelDraw`]: each callback-resolved world point becomes a cache entry
-//! (VIEW from the scene's native viewport when it has one, else from the
-//! floating camera), each face's lighting becomes a normal-cache shade
-//! dword, and each face becomes the command the constructor tables would
-//! have run. The constructors themselves are byte-exact; VIEW points of
-//! world-resolved vertices are only as exact as the materializer's world
-//! points.
+//! [`ModelDraw`]: each vertex becomes a cache entry, each face's lighting a
+//! normal-cache shade dword, and each face the command the constructor
+//! tables would have run. A producer that owns the node's integer frame
+//! supplies the VIEW points and the model-space light, so those entries and
+//! shades are retail's; otherwise each world point is brought into VIEW
+//! through the scene's native viewport or, without one, the floating
+//! camera, and is only as exact as the materializer's world point. The
+//! constructors themselves are byte-exact.
 
 use std::collections::HashMap;
 
@@ -21,7 +22,7 @@ use v2k_formats::models::{
 
 use crate::gl_backend::{
     authored_face_plane_visible, model_lighting_normals, resolve_model_vertices,
-    retail_model_shade, transform_model_light_normal, view_light_normal,
+    retail_model_shade, retail_model_shade_raw, transform_model_light_normal, view_light_normal,
 };
 use crate::projection::NativeViewportWords;
 use crate::renderer::WorldSpriteBlend;
@@ -124,6 +125,13 @@ impl ModelScene {
             (dot(self.camera_basis[1]) * self.units).round() as i32,
             (-dot(self.camera_basis[2]) * self.units).round() as i32,
         ]
+    }
+
+    /// The producer's source-owned VIEW point for vertex `index`, which only
+    /// a scene projecting with the native viewport consumes.
+    fn native_vertex_view(&self, views: &[Option<[i32; 3]>], index: usize) -> Option<[i32; 3]> {
+        self.native?;
+        views.get(index).copied().flatten()
     }
 
     /// VIEW-space direction of a model normal, which `FUN_0046D3F0`
@@ -460,10 +468,13 @@ pub(crate) fn prepare_model_body(
             // A native scene rejects through the native depth's 0x40
             // outcode; the floating camera may sit in another torus image.
             Some(world) if admitted || scene.native.is_some() => {
-                // Callback world points are projected on their own.
-                let view = match mesh.vertex_projection.get(index) {
-                    Some(ModelVertexProjection::WorldPoint(_)) => scene.view_raw(*world),
-                    _ => scene.node_view_raw(node, *world),
+                // A source-owned VIEW point is the vertex cache itself.
+                // Otherwise callback world points are projected on their own.
+                let native = scene.native_vertex_view(mesh.vertex_view_raw, index);
+                let view = match (native, mesh.vertex_projection.get(index)) {
+                    (Some(view), _) => view,
+                    (None, Some(ModelVertexProjection::WorldPoint(_))) => scene.view_raw(*world),
+                    (None, _) => scene.node_view_raw(node, *world),
                 };
                 let point = lens.project_view(view);
                 ModelCorner {
@@ -485,13 +496,22 @@ pub(crate) fn prepare_model_body(
     let mut faces: HashMap<usize, (u8, Vec<i16>)> = HashMap::new();
     let mut face_order = Vec::new();
     let mut previous: Option<(ModelFaceVertices, usize)> = None;
-    let shade_dword = |normal: [f32; 3]| -> u32 {
-        retail_model_shade(
-            mesh.shade_table,
-            scene.view_light_normal(draw.transform.orientation, normal),
-            mesh.light_direction_raw,
-            mesh.shade_shift,
-        )
+    // A node with its integer frame shades from the raw pool normals and
+    // its model-space light; slot 0 is the face normal, 1..=3 its corners.
+    let native_light = mesh.native_light_raw.filter(|_| scene.native.is_some());
+    let shade_dword = |face: usize, slot: usize, normal: [f32; 3]| -> u32 {
+        let raw = native_light.zip(mesh.face_normals_raw.get(face));
+        match raw {
+            Some((light, normals)) => {
+                retail_model_shade_raw(mesh.shade_table, normals[slot], light, mesh.shade_shift)
+            }
+            None => retail_model_shade(
+                mesh.shade_table,
+                scene.view_light_normal(draw.transform.orientation, normal),
+                mesh.light_direction_raw,
+                mesh.shade_shift,
+            ),
+        }
         .map_or(0, |entry| {
             u32::from_le_bytes([entry.r, entry.g, entry.b, entry.shade_level])
         })
@@ -519,7 +539,7 @@ pub(crate) fn prepare_model_body(
                         let at = words.len() - 1;
                         let reference = normals.len() as i16;
                         normals.push(ModelNormal {
-                            shade: shade_dword(corner[2]),
+                            shade: shade_dword(index, 3, corner[2]),
                             culled: false,
                         });
                         words[at] = reference;
@@ -553,8 +573,10 @@ pub(crate) fn prepare_model_body(
             .unwrap_or([face_normal; 3]);
         let lighting = model_lighting_normals(shading, face_normal, corner_normals);
         let normal_index = normals.len() as i16;
+        // FlatLit reads the face normal, Gouraud its first corner.
+        let first_slot = usize::from(matches!(shading, ModelFaceShading::Gouraud));
         normals.push(ModelNormal {
-            shade: lighting.map_or(0, |normals| shade_dword(normals[0])),
+            shade: lighting.map_or(0, |normals| shade_dword(index, first_slot, normals[0])),
             culled,
         });
         let vertices: Vec<i16> = match source {
@@ -596,7 +618,7 @@ pub(crate) fn prepare_model_body(
                     let reference = normals.len() as i16;
                     let normal = normals_for[corner.min(2)];
                     normals.push(ModelNormal {
-                        shade: shade_dword(normal),
+                        shade: shade_dword(index, 1 + corner.min(2), normal),
                         culled: false,
                     });
                     words.push(reference);
@@ -792,9 +814,12 @@ pub(crate) fn prepare_model_billboards(
     let mut corners: Vec<ModelCorner> = world
         .iter()
         .zip(&admitted)
-        .map(|(world, &admitted)| match world {
+        .enumerate()
+        .map(|(index, (world, &admitted))| match world {
             Some(world) if admitted || scene.native.is_some() => {
-                let view = scene.node_view_raw(node, *world);
+                let view = scene
+                    .native_vertex_view(draw.vertex_view_raw, index)
+                    .unwrap_or_else(|| scene.node_view_raw(node, *world));
                 let point = lens.project_view(view);
                 ModelCorner {
                     view,
@@ -1119,5 +1144,65 @@ mod tests {
         let scene = PreparedNode::test_triangles(&[]).scene;
         let node = prepare_model_body(&draw, &scene, &mut NoSprites).unwrap();
         assert_eq!(node.face_order, [0, 2], "the back face is its own polygon");
+    }
+
+    #[test]
+    fn a_native_scene_takes_the_producers_view_points() {
+        let model = ModelEntry {
+            vertices: vec![[0.0, 0.0, 0.0], [256.0, 0.0, 0.0], [0.0, 256.0, 0.0]],
+            vertex_type_flags: vec![0; 3],
+            vertex_projection: vec![ModelVertexProjection::Position; 3],
+            vertex_clip: vec![ModelSlotClip::Clear; 3],
+            triangles: vec![[0, 1, 2]],
+            face_vertices: vec![ModelFaceVertices::Triangle([0, 1, 2])],
+            normals: vec![[0.0, 0.0, 1.0]],
+            face_shading: vec![ModelFaceShading::Flat],
+            ..ModelEntry::default()
+        };
+        let materials = [FaceMaterial {
+            color: [1.0; 3],
+            palette_rgb555: Some(0x7FFF),
+            emissive: [0.0; 3],
+            texture: None,
+            blend: WorldSpriteBlend::Masked,
+            flat_shade_row: 28,
+        }];
+        let views = [Some([-100, 50, 2_000]), None, Some([300, -20, 2_400])];
+        let mut mesh = ModelMesh::from_model(&model, &materials);
+        mesh.vertex_view_raw = &views;
+        let position = [4.0, 0.0, 8.0];
+        let draw = ModelDraw {
+            mesh,
+            projection_authority: Default::default(),
+            transform: ModelTransform {
+                orientation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                position,
+                scale: 100.0 / 256.0,
+            },
+            near_clip: ModelNearClip::RetailWorld,
+            depth_fade: ModelDepthFade::Disabled,
+            depth_policy: ModelDepthPolicy::Geometry,
+            view_pin: ViewPinMode::Raw,
+            surface_resolution: ModelSurfaceResolution::Intrinsic,
+            world_surface: None,
+            external_frame: ExternalFrameMode::Raw,
+            overlay: ModelOverlayKind::None,
+            painter: None,
+        };
+        let mut scene = PreparedNode::test_triangles(&[]).scene;
+        let float = prepare_model_body(&draw, &scene, &mut NoSprites).unwrap();
+        assert_ne!(float.corners[0].view, [-100, 50, 2_000]);
+        scene.native = Some(NativeViewportWords {
+            origin_raw: [0; 3],
+            axes_q31: [[i32::MAX, 0, 0], [0, i32::MAX, 0], [0, 0, i32::MAX]],
+        });
+        let native = prepare_model_body(&draw, &scene, &mut NoSprites).unwrap();
+        assert_eq!(native.corners[0].view, [-100, 50, 2_000]);
+        assert_eq!(native.corners[2].view, [300, -20, 2_400]);
+        // A vertex the producer does not own keeps the transformed point.
+        assert_eq!(
+            native.corners[1].view,
+            scene.node_view_raw(position, [5.0, 0.0, 8.0])
+        );
     }
 }

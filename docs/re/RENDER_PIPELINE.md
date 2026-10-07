@@ -1408,6 +1408,15 @@ Section-6 entries 0..7; every negative bin maps back to entry 0 through slots
 untextured lit paths and a 0..31 Section-3 palette row used by the indexed
 textured path.
 
+In integers, each model-light component is a sum of three separately
+shifted Q31 products of the context vector with one node axis (an identity
+context copies the vector), the dot uses the raw pool normal (X negated for
+an odd reference) in wrapping 32-bit arithmetic, and the slot is the dot's
+low four bits after the shift, not a clamped bin. The software renderer
+shades that way whenever the node's integer frame is owned
+([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); rotating a
+floating-point normal instead lands some faces on a neighbouring bin.
+
 `FUN_0046D5A0` initializes reserved normal-cache references 0/1 from the
 current table's slot 0. A stored zero normal also resolves slot 0 through
 `FUN_0046D3F0`. Preserve that zero direction through parser and model
