@@ -1,5 +1,5 @@
 use v2k_formats::models::{
-    Billboard, ModelEntry, ModelFaceCull, ModelFaceShading, ModelFaceVertices,
+    Billboard, ModelEntry, ModelFaceCull, ModelFaceShading, ModelFaceVertices, ModelPainterOp,
     ModelVertexProjection,
 };
 use v2k_formats::system::{FogGradientEntry, PaletteEntry};
@@ -697,6 +697,22 @@ pub struct ModelDraw<'a> {
     /// Explicit terrain-overlay opt-in for draws that sit on the recovered
     /// terrain hit without authored type-13 vertices.
     pub overlay: ModelOverlayKind,
+    /// The node's place in its tree's retail painter program, for backends
+    /// that queue primitives the way the original does. `Some` promises a
+    /// [`Renderer::end_model_node`] once the node's children are submitted;
+    /// `None` draws the body on its own.
+    pub painter: Option<ModelPainterNode<'a>>,
+}
+
+/// A model-tree node's retail painter program (`FUN_00466xxx` group,
+/// primitive and instance commands in command order). Children expand at
+/// their parent's `Instance` op, inside whatever groups are open there.
+#[derive(Debug, Clone, Copy)]
+pub struct ModelPainterNode<'a> {
+    pub program: &'a [ModelPainterOp],
+    /// The parent program's `Instance` op (its `instance_index`) this node
+    /// expands; `None` for a tree root.
+    pub parent_instance: Option<usize>,
 }
 
 /// Resolved material and authored sprite dimensions for one Section-8
@@ -1044,6 +1060,10 @@ pub trait Renderer {
     fn draw_model_billboards(&mut self, draw: ModelBillboardDraw<'_>) {
         let _ = draw;
     }
+
+    /// The children of the latest [`ModelDraw::painter`] node still open
+    /// have all been submitted. Backends without a primitive queue ignore it.
+    fn end_model_node(&mut self) {}
 
     /// Draw camera-facing, depth-tested sprites in world space after opaque
     /// terrain/models. The sprite textures must have been created through

@@ -38,6 +38,7 @@ impl ModelTreeSubmissionBuffer {
                 OwnedSubmission::Billboards(billboards) => {
                     renderer.draw_model_billboards(billboards.borrow())
                 }
+                OwnedSubmission::EndNode => renderer.end_model_node(),
             }
         }
     }
@@ -50,11 +51,15 @@ impl ModelTreeSubmissionBuffer {
         self.commands
             .push(OwnedSubmission::Billboards(OwnedBillboards::new(draw)));
     }
+    pub(super) fn push_end_node(&mut self) {
+        self.commands.push(OwnedSubmission::EndNode);
+    }
 }
 
 enum OwnedSubmission {
     Body(OwnedBody),
     Billboards(OwnedBillboards),
+    EndNode,
 }
 
 struct OwnedBody {
@@ -89,6 +94,8 @@ struct OwnedBody {
     surface_waves_enabled: Option<bool>,
     external_frame: ExternalFrameMode,
     overlay: ModelOverlayKind,
+    /// The node's painter program and parent instance, when it is a tree node.
+    painter: Option<(Vec<v2k_formats::models::ModelPainterOp>, Option<usize>)>,
 }
 
 impl OwnedBody {
@@ -131,6 +138,9 @@ impl OwnedBody {
             surface_waves_enabled: draw.world_surface.map(|surface| surface.waves_enabled()),
             external_frame: draw.external_frame,
             overlay: draw.overlay,
+            painter: draw
+                .painter
+                .map(|node| (node.program.to_vec(), node.parent_instance)),
         }
     }
 
@@ -174,6 +184,13 @@ impl OwnedBody {
                 .and_then(|enabled| surface.map(|surface| surface.with_waves_enabled(enabled))),
             external_frame: self.external_frame,
             overlay: self.overlay,
+            painter: self
+                .painter
+                .as_ref()
+                .map(|(program, parent_instance)| ModelPainterNode {
+                    program,
+                    parent_instance: *parent_instance,
+                }),
         }
     }
 }
@@ -272,6 +289,7 @@ mod tests {
                 ),
                 external_frame: ExternalFrameMode::Raw,
                 overlay: ModelOverlayKind::TerrainSurface,
+                painter: None,
             };
             let mut later = OwnedBody::new(ModelDraw {
                 projection_authority: draw.projection_authority,
@@ -285,6 +303,7 @@ mod tests {
                 world_surface: None,
                 external_frame: draw.external_frame,
                 overlay: draw.overlay,
+                painter: None,
             });
             later.shade_shift = 19;
             buffer.push_body(draw);
@@ -383,6 +402,7 @@ mod native_edge_buffer_tests {
             world_surface: None,
             external_frame: ExternalFrameMode::Raw,
             overlay: ModelOverlayKind::None,
+            painter: None,
         });
         snapshots[0] = ModelEdgeEndpointSnapshot::Compatibility;
         let draw = owned.borrow(None);

@@ -21,11 +21,11 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.5%25%20code%20%2F%2046.1%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.5%25%20code%20%2F%2046.2%25%20notes-orange)](docs/progress/README.md)
 
 Of the **2,383** game functions in retail `V2000.EXE`,
 **869 (36.5%)** are referenced by the port's code and
-**1,099 (46.1%)** by its code or RE notes.
+**1,100 (46.2%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
 
@@ -186,9 +186,10 @@ their existing behavior. This is a port-owned readability extension beyond
 the original modes, not retail visual acceptance. OpenGL is the supported
 renderer; Software is unavailable in normal options and automatic fallback.
 An explicit `--renderer software` draws through the in-progress retail software
-raster ([SOFTWARE_RASTER.md](docs/re/SOFTWARE_RASTER.md)): videos, menus, 2-D
-overlays and the gameplay ground work; water, sky, models and particles are not
-ported to it yet.
+raster ([SOFTWARE_RASTER.md](docs/re/SOFTWARE_RASTER.md)): videos, menus with
+their 3-D scene, 2-D overlays, and gameplay and cinematic frames with ground,
+water, models, edges and billboards through the retail producers. Particles are
+still drawn by an approximate adapter.
 
 For the classic colour look, select **4:3** or **Stretched** scaling and enable
 **Classic Framebuffer** under Display. At startup it selects the authored

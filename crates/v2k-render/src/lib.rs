@@ -14,6 +14,7 @@ pub mod software;
 pub mod sound;
 pub mod sw_backend;
 mod sw_model;
+mod sw_painter;
 mod terrain_footprint;
 pub mod terrain_light;
 pub mod terrain_tiles;
@@ -33,9 +34,10 @@ pub use renderer::{
     mat3_mul, orientation_f32, orientation_from_ypr, BillboardMaterial, CapturedFrame,
     ExternalFrameMode, FaceMaterial, FrameCaptureSource, IndexedModelTexture, ModelBillboardDraw,
     ModelDepthFade, ModelDepthPolicy, ModelDraw, ModelMesh, ModelNearClip, ModelOverlayKind,
-    ModelTransform, NativeModelFogPass, NativePalette, NativeSprite, NativeTexels,
-    OverlayDepthPolicy, RenderBackend, RenderScene, Renderer, SpriteFog, TextureId, ViewPinMode,
-    WorldModelFog, WorldSprite, WorldSpriteBlend, WorldSurfaceProjection, HALF_ADDITIVE_ALPHA,
+    ModelPainterNode, ModelTransform, NativeModelFogPass, NativePalette, NativeSprite,
+    NativeTexels, OverlayDepthPolicy, RenderBackend, RenderScene, Renderer, SpriteFog, TextureId,
+    ViewPinMode, WorldModelFog, WorldSprite, WorldSpriteBlend, WorldSurfaceProjection,
+    HALF_ADDITIVE_ALPHA,
 };
 pub use sound::{
     original_positional_mix, LoopingVoiceParams, PositionalMix, SoundListener, SoundManager,

@@ -727,6 +727,7 @@ mod tests {
             edges: Vec::new(),
             billboards: Vec::<Billboard>::new(),
             instances: Vec::<ModelInstance>::new(),
+            painter_program: Vec::new(),
             name: None,
         }
     }

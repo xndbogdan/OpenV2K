@@ -29,6 +29,7 @@ use v2k_formats::terrain::{TerrainGrid, WaterAnimation};
 use crate::camera::Camera;
 use crate::config::ScalingMode;
 use crate::projection::{NativeViewportWords, ProjectionEffect, SceneProjectionAuthority};
+use crate::renderer::ModelDepthPolicy;
 use crate::renderer::{
     CapturedFrame, FrameCaptureSource, RenderScene, RenderViewport, Renderer, TextureId,
     WorldModelFog, WorldSpriteBlend,
@@ -38,14 +39,16 @@ use crate::software::terrain::{
     draw_ground, ground_lead, GroundMaterial, GroundProjection, GroundScene,
 };
 use crate::software::water::{draw_water, WaterScene};
+use crate::software::QueueError;
 use crate::software::{
     material_flags, ClipRect, FillSlot, MaterialId, NoWordImages, PixelFormat, PrimitiveQueue,
     SoftwareRaster, Surface565, WORLD_ARENA_BYTES,
 };
 use crate::sw_model::{
-    queue_model_billboards, queue_model_body, queue_world_sprites, DerivedMaterials,
+    prepare_model_billboards, prepare_model_body, queue_world_sprites, DerivedMaterials,
     ModelMaterials, ModelScene,
 };
+use crate::sw_painter::PainterStack;
 use crate::terrain_tiles::InfectionTerrainAnimation;
 
 /// ESP at a fill-slot handler's first instruction while the world queue
@@ -93,6 +96,13 @@ pub struct SoftwareRenderer {
     /// This frame's ground inputs the water pass reuses.
     water: Option<WaterInputs>,
     water_error_reported: bool,
+    /// Model trees whose painter programs are running.
+    painter: PainterStack,
+    /// The FIFO group holding a run of draws the caller already ordered
+    /// (its key), see [`SoftwareRenderer::enter_ordered_run`].
+    ordered_run: Option<i32>,
+    /// Materials bound only until the queue next drains.
+    transient: Vec<MaterialId>,
 }
 
 /// What `FUN_00431A60` shares with the frame's ground scan: the light
@@ -162,6 +172,9 @@ impl SoftwareRenderer {
             model_error_reported: false,
             water: None,
             water_error_reported: false,
+            painter: PainterStack::default(),
+            ordered_run: None,
+            transient: Vec::new(),
         })
     }
 
@@ -184,6 +197,7 @@ impl SoftwareRenderer {
 
     /// Drain queued primitives into the surface (`FUN_004948F0`).
     fn flush(&mut self) {
+        self.settle_models();
         if !self.queued {
             return;
         }
@@ -200,6 +214,9 @@ impl SoftwareRenderer {
         });
         queue.reset();
         self.queued = false;
+        for id in self.transient.drain(..) {
+            self.materials.remove(id);
+        }
     }
 
     /// The clip a direct 2-D draw uses.
@@ -314,6 +331,59 @@ impl ModelMaterials for BackendMaterials<'_> {
 }
 
 impl SoftwareRenderer {
+    /// Finish every running painter program and close an ordered run:
+    /// another producer queues next, or the queue drains.
+    fn settle_models(&mut self) {
+        self.finish_trees();
+        self.close_ordered_run();
+    }
+
+    fn finish_trees(&mut self) {
+        if !self.painter.is_empty() {
+            let result = self.painter.finish_all(&mut self.queue);
+            self.report_model_error(result);
+        }
+    }
+
+    /// Draws the caller already put in painter order ([`ModelDepthPolicy::Painter`]
+    /// and `PainterGroup`) keep that order inside one FIFO group: keyed by the
+    /// group's depth, or drawn after the sorted scene for an isolated
+    /// overlay. Other draws close the run.
+    fn enter_ordered_run(&mut self, policy: ModelDepthPolicy) {
+        let key = match policy {
+            ModelDepthPolicy::Geometry => None,
+            ModelDepthPolicy::Painter => Some(i32::MIN),
+            // Frontend VIEW units are its raw model units.
+            ModelDepthPolicy::PainterGroup { view_depth_raw } => Some(view_depth_raw),
+        };
+        if key == self.ordered_run {
+            return;
+        }
+        self.close_ordered_run();
+        if let Some(key) = key {
+            match self.queue.begin_fifo_group(key) {
+                Ok(()) => self.ordered_run = Some(key),
+                Err(error) => self.report_model_error(Err(error)),
+            }
+        }
+    }
+
+    fn close_ordered_run(&mut self) {
+        if self.ordered_run.take().is_some() {
+            let result = self.queue.end_group();
+            self.report_model_error(result);
+        }
+    }
+
+    fn report_model_error(&mut self, result: Result<(), QueueError>) {
+        if let Err(error) = result {
+            if !self.model_error_reported {
+                self.model_error_reported = true;
+                eprintln!("software models: {error:?}; later primitives this frame are dropped");
+            }
+        }
+    }
+
     /// The world projection words (`0x004FEEA0..0x004FEEF0`): the native
     /// viewport's axes, the native lens, and the fade ramp between the world
     /// fog planes.
@@ -356,16 +426,18 @@ impl SoftwareRenderer {
         })
     }
 
-    fn model_scene(&self) -> Option<ModelScene> {
+    fn model_scene(&self, near_clip: crate::renderer::ModelNearClip) -> Option<ModelScene> {
+        let native = match self.authority {
+            SceneProjectionAuthority::Native(_) => self.native_viewport,
+            _ => None,
+        };
         Some(ModelScene {
             camera_position: self.camera_position,
             camera_basis: self.camera_basis,
-            native: match self.authority {
-                SceneProjectionAuthority::Native(_) => self.native_viewport,
-                _ => None,
-            },
+            native,
             lens: self.model_lens()?,
             world_fog: self.world_model_fog(),
+            units: ModelScene::units_for(native.is_some(), near_clip),
         })
     }
 
@@ -609,6 +681,7 @@ impl Renderer for SoftwareRenderer {
         lights: Option<&crate::terrain_light::TerrainLightWindow>,
         elapsed_micros: u32,
     ) {
+        self.settle_models();
         self.infection.advance(elapsed_micros);
         let (Some(frames), Some(viewport), SceneProjectionAuthority::Native(lens)) =
             (frames, self.native_viewport, self.authority)
@@ -700,6 +773,7 @@ impl Renderer for SoftwareRenderer {
         retail_tick: i32,
         _frames: Option<&crate::water::WaterFrames>,
     ) {
+        self.settle_models();
         let (Some(inputs), Some(viewport), SceneProjectionAuthority::Native(lens)) =
             (self.water.as_ref(), self.native_viewport, self.authority)
         else {
@@ -770,7 +844,8 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn draw_world_sprites(&mut self, sprites: &[crate::renderer::WorldSprite]) {
-        let Some(scene) = self.model_scene() else {
+        self.settle_models();
+        let Some(scene) = self.model_scene(crate::renderer::ModelNearClip::RetailWorld) else {
             return;
         };
         let mut materials = BackendMaterials {
@@ -787,36 +862,54 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn draw_model_billboards(&mut self, draw: crate::renderer::ModelBillboardDraw<'_>) {
-        let Some(scene) = self.model_scene() else {
-            return;
-        };
+        let scene = self.model_scene(draw.near_clip);
         let mut materials = BackendMaterials {
             store: &mut self.materials,
             derived: &mut self.derived,
         };
-        if let Err(error) = queue_model_billboards(&mut self.queue, &draw, &scene, &mut materials) {
-            if !self.model_error_reported {
-                self.model_error_reported = true;
-                eprintln!("software billboards: {error:?}; later ones this frame are dropped");
-            }
-        }
+        let prepared =
+            scene.and_then(|scene| prepare_model_billboards(&draw, &scene, &mut materials));
+        let result = if self.painter.awaiting_billboards() {
+            self.painter.attach_billboards(&mut self.queue, prepared)
+        } else {
+            self.finish_trees();
+            self.enter_ordered_run(draw.depth_policy);
+            prepared.map_or(Ok(()), |billboards| billboards.emit_all(&mut self.queue))
+        };
+        self.report_model_error(result);
+        self.queued = true;
+    }
+
+    fn end_model_node(&mut self) {
+        let result = self.painter.end_node(&mut self.queue);
+        self.report_model_error(result);
         self.queued = true;
     }
 
     fn draw_model_body(&mut self, draw: crate::renderer::ModelDraw<'_>) {
-        let Some(scene) = self.model_scene() else {
-            return;
-        };
+        let scene = self.model_scene(draw.near_clip);
         let mut materials = BackendMaterials {
             store: &mut self.materials,
             derived: &mut self.derived,
         };
-        if let Err(error) = queue_model_body(&mut self.queue, &draw, &scene, &mut materials) {
-            if !self.model_error_reported {
-                self.model_error_reported = true;
-                eprintln!("software models: {error:?}; later faces this frame are dropped");
+        let prepared = scene.and_then(|scene| prepare_model_body(&draw, &scene, &mut materials));
+        let result = match draw.painter {
+            Some(node) => {
+                self.close_ordered_run();
+                self.painter.begin_node(
+                    &mut self.queue,
+                    prepared,
+                    node.program,
+                    node.parent_instance,
+                )
             }
-        }
+            None => {
+                self.finish_trees();
+                self.enter_ordered_run(draw.depth_policy);
+                prepared.map_or(Ok(()), |node| node.emit_all(&mut self.queue))
+            }
+        };
+        self.report_model_error(result);
         self.queued = true;
     }
 
@@ -882,6 +975,50 @@ impl Renderer for SoftwareRenderer {
         blend: WorldSpriteBlend,
     ) {
         self.draw_rgba_sprite(rgba, width, height, x, y, blend);
+    }
+
+    /// `FUN_0042D030`: a screen billboard (the menu and cinematic V2000
+    /// emblems) queued as a keyed textured quad with its additive sprite, so
+    /// that the sorted scene paints around it by depth. `view_depth` is in
+    /// view units of the current scene's coordinates.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_additive_sprite_at_depth(
+        &mut self,
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+        x: i32,
+        y: i32,
+        view_depth: f32,
+        _near: f32,
+        _far: f32,
+    ) {
+        if width == 0 || height == 0 {
+            return;
+        }
+        self.settle_models();
+        let units = match self.scene {
+            RenderScene::Menu => 100.0,
+            RenderScene::World => 256.0,
+        };
+        let key = (view_depth * units) as i32;
+        let material = overlay_material(rgba, width, height, material_flags::ADDITIVE);
+        let id = self.materials.insert(material);
+        self.transient.push(id);
+        let corners = rect_corners(x, y, width as i32, height as i32);
+        match self.queue.push(key, FillSlot::TexturedQuad, 0x18) {
+            Ok(payload) => {
+                for (index, (x, y)) in corners.into_iter().enumerate() {
+                    payload[4 * index..4 * index + 2].copy_from_slice(&(x as i16).to_le_bytes());
+                    payload[4 * index + 2..4 * index + 4]
+                        .copy_from_slice(&(y as i16).to_le_bytes());
+                }
+                payload[0x10..0x14].copy_from_slice(&id.to_le_bytes());
+                payload[0x14..0x18].copy_from_slice(&8u32.to_le_bytes());
+            }
+            Err(error) => self.report_model_error(Err(error)),
+        }
+        self.queued = true;
     }
 
     fn draw_material_sprite_quad(

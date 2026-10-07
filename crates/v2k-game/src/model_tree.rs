@@ -20,7 +20,7 @@ use v2k_render::renderer::RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW;
 use v2k_render::{
     mat3_mul, orientation_f32, BillboardMaterial, ExternalFrameMode, FaceMaterial,
     ModelBillboardDraw, ModelDepthFade, ModelDraw, ModelMesh, ModelNearClip, ModelOverlayKind,
-    ModelTransform, Renderer, ViewPinMode, WorldSurfaceProjection,
+    ModelPainterNode, ModelTransform, Renderer, ViewPinMode, WorldSurfaceProjection,
 };
 
 use crate::model_color::ModelMaterialCache;
@@ -458,6 +458,18 @@ struct ModelNodeGeometry<'a> {
     edges: &'a [v2k_formats::models::ModelEdge],
     edge_projection: v2k_render::renderer::ModelEdgeProjection<'a>,
     billboards: &'a [Billboard],
+    /// Retail group, primitive and instance order; empty for subsets.
+    painter_program: &'a [v2k_formats::models::ModelPainterOp],
+}
+
+/// How a submitted node takes part in a backend's retail painter queue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NodePainter {
+    /// A tree node expanding its parent's `Instance` op (`None`: a root).
+    /// [`ModelTreeRenderer::end_model_node`] follows its children.
+    Tree { parent_instance: Option<usize> },
+    /// Already ordered by the caller (the isolated painter path).
+    Ordered,
 }
 
 impl<'a> ModelNodeGeometry<'a> {
@@ -508,6 +520,7 @@ impl<'a> ModelNodeGeometry<'a> {
             edges: &model.edges,
             edge_projection: v2k_render::renderer::ModelEdgeProjection::Compatibility,
             billboards: &model.billboards,
+            painter_program: &model.painter_program,
         }
     }
 
@@ -533,6 +546,7 @@ impl<'a> ModelNodeGeometry<'a> {
                 &model.edge_endpoint_snapshots,
             ),
             billboards: &model.billboards,
+            painter_program: &model.painter_program,
         }
     }
 }
@@ -755,6 +769,15 @@ impl<'a> ModelTreeRenderer<'a> {
             buffer.push_billboards(draw);
         } else {
             self.renderer.draw_model_billboards(draw);
+        }
+    }
+
+    /// Close the latest tree node opened by [`NodePainter::Tree`].
+    fn end_model_node(&mut self) {
+        if let Some(buffer) = self.submission_buffer.as_mut() {
+            buffer.push_end_node();
+        } else {
+            self.renderer.end_model_node();
         }
     }
 
@@ -1061,6 +1084,7 @@ impl<'a> ModelTreeRenderer<'a> {
             world_surface: None,
             external_frame: ExternalFrameMode::Raw,
             overlay: ModelOverlayKind::None,
+            painter: None,
         });
     }
 
@@ -1085,6 +1109,7 @@ impl<'a> ModelTreeRenderer<'a> {
         depth_policy: ModelDepthPolicy,
         surface_resolution: ModelSurfaceResolution,
         depth_fade: ModelDepthFade,
+        painter: NodePainter,
     ) {
         let external_frame = if surface_resolution == ModelSurfaceResolution::ContextResolved
             && self.external_frame.owns_external_vertices()
@@ -1178,6 +1203,13 @@ impl<'a> ModelTreeRenderer<'a> {
             world_surface: self.world_surface,
             external_frame,
             overlay: self.overlay,
+            painter: match painter {
+                NodePainter::Tree { parent_instance } => Some(ModelPainterNode {
+                    program: geometry.painter_program,
+                    parent_instance,
+                }),
+                NodePainter::Ordered => None,
+            },
         });
         self.submit_node_billboards(&geometry, orientation, position, depth_policy, depth_fade);
     }
@@ -1228,9 +1260,11 @@ impl<'a> ModelTreeRenderer<'a> {
             depth,
             child_transform,
             &vars,
+            None,
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_static_node(
         &mut self,
         model_id: usize,
@@ -1239,6 +1273,7 @@ impl<'a> ModelTreeRenderer<'a> {
         depth: u8,
         child_transform: Option<&dyn ModelTreeChildTransform>,
         vars: &AnimVars,
+        parent_instance: Option<usize>,
     ) {
         let Some(model) = self.cache.global_model(model_id) else {
             return;
@@ -1266,6 +1301,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 vars,
                 child_transform,
                 ModelTreeRootLinkPolicy::Authored,
+                parent_instance,
             );
             return;
         }
@@ -1277,11 +1313,13 @@ impl<'a> ModelTreeRenderer<'a> {
             ModelDepthPolicy::Geometry,
             ModelSurfaceResolution::Intrinsic,
             depth_fade,
+            NodePainter::Tree { parent_instance },
         );
         if depth == 0 {
+            self.end_model_node();
             return;
         }
-        for instance in &model.instances {
+        for (index, instance) in model.instances.iter().enumerate() {
             if instance.model_id as usize == model_id {
                 continue;
             }
@@ -1319,8 +1357,10 @@ impl<'a> ModelTreeRenderer<'a> {
                 &child_vars,
                 child_transform,
                 ModelTreeRootLinkPolicy::Authored,
+                Some(index),
             );
         }
+        self.end_model_node();
     }
 
     /// Materialize a model with live animation variables and linked-parent
@@ -1375,6 +1415,7 @@ impl<'a> ModelTreeRenderer<'a> {
             vars,
             child_transform,
             self.root_link_policy,
+            None,
         );
     }
 
@@ -1389,6 +1430,7 @@ impl<'a> ModelTreeRenderer<'a> {
         vars: &AnimVars,
         child_transform: Option<&dyn ModelTreeChildTransform>,
         root_link_policy: ModelTreeRootLinkPolicy,
+        parent_instance: Option<usize>,
     ) {
         let Some(model) = self.cache.global_model(model_id) else {
             return;
@@ -1414,11 +1456,18 @@ impl<'a> ModelTreeRenderer<'a> {
             ModelDepthPolicy::Geometry,
             surface_resolution,
             depth_fade,
+            NodePainter::Tree { parent_instance },
         );
         if depth == 0 {
+            self.end_model_node();
             return;
         }
-        for (instance, child_linked) in materialized.instances.iter().zip(child_links.iter()) {
+        for (index, (instance, child_linked)) in materialized
+            .instances
+            .iter()
+            .zip(child_links.iter())
+            .enumerate()
+        {
             if instance.model_id as usize == model_id {
                 continue;
             }
@@ -1463,9 +1512,11 @@ impl<'a> ModelTreeRenderer<'a> {
                 &child_vars,
                 child_transform,
                 ModelTreeRootLinkPolicy::Authored,
+                Some(index),
             );
             self.external_frame.end_child(native_parent);
         }
+        self.end_model_node();
     }
 
     /// One reached node is materialized once with the live H/E and native
@@ -2751,6 +2802,7 @@ mod tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: Some(name.to_owned()),
         };
         let materialized = entry.materialize(&AnimVars::default());

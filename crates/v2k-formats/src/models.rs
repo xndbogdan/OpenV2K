@@ -487,6 +487,9 @@ pub struct ModelEntry {
     pub billboards: Vec<Billboard>,
     /// Inline instances of other models (op 0x0E, global pool ids).
     pub instances: Vec<ModelInstance>,
+    /// Authored primitive, child-instance and painter-group order of the
+    /// intrinsic materialization (see [`MaterializedModel::painter_program`]).
+    pub painter_program: Vec<ModelPainterOp>,
     /// Embedded name string (e.g. "hovercraft"), if present and non-empty.
     pub name: Option<String>,
 }
@@ -2131,6 +2134,7 @@ pub fn parse_model_subblocks(data: &[u8], header_value: u32) -> Result<ModelColl
                 edges: Vec::new(),
                 billboards: Vec::new(),
                 instances: Vec::new(),
+                painter_program: Vec::new(),
                 name,
             };
             let m = entry.materialize_into(&AnimVars::default(), &mut stats);
@@ -2152,6 +2156,7 @@ pub fn parse_model_subblocks(data: &[u8], header_value: u32) -> Result<ModelColl
             entry.edges = m.edges;
             entry.billboards = m.billboards;
             entry.instances = m.instances;
+            entry.painter_program = m.painter_program;
             all_entries.push(entry);
 
             if q <= p {
@@ -3742,6 +3747,7 @@ mod tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: None,
         }
     }
@@ -5408,6 +5414,7 @@ mod tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: None,
         };
         let m = entry.materialize(&AnimVars::default());

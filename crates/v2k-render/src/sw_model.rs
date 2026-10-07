@@ -16,7 +16,7 @@ use std::collections::HashMap;
 
 use v2k_formats::models::{
     ModelEdgeEndpointSnapshot, ModelEdgeStyle, ModelFaceCull, ModelFaceShading, ModelFaceVertices,
-    ModelSlotClip, ModelVertexProjection,
+    ModelPainterDepthKey, ModelSlotClip, ModelVertexProjection,
 };
 
 use crate::gl_backend::{
@@ -26,8 +26,8 @@ use crate::gl_backend::{
 use crate::projection::NativeViewportWords;
 use crate::renderer::WorldSpriteBlend;
 use crate::renderer::{
-    ModelBillboardDraw, ModelDepthFade, ModelDraw, ModelEdgeProjection, NativeModelFogPass,
-    WorldModelFog,
+    ModelBillboardDraw, ModelDepthFade, ModelDraw, ModelEdgeProjection, ModelNearClip,
+    NativeModelFogPass, WorldModelFog,
 };
 use crate::software::model::{
     construct_billboard, construct_edge, construct_face, screen_midpoint, BillboardCommand,
@@ -37,6 +37,7 @@ use crate::software::terrain::GroundProjection;
 use crate::software::{material_flags, MaterialId, PrimitiveQueue, QueueError};
 
 /// The scene a model body is queued into.
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct ModelScene {
     pub camera_position: [f32; 3],
     /// GL view rows (x right, y up, z toward the viewer).
@@ -45,6 +46,20 @@ pub(crate) struct ModelScene {
     /// The lens with identity axes; fade terms are per draw.
     pub lens: GroundProjection,
     pub world_fog: Option<WorldModelFog>,
+    /// VIEW units per port world unit off the native path: 256 for the
+    /// world's 8.8 coordinates, 100 for frontend models.
+    pub units: f32,
+}
+
+impl ModelScene {
+    /// VIEW units per world unit for a draw's coordinate domain. Native
+    /// scenes always use the world's 8.8 coordinates.
+    pub(crate) fn units_for(native: bool, near_clip: ModelNearClip) -> f32 {
+        match near_clip {
+            ModelNearClip::RetailFrontend if !native => 100.0,
+            _ => 256.0,
+        }
+    }
 }
 
 /// Fade terms, constructor table and fog colour for one draw.
@@ -103,9 +118,9 @@ impl ModelScene {
         let dot =
             |row: [f32; 3]| row[0] * relative[0] + row[1] * relative[1] + row[2] * relative[2];
         [
-            (dot(self.camera_basis[0]) * 256.0).round() as i32,
-            (dot(self.camera_basis[1]) * 256.0).round() as i32,
-            (-dot(self.camera_basis[2]) * 256.0).round() as i32,
+            (dot(self.camera_basis[0]) * self.units).round() as i32,
+            (dot(self.camera_basis[1]) * self.units).round() as i32,
+            (-dot(self.camera_basis[2]) * self.units).round() as i32,
         ]
     }
 
@@ -128,7 +143,7 @@ impl ModelScene {
         depth_fade: ModelDepthFade,
     ) -> Option<DrawFog> {
         let origin_depth = self.view_raw(position)[2];
-        let radius = (f32::from(radius_raw) * scale.abs() / 100.0 * 256.0) as i32;
+        let radius = (f32::from(radius_raw) * scale.abs() / 100.0 * self.units) as i32;
         let select = |near: i32, far: i32, colour: [f32; 3]| -> Option<DrawFog> {
             if origin_depth.wrapping_sub(radius) >= far {
                 return None;
@@ -164,7 +179,7 @@ impl ModelScene {
                 color,
             } => select(near_raw, far_raw, color),
             ModelDepthFade::Linear { near, far, color } => {
-                select((near * 256.0) as i32, (far * 256.0) as i32, color)
+                select((near * self.units) as i32, (far * self.units) as i32, color)
             }
             ModelDepthFade::InheritWorldFog => match self.world_fog {
                 Some(fog) => select(fog.planes.near_raw, fog.planes.far_raw, fog.color),
@@ -256,20 +271,144 @@ fn screen_midpoints(
     }
 }
 
-/// Queue the faces of one model body.
-pub(crate) fn queue_model_body(
-    queue: &mut PrimitiveQueue,
+/// One model body's constructor inputs, owned so that its painter program
+/// can run them after the draw returns: the warm vertex cache, normal
+/// cache, palette and sprite operands, and one command per source polygon
+/// and edge.
+pub(crate) struct PreparedNode {
+    scene: ModelScene,
+    position: [f32; 3],
+    orientation: [[f32; 3]; 3],
+    /// Raw model units to world units.
+    raw_scale: f32,
+    pass: FacePass,
+    fog_colour: u32,
+    lens: GroundProjection,
+    corners: Vec<ModelCorner>,
+    normals: Vec<ModelNormal>,
+    colours: Vec<u32>,
+    sprites: Vec<MaterialId>,
+    /// Sprite record sizes, parallel to `sprites` (edges read them).
+    sizes: Vec<(u16, u16)>,
+    /// The command of each source polygon, by its first triangle.
+    faces: HashMap<usize, (u8, Vec<i16>)>,
+    /// Polygon first triangles in mesh order.
+    face_order: Vec<usize>,
+    /// The command of each edge, by edge index.
+    edges: Vec<Option<EdgeCommand>>,
+}
+
+impl PreparedNode {
+    fn context<'s>(
+        &'s self,
+        palette: &'s dyn Fn(i16) -> u32,
+        sprite: &'s dyn Fn(i16) -> MaterialId,
+    ) -> FaceContext<'s> {
+        FaceContext {
+            corners: &self.corners,
+            normals: &self.normals,
+            palette,
+            sprite,
+            fog_colour: self.fog_colour,
+        }
+    }
+
+    /// Run the face whose polygon starts at triangle `first`.
+    pub(crate) fn emit_face(
+        &self,
+        queue: &mut PrimitiveQueue,
+        first: usize,
+    ) -> Result<(), QueueError> {
+        let Some((opcode, words)) = self.faces.get(&first) else {
+            return Ok(());
+        };
+        let palette = |index: i16| self.colours.get(index as usize).copied().unwrap_or(0);
+        let sprite = |index: i16| self.sprites.get(index as usize).copied().unwrap_or(0);
+        construct_face(
+            queue,
+            &self.context(&palette, &sprite),
+            self.pass,
+            *opcode,
+            words,
+        )?;
+        Ok(())
+    }
+
+    /// Run edge `index`.
+    pub(crate) fn emit_edge(
+        &self,
+        queue: &mut PrimitiveQueue,
+        index: usize,
+    ) -> Result<(), QueueError> {
+        let Some(Some(command)) = self.edges.get(index) else {
+            return Ok(());
+        };
+        let palette = |index: i16| self.colours.get(index as usize).copied().unwrap_or(0);
+        let sprite = |index: i16| self.sprites.get(index as usize).copied().unwrap_or(0);
+        let size = |index: i16| self.sizes.get(index as usize).copied().unwrap_or((0, 0));
+        let context = self.context(&palette, &sprite);
+        construct_edge(queue, &context, &self.lens, &size, self.pass, *command)
+    }
+
+    /// Every face in mesh order, then every edge: the order of a body
+    /// without a painter program.
+    pub(crate) fn emit_all(&self, queue: &mut PrimitiveQueue) -> Result<(), QueueError> {
+        for &first in &self.face_order {
+            self.emit_face(queue, first)?;
+        }
+        for index in 0..self.edges.len() {
+            self.emit_edge(queue, index)?;
+        }
+        Ok(())
+    }
+
+    /// A painter group's key in VIEW depth units, or `None` for an
+    /// unresolved one (the group is skipped rather than given a guess).
+    pub(crate) fn group_key(&self, key: &ModelPainterDepthKey) -> Option<i32> {
+        let depth = |position_raw: &[f64; 3]| -> i32 {
+            let local = position_raw.map(|value| value as f32 * self.raw_scale);
+            let world: [f32; 3] = std::array::from_fn(|axis| {
+                self.position[axis]
+                    + (0..3)
+                        .map(|k| self.orientation[axis][k] * local[k])
+                        .sum::<f32>()
+            });
+            self.scene.node_view_raw(self.position, world)[2]
+        };
+        Some(match key {
+            ModelPainterDepthKey::Native(depth) | ModelPainterDepthKey::Fixed(depth) => *depth,
+            ModelPainterDepthKey::Vertex {
+                position_raw,
+                offset_raw,
+            } => {
+                // Offsets are model units, VIEW units in gameplay.
+                let offset =
+                    (*offset_raw as f32 * self.raw_scale * self.scene.units).round() as i32;
+                depth(position_raw).wrapping_add(offset)
+            }
+            ModelPainterDepthKey::Minimum(points) => {
+                points.iter().map(depth).min().unwrap_or(i32::MAX)
+            }
+            ModelPainterDepthKey::Maximum(points) => {
+                points.iter().map(depth).max().unwrap_or(-i32::MAX)
+            }
+            ModelPainterDepthKey::Unresolved => return None,
+        })
+    }
+}
+
+/// Build one body's constructor inputs, or `None` when the node lies
+/// beyond the far plane or has no vertices.
+pub(crate) fn prepare_model_body(
     draw: &ModelDraw<'_>,
     scene: &ModelScene,
     materials: &mut dyn ModelMaterials,
-) -> Result<(), QueueError> {
+) -> Option<PreparedNode> {
     let mesh = draw.mesh;
     if mesh.vertices.is_empty() {
-        return Ok(());
+        return None;
     }
-    let Some(fog) = scene.draw_fog(draw) else {
-        return Ok(());
-    };
+    let fog = scene.draw_fog(draw)?;
     let lens = GroundProjection {
         fade: fog.fade,
         ..scene.lens
@@ -307,7 +446,8 @@ pub(crate) fn queue_model_body(
     let mut normals: Vec<ModelNormal> = Vec::new();
     let mut colours: Vec<u32> = Vec::new();
     let mut sprites: Vec<MaterialId> = Vec::new();
-    let mut commands: Vec<(u8, Vec<i16>)> = Vec::new();
+    let mut faces: HashMap<usize, (u8, Vec<i16>)> = HashMap::new();
+    let mut face_order = Vec::new();
     let mut previous: Option<(ModelFaceVertices, usize)> = None;
     let shade_dword = |normal: [f32; 3]| -> u32 {
         retail_model_shade(
@@ -337,7 +477,7 @@ pub(crate) fn queue_model_body(
                         .unwrap_or(ModelFaceShading::Flat),
                     mesh.face_corner_normals.get(index),
                 ) {
-                    if let Some((_, words)) = commands.last_mut() {
+                    if let Some((_, words)) = faces.get_mut(&first) {
                         let at = words.len() - 1;
                         let reference = normals.len() as i16;
                         normals.push(ModelNormal {
@@ -425,10 +565,10 @@ pub(crate) fn queue_model_body(
                 }
             }
         }
-        commands.push((opcode, words));
+        faces.insert(index, (opcode, words));
+        face_order.push(index);
     }
 
-    // Edges follow the faces: the materialized mesh keeps no interleaving.
     // Native endpoint snapshots carry their own VIEW points.
     let snapshots = match (mesh.edge_projection, scene.native) {
         (ModelEdgeProjection::CommandSnapshots(snapshots), Some(_)) => snapshots,
@@ -436,8 +576,9 @@ pub(crate) fn queue_model_body(
     };
     let raw_scale = draw.transform.scale / 100.0;
     let mut sizes = vec![(0u16, 0u16); sprites.len()];
-    let mut edges = Vec::new();
+    let mut edges = Vec::with_capacity(mesh.edges.len());
     for (index, edge) in mesh.edges.iter().enumerate() {
+        edges.push(None);
         let mut vertices = edge.vertices.map(usize::from);
         match snapshots.get(index) {
             None | Some(ModelEdgeEndpointSnapshot::Compatibility) => {}
@@ -488,7 +629,7 @@ pub(crate) fn queue_model_body(
                 sprites.push(id);
                 sizes.push(mesh.edge_widths.get(index).copied().unwrap_or((0, 0)));
                 // Retail sizes are VIEW units; see the billboards.
-                let size = (f32::from(size as i16) * raw_scale * 256.0).round() as i32 as i16;
+                let size = (f32::from(size as i16) * raw_scale * scene.units).round() as i32 as i16;
                 EdgeCommand::Ribbon {
                     sprite: sprites.len() as i16 - 1,
                     size,
@@ -496,46 +637,86 @@ pub(crate) fn queue_model_body(
                 }
             }
         };
-        edges.push(command);
+        edges[index] = Some(command);
     }
 
-    let palette = |index: i16| colours.get(index as usize).copied().unwrap_or(0);
-    let sprite = |index: i16| sprites.get(index as usize).copied().unwrap_or(0);
-    let sprite_size = |index: i16| sizes.get(index as usize).copied().unwrap_or((0, 0));
-    let context = FaceContext {
-        corners: &corners,
-        normals: &normals,
-        palette: &palette,
-        sprite: &sprite,
+    Some(PreparedNode {
+        scene: *scene,
+        position: draw.transform.position,
+        orientation: draw.transform.orientation,
+        raw_scale,
+        pass: fog.pass,
         fog_colour: fog.colour,
-    };
-    for (opcode, words) in &commands {
-        construct_face(queue, &context, fog.pass, *opcode, words)?;
-    }
-    for command in edges {
-        construct_edge(queue, &context, &lens, &sprite_size, fog.pass, command)?;
-    }
-    Ok(())
+        lens,
+        corners,
+        normals,
+        colours,
+        sprites,
+        sizes,
+        faces,
+        face_order,
+        edges,
+    })
 }
 
-/// Queue the billboards attached to one model body.
-pub(crate) fn queue_model_billboards(
-    queue: &mut PrimitiveQueue,
+/// One body's billboards, owned like [`PreparedNode`].
+pub(crate) struct PreparedBillboards {
+    pass: FacePass,
+    fog_colour: u32,
+    lens: GroundProjection,
+    corners: Vec<ModelCorner>,
+    colours: Vec<u32>,
+    sprites: Vec<MaterialId>,
+    sizes: Vec<(u16, u16)>,
+    /// The command of each billboard, by billboard index.
+    commands: Vec<Option<BillboardCommand>>,
+}
+
+impl PreparedBillboards {
+    /// Run billboard `index`.
+    pub(crate) fn emit(&self, queue: &mut PrimitiveQueue, index: usize) -> Result<(), QueueError> {
+        let Some(Some(command)) = self.commands.get(index) else {
+            return Ok(());
+        };
+        if command.vertex >= self.corners.len() {
+            return Ok(());
+        }
+        let palette = |index: i16| self.colours.get(index as usize).copied().unwrap_or(0);
+        let sprite = |index: i16| self.sprites.get(index as usize).copied().unwrap_or(0);
+        let size = |index: i16| self.sizes.get(index as usize).copied().unwrap_or((1, 1));
+        let context = FaceContext {
+            corners: &self.corners,
+            normals: &[],
+            palette: &palette,
+            sprite: &sprite,
+            fog_colour: self.fog_colour,
+        };
+        construct_billboard(queue, &context, &self.lens, &size, self.pass, *command)
+    }
+
+    pub(crate) fn emit_all(&self, queue: &mut PrimitiveQueue) -> Result<(), QueueError> {
+        for index in 0..self.commands.len() {
+            self.emit(queue, index)?;
+        }
+        Ok(())
+    }
+}
+
+/// Build one body's billboard constructor inputs.
+pub(crate) fn prepare_model_billboards(
     draw: &ModelBillboardDraw<'_>,
     scene: &ModelScene,
     materials: &mut dyn ModelMaterials,
-) -> Result<(), QueueError> {
+) -> Option<PreparedBillboards> {
     if draw.vertices.is_empty() || draw.billboards.is_empty() {
-        return Ok(());
+        return None;
     }
-    let Some(fog) = scene.node_fog(
+    let fog = scene.node_fog(
         draw.transform.position,
         draw.radius_raw,
         draw.transform.scale,
         draw.depth_fade,
-    ) else {
-        return Ok(());
-    };
+    )?;
     let lens = GroundProjection {
         fade: fog.fade,
         ..scene.lens
@@ -591,8 +772,9 @@ pub(crate) fn queue_model_billboards(
     let mut colours = Vec::new();
     let mut sprites = Vec::new();
     let mut sizes = Vec::new();
-    let mut commands = Vec::new();
+    let mut commands = Vec::with_capacity(draw.billboards.len());
     for (billboard, material) in draw.billboards.iter().zip(draw.materials) {
+        commands.push(None);
         let id = if billboard.textured {
             let Some(texture) = material.face.texture else {
                 continue;
@@ -613,31 +795,27 @@ pub(crate) fn queue_model_billboards(
         };
         // Model units are VIEW units in gameplay (scale 100/256); other
         // scenes convert their model units to the VIEW domain.
-        let size = (f32::from(billboard.size) * raw_scale * 256.0).round() as i32;
-        commands.push(BillboardCommand {
-            vertex: usize::from(billboard.vertex),
-            id,
-            size,
-            angle: billboard.angle,
-            textured: billboard.textured,
-        });
-    }
-    let palette = |index: i16| colours.get(index as usize).copied().unwrap_or(0);
-    let sprite = |index: i16| sprites.get(index as usize).copied().unwrap_or(0);
-    let sprite_size = |index: i16| sizes.get(index as usize).copied().unwrap_or((1, 1));
-    let context = FaceContext {
-        corners: &corners,
-        normals: &[],
-        palette: &palette,
-        sprite: &sprite,
-        fog_colour: fog.colour,
-    };
-    for command in commands {
-        if command.vertex < corners.len() {
-            construct_billboard(queue, &context, &lens, &sprite_size, fog.pass, command)?;
+        let size = (f32::from(billboard.size) * raw_scale * scene.units).round() as i32;
+        if let Some(slot) = commands.last_mut() {
+            *slot = Some(BillboardCommand {
+                vertex: usize::from(billboard.vertex),
+                id,
+                size,
+                angle: billboard.angle,
+                textured: billboard.textured,
+            });
         }
     }
-    Ok(())
+    Some(PreparedBillboards {
+        pass: fog.pass,
+        fog_colour: fog.colour,
+        lens,
+        corners,
+        colours,
+        sprites,
+        sizes,
+        commands,
+    })
 }
 
 /// Derived sprite materials, keyed by texture and face flags.
@@ -673,7 +851,7 @@ pub(crate) fn queue_world_sprites(
         }
         let depth = view[2] as f32;
         let half = |extent: f32, focal: i32| -> i32 {
-            ((extent * 0.5 * 256.0 * focal as f32 / depth) as i32).max(1)
+            ((extent * 0.5 * scene.units * focal as f32 / depth) as i32).max(1)
         };
         let hx = half(sprite.size[0], scene.lens.focal[0]);
         let hy = half(sprite.size[1], scene.lens.focal[1]);
@@ -711,4 +889,68 @@ pub(crate) fn queue_world_sprites(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+impl PreparedNode {
+    /// A node of on-screen flat triangles, one per `(first triangle, colour,
+    /// depth)`: its constructor packet carries the colour, and the corners'
+    /// depth keys it.
+    pub(crate) fn test_triangles(faces: &[(usize, u32, i32)]) -> Self {
+        let lens = GroundProjection {
+            axes_q31: [[0; 3]; 3],
+            translation: [0; 3],
+            focal: [256, 256],
+            bounds: [640, 480],
+            centre: [320, 240],
+            fade: [0, i32::MAX, i32::MAX],
+            wet_clock: None,
+        };
+        let mut corners = Vec::new();
+        let mut colours = Vec::new();
+        let mut map = HashMap::new();
+        let mut order = Vec::new();
+        for &(first, colour, depth) in faces {
+            let base = corners.len() as i16;
+            for screen in [[10, 10], [100, 10], [10, 100]] {
+                corners.push(ModelCorner {
+                    view: [0, 0, depth],
+                    screen,
+                    clip: 0x12 | 0x80,
+                    fade: 0,
+                });
+            }
+            colours.push(colour);
+            let words = vec![colours.len() as i16 - 1, 0, base, base + 1, base + 2];
+            map.insert(first, (0x03, words));
+            order.push(first);
+        }
+        Self {
+            scene: ModelScene {
+                camera_position: [0.0; 3],
+                camera_basis: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                native: None,
+                lens,
+                world_fog: None,
+                units: 256.0,
+            },
+            position: [0.0; 3],
+            orientation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            raw_scale: 1.0 / 256.0,
+            pass: FacePass::Near,
+            fog_colour: 0,
+            lens,
+            corners,
+            normals: vec![ModelNormal {
+                shade: 0,
+                culled: false,
+            }],
+            colours,
+            sprites: Vec::new(),
+            sizes: Vec::new(),
+            faces: map,
+            face_order: order,
+            edges: Vec::new(),
+        }
+    }
 }
