@@ -228,6 +228,7 @@ impl SoftwareRenderer {
         self.queued = false;
         for id in self.transient.drain(..) {
             self.materials.remove(id);
+            self.derived.forget(id, &mut self.materials);
         }
     }
 
@@ -981,6 +982,7 @@ impl Renderer for SoftwareRenderer {
     fn destroy_texture(&mut self, id: TextureId) {
         self.flush();
         self.materials.remove(id.0 as MaterialId);
+        self.derived.forget(id.0 as MaterialId, &mut self.materials);
     }
 
     fn set_sprite_clip(&mut self, rect: Option<(i32, i32, u32, u32)>) {
@@ -1163,5 +1165,47 @@ impl Renderer for SoftwareRenderer {
         self.reference_width = reference_width.max(1);
         self.reference_height = reference_height.max(1);
         self.update_render_viewport();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::software::material_flags;
+
+    fn pixel(rgba: [u8; 4]) -> OwnedMaterial {
+        OwnedMaterial::raw_from_rgba(&rgba, 1, 1, 0)
+    }
+
+    #[test]
+    fn a_reused_slot_derives_from_its_new_material() {
+        let mut store = MaterialStore::default();
+        let mut derived = DerivedMaterials::default();
+        let old = store.insert(pixel([0, 0, 0, 255]));
+        let flags = material_flags::HALF_ADDITIVE;
+        let mut materials = BackendMaterials {
+            store: &mut store,
+            derived: &mut derived,
+        };
+        materials.face_material(old, flags).unwrap();
+
+        // Free the base as a transient or destroyed texture is freed, then
+        // fill slots until a new texture lands in the old id.
+        store.remove(old);
+        derived.forget(old, &mut store);
+        let white = pixel([255, 255, 255, 255]);
+        let reused = std::iter::repeat_with(|| store.insert(white.clone()))
+            .take(4)
+            .find(|&id| id == old)
+            .expect("the store reuses freed slots");
+
+        let mut materials = BackendMaterials {
+            store: &mut store,
+            derived: &mut derived,
+        };
+        let id = materials.face_material(reused, flags).unwrap();
+        let material = store.get(id).unwrap();
+        assert_eq!(material.atlas[..2], white.atlas[..2]);
+        assert_eq!(material.flags & flags, flags);
     }
 }

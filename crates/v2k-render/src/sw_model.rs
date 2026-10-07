@@ -34,6 +34,7 @@ use crate::software::model::{
     EdgeCommand, FaceContext, FacePass, ModelCorner, ModelNormal,
 };
 use crate::software::particle::{queue_particle, Particle, ParticleScene, ParticleShadow};
+use crate::software::store::MaterialStore;
 use crate::software::terrain::{GroundMaterial, GroundProjection};
 use crate::software::{material_flags, MaterialId, PrimitiveQueue, QueueError};
 
@@ -887,6 +888,22 @@ fn queue_native_particle(
 #[derive(Default)]
 pub(crate) struct DerivedMaterials {
     pub(crate) by_flags: HashMap<(u32, u16), MaterialId>,
+}
+
+impl DerivedMaterials {
+    /// Drop what was derived from `base` once its slot is freed: the store
+    /// reuses ids, and a later material in that slot must not inherit them.
+    pub(crate) fn forget(&mut self, base: MaterialId, store: &mut MaterialStore) {
+        self.by_flags.retain(|&(texture, _), &mut derived| {
+            if texture != base {
+                return true;
+            }
+            if derived != base {
+                store.remove(derived);
+            }
+            false
+        });
+    }
 }
 
 /// Queue camera-facing world sprites. Particles that carry their
