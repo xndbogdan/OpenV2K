@@ -540,8 +540,9 @@ fn present_results_line(
 /// `FUN_00452790` type-on for a wildcard-layout results prefix.
 ///
 /// Field 6 is `iVar4`. Zero becomes 1 and skips truncation (`1 < iVar4`).
-/// The cut is a byte index into the already-formatted body; authored rows
-/// are single-byte ASCII after `%d`/`%s` substitution.
+/// The cut is a retail byte index into the already-formatted body, which
+/// [`retail_text_prefix`](crate::gameplay_notifications::retail_text_prefix)
+/// counts in chars.
 fn type_on_results_body(
     formatted: String,
     age_after_delay_ms: i32,
@@ -552,10 +553,13 @@ fn type_on_results_body(
         return (formatted, false);
     }
     let visible = (age_after_delay_ms.max(0) / interval_ms) as usize;
-    if visible >= formatted.len() {
+    if visible >= formatted.chars().count() {
         return (formatted, false);
     }
-    (formatted[..visible].to_owned(), true)
+    (
+        crate::gameplay_notifications::retail_text_prefix(&formatted, visible).to_owned(),
+        true,
+    )
 }
 
 /// `FUN_00452270` selected by overlay-51 field 7 (`local_f8`).
@@ -623,6 +627,18 @@ fn parse_prefix_integer(field: &str) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn results_type_on_cuts_between_chars() {
+        // A replaced non-ASCII byte is one retail byte and one step.
+        let body = "Caf\u{FFFD} au lait".to_string();
+        assert_eq!(
+            type_on_results_body(body.clone(), 120, 30),
+            ("Caf\u{FFFD}".to_string(), true)
+        );
+        // Twelve chars: complete at 12 * 30 ms.
+        assert_eq!(type_on_results_body(body.clone(), 360, 30), (body, false));
+    }
 
     fn stats() -> WorldCompleteStats {
         WorldCompleteStats {

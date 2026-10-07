@@ -122,10 +122,11 @@ pub(crate) fn span_reciprocal(width: u32) -> i32 {
         return 0;
     }
     let word = (width - RECIPROCAL_ENTRIES - 1) as usize;
-    match super::rows::SPAN_ROW_WORDS.get(word) {
-        Some(&value) => value as i32,
-        None => panic!("software raster span width {width} exceeds the retail table overrun"),
-    }
+    // Surfaces are at most 1024 wide, so spans never get past the overrun
+    // words; a wider caller gets a zero step rather than a crash.
+    super::rows::SPAN_ROW_WORDS
+        .get(word)
+        .map_or(0, |&value| value as i32)
 }
 
 #[cfg(test)]

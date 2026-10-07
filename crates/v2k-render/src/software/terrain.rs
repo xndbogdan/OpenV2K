@@ -50,8 +50,9 @@ pub struct GroundProjection {
     pub bounds: [u32; 2],
     /// `0x004FEEE0/E4`.
     pub centre: [i32; 2],
-    /// `0x004FEEE8` (`0x10000 * 255 / (far - near)`), `0x004FEEEC`,
-    /// `0x004FEEF0`: the fade byte ramp in depth units.
+    /// `0x004FEEE8` (`0x1000000 / (far - near)`, or `0x1000000` when the
+    /// planes do not increase; `FUN_00470A10`), `0x004FEEEC`, `0x004FEEF0`:
+    /// the fade byte ramp in depth units. Receipts pass their own words.
     pub fade: [i32; 3],
     /// `Some(clock)` selects the wet projector `FUN_00436440`, which wobbles
     /// every point by the presentation clock at `0x004FED60`.

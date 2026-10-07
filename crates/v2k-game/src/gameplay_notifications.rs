@@ -801,6 +801,15 @@ struct ParsedNotification {
     reveal_incomplete: bool,
 }
 
+/// The first `bytes` retail bytes of decoded Section-2 text. The decoder
+/// turns every byte into one char (non-ASCII bytes into U+FFFD), so the
+/// cut counts chars and always lands on a UTF-8 boundary.
+pub(crate) fn retail_text_prefix(text: &str, bytes: usize) -> &str {
+    text.char_indices()
+        .nth(bytes)
+        .map_or(text, |(end, _)| &text[..end])
+}
+
 fn parse_authored_notification(
     raw: &str,
     substitution: Option<&str>,
@@ -874,12 +883,11 @@ fn parse_authored_notification(
         .checked_div(reveal_interval_ms)
         .unwrap_or(0)
         .max(0) as usize;
-    let reveal_incomplete = reveal_interval_ms > 1 && visible_bytes < body.len();
+    // FUN_00452790 truncates at this byte index (except for a '%'
+    // formatting escape, which none of the cargo strings use).
+    let reveal_incomplete = reveal_interval_ms > 1 && visible_bytes < body.chars().count();
     let mut text = if reveal_incomplete {
-        // The authored gameplay strings are single-byte ASCII. FUN_00452790
-        // truncates at this byte index (except for a '%' formatting escape,
-        // which none of the cargo strings use).
-        body[..visible_bytes.min(body.len())].to_owned()
+        retail_text_prefix(body, visible_bytes).to_owned()
     } else {
         body.to_owned()
     };
@@ -975,6 +983,19 @@ mod tests {
             notifications.presentation_with_world_text(205, &mut cadence, &records, |_| None);
         assert_eq!(typing.lines[0].text, "Sav");
         assert!(typing.play_typewriter_sound);
+    }
+
+    #[test]
+    fn type_on_counts_a_replaced_byte_as_one_step() {
+        // `extract_strings` turns a non-ASCII byte (a Latin-1 'é') into one
+        // U+FFFD, three bytes in UTF-8. Retail reveals it in one step.
+        let records = ["< 4000, 7000,2,30,*>Caf\u{FFFD} au lait"];
+        let mut notifications = GameplayNotifications::new();
+        let mut cadence = TextTypewriterCadence::default();
+        // 4120 ms: (4120 - 4000) / 30 = four bytes.
+        let typing =
+            notifications.presentation_with_world_text(206, &mut cadence, &records, |_| None);
+        assert_eq!(typing.lines[0].text, "Caf\u{FFFD}");
     }
 
     #[test]

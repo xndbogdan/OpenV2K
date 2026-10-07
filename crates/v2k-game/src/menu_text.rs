@@ -211,11 +211,12 @@ impl MenuFonts {
         let build = |rec: &v2k_formats::params::ParamRecord| -> MenuFont {
             let n = rec.params.len().min(rec.indices.len()).min(256);
             let mut glyphs: Vec<Option<Glyph>> = Vec::with_capacity(n);
-            let pen_scale = if rec.param_b == 0 {
-                100
-            } else {
-                rec.param_b as i32
-            };
+            // A zero word, or one that is not a positive divisor, falls
+            // back to 100 pen units per pixel.
+            let pen_scale = i32::try_from(rec.param_b)
+                .ok()
+                .filter(|&scale| scale > 0)
+                .unwrap_or(100);
             for c in 0..n {
                 let t = &rec.params[c];
                 let advance_raw = i32::from(t.a as i16);

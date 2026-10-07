@@ -573,6 +573,8 @@ impl Renderer for SoftwareRenderer {
     fn begin_scene(&mut self, scene: RenderScene) {
         self.flush();
         self.scene = scene;
+        // The water pass reuses this scene's ground inputs only.
+        self.water = None;
         self.authority = SceneProjectionAuthority::default();
         self.effect = ProjectionEffect::None;
         self.sprite_clip = None;
