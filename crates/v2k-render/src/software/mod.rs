@@ -15,6 +15,7 @@ mod fixed;
 mod fog;
 mod format;
 mod material;
+pub mod model;
 mod queue;
 mod rows;
 mod scan;
@@ -24,6 +25,7 @@ mod state;
 pub mod store;
 pub mod terrain;
 
+pub(crate) use fixed::mul_q31;
 pub use fog::FogRamp;
 pub use format::PixelFormat;
 pub use material::{

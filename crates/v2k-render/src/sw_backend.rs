@@ -35,6 +35,7 @@ use crate::software::{
     material_flags, ClipRect, FillSlot, MaterialId, NoWordImages, PixelFormat, PrimitiveQueue,
     SoftwareRaster, Surface565, WORLD_ARENA_BYTES,
 };
+use crate::sw_model::{queue_model_body, DerivedMaterials, ModelMaterials, ModelScene};
 use crate::terrain_tiles::InfectionTerrainAnimation;
 
 /// ESP at a fill-slot handler's first instruction while the world queue
@@ -73,6 +74,19 @@ pub struct SoftwareRenderer {
     infection: InfectionTerrainAnimation,
     /// Ground queue errors are reported once.
     ground_error_reported: bool,
+    camera_position: [f32; 3],
+    camera_basis: [[f32; 3]; 3],
+    camera_lens: Option<FloatLens>,
+    /// Sprite materials re-flagged per face (blend, row 28).
+    derived: DerivedMaterials,
+    model_error_reported: bool,
+}
+
+/// The floating camera's lens, for scenes without a native one.
+#[derive(Debug, Clone, Copy)]
+struct FloatLens {
+    fov: f32,
+    offset: [f32; 2],
 }
 
 struct FrameDump {
@@ -115,6 +129,11 @@ impl SoftwareRenderer {
             native_viewport: None,
             infection: InfectionTerrainAnimation::default(),
             ground_error_reported: false,
+            camera_position: [0.0; 3],
+            camera_basis: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            camera_lens: None,
+            derived: DerivedMaterials::default(),
+            model_error_reported: false,
         })
     }
 
@@ -240,6 +259,69 @@ impl SoftwareRenderer {
             }
         }
         rgba
+    }
+}
+
+/// Sprite materials for model faces, with the face's flags folded in.
+struct BackendMaterials<'a> {
+    store: &'a mut MaterialStore,
+    derived: &'a mut DerivedMaterials,
+}
+
+impl ModelMaterials for BackendMaterials<'_> {
+    fn face_material(&mut self, texture: u32, flags: u16) -> Option<MaterialId> {
+        if let Some(&id) = self.derived.by_flags.get(&(texture, flags)) {
+            return Some(id);
+        }
+        let base = self.store.get(texture)?;
+        let id = if flags == 0 {
+            texture
+        } else {
+            let mut material = base.clone();
+            material.flags |= flags;
+            self.store.insert(material)
+        };
+        self.derived.by_flags.insert((texture, flags), id);
+        Some(id)
+    }
+}
+
+impl SoftwareRenderer {
+    /// The lens model bodies project with: the scene's native lens, else one
+    /// derived from the floating camera over the logical surface.
+    fn model_lens(&self) -> Option<GroundProjection> {
+        let identity = [[0; 3]; 3];
+        let wet_clock = match self.effect {
+            ProjectionEffect::RetailUnderwater { tick } => Some(tick as u32),
+            ProjectionEffect::None => None,
+        };
+        if let SceneProjectionAuthority::Native(lens) = self.authority {
+            let viewport = lens.viewport_pixels();
+            return Some(GroundProjection {
+                axes_q31: identity,
+                translation: [0; 3],
+                focal: lens.focal_pixels(),
+                bounds: viewport.map(|value| value as u32),
+                centre: lens.centre_pixels(),
+                fade: [0, i32::MAX, i32::MAX],
+                wet_clock,
+            });
+        }
+        let camera = self.camera_lens?;
+        let (width, height) = (self.surface.width as f32, self.surface.height as f32);
+        let focal = height * 0.5 / (camera.fov * 0.5).tan();
+        Some(GroundProjection {
+            axes_q31: identity,
+            translation: [0; 3],
+            focal: [focal.round() as i32; 2],
+            bounds: [self.surface.width, self.surface.height],
+            centre: [
+                (width * 0.5 * (1.0 - camera.offset[0])) as i32,
+                (height * 0.5 * (1.0 + camera.offset[1])) as i32,
+            ],
+            fade: [0, i32::MAX, i32::MAX],
+            wet_clock,
+        })
     }
 }
 
@@ -411,7 +493,19 @@ impl Renderer for SoftwareRenderer {
         self.update_render_viewport();
     }
 
-    fn set_camera(&mut self, _camera: &Camera) {}
+    fn set_camera(&mut self, camera: &Camera) {
+        self.camera_position = camera.position;
+        let view = camera.view_matrix();
+        self.camera_basis = [
+            [view[0], view[4], view[8]],
+            [view[1], view[5], view[9]],
+            [view[2], view[6], view[10]],
+        ];
+        self.camera_lens = Some(FloatLens {
+            fov: camera.fov,
+            offset: camera.projection_offset,
+        });
+    }
 
     fn set_fog(&mut self, _enabled: bool, _near: f32, _far: f32, _color: [f32; 3]) {}
 
@@ -519,7 +613,53 @@ impl Renderer for SoftwareRenderer {
     }
 
     fn supports_models(&self) -> bool {
-        false
+        true
+    }
+
+    fn draw_model_body(&mut self, draw: crate::renderer::ModelDraw<'_>) {
+        let Some(lens) = self.model_lens() else {
+            return;
+        };
+        let scene = ModelScene {
+            camera_position: self.camera_position,
+            camera_basis: self.camera_basis,
+            native: match self.authority {
+                SceneProjectionAuthority::Native(_) => self.native_viewport,
+                _ => None,
+            },
+            lens,
+            world_fog: self.world_model_fog(),
+        };
+        let mut materials = BackendMaterials {
+            store: &mut self.materials,
+            derived: &mut self.derived,
+        };
+        if let Err(error) = queue_model_body(&mut self.queue, &draw, &scene, &mut materials) {
+            if !self.model_error_reported {
+                self.model_error_reported = true;
+                eprintln!("software models: {error:?}; later faces this frame are dropped");
+            }
+        }
+        self.queued = true;
+    }
+
+    fn create_indexed_model_texture(
+        &mut self,
+        texture: crate::renderer::IndexedModelTexture<'_>,
+    ) -> Option<TextureId> {
+        let words: Vec<u16> = texture
+            .palette_rgba
+            .chunks_exact(4)
+            .map(|pixel| rgb565(pixel[0], pixel[1], pixel[2]))
+            .collect();
+        let flags = if texture.transparent_zero {
+            crate::software::material_flags::KEYED
+        } else {
+            0
+        };
+        let material =
+            OwnedMaterial::indexed(texture.indices, texture.width, texture.height, words, flags);
+        Some(TextureId(self.materials.insert(material)))
     }
 
     fn create_texture(&mut self, rgba: &[u8], width: u32, height: u32) -> Option<TextureId> {

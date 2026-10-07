@@ -1301,7 +1301,7 @@ fn retail_model_shade_index(
     }
 }
 
-fn retail_model_shade(
+pub(crate) fn retail_model_shade(
     table: Option<&[FogGradientEntry]>,
     normal: [f32; 3],
     light_direction_raw: [i32; 3],
@@ -1316,7 +1316,7 @@ fn retail_model_shade(
 
 /// 43/44/C3/C4 carry one face-normal light value. The Gouraud families
 /// instead carry distinct corner references; 03/04/83/84 carry no light.
-fn model_lighting_normals(
+pub(crate) fn model_lighting_normals(
     shading: ModelFaceShading,
     face_normal: [f32; 3],
     corner_normals: [[f32; 3]; 3],
@@ -1328,7 +1328,10 @@ fn model_lighting_normals(
     }
 }
 
-fn transform_model_light_normal(orientation: [[f32; 3]; 3], normal: [f32; 3]) -> [f32; 3] {
+pub(crate) fn transform_model_light_normal(
+    orientation: [[f32; 3]; 3],
+    normal: [f32; 3],
+) -> [f32; 3] {
     let v: [f32; 3] = std::array::from_fn(|axis| dot3(orientation[axis], normal));
     let magnitude = dot3(v, v).sqrt();
     if magnitude > 0.0 {
@@ -1363,6 +1366,144 @@ fn flat_lit_palette_color(material: &FaceMaterial, shade: &FogGradientEntry) -> 
     Some(std::array::from_fn(|axis| {
         rgb[axis] as f32 / 255.0 * material.color[axis]
     }))
+}
+
+/// Callback-resolved model vertices, shared by every backend: raw-local
+/// points (`None` when a callback rejects the vertex), the world points the
+/// projector sees, and near-plane admission.
+pub(crate) struct ResolvedModelVertices {
+    pub(crate) local: Vec<Option<[f32; 3]>>,
+    pub(crate) world: Vec<Option<[f32; 3]>>,
+    pub(crate) admitted: Vec<bool>,
+}
+
+/// Resolve every vertex of `draw` through its type callbacks, external
+/// frame and surface policy, then admit it against the near plane.
+pub(crate) fn resolve_model_vertices(
+    draw: &ModelDraw<'_>,
+    camera_position: [f32; 3],
+    camera_basis: [[f32; 3]; 3],
+) -> ResolvedModelVertices {
+    let mesh = draw.mesh;
+    let vertices = mesh.vertices;
+    let vertex_type_flags = mesh.vertex_type_flags;
+    let orientation = draw.transform.orientation;
+    let position = draw.transform.position;
+    let extra_scale = draw.transform.scale;
+    let view_pin_mode = draw.view_pin;
+    let world_surface = draw.world_surface;
+    let external_frame_mode = draw.external_frame;
+    let scale = extra_scale / 100.0_f32;
+    let vertex_for = |idx: usize| -> Option<[f32; 3]> {
+        if mesh
+            .vertex_clip
+            .get(idx)
+            .is_some_and(|clip| *clip != ModelSlotClip::Clear)
+        {
+            return None;
+        }
+        let v = vertices.get(idx)?;
+        let type_flag = vertex_type_flags.get(idx).copied().unwrap_or_default();
+        let mut raw = [v[0] as f32, v[1] as f32, v[2] as f32];
+        if type_flag == 14 {
+            raw = apply_external_frame_operands(
+                raw,
+                external_frame_mode,
+                orientation,
+                position,
+                extra_scale,
+            );
+        }
+        if view_pin_mode == ViewPinMode::Raw
+            || !matches!(type_flag, 13 | 12)
+            || draw.surface_resolution == crate::renderer::ModelSurfaceResolution::ContextResolved
+        {
+            return Some(raw);
+        }
+        if type_flag == 13 {
+            match view_pin_mode {
+                ViewPinMode::Disabled => return None,
+                ViewPinMode::CameraFacing => {
+                    return Some(retail_view_pin_vertex(
+                        raw,
+                        orientation,
+                        position,
+                        extra_scale,
+                        camera_position,
+                        camera_basis,
+                    ));
+                }
+                ViewPinMode::WorldSurface => {
+                    return world_surface.and_then(|surface| {
+                        let resolved = retail_world_surface_vertex(
+                            raw,
+                            orientation,
+                            position,
+                            extra_scale,
+                            surface,
+                        );
+                        (resolved.clip == ModelSlotClip::Clear)
+                            .then(|| resolved.position_raw.map(|value| value as f32))
+                    });
+                }
+                ViewPinMode::Raw => return Some(raw),
+            }
+        }
+        // tf 12: pure alias except in world contexts, where FUN_00433FA0's
+        // swapped handlers ground Y onto the sampled terrain height.
+        match view_pin_mode {
+            ViewPinMode::WorldSurface => world_surface.map(|surface| {
+                retail_world_surface_alias_vertex(
+                    raw,
+                    orientation,
+                    position,
+                    extra_scale,
+                    surface.terrain,
+                )
+            }),
+            _ => Some(raw),
+        }
+    };
+
+    // The retail face handler computes every corner callback before applying
+    // the combined clip-byte lookup. Resolve once per submitted model so an
+    // inclusive sea-band rejection drops the complete face and both colour
+    // passes observe the same animated surface sample.
+    let resolved_vertices = (0..vertices.len()).map(vertex_for).collect::<Vec<_>>();
+    // The projector sees callback-resolved world points. Type-14 selector
+    // outputs bypass O in retail; use the same explicit world conversion as
+    // edge submission instead of testing intrinsic raw-local coordinates.
+    let world_vertices = (0..resolved_vertices.len())
+        .map(|index| {
+            if let Some(v2k_formats::models::ModelVertexProjection::WorldPoint(world)) =
+                mesh.vertex_projection.get(index)
+            {
+                return resolved_vertices[index].map(|_| world.map(|component| component as f32));
+            }
+            edge_endpoint_world(
+                index,
+                vertices,
+                vertex_type_flags,
+                &resolved_vertices,
+                external_frame_mode,
+                orientation,
+                position,
+                scale,
+            )
+        })
+        .collect::<Vec<_>>();
+    let vertex_admitted = vertex_admission(
+        draw.near_clip,
+        &world_vertices,
+        mesh.vertex_projection,
+        camera_position,
+        camera_basis[2],
+    );
+    ResolvedModelVertices {
+        local: resolved_vertices,
+        world: world_vertices,
+        admitted: vertex_admitted,
+    }
 }
 
 /// Shared model-mesh draw path: lit, authored-plane-culled triangles at
@@ -1406,8 +1547,6 @@ unsafe fn draw_tris_gl(
     let position = draw.transform.position;
     let extra_scale = draw.transform.scale;
     let view_pin_mode = draw.view_pin;
-    let world_surface = draw.world_surface;
-    let external_frame_mode = draw.external_frame;
     if vertices.is_empty() {
         return;
     }
@@ -1523,111 +1662,11 @@ unsafe fn draw_tris_gl(
         }
     };
 
-    let vertex_for = |idx: usize| -> Option<[f32; 3]> {
-        if mesh
-            .vertex_clip
-            .get(idx)
-            .is_some_and(|clip| *clip != ModelSlotClip::Clear)
-        {
-            return None;
-        }
-        let v = vertices.get(idx)?;
-        let type_flag = vertex_type_flags.get(idx).copied().unwrap_or_default();
-        let mut raw = [v[0] as f32, v[1] as f32, v[2] as f32];
-        if type_flag == 14 {
-            raw = apply_external_frame_operands(
-                raw,
-                external_frame_mode,
-                orientation,
-                position,
-                extra_scale,
-            );
-        }
-        if view_pin_mode == ViewPinMode::Raw
-            || !matches!(type_flag, 13 | 12)
-            || draw.surface_resolution == crate::renderer::ModelSurfaceResolution::ContextResolved
-        {
-            return Some(raw);
-        }
-        if type_flag == 13 {
-            match view_pin_mode {
-                ViewPinMode::Disabled => return None,
-                ViewPinMode::CameraFacing => {
-                    return Some(retail_view_pin_vertex(
-                        raw,
-                        orientation,
-                        position,
-                        extra_scale,
-                        camera_position,
-                        camera_basis,
-                    ));
-                }
-                ViewPinMode::WorldSurface => {
-                    return world_surface.and_then(|surface| {
-                        let resolved = retail_world_surface_vertex(
-                            raw,
-                            orientation,
-                            position,
-                            extra_scale,
-                            surface,
-                        );
-                        (resolved.clip == ModelSlotClip::Clear)
-                            .then(|| resolved.position_raw.map(|value| value as f32))
-                    });
-                }
-                ViewPinMode::Raw => return Some(raw),
-            }
-        }
-        // tf 12: pure alias except in world contexts, where FUN_00433FA0's
-        // swapped handlers ground Y onto the sampled terrain height.
-        match view_pin_mode {
-            ViewPinMode::WorldSurface => world_surface.map(|surface| {
-                retail_world_surface_alias_vertex(
-                    raw,
-                    orientation,
-                    position,
-                    extra_scale,
-                    surface.terrain,
-                )
-            }),
-            _ => Some(raw),
-        }
-    };
-
-    // The retail face handler computes every corner callback before applying
-    // the combined clip-byte lookup. Resolve once per submitted model so an
-    // inclusive sea-band rejection drops the complete face and both colour
-    // passes observe the same animated surface sample.
-    let resolved_vertices = (0..vertices.len()).map(vertex_for).collect::<Vec<_>>();
-    // The projector sees callback-resolved world points. Type-14 selector
-    // outputs bypass O in retail; use the same explicit world conversion as
-    // edge submission instead of testing intrinsic raw-local coordinates.
-    let world_vertices = (0..resolved_vertices.len())
-        .map(|index| {
-            if let Some(v2k_formats::models::ModelVertexProjection::WorldPoint(world)) =
-                mesh.vertex_projection.get(index)
-            {
-                return resolved_vertices[index].map(|_| world.map(|component| component as f32));
-            }
-            edge_endpoint_world(
-                index,
-                vertices,
-                vertex_type_flags,
-                &resolved_vertices,
-                external_frame_mode,
-                orientation,
-                position,
-                scale,
-            )
-        })
-        .collect::<Vec<_>>();
-    let vertex_admitted = vertex_admission(
-        draw.near_clip,
-        &world_vertices,
-        mesh.vertex_projection,
-        camera_position,
-        camera_basis[2],
-    );
+    let ResolvedModelVertices {
+        local: resolved_vertices,
+        world: world_vertices,
+        admitted: vertex_admitted,
+    } = resolve_model_vertices(&draw, camera_position, camera_basis);
     let vertex_fade_bytes = world_vertices
         .iter()
         .map(|vertex| {

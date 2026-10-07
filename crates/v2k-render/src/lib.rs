@@ -13,6 +13,7 @@ pub mod renderer;
 pub mod software;
 pub mod sound;
 pub mod sw_backend;
+mod sw_model;
 mod terrain_footprint;
 pub mod terrain_light;
 pub mod terrain_tiles;

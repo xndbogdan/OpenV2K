@@ -32,7 +32,7 @@ use v2k_formats::terrain::TerrainGrid;
 
 /// `DAT_004C5268`: non-zero when a primitive with this OR of point outcodes
 /// may reach the screen.
-const OUTCODE_VISIBLE: [u8; 256] = outcode_table();
+pub(crate) const OUTCODE_VISIBLE: [u8; 256] = outcode_table();
 
 /// Points per row and rows are capped by `FUN_004330D0`.
 pub const MAX_POINTS: usize = 30;
@@ -214,6 +214,20 @@ impl GroundProjection {
         depth
     }
 
+    /// Project an already transformed VIEW point: outcode (0x40 behind the
+    /// near plane), screen point and fade byte. The model vertex cache uses
+    /// this with its node's own axes.
+    pub(crate) fn project_view(&self, view: [i32; 3]) -> GroundPoint {
+        let mut point = GroundPoint::default();
+        let [x, y, depth] = view;
+        if depth < 0x40 {
+            point.clip = 0x40;
+        } else {
+            point.clip = self.finish(&mut point, x, y, depth);
+        }
+        point
+    }
+
     /// `FUN_0042FFF0`: reproject a point behind the near plane at depth 0x40.
     /// The dry formula is used even under the wet projector.
     fn reproject_near(&self, point: &mut GroundPoint, delta: [i32; 3]) -> u8 {
@@ -355,11 +369,11 @@ impl GroundScene<'_> {
         let z_fraction = (z_position & 0xFF) as i32;
         let height = |x: u32, z: u32| i32::from(self.cell(x, z).0) * 0x20;
         let near = height(x_cell, z_cell);
-        let along_near = ((height(x_cell + 1, z_cell) - near) * x_fraction >> 8) + near;
+        let along_near = (((height(x_cell + 1, z_cell) - near) * x_fraction) >> 8) + near;
         let far = height(x_cell, z_cell + 1);
-        let along_far = ((height(x_cell + 1, z_cell + 1) - far) * x_fraction >> 8) + far;
+        let along_far = (((height(x_cell + 1, z_cell + 1) - far) * x_fraction) >> 8) + far;
         let height = i32::from(
-            (((along_far - along_near) * z_fraction >> 8) as i16).wrapping_add(along_near as i16),
+            ((((along_far - along_near) * z_fraction) >> 8) as i16).wrapping_add(along_near as i16),
         );
         // Type, light and motion use the whole cells of the un-offset words.
         let x_cell = (column & 0xFFFF) >> 8;

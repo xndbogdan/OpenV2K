@@ -154,6 +154,13 @@ impl PrimitiveQueue {
         self.read(self.base) != 0
     }
 
+    /// Set the current scope's mode word without opening a group, as a
+    /// caller holding a FIFO child scope sees it. Receipts use this to run
+    /// producers in both modes.
+    pub fn set_scope_sorted(&mut self, sorted: bool) {
+        self.write(self.base, u32::from(sorted));
+    }
+
     /// Whether a group is still open.
     pub fn group_open(&self) -> bool {
         self.read(self.base + 0xC) != self.base
