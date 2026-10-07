@@ -35,7 +35,9 @@ use crate::software::{
     material_flags, ClipRect, FillSlot, MaterialId, NoWordImages, PixelFormat, PrimitiveQueue,
     SoftwareRaster, Surface565, WORLD_ARENA_BYTES,
 };
-use crate::sw_model::{queue_model_body, DerivedMaterials, ModelMaterials, ModelScene};
+use crate::sw_model::{
+    queue_model_billboards, queue_model_body, DerivedMaterials, ModelMaterials, ModelScene,
+};
 use crate::terrain_tiles::InfectionTerrainAnimation;
 
 /// ESP at a fill-slot handler's first instruction while the world queue
@@ -287,6 +289,19 @@ impl ModelMaterials for BackendMaterials<'_> {
 }
 
 impl SoftwareRenderer {
+    fn model_scene(&self) -> Option<ModelScene> {
+        Some(ModelScene {
+            camera_position: self.camera_position,
+            camera_basis: self.camera_basis,
+            native: match self.authority {
+                SceneProjectionAuthority::Native(_) => self.native_viewport,
+                _ => None,
+            },
+            lens: self.model_lens()?,
+            world_fog: self.world_model_fog(),
+        })
+    }
+
     /// The lens model bodies project with: the scene's native lens, else one
     /// derived from the floating camera over the logical surface.
     fn model_lens(&self) -> Option<GroundProjection> {
@@ -616,19 +631,26 @@ impl Renderer for SoftwareRenderer {
         true
     }
 
-    fn draw_model_body(&mut self, draw: crate::renderer::ModelDraw<'_>) {
-        let Some(lens) = self.model_lens() else {
+    fn draw_model_billboards(&mut self, draw: crate::renderer::ModelBillboardDraw<'_>) {
+        let Some(scene) = self.model_scene() else {
             return;
         };
-        let scene = ModelScene {
-            camera_position: self.camera_position,
-            camera_basis: self.camera_basis,
-            native: match self.authority {
-                SceneProjectionAuthority::Native(_) => self.native_viewport,
-                _ => None,
-            },
-            lens,
-            world_fog: self.world_model_fog(),
+        let mut materials = BackendMaterials {
+            store: &mut self.materials,
+            derived: &mut self.derived,
+        };
+        if let Err(error) = queue_model_billboards(&mut self.queue, &draw, &scene, &mut materials) {
+            if !self.model_error_reported {
+                self.model_error_reported = true;
+                eprintln!("software billboards: {error:?}; later ones this frame are dropped");
+            }
+        }
+        self.queued = true;
+    }
+
+    fn draw_model_body(&mut self, draw: crate::renderer::ModelDraw<'_>) {
+        let Some(scene) = self.model_scene() else {
+            return;
         };
         let mut materials = BackendMaterials {
             store: &mut self.materials,

@@ -22,8 +22,13 @@ use crate::gl_backend::{
 };
 use crate::projection::NativeViewportWords;
 use crate::renderer::WorldSpriteBlend;
-use crate::renderer::{ModelDepthFade, ModelDraw, NativeModelFogPass, WorldModelFog};
-use crate::software::model::{construct_face, FaceContext, FacePass, ModelCorner, ModelNormal};
+use crate::renderer::{
+    ModelBillboardDraw, ModelDepthFade, ModelDraw, NativeModelFogPass, WorldModelFog,
+};
+use crate::software::model::{
+    construct_billboard, construct_face, BillboardCommand, FaceContext, FacePass, ModelCorner,
+    ModelNormal,
+};
 use crate::software::terrain::GroundProjection;
 use crate::software::{material_flags, MaterialId, PrimitiveQueue, QueueError};
 
@@ -91,9 +96,23 @@ impl ModelScene {
     /// `FUN_00464E60`'s table choice for this node, or `None` when the node
     /// lies wholly beyond the far plane.
     fn draw_fog(&self, draw: &ModelDraw<'_>) -> Option<DrawFog> {
-        let origin_depth = self.view_raw(draw.transform.position)[2];
-        let radius =
-            (f32::from(draw.mesh.radius_raw) * draw.transform.scale.abs() / 100.0 * 256.0) as i32;
+        self.node_fog(
+            draw.transform.position,
+            draw.mesh.radius_raw,
+            draw.transform.scale,
+            draw.depth_fade,
+        )
+    }
+
+    fn node_fog(
+        &self,
+        position: [f32; 3],
+        radius_raw: u16,
+        scale: f32,
+        depth_fade: ModelDepthFade,
+    ) -> Option<DrawFog> {
+        let origin_depth = self.view_raw(position)[2];
+        let radius = (f32::from(radius_raw) * scale.abs() / 100.0 * 256.0) as i32;
         let select = |near: i32, far: i32, colour: [f32; 3]| -> Option<DrawFog> {
             if origin_depth.wrapping_sub(radius) >= far {
                 return None;
@@ -109,7 +128,7 @@ impl ModelScene {
                 colour: colour_word(colour),
             })
         };
-        match draw.depth_fade {
+        match depth_fade {
             ModelDepthFade::Disabled => Some(DrawFog {
                 fade: [0, i32::MAX, i32::MAX],
                 pass: FacePass::Near,
@@ -341,6 +360,130 @@ pub(crate) fn queue_model_body(
     };
     for (opcode, words) in &commands {
         construct_face(queue, &context, fog.pass, *opcode, words)?;
+    }
+    Ok(())
+}
+
+/// Queue the billboards attached to one model body.
+pub(crate) fn queue_model_billboards(
+    queue: &mut PrimitiveQueue,
+    draw: &ModelBillboardDraw<'_>,
+    scene: &ModelScene,
+    materials: &mut dyn ModelMaterials,
+) -> Result<(), QueueError> {
+    if draw.vertices.is_empty() || draw.billboards.is_empty() {
+        return Ok(());
+    }
+    let Some(fog) = scene.node_fog(
+        draw.transform.position,
+        draw.radius_raw,
+        draw.transform.scale,
+        draw.depth_fade,
+    ) else {
+        return Ok(());
+    };
+    let lens = GroundProjection {
+        fade: fog.fade,
+        ..scene.lens
+    };
+    let raw_scale = draw.transform.scale / 100.0;
+    let world: Vec<Option<[f32; 3]>> = draw
+        .vertices
+        .iter()
+        .enumerate()
+        .map(|(index, anchor)| {
+            if draw
+                .vertex_clip
+                .get(index)
+                .is_some_and(|clip| *clip != v2k_formats::models::ModelSlotClip::Clear)
+            {
+                return None;
+            }
+            let local = anchor.map(|value| value as f32 * raw_scale);
+            Some(std::array::from_fn(|axis| {
+                draw.transform.position[axis]
+                    + (0..3)
+                        .map(|k| draw.transform.orientation[axis][k] * local[k])
+                        .sum::<f32>()
+            }))
+        })
+        .collect();
+    let admitted = crate::model_near::vertex_admission(
+        draw.near_clip,
+        &world,
+        draw.vertex_projection,
+        scene.camera_position,
+        scene.camera_basis[2],
+    );
+    let corners: Vec<ModelCorner> = world
+        .iter()
+        .zip(&admitted)
+        .map(|(world, &admitted)| match world {
+            Some(world) if admitted => {
+                let view = scene.view_raw(*world);
+                let point = lens.project_view(view);
+                ModelCorner {
+                    view,
+                    screen: point.screen,
+                    clip: point.clip | 0x80,
+                    fade: point.fade,
+                }
+            }
+            _ => ModelCorner {
+                clip: 0x40 | 0x80,
+                fade: 0xFF,
+                ..ModelCorner::default()
+            },
+        })
+        .collect();
+    let mut colours = Vec::new();
+    let mut sprites = Vec::new();
+    let mut sizes = Vec::new();
+    let mut commands = Vec::new();
+    for (billboard, material) in draw.billboards.iter().zip(draw.materials) {
+        let id = if billboard.textured {
+            let Some(texture) = material.face.texture else {
+                continue;
+            };
+            let flags = face_flags(material.blend, material.face.flat_shade_row);
+            let Some(id) = materials.face_material(texture.0, flags) else {
+                continue;
+            };
+            sprites.push(id);
+            sizes.push((material.width, material.height));
+            sprites.len() as i16 - 1
+        } else {
+            let colour = material.face.palette_rgb555.map_or(0, |rgb555| {
+                u32::from(((rgb555 & 0x7FE0) << 1) | (rgb555 & 0x1F))
+            });
+            colours.push(colour);
+            colours.len() as i16 - 1
+        };
+        // Model units are VIEW units in gameplay (scale 100/256); other
+        // scenes convert their model units to the VIEW domain.
+        let size = (f32::from(billboard.size) * raw_scale * 256.0).round() as i32;
+        commands.push(BillboardCommand {
+            vertex: usize::from(billboard.vertex),
+            id,
+            size,
+            angle: billboard.angle,
+            textured: billboard.textured,
+        });
+    }
+    let palette = |index: i16| colours.get(index as usize).copied().unwrap_or(0);
+    let sprite = |index: i16| sprites.get(index as usize).copied().unwrap_or(0);
+    let sprite_size = |index: i16| sizes.get(index as usize).copied().unwrap_or((1, 1));
+    let context = FaceContext {
+        corners: &corners,
+        normals: &[],
+        palette: &palette,
+        sprite: &sprite,
+        fog_colour: fog.colour,
+    };
+    for command in commands {
+        if command.vertex < corners.len() {
+            construct_billboard(queue, &context, &lens, &sprite_size, fog.pass, command)?;
+        }
     }
     Ok(())
 }

@@ -228,6 +228,20 @@ impl GroundProjection {
         point
     }
 
+    /// `FUN_004594C0`: half a projected size in screen pixels on each axis,
+    /// halved together until both fit below 0x2000.
+    pub(crate) fn half_width(&self, value: i32, depth: i32) -> (i16, i16) {
+        let mut x = quotient(value, self.focal[0], depth);
+        let mut y = quotient(value, self.focal[1], depth);
+        let mut control = x | y;
+        while control > 0x1FFF {
+            control >>= 1;
+            x >>= 1;
+            y >>= 1;
+        }
+        (x as i16, y as i16)
+    }
+
     /// `FUN_0042FFF0`: reproject a point behind the near plane at depth 0x40.
     /// The dry formula is used even under the wet projector.
     fn reproject_near(&self, point: &mut GroundPoint, delta: [i32; 3]) -> u8 {
@@ -262,6 +276,10 @@ fn wobble(angle: u32) -> i32 {
 
 /// X bits 1 (left) / 2 (inside) / 4 (right), Y bits 8 (above) / 0x10
 /// (inside) / 0x20 (below), from unsigned comparisons with the bounds.
+pub(crate) fn outcode_of(x: i32, y: i32, bounds: [u32; 2]) -> u8 {
+    outcode(x, y, bounds)
+}
+
 fn outcode(x: i32, y: i32, bounds: [u32; 2]) -> u8 {
     let horizontal = if (x as u32) < bounds[0] {
         2

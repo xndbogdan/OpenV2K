@@ -253,3 +253,139 @@ fn emit(
     }
     Ok(())
 }
+
+/// A billboard command (`0x68` flat colour, `0x78` sprite): its anchor
+/// vertex, colour or sprite operand, and the size and angle operands as
+/// `FUN_00470840` decodes them. `size` is in VIEW units; retail's model
+/// units are VIEW units, and it doubles the operand's low word.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BillboardCommand {
+    pub vertex: usize,
+    pub id: i16,
+    pub size: i32,
+    pub angle: u16,
+    pub textured: bool,
+}
+
+/// The duplicated quarter-sine word as a Q31 value (`FUN_00467840`).
+fn sine_q31(angle: u32) -> i32 {
+    v2k_formats::fixed_math::retail_sine_q15(angle & 0xFFFF).wrapping_mul(0x1_0001)
+}
+
+/// One Q31 product's low word.
+fn product_word(a: i32, b: i32) -> i16 {
+    super::fixed::mul_q31(a, b) as i16
+}
+
+/// The billboard constructors (`FUN_00467840`/`00467C60` near,
+/// `004680F0`/`00468520` fog): a quad rotated by the angle about the
+/// anchor's screen point, half the projected size on each side. Sprite
+/// billboards scale the rotation by the sprite's aspect (`1 / max(w, h)`
+/// times `1/sqrt(2)`). Anchors behind the near plane, and in the fog table
+/// fully faded anchors, are skipped; the quad is keyed by the anchor's
+/// depth and, in the fog table, every corner takes the anchor's fade byte.
+pub fn construct_billboard(
+    queue: &mut PrimitiveQueue,
+    context: &FaceContext<'_>,
+    lens: &super::terrain::GroundProjection,
+    sprite_size: &dyn Fn(i16) -> (u16, u16),
+    pass: FacePass,
+    command: BillboardCommand,
+) -> Result<(), QueueError> {
+    let anchor = context.corners[command.vertex];
+    if anchor.clip & 0x40 != 0 || (pass == FacePass::Fog && anchor.fade == 0xFF) {
+        return Ok(());
+    }
+    let depth = anchor.view[2];
+    let (hx, hy) = if depth > 0x3F {
+        lens.half_width(command.size.wrapping_mul(2), depth)
+    } else {
+        (0, 0)
+    };
+    let (hx, hy) = (i32::from(hx), i32::from(hy));
+    let [cx, cy] = anchor.screen;
+    let sine = sine_q31(u32::from(command.angle));
+    let cosine = sine_q31(u32::from(command.angle) + 0x4000);
+    let corners: [(i16, i16); 4];
+    let first;
+    if command.textured {
+        let (width, height) = sprite_size(command.id);
+        let (width, height) = (i32::from(width), i32::from(height));
+        let larger = width.max(height);
+        let sine = super::fixed::mul_q31(sine / larger, 0x5A82_7999);
+        let cosine = super::fixed::mul_q31(cosine / larger, 0x5A82_7999);
+        let u8_ = product_word(sine, hy.wrapping_mul(width));
+        let u7 = product_word(cosine, hx.wrapping_mul(width));
+        let u6 = product_word(sine, hx.wrapping_mul(height));
+        let u5 = product_word(cosine, hy.wrapping_mul(height));
+        corners = [
+            (
+                cx.wrapping_sub(u7).wrapping_add(u6),
+                cy.wrapping_sub(u8_).wrapping_sub(u5),
+            ),
+            (
+                cx.wrapping_add(u6).wrapping_add(u7),
+                cy.wrapping_add(u8_).wrapping_sub(u5),
+            ),
+            (
+                cx.wrapping_add(u7).wrapping_sub(u6),
+                cy.wrapping_add(u5).wrapping_add(u8_),
+            ),
+            (
+                cx.wrapping_sub(u7).wrapping_sub(u6),
+                cy.wrapping_add(u5).wrapping_sub(u8_),
+            ),
+        ];
+        first = (context.sprite)(command.id);
+    } else {
+        let u7 = product_word(sine, hy);
+        let u6 = product_word(cosine, hx);
+        let u9 = product_word(sine, hx);
+        let u8_ = product_word(cosine, hy);
+        corners = [
+            (
+                cx.wrapping_add(u9).wrapping_sub(u6),
+                cy.wrapping_sub(u7).wrapping_sub(u8_),
+            ),
+            (
+                cx.wrapping_add(u9).wrapping_add(u6),
+                cy.wrapping_add(u7).wrapping_sub(u8_),
+            ),
+            (
+                cx.wrapping_add(u6).wrapping_sub(u9),
+                cy.wrapping_add(u7).wrapping_add(u8_),
+            ),
+            (
+                cx.wrapping_sub(u6).wrapping_sub(u9),
+                cy.wrapping_add(u8_).wrapping_sub(u7),
+            ),
+        ];
+        first = (context.palette)(command.id);
+    }
+    let outcode = corners.iter().fold(0u8, |code, &(x, y)| {
+        code | super::terrain::outcode_of(i32::from(x), i32::from(y), lens.bounds)
+    });
+    if OUTCODE_VISIBLE[usize::from(outcode)] == 0 {
+        return Ok(());
+    }
+    let fog = pass == FacePass::Fog;
+    let slot = match (command.textured, fog) {
+        (false, false) => FillSlot::FlatQuad,
+        (false, true) => FillSlot::FogQuad,
+        (true, false) => FillSlot::TexturedQuad,
+        (true, true) => FillSlot::TexturedFogQuad,
+    };
+    let bytes = if fog { 0x20 } else { 0x18 };
+    let payload = queue.push(depth, slot, bytes)?;
+    for (index, (x, y)) in corners.into_iter().enumerate() {
+        payload[4 * index..4 * index + 2].copy_from_slice(&x.to_le_bytes());
+        payload[4 * index + 2..4 * index + 4].copy_from_slice(&y.to_le_bytes());
+    }
+    payload[0x10..0x14].copy_from_slice(&first.to_le_bytes());
+    payload[0x14..0x18].copy_from_slice(&0u32.to_le_bytes());
+    if fog {
+        payload[0x18..0x1C].copy_from_slice(&context.fog_colour.to_le_bytes());
+        payload[0x1C..0x20].fill(anchor.fade);
+    }
+    Ok(())
+}
