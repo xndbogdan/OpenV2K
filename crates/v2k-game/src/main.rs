@@ -2698,6 +2698,12 @@ fn run_game(
                 if !matches!(&purpose, LoadingPurpose::CampaignWarp { .. }) {
                     gameplay_notifications.reset_session();
                 }
+                // Port extension: a loaded save keeps the hints it had shown.
+                if let LoadingPurpose::NativeSave { restore } = &purpose {
+                    if let Some(mask) = restore.saved_hint_mask {
+                        gameplay_notifications.restore_saved_hints(mask);
+                    }
+                }
                 world_complete_results.reset();
                 world_complete_tally = WorldCompleteTally::default();
                 gameplay_hud.reset();

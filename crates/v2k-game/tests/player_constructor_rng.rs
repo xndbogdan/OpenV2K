@@ -192,6 +192,7 @@ fn native_save_keeps_restored_pose_but_constructs_a_fresh_process_owned_target()
     let restore = NativeSaveRestore::decode(&NativeCompatibilityPreview {
         logical_level_id: 2,
         state_payload: payload,
+        saved_hint_mask: None,
     })
     .unwrap();
     let mut terrain = fixture.terrain.clone();

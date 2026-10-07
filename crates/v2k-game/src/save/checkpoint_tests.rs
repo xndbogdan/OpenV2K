@@ -41,6 +41,7 @@ pub(super) fn native() -> NativeCompatibilityPreview {
     NativeCompatibilityPreview {
         logical_level_id: 3,
         state_payload,
+        saved_hint_mask: None,
     }
 }
 
@@ -288,6 +289,13 @@ fn parent_native_is_overwritten_in_place_and_new_slots_stay_with_parent_set() {
     let restarted = SaveManager::load_all(&data, None);
     assert!(restarted.is_loadable(8));
     assert!(restarted.is_loadable(0));
+    // The tail comes back as the slot's saved hint mask, through the restore.
+    for (slot, tail) in [(8, 80), (0, 10)] {
+        let native = restarted.slot(slot).unwrap().native.as_ref().unwrap();
+        assert_eq!(native.saved_hint_mask, Some(tail));
+        let restore = super::NativeSaveRestore::decode(native).unwrap();
+        assert_eq!(restore.saved_hint_mask, Some(tail));
+    }
     let _ = fs::remove_dir_all(root);
 }
 
