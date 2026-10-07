@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,383 | |
-| Marked not needed (excluded below) | 0 | |
-| **Referenced by port code** | **871** | **36.6%** |
-| Referenced by code or RE notes | 1,100 | 46.2% |
+| Marked not needed (excluded below) | 1 | |
+| **Referenced by port code** | **875** | **36.7%** |
+| Referenced by code or RE notes | 1,106 | 46.4% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -20,9 +20,9 @@ Manual statuses from [`status.csv`](status.csv):
 | Status | Functions |
 |---|---:|
 | implemented | 194 |
-| approximated | 1 |
+| approximated | 3 |
 | documented | 0 |
-| not-needed | 0 |
+| not-needed | 1 |
 
 82 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.

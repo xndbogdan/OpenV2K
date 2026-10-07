@@ -21,11 +21,11 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.6%25%20code%20%2F%2046.2%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.7%25%20code%20%2F%2046.4%25%20notes-orange)](docs/progress/README.md)
 
-Of the **2,383** game functions in retail `V2000.EXE`,
-**871 (36.6%)** are referenced by the port's code and
-**1,100 (46.2%)** by its code or RE notes.
+Of the **2,382** game functions in retail `V2000.EXE`,
+**875 (36.7%)** are referenced by the port's code and
+**1,106 (46.4%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
 
@@ -190,8 +190,10 @@ retail's 16-bit software raster
 with their 3-D scene, 2-D overlays, and gameplay and cinematic frames with
 ground, water, models, edges, billboards and particles through the retail
 producers. Choose Software in the launcher's Options, in the game's Display
-menu (Rendering; it applies at the next launch) or with `--renderer
-software`. Automatic falls back to Software when OpenGL cannot start.
+menu (Rendering, which switches at once, as in the original) or with
+`--renderer software`. Automatic falls back to Software when OpenGL cannot
+start. Software always draws the authored frame (320×240 to 1024×768); with
+Native scaling it is shown at 4:3.
 
 For the classic colour look, select **4:3** or **Stretched** scaling and enable
 **Classic Framebuffer** under Display. At startup it selects the authored

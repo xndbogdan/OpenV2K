@@ -179,6 +179,17 @@ impl SoftwareRenderer {
         })
     }
 
+    /// The surface is always an authored retail frame: the world producers
+    /// project through the tier's lens and viewport words, which exist only
+    /// at the authored sizes. Native presentation therefore shows that frame
+    /// fitted at 4:3, like the classic modes.
+    fn surface_scaling(&self) -> ScalingMode {
+        match self.scaling_mode {
+            ScalingMode::Native => ScalingMode::FourThree,
+            mode => mode,
+        }
+    }
+
     fn update_render_viewport(&mut self) {
         self.flush();
         self.viewport = RenderViewport::for_output(
@@ -186,7 +197,7 @@ impl SoftwareRenderer {
             self.output_height,
             self.reference_width,
             self.reference_height,
-            self.scaling_mode,
+            self.surface_scaling(),
         );
         let (width, height) = (self.viewport.logical_width, self.viewport.logical_height);
         if (self.surface.width, self.surface.height) != (width, height) {
@@ -1115,7 +1126,7 @@ impl Renderer for SoftwareRenderer {
 
     fn authored_pixel_scale(&self) -> f32 {
         self.ui_submission_policy.authored_pixel_scale(
-            self.scaling_mode,
+            self.surface_scaling(),
             [self.output_width, self.output_height],
             self.reference_height,
         )

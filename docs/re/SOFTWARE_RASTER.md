@@ -20,6 +20,14 @@ launcher, in the Display menu's Rendering row (Software/OpenGL, applied at
 the next launch) and with `--renderer software`; Automatic prefers OpenGL
 and falls back to Software when OpenGL cannot start.
 
+The surface is always an authored retail frame (320×240 to 1024×768): the
+ground, water and model producers project through the tier's lens and
+viewport words, which only exist at those sizes. Native scaling therefore
+shows the software frame at 4:3 rather than drawing at the window size.
+At 1024×768, a release build on the development machine spends 5.2 ms per
+frame on average (9.6 ms at most) in the first world and 8.9 ms (18.6 ms) in
+Intro2, game logic included.
+
 ## Pipeline
 
 1. **Queue thunks** `0x0047A720..0x0047AB00` call one Graph2D fill slot with
