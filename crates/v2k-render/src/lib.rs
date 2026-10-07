@@ -10,6 +10,7 @@ mod model_near;
 pub mod music;
 pub mod projection;
 pub mod renderer;
+pub mod software;
 pub mod sound;
 pub mod sw_backend;
 mod terrain_footprint;

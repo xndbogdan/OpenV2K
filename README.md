@@ -21,11 +21,11 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-31.0%25%20code%20%2F%2041.8%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-34.6%25%20code%20%2F%2044.8%25%20notes-orange)](docs/progress/README.md)
 
 Of the **2,383** game functions in retail `V2000.EXE`,
-**738 (31.0%)** are referenced by the port's code and
-**997 (41.8%)** by its code or RE notes.
+**824 (34.6%)** are referenced by the port's code and
+**1,067 (44.8%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
 

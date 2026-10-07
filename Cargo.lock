@@ -564,6 +564,7 @@ dependencies = [
 name = "v2k-render"
 version = "0.1.0"
 dependencies = [
+ "flate2",
  "gl_generator",
  "lewton",
  "png",
