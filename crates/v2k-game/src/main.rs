@@ -7570,11 +7570,33 @@ fn run_game(
                         }
                     }
                     {
-                        let notification_presentation = gameplay_notifications.presentation(
-                            retail_tick as i32,
-                            &mut text_typewriter_cadence,
-                            |id| session.cache.global_string(id),
-                        );
+                        // FUN_00452CB0 first draws the world's arrival records
+                        // (its strings up to `#`) unless its control slot is
+                        // already completed.
+                        let world_records: Vec<&str> = current_level_id
+                            .and_then(world_control_slot)
+                            .filter(|&slot| {
+                                player_campaign_progress
+                                    .control_slot_bits(slot)
+                                    .is_none_or(|bits| bits & 1 == 0)
+                            })
+                            .and_then(|_| session.cache.level())
+                            .map(|level| {
+                                level
+                                    .strings
+                                    .iter()
+                                    .map(String::as_str)
+                                    .take_while(|record| !record.starts_with('#'))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let notification_presentation = gameplay_notifications
+                            .presentation_with_world_text(
+                                retail_tick as i32,
+                                &mut text_typewriter_cadence,
+                                &world_records,
+                                |id| session.cache.global_string(id),
+                            );
                         if notification_presentation.play_typewriter_sound && menu_fonts.is_some() {
                             if let Some(sound_manager) = sound_manager.as_mut() {
                                 sound_manager.play_centered_sound_with_gain(

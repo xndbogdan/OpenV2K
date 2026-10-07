@@ -221,6 +221,17 @@ Notification slot at `g_rng_state+0x2C4` with **bitmask deduplication** (`FUN_00
 - `DAT_004cad80` maps event IDs `0..24` to resource IDs `0xE1..0xF8`
 - Guard: fires **only** when `phase == 5` exactly (stricter than text messages)
 
+`FUN_00452CB0` first draws the current world's timed arrival records
+(`Entering Peasant World`, `Save the world by killing the creatures.`, ...):
+global Section-2 strings from `DAT_004D056A[world]` (310 for world 1) up to
+the `#` sentinel, through `FUN_00452790` on the world clock
+`DAT_004FED60 * 1000 / 50` with the blinking cursor. These are the leading
+records of the level OVL's own Section 2 for every world. The pass is skipped
+once the world's control slot has bit 0 set (`FUN_0042ED80`), except worlds
+0x25/0x26; controller byte `+0x296 == 4` selects string 0x77 instead. The port
+draws them before the two slots below; Level 1's first record matches
+DirectDraw trace Flip `360946` pixel for pixel.
+
 The consumer is `FUN_00452CB0`: after drawing the ordinary direct-text slot at
 `+0x2C0`, it passes this resource slot to `FUN_00437EE0` with the blinking-cursor
 flag set. `FUN_00437EE0` dereferences the global Section-2 string pointer and
