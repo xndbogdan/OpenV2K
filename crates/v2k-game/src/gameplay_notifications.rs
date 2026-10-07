@@ -5,6 +5,10 @@
 //! remembers every event id in a 32-bit mask so each resource hint is shown at
 //! most once per session. Both slots are rendered by `FUN_00452CB0` through the
 //! authored Section-2 timing/layout prefix parsed by `FUN_00452790`.
+//!
+//! Saves carry that mask. Retail restores it from the file and then clears
+//! it when the loaded game starts, so its hints come back after every load;
+//! the port keeps the restored mask (see [`GameplayNotifications::restore_saved_hints`]).
 
 use crate::attract_attention::{
     AttractAttentionResourceTextRequest, ATTRACT_ATTENTION_RESOURCE_TEXT_EVENT,
@@ -271,6 +275,15 @@ impl GameplayNotifications {
         self.direct = None;
         self.resource = None;
         self.seen_resource_events = 0;
+    }
+
+    /// Port extension: keep the hint mask a loaded save carries. Retail's
+    /// loader restores it (`456C70 -> 438020`), but `FUN_0044F650` then
+    /// clears it for every mode (`437FF0` at `0x44F7E1`), so retail repeats
+    /// each one-time hint after a load. Call this after
+    /// [`Self::reset_session`]; hints the load itself raises still add to it.
+    pub fn restore_saved_hints(&mut self, mask: u32) {
+        self.seen_resource_events |= mask;
     }
 
     /// 45189C/4518AE: ordinary native Loading (+28E == 0) clears both visible
@@ -1263,6 +1276,30 @@ mod tests {
         assert_eq!(
             frame.lines[0].text,
             "Good shooting! Now kill all the other creatures to save the world"
+        );
+    }
+
+    #[test]
+    fn a_loaded_save_keeps_the_hints_it_had_shown() {
+        // A save that had shown the player-kill hint, loaded as a new world.
+        let mut notifications = GameplayNotifications::new();
+        notifications.reset_session();
+        notifications.restore_saved_hints(1 << PLAYER_KILL_HINT_EVENT_ID);
+        notifications.queue_player_kill(100);
+        let mut cadence = TextTypewriterCadence::default();
+        assert!(notifications
+            .presentation(200, &mut cadence, resolve)
+            .lines
+            .is_empty());
+
+        // A hint the save had not shown still appears, and joins the mask.
+        notifications.queue_main_base_conversion(300);
+        let frame = notifications.presentation(360, &mut cadence, resolve);
+        assert_eq!(frame.lines.len(), 1);
+        assert_eq!(frame.lines[0].string_id, 0xe2);
+        assert_eq!(
+            notifications.save_tail_seen_mask(),
+            (1 << PLAYER_KILL_HINT_EVENT_ID) | (1 << MAIN_BASE_CONVERSION_RESOURCE_EVENT_ID)
         );
     }
 

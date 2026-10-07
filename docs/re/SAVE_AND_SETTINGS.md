@@ -89,9 +89,16 @@ Session `+0x1C4` (state `+0x1B0`, applied by `44F830 ->450FC0`) and controller
 bounded native restoration, not a claim that every saved field is implemented.
 
 The four-byte tail has separate semantics: `456C70 ->438020` restores it to
-the resource-notification seen-event mask at `[session+0x2C4]+0x0C`. Mode 6
-then clears that mask through `437FF0` at `44F7E1`, before authored/cargo
-events repopulate it. Do not import the tail directly into the final HUD mask.
+the resource-notification seen-event mask at `[session+0x2C4]+0x0C`.
+`FUN_0044F650` then clears that mask through `437FF0` at `44F7E1`, for every
+mode, before authored/cargo events repopulate it. Retail therefore shows every
+one-time hint again after a load, although the save recorded it.
+
+**Port extension:** the port keeps the saved mask. After its usual session
+reset, a native load ORs the slot's tail back in
+(`GameplayNotifications::restore_saved_hints`), and hints raised during the
+load still add to it. A loaded save no longer repeats hints it had already
+shown. New Game still starts with an empty mask, as in retail.
 
 Portable JSON saves are also explicit compatibility previews. New writes carry
 position, velocity, heading, port-owned body pitch/roll, and health; their

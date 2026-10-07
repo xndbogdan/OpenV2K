@@ -41,6 +41,9 @@ pub struct NativeSaveRestore {
     pub pre_health_damage_buffer_raw: i32,
     /// Controller +195, retained separately from lives/cargo/trophy bytes.
     pub controller_195_raw: u8,
+    /// The slot's saved hint mask, see
+    /// [`NativeCompatibilityPreview::saved_hint_mask`].
+    pub saved_hint_mask: Option<u32>,
 }
 
 impl NativeSaveRestore {
@@ -111,6 +114,7 @@ impl NativeSaveRestore {
             session_flags_raw: word(payload, 0x1b0),
             pre_health_damage_buffer_raw: word(payload, 0x16c) as i32,
             controller_195_raw: payload[0x145],
+            saved_hint_mask: native.saved_hint_mask,
         })
     }
 
@@ -151,6 +155,7 @@ mod tests {
         NativeCompatibilityPreview {
             logical_level_id: 18,
             state_payload: payload,
+            saved_hint_mask: None,
         }
     }
 
