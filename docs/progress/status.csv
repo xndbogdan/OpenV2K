@@ -193,3 +193,7 @@ address,status,note
 0x0045B280,implemented,software primitive queue record by scope; exercised by every native producer receipt (docs/re/SOFTWARE_RASTER.md)
 0x0043D410,implemented,software particle drawer; byte-exact on native particle receipts (docs/re/SOFTWARE_RASTER.md)
 0x0046D010,implemented,software dry projector without fade (particle shadows); byte-exact through particle receipts (docs/re/SOFTWARE_RASTER.md)
+0x0042F530,implemented,static-object cell window behind retail cameras (crates/v2k-game/src/static_objects.rs)
+0x00466160,approximated,model light brought into VIEW space; the port dots floating-point VIEW normals (docs/re/RENDER_PIPELINE.md)
+0x00470B60,implemented,menu glyph pen kept in 1/100 px with per-glyph truncation (crates/v2k-game/src/menu_text_submission.rs)
+0x00470F80,implemented,menu text width: advances plus every kern but the last, truncated (crates/v2k-game/src/menu_text.rs)
