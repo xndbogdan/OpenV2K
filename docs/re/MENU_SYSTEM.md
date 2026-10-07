@@ -1121,27 +1121,15 @@ The two independent 60-Hz audits `20260717-032247-complete-menu-audit` and
 the zero-clock replacement, and the expected retail process loss after a Load
 selection.
 
-### Local Load-only preservation patch (2026-08-02)
+### Copy protection
 
-For the canonical 936,448-byte retail executable with SHA-256
-`E9BE7A833612FBA3A5A5AB92A974ECE1A689E4B7E72409D9EE8331380573B4BA`, the
-Load-only failure response is the conditional branch `74 05` at virtual address
-`0x0043C0CF` (file offset `0x0003B4CF`). Changing only its first byte to `EB`
-makes the branch unconditionally skip the call to the shared shutdown routine.
-The guard window changes from `85 F6 74 05 E8 FA 9D 05 00` to
-`85 F6 EB 05 E8 FA 9D 05 00`; the resulting executable SHA-256 is
-`D8365A3EAAE541C071214835833CCF6DB8DC491646C713F2C4D0017A04A6A720`.
+The process loss after a retail Load selection comes from the game's copy
+protection. The Rust port has no media or copy-protection checks.
 
-This compatibility patch must be applied only to a copied, exact-hash
-executable. It intentionally leaves the media probes, native save reader,
-normal Quit path, and separate network-host policy intact. Never stub
-`FUN_00495ED0` globally because it is also the legitimate engine shutdown
-routine. The Rust port omits this obsolete protection policy entirely.
-
-The later NoCD05 Alpine failure is a [short overlay read followed by an
+The NoCD05 Alpine failure is a [short overlay read followed by an
 error-dialog callback crash](RETAIL_DATA_INTEGRITY.md#nocd05-alpine-load-failure),
-not evidence for another protection bypass. Its missing-file text is stale
-CRT errno from EOF; the requested file opens successfully.
+not a protection failure. Its missing-file text is stale CRT errno from EOF;
+the requested file opens successfully.
 
 ## Decompilation artifacts & tools
 
