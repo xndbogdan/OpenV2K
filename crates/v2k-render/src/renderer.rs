@@ -213,6 +213,11 @@ pub struct ModelMesh<'a> {
     /// World tf13 provenance after dependency resolution, including linked
     /// imports. Used only with [`ModelSurfaceResolution::ContextResolved`].
     pub vertex_surface_origin: &'a [v2k_formats::models::ModelSurfaceOrigin],
+    /// Source-owned VIEW points parallel to `vertices`, from the node's
+    /// integer frame (`FUN_0046D610`'s cache). Empty, or `None` for a vertex,
+    /// when the producer does not own that frame. Backends projecting with
+    /// the native viewport use these instead of transforming the vertex.
+    pub vertex_view_raw: &'a [Option<[i32; 3]>],
     pub triangles: &'a [[u16; 3]],
     /// Original triangle or quad for each triangulated face. A quad's two
     /// triangles retain all four vertices for atomic retail near rejection.
@@ -222,6 +227,10 @@ pub struct ModelMesh<'a> {
     pub face_cull: &'a [ModelFaceCull],
     pub face_uvs: &'a [[[f32; 2]; 3]],
     pub face_corner_normals: &'a [[[f32; 3]; 3]],
+    /// The pool vectors behind `normals` and `face_corner_normals` (face
+    /// normal, then corners), parallel to `triangles`. Empty when the
+    /// producer kept only unit normals.
+    pub face_normals_raw: &'a [[[i32; 3]; 4]],
     pub face_shading: &'a [ModelFaceShading],
     /// Authored `0x02`/`0x22` segments into `vertices`.
     pub edges: &'a [v2k_formats::models::ModelEdge],
@@ -242,6 +251,10 @@ pub struct ModelMesh<'a> {
     /// contexts `(73,73,-73)` and the frontend Klaus context its separately
     /// authored `(-100,50,-50)`. Backends shade with VIEW-space normals.
     pub light_direction_raw: [i32; 3],
+    /// `FUN_00466160`'s light in the node's model axes, when the producer
+    /// owns the node's integer frame. Backends shading with the native
+    /// viewport dot it with `face_normals_raw` instead of rotating normals.
+    pub native_light_raw: Option<[i32; 3]>,
     /// Signed contextual shift applied to the 16-slot model-light table.
     /// World entity draws use terrain light minus the 0..8 underwater
     /// darkness step; menu and diagnostic draws leave this at zero.
@@ -258,12 +271,14 @@ impl<'a> ModelMesh<'a> {
             vertex_projection: &model.vertex_projection,
             vertex_clip: &model.vertex_clip,
             vertex_surface_origin: &model.vertex_surface_origin,
+            vertex_view_raw: &[],
             triangles: &model.triangles,
             face_vertices: &model.face_vertices,
             normals: &model.normals,
             face_cull: &model.face_cull,
             face_uvs: &model.face_uvs,
             face_corner_normals: &model.face_corner_normals,
+            face_normals_raw: &[],
             face_shading: &model.face_shading,
             edges: &model.edges,
             edge_projection: ModelEdgeProjection::Compatibility,
@@ -271,6 +286,7 @@ impl<'a> ModelMesh<'a> {
             edge_widths: &[],
             shade_table: None,
             light_direction_raw: RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
+            native_light_raw: None,
             shade_shift: 0,
             materials,
         }
@@ -752,6 +768,9 @@ pub struct ModelBillboardDraw<'a> {
     /// The owning resolved slot's clip state, with the same contract as
     /// [`ModelMesh::vertex_clip`].
     pub vertex_clip: &'a [v2k_formats::models::ModelSlotClip],
+    /// Source-owned VIEW points, with the same contract as
+    /// [`ModelMesh::vertex_view_raw`].
+    pub vertex_view_raw: &'a [Option<[i32; 3]>],
     pub billboards: &'a [Billboard],
     pub materials: &'a [BillboardMaterial],
     pub transform: ModelTransform,

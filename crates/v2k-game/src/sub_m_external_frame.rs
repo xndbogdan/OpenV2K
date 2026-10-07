@@ -128,6 +128,12 @@ impl<'a> SubMPresentation<'a> {
         self
     }
 
+    /// The current node's source-owned frame with its viewport, which the
+    /// node's VIEW points use.
+    pub(crate) fn native_context(&self) -> Option<(NativeModelFrame, NativeWorldViewport)> {
+        self.native_frame.clone().zip(self.native_viewport)
+    }
+
     pub(crate) fn native_view_selection(&self) -> Option<v2k_formats::models::ModelViewSelection> {
         self.native_frame
             .as_ref()

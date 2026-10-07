@@ -449,6 +449,7 @@ struct ModelNodeGeometry<'a> {
     vertex_projection: &'a [ModelVertexProjection],
     vertex_clip: &'a [v2k_formats::models::ModelSlotClip],
     vertex_surface_origin: &'a [v2k_formats::models::ModelSurfaceOrigin],
+    vertex_view_raw: &'a [Option<[i32; 3]>],
     triangles: &'a [[u16; 3]],
     face_vertices: &'a [ModelFaceVertices],
     normals: &'a [[f32; 3]],
@@ -456,6 +457,7 @@ struct ModelNodeGeometry<'a> {
     face_materials: &'a [u16],
     face_uvs: &'a [[[f32; 2]; 3]],
     face_corner_normals: &'a [[[f32; 3]; 3]],
+    face_normals_raw: &'a [[[i32; 3]; 4]],
     face_shading: &'a [ModelFaceShading],
     edges: &'a [v2k_formats::models::ModelEdge],
     edge_projection: v2k_render::renderer::ModelEdgeProjection<'a>,
@@ -511,6 +513,7 @@ impl<'a> ModelNodeGeometry<'a> {
             vertex_projection: &model.vertex_projection,
             vertex_clip: &model.vertex_clip,
             vertex_surface_origin: &model.vertex_surface_origin,
+            vertex_view_raw: &[],
             triangles: &model.triangles,
             face_vertices: &model.face_vertices,
             normals: &model.normals,
@@ -518,6 +521,7 @@ impl<'a> ModelNodeGeometry<'a> {
             face_materials: &model.face_materials,
             face_uvs: &model.face_uvs,
             face_corner_normals: &model.face_corner_normals,
+            face_normals_raw: &[],
             face_shading: &model.face_shading,
             edges: &model.edges,
             edge_projection: v2k_render::renderer::ModelEdgeProjection::Compatibility,
@@ -535,6 +539,7 @@ impl<'a> ModelNodeGeometry<'a> {
             vertex_projection: &model.vertex_projection,
             vertex_clip: &model.vertex_clip,
             vertex_surface_origin: &model.vertex_surface_origin,
+            vertex_view_raw: &model.vertex_view_raw,
             triangles: &model.triangles,
             face_vertices: &model.face_vertices,
             normals: &model.normals,
@@ -542,6 +547,7 @@ impl<'a> ModelNodeGeometry<'a> {
             face_materials: &model.face_materials,
             face_uvs: &model.face_uvs,
             face_corner_normals: &model.face_corner_normals,
+            face_normals_raw: &model.face_normals_raw,
             face_shading: &model.face_shading,
             edges: &model.edges,
             edge_projection: v2k_render::renderer::ModelEdgeProjection::CommandSnapshots(
@@ -798,6 +804,26 @@ impl<'a> ModelTreeRenderer<'a> {
     /// node rather than being recomputed from a child attachment.
     pub fn with_external_frame(mut self, external_frame: ExternalFrameMode) -> Self {
         self.external_frame = ModelTreeExternalFrame::Fixed(external_frame);
+        self
+    }
+
+    /// [`Self::with_external_frame`] for a hierarchy whose root node frame is
+    /// source-owned, as static terrain objects' is: every reached node then
+    /// carries its integer VIEW frame, which its vertices' VIEW points,
+    /// view-dependent commands and node fog selection use. Children derive
+    /// their frames from their parent's as they are reached.
+    pub fn with_native_external_frame(
+        mut self,
+        external_frame: ExternalFrameMode,
+        root: Option<(
+            crate::native_model_frame::NativeModelFrame,
+            crate::native_model_frame::NativeWorldViewport,
+        )>,
+    ) -> Self {
+        self.external_frame = ModelTreeExternalFrame::NativeFixed {
+            mode: external_frame,
+            native_context: root,
+        };
         self
     }
 
@@ -1061,6 +1087,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 vertex_projection: &[],
                 vertex_clip: &[],
                 vertex_surface_origin: &[],
+                vertex_view_raw: &[],
                 triangles: &triangles,
                 // Filtered workbench shadow previews use triangle fallback.
                 face_vertices: &[],
@@ -1068,6 +1095,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 face_cull: &[],
                 face_uvs: &[],
                 face_corner_normals: &[],
+                face_normals_raw: &[],
                 face_shading: &[],
                 edges: &[],
                 edge_projection: v2k_render::renderer::ModelEdgeProjection::Compatibility,
@@ -1075,6 +1103,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 edge_widths: &[],
                 shade_table: None,
                 light_direction_raw: RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
+                native_light_raw: None,
                 shade_shift: 0,
                 materials: &materials,
             },
@@ -1178,12 +1207,14 @@ impl<'a> ModelTreeRenderer<'a> {
             vertex_projection: geometry.vertex_projection,
             vertex_clip: geometry.vertex_clip,
             vertex_surface_origin: geometry.vertex_surface_origin,
+            vertex_view_raw: geometry.vertex_view_raw,
             triangles: geometry.triangles,
             face_vertices: geometry.face_vertices,
             normals: geometry.normals,
             face_cull: geometry.face_cull,
             face_uvs: geometry.face_uvs,
             face_corner_normals: geometry.face_corner_normals,
+            face_normals_raw: geometry.face_normals_raw,
             face_shading: geometry.face_shading,
             edges: geometry.edges,
             edge_projection: geometry.edge_projection,
@@ -1191,6 +1222,10 @@ impl<'a> ModelTreeRenderer<'a> {
             edge_widths: &edge_widths,
             shade_table: self.cache.fog_gradient().map(Vec::as_slice),
             light_direction_raw: self.light_direction_raw,
+            native_light_raw: self
+                .external_frame
+                .native_context()
+                .map(|(frame, _)| frame.model_light_raw(self.light_direction_raw)),
             shade_shift: self.shade_shift,
             materials: &face_materials,
         };
@@ -1236,6 +1271,7 @@ impl<'a> ModelTreeRenderer<'a> {
             vertices: geometry.vertices,
             vertex_projection: geometry.vertex_projection,
             vertex_clip: geometry.vertex_clip,
+            vertex_view_raw: geometry.vertex_view_raw,
             billboards: geometry.billboards,
             materials: &billboard_materials,
             transform: ModelTransform {
@@ -2264,6 +2300,9 @@ mod tests {
         face_uvs: Vec<[[f32; 2]; 3]>,
         face_corner_normals: Vec<[[f32; 3]; 3]>,
         face_shading: Vec<ModelFaceShading>,
+        vertex_view_raw: Vec<Option<[i32; 3]>>,
+        face_normals_raw: Vec<[[i32; 3]; 4]>,
+        native_light_raw: Option<[i32; 3]>,
         shade_table: Vec<FogGradientEntry>,
         light_direction_raw: [i32; 3],
         shade_shift: i32,
@@ -2368,6 +2407,9 @@ mod tests {
                 face_uvs: draw.mesh.face_uvs.to_vec(),
                 face_corner_normals: draw.mesh.face_corner_normals.to_vec(),
                 face_shading: draw.mesh.face_shading.to_vec(),
+                vertex_view_raw: draw.mesh.vertex_view_raw.to_vec(),
+                face_normals_raw: draw.mesh.face_normals_raw.to_vec(),
+                native_light_raw: draw.mesh.native_light_raw,
                 shade_table: draw.mesh.shade_table.unwrap_or_default().to_vec(),
                 light_direction_raw: draw.mesh.light_direction_raw,
                 shade_shift: draw.mesh.shade_shift,
@@ -4430,6 +4472,74 @@ mod tests {
         session.load_auxiliary_ovl(3, 1).unwrap();
         session.load_level_by_id(13, 1).unwrap();
         session
+    }
+
+    #[v2k_test_support::retail_test]
+    fn static_objects_publish_integer_view_points_and_model_light() {
+        use crate::native_model_frame::{NativeModelFrame, NativeWorldViewport};
+        use v2k_render::projection::{
+            NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
+        };
+        let data = v2k_test_support::retail_dir();
+        let mut session = crate::session::GameSession::init(&data).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        session.load_level_by_id(50, 1).unwrap();
+        let cache = &session.cache;
+        // Intro2's tick-98 camera and the village hut at cell [139, 124].
+        let viewport = NativeWorldViewport {
+            origin_raw: [-29184, 590, 30834],
+            axes_q31: [
+                [2147347834, 0, 0],
+                [0, 2072352042, 560095147],
+                [0, -560130571, 2072483113],
+            ],
+            identity: false,
+        };
+        let frame = NativeModelFrame::from_static_object(viewport, [35712_u16 as i16, -272, 31872]);
+        assert_eq!(frame.origin_view_raw, [-640, -562, 1225]);
+        let colors = ModelMaterialCache::new();
+        let mut renderer = RecordingRenderer::default();
+        let position = [139.5, -272.0 / 256.0, 124.5];
+        let mut tree =
+            ModelTreeRenderer::new_world(&mut renderer, cache, &colors, 100.0 / 256.0, None, 98)
+                .with_scene_projection_authority(SceneProjectionAuthority::Native(
+                    NativeScreenProjection::new(
+                        [512, 512],
+                        [320, 240],
+                        [640, 480],
+                        ProjectionEffect::None,
+                    )
+                    .unwrap(),
+                ))
+                .with_view(ModelTreeView {
+                    position: [142.0, 590.0 / 256.0, 30834.0 / 256.0],
+                    forward: [0.0, 0.0, 1.0],
+                })
+                .with_native_external_frame(
+                    ExternalFrameMode::WorldPoint([position[0], 0.0, position[2]]),
+                    Some((frame.clone(), viewport)),
+                );
+        tree.draw_linked(
+            364,
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            position,
+            8,
+            None,
+            &AnimVars::default(),
+        );
+        drop(tree);
+        let body = renderer.bodies.first().expect("hut body");
+        assert!(!body.triangles.is_empty());
+        assert_eq!(body.vertex_view_raw.len(), body.vertices.len());
+        assert!(
+            body.vertex_view_raw.iter().all(Option::is_some),
+            "every hut vertex is a plain slot of the static node"
+        );
+        assert_eq!(body.face_normals_raw.len(), body.triangles.len());
+        assert_eq!(
+            body.native_light_raw,
+            Some(frame.model_light_raw(body.light_direction_raw))
+        );
     }
 
     #[v2k_test_support::retail_test]

@@ -1034,15 +1034,36 @@ fn retail_model_shade_index(
         + normal[1] * light_direction_raw[1] as f32
         + normal[2] * light_direction_raw[2] as f32;
     let signed_bin = (dot_raw * RETAIL_MODEL_NORMAL_TO_SHADE_BIN).floor() as i32;
-    // FUN_004136C0/FUN_004138F0 shift the complete signed -8..7 lookup,
-    // clamping at its two endpoints before applying the original 4-bit slot
-    // layout. Slots 8..15 all resolve to Section-6 entry zero.
+    retail_model_shade_slot(signed_bin, shade_shift)
+}
+
+/// FUN_004136C0/FUN_004138F0 shift the complete signed -8..7 lookup,
+/// clamping at its two endpoints before applying the original 4-bit slot
+/// layout. Slots 8..15 all resolve to Section-6 entry zero.
+fn retail_model_shade_slot(signed_bin: i32, shade_shift: i32) -> usize {
     let slot = ((signed_bin + shade_shift).clamp(-8, 7) & 0x0f) as usize;
     if slot < 8 {
         slot
     } else {
         0
     }
+}
+
+/// `FUN_0046D3F0` in its own integers: the raw pool normal dotted with the
+/// node's model-space light in wrapping 32-bit arithmetic, and the 4-bit
+/// table slot of that dot shifted right by 19.
+pub(crate) fn retail_model_shade_raw(
+    table: Option<&[FogGradientEntry]>,
+    normal_raw: [i32; 3],
+    light_model_raw: [i32; 3],
+    shade_shift: i32,
+) -> Option<&FogGradientEntry> {
+    let dot = light_model_raw[2]
+        .wrapping_mul(normal_raw[2])
+        .wrapping_add(light_model_raw[1].wrapping_mul(normal_raw[1]))
+        .wrapping_add(light_model_raw[0].wrapping_mul(normal_raw[0]));
+    let signed_bin = (((dot >> 19) & 0x0F) ^ 0x08) - 0x08;
+    table?.get(retail_model_shade_slot(signed_bin, shade_shift))
 }
 
 pub(crate) fn retail_model_shade(
@@ -4465,6 +4486,7 @@ impl Renderer for GlRenderer {
             vertices,
             vertex_projection,
             vertex_clip,
+            vertex_view_raw: _,
             billboards,
             materials,
             transform,
@@ -5089,13 +5111,14 @@ mod tests {
         model_face_opacity, model_face_palette_row, model_face_writes_depth,
         model_lighting_normals, overlay_sprite_filter, painter_group_window_depth,
         perspective_ndc_depth, resolve_model_depth_fade, retail_flat_lit_rgb565,
-        retail_model_shade_index, retail_view_pin_vertex, retail_world_surface_alias_vertex,
-        retail_world_surface_vertex, scene_uses_world_fog, terrain_type_signature,
-        transform_model_light_normal, triangle_uses_surface_overlay_depth, view_light_normal,
-        view_pin_triangle_is_color_underlay, view_pin_triangle_is_world_surface_decal,
-        view_pin_triangle_needs_coplanar_depth, view_pin_triangle_visible,
-        world_point_as_raw_local, world_sprite_draw_order, IndexedModelTextures,
-        OverlaySpriteBlend, SurfaceVertexSource, MODEL_FIXED_SHADE_ROW, RETAIL_VIEW_PIN_Y,
+        retail_model_shade_index, retail_model_shade_raw, retail_view_pin_vertex,
+        retail_world_surface_alias_vertex, retail_world_surface_vertex, scene_uses_world_fog,
+        terrain_type_signature, transform_model_light_normal, triangle_uses_surface_overlay_depth,
+        view_light_normal, view_pin_triangle_is_color_underlay,
+        view_pin_triangle_is_world_surface_decal, view_pin_triangle_needs_coplanar_depth,
+        view_pin_triangle_visible, world_point_as_raw_local, world_sprite_draw_order,
+        IndexedModelTextures, OverlaySpriteBlend, SurfaceVertexSource, MODEL_FIXED_SHADE_ROW,
+        RETAIL_VIEW_PIN_Y,
     };
     use crate::config::ScalingMode;
     use crate::renderer::{
@@ -5106,6 +5129,7 @@ mod tests {
     use v2k_formats::models::{
         ModelFaceCullPlane, ModelFaceShading, ModelSlotClip, ModelSurfaceOrigin,
     };
+    use v2k_formats::system::FogGradientEntry;
     use v2k_formats::terrain::{TerrainCell, TerrainGrid, GRID_SIZE};
 
     #[test]
@@ -5414,6 +5438,29 @@ mod tests {
             ),
             0
         );
+    }
+
+    #[test]
+    fn integer_model_light_bins_the_raw_dot_as_46d3f0_does() {
+        let table: Vec<FogGradientEntry> = (0..8)
+            .map(|shade_level| FogGradientEntry {
+                r: 0,
+                g: 0,
+                b: 0,
+                shade_level,
+            })
+            .collect();
+        let level = |normal, light, shift| {
+            retail_model_shade_raw(Some(&table), normal, light, shift)
+                .map(|entry| entry.shade_level)
+        };
+        let light = RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW;
+        assert_eq!(level([32_767, 0, 0], light, 0), Some(4));
+        assert_eq!(level([-32_767, 0, 0], light, 0), Some(0));
+        assert_eq!(level([32_767, 0, 0], light, 2), Some(6));
+        assert_eq!(level([0, 0, 0], light, 0), Some(0));
+        // The slot is the dot's four bits, not a clamped bin.
+        assert_eq!(level([32_767, 0, 0], [8_000, 0, 0], 0), Some(3));
     }
 
     #[test]

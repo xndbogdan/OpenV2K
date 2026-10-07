@@ -8495,6 +8495,15 @@ fn draw_gameplay_world(
             .with_submission_buffer(&mut model_submissions)
             .with_view(camera.into())
             .with_shade_shift(shade_shift);
+            // A plain body keeps 4138F0's integer frame for its VIEW points.
+            // Sub-H/M presentations below install their own frame owners.
+            if !cache
+                .global_model(model_id)
+                .is_some_and(|model| model_is_camera_facing_actor(model))
+            {
+                tree =
+                    tree.with_native_external_frame(ExternalFrameMode::Raw, native_context.clone());
+            }
             if let (Some(descriptor), Some(model), RetailRuntimeValue::Known(Some(runtime))) = (
                 descriptor.as_ref(),
                 cache.global_model(model_id),
@@ -8631,6 +8640,7 @@ fn draw_gameplay_world(
         Some(terrain_lights),
         retail_tick,
         world_fx,
+        native_viewport,
     );
     model_submissions.flush(
         renderer,
@@ -8954,6 +8964,16 @@ fn render_opening_cinematic(
                 cache.terrain(),
                 Some(terrain_lights),
             ));
+            // A plain body at its physical pose keeps 4138F0's integer frame
+            // for its VIEW points; a cinematic pose proxy is not that frame.
+            if live_actor_pose
+                && !cache
+                    .global_model(model_id)
+                    .is_some_and(|model| model_is_camera_facing_actor(model))
+            {
+                tree =
+                    tree.with_native_external_frame(ExternalFrameMode::Raw, native_context.clone());
+            }
             // D360 writes persistent caches in the physical actor's coordinate
             // system. A remaining cinematic pose proxy cannot own those writes.
             if let (true, Some(descriptor), Some(model), RetailRuntimeValue::Known(Some(runtime))) = (
@@ -9065,6 +9085,7 @@ fn render_opening_cinematic(
         Some(terrain_lights),
         retail_tick,
         world_fx,
+        native_viewport,
     );
     model_submissions.flush(
         renderer,
@@ -11685,6 +11706,7 @@ fn draw_static_terrain_objects(
     terrain_lights: Option<&v2k_render::TerrainLightWindow>,
     retail_tick: u32,
     world_fx: &mut WorldFx,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
 ) {
     let (Some(terrain), Some(objects)) = (cache.terrain(), cache.terrain_objects()) else {
         return;
@@ -11722,7 +11744,19 @@ fn draw_static_terrain_objects(
         // Retail draws static terrain objects with the identity root
         // orientation (FORMAT_DOCUMENTATION.md §9); tree trunks stay authored
         // and their bases are grounded by the world tf-12 callback family in
-        // the renderer, not by yawing geometry toward the camera.
+        // the renderer, not by yawing geometry toward the camera. With the
+        // native viewport, the node frame and its VIEW points are integer.
+        let native = native_viewport.map(|viewport| {
+            let origin_raw = object
+                .position
+                .map(|value| (value * 256.0).round() as i32 as i16);
+            (
+                v2k_game::native_model_frame::NativeModelFrame::from_static_object(
+                    viewport, origin_raw,
+                ),
+                viewport,
+            )
+        });
         ModelTreeRenderer::new_world(
             renderer,
             cache,
@@ -11732,9 +11766,10 @@ fn draw_static_terrain_objects(
             retail_tick as i32,
         )
         .with_view(camera.into())
-        .with_external_frame(ExternalFrameMode::WorldPoint(
-            object.external_frame_world_point(),
-        ))
+        .with_native_external_frame(
+            ExternalFrameMode::WorldPoint(object.external_frame_world_point()),
+            native,
+        )
         .with_shade_shift(world_model_shade_shift(
             object.position,
             cache.terrain(),

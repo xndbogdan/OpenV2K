@@ -101,6 +101,30 @@ impl NativeModelFrame {
         }
     }
 
+    /// `FUN_00427090`'s static terrain-object node at its `FUN_0042F650`
+    /// origin. The node record at `0x004CA3C0` holds Q31 one on the basis
+    /// diagonal and identity word 1; `FUN_00464F90` multiplies that basis into
+    /// a world viewport's axes and clears the identity word, or copies both
+    /// from an identity viewport.
+    pub fn from_static_object(viewport: NativeWorldViewport, origin_raw: [i16; 3]) -> Self {
+        const BASIS_Q31: [[i32; 3]; 3] = [[i32::MAX, 0, 0], [0, i32::MAX, 0], [0, 0, i32::MAX]];
+        Self {
+            identity: viewport.identity,
+            ..Self::from_actor(viewport, origin_raw, BASIS_Q31)
+        }
+    }
+
+    /// `FUN_00466160`: the context's VIEW-space light in this node's model
+    /// axes, each component a sum of separately shifted Q31 products. An
+    /// identity frame copies the light.
+    pub fn model_light_raw(&self, light_view_raw: [i32; 3]) -> [i32; 3] {
+        if self.identity {
+            light_view_raw
+        } else {
+            self.axes_view_q31.map(|axis| dot_q31(light_view_raw, axis))
+        }
+    }
+
     pub fn view_selection(&self) -> ModelViewSelection {
         ModelViewSelection::Retail {
             local_origin_from_camera_raw: if self.identity {
@@ -795,6 +819,46 @@ mod tests {
                 .into_iter()
                 .collect()
         );
+    }
+
+    #[test]
+    fn static_object_frame_multiplies_q31_one_into_the_viewport() {
+        let viewport = viewport();
+        let origin = [17_536, -160, 31_616];
+        let frame = NativeModelFrame::from_static_object(viewport, origin);
+        // 464F90's products with 0x7FFFFFFF drop one from every positive
+        // viewport word: the static basis is not an exact identity.
+        assert_eq!(
+            frame.axes_view_q31,
+            [
+                [2147345376, -4394708, -13168014],
+                [0, 2035509247, -682542069],
+                [13827078, 682498121, 2035555526]
+            ]
+        );
+        assert!(!frame.identity);
+        let delta = [17_536 - 17324, -160 - 2336, 31_616 - 31398];
+        assert_eq!(frame.origin_view_raw, viewport.world_vector_to_view(delta));
+        // 466160 carries the VIEW light into those axes.
+        let light = [-18, 73, -18];
+        assert_eq!(
+            frame.model_light_raw(light),
+            frame.axes_view_q31.map(|axis| dot_q31(light, axis))
+        );
+        // An identity viewport copies the basis and its identity word.
+        let copied = NativeModelFrame::from_static_object(
+            NativeWorldViewport {
+                identity: true,
+                ..viewport
+            },
+            origin,
+        );
+        assert!(copied.identity);
+        assert_eq!(
+            copied.axes_view_q31,
+            [[i32::MAX, 0, 0], [0, i32::MAX, 0], [0, 0, i32::MAX]]
+        );
+        assert_eq!(copied.model_light_raw(light), light);
     }
 
     #[test]
