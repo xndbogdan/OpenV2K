@@ -195,15 +195,13 @@ menu (Rendering, which switches at once, as in the original) or with
 start. Software always draws the authored frame (320×240 to 1024×768); with
 Native scaling it is shown at 4:3.
 
-For the classic colour look, select **4:3** or **Stretched** scaling and enable
-**Classic Framebuffer** under Display. At startup it selects the authored
-640×480, 800×600 or 1024×768 tier that fits the configured Resolution (Low
-detail keeps 320×240), then quantizes logical pixels to RGB565 before the final
-upscale. Toggling Classic or changing scaling redraws the paused game immediately,
-with its current HUD and shield frame preserved. High layout tiers also update
-live when Resolution changes; changing art detail requires a restart.
-Packed software blending/fog remains a
-[documented approximation](docs/re/RENDER_PIPELINE.md#classic-framebuffer-colour-and-resolution).
+For the original look, choose the Software renderer: it draws the authored
+640×480, 800×600 or 1024×768 frame that fits the configured Resolution (Low
+detail keeps 320×240) in RGB565 through the retail raster. Changing the
+renderer or scaling redraws the paused game immediately, with its current HUD
+and shield frame preserved. High layout tiers also update live when Resolution
+changes; changing art detail requires a restart. OpenGL's RGBA8 composition
+remains a [documented approximation](docs/re/RENDER_PIPELINE.md#colour-depth-and-resolution).
 
 `cargo run --release` opens the Windows launcher. Play starts the frontend;
 `--skip-intro` opens the menu after Play, and `--no-launcher` bypasses the

@@ -161,8 +161,6 @@ struct PortPreferences {
     #[serde(default)]
     scaling: ScalingMode,
     #[serde(default)]
-    classic_framebuffer: bool,
-    #[serde(default)]
     detail: GraphicsDetail,
     #[serde(default)]
     difficulty: Difficulty,
@@ -175,7 +173,6 @@ impl PortPreferences {
             width: config.width,
             height: config.height,
             scaling: config.scaling,
-            classic_framebuffer: config.classic_framebuffer,
             detail: config.detail,
             difficulty: config.difficulty,
         }
@@ -185,7 +182,6 @@ impl PortPreferences {
         config.width = self.width;
         config.height = self.height;
         config.scaling = self.scaling;
-        config.classic_framebuffer = self.classic_framebuffer;
         config.detail = self.detail;
         config.difficulty = self.difficulty;
     }

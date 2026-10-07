@@ -24,15 +24,18 @@ The following properties describe the audited **software filler** path:
 | Shading | Separate unlit, uniformly lit and Gouraud face families | Authored normals and solid near/far composition; RGB565 Gouraud packing after affine interpolation | Implemented; matched visual acceptance open |
 | Hidden surface | **Painter's algorithm** — depth-sorted queue, NO z-buffer | Geometric GL depth with explicit painter groups in selected paths | Partial; opaque geometry is not universally equivalent |
 | Backface cull | Authored anchor/normal plane, strict negative camera dot | Exact world-space equivalent | ✓ |
-| Color depth | 16 bpp RGB565 | Classic final logical pixels quantized to RGB565; draw composition remains RGBA8 | Approximation; packed blend/fog acceptance open |
+| Color depth | 16 bpp RGB565 | Software renderer: RGB565 through the retail fill slots. OpenGL: RGBA8 composition | Software exact on receipts; OpenGL approximation |
 
-## Classic framebuffer colour and resolution
+## Colour depth and resolution
 
 The retained [DirectDraw surface](#full-frame-directdraw-trace-acceptance-2026-07-27)
 proves 1024×768×16 with RGB565 masks, rather than an 8-bit final framebuffer.
 Indexed textures, their authored shade palettes, point sampling and quantized
 lighting also contribute to the stepped look; reducing final colour depth alone
-does not recreate the integer software rasterizer.
+does not recreate the integer software rasterizer. The software renderer
+([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md)) is that rasterizer; it replaced the
+OpenGL Classic Framebuffer option, which only quantized a finished RGBA8 frame
+to RGB565 (removed 2026-10-07).
 
 Display Resolution offers the original 640×480, 800×600 and 1024×768 presets.
 The selected preset supplies the authored High layout and window size;

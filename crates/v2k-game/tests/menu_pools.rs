@@ -1110,18 +1110,6 @@ fn display_exposes_retail_rows_and_port_scaling() {
         .find(|i| i.label == "Scaling")
         .unwrap();
     assert_eq!(scaling.value_label.as_deref(), Some("Native"));
-    let classic = shell
-        .view()
-        .items
-        .iter()
-        .find(|i| i.label == "Classic Framebuffer")
-        .unwrap();
-    assert!(classic.selectable);
-    assert!(
-        !classic.enabled,
-        "Native output must disable the classic framebuffer row"
-    );
-    assert_eq!(classic.value_label.as_deref(), Some("Disabled"));
     assert_eq!(
         shell
             .view()
@@ -1152,15 +1140,6 @@ fn display_exposes_retail_rows_and_port_scaling() {
             .and_then(|item| item.value_label.as_deref()),
         Some("4:3")
     );
-    let classic = shell
-        .view()
-        .items
-        .iter()
-        .find(|item| item.label == "Classic Framebuffer")
-        .unwrap();
-    assert!(classic.selectable);
-    assert!(classic.enabled);
-    assert_eq!(classic.value_label.as_deref(), Some("Disabled"));
     shell.engine.settings.set(SettingId::Scaling, 2);
     shell.refresh(&ctx);
     assert_eq!(
@@ -1221,7 +1200,6 @@ fn runtime_setting_bridge_round_trips_authored_and_external_values() {
         (SettingId::ActiveCamera, 8),
         (SettingId::Targetter, 0),
         (SettingId::Scaling, 2),
-        (SettingId::ClassicFramebuffer, 1),
         (SettingId::AmbientVolume, 7),
     ] {
         apply_setting_to_config(&mut config, setting, value);
@@ -1235,11 +1213,8 @@ fn runtime_setting_bridge_round_trips_authored_and_external_values() {
     assert_eq!(engine.settings.get(SettingId::ActiveCamera), 8);
     assert_eq!(engine.settings.get(SettingId::Targetter), 0);
     assert_eq!(engine.settings.get(SettingId::Scaling), 2);
-    assert_eq!(engine.settings.get(SettingId::ClassicFramebuffer), 1);
     assert_eq!(engine.settings.get(SettingId::AmbientVolume), 7);
     assert_eq!(config.scaling, v2k_render::ScalingMode::Stretched);
-    assert!(config.classic_framebuffer);
-    assert!(config.classic_framebuffer_effective());
 }
 
 #[v2k_test_support::retail_test]
