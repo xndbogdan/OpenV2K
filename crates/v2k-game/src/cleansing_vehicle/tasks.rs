@@ -43,12 +43,14 @@ impl CleansingMovementTaskState {
     }
     /// 40308D..4031E7. The unsigned low-word divisions deliberately differ
     /// from Wander's bit shift once the expanding radius ceases to divide32768.
+    /// Returns whether the target is infected afterwards: `false` when all
+    /// eight probes missed and the last candidate survives.
     pub fn retarget(
         &mut self,
         anchor: [i16; 3],
         terrain: &TerrainGrid,
         next_random: &mut impl FnMut() -> u32,
-    ) {
+    ) -> bool {
         let infected = |position: [i16; 3]| {
             terrain
                 .cell(
@@ -61,7 +63,7 @@ impl CleansingMovementTaskState {
                 != 0
         };
         if infected(self.private.target_position_raw) && next_random() as u16 & 63 != 0 {
-            return;
+            return true;
         }
         let mut radius = 256i32;
         for _ in 0..8 {
@@ -74,11 +76,42 @@ impl CleansingMovementTaskState {
             self.private.target_position_raw[2] =
                 anchor[2].wrapping_add(z as i16).wrapping_sub(radius as i16);
             if infected(self.private.target_position_raw) {
-                break;
+                return true;
             }
             radius = radius * 3 / 2;
         }
+        false
     }
+}
+
+/// Port extension, not retail: the centre of the infected cell nearest
+/// `position`. Square rings grow outward over the wrapping grid; the first
+/// ring holding infection yields its Euclidean nearest cell, the first in
+/// ring order on a tie. No random words are drawn.
+pub(crate) fn nearest_infected_cell(terrain: &TerrainGrid, position: [i16; 3]) -> Option<[i16; 2]> {
+    let origin = [
+        i32::from(position[0] as u16 >> 8),
+        i32::from(position[2] as u16 >> 8),
+    ];
+    let infected = |[dx, dz]: [i32; 2]| {
+        terrain
+            .cell(
+                ((origin[0] + dx) & 0xFF) as usize,
+                ((origin[1] + dz) & 0xFF) as usize,
+            )
+            .is_some_and(|cell| cell.terrain_type & 0x10 != 0)
+    };
+    (0..=128).find_map(|ring: i32| {
+        let rows = (-ring..=ring).flat_map(move |dx| [[dx, -ring], [dx, ring]]);
+        let columns = (1 - ring..ring).flat_map(move |dz| [[-ring, dz], [ring, dz]]);
+        rows.chain(columns)
+            .filter(|&offset| infected(offset))
+            .min_by_key(|[dx, dz]| dx * dx + dz * dz)
+            .map(|[dx, dz]| {
+                let centre = |cell: i32| ((((cell & 0xFF) << 8) | 0x80) as u16) as i16;
+                [centre(origin[0] + dx), centre(origin[1] + dz)]
+            })
+    })
 }
 
 pub(crate) fn candidate(entity: &Entity) -> GuardLocationEntityRef {

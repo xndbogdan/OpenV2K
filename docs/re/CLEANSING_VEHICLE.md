@@ -59,6 +59,21 @@ with varying infection density, wrapped coordinates, and both callback modes.
 Only handle lookup and the following mover were stubbed. This is a static PE
 oracle, not a TTD execution receipt (`.tmp/cleansing-seek-oracle.py`).
 
+The probes stay around the immutable anchor, the point the rover was beamed
+out at, and the eighth reaches about seventeen cells. A rover beamed out
+farther than that from any infection therefore never finds it: each tick its
+target becomes another random clean point, so it only mills about there.
+Within the common-axis limit of the Main Base (twelve cells), Base Nearby
+parks it in Stationary instead.
+
+**Port extension.** When all eight probes miss, the port targets the
+centre of the infected cell nearest the rover
+([`nearest_infected_cell`](../../crates/v2k-game/src/cleansing_vehicle/tasks.rs)):
+square rings grow over the wrapping grid, and the first ring holding
+infection yields its Euclidean nearest cell. The search draws no random
+words, so the shared sequence is unchanged; the probes, the 63-in-64
+retention of an infected target and the Base Nearby choice stay as retail.
+
 402850 suppresses its callback while attached (1000h). Detailed mode emits
 class6 through440DC0, caller return4029DB; coarse mode directly clears through
 33720, return4028EB. Class6's43E1A0 terminal response clears through33720 with

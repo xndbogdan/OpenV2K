@@ -281,6 +281,64 @@ fn cleansing_pair_callback_uses_native_custody_and_preserves_task_clock() {
 }
 
 #[v2k_test_support::retail_test]
+fn a_rover_far_from_infection_heads_for_the_nearest_infected_cell() {
+    let (mut session, mut manager, mut fx) = super::super::tests::fixture(15);
+    let id = manager.iter_all().find(|e| e.entity_type == 49).unwrap().id;
+    publish(&mut manager, id, 42, &mut fx);
+    let entity = manager.entity_mut(id).unwrap();
+    entity.collision.state_flags_at_0x08.overwrite(
+        SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT,
+        SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT,
+    );
+    let position = entity.position_raw();
+    let anchor_y = entity
+        .cleansing_vehicle_runtime
+        .unwrap()
+        .immutable_anchor_raw[1];
+    // Clean the world, then infect one cell forty columns away: beyond the
+    // eight retail probes, which reach about seventeen cells.
+    let terrain = session.cache.level_terrain_mut().unwrap();
+    for cell in &mut terrain.cells {
+        cell.terrain_type &= !INFECTION_TERRAIN_TYPE_BIT;
+    }
+    let cell = [
+        ((position[0] as u16 >> 8) as usize + 40) % 256,
+        (position[2] as u16 >> 8) as usize,
+    ];
+    terrain.cells[cell[0] * 256 + cell[1]].terrain_type |= INFECTION_TERRAIN_TYPE_BIT;
+    let owner = CleansingVehicleOwner::adopt(&manager, id).unwrap();
+    let tick = tick_cleansing_vehicle(
+        &mut manager,
+        owner,
+        CleansingVehicleFrame {
+            resources: &mut session.cache,
+            world_fx: &mut fx,
+            elapsed_micros: 20_000,
+            global_elapsed_micros: 20_000,
+            retail_tick: 1001,
+        },
+    );
+    assert!(
+        matches!(tick.outcome, CleansingVehicleOutcome::Advanced { .. }),
+        "{:?}",
+        tick.outcome
+    );
+    let Some(ActorTaskRuntime::CleansingLandscape(state)) = manager
+        .entity_mut(id)
+        .unwrap()
+        .actor_task_state(ActorTaskSlot::Primary)
+        .copied()
+    else {
+        panic!("cleansing movement task");
+    };
+    let centre = |cell: usize| (((cell << 8) | 0x80) as u16) as i16;
+    assert_eq!(
+        state.private.target_position_raw,
+        [centre(cell[0]), anchor_y, centre(cell[1])]
+    );
+}
+
+#[v2k_test_support::retail_test]
 fn late_mover_block_retains_prefix_without_replaying_rng_or_task_age() {
     let (mut session, mut manager, mut fx) = super::super::tests::fixture(15);
     let id = manager.iter_all().find(|e| e.entity_type == 49).unwrap().id;
