@@ -605,6 +605,10 @@ impl Renderer for SoftwareRenderer {
             .flatten()
     }
 
+    fn retained_world_model_fog(&self) -> Option<WorldModelFog> {
+        self.world_fog
+    }
+
     fn world_fog_planes(&self) -> Option<[f32; 2]> {
         self.world_model_fog().map(|fog| {
             [

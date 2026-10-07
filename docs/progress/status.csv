@@ -197,3 +197,6 @@ address,status,note
 0x00466160,approximated,model light brought into VIEW space; the port dots floating-point VIEW normals (docs/re/RENDER_PIPELINE.md)
 0x00470B60,implemented,menu glyph pen kept in 1/100 px with per-glyph truncation (crates/v2k-game/src/menu_text_submission.rs)
 0x00470F80,implemented,menu text width: advances plus every kern but the last, truncated (crates/v2k-game/src/menu_text.rs)
+0x0042D340,approximated,startup display search; only the renderer backend can fail in the port so it alone falls back (crates/v2k-game/src/main.rs)
+0x0044E090,not-needed,WinMain: protection-library start and stop around the engine main; the port has its own entry point
+0x0044E0E0,approximated,Display-menu display rebuild; the port replaces the renderer at once and keeps the current one if the new backend cannot start (crates/v2k-game/src/main.rs)

@@ -272,6 +272,30 @@ fn apply_classic_framebuffer_presentation(
     }
 }
 
+/// Display-menu Rendering change (`FUN_0043CC70` -> `FUN_0043CC40` ->
+/// `FUN_0044E0E0`). Retail rebuilds the display at once and, when the new
+/// one cannot start, keeps running on the previous one; the menu value stays
+/// as chosen. The new renderer starts without textures, so the caller
+/// re-uploads what the previous one held.
+fn replace_renderer(
+    game_window: &GameWindow,
+    renderer: &mut Box<dyn Renderer>,
+    config: &GameConfig,
+) -> Result<v2k_render::RenderBackend, String> {
+    let (replacement, backend) = v2k_render::create_renderer(
+        game_window,
+        "V2K",
+        config.width,
+        config.height,
+        config.resolve_backend(None),
+        false,
+    )?;
+    let world_model_fog = renderer.retained_world_model_fog();
+    drop(std::mem::replace(renderer, replacement));
+    renderer.set_world_model_fog(world_model_fog);
+    Ok(backend)
+}
+
 /// Ordinary worlds run the conversion/intake walkers on authenticated owners.
 fn ordinary_world_pair_pass_required(current_level_id: Option<u32>) -> bool {
     current_level_id.is_some_and(|id| (13..=49).contains(&id))
@@ -1512,14 +1536,17 @@ fn run_game(
     };
     let mut vtol_trace_sequence = 0u64;
 
-    let (mut renderer, actual_backend) = v2k_render::create_renderer(
+    let (mut renderer, mut actual_backend) = v2k_render::create_renderer(
         &game_window,
         "V2K",
         config.width,
         config.height,
         preferred,
-        // Without a command-line choice, a failed OpenGL start falls back to
-        // the software renderer, as retail fell back from Direct3D.
+        // Retail's startup search (`FUN_0044E2E0` -> `FUN_0042D340`) tries
+        // each resolution and window mode, then the other renderer, and keeps
+        // the first combination that starts. Only the backend can fail to
+        // start here, so without a command-line choice OpenGL falls back to
+        // the software renderer.
         cli_override.is_none(),
     )?;
 
@@ -1536,8 +1563,9 @@ fn run_game(
 
     log!("Renderer: {}", renderer.backend_name());
 
-    // Save detected backend to config
-    if config.renderer == RendererChoice::Auto {
+    // Keep the backend that started, as the retail search leaves the
+    // working combination in the settings.
+    if config.renderer == RendererChoice::Auto || actual_backend != preferred {
         config.set_detected_backend(actual_backend);
         if let Err(error) = config.try_save(data_dir) {
             eprintln!("Could not save settings: {error}");
@@ -2169,11 +2197,39 @@ fn run_game(
                                 v2k_game::menu_data::SettingId::Resolution => {
                                     renderer.set_window_size(config.width, config.height);
                                 }
-                                v2k_game::menu_data::SettingId::Rendering => {
-                                    // Replacing the live renderer would invalidate every
-                                    // cached texture and material. Persist the choice for
-                                    // the next launch.
-                                    log!("Renderer change will apply on next launch");
+                                v2k_game::menu_data::SettingId::Rendering
+                                    if config.resolve_backend(None) != actual_backend =>
+                                {
+                                    match replace_renderer(&game_window, &mut renderer, &config) {
+                                        Ok(backend) => {
+                                            actual_backend = backend;
+                                            renderer.set_overlay_depth_policy(overlay_depth_policy);
+                                            if config.fullscreen {
+                                                renderer.set_fullscreen(true);
+                                            }
+                                            game_window.release_mouse_capture();
+                                            // Texture ids belonged to the old renderer.
+                                            face_colors.forget_textures();
+                                            if terrain_frames.is_some() {
+                                                terrain_frames =
+                                                    v2k_game::terrain_render::build_terrain_frames(
+                                                        &session.cache,
+                                                        renderer.as_mut(),
+                                                    );
+                                            }
+                                            if water_frames.is_some() {
+                                                water_frames = v2k_game::water::build_water_frames(
+                                                    &session.cache,
+                                                    renderer.as_mut(),
+                                                );
+                                            }
+                                            log!("Renderer: {}", renderer.backend_name());
+                                        }
+                                        Err(error) => eprintln!(
+                                            "Renderer change failed ({error}); keeping {}",
+                                            renderer.backend_name()
+                                        ),
+                                    }
                                 }
                                 _ => {}
                             }
@@ -2182,6 +2238,7 @@ fn run_game(
                                 SettingId::Resolution
                                     | SettingId::Scaling
                                     | SettingId::ClassicFramebuffer
+                                    | SettingId::Rendering
                             ) {
                                 if let Some(tier) =
                                     v2k_game::system_layout::HighSystemLayoutTier::from_variant(

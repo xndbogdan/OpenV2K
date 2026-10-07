@@ -1045,6 +1045,12 @@ pub trait Renderer {
         None
     }
 
+    /// The world fog last published with [`Self::set_world_model_fog`],
+    /// whatever scene is active, so a replacement renderer can inherit it.
+    fn retained_world_model_fog(&self) -> Option<WorldModelFog> {
+        self.world_model_fog()
+    }
+
     /// World fog planes inherited by the active scene, independent of
     /// temporary GL state during model/overlay submission. Menu scenes and
     /// backends without world fog return None. Hierarchy traversal uses the far plane before

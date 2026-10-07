@@ -16,9 +16,13 @@ receipts, and model painter programs run their queue groups as retail
 does. The software backend (`crates/v2k-render/src/sw_backend.rs`) draws
 videos, menus, the frontend models, 2-D overlays and whole gameplay and
 cinematic frames through them, particles included. It is selectable in the
-launcher, in the Display menu's Rendering row (Software/OpenGL, applied at
-the next launch) and with `--renderer software`; Automatic prefers OpenGL
-and falls back to Software when OpenGL cannot start.
+launcher, in the Display menu's Rendering row (Software/OpenGL) and with
+`--renderer software`; Automatic prefers OpenGL and falls back to Software
+when OpenGL cannot start. A Rendering change replaces the renderer at once,
+as retail's display menu rebuilds its display (`FUN_0043CC70` ->
+`FUN_0043CC40` -> `FUN_0044E0E0`); the game re-uploads its textures and the
+replacement inherits the world fog. If the new backend cannot start, the
+current one keeps running.
 
 The surface is always an authored retail frame (320×240 to 1024×768): the
 ground, water and model producers project through the tier's lens and

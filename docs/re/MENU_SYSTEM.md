@@ -1003,6 +1003,31 @@ an attract-table policy.
   follow (Sound 46 → Off/On 47/48; Self Righting 42 → Off/Level/Angled
   43-45; Joystick 52 → Absolute/Relative 53/54).
 
+### Display changes and the startup display search
+
+Each Display callback (`FUN_0043CBF0` Resolution, `FUN_0043CC70` Rendering,
+`FUN_0043CCA0` Bilinear, `FUN_0043CCD0` window/full screen) calls
+`FUN_0043CC40` when its value changed. That passes `min(Resolution, 3)` to
+`FUN_0044E0E0`, which releases the current display and starts one built from
+the settings (`FUN_0042D2A0`). If the new display fails, it is freed and the
+previous one started again; the menu value stays as chosen. On success
+`FUN_00493A40` reloads the resolution tier's resources if the tier changed.
+
+Startup instead runs `FUN_0044E2E0` -> `FUN_0042D340`. Beginning with the
+saved values it tries every display mode (the Section-5 count), then the
+other window mode, then the other renderer, then the other Bilinear value,
+and keeps the first combination that starts; the settings then hold that
+combination. Error `0xA08` shows `V2000 cannot run in the desktop. Trying
+full screen...` (windowed) or `V2000 cannot run in this mode...` once.
+
+The port's Rendering row offers Software (retail string 9) and OpenGL. The
+retail Direct3D table is not ported, so the second value names the renderer
+the port actually runs. A change replaces the renderer at once and keeps the
+current one when the new backend cannot start, as `FUN_0044E0E0` does; the
+port creates the replacement before dropping the old renderer. At startup
+only the backend can fail, so OpenGL falls back to Software unless
+`--renderer` forced a choice, and the backend that started is saved.
+
 ### Port Network availability
 
 The port intentionally replaces `0x4C11D0`'s runtime session placeholders with

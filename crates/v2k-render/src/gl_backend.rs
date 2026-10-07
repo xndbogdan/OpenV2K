@@ -3536,6 +3536,9 @@ impl GlRenderer {
 
 impl Drop for GlRenderer {
     fn drop(&mut self) {
+        // A live renderer switch creates the replacement first, which may
+        // leave another context current. Delete into this one.
+        let _ = self.window.gl_make_current(&self._gl_context);
         if let Some(target) = self.classic_framebuffer.take() {
             unsafe {
                 target.destroy();
@@ -4410,6 +4413,10 @@ impl Renderer for GlRenderer {
         scene_uses_world_fog(self.active_scene, self.world_fog_enabled)
             .then_some(self.world_model_fog)
             .flatten()
+    }
+
+    fn retained_world_model_fog(&self) -> Option<crate::renderer::WorldModelFog> {
+        self.world_model_fog
     }
 
     fn world_fog_planes(&self) -> Option<[f32; 2]> {
