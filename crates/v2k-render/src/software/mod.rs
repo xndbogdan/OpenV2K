@@ -15,17 +15,20 @@ mod fixed;
 mod fog;
 mod format;
 mod material;
+mod queue;
 mod rows;
 mod scan;
 mod slots;
 mod span;
 mod state;
+pub mod store;
 
 pub use fog::FogRamp;
 pub use format::PixelFormat;
 pub use material::{
     flags as material_flags, MaterialId, MaterialSource, MaterialView, ATLAS_STRIDE,
 };
+pub use queue::{thunk_address, PrimitiveQueue, QueueCallback, QueueError, WORLD_ARENA_BYTES};
 pub use rows::{SpanRow, TexelTable};
 pub use slots::FillSlot;
 pub use state::ClipRect;

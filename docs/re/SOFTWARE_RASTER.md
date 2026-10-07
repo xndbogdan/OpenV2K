@@ -8,9 +8,10 @@ here. See [RENDER_PIPELINE.md](RENDER_PIPELINE.md) for the queue, producers
 and the frame-level evidence.
 
 Status: every reachable fill slot and every span row a slot can bind is
-ported and matches retail byte for byte on the native receipts below. The
-primitive queue, the primitive producers and backend integration are not
-yet ported.
+ported and matches retail byte for byte on the native receipts below, and
+the primitive queue reproduces the retail queue controls. `--renderer
+software` draws through both (`crates/v2k-render/src/sw_backend.rs`), but
+the 3-D primitive producers are not ported yet.
 
 ## Pipeline
 
@@ -123,6 +124,34 @@ Notable filler behaviour (each port names its retail routine):
 - **Accumulation.** `00476990` (and the unbound `00477AD0`) add the previous
   pixel's sum instead of the colour, so a span brightens toward white.
 
+## Primitive queue
+
+Producers append records to one bump arena (`FUN_0044F540` requests 0x19000
+bytes; `FUN_00494860` keeps the last twelve free) that `FUN_00428E60` resets
+(`FUN_004948C0`) and `FUN_00428E70` drains (`FUN_004948F0`):
+
+- the 24-byte root holds the current scope's mode (1 sorted, 0 FIFO), the
+  root list head, the tail (address of the last `next` field), the current
+  scope header, the limit and the cursor;
+- `FUN_00459D10` appends `{next, callback, payload}`, `FUN_0045B220`
+  `{key, next, callback, payload}`, and `FUN_0045B280` picks by the current
+  mode; payloads are rounded up to dwords;
+- `FUN_00494AB0` / `FUN_00494B60` append a group record whose payload is a
+  child list header `{saved mode, head, saved tail, saved scope}` and whose
+  callback sorts and drains (`FUN_00494930`) or only drains
+  (`FUN_00494A50`) it; `FUN_00494A80` restores the enclosing scope;
+- the bottom-up merge sort orders by descending signed key, equal keys by
+  ascending record address, and relinks the list in place; draining stops
+  at the first non-zero callback result and does not consume records;
+- a record past the limit raises an engine error through `FUN_00471150`
+  without linking; a group that does not fit returns an error and leaves
+  the scope unchanged.
+
+Every record callback is a thunk (`0x0047A720 + 0x20 * k`) that calls one
+fill slot with the device and payload and returns its result.
+`crates/v2k-render/src/software/queue.rs` keeps the arena as bytes with this
+layout; its tests replay the retail queue controls.
+
 ## 2D slots
 
 | Slot | Handler | Behaviour |
@@ -156,7 +185,9 @@ span-reciprocal overrun; and the zero fog-mask state.
 - The retail stack address at the scan converter, which `00478510`'s pixels
   depend on, has not been measured in the shipped game; receipts use a fixed
   synthetic stack.
-- The primitive queue (`FUN_004948C0..FUN_00494B60`), the producers that fill
-  it, and a backend that presents the software surface are not ported.
+- The producers that fill the queue (model face, group and billboard
+  constructors, terrain, water, sky, particles) are not ported. The software
+  backend adapts RGBA-only port images to raw-texel materials and fades the
+  surface with an 8-bit alpha blend; neither adapter is retail evidence.
 - No full-frame comparison against the DirectDraw trace has been made with
   this raster.

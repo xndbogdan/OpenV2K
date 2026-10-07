@@ -21,11 +21,11 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-35.6%25%20code%20%2F%2045.7%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.0%25%20code%20%2F%2046.0%25%20notes-orange)](docs/progress/README.md)
 
 Of the **2,383** game functions in retail `V2000.EXE`,
-**848 (35.6%)** are referenced by the port's code and
-**1,089 (45.7%)** by its code or RE notes.
+**857 (36.0%)** are referenced by the port's code and
+**1,095 (46.0%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
 
@@ -185,7 +185,9 @@ short axis, preserving original matching presets; Low and 4:3/Stretched keep
 their existing behavior. This is a port-owned readability extension beyond
 the original modes, not retail visual acceptance. OpenGL is the supported
 renderer; Software is unavailable in normal options and automatic fallback.
-An explicit `--renderer software` remains a diagnostic stub.
+An explicit `--renderer software` draws through the in-progress retail software
+raster ([SOFTWARE_RASTER.md](docs/re/SOFTWARE_RASTER.md)): videos, menus and
+2-D overlays work, but no 3-D world or model producer is ported to it yet.
 
 For the classic colour look, select **4:3** or **Stretched** scaling and enable
 **Classic Framebuffer** under Display. At startup it selects the authored
