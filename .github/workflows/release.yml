@@ -1,9 +1,12 @@
 name: Release
 
-# Push a tag such as v0.1.0 to build Windows and Linux binaries and publish a
-# GitHub Release. Tags with a suffix (v0.2.0-rc1) are marked as pre-releases.
+# A merge into main publishes a GitHub Release when crates/v2k-game's version
+# has no `v<version>` tag yet; bump the version in the milestone pull request.
+# Pushing a tag such as v0.1.0 still builds and publishes that tag. Versions
+# with a suffix (0.2.0-rc1) are marked as pre-releases.
 on:
   push:
+    branches: [main]
     tags: ["v*"]
 
 permissions:
@@ -13,7 +16,37 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: version
+        shell: bash
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' crates/v2k-game/Cargo.toml | head -n 1)
+          tag="v$version"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          if git rev-parse -q --verify "refs/tags/$tag" > /dev/null; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$tag is already released; bump crates/v2k-game's version to publish."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: version
+    if: needs.version.outputs.publish == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -87,7 +120,7 @@ jobs:
       - name: Package
         shell: bash
         run: |
-          name="OpenV2K-${GITHUB_REF_NAME}-${{ matrix.platform }}"
+          name="OpenV2K-${{ needs.version.outputs.tag }}-${{ matrix.platform }}"
           mkdir "$name"
           cp README.md LAUNCHER.md LICENSE-MIT LICENSE-APACHE THIRD_PARTY_LICENSES.html "$name/"
           if [ "$RUNNER_OS" = "Windows" ]; then
@@ -107,7 +140,7 @@ jobs:
             OpenV2K-*.tar.gz
 
   publish:
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -119,8 +152,10 @@ jobs:
 
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           files: |
             OpenV2K-*
             SHA256SUMS.txt
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(needs.version.outputs.tag, '-') }}
           generate_release_notes: true
