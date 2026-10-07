@@ -237,8 +237,7 @@ impl SoftwareRenderer {
             // Additive screen materials go through a textured quad's
             // additive rows, mapped one texel per pixel.
             WorldSpriteBlend::Additive => {
-                let material =
-                    OwnedMaterial::raw_from_rgba(rgba, width, height, material_flags::ADDITIVE);
+                let material = overlay_material(rgba, width, height, material_flags::ADDITIVE);
                 let corners = rect_corners(x, y, width as i32, height as i32);
                 self.draw_textured_quad(corners, material);
             }
@@ -375,6 +374,13 @@ fn full_clip(surface: &Surface565) -> ClipRect {
         x1: surface.width as i16,
         y1: surface.height as i16,
     }
+}
+
+/// A composited overlay image as a textured-quad material: indexed (as
+/// retail's overlay sprites are) when its colours fit a palette, else raw.
+fn overlay_material(rgba: &[u8], width: u32, height: u32, flags: u16) -> OwnedMaterial {
+    OwnedMaterial::indexed_from_rgba(rgba, width, height, flags)
+        .unwrap_or_else(|| OwnedMaterial::raw_from_rgba(rgba, width, height, flags))
 }
 
 fn rect_corners(x: i32, y: i32, width: i32, height: i32) -> [(i32, i32); 4] {
@@ -763,7 +769,7 @@ impl Renderer for SoftwareRenderer {
             WorldSpriteBlend::HalfAdditive => material_flags::HALF_ADDITIVE,
             WorldSpriteBlend::Additive => material_flags::ADDITIVE,
         };
-        let material = OwnedMaterial::raw_from_rgba(rgba, width, height, flags);
+        let material = overlay_material(rgba, width, height, flags);
         self.draw_textured_quad(corners, material);
     }
 

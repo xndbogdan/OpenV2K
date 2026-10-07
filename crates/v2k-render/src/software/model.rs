@@ -418,3 +418,170 @@ pub fn construct_billboard(
     }
     Ok(())
 }
+
+/// A model edge command: opcode `0x02`, a palette line `[colour, v0, v1]`,
+/// or `0x22`, a sprite ribbon `[sprite, size, v0, v1]` (the size is the raw
+/// stream word, not a decoded operand).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EdgeCommand {
+    Line {
+        colour: i16,
+        vertices: [usize; 2],
+    },
+    Ribbon {
+        sprite: i16,
+        size: i16,
+        vertices: [usize; 2],
+    },
+}
+
+/// The edge constructors. `0x02` (`FUN_00458C60` near, `FUN_00458E20`
+/// fog) queues a line between the two points (`+0x1024`, or `+0x1028` with
+/// both fade bytes) unless their combined outcode is off screen. `0x22`
+/// (`FUN_00459000` near, `FUN_00459550` fog) queues a sprite quad around
+/// the segment (`+0x1098` / `+0x109C`): it is skipped when either point is
+/// behind the near plane or, in the fog table, both are fully faded. The
+/// quad's half width is the size projected at the points' mean depth,
+/// across the screen direction; it reaches past each point along it by
+/// `length * height / (2 * (width - height))` of the sprite. Both are
+/// keyed by the first point's depth.
+///
+/// A ribbon sprite whose width equals its height divides by zero in retail;
+/// the port skips it.
+pub fn construct_edge(
+    queue: &mut PrimitiveQueue,
+    context: &FaceContext<'_>,
+    lens: &super::terrain::GroundProjection,
+    sprite_size: &dyn Fn(i16) -> (u16, u16),
+    pass: FacePass,
+    command: EdgeCommand,
+) -> Result<(), QueueError> {
+    let fog = pass == FacePass::Fog;
+    let corner = |index: usize| context.corners.get(index).copied();
+    match command {
+        EdgeCommand::Line { colour, vertices } => {
+            let (Some(a), Some(b)) = (corner(vertices[0]), corner(vertices[1])) else {
+                return Ok(());
+            };
+            if OUTCODE_VISIBLE[usize::from(a.clip | b.clip)] == 0 {
+                return Ok(());
+            }
+            let (slot, bytes) = if fog {
+                (FillSlot::FadedLine, 0x18)
+            } else {
+                (FillSlot::Line, 0x10)
+            };
+            let payload = queue.push(a.view[2], slot, bytes)?;
+            payload[0..4].copy_from_slice(&a.screen_dword().to_le_bytes());
+            payload[4..8].copy_from_slice(&b.screen_dword().to_le_bytes());
+            payload[8..12].copy_from_slice(&(context.palette)(colour).to_le_bytes());
+            payload[12..16].copy_from_slice(&0u32.to_le_bytes());
+            if fog {
+                // Bytes 0x16..0x18 keep whatever the arena held.
+                payload[0x10..0x14].copy_from_slice(&context.fog_colour.to_le_bytes());
+                payload[0x14] = a.fade;
+                payload[0x15] = b.fade;
+            }
+        }
+        EdgeCommand::Ribbon {
+            sprite,
+            size,
+            vertices,
+        } => {
+            let Some(a) = corner(vertices[0]) else {
+                return Ok(());
+            };
+            if a.clip & 0x40 != 0 {
+                return Ok(());
+            }
+            let Some(b) = corner(vertices[1]) else {
+                return Ok(());
+            };
+            if b.clip & 0x40 != 0 || (fog && a.fade == 0xFF && b.fade == 0xFF) {
+                return Ok(());
+            }
+            let dx = i32::from(b.screen[0].wrapping_sub(a.screen[0]));
+            let dy = i32::from(b.screen[1].wrapping_sub(a.screen[1]));
+            let root = v2k_formats::fixed_math::retail_integer_sqrt(
+                dx.wrapping_mul(dx).wrapping_add(dy.wrapping_mul(dy)),
+            );
+            let length = i32::from((root as i16).wrapping_add(1));
+            let (Some(ux), Some(uy)) = (
+                (dx << 15).checked_div(length),
+                (dy << 15).checked_div(length),
+            ) else {
+                return Ok(());
+            };
+            let (ux, uy) = (i32::from(ux as i16), i32::from(uy as i16));
+            let (width, height) = sprite_size(sprite);
+            let (width, height) = (u32::from(width), u32::from(height));
+            let Some(reach) = (height.wrapping_mul(length as u32) as i32)
+                .checked_div(width.wrapping_sub(height).wrapping_mul(2) as i32)
+            else {
+                return Ok(());
+            };
+            let ex = reach.wrapping_mul(ux) >> 15;
+            let ey = reach.wrapping_mul(uy) >> 15;
+            let depth = a.view[2].wrapping_add(b.view[2]) / 2;
+            // Both depths are at least 0x40 once neither point has the
+            // near flag; retail reads stale words otherwise.
+            let (hx, hy) = if depth > 0x3F {
+                lens.half_width(i32::from(size), depth)
+            } else {
+                (0, 0)
+            };
+            let mut px = -((i32::from(hx) * uy) >> 15);
+            let mut py = (i32::from(hy) * ux) >> 15;
+            if px as i16 == 0 {
+                px = 1;
+            }
+            if py as i16 == 0 {
+                py = 1;
+            }
+            let (px, py, ex, ey) = (px as i16, py as i16, ex as i16, ey as i16);
+            let [ax, ay] = a.screen;
+            let [bx, by] = b.screen;
+            let corners = [
+                (
+                    ax.wrapping_add(px).wrapping_sub(ex),
+                    ay.wrapping_add(py).wrapping_sub(ey),
+                ),
+                (
+                    bx.wrapping_add(ex).wrapping_add(px),
+                    by.wrapping_add(ey).wrapping_add(py),
+                ),
+                (
+                    bx.wrapping_add(ex).wrapping_sub(px),
+                    by.wrapping_add(ey).wrapping_sub(py),
+                ),
+                (
+                    ax.wrapping_sub(px).wrapping_sub(ex),
+                    ay.wrapping_sub(py).wrapping_sub(ey),
+                ),
+            ];
+            let outcode = corners.iter().fold(0u8, |code, &(x, y)| {
+                code | super::terrain::outcode_of(i32::from(x), i32::from(y), lens.bounds)
+            });
+            if OUTCODE_VISIBLE[usize::from(outcode)] == 0 {
+                return Ok(());
+            }
+            let (slot, bytes) = if fog {
+                (FillSlot::TexturedFogQuad, 0x20)
+            } else {
+                (FillSlot::TexturedQuad, 0x18)
+            };
+            let payload = queue.push(a.view[2], slot, bytes)?;
+            for (index, (x, y)) in corners.into_iter().enumerate() {
+                payload[4 * index..4 * index + 2].copy_from_slice(&x.to_le_bytes());
+                payload[4 * index + 2..4 * index + 4].copy_from_slice(&y.to_le_bytes());
+            }
+            payload[0x10..0x14].copy_from_slice(&(context.sprite)(sprite).to_le_bytes());
+            payload[0x14..0x18].copy_from_slice(&0u32.to_le_bytes());
+            if fog {
+                payload[0x18..0x1C].copy_from_slice(&context.fog_colour.to_le_bytes());
+                payload[0x1C..0x20].copy_from_slice(&[a.fade, b.fade, b.fade, a.fade]);
+            }
+        }
+    }
+    Ok(())
+}

@@ -15,7 +15,8 @@
 use std::collections::HashMap;
 
 use v2k_formats::models::{
-    ModelFaceCull, ModelFaceShading, ModelFaceVertices, ModelVertexProjection,
+    ModelEdgeEndpointSnapshot, ModelEdgeStyle, ModelFaceCull, ModelFaceShading, ModelFaceVertices,
+    ModelSlotClip, ModelVertexProjection,
 };
 
 use crate::gl_backend::{
@@ -25,11 +26,12 @@ use crate::gl_backend::{
 use crate::projection::NativeViewportWords;
 use crate::renderer::WorldSpriteBlend;
 use crate::renderer::{
-    ModelBillboardDraw, ModelDepthFade, ModelDraw, NativeModelFogPass, WorldModelFog,
+    ModelBillboardDraw, ModelDepthFade, ModelDraw, ModelEdgeProjection, NativeModelFogPass,
+    WorldModelFog,
 };
 use crate::software::model::{
-    construct_billboard, construct_face, screen_midpoint, BillboardCommand, FaceContext, FacePass,
-    ModelCorner, ModelNormal,
+    construct_billboard, construct_edge, construct_face, screen_midpoint, BillboardCommand,
+    EdgeCommand, FaceContext, FacePass, ModelCorner, ModelNormal,
 };
 use crate::software::terrain::GroundProjection;
 use crate::software::{material_flags, MaterialId, PrimitiveQueue, QueueError};
@@ -76,12 +78,19 @@ impl ModelScene {
     /// deltas wrap to signed words, as retail forms actor-minus-viewport
     /// deltas, so any torus image of the point lands beside the eye.
     fn view_raw(&self, world: [f32; 3]) -> [i32; 3] {
+        self.node_view_raw(world, world)
+    }
+
+    /// VIEW point of a model vertex at `world` whose node sits at `node`.
+    /// Retail wraps only the node's delta; vertex offsets are added in VIEW
+    /// space, so a large model stays whole across the wrap.
+    fn node_view_raw(&self, node: [f32; 3], world: [f32; 3]) -> [i32; 3] {
         if let Some(native) = self.native {
             let delta: [i32; 3] = std::array::from_fn(|axis| {
-                i32::from(
-                    ((world[axis] * 256.0).round() as i32).wrapping_sub(native.origin_raw[axis])
-                        as i16,
-                )
+                let node_raw = (node[axis] * 256.0).round() as i32;
+                let offset = ((world[axis] - node[axis]) * 256.0).round() as i32;
+                i32::from(node_raw.wrapping_sub(native.origin_raw[axis]) as i16)
+                    .wrapping_add(offset)
             });
             return native.axes_q31.map(|row| {
                 row.iter().zip(delta).fold(0i32, |sum, (&axis, value)| {
@@ -266,15 +275,21 @@ pub(crate) fn queue_model_body(
         ..scene.lens
     };
     let resolved = resolve_model_vertices(draw, scene.camera_position, scene.camera_basis);
+    let node = draw.transform.position;
     let mut corners: Vec<ModelCorner> = resolved
         .world
         .iter()
         .zip(&resolved.admitted)
-        .map(|(world, &admitted)| match world {
+        .enumerate()
+        .map(|(index, (world, &admitted))| match world {
             // A native scene rejects through the native depth's 0x40
             // outcode; the floating camera may sit in another torus image.
             Some(world) if admitted || scene.native.is_some() => {
-                let view = scene.view_raw(*world);
+                // Callback world points are projected on their own.
+                let view = match mesh.vertex_projection.get(index) {
+                    Some(ModelVertexProjection::WorldPoint(_)) => scene.view_raw(*world),
+                    _ => scene.node_view_raw(node, *world),
+                };
                 let point = lens.project_view(view);
                 ModelCorner {
                     view,
@@ -413,8 +428,80 @@ pub(crate) fn queue_model_body(
         commands.push((opcode, words));
     }
 
+    // Edges follow the faces: the materialized mesh keeps no interleaving.
+    // Native endpoint snapshots carry their own VIEW points.
+    let snapshots = match (mesh.edge_projection, scene.native) {
+        (ModelEdgeProjection::CommandSnapshots(snapshots), Some(_)) => snapshots,
+        _ => &[],
+    };
+    let raw_scale = draw.transform.scale / 100.0;
+    let mut sizes = vec![(0u16, 0u16); sprites.len()];
+    let mut edges = Vec::new();
+    for (index, edge) in mesh.edges.iter().enumerate() {
+        let mut vertices = edge.vertices.map(usize::from);
+        match snapshots.get(index) {
+            None | Some(ModelEdgeEndpointSnapshot::Compatibility) => {}
+            Some(ModelEdgeEndpointSnapshot::Native { endpoints }) => {
+                for (end, endpoint) in endpoints.iter().enumerate() {
+                    vertices[end] = corners.len();
+                    corners.push(if endpoint.clip == ModelSlotClip::Clear {
+                        let point = lens.project_view(endpoint.view_raw);
+                        ModelCorner {
+                            view: endpoint.view_raw,
+                            screen: point.screen,
+                            clip: point.clip | 0x80,
+                            fade: point.fade,
+                        }
+                    } else {
+                        REJECTED_CORNER
+                    });
+                }
+            }
+            // Retail allocated nothing, or the native producer failed.
+            Some(_) => continue,
+        }
+        let material = mesh.edge_materials.get(index);
+        let command = match edge.style {
+            ModelEdgeStyle::Palette { .. } => {
+                colours.push(
+                    material
+                        .and_then(|material| material.palette_rgb555)
+                        .map_or(0, |rgb555| {
+                            u32::from(((rgb555 & 0x7FE0) << 1) | (rgb555 & 0x1F))
+                        }),
+                );
+                EdgeCommand::Line {
+                    colour: colours.len() as i16 - 1,
+                    vertices,
+                }
+            }
+            ModelEdgeStyle::Sprite { size, .. } => {
+                let Some((texture, material)) = material
+                    .and_then(|material| material.texture.map(|texture| (texture, material)))
+                else {
+                    continue;
+                };
+                let flags = face_flags(material.blend, material.flat_shade_row);
+                let Some(id) = materials.face_material(texture.0, flags) else {
+                    continue;
+                };
+                sprites.push(id);
+                sizes.push(mesh.edge_widths.get(index).copied().unwrap_or((0, 0)));
+                // Retail sizes are VIEW units; see the billboards.
+                let size = (f32::from(size as i16) * raw_scale * 256.0).round() as i32 as i16;
+                EdgeCommand::Ribbon {
+                    sprite: sprites.len() as i16 - 1,
+                    size,
+                    vertices,
+                }
+            }
+        };
+        edges.push(command);
+    }
+
     let palette = |index: i16| colours.get(index as usize).copied().unwrap_or(0);
     let sprite = |index: i16| sprites.get(index as usize).copied().unwrap_or(0);
+    let sprite_size = |index: i16| sizes.get(index as usize).copied().unwrap_or((0, 0));
     let context = FaceContext {
         corners: &corners,
         normals: &normals,
@@ -424,6 +511,9 @@ pub(crate) fn queue_model_body(
     };
     for (opcode, words) in &commands {
         construct_face(queue, &context, fog.pass, *opcode, words)?;
+    }
+    for command in edges {
+        construct_edge(queue, &context, &lens, &sprite_size, fog.pass, command)?;
     }
     Ok(())
 }
@@ -479,12 +569,13 @@ pub(crate) fn queue_model_billboards(
         scene.camera_position,
         scene.camera_basis[2],
     );
+    let node = draw.transform.position;
     let mut corners: Vec<ModelCorner> = world
         .iter()
         .zip(&admitted)
         .map(|(world, &admitted)| match world {
             Some(world) if admitted || scene.native.is_some() => {
-                let view = scene.view_raw(*world);
+                let view = scene.node_view_raw(node, *world);
                 let point = lens.project_view(view);
                 ModelCorner {
                     view,

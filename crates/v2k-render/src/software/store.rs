@@ -88,6 +88,54 @@ impl OwnedMaterial {
         }
     }
 
+    /// An RGBA image as an indexed material: each distinct opaque colour
+    /// becomes a palette entry and transparent texels take index 0 under the
+    /// keyed flag. Retail's overlay sprites are indexed, and its indexed
+    /// half-additive and additive rows read the destination where the raw
+    /// ones do not. `None` for images with more than 255 opaque colours,
+    /// which are left to the raw path.
+    pub fn indexed_from_rgba(
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+        extra_flags: u16,
+    ) -> Option<Self> {
+        let texels = width as usize * height as usize;
+        let mut palette = vec![0u16];
+        let mut lookup = std::collections::HashMap::new();
+        let mut indices = Vec::with_capacity(texels);
+        let mut keyed = false;
+        for pixel in rgba.chunks_exact(4).take(texels) {
+            if pixel[3] == 0 {
+                keyed = true;
+                indices.push(0);
+                continue;
+            }
+            let word = rgb565(pixel[0], pixel[1], pixel[2]);
+            let index = match lookup.get(&word) {
+                Some(&index) => index,
+                None if palette.len() < 256 => {
+                    palette.push(word);
+                    let index = (palette.len() - 1) as u8;
+                    lookup.insert(word, index);
+                    index
+                }
+                None => return None,
+            };
+            indices.push(index);
+        }
+        indices.resize(texels, 0);
+        palette.resize(palette.len().div_ceil(16) * 16, 0);
+        let keyed = if keyed { flags::KEYED } else { 0 };
+        Some(Self::indexed(
+            &indices,
+            width,
+            height,
+            palette,
+            extra_flags | keyed,
+        ))
+    }
+
     /// An indexed material from texel indices and display-format palette
     /// words (`rows × 16` entries, row 0 first).
     pub fn indexed(
@@ -206,6 +254,26 @@ impl MaterialSource for MaterialStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rgba_overlays_become_keyed_indexed_materials() {
+        let rgba = [
+            0, 0, 0, 0, // transparent
+            248, 0, 0, 255, // red
+            0, 0, 0, 255, // opaque black stays visible
+            248, 0, 0, 255,
+        ];
+        let material = OwnedMaterial::indexed_from_rgba(&rgba, 2, 2, flags::ADDITIVE).unwrap();
+        assert_eq!(material.flags, flags::ADDITIVE | flags::KEYED);
+        let view = material.view();
+        assert_eq!(&material.atlas[..2], &[0, 1]);
+        assert_eq!(&material.atlas[ATLAS_STRIDE..ATLAS_STRIDE + 2], &[2, 1]);
+        assert_eq!(&view.palette[..3], &[0, 0xF800, 0]);
+        let many: Vec<u8> = (0..256u32)
+            .flat_map(|i| [((i & 0x1F) << 3) as u8, ((i >> 5) << 2) as u8, 8, 255])
+            .collect();
+        assert!(OwnedMaterial::indexed_from_rgba(&many, 256, 1, 0).is_none());
+    }
 
     #[test]
     fn rgb565_round_trips_through_bit_replication() {
