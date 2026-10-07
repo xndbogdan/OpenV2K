@@ -374,6 +374,17 @@ combinations and both uniform and per-vertex shading; top, side and full
 clipping; inset clip rectangles; quad splits; padded pitch; the
 span-reciprocal overrun; and the zero fog-mask state.
 
+## Frame captures
+
+`V2K_SOFTWARE_FRAME_DUMP=<dir>` writes every presented software frame as a
+BMP. With the SDL dummy video driver this runs headless. To compare Intro2
+with retail, also set `V2K_NEW_GAME_AFTER_TICKS=<n>` and start from the menu
+(`--skip-intro`): the frontend confirms its default New Game after `n` ticks
+and Intro2 loads through the production Begin-Intro construction. `--level
+50` instead uses the generic debug constructor without the native Intro2
+owners, so for example the factory's Sub-M status words stay zero, its roof
+ribbons are skipped and its lid is drawn.
+
 ## Open
 
 - The retail stack address at the scan converter, which `00478510`'s pixels

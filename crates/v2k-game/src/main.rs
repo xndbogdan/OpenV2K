@@ -175,7 +175,8 @@ use v2k_game::static_damage::{
 };
 use v2k_game::static_damage_live::resolve_current_static_damage_target;
 use v2k_game::static_objects::{
-    collect_static_terrain_objects, free_camera_entity_view_contains_position,
+    collect_retail_static_terrain_objects, collect_static_terrain_objects,
+    free_camera_entity_view_contains_position,
 };
 use v2k_game::targetter::{
     fun_0044ea60, targetter_model_scale_raw, targetter_terrain_height_raw, TargetterCandidate,
@@ -1465,6 +1466,13 @@ fn run_game(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
+    // `V2K_NEW_GAME_AFTER_TICKS`: headless diagnostics confirm the frontend
+    // ring's default New Game after this many frontend ticks, so a capture
+    // takes the production Begin-Intro path rather than the generic debug
+    // load of `--level 50`.
+    let mut auto_new_game_tick = std::env::var("V2K_NEW_GAME_AFTER_TICKS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok());
     let mut config = GameConfig::load(data_dir);
     log!(
         "Controls: {} => Sensitivity {}/15, Self Righting {}",
@@ -2108,6 +2116,18 @@ fn run_game(
                             keys_down.remove(kc);
                         }
                         _ => {}
+                    }
+                }
+
+                if let Some(tick) = auto_new_game_tick {
+                    if !menu_is_paused && retail_tick >= tick && !shell.is_transitioning() {
+                        auto_new_game_tick = None;
+                        let ctx = MenuCtx {
+                            cache: &session.cache,
+                            config: &config,
+                            saves: Some(&save_manager),
+                        };
+                        shell_events.extend(shell.input(MenuInput::Select, &ctx));
                     }
                 }
 
@@ -8542,6 +8562,7 @@ fn draw_gameplay_world(
         cache,
         face_colors,
         camera,
+        camera_mode,
         terrain_frames,
         Some(terrain_lights),
         retail_tick,
@@ -8976,6 +8997,7 @@ fn render_opening_cinematic(
         cache,
         face_colors,
         camera,
+        GameplayWorldCameraMode::RetailChase,
         terrain_frames,
         Some(terrain_lights),
         retail_tick,
@@ -11571,11 +11593,13 @@ fn world_model_shade_shift(
 /// footprint as opaque terrain. `FUN_0042F650` uses an identity root basis,
 /// raw cell centre `+0x80`, and exposes only the global 50 Hz tick on dynamic
 /// animation channel zero.
+#[allow(clippy::too_many_arguments)]
 fn draw_static_terrain_objects(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,
     colors: &v2k_game::model_color::ModelMaterialCache,
     camera: &Camera,
+    camera_mode: GameplayWorldCameraMode,
     terrain_frames: Option<&v2k_render::TerrainFrames>,
     terrain_lights: Option<&v2k_render::TerrainLightWindow>,
     retail_tick: u32,
@@ -11591,13 +11615,23 @@ fn draw_static_terrain_objects(
     vars.dynamic[0] = (retail_tick & 0xFFFF) as i32;
     let orientation = orientation_from_ypr(0.0, 0.0, 0.0);
 
-    let visible_objects = collect_static_terrain_objects(
-        terrain,
-        objects,
-        camera.position,
-        camera.forward(),
-        scan_dimensions,
-    );
+    let visible_objects = match camera_mode {
+        // FUN_0042F530 walks whole cell words on the world axes.
+        GameplayWorldCameraMode::RetailChase => collect_retail_static_terrain_objects(
+            terrain,
+            objects,
+            camera.position.map(|value| (value * 256.0).round() as i32),
+            v2k_core::render_scan::terrain_row_lead_raw(camera.forward()[1]),
+            scan_dimensions,
+        ),
+        GameplayWorldCameraMode::Free => collect_static_terrain_objects(
+            terrain,
+            objects,
+            camera.position,
+            camera.forward(),
+            scan_dimensions,
+        ),
+    };
     let sea_level = terrain.water_enabled().then(|| terrain.sea_level_world_y());
     world_fx.emit_static_terrain_object_particles(&visible_objects, sea_level);
     // Retail allocates these records directly from the static-object draw
