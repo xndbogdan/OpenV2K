@@ -121,7 +121,7 @@ with separate explosion programs rather than the direct packet rows above.
 ## Recorded hits and kills
 
 Both recordings load the repaired Alpine overlay successfully, use the
-faststart instruction bytes at `0044E316/0042D5C2`, and have recorder exit0.
+faststart build, and have recorder exit0.
 Recording 01 lasts 73.172 s; recording 02 lasts 150.313 s. These durations describe
 the recordings, not startup benchmarks.
 

@@ -134,12 +134,10 @@ are both936448 bytes at image base400000h, with identical sections and entry.
 | Image | SHA256 |
 |---|---|
 | Retail `V2000.EXE` | `e9be7a833612fba3a5a5ab92a974ece1a689e4b7e72409d9ee8331380573b4ba` |
-| `V2000-nocd.exe` | `d8365a3eaae541c071214835833ccf6db8dc491646c713f2c4d0017a04a6a720` |
 
-The only differing byte is file offset3B4CFh / VA43C0CFh, `74→EB` in the
-protection branch. Gameplay addresses used here are unchanged. The user-supplied
-executable is retained locally as `v2000/V2000-nocd.exe`; its bytes are private
-installation data, while the hashes and patch provenance above remain versioned.
+The NoCD image differs from retail only in its protection branch; gameplay
+addresses used here are unchanged. The user-supplied executable stays local
+and private; only the retail hash above is versioned.
 
 Accepted query stems are `nocd02-timeline`, `nocd02-save-state`,
 `nocd02-cleansing-events`, `nocd02-cleansing-oracle-v2`,

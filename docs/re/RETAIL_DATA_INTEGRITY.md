@@ -3,8 +3,9 @@
 ## NoCD05 Alpine load failure
 
 `V2000-nocd05.run` records a data-read failure, followed by a separate error-dialog
-crash. It does not establish another media-authentication failure. The recorded
-image retains the sole `43C0CF: 74 -> EB` [Load-only patch](MENU_SYSTEM.md#local-load-only-preservation-patch-2026-08-02).
+crash. It does not establish a media-authentication failure. The recorded
+image differs from retail only in its protection branch (see
+[NoCD02 replay provenance](CLEANSING_VEHICLE.md#nocd02-replay-provenance)).
 
 The recording loads registry save `<install>\Slot13`, enters Castle
 (logical world 3, global OVL15), and later returns to the menu and loads
