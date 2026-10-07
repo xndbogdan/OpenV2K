@@ -1024,7 +1024,8 @@ The port's Rendering row offers Software (retail string 9) and OpenGL. The
 retail Direct3D table is not ported, so the second value names the renderer
 the port actually runs. A change replaces the renderer at once and keeps the
 current one when the new backend cannot start, as `FUN_0044E0E0` does; the
-port creates the replacement before dropping the old renderer. At startup
+port creates the replacement before dropping the old renderer, and opens its
+window where the old one was (a full-screen game stays on its display). At startup
 only the backend can fail, so OpenGL falls back to Software unless
 `--renderer` forced a choice, and the backend that started is saved.
 

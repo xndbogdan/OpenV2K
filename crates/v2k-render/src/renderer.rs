@@ -1281,6 +1281,12 @@ pub trait Renderer {
     /// (Alt+Enter). Default no-op for backends without a togglable window.
     fn set_fullscreen(&mut self, _on: bool) {}
 
+    /// Where this renderer's window is, for a replacement renderer to reopen
+    /// in the same place. Backends without a window return `None`.
+    fn window_placement(&self) -> Option<crate::WindowPlacement> {
+        None
+    }
+
     /// Change the OS window's drawable size. Display→Resolution uses this;
     /// unlike [`Self::resize`], it requests a real window mode change.
     fn set_window_size(&mut self, width: u32, height: u32) {

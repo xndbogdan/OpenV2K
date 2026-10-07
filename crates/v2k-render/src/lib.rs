@@ -47,7 +47,7 @@ pub use terrain_light::TerrainLightWindow;
 pub use terrain_tiles::TerrainFrames;
 pub use ui_mapping::{UiAnchor, UiMapping, UiMappingRequest, UiSubmissionPolicy};
 pub use water::WaterFrames;
-pub use window::{apply_app_window_icon, GameEvent, GameWindow};
+pub use window::{apply_app_window_icon, GameEvent, GameWindow, WindowPlacement};
 
 pub use gl_backend::{authored_face_plane_visible, GlRenderer};
 pub use sw_backend::SoftwareRenderer;
@@ -59,7 +59,8 @@ pub use sw_backend::SoftwareRenderer;
 /// consumes the window via `into_canvas`).
 ///
 /// If `preferred` is OpenGL and creation fails, falls back to software
-/// automatically when `auto_fallback` is true.
+/// automatically when `auto_fallback` is true. `placement` reopens a replaced
+/// renderer's window where the old one was; `None` centres it.
 pub fn create_renderer(
     game_window: &GameWindow,
     title: &str,
@@ -67,16 +68,21 @@ pub fn create_renderer(
     height: u32,
     preferred: RenderBackend,
     auto_fallback: bool,
+    placement: Option<WindowPlacement>,
 ) -> Result<(Box<dyn Renderer>, RenderBackend), String> {
+    let (width, height) = placement.map_or((width, height), |placement| {
+        placement.size_or(width, height)
+    });
     match preferred {
         RenderBackend::OpenGL => {
-            let window = game_window.create_gl_window(title, width, height)?;
+            let window = game_window.create_gl_window(title, width, height, placement)?;
             match GlRenderer::new(window, width, height) {
                 Ok(gl) => Ok((Box::new(gl), RenderBackend::OpenGL)),
                 Err(e) => {
                     if auto_fallback {
                         eprintln!("OpenGL init failed ({}), falling back to software", e);
-                        let sw_window = game_window.create_sw_window(title, width, height)?;
+                        let sw_window =
+                            game_window.create_sw_window(title, width, height, placement)?;
                         let sw = SoftwareRenderer::new(sw_window, width, height)?;
                         Ok((Box::new(sw), RenderBackend::Software))
                     } else {
@@ -86,7 +92,7 @@ pub fn create_renderer(
             }
         }
         RenderBackend::Software => {
-            let window = game_window.create_sw_window(title, width, height)?;
+            let window = game_window.create_sw_window(title, width, height, placement)?;
             let sw = SoftwareRenderer::new(window, width, height)?;
             Ok((Box::new(sw), RenderBackend::Software))
         }
