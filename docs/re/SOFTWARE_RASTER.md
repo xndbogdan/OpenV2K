@@ -13,9 +13,12 @@ the primitive queue reproduces the retail queue controls. The ground and
 water producers, the model face, edge and billboard constructors and the
 type-1 vertex projector are ported and byte-exact against retail on their
 receipts, and model painter programs run their queue groups as retail
-does. `--renderer software` (`crates/v2k-render/src/sw_backend.rs`) draws
+does. The software backend (`crates/v2k-render/src/sw_backend.rs`) draws
 videos, menus, the frontend models, 2-D overlays and whole gameplay and
-cinematic frames through them, particles included.
+cinematic frames through them, particles included. It is selectable in the
+launcher, in the Display menu's Rendering row (Software/OpenGL, applied at
+the next launch) and with `--renderer software`; Automatic prefers OpenGL
+and falls back to Software when OpenGL cannot start.
 
 ## Pipeline
 

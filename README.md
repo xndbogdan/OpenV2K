@@ -183,12 +183,15 @@ their backdrop's canvas mapping. Footer logos and copyright grow independently
 at the actual bottom edges (1.8x/3.6x). All Native growth uses the effective
 short axis, preserving original matching presets; Low and 4:3/Stretched keep
 their existing behavior. This is a port-owned readability extension beyond
-the original modes, not retail visual acceptance. OpenGL is the supported
-renderer; Software is unavailable in normal options and automatic fallback.
-An explicit `--renderer software` draws through the in-progress retail software
-raster ([SOFTWARE_RASTER.md](docs/re/SOFTWARE_RASTER.md)): videos, menus with
-their 3-D scene, 2-D overlays, and gameplay and cinematic frames with ground,
-water, models, edges, billboards and particles through the retail producers.
+the original modes, not retail visual acceptance. Two renderers are
+available: OpenGL (the default, chosen by Automatic) and Software, a port of
+retail's 16-bit software raster
+([SOFTWARE_RASTER.md](docs/re/SOFTWARE_RASTER.md)) that draws videos, menus
+with their 3-D scene, 2-D overlays, and gameplay and cinematic frames with
+ground, water, models, edges, billboards and particles through the retail
+producers. Choose Software in the launcher's Options, in the game's Display
+menu (Rendering; it applies at the next launch) or with `--renderer
+software`. Automatic falls back to Software when OpenGL cannot start.
 
 For the classic colour look, select **4:3** or **Stretched** scaling and enable
 **Classic Framebuffer** under Display. At startup it selects the authored

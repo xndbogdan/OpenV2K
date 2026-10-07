@@ -1261,12 +1261,12 @@ impl WindowState {
         let renderer_index = match config.renderer {
             RendererChoice::Auto => 0,
             RendererChoice::OpenGL => 1,
-            RendererChoice::Software => 1,
+            RendererChoice::Software => 2,
             RendererChoice::Wgpu => 0,
         };
         let renderer = self.combo(
             window,
-            &strings(&["Automatic", "OpenGL"]),
+            &strings(&["Automatic", "OpenGL", "Software"]),
             renderer_index,
             ID_RENDERER,
             136,
@@ -1438,6 +1438,7 @@ impl WindowState {
         config.set_resolution_index(combo_selection(controls.resolution));
         config.renderer = match combo_selection(controls.renderer) {
             1 => RendererChoice::OpenGL,
+            2 => RendererChoice::Software,
             _ => RendererChoice::Auto,
         };
         config.scaling = ScalingMode::from_index(combo_selection(controls.scaling) as u32);

@@ -300,11 +300,6 @@ impl GameConfig {
     }
 
     fn normalize_presentation(&mut self) {
-        // Software remains an explicit diagnostic CLI backend, rather than a
-        // persisted interactive preference for the incomplete desktop path.
-        if self.renderer == RendererChoice::Software {
-            self.renderer = RendererChoice::OpenGL;
-        }
         // Older port preferences allowed custom/HD output sizes. Retain the
         // largest authored tier that fits both dimensions, with a 640x480
         // minimum window even when Low detail selects 320x240 game art.
@@ -465,18 +460,15 @@ mod tests {
     }
 
     #[test]
-    fn normalized_preferences_keep_software_available_only_as_a_cli_override() {
+    fn normalized_preferences_keep_a_software_choice() {
         let mut cfg = GameConfig {
             renderer: RendererChoice::Software,
             ..GameConfig::default()
         };
         cfg.normalize_presentation();
-        assert_eq!(cfg.renderer, RendererChoice::OpenGL);
-        assert_eq!(cfg.resolve_backend(None), RenderBackend::OpenGL);
-        assert_eq!(
-            cfg.resolve_backend(Some("software")),
-            RenderBackend::Software
-        );
+        assert_eq!(cfg.renderer, RendererChoice::Software);
+        assert_eq!(cfg.resolve_backend(None), RenderBackend::Software);
+        assert_eq!(cfg.resolve_backend(Some("opengl")), RenderBackend::OpenGL);
     }
 
     #[test]

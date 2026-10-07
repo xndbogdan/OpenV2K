@@ -255,10 +255,17 @@ fn world_control_slot(level_id: u32) -> Option<usize> {
         .filter(|slot| *slot < RETAIL_CONTROL_SLOT_COUNT)
 }
 
-fn apply_classic_framebuffer_presentation(renderer: &mut dyn Renderer, config: &mut GameConfig) {
+/// Apply the OpenGL classic-framebuffer preference. The software backend
+/// already presents its authored-resolution surface in the 4:3 modes, so the
+/// preference is kept for a later OpenGL launch rather than cleared.
+fn apply_classic_framebuffer_presentation(
+    renderer: &mut dyn Renderer,
+    config: &mut GameConfig,
+    backend: v2k_render::RenderBackend,
+) {
     let requested = config.classic_framebuffer_effective();
     let active = renderer.set_classic_framebuffer(requested);
-    if requested && !active {
+    if requested && !active && backend == v2k_render::RenderBackend::OpenGL {
         log!("Classic framebuffer is unavailable on the active renderer; disabling the option");
         config.classic_framebuffer = false;
         renderer.set_classic_framebuffer(false);
@@ -1511,8 +1518,9 @@ fn run_game(
         config.width,
         config.height,
         preferred,
-        // The software stub requires an explicit diagnostic CLI selection.
-        false,
+        // Without a command-line choice, a failed OpenGL start falls back to
+        // the software renderer, as retail fell back from Direct3D.
+        cli_override.is_none(),
     )?;
 
     let initial_menu_size = config.detail.menu_virtual_size();
@@ -1521,7 +1529,7 @@ fn run_game(
     if overlay_depth_policy == v2k_render::OverlayDepthPolicy::OverlayAlways {
         log!("Overlay depth diagnosis policy active: {overlay_depth_policy:?} (presentation only)");
     }
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config);
+    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config, actual_backend);
     if config.fullscreen {
         renderer.set_fullscreen(true);
     }
@@ -1626,7 +1634,7 @@ fn run_game(
     }
     renderer.set_scaling_mode(config.scaling, menu_reference_size.0, menu_reference_size.1);
     renderer.set_ui_submission_policy(live_display::ui_policy(&config, gameplay_hud_variant));
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config);
+    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config, actual_backend);
 
     // --- Background flame billboard animation (table 0x4CA938) ---
     // .data initial state (frame 8, accumulator 2,000,000 µs) wraps on the
@@ -2162,9 +2170,9 @@ fn run_game(
                                     renderer.set_window_size(config.width, config.height);
                                 }
                                 v2k_game::menu_data::SettingId::Rendering => {
-                                    // Replacing a live SDL/OpenGL renderer would invalidate
-                                    // every cached GPU resource. Persist the choice for the
-                                    // next launch, matching the original's mode-rebuild boundary.
+                                    // Replacing the live renderer would invalidate every
+                                    // cached texture and material. Persist the choice for
+                                    // the next launch.
                                     log!("Renderer change will apply on next launch");
                                 }
                                 _ => {}
@@ -2209,6 +2217,7 @@ fn run_game(
                                 apply_classic_framebuffer_presentation(
                                     renderer.as_mut(),
                                     &mut config,
+                                    actual_backend,
                                 );
                                 shell.engine.settings.set(
                                     SettingId::ClassicFramebuffer,

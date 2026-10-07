@@ -188,7 +188,7 @@ impl MenuEngine {
 
     /// Runtime availability independent of whether the decoded row has an
     /// action. Decorative headings remain available; only temporarily
-    /// unavailable controls and unimplemented renderer choices return false.
+    /// unavailable controls return false.
     pub fn item_available(&self, item: &ItemDef) -> bool {
         item_is_available(&self.settings, item)
     }
@@ -300,11 +300,6 @@ impl MenuEngine {
 
     /// FUN_0043B7C0: clamp to 0..=max; sound 1 on change, 0 at the limit.
     fn spin(&mut self, setting: SettingId, max: u32, dir: i32) -> Vec<MenuCommand> {
-        // The software backend is diagnostic-only until it implements the game.
-        if setting == SettingId::Rendering {
-            return vec![MenuCommand::PlaySound(0)];
-        }
-
         // The authored-size framebuffer has no meaning in Native mode. Keep
         // its row visible for discoverability, but make adjustment inert until
         // the user chooses preserved 4:3 or Stretched output.
@@ -432,12 +427,6 @@ impl MenuEngine {
 /// callback may be a decorative heading and must not inherit disabled styling.
 fn item_is_available(settings: &Settings, item: &ItemDef) -> bool {
     item.available
-        && !matches!(
-            item.select,
-            SelectAction::Toggle {
-                setting: SettingId::Rendering
-            }
-        )
         && !(matches!(
             item.select,
             SelectAction::Toggle {
@@ -567,7 +556,7 @@ mod tests {
     }
 
     #[test]
-    fn rendering_row_is_inert_and_navigation_skips_it() {
+    fn rendering_row_toggles_software_and_opengl() {
         for mask in [VIS_FRONTEND, VIS_INGAME] {
             let mut engine = MenuEngine::new(DISPLAY, mask);
             let rendering_index = engine
@@ -583,24 +572,26 @@ mod tests {
                 })
                 .unwrap();
             let row = &engine.current().unwrap().items[rendering_index];
-            assert!(row.visible(mask), "the authored row remains visible");
-            assert!(!engine.item_available(row));
-            assert_ne!(engine.selected(), rendering_index);
+            assert!(row.visible(mask));
+            assert!(engine.item_available(row));
 
             engine.stack.last_mut().unwrap().sel = rendering_index;
-            assert_eq!(engine.selected_action(), None);
-            assert!(engine.handle(MenuInput::Select).is_empty());
             assert_eq!(engine.settings.get(SettingId::Rendering), 1);
-            for direction in [-1, 1] {
-                assert_eq!(
-                    engine.spin(SettingId::Rendering, 1, direction),
-                    vec![MenuCommand::PlaySound(0)]
-                );
-            }
-            engine.move_cursor(1);
-            assert_ne!(engine.selected(), rendering_index);
-            engine.move_cursor(-1);
-            assert_ne!(engine.selected(), rendering_index);
+            assert_eq!(
+                engine.handle(MenuInput::Left),
+                vec![
+                    MenuCommand::PlaySound(1),
+                    MenuCommand::SettingChanged(SettingId::Rendering, 0),
+                ]
+            );
+            assert_eq!(engine.settings.get(SettingId::Rendering), 0);
+            assert_eq!(
+                engine.handle(MenuInput::Right),
+                vec![
+                    MenuCommand::PlaySound(1),
+                    MenuCommand::SettingChanged(SettingId::Rendering, 1),
+                ]
+            );
             assert_eq!(engine.settings.get(SettingId::Rendering), 1);
         }
     }
