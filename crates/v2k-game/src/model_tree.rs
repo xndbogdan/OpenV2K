@@ -3640,8 +3640,6 @@ mod tests {
                 ScalingMode::FourThree,
                 ScalingMode::Stretched,
             ] {
-                // Classic Framebuffer uses this same logical surface, then
-                // presents it into the physical viewport after all draws.
                 let viewport = RenderViewport::for_output(width, height, 640, 480, mode);
                 let aspect = f64::from(viewport.logical_width) / f64::from(viewport.logical_height);
                 let policy = ModelTreeRootLinkPolicy::KlausMatte {

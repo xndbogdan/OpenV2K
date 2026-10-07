@@ -213,8 +213,9 @@ and unknown fallback DWORDs survive the save. Registry writes leave unrelated
 values untouched.
 
 Modern backend choice, output width/height, Native/4:3/Stretched scaling,
-classic framebuffer policy, graphics detail, and port Difficulty are kept
-separately in `<data-dir>/port-config.json`. Existing legacy display values
+graphics detail, and port Difficulty are kept separately in
+`<data-dir>/port-config.json`; a retired `classic_framebuffer` key there is
+ignored. Existing legacy display values
 are retained on upgrade and this small file takes precedence afterward.
 The old `config.json` is never deleted, renamed, or rewritten. This avoids
 losing existing preferences while moving retail options out of that file.

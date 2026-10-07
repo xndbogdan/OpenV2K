@@ -1295,25 +1295,6 @@ pub trait Renderer {
         _reference_height: u32,
     ) {
     }
-
-    /// Render the complete scene into the selected authored-resolution
-    /// framebuffer before presenting it to the physical output. This keeps
-    /// texture lookup point-sampled while allowing one final filtered scale,
-    /// with the OpenGL classic adapter quantizing logical pixels to RGB565
-    /// before that scale. Packed per-draw software composition remains separate.
-    /// matching the way a completed retail frame was enlarged for a modern
-    /// display. Backends without an offscreen color/depth target return
-    /// `false`; Native presentation may also reject the request.
-    fn set_classic_framebuffer(&mut self, _enabled: bool) -> bool {
-        false
-    }
-
-    /// Whether authored-resolution offscreen presentation is currently in
-    /// use. A requested mode can become inactive after switching to Native or
-    /// when the graphics driver cannot provide framebuffer objects.
-    fn classic_framebuffer_active(&self) -> bool {
-        false
-    }
 }
 
 #[cfg(test)]

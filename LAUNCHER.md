@@ -129,9 +129,6 @@ a worker so the window stays responsive while importing or verifying files.
 Launcher display and audio controls use `GameConfig::load` and `try_save`,
 including the same portable settings files and port-owned registry namespace
 used by the game menus. Retail registry settings remain import-only.
-Classic Framebuffer is available with Preserve 4:3 or Stretched 4:3 scaling.
-Selecting Native scaling clears and disables it, matching the in-game options.
-This restriction applies to scaling, regardless of the selected output resolution.
 Resolution offers only 640x480, 800x600 and 1024x768. Fullscreen uses the
 current desktop resolution without switching display modes; the selected
 preset determines the window size and authored layout tier. Older HD presets

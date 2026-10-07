@@ -545,12 +545,9 @@ fn ui_submission_policy_follows_resident_art_and_explicit_native_or_classic_choi
     );
     for scaling in [ScalingMode::FourThree, ScalingMode::Stretched] {
         config.scaling = scaling;
-        for classic_framebuffer in [false, true] {
-            config.classic_framebuffer = classic_framebuffer;
-            assert_eq!(
-                ui_policy(&config, Some(3)),
-                UiSubmissionPolicy::FitAuthoredCanvas
-            );
-        }
+        assert_eq!(
+            ui_policy(&config, Some(3)),
+            UiSubmissionPolicy::FitAuthoredCanvas
+        );
     }
 }

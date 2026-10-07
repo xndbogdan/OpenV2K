@@ -101,9 +101,6 @@ pub enum SettingId {
     FullScreen,
     /// Port extension — Native / preserved 4:3 / legacy Stretched output.
     Scaling,
-    /// Port extension — render at the selected tier's authored resolution
-    /// before scaling the completed frame to the output.
-    ClassicFramebuffer,
     /// +0x24 — self righting (Off/Level/Angled).
     SelfRighting,
     /// +0x28 — full analogue / absolute mode.
@@ -475,9 +472,9 @@ impl MenuTree {
 
         // Intentional port extension: expose modern aspect handling without
         // altering the extracted source-of-truth JSON. The first six rows
-        // remain the decoded retail Display menu; the port's Scaling and
-        // Classic Framebuffer rows are inserted after Display and before
-        // Active Camera, while the decoration prop stays last.
+        // remain the decoded retail Display menu; the port's Scaling row is
+        // inserted after Display and before Active Camera, while the
+        // decoration prop stays last.
         if let Some(display) = screens.get_mut(&DISPLAY) {
             // Port extension: changing the output and high-tier layout is now
             // supported while paused. Preserve the retail reference JSON.
@@ -521,23 +518,6 @@ impl MenuTree {
                     arg1: 2,
                     arg2: 0,
                     label: Some("Scaling".to_string()),
-                },
-            );
-            display.items.insert(
-                insert_at + 1,
-                ItemDef {
-                    visibility: VIS_INGAME | VIS_FRONTEND,
-                    available: true,
-                    draw: DrawKind::SettingRow {
-                        string_id: u32::MAX,
-                        setting: SettingId::ClassicFramebuffer,
-                    },
-                    select: SelectAction::Toggle {
-                        setting: SettingId::ClassicFramebuffer,
-                    },
-                    arg1: 1,
-                    arg2: 0,
-                    label: Some("Classic Framebuffer".to_string()),
                 },
             );
         }
@@ -708,8 +688,8 @@ mod tests {
         }
         assert_eq!(
             display.items.len(),
-            9,
-            "six retail settings, two port presentation rows, and screenop prop"
+            8,
+            "six retail settings, the port Scaling row, and screenop prop"
         );
         let scaling = display
             .items
@@ -725,19 +705,6 @@ mod tests {
         assert_eq!(scaling.label.as_deref(), Some("Scaling"));
         assert!(scaling.visible(VIS_FRONTEND));
         assert!(scaling.visible(VIS_INGAME));
-        let classic = display
-            .items
-            .iter()
-            .find(|i| {
-                i.select
-                    == (SelectAction::Toggle {
-                        setting: SettingId::ClassicFramebuffer,
-                    })
-            })
-            .expect("Display must expose the classic framebuffer selector");
-        assert_eq!(classic.label.as_deref(), Some("Classic Framebuffer"));
-        assert!(classic.visible(VIS_FRONTEND));
-        assert!(classic.visible(VIS_INGAME));
         let resolution = display
             .items
             .iter()

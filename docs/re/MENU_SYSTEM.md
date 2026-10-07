@@ -387,8 +387,8 @@ full-frame video, background images and retained pause underlays keep their
 dedicated policies. Matching 640×480, 800×600 and 1024×768 layouts retain their
 original geometry; growth beyond them is a modern port-owned extension, not
 retail acceptance. The scale and mode boundaries are owned by
-[Render presentation](RENDER_PIPELINE.md#classic-framebuffer-colour-and-resolution).
-High Resolution/Scaling/Classic changes stage the selected system layouts and
+[Render presentation](RENDER_PIPELINE.md#colour-depth-and-resolution).
+High Resolution/Scaling changes stage the selected system layouts and
 font, projection, HUD/radar/map-status snapshots before atomic publication,
 without replacing intrinsic glyph pixels or advancing world/effect clocks.
 Low/High artwork and renderer replacement remain their existing launch-time

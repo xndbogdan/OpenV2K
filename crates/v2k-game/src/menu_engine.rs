@@ -49,7 +49,6 @@ impl Default for Settings {
         values.insert(SettingId::FullScreen, 1);
         // Port-only option; Native is the modern default.
         values.insert(SettingId::Scaling, 0);
-        values.insert(SettingId::ClassicFramebuffer, 0);
         values.insert(SettingId::SelfRighting, 1);
         values.insert(SettingId::AbsoluteMode, 0);
         values.insert(SettingId::Sensitivity, 10);
@@ -186,11 +185,10 @@ impl MenuEngine {
         &self.tree
     }
 
-    /// Runtime availability independent of whether the decoded row has an
-    /// action. Decorative headings remain available; only temporarily
-    /// unavailable controls return false.
+    /// Availability independent of whether the decoded row has an action.
+    /// Decorative headings remain available.
     pub fn item_available(&self, item: &ItemDef) -> bool {
-        item_is_available(&self.settings, item)
+        item.available
     }
 
     /// Whether the cursor may currently rest on and activate this item.
@@ -206,7 +204,7 @@ impl MenuEngine {
         let sel = self
             .tree
             .screen(va)
-            .map(|s| first_selectable(s, self.vis_mask, &self.settings))
+            .map(|s| first_selectable(s, self.vis_mask))
             .unwrap_or(0);
         self.stack.push(StackSlot { screen: va, sel });
         true
@@ -272,7 +270,7 @@ impl MenuEngine {
         let mut idx = slot.sel;
         for _ in 0..n {
             idx = (idx as i64 + dir as i64).rem_euclid(n as i64) as usize;
-            if item_is_enabled(&self.settings, &screen.items[idx], mask) {
+            if item_is_enabled(&screen.items[idx], mask) {
                 if idx != slot.sel {
                     slot.sel = idx;
                     return vec![MenuCommand::PlaySound(0)];
@@ -300,13 +298,6 @@ impl MenuEngine {
 
     /// FUN_0043B7C0: clamp to 0..=max; sound 1 on change, 0 at the limit.
     fn spin(&mut self, setting: SettingId, max: u32, dir: i32) -> Vec<MenuCommand> {
-        // The authored-size framebuffer has no meaning in Native mode. Keep
-        // its row visible for discoverability, but make adjustment inert until
-        // the user chooses preserved 4:3 or Stretched output.
-        if setting == SettingId::ClassicFramebuffer && self.settings.get(SettingId::Scaling) == 0 {
-            return vec![MenuCommand::PlaySound(0)];
-        }
-
         let cur = self.settings.get(setting);
         let new = if dir > 0 {
             (cur + 1).min(max)
@@ -317,23 +308,10 @@ impl MenuEngine {
             return vec![MenuCommand::PlaySound(0)];
         }
         self.settings.set(setting, new);
-        let mut commands = vec![
+        vec![
             MenuCommand::PlaySound(1),
             MenuCommand::SettingChanged(setting, new),
-        ];
-        // Switching back to Native explicitly turns the port extension off,
-        // rather than retaining a hidden enabled state in the config.
-        if setting == SettingId::Scaling
-            && new == 0
-            && self.settings.get(SettingId::ClassicFramebuffer) != 0
-        {
-            self.settings.set(SettingId::ClassicFramebuffer, 0);
-            commands.push(MenuCommand::SettingChanged(
-                SettingId::ClassicFramebuffer,
-                0,
-            ));
-        }
-        commands
+        ]
     }
 
     fn selected_action(&self) -> Option<SelectAction> {
@@ -423,29 +401,18 @@ impl MenuEngine {
     }
 }
 
-/// Dynamic availability is orthogonal to selectability. A row without a
+/// Shared interaction policy for navigation and activation. A row without a
 /// callback may be a decorative heading and must not inherit disabled styling.
-fn item_is_available(settings: &Settings, item: &ItemDef) -> bool {
-    item.available
-        && !(matches!(
-            item.select,
-            SelectAction::Toggle {
-                setting: SettingId::ClassicFramebuffer
-            }
-        ) && settings.get(SettingId::Scaling) == 0)
-}
-
-/// Shared interaction policy for navigation and activation.
-fn item_is_enabled(settings: &Settings, item: &ItemDef, mask: u32) -> bool {
-    item.selectable(mask) && item_is_available(settings, item)
+fn item_is_enabled(item: &ItemDef, mask: u32) -> bool {
+    item.selectable(mask) && item.available
 }
 
 /// First selectable item index under the mask (0 if none).
-fn first_selectable(screen: &ScreenDef, mask: u32, settings: &Settings) -> usize {
+fn first_selectable(screen: &ScreenDef, mask: u32) -> usize {
     screen
         .items
         .iter()
-        .position(|item| item_is_enabled(settings, item, mask))
+        .position(|item| item_is_enabled(item, mask))
         .unwrap_or(0)
 }
 
@@ -478,7 +445,6 @@ mod tests {
             (SettingId::Bilinear, 1),
             (SettingId::FullScreen, 1),
             (SettingId::Scaling, 0),
-            (SettingId::ClassicFramebuffer, 0),
             (SettingId::SelfRighting, 1),
             (SettingId::AbsoluteMode, 0),
             (SettingId::Sensitivity, 10),
@@ -594,66 +560,6 @@ mod tests {
             );
             assert_eq!(engine.settings.get(SettingId::Rendering), 1);
         }
-    }
-
-    #[test]
-    fn classic_framebuffer_is_inert_in_native_and_cleared_on_native_switch() {
-        let mut engine = MenuEngine::main_menu();
-
-        let commands = engine.spin(SettingId::ClassicFramebuffer, 1, 1);
-        assert_eq!(commands, vec![MenuCommand::PlaySound(0)]);
-        assert_eq!(engine.settings.get(SettingId::ClassicFramebuffer), 0);
-
-        engine.settings.set(SettingId::Scaling, 1);
-        let commands = engine.spin(SettingId::ClassicFramebuffer, 1, 1);
-        assert!(commands.contains(&MenuCommand::SettingChanged(
-            SettingId::ClassicFramebuffer,
-            1,
-        )));
-        assert_eq!(engine.settings.get(SettingId::ClassicFramebuffer), 1);
-
-        let commands = engine.spin(SettingId::Scaling, 2, -1);
-        assert!(commands.contains(&MenuCommand::SettingChanged(SettingId::Scaling, 0)));
-        assert!(commands.contains(&MenuCommand::SettingChanged(
-            SettingId::ClassicFramebuffer,
-            0,
-        )));
-        assert_eq!(engine.settings.get(SettingId::ClassicFramebuffer), 0);
-    }
-
-    #[test]
-    fn native_navigation_skips_the_disabled_classic_framebuffer_row() {
-        let mut engine = MenuEngine::new(DISPLAY, VIS_FRONTEND);
-        let screen = engine.current().unwrap();
-        let scaling_index = screen
-            .items
-            .iter()
-            .position(|item| {
-                item.select
-                    == (SelectAction::Spinner {
-                        setting: SettingId::Scaling,
-                        max: 2,
-                    })
-            })
-            .unwrap();
-        let classic_index = screen
-            .items
-            .iter()
-            .position(|item| {
-                item.select
-                    == (SelectAction::Toggle {
-                        setting: SettingId::ClassicFramebuffer,
-                    })
-            })
-            .unwrap();
-        assert_eq!(classic_index, scaling_index + 1);
-
-        engine.stack.last_mut().unwrap().sel = scaling_index;
-        engine.move_cursor(1);
-        assert_eq!(engine.selected(), classic_index + 1);
-
-        engine.stack.last_mut().unwrap().sel = classic_index;
-        assert_eq!(engine.selected_action(), None);
     }
 
     #[test]

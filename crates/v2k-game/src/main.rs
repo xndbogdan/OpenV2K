@@ -255,23 +255,6 @@ fn world_control_slot(level_id: u32) -> Option<usize> {
         .filter(|slot| *slot < RETAIL_CONTROL_SLOT_COUNT)
 }
 
-/// Apply the OpenGL classic-framebuffer preference. The software backend
-/// already presents its authored-resolution surface in the 4:3 modes, so the
-/// preference is kept for a later OpenGL launch rather than cleared.
-fn apply_classic_framebuffer_presentation(
-    renderer: &mut dyn Renderer,
-    config: &mut GameConfig,
-    backend: v2k_render::RenderBackend,
-) {
-    let requested = config.classic_framebuffer_effective();
-    let active = renderer.set_classic_framebuffer(requested);
-    if requested && !active && backend == v2k_render::RenderBackend::OpenGL {
-        log!("Classic framebuffer is unavailable on the active renderer; disabling the option");
-        config.classic_framebuffer = false;
-        renderer.set_classic_framebuffer(false);
-    }
-}
-
 /// Display-menu Rendering change (`FUN_0043CC70` -> `FUN_0043CC40` ->
 /// `FUN_0044E0E0`). Retail rebuilds the display at once and, when the new
 /// one cannot start, keeps running on the previous one; the menu value stays
@@ -1556,7 +1539,6 @@ fn run_game(
     if overlay_depth_policy == v2k_render::OverlayDepthPolicy::OverlayAlways {
         log!("Overlay depth diagnosis policy active: {overlay_depth_policy:?} (presentation only)");
     }
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config, actual_backend);
     if config.fullscreen {
         renderer.set_fullscreen(true);
     }
@@ -1662,7 +1644,6 @@ fn run_game(
     }
     renderer.set_scaling_mode(config.scaling, menu_reference_size.0, menu_reference_size.1);
     renderer.set_ui_submission_policy(live_display::ui_policy(&config, gameplay_hud_variant));
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config, actual_backend);
 
     // --- Background flame billboard animation (table 0x4CA938) ---
     // .data initial state (frame 8, accumulator 2,000,000 µs) wraps on the
@@ -2235,10 +2216,7 @@ fn run_game(
                             }
                             if matches!(
                                 id,
-                                SettingId::Resolution
-                                    | SettingId::Scaling
-                                    | SettingId::ClassicFramebuffer
-                                    | SettingId::Rendering
+                                SettingId::Resolution | SettingId::Scaling | SettingId::Rendering
                             ) {
                                 if let Some(tier) =
                                     v2k_game::system_layout::HighSystemLayoutTier::from_variant(
@@ -2271,15 +2249,6 @@ fn run_game(
                                     &config,
                                     gameplay_hud_variant,
                                 ));
-                                apply_classic_framebuffer_presentation(
-                                    renderer.as_mut(),
-                                    &mut config,
-                                    actual_backend,
-                                );
-                                shell.engine.settings.set(
-                                    SettingId::ClassicFramebuffer,
-                                    config.classic_framebuffer_effective() as u32,
-                                );
                             }
                             world_projection.apply_to(&mut camera, renderer.viewport_size());
                             if let Err(error) = config.try_save(data_dir) {
@@ -13928,8 +13897,7 @@ fn render_list(
             continue;
         }
         // Disabled port-extension rows stay visible but use a deliberately
-        // darkened green font. In particular, Classic Framebuffer is visibly
-        // unavailable while Scaling is Native.
+        // darkened green font.
         let selected = i == menu.selected && item.is_interactive();
         let font = f.font(selected);
         let tone = if item.enabled {

@@ -27,7 +27,7 @@ contributes to "doesn't feel like the original".
 > Quit alone enters the shared frontend teardown. A
 > captured last-presented world frame remains beneath `optionsh` and the pause
 > rows; Klaus, the flame billboard, and frontend branding are excluded.
-> Display changes (Classic Framebuffer, scaling, resolution, fullscreen and
+> Display changes (renderer, scaling, resolution, fullscreen and
 > window resize) rebuild that underlay immediately from isolated pause-entry
 > world owners with zero elapsed time. Retained particle, shield and HUD/radar/text commands are
 > reprojected without re-running their RNG, sound or cadence producers. Native
@@ -287,9 +287,9 @@ by leverage:
    selected model 35/70 authored pixels too high and creates a false gap to
    the correctly placed label. The Display list preserves the six-row retail
    set (Rendering, Resolution, Bilinear, Display, Active Camera, Targetter)
-   and deliberately inserts the port-only aspect-scaling and Classic
-   Framebuffer selectors as seventh and eighth QoL rows. Classic Framebuffer is
-   unavailable, visibly dimmed, and forced off under Native scaling. Runtime
+   and deliberately inserts the port-only aspect-scaling selector as a
+   seventh QoL row. (A Classic Framebuffer row followed it until the software
+   renderer replaced it on 2026-10-07.) Runtime
    availability is intentionally separate from the decoded select callback:
    non-action headings such as `Quit Game?` retain the normal font tone while
    remaining outside cursor navigation.
@@ -367,15 +367,15 @@ by leverage:
     L3 lo-res alts). Classic 4:3/Stretched modes must retain the loaded UI
    variant's authored framebuffer (320×240 low; 640×480, 800×600 or 1024×768 high) so these
     native-pixel sprites scale with the whole frame rather than remaining
-    desktop-sized pixels. ✅ The optional Classic Framebuffer path now renders
-    those modes into an authored-resolution color/depth target and linearly
-   quantizes completed logical pixels to RGB565 before scaling the frame once.
-   Classic startup selects the matching retail display tier through 1024×768;
-   changing the resident resource tier requires restart. RGBA8 draw composition
-   remains a [documented approximation](RENDER_PIPELINE.md#classic-framebuffer-colour-and-resolution).
-   Persistent model/world textures and
-    internal overlays remain point sampled, matching the recovered software
-    rasterizer. Native mode deliberately disables this path.
+    desktop-sized pixels. ✅ In these modes OpenGL draws the authored logical
+    frame scaled to the output, and the software renderer draws the authored
+    frame itself in RGB565 through the retail raster (it replaced the OpenGL
+    Classic Framebuffer option on 2026-10-07). Startup selects the matching
+    retail display tier through 1024×768; changing the resident resource tier
+    requires restart. OpenGL's RGBA8 composition remains a
+    [documented approximation](RENDER_PIPELINE.md#colour-depth-and-resolution).
+    Persistent model/world textures and internal overlays remain point
+    sampled, matching the recovered software rasterizer.
 
 ## Already matching (don't touch)
 

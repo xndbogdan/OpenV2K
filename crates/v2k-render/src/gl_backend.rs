@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 mod sprite_quads;
 use sprite_quads::{camera_facing_corners, model_billboard_fog, SpriteQuad};
-mod classic_color;
-use classic_color::{quantize_readback, ClassicColorProgram};
 
 use sdl2::video::{GLContext, Window};
 
@@ -272,16 +270,7 @@ enum OverlaySpriteBlend {
     Retail(WorldSpriteBlend),
 }
 
-fn overlay_sprite_filter(
-    scaling_mode: ScalingMode,
-    blend: OverlaySpriteBlend,
-    classic_framebuffer_active: bool,
-) -> i32 {
-    if classic_framebuffer_active {
-        // The completed authored-resolution color target receives the only
-        // filtered scale. Individual sprite uploads remain point sampled.
-        return crate::gl::NEAREST as i32;
-    }
+fn overlay_sprite_filter(scaling_mode: ScalingMode, blend: OverlaySpriteBlend) -> i32 {
     match blend {
         // Section-3 material sprites carry authored keyed masks. The HUD path
         // already materializes them in its selected layout; interpolating the
@@ -298,253 +287,6 @@ fn overlay_sprite_filter(
             }
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FramebufferApi {
-    Core,
-    Ext,
-}
-
-impl FramebufferApi {
-    fn loaded() -> Option<Self> {
-        let core = crate::gl::BindFramebuffer::is_loaded()
-            && crate::gl::GenFramebuffers::is_loaded()
-            && crate::gl::DeleteFramebuffers::is_loaded()
-            && crate::gl::CheckFramebufferStatus::is_loaded()
-            && crate::gl::FramebufferTexture2D::is_loaded()
-            && crate::gl::BindRenderbuffer::is_loaded()
-            && crate::gl::GenRenderbuffers::is_loaded()
-            && crate::gl::DeleteRenderbuffers::is_loaded()
-            && crate::gl::RenderbufferStorage::is_loaded()
-            && crate::gl::FramebufferRenderbuffer::is_loaded();
-        if core {
-            return Some(Self::Core);
-        }
-
-        let ext = crate::gl::BindFramebufferEXT::is_loaded()
-            && crate::gl::GenFramebuffersEXT::is_loaded()
-            && crate::gl::DeleteFramebuffersEXT::is_loaded()
-            && crate::gl::CheckFramebufferStatusEXT::is_loaded()
-            && crate::gl::FramebufferTexture2DEXT::is_loaded()
-            && crate::gl::BindRenderbufferEXT::is_loaded()
-            && crate::gl::GenRenderbuffersEXT::is_loaded()
-            && crate::gl::DeleteRenderbuffersEXT::is_loaded()
-            && crate::gl::RenderbufferStorageEXT::is_loaded()
-            && crate::gl::FramebufferRenderbufferEXT::is_loaded();
-        ext.then_some(Self::Ext)
-    }
-
-    unsafe fn bind_framebuffer(self, framebuffer: u32) {
-        match self {
-            Self::Core => crate::gl::BindFramebuffer(crate::gl::FRAMEBUFFER, framebuffer),
-            Self::Ext => crate::gl::BindFramebufferEXT(crate::gl::FRAMEBUFFER_EXT, framebuffer),
-        }
-    }
-
-    unsafe fn gen_framebuffer(self, framebuffer: &mut u32) {
-        match self {
-            Self::Core => crate::gl::GenFramebuffers(1, framebuffer),
-            Self::Ext => crate::gl::GenFramebuffersEXT(1, framebuffer),
-        }
-    }
-
-    unsafe fn delete_framebuffer(self, framebuffer: &u32) {
-        match self {
-            Self::Core => crate::gl::DeleteFramebuffers(1, framebuffer),
-            Self::Ext => crate::gl::DeleteFramebuffersEXT(1, framebuffer),
-        }
-    }
-
-    unsafe fn framebuffer_texture(self, texture: u32) {
-        match self {
-            Self::Core => crate::gl::FramebufferTexture2D(
-                crate::gl::FRAMEBUFFER,
-                crate::gl::COLOR_ATTACHMENT0,
-                crate::gl::TEXTURE_2D,
-                texture,
-                0,
-            ),
-            Self::Ext => crate::gl::FramebufferTexture2DEXT(
-                crate::gl::FRAMEBUFFER_EXT,
-                crate::gl::COLOR_ATTACHMENT0_EXT,
-                crate::gl::TEXTURE_2D,
-                texture,
-                0,
-            ),
-        }
-    }
-
-    unsafe fn framebuffer_status(self) -> u32 {
-        match self {
-            Self::Core => crate::gl::CheckFramebufferStatus(crate::gl::FRAMEBUFFER),
-            Self::Ext => crate::gl::CheckFramebufferStatusEXT(crate::gl::FRAMEBUFFER_EXT),
-        }
-    }
-
-    unsafe fn bind_renderbuffer(self, renderbuffer: u32) {
-        match self {
-            Self::Core => crate::gl::BindRenderbuffer(crate::gl::RENDERBUFFER, renderbuffer),
-            Self::Ext => crate::gl::BindRenderbufferEXT(crate::gl::RENDERBUFFER_EXT, renderbuffer),
-        }
-    }
-
-    unsafe fn gen_renderbuffer(self, renderbuffer: &mut u32) {
-        match self {
-            Self::Core => crate::gl::GenRenderbuffers(1, renderbuffer),
-            Self::Ext => crate::gl::GenRenderbuffersEXT(1, renderbuffer),
-        }
-    }
-
-    unsafe fn delete_renderbuffer(self, renderbuffer: &u32) {
-        match self {
-            Self::Core => crate::gl::DeleteRenderbuffers(1, renderbuffer),
-            Self::Ext => crate::gl::DeleteRenderbuffersEXT(1, renderbuffer),
-        }
-    }
-
-    unsafe fn allocate_depth(self, width: u32, height: u32) {
-        match self {
-            Self::Core => crate::gl::RenderbufferStorage(
-                crate::gl::RENDERBUFFER,
-                crate::gl::DEPTH_COMPONENT24,
-                width as i32,
-                height as i32,
-            ),
-            Self::Ext => crate::gl::RenderbufferStorageEXT(
-                crate::gl::RENDERBUFFER_EXT,
-                crate::gl::DEPTH_COMPONENT24,
-                width as i32,
-                height as i32,
-            ),
-        }
-    }
-
-    unsafe fn framebuffer_depth(self, renderbuffer: u32) {
-        match self {
-            Self::Core => crate::gl::FramebufferRenderbuffer(
-                crate::gl::FRAMEBUFFER,
-                crate::gl::DEPTH_ATTACHMENT,
-                crate::gl::RENDERBUFFER,
-                renderbuffer,
-            ),
-            Self::Ext => crate::gl::FramebufferRenderbufferEXT(
-                crate::gl::FRAMEBUFFER_EXT,
-                crate::gl::DEPTH_ATTACHMENT_EXT,
-                crate::gl::RENDERBUFFER_EXT,
-                renderbuffer,
-            ),
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ClassicFramebuffer {
-    api: FramebufferApi,
-    framebuffer: u32,
-    color_texture: u32,
-    depth_renderbuffer: u32,
-    width: u32,
-    height: u32,
-    color_program: ClassicColorProgram,
-}
-
-impl ClassicFramebuffer {
-    unsafe fn create(api: FramebufferApi, width: u32, height: u32) -> Result<Self, String> {
-        let width = width.max(1);
-        let height = height.max(1);
-        let color_program = ClassicColorProgram::create()?;
-        let mut framebuffer = 0;
-        let mut color_texture = 0;
-        let mut depth_renderbuffer = 0;
-
-        crate::gl::GenTextures(1, &mut color_texture);
-        crate::gl::BindTexture(crate::gl::TEXTURE_2D, color_texture);
-        crate::gl::TexParameteri(
-            crate::gl::TEXTURE_2D,
-            crate::gl::TEXTURE_MIN_FILTER,
-            crate::gl::NEAREST as i32,
-        );
-        crate::gl::TexParameteri(
-            crate::gl::TEXTURE_2D,
-            crate::gl::TEXTURE_MAG_FILTER,
-            crate::gl::NEAREST as i32,
-        );
-        crate::gl::TexParameteri(
-            crate::gl::TEXTURE_2D,
-            crate::gl::TEXTURE_WRAP_S,
-            crate::gl::CLAMP_TO_EDGE as i32,
-        );
-        crate::gl::TexParameteri(
-            crate::gl::TEXTURE_2D,
-            crate::gl::TEXTURE_WRAP_T,
-            crate::gl::CLAMP_TO_EDGE as i32,
-        );
-        crate::gl::TexImage2D(
-            crate::gl::TEXTURE_2D,
-            0,
-            crate::gl::RGBA8 as i32,
-            width as i32,
-            height as i32,
-            0,
-            crate::gl::RGBA,
-            crate::gl::UNSIGNED_BYTE,
-            std::ptr::null(),
-        );
-
-        api.gen_renderbuffer(&mut depth_renderbuffer);
-        api.bind_renderbuffer(depth_renderbuffer);
-        api.allocate_depth(width, height);
-
-        api.gen_framebuffer(&mut framebuffer);
-        api.bind_framebuffer(framebuffer);
-        api.framebuffer_texture(color_texture);
-        api.framebuffer_depth(depth_renderbuffer);
-        let status = api.framebuffer_status();
-        api.bind_renderbuffer(0);
-        api.bind_framebuffer(0);
-        crate::gl::BindTexture(crate::gl::TEXTURE_2D, 0);
-
-        if status != crate::gl::FRAMEBUFFER_COMPLETE {
-            if framebuffer != 0 {
-                api.delete_framebuffer(&framebuffer);
-            }
-            if depth_renderbuffer != 0 {
-                api.delete_renderbuffer(&depth_renderbuffer);
-            }
-            if color_texture != 0 {
-                crate::gl::DeleteTextures(1, &color_texture);
-            }
-            crate::gl::DeleteProgram(color_program.id);
-            return Err(format!("framebuffer incomplete (status 0x{status:04X})"));
-        }
-
-        Ok(Self {
-            api,
-            framebuffer,
-            color_texture,
-            depth_renderbuffer,
-            width,
-            height,
-            color_program,
-        })
-    }
-
-    unsafe fn destroy(self) {
-        self.api.bind_framebuffer(0);
-        self.api.delete_framebuffer(&self.framebuffer);
-        self.api.delete_renderbuffer(&self.depth_renderbuffer);
-        crate::gl::DeleteTextures(1, &self.color_texture);
-        crate::gl::DeleteProgram(self.color_program.id);
-    }
-}
-
-fn classic_framebuffer_should_be_active(
-    requested: bool,
-    scaling_mode: ScalingMode,
-    framebuffer_ready: bool,
-) -> bool {
-    requested && scaling_mode != ScalingMode::Native && framebuffer_ready
 }
 
 struct TerrainProgram {
@@ -2633,9 +2375,6 @@ pub struct GlRenderer {
     scaling_mode: ScalingMode,
     ui_submission_policy: crate::ui_mapping::UiSubmissionPolicy,
     viewport: RenderViewport,
-    framebuffer_api: Option<FramebufferApi>,
-    classic_framebuffer_requested: bool,
-    classic_framebuffer: Option<ClassicFramebuffer>,
     /// Exact selection envelope used to build the retained terrain mesh.
     terrain_cache_footprint: Option<TerrainFootprint>,
     terrain_light_revision: u64,
@@ -2774,13 +2513,6 @@ impl GlRenderer {
                 None
             }
         };
-        let framebuffer_api = FramebufferApi::loaded();
-        if framebuffer_api.is_none() {
-            eprintln!(
-                "Framebuffer objects unavailable; classic authored-resolution presentation disabled"
-            );
-        }
-
         Ok(Self {
             window,
             _gl_context: gl_context,
@@ -2793,9 +2525,6 @@ impl GlRenderer {
             scaling_mode: ScalingMode::Native,
             ui_submission_policy: Default::default(),
             viewport: RenderViewport::for_output(width, height, width, height, ScalingMode::Native),
-            framebuffer_api,
-            classic_framebuffer_requested: false,
-            classic_framebuffer: None,
             terrain_cache_footprint: None,
             terrain_light_revision: 0,
             terrain_type_signature: 0,
@@ -2841,146 +2570,17 @@ impl GlRenderer {
         );
         self.width = self.viewport.logical_width;
         self.height = self.viewport.logical_height;
-        self.sync_classic_framebuffer();
         self.bind_render_target();
-    }
-
-    fn classic_framebuffer_active(&self) -> bool {
-        classic_framebuffer_should_be_active(
-            self.classic_framebuffer_requested,
-            self.scaling_mode,
-            self.classic_framebuffer.is_some(),
-        )
-    }
-
-    fn sync_classic_framebuffer(&mut self) {
-        let should_exist = self.classic_framebuffer_requested
-            && self.scaling_mode != ScalingMode::Native
-            && self.framebuffer_api.is_some();
-        let dimensions_match = self
-            .classic_framebuffer
-            .as_ref()
-            .is_some_and(|target| target.width == self.width && target.height == self.height);
-        if should_exist && dimensions_match {
-            return;
-        }
-
-        if let Some(target) = self.classic_framebuffer.take() {
-            unsafe {
-                target.destroy();
-            }
-        }
-        if !should_exist {
-            return;
-        }
-
-        let api = self
-            .framebuffer_api
-            .expect("availability was checked before creating a framebuffer");
-        match unsafe { ClassicFramebuffer::create(api, self.width, self.height) } {
-            Ok(target) => {
-                eprintln!(
-                    "Classic framebuffer active: {}x{} -> {}x{}",
-                    target.width,
-                    target.height,
-                    self.viewport.physical_width,
-                    self.viewport.physical_height
-                );
-                self.classic_framebuffer = Some(target);
-            }
-            Err(error) => {
-                eprintln!("Classic framebuffer unavailable: {error}");
-            }
-        }
     }
 
     fn bind_render_target(&self) {
         unsafe {
-            if self.classic_framebuffer_active() {
-                let target = self
-                    .classic_framebuffer
-                    .as_ref()
-                    .expect("active classic framebuffer has a target");
-                target.api.bind_framebuffer(target.framebuffer);
-                crate::gl::Viewport(0, 0, target.width as i32, target.height as i32);
-            } else {
-                if let Some(api) = self.framebuffer_api {
-                    api.bind_framebuffer(0);
-                }
-                crate::gl::Viewport(
-                    self.viewport.x,
-                    self.viewport.y,
-                    self.viewport.physical_width as i32,
-                    self.viewport.physical_height as i32,
-                );
-            }
-        }
-    }
-
-    fn present_classic_framebuffer(&mut self) {
-        let Some(target) = self.classic_framebuffer.as_ref() else {
-            return;
-        };
-        let api = target.api;
-        let color_texture = target.color_texture;
-        unsafe {
-            api.bind_framebuffer(0);
-            crate::gl::Viewport(0, 0, self.output_width as i32, self.output_height as i32);
-            crate::gl::Disable(crate::gl::SCISSOR_TEST);
-            crate::gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-            crate::gl::Clear(crate::gl::COLOR_BUFFER_BIT | crate::gl::DEPTH_BUFFER_BIT);
             crate::gl::Viewport(
                 self.viewport.x,
                 self.viewport.y,
                 self.viewport.physical_width as i32,
                 self.viewport.physical_height as i32,
             );
-
-            crate::gl::UseProgram(0);
-            crate::gl::ActiveTexture(crate::gl::TEXTURE1);
-            crate::gl::BindTexture(crate::gl::TEXTURE_2D, 0);
-            crate::gl::Disable(crate::gl::TEXTURE_2D);
-            crate::gl::ActiveTexture(crate::gl::TEXTURE0);
-            crate::gl::Disable(crate::gl::DEPTH_TEST);
-            crate::gl::Disable(crate::gl::CULL_FACE);
-            crate::gl::Disable(crate::gl::BLEND);
-            crate::gl::Disable(crate::gl::ALPHA_TEST);
-            crate::gl::Disable(crate::gl::FOG);
-            crate::gl::Disable(crate::gl::LIGHTING);
-            crate::gl::Enable(crate::gl::TEXTURE_2D);
-            crate::gl::BindTexture(crate::gl::TEXTURE_2D, color_texture);
-            crate::gl::Color4f(1.0, 1.0, 1.0, 1.0);
-            crate::gl::UseProgram(target.color_program.id);
-            crate::gl::Uniform1i(target.color_program.source_sampler, 0);
-            crate::gl::Uniform2f(
-                target.color_program.source_size,
-                target.width as f32,
-                target.height as f32,
-            );
-
-            crate::gl::MatrixMode(crate::gl::PROJECTION);
-            crate::gl::PushMatrix();
-            crate::gl::LoadIdentity();
-            crate::gl::MatrixMode(crate::gl::MODELVIEW);
-            crate::gl::PushMatrix();
-            crate::gl::LoadIdentity();
-            crate::gl::Begin(crate::gl::QUADS);
-            crate::gl::TexCoord2f(0.0, 0.0);
-            crate::gl::Vertex2f(-1.0, -1.0);
-            crate::gl::TexCoord2f(1.0, 0.0);
-            crate::gl::Vertex2f(1.0, -1.0);
-            crate::gl::TexCoord2f(1.0, 1.0);
-            crate::gl::Vertex2f(1.0, 1.0);
-            crate::gl::TexCoord2f(0.0, 1.0);
-            crate::gl::Vertex2f(-1.0, 1.0);
-            crate::gl::End();
-            crate::gl::UseProgram(0);
-            crate::gl::MatrixMode(crate::gl::PROJECTION);
-            crate::gl::PopMatrix();
-            crate::gl::MatrixMode(crate::gl::MODELVIEW);
-            crate::gl::PopMatrix();
-            crate::gl::BindTexture(crate::gl::TEXTURE_2D, 0);
-            crate::gl::Disable(crate::gl::TEXTURE_2D);
         }
     }
 
@@ -3031,7 +2631,7 @@ impl GlRenderer {
     }
 
     fn transient_sprite_filter(&self) -> i32 {
-        if self.classic_framebuffer_active() || self.scaling_mode == ScalingMode::Native {
+        if self.scaling_mode == ScalingMode::Native {
             crate::gl::NEAREST as i32
         } else {
             // Classic modes emulate the filtered enlargement of the complete
@@ -3075,8 +2675,7 @@ impl GlRenderer {
             return;
         }
 
-        let filter =
-            overlay_sprite_filter(self.scaling_mode, blend, self.classic_framebuffer_active());
+        let filter = overlay_sprite_filter(self.scaling_mode, blend);
         unsafe {
             crate::gl::MatrixMode(crate::gl::PROJECTION);
             crate::gl::PushMatrix();
@@ -3539,11 +3138,6 @@ impl Drop for GlRenderer {
         // A live renderer switch creates the replacement first, which may
         // leave another context current. Delete into this one.
         let _ = self.window.gl_make_current(&self._gl_context);
-        if let Some(target) = self.classic_framebuffer.take() {
-            unsafe {
-                target.destroy();
-            }
-        }
         if let Some(program) = self.model_program.take() {
             unsafe {
                 crate::gl::DeleteProgram(program.id);
@@ -4197,9 +3791,8 @@ impl Renderer for GlRenderer {
         self.bind_render_target();
         unsafe {
             crate::gl::Disable(crate::gl::SCISSOR_TEST);
-            let inset = !self.classic_framebuffer_active()
-                && (self.viewport.physical_width != self.output_width
-                    || self.viewport.physical_height != self.output_height);
+            let inset = self.viewport.physical_width != self.output_width
+                || self.viewport.physical_height != self.output_height;
             if inset {
                 crate::gl::ClearColor(0.0, 0.0, 0.0, 1.0);
                 crate::gl::Clear(crate::gl::COLOR_BUFFER_BIT | crate::gl::DEPTH_BUFFER_BIT);
@@ -4218,51 +3811,11 @@ impl Renderer for GlRenderer {
     }
 
     fn present(&mut self) {
-        if self.classic_framebuffer_active() {
-            self.present_classic_framebuffer();
-        }
         self.window.gl_swap_window();
         self.bind_render_target();
     }
 
     fn capture_frame(&mut self, source: FrameCaptureSource) -> Option<CapturedFrame> {
-        if self.classic_framebuffer_active() {
-            let target = self.classic_framebuffer.as_ref()?;
-            let width = target.width;
-            let height = target.height;
-            let byte_len = usize::try_from(width)
-                .ok()?
-                .checked_mul(usize::try_from(height).ok()?)?
-                .checked_mul(4)?;
-            let mut rgba = vec![0; byte_len];
-            unsafe {
-                target.api.bind_framebuffer(target.framebuffer);
-                crate::gl::ReadBuffer(crate::gl::COLOR_ATTACHMENT0);
-                crate::gl::PixelStorei(crate::gl::PACK_ALIGNMENT, 1);
-                crate::gl::ReadPixels(
-                    0,
-                    0,
-                    width as i32,
-                    height as i32,
-                    crate::gl::RGBA,
-                    crate::gl::UNSIGNED_BYTE,
-                    rgba.as_mut_ptr().cast(),
-                );
-                target.api.bind_framebuffer(0);
-                crate::gl::ReadBuffer(crate::gl::BACK);
-            }
-            flip_rgba_rows(&mut rgba, width, height);
-            if source == FrameCaptureSource::Presented {
-                quantize_readback(&mut rgba);
-            }
-            self.bind_render_target();
-            return Some(CapturedFrame {
-                rgba,
-                width,
-                height,
-            });
-        }
-
         let width = self.viewport.physical_width;
         let height = self.viewport.physical_height;
         let byte_len = usize::try_from(width)
@@ -5181,20 +4734,16 @@ impl Renderer for GlRenderer {
                 let y0 = y.clamp(0, self.height as i32);
                 let x1 = (x.saturating_add(width as i32)).clamp(x0, self.width as i32);
                 let y1 = (y.saturating_add(height as i32)).clamp(y0, self.height as i32);
-                let (px0, py0, px1, py1) = if self.classic_framebuffer_active() {
-                    (x0, self.height as i32 - y1, x1, self.height as i32 - y0)
-                } else {
-                    let sx = self.viewport.physical_width as f64 / self.width as f64;
-                    let sy = self.viewport.physical_height as f64 / self.height as f64;
-                    (
-                        self.viewport.x + (x0 as f64 * sx).floor() as i32,
-                        self.viewport.y + self.viewport.physical_height as i32
-                            - (y1 as f64 * sy).ceil() as i32,
-                        self.viewport.x + (x1 as f64 * sx).ceil() as i32,
-                        self.viewport.y + self.viewport.physical_height as i32
-                            - (y0 as f64 * sy).floor() as i32,
-                    )
-                };
+                let sx = self.viewport.physical_width as f64 / self.width as f64;
+                let sy = self.viewport.physical_height as f64 / self.height as f64;
+                let (px0, py0, px1, py1) = (
+                    self.viewport.x + (x0 as f64 * sx).floor() as i32,
+                    self.viewport.y + self.viewport.physical_height as i32
+                        - (y1 as f64 * sy).ceil() as i32,
+                    self.viewport.x + (x1 as f64 * sx).ceil() as i32,
+                    self.viewport.y + self.viewport.physical_height as i32
+                        - (y0 as f64 * sy).floor() as i32,
+                );
                 crate::gl::Enable(crate::gl::SCISSOR_TEST);
                 crate::gl::Scissor(px0, py0, px1 - px0, py1 - py0);
             } else {
@@ -5345,11 +4894,7 @@ impl Renderer for GlRenderer {
             return;
         }
 
-        let filter = if self.classic_framebuffer_active() {
-            crate::gl::NEAREST as i32
-        } else {
-            crate::gl::LINEAR as i32
-        };
+        let filter = crate::gl::LINEAR as i32;
         unsafe {
             let fog_was_enabled = crate::gl::IsEnabled(crate::gl::FOG) != 0;
 
@@ -5501,17 +5046,6 @@ impl Renderer for GlRenderer {
         self.reference_height = reference_height.max(1);
         self.update_render_viewport();
     }
-
-    fn set_classic_framebuffer(&mut self, enabled: bool) -> bool {
-        self.classic_framebuffer_requested = enabled;
-        self.sync_classic_framebuffer();
-        self.bind_render_target();
-        self.classic_framebuffer_active()
-    }
-
-    fn classic_framebuffer_active(&self) -> bool {
-        GlRenderer::classic_framebuffer_active(self)
-    }
 }
 
 #[cfg(test)]
@@ -5544,21 +5078,20 @@ mod callback_face_coordinate_tests {
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_external_frame_operands, authored_face_plane_visible, billboard_writes_depth,
-        classic_framebuffer_should_be_active, dot3, edge_endpoint_fade_bytes, edge_endpoint_world,
-        edge_quad_fade_bytes, fixed_function_fog_far, fixed_function_model_texture,
-        flat_lit_palette_color, flip_rgba_rows, indexed_model_rgba_at_row, infection_corner_mask,
-        infection_quad_vertices, model_face_opacity, model_face_palette_row,
-        model_face_writes_depth, model_lighting_normals, overlay_sprite_filter,
-        painter_group_window_depth, perspective_ndc_depth, resolve_model_depth_fade,
-        retail_flat_lit_rgb565, retail_model_shade_index, retail_view_pin_vertex,
-        retail_world_surface_alias_vertex, retail_world_surface_vertex, scene_uses_world_fog,
-        terrain_type_signature, transform_model_light_normal, triangle_uses_surface_overlay_depth,
-        view_light_normal, view_pin_triangle_is_color_underlay,
-        view_pin_triangle_is_world_surface_decal, view_pin_triangle_needs_coplanar_depth,
-        view_pin_triangle_visible, world_point_as_raw_local, world_sprite_draw_order,
-        IndexedModelTextures, OverlaySpriteBlend, SurfaceVertexSource, MODEL_FIXED_SHADE_ROW,
-        RETAIL_VIEW_PIN_Y,
+        apply_external_frame_operands, authored_face_plane_visible, billboard_writes_depth, dot3,
+        edge_endpoint_fade_bytes, edge_endpoint_world, edge_quad_fade_bytes,
+        fixed_function_fog_far, fixed_function_model_texture, flat_lit_palette_color,
+        flip_rgba_rows, indexed_model_rgba_at_row, infection_corner_mask, infection_quad_vertices,
+        model_face_opacity, model_face_palette_row, model_face_writes_depth,
+        model_lighting_normals, overlay_sprite_filter, painter_group_window_depth,
+        perspective_ndc_depth, resolve_model_depth_fade, retail_flat_lit_rgb565,
+        retail_model_shade_index, retail_view_pin_vertex, retail_world_surface_alias_vertex,
+        retail_world_surface_vertex, scene_uses_world_fog, terrain_type_signature,
+        transform_model_light_normal, triangle_uses_surface_overlay_depth, view_light_normal,
+        view_pin_triangle_is_color_underlay, view_pin_triangle_is_world_surface_decal,
+        view_pin_triangle_needs_coplanar_depth, view_pin_triangle_visible,
+        world_point_as_raw_local, world_sprite_draw_order, IndexedModelTextures,
+        OverlaySpriteBlend, SurfaceVertexSource, MODEL_FIXED_SHADE_ROW, RETAIL_VIEW_PIN_Y,
     };
     use crate::config::ScalingMode;
     use crate::renderer::{
@@ -5807,7 +5340,7 @@ mod tests {
                 WorldSpriteBlend::HalfAdditive,
             ] {
                 assert_eq!(
-                    overlay_sprite_filter(mode, OverlaySpriteBlend::Retail(blend), false),
+                    overlay_sprite_filter(mode, OverlaySpriteBlend::Retail(blend)),
                     crate::gl::NEAREST as i32
                 );
             }
@@ -5817,58 +5350,15 @@ mod tests {
     #[test]
     fn conventional_overlay_filter_retains_output_scaling_policy() {
         assert_eq!(
-            overlay_sprite_filter(
-                ScalingMode::Native,
-                OverlaySpriteBlend::ConventionalAlpha,
-                false
-            ),
+            overlay_sprite_filter(ScalingMode::Native, OverlaySpriteBlend::ConventionalAlpha),
             crate::gl::NEAREST as i32
         );
         for mode in [ScalingMode::FourThree, ScalingMode::Stretched] {
             assert_eq!(
-                overlay_sprite_filter(mode, OverlaySpriteBlend::ConventionalAlpha, false),
+                overlay_sprite_filter(mode, OverlaySpriteBlend::ConventionalAlpha),
                 crate::gl::LINEAR as i32
             );
         }
-    }
-
-    #[test]
-    fn classic_framebuffer_keeps_internal_overlays_point_sampled() {
-        for mode in [ScalingMode::FourThree, ScalingMode::Stretched] {
-            assert_eq!(
-                overlay_sprite_filter(mode, OverlaySpriteBlend::ConventionalAlpha, true),
-                crate::gl::NEAREST as i32
-            );
-        }
-    }
-
-    #[test]
-    fn classic_framebuffer_fails_safe_for_native_and_missing_targets() {
-        assert!(classic_framebuffer_should_be_active(
-            true,
-            ScalingMode::FourThree,
-            true
-        ));
-        assert!(classic_framebuffer_should_be_active(
-            true,
-            ScalingMode::Stretched,
-            true
-        ));
-        assert!(!classic_framebuffer_should_be_active(
-            true,
-            ScalingMode::Native,
-            true
-        ));
-        assert!(!classic_framebuffer_should_be_active(
-            true,
-            ScalingMode::FourThree,
-            false
-        ));
-        assert!(!classic_framebuffer_should_be_active(
-            false,
-            ScalingMode::FourThree,
-            true
-        ));
     }
 
     #[test]
