@@ -86,6 +86,14 @@ length sees the previous primitive's entry, and the port keeps that.
   and use those routine addresses as reciprocals.
 - Clip interpolation halves the numerator, clamps the ratio to `0x3FFFFFFF`,
   picks its sign from the branch taken, then doubles it.
+- Shaded fillers seed `00478510`'s dither with the high sixteen bits of the
+  scan converter's left edge record, a stack address. In a TTD-recorded
+  launch (Intro2) every fill handler entered at `0x001AFDEC`; with that value
+  the port's terrain in Intro2's opening shot matches the recorded frames
+  byte for byte, and with the previous page about a quarter of bare-terrain
+  pixels landed one shade step off. The recorder raises the main thread's
+  stack by one 64 KiB page, so the default assumes an ordinary launch at
+  `0x0019FDEC`.
 
 ## Scan conversion
 
@@ -392,7 +400,10 @@ span-reciprocal overrun; and the zero fog-mask state.
 ## Frame captures
 
 `V2K_SOFTWARE_FRAME_DUMP=<dir>` writes every presented software frame as a
-BMP. With the SDL dummy video driver this runs headless. To compare Intro2
+BMP. With the SDL dummy video driver this runs headless. When comparing with
+frames from a TTD-recorded retail launch, set
+`V2K_SOFTWARE_HANDLER_ESP=0x001AFDEC` so the dither seed uses the recorded
+stack page (see [Fixed point](#fixed-point)). To compare Intro2
 with retail, also set `V2K_NEW_GAME_AFTER_TICKS=<n>` and start from the menu
 (`--skip-intro`): the frontend confirms its default New Game after `n` ticks
 and Intro2 loads through the production Begin-Intro construction. `--level
@@ -402,9 +413,8 @@ ribbons are skipped and its lid is drawn.
 
 ## Open
 
-- The retail stack address at the scan converter, which `00478510`'s pixels
-  depend on, has not been measured in the shipped game; receipts use a fixed
-  synthetic stack.
+- An ordinary launch's stack page is inferred from the recorded one, not
+  measured; receipts use a fixed synthetic stack.
 - Particle positions come from the port's floating-point particle state,
   rounded to world words; world sprites without particle inputs still use
   an approximate quad.

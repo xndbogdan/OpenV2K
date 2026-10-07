@@ -54,9 +54,25 @@ use crate::terrain_tiles::InfectionTerrainAnimation;
 
 /// ESP at a fill-slot handler's first instruction while the world queue
 /// drains. Only its high sixteen bits reach pixels (the `00478510` dither
-/// seed); the shipped game's value has not been measured, so this assumes
-/// the usual Win32 main-thread stack page.
-const HANDLER_ESP: u32 = 0x0019_F000;
+/// seed). A TTD-recorded launch entered every handler at `0x001AFDEC`; the
+/// recorder raises the main thread's stack by one 64 KiB page, so an
+/// ordinary launch is taken to be one page lower. That page is inferred,
+/// not measured.
+const HANDLER_ESP: u32 = 0x0019_FDEC;
+
+/// `V2K_SOFTWARE_HANDLER_ESP` (hexadecimal) replaces [`HANDLER_ESP`], for
+/// comparing frames with a recorded launch (`0x001AFDEC`).
+fn handler_esp(value: Option<&str>) -> u32 {
+    value
+        .map(|text| text.trim())
+        .map(|text| {
+            text.strip_prefix("0x")
+                .or_else(|| text.strip_prefix("0X"))
+                .unwrap_or(text)
+        })
+        .and_then(|digits| u32::from_str_radix(digits, 16).ok())
+        .unwrap_or(HANDLER_ESP)
+}
 
 pub struct SoftwareRenderer {
     canvas: Canvas<Window>,
@@ -139,7 +155,11 @@ impl SoftwareRenderer {
         let viewport =
             RenderViewport::for_output(width, height, width, height, ScalingMode::Native);
         let surface = Surface565::new(viewport.logical_width, viewport.logical_height);
-        let raster = SoftwareRaster::new(full_clip(&surface), PixelFormat::RGB565, HANDLER_ESP);
+        let raster = SoftwareRaster::new(
+            full_clip(&surface),
+            PixelFormat::RGB565,
+            handler_esp(std::env::var("V2K_SOFTWARE_HANDLER_ESP").ok().as_deref()),
+        );
         Ok(Self {
             canvas,
             output_width: width,
@@ -1185,6 +1205,17 @@ mod tests {
 
     fn pixel(rgba: [u8; 4]) -> OwnedMaterial {
         OwnedMaterial::raw_from_rgba(&rgba, 1, 1, 0)
+    }
+
+    #[test]
+    fn the_handler_stack_override_reads_hexadecimal() {
+        assert_eq!(handler_esp(None), HANDLER_ESP);
+        assert_eq!(handler_esp(Some("0x001AFDEC")), 0x001A_FDEC);
+        assert_eq!(handler_esp(Some(" 001afdec ")), 0x001A_FDEC);
+        assert_eq!(handler_esp(Some("not a number")), HANDLER_ESP);
+        // Only the high half reaches pixels; the default keeps the page
+        // the port has always used.
+        assert_eq!(HANDLER_ESP >> 16, 0x0019);
     }
 
     #[test]
