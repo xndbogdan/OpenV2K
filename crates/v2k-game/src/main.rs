@@ -9859,6 +9859,11 @@ fn play_world_audio(
 /// FUN_004537F0 queues the global nine-frame V2000 emblem in every cinematic
 /// phase through FUN_0042D030. Unlike the large centered menu billboard, this
 /// HUD instance is one quarter of the framebuffer width tall and bottom-left.
+///
+/// Its queue key is -10000, below every other key of the frame, so it drains
+/// last and nothing masks it: the emblem adds over the finished frame,
+/// Klaus's cover included. The port draws it as the frame's last additive
+/// overlay.
 fn draw_intro_billboard(
     renderer: &mut dyn v2k_render::Renderer,
     menu_resources: &v2k_game::menu::MenuResources,
@@ -9878,15 +9883,13 @@ fn draw_intro_billboard(
         .round()
         .max(1.0) as u32;
     let scaled = scale_rgba(&frame.rgba, frame.width, frame.height, w, h);
-    renderer.draw_additive_sprite_at_depth(
+    renderer.draw_material_sprite(
         &scaled,
         w,
         h,
         0,
         vh.saturating_sub(h) as i32,
-        0.1,
-        0.1,
-        1_000.0,
+        WorldSpriteBlend::Additive,
     );
 }
 
