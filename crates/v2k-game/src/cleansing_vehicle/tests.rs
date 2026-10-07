@@ -72,25 +72,50 @@ fn infection_search_preserves_source_rng_order_divisions_and_wrapping() {
     let mut task = tasks::CleansingMovementTaskState::new([512, 77, 512]);
     terrain.cells[256 + 1].terrain_type = 0x10;
     let mut draws = [0, 0].into_iter();
-    task.retarget([512, 77, 512], &terrain, &mut || {
+    assert!(task.retarget([512, 77, 512], &terrain, &mut || {
         draws.next().expect("unexpected retention draw")
-    });
+    }));
     assert_eq!(task.private.target_position_raw, [256, 77, 256]);
     assert_eq!(draws.next(), None);
     let mut draws = [1].into_iter();
-    task.retarget([3000, 9, 3000], &terrain, &mut || {
+    assert!(task.retarget([3000, 9, 3000], &terrain, &mut || {
         draws.next().expect("infected target should remain")
-    });
+    }));
     assert_eq!(task.private.target_position_raw, [256, 77, 256]);
     assert_eq!(draws.next(), None);
     terrain.cells[257].terrain_type = 0;
     let mut count = 0;
-    task.retarget([32760, 123, -32760], &terrain, &mut || {
+    assert!(!task.retarget([32760, 123, -32760], &terrain, &mut || {
         count += 1;
         0xffff
-    });
+    }));
     assert_eq!(count, 16);
     assert_eq!(task.private.target_position_raw, [-27788, 123, -27772]);
+}
+
+#[test]
+fn nearest_infection_takes_the_first_ring_and_wraps_the_seam() {
+    let mut terrain = flat();
+    // The rover's cell is [2, 3].
+    let position = [(2 << 8) + 40, 0, (3 << 8) + 200];
+    assert_eq!(tasks::nearest_infected_cell(&terrain, position), None);
+    let infect = |terrain: &mut TerrainGrid, x: usize, z: usize| {
+        terrain.cells[x * 256 + z].terrain_type |= 0x10;
+    };
+    infect(&mut terrain, 10, 10);
+    infect(&mut terrain, 250, 5);
+    infect(&mut terrain, 2, 40);
+    // Ring 8 holds [10, 10] (8, 7) and, across the seam, [250, 5] (-8, 2);
+    // the Euclidean nearest of that ring wins over the farther ring.
+    assert_eq!(
+        tasks::nearest_infected_cell(&terrain, position),
+        Some([((250 << 8) | 0x80) as u16 as i16, (5 << 8) | 0x80])
+    );
+    infect(&mut terrain, 2, 3);
+    assert_eq!(
+        tasks::nearest_infected_cell(&terrain, position),
+        Some([(2 << 8) | 0x80, (3 << 8) | 0x80])
+    );
 }
 
 #[v2k_test_support::retail_test]
