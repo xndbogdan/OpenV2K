@@ -8766,6 +8766,7 @@ fn render_opening_cinematic(
         renderer.clear(0.0, 0.0, 0.0);
         finish_opening_cinematic_frame(
             renderer,
+            cache,
             fonts,
             menu_resources,
             billboard_sprite_id,
@@ -9113,6 +9114,7 @@ fn render_opening_cinematic(
     );
     finish_opening_cinematic_frame(
         renderer,
+        cache,
         fonts,
         menu_resources,
         billboard_sprite_id,
@@ -9124,8 +9126,10 @@ fn render_opening_cinematic(
 
 /// Complete an Intro2 frame with the overlays shared by world shots and the
 /// final black card.
+#[allow(clippy::too_many_arguments)]
 fn finish_opening_cinematic_frame(
     renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
     fonts: Option<&v2k_game::menu_text::MenuFonts>,
     menu_resources: &v2k_game::menu::MenuResources,
     billboard_sprite_id: u16,
@@ -9151,7 +9155,7 @@ fn finish_opening_cinematic_frame(
             draw_story_caption(renderer, fonts, &text);
         }
     }
-    draw_intro_billboard(renderer, menu_resources, billboard_sprite_id);
+    draw_intro_billboard(renderer, cache, menu_resources, billboard_sprite_id);
     renderer.present();
 }
 
@@ -9857,8 +9861,9 @@ fn play_world_audio(
 }
 
 /// FUN_004537F0 queues the global nine-frame V2000 emblem in every cinematic
-/// phase through FUN_0042D030. Unlike the large centered menu billboard, this
-/// HUD instance is one quarter of the framebuffer width tall and bottom-left.
+/// phase through FUN_0042D030 at unit scale: a quarter of the focal length
+/// tall at the bottom left ([`MenuBillboardLayout::cinematic_rect`]), the
+/// selected frame stretched over that quad.
 ///
 /// Its queue key is -10000, below every other key of the frame, so it drains
 /// last and nothing masks it: the emblem adds over the finished frame,
@@ -9866,6 +9871,7 @@ fn play_world_audio(
 /// overlay.
 fn draw_intro_billboard(
     renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
     menu_resources: &v2k_game::menu::MenuResources,
     billboard_sprite_id: u16,
 ) {
@@ -9877,18 +9883,32 @@ fn draw_intro_billboard(
     if frame.width == 0 || frame.height == 0 {
         return;
     }
+    let Some(layout) = MenuBillboardLayout::from_cache(cache) else {
+        return;
+    };
+    let Some((_, entry)) = cache.global_sprite(gid) else {
+        return;
+    };
+    let frame_size = [entry.flags as u16, (entry.flags >> 16) as u16];
     let (vw, vh) = renderer.viewport_size();
-    let h = (vw / 4).max(1);
-    let w = (frame.width as f32 * h as f32 / frame.height as f32)
-        .round()
-        .max(1.0) as u32;
-    let scaled = scale_rgba(&frame.rgba, frame.width, frame.height, w, h);
-    renderer.draw_material_sprite(
-        &scaled,
-        w,
-        h,
-        0,
-        vh.saturating_sub(h) as i32,
+    let mapping = UiMapping::new(UiMappingRequest {
+        viewport: [vw, vh],
+        authored_canvas: layout.framebuffer.map(|dimension| dimension as u32),
+        policy: renderer.ui_submission_policy(),
+    });
+    let Some(rect) = layout
+        .cinematic_rect(frame_size)
+        .and_then(|rect| billboard_viewport_rect(mapping, rect))
+    else {
+        return;
+    };
+    let (left, top) = (rect.x, rect.y);
+    let (right, bottom) = (left + rect.width as i32, top + rect.height as i32);
+    renderer.draw_material_sprite_quad(
+        &frame.rgba,
+        frame.width,
+        frame.height,
+        [(left, top), (right, top), (right, bottom), (left, bottom)],
         WorldSpriteBlend::Additive,
     );
 }
@@ -13325,7 +13345,14 @@ fn menu_billboard_viewport_rect(
     pose: MenuBillboardPose,
     frame_size: [u16; 2],
 ) -> Option<MenuBillboardRect> {
-    let rect = layout.rect(pose, frame_size)?;
+    billboard_viewport_rect(mapping, layout.rect(pose, frame_size)?)
+}
+
+/// Map a framebuffer-pixel D030 rectangle into the port's viewport.
+fn billboard_viewport_rect(
+    mapping: UiMapping,
+    rect: MenuBillboardRect,
+) -> Option<MenuBillboardRect> {
     let UiMapping {
         scale: s,
         offset_x: ox,
