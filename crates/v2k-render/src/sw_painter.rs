@@ -251,9 +251,12 @@ mod tests {
         colours
     }
 
+    /// A test node's faces as `(face, colour, key)`.
+    type Faces<'a> = &'a [(usize, u32, i32)];
+
     fn run_tree(
-        parent: (&[(usize, u32, i32)], &[ModelPainterOp]),
-        children: &[(usize, &[(usize, u32, i32)], &[ModelPainterOp])],
+        parent: (Faces<'_>, &[ModelPainterOp]),
+        children: &[(usize, Faces<'_>, &[ModelPainterOp])],
     ) -> Vec<u32> {
         let mut queue = PrimitiveQueue::new(WORLD_ARENA_BYTES).unwrap();
         let mut stack = PainterStack::default();
