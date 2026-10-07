@@ -22,6 +22,7 @@ mod slots;
 mod span;
 mod state;
 pub mod store;
+pub mod terrain;
 
 pub use fog::FogRamp;
 pub use format::PixelFormat;

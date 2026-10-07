@@ -60,6 +60,15 @@ impl Default for SceneProjectionAuthority {
     }
 }
 
+/// The retained world viewport words a scene's producers transform with:
+/// the eye in raw world units and the VIEW axes as Q31 rows (viewport
+/// `+0x04..+0x0C` and `+0x14..+0x34`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeViewportWords {
+    pub origin_raw: [i32; 3],
+    pub axes_q31: [[i32; 3]; 3],
+}
+
 /// Authenticated source display globals consumed by 46CD90/46CEB0 and
 /// 46CCF0. Logical resizing is a separate adapter; callers must not recover
 /// these integer values by rounding a GL projection matrix.
@@ -99,6 +108,14 @@ impl NativeScreenProjection {
 
     pub fn viewport_pixels(self) -> [i32; 2] {
         self.viewport_pixels
+    }
+
+    pub fn focal_pixels(self) -> [i32; 2] {
+        self.focal_pixels
+    }
+
+    pub fn centre_pixels(self) -> [i32; 2] {
+        self.centre_pixels
     }
 
     /// Source signed DIV truncates the perspective quotient before adding

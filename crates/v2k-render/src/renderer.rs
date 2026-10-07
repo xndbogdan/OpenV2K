@@ -69,6 +69,38 @@ impl RenderBackend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextureId(pub u32);
 
+/// One Section-3 record in its retail memory form.
+#[derive(Debug, Clone)]
+pub struct NativeSprite<'a> {
+    /// Render flags (record `+0x04` low byte).
+    pub flags: u16,
+    pub shade_count: u16,
+    pub width: u16,
+    pub height: u16,
+    pub texels: NativeTexels<'a>,
+}
+
+/// A record's texels: indices with display-format palette words (row-major
+/// shade rows of sixteen, or a flat table), or raw display-format words.
+#[derive(Debug, Clone)]
+pub enum NativeTexels<'a> {
+    Indexed {
+        indices: &'a [u8],
+        palette: NativePalette,
+    },
+    Raw {
+        words: &'a [u16],
+    },
+}
+
+/// A Section-3 palette block shared by its records, and where one record's
+/// palette starts in it.
+#[derive(Debug, Clone)]
+pub struct NativePalette {
+    pub block: std::sync::Arc<[u16]>,
+    pub start: usize,
+}
+
 /// Indexed Section-3 image plus its complete 32×16 shade ramp.
 ///
 /// `fallback_rgba` keeps the texture handle usable by renderer paths that do
@@ -1060,6 +1092,22 @@ pub trait Renderer {
         texture: IndexedModelTexture<'_>,
     ) -> Option<TextureId> {
         self.create_texture(texture.fallback_rgba, texture.width, texture.height)
+    }
+
+    /// Register a Section-3 record for backends that rasterize retail
+    /// materials directly, returning its material id. Other backends keep
+    /// the default `None`.
+    fn create_native_sprite(&mut self, _sprite: NativeSprite<'_>) -> Option<u32> {
+        None
+    }
+
+    /// Publish the retained world viewport words for producers that
+    /// transform natively. Scene boundaries do not clear it; callers pass
+    /// `None` when the scene has no native viewport.
+    fn set_native_world_viewport(
+        &mut self,
+        _viewport: Option<crate::projection::NativeViewportWords>,
+    ) {
     }
 
     /// Free a texture created with [`Renderer::create_texture`]. Default no-op.

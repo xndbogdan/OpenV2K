@@ -9,9 +9,11 @@ and the frame-level evidence.
 
 Status: every reachable fill slot and every span row a slot can bind is
 ported and matches retail byte for byte on the native receipts below, and
-the primitive queue reproduces the retail queue controls. `--renderer
-software` draws through both (`crates/v2k-render/src/sw_backend.rs`), but
-the 3-D primitive producers are not ported yet.
+the primitive queue reproduces the retail queue controls. The opaque ground
+producer is ported and byte-exact against the retail scan. `--renderer
+software` (`crates/v2k-render/src/sw_backend.rs`) draws videos, menus, 2-D
+overlays and the gameplay ground through them; water, sky, model and
+particle producers are not ported yet.
 
 ## Pipeline
 
@@ -152,6 +154,48 @@ fill slot with the device and payload and returns its result.
 `crates/v2k-render/src/software/queue.rs` keeps the arena as bytes with this
 layout; its tests replay the retail queue controls.
 
+## Ground producer
+
+`FUN_0042F960 -> FUN_0042F980` queues the opaque ground
+(`crates/v2k-render/src/software/terrain.rs`):
+
+- `FUN_00431890` builds a context from the world viewport: the first eight
+  Section-6 dwords (shade words), the queue, the fog colour (`+0x7C`), the
+  projector at dispatch-table `+0xB4`, the eye words, the darkness band from
+  the Section-10 header, the infection base and a signed row lead from
+  camera basis word 12 (`0x200`, or `0x200 + ((w + 0x58000000) * 0x1C00 >>
+  31)` when that sum is negative). `FUN_00433530` advances the infection
+  motion offsets.
+- Rows are lines of constant world X. `FUN_0042FCC0` fills one row of
+  `DAT_004CAB74` points along +Z from `eyeZ + lead`: the first and last
+  points come from `FUN_00430140` at the fractional ends (bilinear height),
+  interior points from whole cells. Each point gets its height, light-window
+  and darkness shade index (0..7), infection motion, the projector's screen
+  point, outcode, fade byte and a 16-bit depth word; points behind the near
+  plane are reprojected at depth 0x40 by `FUN_0042FFF0`.
+- The scan walks `DAT_004CAB70` rows toward -X from the eye's row, then
+  restarts at the eye's row and walks toward +X. After each strip it
+  retires leading points whose next point is past the near plane or off the
+  screen side it walks toward (outcode `0x41`, then `0x44`).
+- Each strip (`FUN_00430430`) takes the lower-X row first. Its first and
+  last cells are mapped quads (`+0x10C0`, fogged `+0x10C4`) with the leading
+  or trailing edge UVs interpolated by the eye's fractional Z; other cells
+  are shaded quads (`+0x10A8`/`+0x10AC`) whose corners are permuted onto the
+  canonical transition sprite (`FUN_00433180`). Cells with infected corners
+  add an overlay allocated right after the base with the same key; a fully
+  infected interior cell queues only the full infection shape. Cells are
+  skipped when their outcodes cannot reach the screen, every corner is fully
+  faded, or `FUN_004709B0` finds both triangles wound counter-clockwise on
+  screen. Keys are the latest row's depth word plus 0x200.
+- Every first-row point pair also queues `FUN_00431970`'s flat cap to the
+  screen bottom (key 0, system-2 palette entry 11).
+
+The world viewport words come from the chase or intro camera's native
+viewport and the lens from system level 2; the fade ramp is
+`[0x1000000 / (far - near), near, far]` over the world fog planes. Terrain
+sprites are registered as native Section-3 records sharing their atlas's
+display-format palette block.
+
 ## 2D slots
 
 | Slot | Handler | Behaviour |
@@ -174,6 +218,13 @@ stack frame, the final dither word and clip, and a 64-bit FNV-1a digest of
 the output surface with its changed-pixel count. It contains no retail
 data.
 
+`crates/v2k-render/tests/software_ground_receipts.rs` replays 12 whole
+ground scans (dry and wet projectors, fractional and wrapping eyes, steep
+and negative-lead pitches, near-plane points, dense infection, heavy fog,
+a 52-by-30 scan, a darkness band and a translated view) and compares a
+digest of the queue arena they fill, so keys, links, record layouts and
+allocation order are all covered.
+
 Coverage: all 32 slots; every span row a handler can bind in both tables
 (the test asserts the set), with material flags `0x00..0x13` in fifteen
 combinations and both uniform and per-vertex shading; top, side and full
@@ -185,8 +236,8 @@ span-reciprocal overrun; and the zero fog-mask state.
 - The retail stack address at the scan converter, which `00478510`'s pixels
   depend on, has not been measured in the shipped game; receipts use a fixed
   synthetic stack.
-- The producers that fill the queue (model face, group and billboard
-  constructors, terrain, water, sky, particles) are not ported. The software
+- The water, sky, model (face, group, billboard, edge) and particle
+  producers are not ported; the backend draws no models yet. The software
   backend adapts RGBA-only port images to raw-texel materials and fades the
   surface with an 8-bit alpha blend; neither adapter is retail evidence.
 - No full-frame comparison against the DirectDraw trace has been made with

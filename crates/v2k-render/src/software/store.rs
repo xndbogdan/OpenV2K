@@ -7,7 +7,10 @@
 //! stored as raw display-format texels, which the raw span rows and the
 //! sprite blit draw exactly like the palette words they came from.
 
+use std::sync::Arc;
+
 use super::material::{flags, MaterialId, MaterialSource, MaterialView, ATLAS_STRIDE};
+use crate::renderer::{NativeSprite, NativeTexels};
 
 /// Texel words and palette of one bound material.
 #[derive(Debug, Clone)]
@@ -18,8 +21,10 @@ pub struct OwnedMaterial {
     pub height: u16,
     /// Rows of [`ATLAS_STRIDE`] bytes starting at the texel origin.
     pub atlas: Vec<u8>,
-    /// Display-format palette words (empty for raw materials).
-    pub palette: Vec<u16>,
+    /// Display-format palette block shared with the record's neighbours
+    /// (empty for raw materials), and where this record's palette starts.
+    pub palette: Arc<[u16]>,
+    pub palette_start: usize,
 }
 
 /// RGB565 of an RGBA8 pixel, keeping the top bits of each channel.
@@ -78,7 +83,8 @@ impl OwnedMaterial {
             width: columns as u16,
             height: rows as u16,
             atlas,
-            palette: Vec::new(),
+            palette: Arc::from([]),
+            palette_start: 0,
         }
     }
 
@@ -104,7 +110,44 @@ impl OwnedMaterial {
             width: columns as u16,
             height: rows as u16,
             atlas,
+            palette: Arc::from(palette),
+            palette_start: 0,
+        }
+    }
+
+    /// A record registered through [`crate::Renderer::create_native_sprite`].
+    pub fn from_native(sprite: &NativeSprite<'_>) -> Self {
+        let (width, height) = (usize::from(sprite.width), usize::from(sprite.height));
+        let mut atlas = vec![0u8; ATLAS_STRIDE * height];
+        let (palette, palette_start) = match &sprite.texels {
+            NativeTexels::Indexed { indices, palette } => {
+                let columns = width.min(ATLAS_STRIDE);
+                for y in 0..height {
+                    let row = indices.get(y * width..y * width + columns).unwrap_or(&[]);
+                    atlas[y * ATLAS_STRIDE..][..row.len()].copy_from_slice(row);
+                }
+                (palette.block.clone(), palette.start)
+            }
+            NativeTexels::Raw { words } => {
+                let columns = width.min(ATLAS_STRIDE / 2);
+                for y in 0..height {
+                    for x in 0..columns {
+                        let word = words.get(y * width + x).copied().unwrap_or(0);
+                        let at = y * ATLAS_STRIDE + 2 * x;
+                        atlas[at..at + 2].copy_from_slice(&word.to_le_bytes());
+                    }
+                }
+                (Arc::from([]), 0)
+            }
+        };
+        Self {
+            flags: sprite.flags,
+            shade_count: sprite.shade_count,
+            width: sprite.width,
+            height: sprite.height,
+            atlas,
             palette,
+            palette_start,
         }
     }
 
@@ -116,7 +159,7 @@ impl OwnedMaterial {
             height: self.height,
             atlas: &self.atlas,
             origin: 0,
-            palette: &self.palette,
+            palette: self.palette.get(self.palette_start..).unwrap_or(&[]),
         }
     }
 }

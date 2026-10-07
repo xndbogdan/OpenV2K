@@ -22,15 +22,20 @@ use v2k_formats::terrain::TerrainGrid;
 
 use crate::camera::Camera;
 use crate::config::ScalingMode;
+use crate::projection::{NativeViewportWords, ProjectionEffect, SceneProjectionAuthority};
 use crate::renderer::{
     CapturedFrame, FrameCaptureSource, RenderScene, RenderViewport, Renderer, TextureId,
-    WorldSpriteBlend,
+    WorldModelFog, WorldSpriteBlend,
 };
 use crate::software::store::{rgb565, rgba8, MaterialStore, OwnedMaterial};
+use crate::software::terrain::{
+    draw_ground, ground_lead, GroundMaterial, GroundProjection, GroundScene,
+};
 use crate::software::{
     material_flags, ClipRect, FillSlot, MaterialId, NoWordImages, PixelFormat, PrimitiveQueue,
     SoftwareRaster, Surface565, WORLD_ARENA_BYTES,
 };
+use crate::terrain_tiles::InfectionTerrainAnimation;
 
 /// ESP at a fill-slot handler's first instruction while the world queue
 /// drains. Only its high sixteen bits reach pixels (the `00478510` dither
@@ -59,6 +64,15 @@ pub struct SoftwareRenderer {
     /// `V2K_SOFTWARE_FRAME_DUMP`: directory receiving every presented frame
     /// as a 24-bit BMP, for headless inspection and frame comparison.
     frame_dump: Option<FrameDump>,
+    scene: RenderScene,
+    authority: SceneProjectionAuthority,
+    effect: ProjectionEffect,
+    world_fog: Option<WorldModelFog>,
+    native_viewport: Option<NativeViewportWords>,
+    /// `FUN_00433530`'s process state, advanced only by terrain draws.
+    infection: InfectionTerrainAnimation,
+    /// Ground queue errors are reported once.
+    ground_error_reported: bool,
 }
 
 struct FrameDump {
@@ -94,6 +108,13 @@ impl SoftwareRenderer {
                 directory: directory.into(),
                 next: 0,
             }),
+            scene: RenderScene::Menu,
+            authority: SceneProjectionAuthority::default(),
+            effect: ProjectionEffect::None,
+            world_fog: None,
+            native_viewport: None,
+            infection: InfectionTerrainAnimation::default(),
+            ground_error_reported: false,
         })
     }
 
@@ -287,10 +308,48 @@ impl Renderer for SoftwareRenderer {
         "Software"
     }
 
-    fn begin_scene(&mut self, _scene: RenderScene) {
+    fn begin_scene(&mut self, scene: RenderScene) {
         self.flush();
+        self.scene = scene;
+        self.authority = SceneProjectionAuthority::default();
+        self.effect = ProjectionEffect::None;
         self.sprite_clip = None;
         self.raster.set_clip(full_clip(&self.surface));
+    }
+
+    fn set_projection_effect(&mut self, effect: ProjectionEffect) {
+        self.effect = effect;
+    }
+
+    fn set_scene_projection_authority(&mut self, authority: SceneProjectionAuthority) {
+        self.authority = authority;
+    }
+
+    fn scene_projection_authority(&self) -> SceneProjectionAuthority {
+        self.authority
+    }
+
+    fn set_native_world_viewport(&mut self, viewport: Option<NativeViewportWords>) {
+        self.native_viewport = viewport;
+    }
+
+    fn set_world_model_fog(&mut self, fog: Option<WorldModelFog>) {
+        self.world_fog = fog;
+    }
+
+    fn world_model_fog(&self) -> Option<WorldModelFog> {
+        (self.scene == RenderScene::World)
+            .then_some(self.world_fog)
+            .flatten()
+    }
+
+    fn world_fog_planes(&self) -> Option<[f32; 2]> {
+        self.world_model_fog().map(|fog| {
+            [
+                fog.planes.near_raw as f32 / 256.0,
+                fog.planes.far_raw as f32 / 256.0,
+            ]
+        })
     }
 
     fn clear(&mut self, r: f32, g: f32, b: f32) {
@@ -356,16 +415,107 @@ impl Renderer for SoftwareRenderer {
 
     fn set_fog(&mut self, _enabled: bool, _near: f32, _far: f32, _color: [f32; 3]) {}
 
+    /// `FUN_0042F960`: queue the opaque ground through the retail scan. It
+    /// needs the scene's native viewport, lens and native terrain sprites;
+    /// without them nothing is drawn.
     fn draw_terrain(
         &mut self,
-        _terrain: &TerrainGrid,
-        _colors: &[PaletteEntry],
-        _frames: Option<&crate::terrain_tiles::TerrainFrames>,
-        _lights: Option<&crate::terrain_light::TerrainLightWindow>,
-        _elapsed_micros: u32,
+        terrain: &TerrainGrid,
+        colors: &[PaletteEntry],
+        frames: Option<&crate::terrain_tiles::TerrainFrames>,
+        lights: Option<&crate::terrain_light::TerrainLightWindow>,
+        elapsed_micros: u32,
     ) {
-        // The terrain producers (`FUN_00430430`, `FUN_004327C0`) are not
-        // ported yet.
+        self.infection.advance(elapsed_micros);
+        let (Some(frames), Some(viewport), SceneProjectionAuthority::Native(lens)) =
+            (frames, self.native_viewport, self.authority)
+        else {
+            return;
+        };
+        let Some(native) = frames.native.as_ref() else {
+            return;
+        };
+        // 0x004FEEE8/EC/F0: the fade ramp between the world fog planes.
+        let fade = match self.world_model_fog() {
+            Some(fog) if fog.planes.far_raw > fog.planes.near_raw => [
+                0x0100_0000 / (fog.planes.far_raw - fog.planes.near_raw),
+                fog.planes.near_raw,
+                fog.planes.far_raw,
+            ],
+            _ => [0, i32::MAX, i32::MAX],
+        };
+        let viewport_pixels = lens.viewport_pixels();
+        let projection = GroundProjection {
+            axes_q31: viewport.axes_q31,
+            translation: [0; 3],
+            focal: lens.focal_pixels(),
+            bounds: viewport_pixels.map(|value| value as u32),
+            centre: lens.centre_pixels(),
+            fade,
+            wet_clock: match self.effect {
+                ProjectionEffect::RetailUnderwater { tick } => Some(tick as u32),
+                ProjectionEffect::None => None,
+            },
+        };
+        let empty_light = [0i8; 1024];
+        let (light, light_origin) = lights.map_or((&empty_light, [0, 0]), |lights| lights.window());
+        let motion = self.infection.frame();
+        let display = |rgb555: u16| u32::from(((rgb555 & 0x7FE0) << 1) | (rgb555 & 0x1F));
+        let fog_colour = self.world_fog.map_or(0, |fog| {
+            let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0) as u8;
+            u32::from(rgb565(
+                byte(fog.color[0]),
+                byte(fog.color[1]),
+                byte(fog.color[2]),
+            ))
+        });
+        let sprites = &native.sprites;
+        let tile_base = native.tile_base;
+        let sprite = |index: u32| {
+            let local = index.wrapping_sub(tile_base) as usize;
+            let record = sprites.get(local).or_else(|| sprites.first()).copied();
+            record.map_or(
+                GroundMaterial {
+                    id: 0,
+                    width: 1,
+                    height: 1,
+                },
+                |record| GroundMaterial {
+                    id: record.id,
+                    width: record.width,
+                    height: record.height,
+                },
+            )
+        };
+        let scene = GroundScene {
+            grid: terrain,
+            projection,
+            eye: viewport.origin_raw.map(|value| value as i16),
+            lead: ground_lead(viewport.axes_q31[2][1]),
+            screen_height: viewport_pixels[1] as i16,
+            shade_words: native.shade_words,
+            fog_colour,
+            cap_colour: colors.get(11).map_or(0, |entry| display(entry.rgb555)),
+            rows: frames.scan_columns,
+            points: frames.scan_rows.clamp(3, 30),
+            light,
+            light_origin,
+            infection_offsets: motion.offsets(),
+            infection_selectors: motion.selectors(),
+            tiles: &frames.lookup,
+            tile_base,
+            infection_base: tile_base + crate::terrain_tiles::INFECTION_BASE_OFFSET,
+            sprite: &sprite,
+        };
+        match draw_ground(&mut self.queue, &scene) {
+            Ok(()) => {}
+            Err(error) if !self.ground_error_reported => {
+                self.ground_error_reported = true;
+                eprintln!("software ground: {error:?}; the rest of the ground is not queued");
+            }
+            Err(_) => {}
+        }
+        self.queued = true;
     }
 
     fn supports_models(&self) -> bool {
@@ -377,6 +527,10 @@ impl Renderer for SoftwareRenderer {
             .materials
             .insert(OwnedMaterial::raw_from_rgba(rgba, width, height, 0));
         Some(TextureId(id))
+    }
+
+    fn create_native_sprite(&mut self, sprite: crate::renderer::NativeSprite<'_>) -> Option<u32> {
+        Some(self.materials.insert(OwnedMaterial::from_native(&sprite)))
     }
 
     fn destroy_texture(&mut self, id: TextureId) {

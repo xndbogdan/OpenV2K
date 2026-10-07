@@ -71,6 +71,16 @@ pub(crate) struct InfectionMotionFrame {
 }
 
 impl InfectionMotionFrame {
+    /// Context `+0x44`: the sixteen signed motion offsets.
+    pub(crate) fn offsets(&self) -> [i8; 16] {
+        self.offsets
+    }
+
+    /// `0x004CAB88`: the selector bytes.
+    pub(crate) fn selectors(&self) -> &[u8; 256] {
+        &self.selectors
+    }
+
     /// Apply `FUN_00430140`'s obfuscated 16x16 selector lookup. Its expression
     /// reduces to low-nibble X in bits 0..3 and low-nibble Z in bits 4..7.
     pub(crate) fn vertex_offset_raw(&self, world_x_cell: i32, world_z_cell: i32) -> [i8; 2] {
@@ -198,6 +208,27 @@ pub struct TerrainFrames {
     /// Per-level opaque terrain footprint recovered from Section 13 +0x88.
     pub scan_columns: u32,
     pub scan_rows: u32,
+    /// Native materials for backends that run the retail ground producer.
+    pub native: Option<NativeTerrainMaterials>,
+}
+
+/// One registered Section-3 record: its material id and `+0x10/+0x12` size.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeSpriteRef {
+    pub id: u32,
+    pub width: u16,
+    pub height: u16,
+}
+
+/// The terrain level's retail ground inputs that are resources, not state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NativeTerrainMaterials {
+    /// Global sprite index of canonical frame 0 (Section 13 `+0x4C`).
+    pub tile_base: u32,
+    /// The 120 canonical frames followed by the five infection shapes.
+    pub sprites: Vec<NativeSpriteRef>,
+    /// The first eight Section-6 dwords, as `FUN_00431890` copies them.
+    pub shade_words: [u32; 8],
 }
 
 #[cfg(test)]

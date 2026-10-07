@@ -1,11 +1,14 @@
 //! Per-level terrain transition sprite upload.
 
+use std::collections::HashMap;
+use std::sync::Arc;
 use v2k_formats::palette::{BRIGHTEST_SHADE, COLORS_PER_SHADE, SHADE_LEVELS};
+
 use v2k_render::terrain_tiles::{
-    build_lookup, scan_dimensions, TerrainFrames, CANONICAL_FRAME_COUNT, INFECTION_BASE_OFFSET,
-    INFECTION_FRAME_COUNT,
+    build_lookup, scan_dimensions, NativeSpriteRef, NativeTerrainMaterials, TerrainFrames,
+    CANONICAL_FRAME_COUNT, INFECTION_BASE_OFFSET, INFECTION_FRAME_COUNT,
 };
-use v2k_render::Renderer;
+use v2k_render::{NativePalette, NativeSprite, NativeTexels, Renderer};
 
 use crate::resource_cache::ResourceCache;
 
@@ -150,6 +153,7 @@ pub fn build_terrain_frames(
         renderer.destroy_texture(texture);
         return None;
     };
+    let native = native_terrain_materials(cache, renderer, base);
     Some(TerrainFrames {
         texture,
         index_texture,
@@ -162,6 +166,64 @@ pub fn build_terrain_frames(
         shade_rows,
         scan_columns,
         scan_rows,
+        native,
+    })
+}
+
+/// Register the 120 canonical frames and five infection shapes as native
+/// Section-3 records for backends that run the retail ground producer, with
+/// the first eight Section-6 dwords. `None` when the backend keeps no
+/// native materials or a record is not indexed.
+fn native_terrain_materials(
+    cache: &ResourceCache,
+    renderer: &mut dyn Renderer,
+    base: u32,
+) -> Option<NativeTerrainMaterials> {
+    let gradient = cache.fog_gradient()?;
+    let shade_words: [u32; 8] = std::array::from_fn(|index| {
+        gradient.get(index).map_or(0, |entry| {
+            u32::from_le_bytes([entry.r, entry.g, entry.b, entry.shade_level])
+        })
+    });
+    // One display-format palette block per Section-3 atlas, shared by its
+    // records so palette overshoot reads the neighbouring palettes.
+    let mut blocks: HashMap<*const v2k_formats::sprites::SpriteAtlas, Arc<[u16]>> = HashMap::new();
+    let count = CANONICAL_FRAME_COUNT as u32 + INFECTION_FRAME_COUNT as u32;
+    let mut sprites = Vec::with_capacity(count as usize);
+    for offset in 0..count {
+        let gid = u16::try_from(base.checked_add(offset)?).ok()?;
+        let (atlas, entry) = cache.global_sprite(gid)?;
+        if entry.pal_size & 0x02 != 0 {
+            return None;
+        }
+        let indices = atlas.decode_indices(entry).ok()?.indices;
+        let block = blocks
+            .entry(atlas as *const _)
+            .or_insert_with(|| Arc::from(atlas.display_palette_words()))
+            .clone();
+        // Record +0x10/+0x12, which the UV setup reads.
+        let width = entry.flags as u16;
+        let height = (entry.flags >> 16) as u16;
+        let id = renderer.create_native_sprite(NativeSprite {
+            flags: entry.pal_size & 0xFF,
+            shade_count: entry.shade_count,
+            width,
+            height,
+            texels: NativeTexels::Indexed {
+                indices: &indices,
+                palette: NativePalette {
+                    block,
+                    start: entry.pal_offset as usize / 2,
+                },
+            },
+        })?;
+        sprites.push(NativeSpriteRef { id, width, height });
+    }
+    debug_assert_eq!(INFECTION_BASE_OFFSET, CANONICAL_FRAME_COUNT as u32);
+    Some(NativeTerrainMaterials {
+        tile_base: base,
+        sprites,
+        shade_words,
     })
 }
 

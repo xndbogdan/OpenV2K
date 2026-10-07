@@ -32,9 +32,9 @@ pub use renderer::{
     mat3_mul, orientation_f32, orientation_from_ypr, BillboardMaterial, CapturedFrame,
     ExternalFrameMode, FaceMaterial, FrameCaptureSource, IndexedModelTexture, ModelBillboardDraw,
     ModelDepthFade, ModelDepthPolicy, ModelDraw, ModelMesh, ModelNearClip, ModelOverlayKind,
-    ModelTransform, NativeModelFogPass, OverlayDepthPolicy, RenderBackend, RenderScene, Renderer,
-    SpriteFog, TextureId, ViewPinMode, WorldModelFog, WorldSprite, WorldSpriteBlend,
-    WorldSurfaceProjection, HALF_ADDITIVE_ALPHA,
+    ModelTransform, NativeModelFogPass, NativePalette, NativeSprite, NativeTexels,
+    OverlayDepthPolicy, RenderBackend, RenderScene, Renderer, SpriteFog, TextureId, ViewPinMode,
+    WorldModelFog, WorldSprite, WorldSpriteBlend, WorldSurfaceProjection, HALF_ADDITIVE_ALPHA,
 };
 pub use sound::{
     original_positional_mix, LoopingVoiceParams, PositionalMix, SoundListener, SoundManager,

@@ -8099,6 +8099,7 @@ fn draw_gameplay_world(
             projection_effect,
         ),
     );
+    renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(
         renderer,
         cache,
@@ -8707,6 +8708,7 @@ fn render_opening_cinematic(
             projection_effect,
         ),
     );
+    renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(renderer, cache, None, face_colors, camera, retail_tick);
 
     // 530D0/53570 and pre-actor light writers precede 53760. Actor

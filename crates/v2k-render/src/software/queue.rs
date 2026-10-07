@@ -20,14 +20,15 @@
 //!   ascending record address, and rewrites its links in place;
 //! - draining stops at the first callback that returns non-zero.
 //!
-//! Arena addresses are offsets from [`ARENA_BASE`]; only their order is
-//! observable (equal-key ties), and that matches allocation order.
+//! Arena addresses start at a base address ([`PrimitiveQueue::with_base`]);
+//! only their order is observable (equal-key ties), and that matches
+//! allocation order.
 
 use super::slots::FillSlot;
 
-/// Address the arena is modelled at. Any non-zero base gives the same
-/// behaviour; zero is reserved for null links.
-const ARENA_BASE: u32 = 0x0100_0000;
+/// Default address the arena is modelled at. Any non-zero base gives the
+/// same behaviour; zero is reserved for null links.
+const DEFAULT_BASE: u32 = 0x0100_0000;
 /// Bytes of the root header (`FUN_004948C0` starts the cursor after it).
 const ROOT_HEADER: u32 = 0x18;
 /// `FUN_00494860` keeps the last twelve arena bytes free: a record header is
@@ -101,28 +102,41 @@ fn callback_kind(word: u32) -> QueueCallback {
 #[derive(Debug, Clone)]
 pub struct PrimitiveQueue {
     arena: Vec<u8>,
+    /// Address of the root header (arena byte 0).
+    base: u32,
 }
 
 impl PrimitiveQueue {
     /// `FUN_00494860` + `FUN_004948C0`: an arena of `bytes` (rounded down
     /// to a multiple of four) with an empty sorted root.
     pub fn new(bytes: usize) -> Result<Self, QueueError> {
+        Self::with_base(bytes, DEFAULT_BASE)
+    }
+
+    /// [`Self::new`] with the root header at address `base`, so links match
+    /// an arena allocated there (receipts compare arenas byte for byte).
+    pub fn with_base(bytes: usize, base: u32) -> Result<Self, QueueError> {
         if bytes < 0x80 {
             return Err(QueueError::ArenaTooSmall);
         }
+        assert!(
+            base != 0 && base % 4 == 0,
+            "arena base must be a non-null dword address"
+        );
         let bytes = bytes & !3;
         let mut queue = Self {
             arena: vec![0; bytes],
+            base,
         };
-        let limit = ARENA_BASE + bytes as u32 - RESERVED_TAIL;
-        queue.write(ARENA_BASE + 0x10, limit);
+        let limit = base + bytes as u32 - RESERVED_TAIL;
+        queue.write(base + 0x10, limit);
         queue.reset();
         Ok(queue)
     }
 
     /// `FUN_004948C0`: forget every record and reopen the sorted root.
     pub fn reset(&mut self) {
-        let root = ARENA_BASE;
+        let root = self.base;
         self.write(root, 1);
         self.write(root + 8, root + 4);
         self.write(root + 0xC, root);
@@ -132,17 +146,17 @@ impl PrimitiveQueue {
 
     /// Bytes allocated after the root header.
     pub fn used_bytes(&self) -> usize {
-        (self.read(ARENA_BASE + 0x14) - ARENA_BASE - ROOT_HEADER) as usize
+        (self.read(self.base + 0x14) - self.base - ROOT_HEADER) as usize
     }
 
     /// Whether the current scope sorts its records.
     pub fn sorted_scope(&self) -> bool {
-        self.read(ARENA_BASE) != 0
+        self.read(self.base) != 0
     }
 
     /// Whether a group is still open.
     pub fn group_open(&self) -> bool {
-        self.read(ARENA_BASE + 0xC) != ARENA_BASE
+        self.read(self.base + 0xC) != self.base
     }
 
     /// `FUN_00459D10`: append a FIFO record (no key) for `slot` and return
@@ -154,7 +168,7 @@ impl PrimitiveQueue {
         slot: FillSlot,
         payload_bytes: usize,
     ) -> Result<&mut [u8], QueueError> {
-        let root = ARENA_BASE;
+        let root = self.base;
         let record = self.read(root + 0x14);
         self.write(record, 0);
         self.write(record + 4, thunk_address(slot));
@@ -177,7 +191,20 @@ impl PrimitiveQueue {
         slot: FillSlot,
         payload_bytes: usize,
     ) -> Result<&mut [u8], QueueError> {
-        let root = ARENA_BASE;
+        let at = self.allocate_sorted(key, slot, payload_bytes)?;
+        let end = at + words(payload_bytes) as usize * 4;
+        Ok(&mut self.arena[at..end])
+    }
+
+    /// [`Self::push_sorted`] returning the payload's arena offset, for
+    /// producers that allocate several records before filling them.
+    pub(crate) fn allocate_sorted(
+        &mut self,
+        key: i32,
+        slot: FillSlot,
+        payload_bytes: usize,
+    ) -> Result<usize, QueueError> {
+        let root = self.base;
         let record = self.read(root + 0x14);
         let node = record + 4;
         self.write(record, key as u32);
@@ -191,7 +218,22 @@ impl PrimitiveQueue {
         self.write(root + 0x14, end);
         self.write(tail, node);
         self.write(root + 8, node);
-        Ok(self.payload(record + 0xC, end))
+        Ok((record + 0xC - self.base) as usize)
+    }
+
+    /// The arena from payload offset `at` on.
+    pub(crate) fn payload_mut(&mut self, at: usize) -> &mut [u8] {
+        &mut self.arena[at..]
+    }
+
+    /// The address of the first record and the bytes allocated since the
+    /// last reset, with links as arena addresses.
+    pub fn allocated(&self) -> (u32, &[u8]) {
+        let cursor = (self.read(self.base + 0x14) - self.base) as usize;
+        (
+            self.base + ROOT_HEADER,
+            &self.arena[ROOT_HEADER as usize..cursor],
+        )
     }
 
     /// `FUN_0045B280`: a keyed record in a sorted scope, a FIFO record (key
@@ -221,7 +263,7 @@ impl PrimitiveQueue {
     }
 
     fn begin_group(&mut self, key: i32, callback: u32, mode: u32) -> Result<(), QueueError> {
-        let root = ARENA_BASE;
+        let root = self.base;
         let record = self.read(root + 0x14);
         let header = if self.sorted_scope() {
             let node = record + 4;
@@ -263,7 +305,7 @@ impl PrimitiveQueue {
 
     /// `FUN_00494A80`: close the innermost open group.
     pub fn end_group(&mut self) -> Result<(), QueueError> {
-        let root = ARENA_BASE;
+        let root = self.base;
         let scope = self.read(root + 0xC);
         if scope == root {
             return Err(QueueError::EndAtRoot);
@@ -285,7 +327,7 @@ impl PrimitiveQueue {
             // Cannot fail while a group is open.
             self.end_group().expect("open group");
         }
-        self.sort_and_dispatch(ARENA_BASE, fill)
+        self.sort_and_dispatch(self.base, fill)
     }
 
     /// `FUN_00494930`: sort the list whose head field is at `header + 4`,
@@ -325,7 +367,7 @@ impl PrimitiveQueue {
             let payload = node + 8;
             let result = match callback_kind(self.read(node + 4)) {
                 QueueCallback::Fill(slot) => {
-                    fill(slot, &self.arena[(payload - ARENA_BASE) as usize..])
+                    fill(slot, &self.arena[(payload - self.base) as usize..])
                 }
                 QueueCallback::SortedGroup => self.sort_and_dispatch(payload, fill),
                 QueueCallback::FifoGroup => self.dispatch(payload, fill),
@@ -342,16 +384,16 @@ impl PrimitiveQueue {
     }
 
     fn payload(&mut self, start: u32, end: u32) -> &mut [u8] {
-        &mut self.arena[(start - ARENA_BASE) as usize..(end - ARENA_BASE) as usize]
+        &mut self.arena[(start - self.base) as usize..(end - self.base) as usize]
     }
 
     fn read(&self, address: u32) -> u32 {
-        let at = (address - ARENA_BASE) as usize;
+        let at = (address - self.base) as usize;
         u32::from_le_bytes(self.arena[at..at + 4].try_into().unwrap())
     }
 
     fn write(&mut self, address: u32, value: u32) {
-        let at = (address - ARENA_BASE) as usize;
+        let at = (address - self.base) as usize;
         self.arena[at..at + 4].copy_from_slice(&value.to_le_bytes());
     }
 }
