@@ -225,7 +225,8 @@ pub struct NativeSpriteRef {
 pub struct NativeTerrainMaterials {
     /// Global sprite index of canonical frame 0 (Section 13 `+0x4C`).
     pub tile_base: u32,
-    /// The 120 canonical frames followed by the five infection shapes.
+    /// The 120 canonical frames, the five infection shapes and the five
+    /// shoreline shapes, in global sprite order from `tile_base`.
     pub sprites: Vec<NativeSpriteRef>,
     /// The first eight Section-6 dwords, as `FUN_00431890` copies them.
     pub shade_words: [u32; 8],

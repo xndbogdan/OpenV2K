@@ -71,7 +71,7 @@ pub struct GroundPoint {
 }
 
 impl GroundPoint {
-    fn screen_dword(self) -> u32 {
+    pub(crate) fn screen_dword(self) -> u32 {
         u32::from(self.screen[0] as u16) | (u32::from(self.screen[1] as u16) << 16)
     }
 }
@@ -214,6 +214,23 @@ impl GroundProjection {
         depth
     }
 
+    /// The dry projector the water pass inlines (`FUN_004321E0`) or calls
+    /// (`FUN_0042FFF0`): a point behind the near plane only takes the 0x40
+    /// outcode and keeps its stale screen point and fade. Returns the depth.
+    pub(crate) fn project_dry(&self, point: &mut GroundPoint, delta: [i32; 3]) -> i32 {
+        let [x, y, depth] = self.view(delta);
+        if depth < 0x40 {
+            point.clip = 0x40;
+        } else {
+            let dry = Self {
+                wet_clock: None,
+                ..*self
+            };
+            point.clip = dry.finish(point, x, y, depth);
+        }
+        depth
+    }
+
     /// Project an already transformed VIEW point: outcode (0x40 behind the
     /// near plane), screen point and fade byte. The model vertex cache uses
     /// this with its node's own axes.
@@ -323,7 +340,7 @@ struct Scan<'s, 'a> {
 }
 
 impl GroundScene<'_> {
-    fn cell(&self, x: u32, z: u32) -> (i8, u8) {
+    pub(crate) fn cell(&self, x: u32, z: u32) -> (i8, u8) {
         let cell = self
             .grid
             .cell((x & 0xFF) as usize, (z & 0xFF) as usize)
@@ -331,7 +348,7 @@ impl GroundScene<'_> {
         (cell.height as i8, cell.terrain_type)
     }
 
-    fn light(&self, x_cell: u32, z_cell: u32) -> i32 {
+    pub(crate) fn light(&self, x_cell: u32, z_cell: u32) -> i32 {
         let x = x_cell.wrapping_sub(u32::from(self.light_origin[0])) & 0xFF;
         let z = z_cell.wrapping_sub(u32::from(self.light_origin[1])) & 0xFF;
         if x < 0x20 && z < 0x20 {
@@ -608,33 +625,7 @@ impl Scan<'_, '_> {
         edge: Edge,
         fraction: i32,
     ) {
-        let width = (i32::from(material.width) << 16).wrapping_sub(1);
-        let height = (i32::from(material.height) << 16).wrapping_sub(1);
-        let uv = [[0, 0], [width, 0], [width, height], [0, height]];
-        let blend = |from: [i32; 2], to: [i32; 2]| -> [i32; 2] {
-            std::array::from_fn(|axis| {
-                (to[axis].wrapping_sub(from[axis]))
-                    .wrapping_mul(fraction)
-                    .wrapping_add(from[axis].wrapping_mul(0x100))
-                    >> 8
-            })
-        };
-        let [s0, s1, s2, s3] = slots;
-        let mut out = [[0i32; 2]; 4];
-        match edge {
-            Edge::Leading => {
-                out[s2] = uv[s2];
-                out[s3] = uv[s3];
-                out[s0] = blend(uv[s0], uv[s3]);
-                out[s1] = blend(uv[s1], uv[s2]);
-            }
-            Edge::Trailing => {
-                out[s0] = uv[s0];
-                out[s1] = uv[s1];
-                out[s2] = blend(uv[s1], uv[s2]);
-                out[s3] = blend(uv[s0], uv[s3]);
-            }
-        }
+        let out = edge_uvs(material, slots, edge, fraction);
         let payload = self.queue.payload_mut(at);
         payload[0x10..0x14].copy_from_slice(&material.id.to_le_bytes());
         payload[0x24..0x28].copy_from_slice(&0u32.to_le_bytes());
@@ -724,10 +715,50 @@ impl Scan<'_, '_> {
     }
 }
 
+/// The first or last cell of a strip.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Edge {
+pub(crate) enum Edge {
     Leading,
     Trailing,
+}
+
+/// A strip edge cell's 16.16 UVs per sprite slot: the cell is only partly
+/// in the strip, so its leading (or trailing) slots are interpolated toward
+/// the far ones by the eye's fractional Z.
+pub(crate) fn edge_uvs(
+    material: GroundMaterial,
+    slots: [usize; 4],
+    edge: Edge,
+    fraction: i32,
+) -> [[i32; 2]; 4] {
+    let width = (i32::from(material.width) << 16).wrapping_sub(1);
+    let height = (i32::from(material.height) << 16).wrapping_sub(1);
+    let uv = [[0, 0], [width, 0], [width, height], [0, height]];
+    let blend = |from: [i32; 2], to: [i32; 2]| -> [i32; 2] {
+        std::array::from_fn(|axis| {
+            (to[axis].wrapping_sub(from[axis]))
+                .wrapping_mul(fraction)
+                .wrapping_add(from[axis].wrapping_mul(0x100))
+                >> 8
+        })
+    };
+    let [s0, s1, s2, s3] = slots;
+    let mut out = [[0i32; 2]; 4];
+    match edge {
+        Edge::Leading => {
+            out[s2] = uv[s2];
+            out[s3] = uv[s3];
+            out[s0] = blend(uv[s0], uv[s3]);
+            out[s1] = blend(uv[s1], uv[s2]);
+        }
+        Edge::Trailing => {
+            out[s0] = uv[s0];
+            out[s1] = uv[s1];
+            out[s2] = blend(uv[s1], uv[s2]);
+            out[s3] = blend(uv[s0], uv[s3]);
+        }
+    }
+    out
 }
 
 /// `FUN_004709B0`: the quad's screen winding is counter-clockwise on both

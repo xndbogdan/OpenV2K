@@ -188,7 +188,7 @@ fn native_terrain_materials(
     // One display-format palette block per Section-3 atlas, shared by its
     // records so palette overshoot reads the neighbouring palettes.
     let mut blocks: HashMap<*const v2k_formats::sprites::SpriteAtlas, Arc<[u16]>> = HashMap::new();
-    let count = CANONICAL_FRAME_COUNT as u32 + INFECTION_FRAME_COUNT as u32;
+    let count = v2k_render::water::SHORELINE_BASE_OFFSET + v2k_render::water::SHORELINE_FRAME_COUNT;
     let mut sprites = Vec::with_capacity(count as usize);
     for offset in 0..count {
         let gid = u16::try_from(base.checked_add(offset)?).ok()?;

@@ -6,11 +6,17 @@
 //! draw, capture or presentation, as the original flushes its world queue
 //! before the overlays that call fill slots directly.
 //!
+//! World scenes queue through the ported producers: the ground scan, the
+//! water pass, and model faces, edges and billboards through the retail
+//! constructors (see `crate::sw_model`). Their inputs are exact where the
+//! scene supplies native words (viewport, lens, terrain materials); model
+//! VIEW points come from the port's materialized world points.
+//!
 //! Draw calls whose inputs the port only holds as RGBA images are adapted
-//! at this boundary: an RGBA image becomes a raw-texel material (exact for
-//! colours that came from RGB565 palette words). 3-D producers are not
-//! ported yet, so [`Renderer::supports_models`] stays false and callers keep
-//! their 2-D fallbacks; terrain, water and world sprites draw nothing.
+//! at this boundary: an RGBA image becomes an indexed material when its
+//! colours fit a palette, else a raw-texel one (exact for colours that came
+//! from RGB565 palette words). World sprites are adapted from the port's
+//! particle presentation rather than produced by `FUN_0043D410`.
 
 use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::Rect;
@@ -18,7 +24,7 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 
 use v2k_formats::system::PaletteEntry;
-use v2k_formats::terrain::TerrainGrid;
+use v2k_formats::terrain::{TerrainGrid, WaterAnimation};
 
 use crate::camera::Camera;
 use crate::config::ScalingMode;
@@ -31,6 +37,7 @@ use crate::software::store::{rgb565, rgba8, MaterialStore, OwnedMaterial};
 use crate::software::terrain::{
     draw_ground, ground_lead, GroundMaterial, GroundProjection, GroundScene,
 };
+use crate::software::water::{draw_water, WaterScene};
 use crate::software::{
     material_flags, ClipRect, FillSlot, MaterialId, NoWordImages, PixelFormat, PrimitiveQueue,
     SoftwareRaster, Surface565, WORLD_ARENA_BYTES,
@@ -83,6 +90,22 @@ pub struct SoftwareRenderer {
     /// Sprite materials re-flagged per face (blend, row 28).
     derived: DerivedMaterials,
     model_error_reported: bool,
+    /// This frame's ground inputs the water pass reuses.
+    water: Option<WaterInputs>,
+    water_error_reported: bool,
+}
+
+/// What `FUN_00431A60` shares with the frame's ground scan: the light
+/// window, scan counts, shade dwords and the shoreline sprite records.
+struct WaterInputs {
+    light: Box<[i8; 1024]>,
+    light_origin: [u8; 2],
+    rows: u32,
+    points: u32,
+    shade_words: [u32; 8],
+    /// Global index of shoreline shape 0 and its five records.
+    shore_base: u32,
+    shore: Vec<crate::terrain_tiles::NativeSpriteRef>,
 }
 
 /// The floating camera's lens, for scenes without a native one.
@@ -137,6 +160,8 @@ impl SoftwareRenderer {
             camera_lens: None,
             derived: DerivedMaterials::default(),
             model_error_reported: false,
+            water: None,
+            water_error_reported: false,
         })
     }
 
@@ -289,6 +314,48 @@ impl ModelMaterials for BackendMaterials<'_> {
 }
 
 impl SoftwareRenderer {
+    /// The world projection words (`0x004FEEA0..0x004FEEF0`): the native
+    /// viewport's axes, the native lens, and the fade ramp between the world
+    /// fog planes.
+    fn ground_projection(
+        &self,
+        lens: crate::projection::NativeScreenProjection,
+        viewport: NativeViewportWords,
+    ) -> GroundProjection {
+        let fade = match self.world_model_fog() {
+            Some(fog) if fog.planes.far_raw > fog.planes.near_raw => [
+                0x0100_0000 / (fog.planes.far_raw - fog.planes.near_raw),
+                fog.planes.near_raw,
+                fog.planes.far_raw,
+            ],
+            _ => [0, i32::MAX, i32::MAX],
+        };
+        GroundProjection {
+            axes_q31: viewport.axes_q31,
+            translation: [0; 3],
+            focal: lens.focal_pixels(),
+            bounds: lens.viewport_pixels().map(|value| value as u32),
+            centre: lens.centre_pixels(),
+            fade,
+            wet_clock: match self.effect {
+                ProjectionEffect::RetailUnderwater { tick } => Some(tick as u32),
+                ProjectionEffect::None => None,
+            },
+        }
+    }
+
+    /// The world fog colour as a display word (context `+0x28`).
+    fn ground_fog_colour(&self) -> u32 {
+        self.world_fog.map_or(0, |fog| {
+            let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0) as u8;
+            u32::from(rgb565(
+                byte(fog.color[0]),
+                byte(fog.color[1]),
+                byte(fog.color[2]),
+            ))
+        })
+    }
+
     fn model_scene(&self) -> Option<ModelScene> {
         Some(ModelScene {
             camera_position: self.camera_position,
@@ -551,40 +618,29 @@ impl Renderer for SoftwareRenderer {
         let Some(native) = frames.native.as_ref() else {
             return;
         };
-        // 0x004FEEE8/EC/F0: the fade ramp between the world fog planes.
-        let fade = match self.world_model_fog() {
-            Some(fog) if fog.planes.far_raw > fog.planes.near_raw => [
-                0x0100_0000 / (fog.planes.far_raw - fog.planes.near_raw),
-                fog.planes.near_raw,
-                fog.planes.far_raw,
-            ],
-            _ => [0, i32::MAX, i32::MAX],
-        };
+        let projection = self.ground_projection(lens, viewport);
         let viewport_pixels = lens.viewport_pixels();
-        let projection = GroundProjection {
-            axes_q31: viewport.axes_q31,
-            translation: [0; 3],
-            focal: lens.focal_pixels(),
-            bounds: viewport_pixels.map(|value| value as u32),
-            centre: lens.centre_pixels(),
-            fade,
-            wet_clock: match self.effect {
-                ProjectionEffect::RetailUnderwater { tick } => Some(tick as u32),
-                ProjectionEffect::None => None,
-            },
-        };
         let empty_light = [0i8; 1024];
         let (light, light_origin) = lights.map_or((&empty_light, [0, 0]), |lights| lights.window());
+        let points = frames.scan_rows.clamp(3, 30);
+        let shore = crate::water::SHORELINE_BASE_OFFSET as usize;
+        let shore = shore..shore + crate::water::SHORELINE_FRAME_COUNT as usize;
+        self.water = Some(WaterInputs {
+            light: Box::new(*light),
+            light_origin,
+            rows: frames.scan_columns,
+            points,
+            shade_words: native.shade_words,
+            shore_base: native.tile_base + crate::water::SHORELINE_BASE_OFFSET,
+            shore: native
+                .sprites
+                .get(shore)
+                .map(<[_]>::to_vec)
+                .unwrap_or_default(),
+        });
         let motion = self.infection.frame();
         let display = |rgb555: u16| u32::from(((rgb555 & 0x7FE0) << 1) | (rgb555 & 0x1F));
-        let fog_colour = self.world_fog.map_or(0, |fog| {
-            let byte = |value: f32| (value.clamp(0.0, 1.0) * 255.0) as u8;
-            u32::from(rgb565(
-                byte(fog.color[0]),
-                byte(fog.color[1]),
-                byte(fog.color[2]),
-            ))
-        });
+        let fog_colour = self.ground_fog_colour();
         let sprites = &native.sprites;
         let tile_base = native.tile_base;
         let sprite = |index: u32| {
@@ -613,7 +669,7 @@ impl Renderer for SoftwareRenderer {
             fog_colour,
             cap_colour: colors.get(11).map_or(0, |entry| display(entry.rgb555)),
             rows: frames.scan_columns,
-            points: frames.scan_rows.clamp(3, 30),
+            points,
             light,
             light_origin,
             infection_offsets: motion.offsets(),
@@ -628,6 +684,81 @@ impl Renderer for SoftwareRenderer {
             Err(error) if !self.ground_error_reported => {
                 self.ground_error_reported = true;
                 eprintln!("software ground: {error:?}; the rest of the ground is not queued");
+            }
+            Err(_) => {}
+        }
+        self.queued = true;
+    }
+
+    /// `FUN_00431A60`: queue the sea through the retail water pass with the
+    /// light, counts and shoreline sprites of this frame's ground scan.
+    fn draw_water(
+        &mut self,
+        terrain: &TerrainGrid,
+        _sea_level_y: f32,
+        _color: [f32; 3],
+        retail_tick: i32,
+        _frames: Option<&crate::water::WaterFrames>,
+    ) {
+        let (Some(inputs), Some(viewport), SceneProjectionAuthority::Native(lens)) =
+            (self.water.as_ref(), self.native_viewport, self.authority)
+        else {
+            return;
+        };
+        if inputs.shore.is_empty() {
+            return;
+        }
+        let projection = self.ground_projection(lens, viewport);
+        let shore_base = inputs.shore_base;
+        let shore = &inputs.shore;
+        let sprite = |index: u32| {
+            let record = shore
+                .get(index.wrapping_sub(shore_base) as usize)
+                .or_else(|| shore.first())
+                .copied();
+            record.map_or(
+                GroundMaterial {
+                    id: 0,
+                    width: 1,
+                    height: 1,
+                },
+                |record| GroundMaterial {
+                    id: record.id,
+                    width: record.width,
+                    height: record.height,
+                },
+            )
+        };
+        let scene = GroundScene {
+            grid: terrain,
+            projection,
+            eye: viewport.origin_raw.map(|value| value as i16),
+            lead: ground_lead(viewport.axes_q31[2][1]),
+            screen_height: lens.viewport_pixels()[1] as i16,
+            shade_words: inputs.shade_words,
+            fog_colour: self.ground_fog_colour(),
+            cap_colour: 0,
+            rows: inputs.rows,
+            points: inputs.points,
+            light: &inputs.light,
+            light_origin: inputs.light_origin,
+            infection_offsets: [0; 16],
+            infection_selectors: &[0; 256],
+            tiles: &[],
+            tile_base: 0,
+            infection_base: 0,
+            sprite: &sprite,
+        };
+        let water = WaterScene {
+            sea_level: terrain.sea_level_raw(),
+            animation: WaterAnimation::Animated { tick: retail_tick },
+            shore_base,
+        };
+        match draw_water(&mut self.queue, &scene, &water) {
+            Ok(()) => {}
+            Err(error) if !self.water_error_reported => {
+                self.water_error_reported = true;
+                eprintln!("software water: {error:?}; the rest of the water is not queued");
             }
             Err(_) => {}
         }

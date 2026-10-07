@@ -24,6 +24,7 @@ mod span;
 mod state;
 pub mod store;
 pub mod terrain;
+pub mod water;
 
 pub(crate) use fixed::mul_q31;
 pub use fog::FogRamp;

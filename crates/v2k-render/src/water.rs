@@ -122,6 +122,9 @@ pub const SLOT_UV: [(f32, f32); 4] = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 
 /// to shoreline sets at global sprite indices 1741/2119/2859).
 pub const SHORELINE_BASE_OFFSET: u32 = 125;
 
+/// Shoreline shape sprites per level.
+pub const SHORELINE_FRAME_COUNT: u32 = 5;
+
 /// GPU-resident shoreline frame set for one level: the 5 shape sprites packed
 /// into a single texture, plus each frame's UV sub-rect (u0, v0, u1, v1).
 ///
