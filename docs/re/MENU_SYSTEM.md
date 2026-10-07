@@ -305,7 +305,15 @@ Pipeline: `FUN_0043B3E0` → `FUN_0043B1C0(rt, pos, flags, reveal, label,
 value)` → `FUN_00470AE0` (word-wrap at spaces, wrap width = 60% of screen
 width) / `FUN_00470A70` (single line) → `FUN_00470B60` per glyph →
 `FUN_00470F30` blit at `(pen_x/100 + xoff, pen_y/100 + yoff − sprite_h + 1)`
-— **y is the baseline**. Sprite resolver callback = 0x4291D0 =
+— **y is the baseline**. The pen stays in 1/100-px units and each glyph's
+position truncates. `FUN_00470F80` measures every advance plus every kern but
+the last, truncated to whole pixels; `FUN_0043B1C0` (flag 2) and the loading
+text `FUN_0042B040` centre at `x − width/2` with that halving truncated, while
+`FUN_00452790`'s presets above 9 start at `(screen width − width) / 2`. The
+glyphs are `0x04`-flagged records drawn through the `FUN_0047AD90` blit, so
+they use palette row 28, not the brightest row. With those rules the port's
+frontend label, copyright banner and both logos match DirectDraw trace frame
+`324003` pixel for pixel (2026-10-07). Sprite resolver callback = 0x4291D0 =
 `return DAT_004FE62C[id]` (passing NULL = measure-only pass, used to measure
 scrolled-out items). Setting rows: value string = `string_pool[label_id + 1 +
 *value_ptr]`, drawn right-aligned at `label_x + pt7.x (185)`. FUN_0043B740

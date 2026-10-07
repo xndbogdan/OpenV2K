@@ -56,17 +56,16 @@ impl MenuResources {
     ///   7:    Copyright banner (155x14 in variant 0)
     ///   8-14: Trophy/chalice icons (102x128) — carousel item icons
     pub fn from_menu_ovl(menu_gfx: &LevelState) -> Self {
-        let shade = v2k_formats::palette::BRIGHTEST_SHADE;
         let atlas = match &menu_gfx.sprites {
             Some(a) => a,
             None => return Self::empty(),
         };
 
-        let trophy_icons = Self::decode_range(atlas, 8, 15, shade);
-        let flame_frames = Self::decode_range(atlas, 9, 15, shade);
-        let copyright_banner = Self::decode_one(atlas, 7, shade);
-        let frontier_logo = Self::decode_one(atlas, 5, shade);
-        let publisher_logo = Self::decode_one(atlas, 6, shade);
+        let trophy_icons = Self::decode_range(atlas, 8, 15);
+        let flame_frames = Self::decode_range(atlas, 9, 15);
+        let copyright_banner = Self::decode_one(atlas, 7);
+        let frontier_logo = Self::decode_one(atlas, 5);
+        let publisher_logo = Self::decode_one(atlas, 6);
 
         // Find screeno2 model by name
         let screeno2_model_idx = menu_gfx.models.as_ref().and_then(|mc| {
@@ -98,9 +97,12 @@ impl MenuResources {
         }
     }
 
-    fn decode_one(atlas: &SpriteAtlas, entry_idx: usize, shade: usize) -> Option<DecodedIcon> {
+    /// Frontend sprites are blitted unshaded, so each keeps the palette row
+    /// its own flags select (`sprite_flat_shade_row`), not the brightest.
+    fn decode_one(atlas: &SpriteAtlas, entry_idx: usize) -> Option<DecodedIcon> {
         let entry = atlas.entries.get(entry_idx)?;
-        let decoded = atlas.decode_sprite(entry, shade).ok()?;
+        let row = crate::model_color::sprite_flat_shade_row(entry.pal_size as u8);
+        let decoded = atlas.decode_sprite(entry, usize::from(row)).ok()?;
         Some(DecodedIcon {
             width: decoded.width as u32,
             height: decoded.height as u32,
@@ -108,14 +110,9 @@ impl MenuResources {
         })
     }
 
-    fn decode_range(
-        atlas: &SpriteAtlas,
-        start: usize,
-        end: usize,
-        shade: usize,
-    ) -> Vec<DecodedIcon> {
+    fn decode_range(atlas: &SpriteAtlas, start: usize, end: usize) -> Vec<DecodedIcon> {
         (start..end)
-            .filter_map(|i| Self::decode_one(atlas, i, shade))
+            .filter_map(|i| Self::decode_one(atlas, i))
             .collect()
     }
 }

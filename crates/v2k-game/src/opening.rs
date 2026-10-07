@@ -444,6 +444,30 @@ pub fn intro_actor_heading(entity_index: usize) -> f32 {
     0.0
 }
 
+/// Where `FUN_00452790` lays out an Intro2 narrative record.
+///
+/// Every narrative record's header selects placement style 2 (style 3 on the
+/// final page), which places the text at 5% of the display mode's width,
+/// its baseline at 16% of the height, and wraps it at 80% of the width,
+/// each as an integer percentage. 1024x768 gives `(51, 122)`; 640x480 gives
+/// `(32, 76)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StoryCaptionPlacement {
+    pub x: i32,
+    pub baseline: i32,
+    pub wrap_width: i32,
+}
+
+impl StoryCaptionPlacement {
+    pub const fn for_display(width: i32, height: i32) -> Self {
+        Self {
+            x: 5 * width / 100,
+            baseline: height * 16 / 100,
+            wrap_width: 80 * width / 100,
+        }
+    }
+}
+
 /// A caption active during retail's inclusive `[start, end]` interval.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StoryCaption {
@@ -592,6 +616,28 @@ mod tests {
         assert_eq!(intro2_backdrop(4_001), Intro2Backdrop::BlackCard);
         assert_eq!(intro2_backdrop(4_300), Intro2Backdrop::BlackCard);
         assert_eq!(intro2_backdrop(4_301), Intro2Backdrop::BlackCard);
+    }
+
+    #[test]
+    fn narrative_captions_use_style_two_screen_percentages() {
+        // DirectDraw trace frame 345026 draws the caption's left edge at 51
+        // and its glyph bottom at 122 on the 1024x768 mode.
+        assert_eq!(
+            StoryCaptionPlacement::for_display(1024, 768),
+            StoryCaptionPlacement {
+                x: 51,
+                baseline: 122,
+                wrap_width: 819,
+            }
+        );
+        assert_eq!(
+            StoryCaptionPlacement::for_display(640, 480),
+            StoryCaptionPlacement {
+                x: 32,
+                baseline: 76,
+                wrap_width: 512,
+            }
+        );
     }
 
     #[test]

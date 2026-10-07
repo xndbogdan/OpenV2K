@@ -9814,8 +9814,11 @@ fn draw_story_caption(
         policy: renderer.ui_submission_policy(),
     });
     let font = &fonts.selected;
-    let margin_x = 24.0;
-    let max_width = fonts.virtual_w - margin_x * 2.0;
+    let placement = v2k_game::opening::StoryCaptionPlacement::for_display(
+        fonts.virtual_w as i32,
+        fonts.virtual_h as i32,
+    );
+    let max_width = placement.wrap_width as f32;
     let mut lines = Vec::<String>::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -9835,15 +9838,15 @@ fn draw_story_caption(
         lines.push(line);
     }
 
-    // Retail places the yellow narrative line near the top-left of the 640×480
-    // authored frame. It is independent of the bottom-left V2000 emblem.
-    let base = 60.0;
+    // The display mode's percentages, independent of the bottom-left V2000
+    // emblem.
+    let base = placement.baseline as f32;
     for (index, line) in lines.iter().enumerate() {
         draw_menu_text(
             renderer,
             font,
             line,
-            [margin_x, base + index as f32 * font.line_step],
+            [placement.x as f32, base + index as f32 * font.line_step],
             false,
             usize::MAX,
             mapping,
