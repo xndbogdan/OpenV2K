@@ -361,16 +361,7 @@ fn tick_primary(
                     .level_terrain()
                     .ok_or(Block::Runtime("cleansing terrain"))?;
                 let mut random = || u32::from(frame.world_fx.next_shared_retail_random_u16());
-                if !state.retarget(anchor, terrain, &mut random) {
-                    // Port extension: retail's probes stay around the drop
-                    // point, so a rover beamed out away from any infection
-                    // only mills about there. Seek the nearest infection.
-                    if let Some([x, z]) =
-                        super::tasks::nearest_infected_cell(terrain, entity.position_raw())
-                    {
-                        state.private.target_position_raw = [x, anchor[1], z];
-                    }
-                }
+                state.retarget(anchor, terrain, &mut random);
                 // 40320E..403217 maps false to the 4BE148 owner-result tag.
                 super::mover::run(
                     entity,
