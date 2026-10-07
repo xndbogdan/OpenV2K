@@ -335,8 +335,11 @@ its fog planes and the bilinear ground height (`FUN_0043DB60`).
 ## Screen billboards and overlays
 
 `FUN_0042D030` (the menu and cinematic V2000 emblems) queues a textured
-quad keyed by a fixed depth with its additive sprite record; the backend
-does the same, so the sorted scene paints around it. The status orb's
+quad keyed by a fixed depth with its additive sprite record. The menu
+emblem's key (`0xC00`) lies among the scene's, so the backend queues it the
+same way and the sorted scene paints around it. Intro2's `FUN_004537F0`
+passes -10000, below every other key, so that emblem drains last; the port
+draws it after the queue as the frame's final textured quad. The status orb's
 additive and half-additive layers are textured quads (`FUN_0042A570`) and
 its masked layers unscaled sprites (`FUN_0042A690`, `+0x1030`). The port
 holds these images as RGBA; the backend rebuilds an indexed material when

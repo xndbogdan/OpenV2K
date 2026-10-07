@@ -611,6 +611,17 @@ near/far −0x200/0x200, +0x7C terminal depth-fade color.
   with only the two frontend menu scenes differing. Cinematic, gameplay and
   Klaus-only controls remain identical in that billboard comparison. Selected
   tier font/layout submission follows the separate explicit UI policy above.
+- CINEMATIC EMBLEM (`FUN_004537F0`, every Intro2 frame): the same table and
+  D030 at unit scale (`S = 0x10000`, so `h = (focal_y << 6) >> 8`) with
+  queue key **-10000**, below every other key of the frame: it drains last
+  and adds over everything, Klaus's cover included. Its origin is `x = 0`,
+  `y = H - rh` (reference sprite 420), less `trunc(H/10)` above 480 lines.
+  Loading the Intro2 world empties the 1294–1299 slots (written to zero at
+  `00493B45`) before the first cinematic frame, so D030 takes each entry's
+  420–425 alternative: 16-colour 102×129 frames in tiers 1–3, a 101×128 quad
+  at `(0,351)` on the 640×480 tier. A TTD recording of retail Intro2 matches
+  this pixel for pixel at tick 13 (frame 425 over the cover) and tick 4003
+  (frame 423 over the grey final card).
 - BOTTOM SPRITES (`FUN_0042B040(rt,0,1,0)` every frame): global sprite ids
   1290 (Frontier logo, x=0), 1292 (copyright line, centered), and 1291
   (Grolier logo, right), each at y = screen_h − sprite_h. Variant-0 dimensions
