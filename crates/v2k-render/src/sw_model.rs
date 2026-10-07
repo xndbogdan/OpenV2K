@@ -21,7 +21,7 @@ use v2k_formats::models::{
 
 use crate::gl_backend::{
     authored_face_plane_visible, model_lighting_normals, resolve_model_vertices,
-    retail_model_shade, transform_model_light_normal,
+    retail_model_shade, transform_model_light_normal, view_light_normal,
 };
 use crate::projection::NativeViewportWords;
 use crate::renderer::WorldSpriteBlend;
@@ -123,6 +123,22 @@ impl ModelScene {
             (dot(self.camera_basis[1]) * self.units).round() as i32,
             (-dot(self.camera_basis[2]) * self.units).round() as i32,
         ]
+    }
+
+    /// VIEW-space direction of a model normal, which `FUN_0046D3F0`
+    /// effectively dots with the context's light: the native viewport's rows
+    /// when the scene has them, else the floating camera.
+    fn view_light_normal(&self, orientation: [[f32; 3]; 3], normal: [f32; 3]) -> [f32; 3] {
+        let Some(native) = self.native else {
+            return view_light_normal(self.camera_basis, orientation, normal);
+        };
+        let world = transform_model_light_normal(orientation, normal);
+        native.axes_q31.map(|row| {
+            row.iter()
+                .zip(world)
+                .map(|(&axis, value)| axis as f32 / 2_147_483_648.0 * value)
+                .sum()
+        })
     }
 
     /// The eye in the world image nearest `node`: the native viewport's
@@ -471,7 +487,7 @@ pub(crate) fn prepare_model_body(
     let shade_dword = |normal: [f32; 3]| -> u32 {
         retail_model_shade(
             mesh.shade_table,
-            transform_model_light_normal(draw.transform.orientation, normal),
+            scene.view_light_normal(draw.transform.orientation, normal),
             mesh.light_direction_raw,
             mesh.shade_shift,
         )

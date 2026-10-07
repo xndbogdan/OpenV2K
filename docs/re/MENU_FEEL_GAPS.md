@@ -161,8 +161,10 @@ by leverage:
    the light vector: every submission incorrectly inherited the local/world
    `(73,73,-73)` direction. Model submissions now carry their signed raw
    vector explicitly, so persistent frontend Klaus uses its recovered
-   `(-100,50,-50)` context while ring props and ordinary world models retain
-   `(73,73,-73)`.
+   `(-100,50,-50)` context while ring props retain `(73,73,-73)`. Since
+   2026-10-07 world models use the level's reduced Section-10 direction, and
+   every vector is applied in VIEW space; see
+   [the model light table](RENDER_PIPELINE.md#model-light-table).
    ✅ Camera-relative root orientation corrected 2026-07-11: the port applies
    the effective 180° view-space turn so Klaus presents his head toward the
    camera and his tail behind, matching the observed original menu.

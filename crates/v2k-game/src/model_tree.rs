@@ -16,7 +16,9 @@ use v2k_formats::models::{
 };
 use v2k_formats::system::PaletteEntry;
 use v2k_render::renderer::ModelSurfaceResolution;
-use v2k_render::renderer::RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW;
+use v2k_render::renderer::{
+    retail_world_model_light_direction_raw, RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
+};
 use v2k_render::{
     mat3_mul, orientation_f32, BillboardMaterial, ExternalFrameMode, FaceMaterial,
     ModelBillboardDraw, ModelDepthFade, ModelDraw, ModelMesh, ModelNearClip, ModelOverlayKind,
@@ -731,6 +733,9 @@ impl<'a> ModelTreeRenderer<'a> {
                     != 0,
             )
         });
+        if let Some(terrain) = cache.terrain() {
+            tree.light_direction_raw = retail_world_model_light_direction_raw(terrain);
+        }
         tree.near_clip = ModelNearClip::RetailWorld;
         tree
     }
@@ -837,11 +842,13 @@ impl<'a> ModelTreeRenderer<'a> {
         self
     }
 
-    /// Install the signed raw model-light vector for this hierarchy.
+    /// Install the signed raw VIEW-space model-light vector for this
+    /// hierarchy.
     ///
-    /// Ordinary world and local-menu contexts retain the default
-    /// `(73,73,-73)`. Frontend Klaus uses the distinct `(-100,50,-50)` vector
-    /// recovered from its persistent world context.
+    /// Local contexts retain the default `(73,73,-73)` and world trees start
+    /// from the level's reduced Section-10 direction. Frontend Klaus uses the
+    /// distinct `(-100,50,-50)` vector recovered from its persistent world
+    /// context.
     pub fn with_light_direction_raw(mut self, light_direction_raw: [i32; 3]) -> Self {
         self.light_direction_raw = light_direction_raw;
         self

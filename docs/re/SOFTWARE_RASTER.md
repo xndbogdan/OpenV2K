@@ -384,9 +384,14 @@ span-reciprocal overrun; and the zero fog-mask state.
   an approximate quad.
 - Model VIEW points come from the port's floating-point materialized world
   points, not retail's Q31 node transforms, so they can differ by a unit.
-  Billboards still queue after their body rather than at their command when
-  no painter program carries them.
+  Shade bins likewise dot floating-point VIEW normals with the context's
+  light ([model light table](RENDER_PIPELINE.md#model-light-table)), so a
+  normal on a bin edge can land one bin off. Billboards still queue after
+  their body rather than at their command when no painter program carries
+  them.
 - The backend adapts RGBA-only port images (overlays, fades) at its
   boundary; those adapters are not retail evidence.
-- No full-frame comparison against the retail software renderer has been
-  made; frames have been compared only with the port's OpenGL renderer.
+- Full frames have been compared with the accepted retail DirectDraw trace
+  only at approximate Intro2 poses: sky, fog, texture sampling and dither
+  agree, and the comparison found the world model light, now corrected.
+  Matched-pose comparison remains open.

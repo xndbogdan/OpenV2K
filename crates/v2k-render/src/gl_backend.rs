@@ -1275,10 +1275,12 @@ fn compute_face_normal(vertices: &[[f64; 3]], tri: &[u16; 3]) -> [f32; 3] {
 ///
 /// `FUN_0046D3F0` dots the active signed integer light vector with an authored
 /// signed-16 unit normal, shifts the result right by 19, then masks to four
-/// bits. World and local-menu contexts use `(73,73,-73)`; frontend Klaus uses
-/// `(-100,50,-50)`. Their direction *and magnitude* therefore belong to the
-/// render submission. The parser exposes normalized float normals, so
-/// `32767 / 2^19` restores the equivalent fixed-point bin scale.
+/// bits. Local contexts use `(73,73,-73)`, the world its reduced Section-10
+/// direction and frontend Klaus `(-100,50,-50)`. Their direction *and
+/// magnitude* therefore belong to the render submission. The parser exposes
+/// normalized float normals, so `32767 / 2^19` restores the equivalent
+/// fixed-point bin scale. Callers pass VIEW-space normals
+/// ([`view_light_normal`]).
 const RETAIL_MODEL_NORMAL_TO_SHADE_BIN: f32 = 32_767.0 / 524_288.0;
 
 fn retail_model_shade_index(
@@ -1326,6 +1328,25 @@ pub(crate) fn model_lighting_normals(
         ModelFaceShading::FlatLit => Some([face_normal; 3]),
         ModelFaceShading::Gouraud => Some(corner_normals),
     }
+}
+
+/// The VIEW-space normal `FUN_0046D3F0` effectively dots with the light.
+///
+/// `FUN_00466160` brings the context's light into model space through the
+/// node's VIEW axes (camera rows times model basis), so the light is fixed to
+/// the camera. `basis` holds the camera's GL rows (x right, y up, z toward
+/// the viewer); retail VIEW Z looks forward.
+pub(crate) fn view_light_normal(
+    basis: [[f32; 3]; 3],
+    orientation: [[f32; 3]; 3],
+    normal: [f32; 3],
+) -> [f32; 3] {
+    let world = transform_model_light_normal(orientation, normal);
+    [
+        dot3(basis[0], world),
+        dot3(basis[1], world),
+        -dot3(basis[2], world),
+    ]
 }
 
 pub(crate) fn transform_model_light_normal(
@@ -1801,7 +1822,7 @@ unsafe fn draw_tris_gl(
             normals.map(|normal| {
                 retail_model_shade(
                     shade_table,
-                    transform_model_light_normal(orientation, normal),
+                    view_light_normal(camera_basis, orientation, normal),
                     light_direction_raw,
                     shade_shift,
                 )
@@ -5526,10 +5547,11 @@ mod tests {
         retail_flat_lit_rgb565, retail_model_shade_index, retail_view_pin_vertex,
         retail_world_surface_alias_vertex, retail_world_surface_vertex, scene_uses_world_fog,
         terrain_type_signature, transform_model_light_normal, triangle_uses_surface_overlay_depth,
-        view_pin_triangle_is_color_underlay, view_pin_triangle_is_world_surface_decal,
-        view_pin_triangle_needs_coplanar_depth, view_pin_triangle_visible,
-        world_point_as_raw_local, world_sprite_draw_order, IndexedModelTextures,
-        OverlaySpriteBlend, SurfaceVertexSource, MODEL_FIXED_SHADE_ROW, RETAIL_VIEW_PIN_Y,
+        view_light_normal, view_pin_triangle_is_color_underlay,
+        view_pin_triangle_is_world_surface_decal, view_pin_triangle_needs_coplanar_depth,
+        view_pin_triangle_visible, world_point_as_raw_local, world_sprite_draw_order,
+        IndexedModelTextures, OverlaySpriteBlend, SurfaceVertexSource, MODEL_FIXED_SHADE_ROW,
+        RETAIL_VIEW_PIN_Y,
     };
     use crate::config::ScalingMode;
     use crate::renderer::{
@@ -6187,6 +6209,44 @@ mod tests {
     }
 
     #[test]
+    fn world_model_light_is_the_reduced_section10_direction_fixed_to_the_camera() {
+        use crate::renderer::retail_world_model_light_direction_raw;
+        // 42EA30 divides X and Z by four, rounding toward zero.
+        let mut terrain = flat_world_surface_terrain(0, 0);
+        assert_eq!(
+            retail_world_model_light_direction_raw(&terrain),
+            [-18, 73, -18]
+        );
+        terrain.header[1..4].copy_from_slice(&[75, -40, -3]);
+        assert_eq!(
+            retail_world_model_light_direction_raw(&terrain),
+            [18, -40, 0]
+        );
+
+        // 466160 rotates the light through the node's VIEW axes, so one world
+        // normal shades differently once the camera turns.
+        let identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let up = [0.0, 1.0, 0.0];
+        let east = [1.0, 0.0, 0.0];
+        assert_eq!(view_light_normal(identity, identity, up), [0.0, 1.0, 0.0]);
+        // GL rows look down -Z; retail VIEW Z looks forward.
+        assert_eq!(
+            view_light_normal(identity, identity, [0.0, 0.0, 1.0])[2],
+            -1.0
+        );
+        let light = [-18, 73, -18];
+        let facing_camera = view_light_normal(identity, identity, [0.0, 0.0, 1.0]);
+        let yawed = [[0.0, 0.0, -1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]];
+        let facing_after_yaw = view_light_normal(yawed, identity, east);
+        assert_eq!(facing_after_yaw, facing_camera);
+        assert_ne!(
+            retail_model_shade_index(view_light_normal(identity, identity, east), light, 0),
+            retail_model_shade_index(facing_after_yaw, light, 0)
+        );
+        assert_eq!(retail_model_shade_index(facing_camera, light, 0), 1);
+    }
+
+    #[test]
     fn world_surface_projection_uses_retail_section10_slopes() {
         let terrain = flat_world_surface_terrain(0, -0x1800);
         let projection = WorldSurfaceProjection::new(&terrain, 123);
@@ -6669,6 +6729,7 @@ mod tests {
             blend,
             flat_shade_row: 28,
             fog: crate::renderer::SpriteFog::Near,
+            native: None,
         };
         let sprites = [
             sprite(100.0, 10, WorldSpriteBlend::HalfAdditive),

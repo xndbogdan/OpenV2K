@@ -158,14 +158,30 @@ impl FaceMaterial {
     }
 }
 
-/// Raw model-light vector installed by the ordinary world and local-menu
-/// render contexts.
+/// Raw model-light vector of the local render contexts (templates
+/// `0x4CB460` and `0x4CA628`: frontend prop rows and gameplay HUD models),
+/// whose camera rows are identity.
 ///
-/// Retail transforms these signed integer components into model orientation
-/// before resolving face/corner normal references through the Section-6 table.
+/// Every context's light is a VIEW-space vector: `FUN_00466160` brings it
+/// into model space through the node's VIEW axes before `FUN_0046D3F0`
+/// resolves face/corner normal references through the Section-6 table.
 /// Keeping the authored scale matters because the final bin is selected after
-/// a fixed `>> 19`, not from a normalized direction alone.
+/// a fixed `>> 19`, not from a normalized direction alone. World contexts
+/// use [`retail_world_model_light_direction_raw`] instead.
 pub const RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW: [i32; 3] = [73, 73, -73];
+
+/// The world context's model light: `FUN_0042EA30` stores the Section-10
+/// direction with X and Z divided by four (rounding toward zero), and
+/// `FUN_00433FA0` installs it, unrotated, as the VIEW-space light of every
+/// frame. Model shading in the world is therefore fixed to the camera.
+/// Level 1's `(-73,73,-73)` becomes `(-18,73,-18)`.
+pub fn retail_world_model_light_direction_raw(terrain: &TerrainGrid) -> [i32; 3] {
+    [
+        terrain.header[1] / 4,
+        terrain.header[2],
+        terrain.header[3] / 4,
+    ]
+}
 
 /// Endpoint producer mode for the manual 0x02/0x22 screen constructor.
 #[derive(Debug, Clone, Copy)]
@@ -221,9 +237,10 @@ pub struct ModelMesh<'a> {
     /// Active Section-6 render-shade table. The recovered retail model light
     /// table addresses entries 0..7 and maps its remaining slots to entry 0.
     pub shade_table: Option<&'a [FogGradientEntry]>,
-    /// Signed raw light vector active for this render context. Ordinary world
-    /// and local menu props use `(73,73,-73)`; the frontend Klaus context uses
-    /// its separately authored `(-100,50,-50)` vector.
+    /// Signed raw VIEW-space light vector active for this render context.
+    /// World draws use the level's reduced Section-10 direction, local
+    /// contexts `(73,73,-73)` and the frontend Klaus context its separately
+    /// authored `(-100,50,-50)`. Backends shade with VIEW-space normals.
     pub light_direction_raw: [i32; 3],
     /// Signed contextual shift applied to the 16-slot model-light table.
     /// World entity draws use terrain light minus the 0..8 underwater
@@ -589,9 +606,8 @@ impl<'a> WorldSurfaceProjection<'a> {
     }
 
     pub fn new(terrain: &'a TerrainGrid, retail_tick: i32) -> Self {
-        let direction_x = terrain.header[1] / 4;
-        let direction_y = terrain.header[2];
-        let direction_z = terrain.header[3] / 4;
+        let [direction_x, direction_y, direction_z] =
+            retail_world_model_light_direction_raw(terrain);
         Self {
             terrain,
             retail_tick,
