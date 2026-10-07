@@ -427,6 +427,7 @@ impl ModelNodeGeometry<'_> {
             edges: &[],
             edge_projection: v2k_render::renderer::ModelEdgeProjection::Compatibility,
             billboards: &[],
+            painter_program: &[],
         }
     }
 
@@ -588,6 +589,7 @@ impl ModelTreeRenderer<'_> {
                     node.depth_fade.unwrap_or_else(|| {
                         model_node_depth_fade(node.model_flags, self.depth_fade)
                     }),
+                    NodePainter::Ordered,
                 ),
                 PainterPrimitive::Edge { edge, .. } => self.submit_node(
                     geometry.edge_index(edge),
@@ -599,6 +601,7 @@ impl ModelTreeRenderer<'_> {
                     node.depth_fade.unwrap_or_else(|| {
                         model_node_depth_fade(node.model_flags, self.depth_fade)
                     }),
+                    NodePainter::Ordered,
                 ),
                 PainterPrimitive::Billboard { billboard, .. } => self.submit_node_billboards(
                     &geometry.billboard_index(billboard),

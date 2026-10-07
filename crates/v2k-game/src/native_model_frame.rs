@@ -23,6 +23,14 @@ pub struct NativeWorldViewport {
 }
 
 impl NativeWorldViewport {
+    /// The words the software producers transform with.
+    pub fn words(self) -> v2k_render::projection::NativeViewportWords {
+        v2k_render::projection::NativeViewportWords {
+            origin_raw: self.origin_raw,
+            axes_q31: self.axes_q31,
+        }
+    }
+
     pub fn world_vector_to_view(self, vector: [i32; 3]) -> [i32; 3] {
         if self.identity {
             vector

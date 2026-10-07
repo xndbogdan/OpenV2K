@@ -1083,9 +1083,19 @@ fn display_exposes_retail_rows_and_port_scaling() {
         .find(|item| item.label == "Rendering")
         .unwrap();
     assert!(rendering.selectable, "retain the authored renderer row");
-    assert!(!rendering.enabled);
-    assert!(!rendering.is_interactive());
+    assert!(rendering.enabled);
+    assert!(rendering.is_interactive());
     assert_eq!(rendering.value_label.as_deref(), Some("OpenGL"));
+    // Value 0 shows retail's own "Software" string.
+    shell.engine.settings.set(SettingId::Rendering, 0);
+    shell.refresh(&ctx);
+    let rendering = shell
+        .view()
+        .items
+        .iter()
+        .find(|item| item.label == "Rendering")
+        .unwrap();
+    assert_eq!(rendering.value_label.as_deref(), Some("Software"));
     let camera = shell
         .view()
         .items
@@ -1121,6 +1131,7 @@ fn display_exposes_retail_rows_and_port_scaling() {
             .map(|item| item.label.as_str())
             .collect::<Vec<_>>(),
         [
+            "Rendering",
             "Resolution",
             "Bilinear Filtering",
             "Display",

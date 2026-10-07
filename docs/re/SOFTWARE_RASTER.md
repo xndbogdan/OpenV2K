@@ -1,0 +1,423 @@
+# V2000 software raster (16-bpp Graph2D fill table)
+
+How retail `V2000.EXE` turns a queued primitive into RGB565 pixels when the
+surface is a 16-bpp software surface, and how `v2k-render::software`
+reproduces it. This is the CPU path; the alternate/Direct3D `Graph2D` table
+(`FUN_00481240..FUN_00492A10`) is a different consumer and is not described
+here. See [RENDER_PIPELINE.md](RENDER_PIPELINE.md) for the queue, producers
+and the frame-level evidence.
+
+Status: every reachable fill slot and every span row a slot can bind is
+ported and matches retail byte for byte on the native receipts below, and
+the primitive queue reproduces the retail queue controls. The ground and
+water producers, the model face, edge and billboard constructors and the
+type-1 vertex projector are ported and byte-exact against retail on their
+receipts, and model painter programs run their queue groups as retail
+does. The software backend (`crates/v2k-render/src/sw_backend.rs`) draws
+videos, menus, the frontend models, 2-D overlays and whole gameplay and
+cinematic frames through them, particles included. It is selectable in the
+launcher, in the Display menu's Rendering row (Software/OpenGL) and with
+`--renderer software`; Automatic prefers OpenGL and falls back to Software
+when OpenGL cannot start. A Rendering change replaces the renderer at once,
+as retail's display menu rebuilds its display (`FUN_0043CC70` ->
+`FUN_0043CC40` -> `FUN_0044E0E0`); the game re-uploads its textures and the
+replacement inherits the world fog. If the new backend cannot start, the
+current one keeps running.
+
+The surface is always an authored retail frame (320×240 to 1024×768): the
+ground, water and model producers project through the tier's lens and
+viewport words, which only exist at those sizes. Native scaling therefore
+shows the software frame at 4:3 rather than drawing at the window size.
+At 1024×768, a release build on the development machine spends 5.2 ms per
+frame on average (9.6 ms at most) in the first world and 8.9 ms (18.6 ms) in
+Intro2, game logic included.
+
+## Pipeline
+
+1. **Queue thunks** `0x0047A720..0x0047AB00` call one Graph2D fill slot with
+   the queue record's payload (`record + 8`).
+2. **Fill-slot handler.** `FUN_00480D10` stores the software handlers at
+   Graph2D `+0x101C..+0x10C4` when its mode descriptor's word `+8` is zero
+   and word `+4` (bits per pixel) is 16; a non-zero `+8` installs the
+   alternate table. The queue reaches 32 of the 43 software slots;
+   `+0x101C`, `+0x1068..+0x107C` and `+0x10B0..+0x10BC` have no thunk or
+   call site.
+   - Six **2D slots** write the surface themselves (`+0x1020..+0x1034`).
+   - 26 **polygon slots** decode corners and attributes into the vertex pool,
+     bind a material and a span row, store `0xE49C` into the dither word
+     `+0x10C8`, and run the scan converter.
+3. **Scan converter** `FUN_00472B20` walks the polygon's two vertex chains,
+   clips them to the Graph2D rectangle, and calls the bound row's span filler
+   once per scanline with the left and right edge records.
+4. **Span row.** Each of two static 36-row tables (indexed texels
+   `0x004D55A0`, raw texels `0x004D5900`) holds per row a span filler and
+   the five routines of one attribute class (edge init, x-clip interpolation,
+   clip clamp, multi-line step, edge-to-vertex copy).
+
+### Graph2D block and device fields
+
+| Offset | Meaning |
+|---|---|
+| device `+0x00/+0x04` | surface width/height (the clip setter clamps to them) |
+| device `+0x18/+0x1C` | locked surface pointer, pitch in bytes |
+| device `+0x20/+0x24/+0x28` | red/green/blue channel shift words (RGB565: 7, 2, 4) |
+| `+0x0C` | clip rectangle `x0, y0, x1, y1` (i16; left/top inclusive) |
+| `+0x14` | bound Section-3 material record |
+| `+0x18` | per-primitive word; byte `+0x1B` is the fixed palette row |
+| `+0x1C` | flat colour / packed word for untextured rows |
+| `+0x20` | bound span row |
+| `+0x24..+0xE34` | vertex pool: 100 × nine dwords (attributes 0..3, x 16.16, y, u, v, fade) |
+| `+0xE34` | live pool length |
+| `+0xE38..+0x1018` | four ten-entry `{from, to, flags}` chain lists |
+| `+0x1018` | span-row table base: untextured handlers write the raw table, unfogged textured handlers the material's; fogged handlers leave it |
+| `+0x10C8` | dither word |
+
+The pool and lists persist between primitives; a list slot read past its live
+length sees the previous primitive's entry, and the port keeps that.
+
+## Fixed point
+
+- Products use the Q31 multiply `imul; shl eax,1; rcl edx,1`.
+- Slopes are Q31 products with a reciprocal; most fillers round a negative
+  slope one unit toward zero, but the indexed fillers leave the u step
+  unrounded.
+- Edge and span reciprocals come from a 641-entry table (`0x4D4B98`). Spans
+  wider than 640 pixels index past it into the span-row tables that follow,
+  and use those routine addresses as reciprocals.
+- Clip interpolation halves the numerator, clamps the ratio to `0x3FFFFFFF`,
+  picks its sign from the branch taken, then doubles it.
+
+## Scan conversion
+
+- The top vertex starts chain A (walking backwards) and chain B (forwards).
+  A chain that turns upward ends the walk; for a quad, `FUN_004734E0`
+  instead draws two triangles sharing the chain's second and fourth vertices,
+  re-entering the converter 0x1A0 bytes deeper on the stack.
+- Top clipping (`FUN_00472680`) drops segments above the clip top. Side
+  clipping (`FUN_00472880`) splits segments at both clip sides and tags each
+  piece. The rebuild's skip loop ends chain A at its split count but chain B
+  only past it (`jg`), so it can read one stale list entry. When a rebuilt
+  chain-B segment starts away from the previous one's end, its new start
+  vertex is clamped toward chain B's own edge instead of chain A's
+  (`00473281`).
+- Each scanline goes to the filler with the smaller-x edge as left; equal x
+  picks chain B.
+
+## Span rows and fillers
+
+Row selection, by handler and material flags (`0x01` keyed, `0x02` raw,
+`0x04` row 28, `0x08` half-additive, `0x10` additive):
+
+- flat 0 (half 12), tinted 1 (13), Gouraud 2 (14);
+- textured 4/5 (one-row 5), +4 keyed, +12 half-additive, +24 additive;
+- per-vertex shaded 6, with the same offsets;
+- fogged rows 7, keyed 11, half 19/23, additive 31/35.
+
+Rows 3, 15 and 24..27 are bound by no slot; their fillers are not ported.
+
+Notable filler behaviour (each port names its retail routine):
+
+- **Direction.** Indexed fillers write right to left from the right edge;
+  raw and untextured fillers write left to right from the left edge.
+- **Dither.** Shaded indexed fillers add generator noise (`state * 9`, seeded
+  from `+0x10C8`) to the palette row and fog level, and each keeps the
+  generator differently. `00478510` puts the left edge record's address high
+  half above the stored word, so the retail stack location of the scan
+  converter is an input to those pixels. `004799B0` stores back the last
+  pixel's halved destination. The additive shaded rows (`0047A0B0`,
+  `0047A540`) step `0x43FD` per drawn pixel and write an unmasked saturating
+  sum. The half-additive shaded rows (`00479220`, `004799B0`) use `u >> 16`
+  as their "noise".
+- **Pixel pairs.** `00479220` samples one texel per aligned pixel pair; a
+  two-pixel span starting at an address of 2 mod 4 draws nothing.
+- **Fog ramp.** `FUN_0047CA20` rebuilds sixteen packed ramp entries and the
+  saturation masks only when the fog colour changes. Process memory starts
+  zeroed, so until a fogged primitive supplies a non-zero colour the masks
+  are zero and additive draws write black.
+- **Raw rows.** Raw half-additive *and* additive rows never read the
+  destination: they write the (lit) texel at half intensity, masked with
+  `!(0x80 << (green+1) | 0x80 >> (blue-1))`. Raw fogged rows walk the fade
+  from the right edge toward the left, read the low word of ramp entry
+  `(fade >> 20) - 1`, and saturate on each field's lowest bit instead of
+  its carry.
+- **Accumulation.** `00476990` (and the unbound `00477AD0`) add the previous
+  pixel's sum instead of the colour, so a span brightens toward white.
+
+## Primitive queue
+
+Producers append records to one bump arena (`FUN_0044F540` requests 0x19000
+bytes; `FUN_00494860` keeps the last twelve free) that `FUN_00428E60` resets
+(`FUN_004948C0`) and `FUN_00428E70` drains (`FUN_004948F0`):
+
+- the 24-byte root holds the current scope's mode (1 sorted, 0 FIFO), the
+  root list head, the tail (address of the last `next` field), the current
+  scope header, the limit and the cursor;
+- `FUN_00459D10` appends `{next, callback, payload}`, `FUN_0045B220`
+  `{key, next, callback, payload}`, and `FUN_0045B280` picks by the current
+  mode; payloads are rounded up to dwords;
+- `FUN_00494AB0` / `FUN_00494B60` append a group record whose payload is a
+  child list header `{saved mode, head, saved tail, saved scope}` and whose
+  callback sorts and drains (`FUN_00494930`) or only drains
+  (`FUN_00494A50`) it; `FUN_00494A80` restores the enclosing scope;
+- the bottom-up merge sort orders by descending signed key, equal keys by
+  ascending record address, and relinks the list in place; draining stops
+  at the first non-zero callback result and does not consume records;
+- a record past the limit raises an engine error through `FUN_00471150`
+  without linking; a group that does not fit returns an error and leaves
+  the scope unchanged.
+
+Every record callback is a thunk (`0x0047A720 + 0x20 * k`) that calls one
+fill slot with the device and payload and returns its result.
+`crates/v2k-render/src/software/queue.rs` keeps the arena as bytes with this
+layout; its tests replay the retail queue controls.
+
+## Ground producer
+
+`FUN_0042F960 -> FUN_0042F980` queues the opaque ground
+(`crates/v2k-render/src/software/terrain.rs`):
+
+- `FUN_00431890` builds a context from the world viewport: the first eight
+  Section-6 dwords (shade words), the queue, the fog colour (`+0x7C`), the
+  projector at dispatch-table `+0xB4`, the eye words, the darkness band from
+  the Section-10 header, the infection base and a signed row lead from
+  camera basis word 12 (`0x200`, or `0x200 + ((w + 0x58000000) * 0x1C00 >>
+  31)` when that sum is negative). `FUN_00433530` advances the infection
+  motion offsets.
+- Rows are lines of constant world X. `FUN_0042FCC0` fills one row of
+  `DAT_004CAB74` points along +Z from `eyeZ + lead`: the first and last
+  points come from `FUN_00430140` at the fractional ends (bilinear height),
+  interior points from whole cells. Each point gets its height, light-window
+  and darkness shade index (0..7), infection motion, the projector's screen
+  point, outcode, fade byte and a 16-bit depth word; points behind the near
+  plane are reprojected at depth 0x40 by `FUN_0042FFF0`.
+- The scan walks `DAT_004CAB70` rows toward -X from the eye's row, then
+  restarts at the eye's row and walks toward +X. After each strip it
+  retires leading points whose next point is past the near plane or off the
+  screen side it walks toward (outcode `0x41`, then `0x44`).
+- Each strip (`FUN_00430430`) takes the lower-X row first. Its first and
+  last cells are mapped quads (`+0x10C0`, fogged `+0x10C4`) with the leading
+  or trailing edge UVs interpolated by the eye's fractional Z; other cells
+  are shaded quads (`+0x10A8`/`+0x10AC`) whose corners are permuted onto the
+  canonical transition sprite (`FUN_00433180`). Cells with infected corners
+  add an overlay allocated right after the base with the same key; a fully
+  infected interior cell queues only the full infection shape. Cells are
+  skipped when their outcodes cannot reach the screen, every corner is fully
+  faded, or `FUN_004709B0` finds both triangles wound counter-clockwise on
+  screen. Keys are the latest row's depth word plus 0x200.
+- Every first-row point pair also queues `FUN_00431970`'s flat cap to the
+  screen bottom (key 0, system-2 palette entry 11).
+
+The world viewport words come from the chase or intro camera's native
+viewport and the lens from system level 2; the fade ramp is
+`[0x1000000 / (far - near), near, far]` over the world fog planes. Terrain
+sprites are registered as native Section-3 records sharing their atlas's
+display-format palette block.
+
+## Water producer
+
+`FUN_00431A40 -> FUN_00431A60` queues the sea when the Section-10 sea level
+(header dword 0 bits 8..23) is above `-0x1000`
+(`crates/v2k-render/src/software/water.rs`). It walks the ground scan's rows
+and retires points the same way, with its own points and strips:
+
+- `FUN_00431D20` builds a row like `FUN_0042FCC0`. Interior points
+  (`FUN_004321E0`) sit at whole cell words; the first and last
+  (`FUN_004324B0`) at the eye's fractional Z, but take terrain, light and
+  the submerged bit from their whole cell. Each point's height is
+  `FUN_00445920`'s surface: the sea level, or where the terrain below is
+  under it and waves animate (`DAT_004FECE4`), the sea displaced by three
+  table sines of the clock and position, scaled by the water depth plus
+  0x200 and clamped to the terrain.
+- The shade index is `((surface - previous) >> 5) + 3 + light`, clamped to
+  0..7, where `previous` is the row's previous point; the first point's
+  `previous` takes its terrain one column back and its wave one cell back.
+- Points are projected by the dry projector inline; a point behind the
+  near plane only takes outcode 0x40 (no reprojection).
+- `FUN_004327C0` queues each cell with a submerged corner as one shoreline
+  sprite, chosen and rotated by the four submerged bits through the table
+  at `0x004CACC8`: mapped quads at the strip ends (UVs blended by the eye's
+  fractional Z, as for the ground), shaded quads between. There is no
+  winding test and no cap; keys are the depth word plus 0x180, so water
+  paints after the ground at the same depth.
+
+## Model constructors
+
+The model command stream runs through two 256-entry constructor tables,
+near (`0x004D3CE0`) and fog (`0x004D40E0`); `FUN_00464E60` picks the table
+per node from its origin depth and authored radius against the fog planes
+and rejects a node wholly beyond the far plane
+(`crates/v2k-render/src/software/model.rs`).
+
+- **Vertex cache.** Each slot holds VIEW x/y/z, a screen point, an outcode
+  (0x80 once projected) and a fade byte. Ordinary vertices project through
+  `FUN_0046CEB0` (fog) or `FUN_0046CD90` (near): the divide-first
+  perspective, the 0x1FFF cap and the outcodes of the ground projector.
+  Type 1 (`FUN_0046DC00`) averages its two sources' screen points
+  (truncating), keeps the nearer source's depth and fade, takes a fresh
+  outcode, and is rejected when either source is; it never writes VIEW X/Y.
+- **Faces.** Opcode bits select the family: `0x03`/`0x04` triangle/quad
+  (`0x07`/`0x08` mirrored), `0x20` Gouraud, `0x40` lit, `0x80` sprite. A
+  face is skipped when its normal is culled, its corners' outcode cannot
+  reach the screen, or (fog table) every corner is fully faded; otherwise
+  one packet is keyed by its first corner's depth.
+- **Edges.** `0x02` (`FUN_00458C60`/`FUN_00458E20`) queues a line
+  (`+0x1024`, fogged `+0x1028` with both fade bytes) unless the endpoints'
+  outcode cannot reach the screen. `0x22` (`FUN_00459000`/`FUN_00459550`)
+  queues a sprite quad around the segment: skipped when either endpoint is
+  behind the near plane or (fog) both are fully faded; half width is the
+  raw size word projected at the endpoints' mean depth (`FUN_004594C0`),
+  across the integer-sqrt screen direction (`FUN_00457730`); it reaches
+  past each endpoint by `length * height / (2 * (width - height))` of the
+  sprite record. Both are keyed by the first endpoint's depth.
+- **Billboards.** `0x68` (flat colour) and `0x78` (sprite) rotate a quad by
+  a quarter-sine angle about the anchor's screen point, half the projected
+  size on each side; sprite billboards scale by the sprite's aspect. Fog
+  billboards take the anchor's fade on every corner and skip a fully faded
+  anchor.
+
+The adapter (`crates/v2k-render/src/sw_model.rs`) rebuilds these inputs
+from the port's materialized model: VIEW points from the scene's native
+viewport (only the node's delta wraps to signed words; vertex offsets add
+in VIEW space) or the floating camera (256 VIEW units per world unit, 100
+for frontend models), lighting from the authored normals, and one command
+per source polygon and edge.
+
+## Painter programs
+
+Retail runs a model tree as one command stream into the queue. Opcodes
+`0x06`/`0x26` (maximum/minimum depth of a slot list), `0x46`/`0xC6` (a
+slot's depth, plus an offset), `0x66` (the node origin), `0x86` (-1) and
+`0xA6` (a constant) open a FIFO group (`FUN_00494B60`), `0x15` a sorted one
+(`FUN_00494AB0`), and `0xE6` closes the innermost; an instance command
+expands its child in place, inside the groups open there. About half of
+the world models author groups, and some, including the player's craft,
+put child instances inside them.
+
+The port submits a tree one node at a time, so each body carries its
+materialized painter program and the index of the parent instance it
+expands, and `Renderer::end_model_node` follows its children
+(`crates/v2k-render/src/sw_painter.rs`). The backend keeps one frame per
+open node: a frame runs its program up to its next instance, resumes
+through the matching instance when that child arrives (skipping children
+that never came) and finishes at the node's end. Group keys resolve to
+VIEW depths of the node's materialized points; an unresolved key skips its
+group. Leftover groups close when the tree's root ends. Runs of draws the
+game has already painter-ordered (the frontend's Klaus hierarchy) go in one
+FIFO group keyed by their outer group.
+
+## Particles
+
+`FUN_0043D410` draws one particle (`crates/v2k-render/src/software/particle.rs`).
+It projects the particle through the world projector and draws nothing when
+the centre is behind the near plane, past the context's far plane, or off
+screen by more than the screen size. The quad's half width is
+`((w * scale) >> 8) * focal / (depth << 9)` (height likewise) for the frame's
+sprite record and `scale` = the class draw scale (plus a jitter from the
+particle record's address) times the frame's size word; class flag 8 keeps
+at least one pixel. A quad that cannot reach the screen is dropped. Unless
+class flag 4 centres it, the quad stands on the particle; flag 1 mirrors
+it. It is keyed by the depth plus the class's signed bias: a near textured
+quad before the context's fog plane, else a fogged one with the centre's
+fade byte. A class with a shadow size (descriptor `+0x09`) also queues a
+one-pixel flat quad between two ground points projected by `FUN_0046D010`,
+in master palette entry 32, keyed one unit deeper. The game supplies each
+particle's frame, jittered scale, descriptor flags, bias and shadow size,
+its fog planes and the bilinear ground height (`FUN_0043DB60`).
+
+## Screen billboards and overlays
+
+`FUN_0042D030` (the menu and cinematic V2000 emblems) queues a textured
+quad keyed by a fixed depth with its additive sprite record; the backend
+does the same, so the sorted scene paints around it. The status orb's
+additive and half-additive layers are textured quads (`FUN_0042A570`) and
+its masked layers unscaled sprites (`FUN_0042A690`, `+0x1030`). The port
+holds these images as RGBA; the backend rebuilds an indexed material when
+their colours fit a palette, because retail's overlay sprites are indexed
+and its indexed half-additive and additive rows read the destination while
+the raw rows replace it.
+
+## 2D slots
+
+| Slot | Handler | Behaviour |
+|---|---|---|
+| `+0x1020` | `FUN_0047AC30` | dword image, low words written, optional zero key; draws nothing unless wholly inside the clip |
+| `+0x1024` | `FUN_0047B360` | flat line as one clipped run per scanline |
+| `+0x1028` | `FUN_0047B6C0` | two-colour faded line; compares 16.16 positions with the pixel clip and uses them as the address, so only points within 1/64 px of the origin draw |
+| `+0x102C` | `FUN_0047AB20` | set the clip rectangle, clamped to the surface |
+| `+0x1030` | `FUN_0047AD90` | unscaled sprite; flag 0x08 adds `(dst >> 1) & 0xFBEF` (RGB565) |
+| `+0x1034` | `FUN_0047B9F0` | fills `height` rows' worth of words from `x0 / 4` dwords into row `y0`, ignoring the right extent, in 16-byte blocks counted back from the end |
+
+## Evidence: native receipts
+
+`crates/v2k-render/tests/software_raster_receipts.rs` replays 896 receipts.
+Each was produced by private tooling that executes the unchanged retail
+handler, scan converter and fillers on synthetic inputs (surface, atlas,
+palette and word images generated from seeds by a hash the test
+reimplements). The fixture holds parameters, packets, the scan converter's
+stack frame, the final dither word and clip, and a 64-bit FNV-1a digest of
+the output surface with its changed-pixel count. It contains no retail
+data.
+
+`crates/v2k-render/tests/software_ground_receipts.rs` replays 12 whole
+ground scans (dry and wet projectors, fractional and wrapping eyes, steep
+and negative-lead pitches, near-plane points, dense infection, heavy fog,
+a 52-by-30 scan, a darkness band and a translated view) and compares a
+digest of the queue arena they fill, so keys, links, record layouts and
+allocation order are all covered.
+
+`software_water_receipts.rs` replays 12 whole water passes (shores, a
+static sea, late and negative clocks, a high and a drowning sea, the near
+plane, heavy fog, a full scan and a translated view) the same way.
+
+`software_particle_receipts.rs` replays 124 particles (66 drawn) on
+synthetic class descriptors: mirrored, centred and clamped quads, signed
+biases, near and fogged quads, wet projection, ground shadows, size jitter,
+the near plane and off-screen rejection.
+
+`software_model_face_receipts.rs` (384), `software_model_billboard_receipts.rs`
+(96) and `software_model_edge_receipts.rs` (128) run every face, billboard
+and edge opcode of both constructor tables on generated warm vertex caches,
+normal caches, palette dwords, sprite records and lens words, sorted and
+FIFO, and compare digests of the bytes each queued.
+`software_model_midpoint_receipts.rs` (55) records every field the type-1
+projector writes, including ties, odd negative sums, near rejection and
+other bounds.
+
+Coverage: all 32 slots; every span row a handler can bind in both tables
+(the test asserts the set), with material flags `0x00..0x13` in fifteen
+combinations and both uniform and per-vertex shading; top, side and full
+clipping; inset clip rectangles; quad splits; padded pitch; the
+span-reciprocal overrun; and the zero fog-mask state.
+
+## Frame captures
+
+`V2K_SOFTWARE_FRAME_DUMP=<dir>` writes every presented software frame as a
+BMP. With the SDL dummy video driver this runs headless. To compare Intro2
+with retail, also set `V2K_NEW_GAME_AFTER_TICKS=<n>` and start from the menu
+(`--skip-intro`): the frontend confirms its default New Game after `n` ticks
+and Intro2 loads through the production Begin-Intro construction. `--level
+50` instead uses the generic debug constructor without the native Intro2
+owners, so for example the factory's Sub-M status words stay zero, its roof
+ribbons are skipped and its lid is drawn.
+
+## Open
+
+- The retail stack address at the scan converter, which `00478510`'s pixels
+  depend on, has not been measured in the shipped game; receipts use a fixed
+  synthetic stack.
+- Particle positions come from the port's floating-point particle state,
+  rounded to world words; world sprites without particle inputs still use
+  an approximate quad.
+- Model VIEW points come from the port's floating-point materialized world
+  points, not retail's Q31 node transforms, so they can differ by a unit.
+  Shade bins likewise dot floating-point VIEW normals with the context's
+  light ([model light table](RENDER_PIPELINE.md#model-light-table)), so a
+  normal on a bin edge can land one bin off. Billboards still queue after
+  their body rather than at their command when no painter program carries
+  them.
+- The backend adapts RGBA-only port images (overlays, fades) at its
+  boundary; those adapters are not retail evidence.
+- Full frames have been compared with the accepted retail DirectDraw trace
+  only at approximate Intro2 poses: sky, fog, texture sampling and dither
+  agree, and the comparison found the world model light, now corrected.
+  Matched-pose comparison remains open.

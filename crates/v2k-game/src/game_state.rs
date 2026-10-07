@@ -1871,7 +1871,15 @@ fn item_value(
 
     let text = match setting {
         SettingId::Resolution => ctx.config.resolution_label(),
-        SettingId::Rendering => "OpenGL".to_string(),
+        // Retail's values are Software (string 9) and Direct3D (string 10);
+        // the port's hardware renderer is OpenGL.
+        SettingId::Rendering => {
+            if v == 0 {
+                ctx.string_or(9, "Software")
+            } else {
+                "OpenGL".to_string()
+            }
+        }
         SettingId::FullScreen => ctx.string_or(
             6 + v as usize,
             if v == 0 { "In a Window" } else { "Full Screen" },
@@ -1993,9 +2001,11 @@ pub fn sync_settings_from_config(engine: &mut MenuEngine, config: &GameConfig) {
     s.set(SettingId::Targetter, config.targetter as u32);
     s.set(SettingId::Hud, config.hud as u32);
     s.set(SettingId::Language, config.language as u32);
-    // Only OpenGL is implemented for interactive play. Keep the authored
-    // renderer row aligned with its disabled port presentation.
-    s.set(SettingId::Rendering, 1);
+    // Retail's toggle: 0 = Software, 1 = hardware (OpenGL in the port).
+    s.set(
+        SettingId::Rendering,
+        u32::from(config.renderer != v2k_render::RendererChoice::Software),
+    );
 }
 
 /// Apply a changed setting back to the GameConfig.
@@ -2034,9 +2044,11 @@ pub fn apply_setting_to_config(config: &mut GameConfig, id: SettingId, v: u32) {
         SettingId::Hud => config.hud = v != 0,
         SettingId::Language => config.language = v as u8,
         SettingId::Rendering => {
-            // This authored row is inert in the port; a stale native value must
-            // never select the unimplemented software backend for normal play.
-            config.renderer = v2k_render::RendererChoice::OpenGL;
+            config.renderer = if v == 0 {
+                v2k_render::RendererChoice::Software
+            } else {
+                v2k_render::RendererChoice::OpenGL
+            };
         }
         SettingId::Resolution => {
             // The port spinner selects output size, independently of Low's
@@ -3743,12 +3755,12 @@ mod tests {
     }
 
     #[test]
-    fn interactive_rendering_bridge_never_selects_software() {
-        for renderer in [
-            v2k_render::RendererChoice::Auto,
-            v2k_render::RendererChoice::OpenGL,
-            v2k_render::RendererChoice::Software,
-            v2k_render::RendererChoice::Wgpu,
+    fn rendering_row_toggles_between_software_and_opengl() {
+        for (renderer, row) in [
+            (v2k_render::RendererChoice::Auto, 1),
+            (v2k_render::RendererChoice::OpenGL, 1),
+            (v2k_render::RendererChoice::Software, 0),
+            (v2k_render::RendererChoice::Wgpu, 1),
         ] {
             let mut config = GameConfig {
                 renderer,
@@ -3756,8 +3768,10 @@ mod tests {
             };
             let mut engine = MenuEngine::main_menu();
             sync_settings_from_config(&mut engine, &config);
-            assert_eq!(engine.settings.get(SettingId::Rendering), 1);
+            assert_eq!(engine.settings.get(SettingId::Rendering), row);
             apply_setting_to_config(&mut config, SettingId::Rendering, 0);
+            assert_eq!(config.renderer, v2k_render::RendererChoice::Software);
+            apply_setting_to_config(&mut config, SettingId::Rendering, 1);
             assert_eq!(config.renderer, v2k_render::RendererChoice::OpenGL);
         }
     }

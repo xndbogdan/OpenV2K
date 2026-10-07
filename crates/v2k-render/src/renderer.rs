@@ -1,5 +1,5 @@
 use v2k_formats::models::{
-    Billboard, ModelEntry, ModelFaceCull, ModelFaceShading, ModelFaceVertices,
+    Billboard, ModelEntry, ModelFaceCull, ModelFaceShading, ModelFaceVertices, ModelPainterOp,
     ModelVertexProjection,
 };
 use v2k_formats::system::{FogGradientEntry, PaletteEntry};
@@ -69,6 +69,38 @@ impl RenderBackend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextureId(pub u32);
 
+/// One Section-3 record in its retail memory form.
+#[derive(Debug, Clone)]
+pub struct NativeSprite<'a> {
+    /// Render flags (record `+0x04` low byte).
+    pub flags: u16,
+    pub shade_count: u16,
+    pub width: u16,
+    pub height: u16,
+    pub texels: NativeTexels<'a>,
+}
+
+/// A record's texels: indices with display-format palette words (row-major
+/// shade rows of sixteen, or a flat table), or raw display-format words.
+#[derive(Debug, Clone)]
+pub enum NativeTexels<'a> {
+    Indexed {
+        indices: &'a [u8],
+        palette: NativePalette,
+    },
+    Raw {
+        words: &'a [u16],
+    },
+}
+
+/// A Section-3 palette block shared by its records, and where one record's
+/// palette starts in it.
+#[derive(Debug, Clone)]
+pub struct NativePalette {
+    pub block: std::sync::Arc<[u16]>,
+    pub start: usize,
+}
+
 /// Indexed Section-3 image plus its complete 32×16 shade ramp.
 ///
 /// `fallback_rgba` keeps the texture handle usable by renderer paths that do
@@ -126,14 +158,30 @@ impl FaceMaterial {
     }
 }
 
-/// Raw model-light vector installed by the ordinary world and local-menu
-/// render contexts.
+/// Raw model-light vector of the local render contexts (templates
+/// `0x4CB460` and `0x4CA628`: frontend prop rows and gameplay HUD models),
+/// whose camera rows are identity.
 ///
-/// Retail transforms these signed integer components into model orientation
-/// before resolving face/corner normal references through the Section-6 table.
+/// Every context's light is a VIEW-space vector: `FUN_00466160` brings it
+/// into model space through the node's VIEW axes before `FUN_0046D3F0`
+/// resolves face/corner normal references through the Section-6 table.
 /// Keeping the authored scale matters because the final bin is selected after
-/// a fixed `>> 19`, not from a normalized direction alone.
+/// a fixed `>> 19`, not from a normalized direction alone. World contexts
+/// use [`retail_world_model_light_direction_raw`] instead.
 pub const RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW: [i32; 3] = [73, 73, -73];
+
+/// The world context's model light: `FUN_0042EA30` stores the Section-10
+/// direction with X and Z divided by four (rounding toward zero), and
+/// `FUN_00433FA0` installs it, unrotated, as the VIEW-space light of every
+/// frame. Model shading in the world is therefore fixed to the camera.
+/// Level 1's `(-73,73,-73)` becomes `(-18,73,-18)`.
+pub fn retail_world_model_light_direction_raw(terrain: &TerrainGrid) -> [i32; 3] {
+    [
+        terrain.header[1] / 4,
+        terrain.header[2],
+        terrain.header[3] / 4,
+    ]
+}
 
 /// Endpoint producer mode for the manual 0x02/0x22 screen constructor.
 #[derive(Debug, Clone, Copy)]
@@ -189,9 +237,10 @@ pub struct ModelMesh<'a> {
     /// Active Section-6 render-shade table. The recovered retail model light
     /// table addresses entries 0..7 and maps its remaining slots to entry 0.
     pub shade_table: Option<&'a [FogGradientEntry]>,
-    /// Signed raw light vector active for this render context. Ordinary world
-    /// and local menu props use `(73,73,-73)`; the frontend Klaus context uses
-    /// its separately authored `(-100,50,-50)` vector.
+    /// Signed raw VIEW-space light vector active for this render context.
+    /// World draws use the level's reduced Section-10 direction, local
+    /// contexts `(73,73,-73)` and the frontend Klaus context its separately
+    /// authored `(-100,50,-50)`. Backends shade with VIEW-space normals.
     pub light_direction_raw: [i32; 3],
     /// Signed contextual shift applied to the 16-slot model-light table.
     /// World entity draws use terrain light minus the 0..8 underwater
@@ -557,9 +606,8 @@ impl<'a> WorldSurfaceProjection<'a> {
     }
 
     pub fn new(terrain: &'a TerrainGrid, retail_tick: i32) -> Self {
-        let direction_x = terrain.header[1] / 4;
-        let direction_y = terrain.header[2];
-        let direction_z = terrain.header[3] / 4;
+        let [direction_x, direction_y, direction_z] =
+            retail_world_model_light_direction_raw(terrain);
         Self {
             terrain,
             retail_tick,
@@ -665,6 +713,22 @@ pub struct ModelDraw<'a> {
     /// Explicit terrain-overlay opt-in for draws that sit on the recovered
     /// terrain hit without authored type-13 vertices.
     pub overlay: ModelOverlayKind,
+    /// The node's place in its tree's retail painter program, for backends
+    /// that queue primitives the way the original does. `Some` promises a
+    /// [`Renderer::end_model_node`] once the node's children are submitted;
+    /// `None` draws the body on its own.
+    pub painter: Option<ModelPainterNode<'a>>,
+}
+
+/// A model-tree node's retail painter program (`FUN_00466xxx` group,
+/// primitive and instance commands in command order). Children expand at
+/// their parent's `Instance` op, inside whatever groups are open there.
+#[derive(Debug, Clone, Copy)]
+pub struct ModelPainterNode<'a> {
+    pub program: &'a [ModelPainterOp],
+    /// The parent program's `Instance` op (its `instance_index`) this node
+    /// expands; `None` for a tree root.
+    pub parent_instance: Option<usize>,
 }
 
 /// Resolved material and authored sprite dimensions for one Section-8
@@ -745,6 +809,38 @@ pub struct WorldSprite {
     pub flat_shade_row: u8,
     /// Center-depth fade selected by this sprite's explicit draw context.
     pub fog: SpriteFog,
+    /// The particle inputs `FUN_0043D410` reads, for backends that queue the
+    /// retail particle primitives; `None` for other sprites.
+    pub native: Option<NativeParticle>,
+}
+
+/// One particle as `FUN_0043D410` draws it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeParticle {
+    /// World words (particle `+0x08/+0x0A/+0x0C`).
+    pub position_raw: [i16; 3],
+    /// Draw scale after its record-address jitter times the frame's size word.
+    pub scale_raw: i32,
+    /// The frame's size word, which alone scales the shadow.
+    pub frame_size_raw: u16,
+    /// Descriptor `+0x07`: 1 mirrors, 4 centres, 8 keeps one pixel.
+    pub flags: u8,
+    /// Descriptor `+0x12`, added to the depth key.
+    pub sort_bias_raw: i16,
+    /// Render-context particle fog planes (`+0x74`, `+0x78`).
+    pub fog_near_raw: i32,
+    pub fog_far_raw: i32,
+    pub shadow: Option<NativeParticleShadow>,
+}
+
+/// A particle class's ground shadow (descriptor `+0x09`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeParticleShadow {
+    pub size: u8,
+    /// Ground height under the particle (`FUN_0043DB60`).
+    pub ground_raw: i16,
+    /// System-2 palette entry 32 as a display word.
+    pub colour: u32,
 }
 
 impl WorldSprite {
@@ -760,6 +856,7 @@ impl WorldSprite {
             blend: WorldSpriteBlend::Additive,
             flat_shade_row: 28,
             fog: SpriteFog::Near,
+            native: None,
         }
     }
 }
@@ -948,6 +1045,12 @@ pub trait Renderer {
         None
     }
 
+    /// The world fog last published with [`Self::set_world_model_fog`],
+    /// whatever scene is active, so a replacement renderer can inherit it.
+    fn retained_world_model_fog(&self) -> Option<WorldModelFog> {
+        self.world_model_fog()
+    }
+
     /// World fog planes inherited by the active scene, independent of
     /// temporary GL state during model/overlay submission. Menu scenes and
     /// backends without world fog return None. Hierarchy traversal uses the far plane before
@@ -1013,6 +1116,10 @@ pub trait Renderer {
         let _ = draw;
     }
 
+    /// The children of the latest [`ModelDraw::painter`] node still open
+    /// have all been submitted. Backends without a primitive queue ignore it.
+    fn end_model_node(&mut self) {}
+
     /// Draw camera-facing, depth-tested sprites in world space after opaque
     /// terrain/models. The sprite textures must have been created through
     /// [`Self::create_texture`] or [`Self::create_indexed_model_texture`].
@@ -1060,6 +1167,22 @@ pub trait Renderer {
         texture: IndexedModelTexture<'_>,
     ) -> Option<TextureId> {
         self.create_texture(texture.fallback_rgba, texture.width, texture.height)
+    }
+
+    /// Register a Section-3 record for backends that rasterize retail
+    /// materials directly, returning its material id. Other backends keep
+    /// the default `None`.
+    fn create_native_sprite(&mut self, _sprite: NativeSprite<'_>) -> Option<u32> {
+        None
+    }
+
+    /// Publish the retained world viewport words for producers that
+    /// transform natively. Scene boundaries do not clear it; callers pass
+    /// `None` when the scene has no native viewport.
+    fn set_native_world_viewport(
+        &mut self,
+        _viewport: Option<crate::projection::NativeViewportWords>,
+    ) {
     }
 
     /// Free a texture created with [`Renderer::create_texture`]. Default no-op.

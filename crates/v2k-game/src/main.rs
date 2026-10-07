@@ -175,7 +175,8 @@ use v2k_game::static_damage::{
 };
 use v2k_game::static_damage_live::resolve_current_static_damage_target;
 use v2k_game::static_objects::{
-    collect_static_terrain_objects, free_camera_entity_view_contains_position,
+    collect_retail_static_terrain_objects, collect_static_terrain_objects,
+    free_camera_entity_view_contains_position,
 };
 use v2k_game::targetter::{
     fun_0044ea60, targetter_model_scale_raw, targetter_terrain_height_raw, TargetterCandidate,
@@ -254,14 +255,45 @@ fn world_control_slot(level_id: u32) -> Option<usize> {
         .filter(|slot| *slot < RETAIL_CONTROL_SLOT_COUNT)
 }
 
-fn apply_classic_framebuffer_presentation(renderer: &mut dyn Renderer, config: &mut GameConfig) {
+/// Apply the OpenGL classic-framebuffer preference. The software backend
+/// already presents its authored-resolution surface in the 4:3 modes, so the
+/// preference is kept for a later OpenGL launch rather than cleared.
+fn apply_classic_framebuffer_presentation(
+    renderer: &mut dyn Renderer,
+    config: &mut GameConfig,
+    backend: v2k_render::RenderBackend,
+) {
     let requested = config.classic_framebuffer_effective();
     let active = renderer.set_classic_framebuffer(requested);
-    if requested && !active {
+    if requested && !active && backend == v2k_render::RenderBackend::OpenGL {
         log!("Classic framebuffer is unavailable on the active renderer; disabling the option");
         config.classic_framebuffer = false;
         renderer.set_classic_framebuffer(false);
     }
+}
+
+/// Display-menu Rendering change (`FUN_0043CC70` -> `FUN_0043CC40` ->
+/// `FUN_0044E0E0`). Retail rebuilds the display at once and, when the new
+/// one cannot start, keeps running on the previous one; the menu value stays
+/// as chosen. The new renderer starts without textures, so the caller
+/// re-uploads what the previous one held.
+fn replace_renderer(
+    game_window: &GameWindow,
+    renderer: &mut Box<dyn Renderer>,
+    config: &GameConfig,
+) -> Result<v2k_render::RenderBackend, String> {
+    let (replacement, backend) = v2k_render::create_renderer(
+        game_window,
+        "V2K",
+        config.width,
+        config.height,
+        config.resolve_backend(None),
+        false,
+    )?;
+    let world_model_fog = renderer.retained_world_model_fog();
+    drop(std::mem::replace(renderer, replacement));
+    renderer.set_world_model_fog(world_model_fog);
+    Ok(backend)
 }
 
 /// Ordinary worlds run the conversion/intake walkers on authenticated owners.
@@ -1465,6 +1497,13 @@ fn run_game(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
+    // `V2K_NEW_GAME_AFTER_TICKS`: headless diagnostics confirm the frontend
+    // ring's default New Game after this many frontend ticks, so a capture
+    // takes the production Begin-Intro path rather than the generic debug
+    // load of `--level 50`.
+    let mut auto_new_game_tick = std::env::var("V2K_NEW_GAME_AFTER_TICKS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok());
     let mut config = GameConfig::load(data_dir);
     log!(
         "Controls: {} => Sensitivity {}/15, Self Righting {}",
@@ -1497,14 +1536,18 @@ fn run_game(
     };
     let mut vtol_trace_sequence = 0u64;
 
-    let (mut renderer, actual_backend) = v2k_render::create_renderer(
+    let (mut renderer, mut actual_backend) = v2k_render::create_renderer(
         &game_window,
         "V2K",
         config.width,
         config.height,
         preferred,
-        // The software stub requires an explicit diagnostic CLI selection.
-        false,
+        // Retail's startup search (`FUN_0044E2E0` -> `FUN_0042D340`) tries
+        // each resolution and window mode, then the other renderer, and keeps
+        // the first combination that starts. Only the backend can fail to
+        // start here, so without a command-line choice OpenGL falls back to
+        // the software renderer.
+        cli_override.is_none(),
     )?;
 
     let initial_menu_size = config.detail.menu_virtual_size();
@@ -1513,15 +1556,16 @@ fn run_game(
     if overlay_depth_policy == v2k_render::OverlayDepthPolicy::OverlayAlways {
         log!("Overlay depth diagnosis policy active: {overlay_depth_policy:?} (presentation only)");
     }
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config);
+    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config, actual_backend);
     if config.fullscreen {
         renderer.set_fullscreen(true);
     }
 
     log!("Renderer: {}", renderer.backend_name());
 
-    // Save detected backend to config
-    if config.renderer == RendererChoice::Auto {
+    // Keep the backend that started, as the retail search leaves the
+    // working combination in the settings.
+    if config.renderer == RendererChoice::Auto || actual_backend != preferred {
         config.set_detected_backend(actual_backend);
         if let Err(error) = config.try_save(data_dir) {
             eprintln!("Could not save settings: {error}");
@@ -1618,7 +1662,7 @@ fn run_game(
     }
     renderer.set_scaling_mode(config.scaling, menu_reference_size.0, menu_reference_size.1);
     renderer.set_ui_submission_policy(live_display::ui_policy(&config, gameplay_hud_variant));
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config);
+    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config, actual_backend);
 
     // --- Background flame billboard animation (table 0x4CA938) ---
     // .data initial state (frame 8, accumulator 2,000,000 µs) wraps on the
@@ -2111,6 +2155,18 @@ fn run_game(
                     }
                 }
 
+                if let Some(tick) = auto_new_game_tick {
+                    if !menu_is_paused && retail_tick >= tick && !shell.is_transitioning() {
+                        auto_new_game_tick = None;
+                        let ctx = MenuCtx {
+                            cache: &session.cache,
+                            config: &config,
+                            saves: Some(&save_manager),
+                        };
+                        shell_events.extend(shell.input(MenuInput::Select, &ctx));
+                    }
+                }
+
                 // Apply side effects from the menu engine.
                 let mut next_state: Option<GameState> = None;
                 for ev in shell_events {
@@ -2141,11 +2197,39 @@ fn run_game(
                                 v2k_game::menu_data::SettingId::Resolution => {
                                     renderer.set_window_size(config.width, config.height);
                                 }
-                                v2k_game::menu_data::SettingId::Rendering => {
-                                    // Replacing a live SDL/OpenGL renderer would invalidate
-                                    // every cached GPU resource. Persist the choice for the
-                                    // next launch, matching the original's mode-rebuild boundary.
-                                    log!("Renderer change will apply on next launch");
+                                v2k_game::menu_data::SettingId::Rendering
+                                    if config.resolve_backend(None) != actual_backend =>
+                                {
+                                    match replace_renderer(&game_window, &mut renderer, &config) {
+                                        Ok(backend) => {
+                                            actual_backend = backend;
+                                            renderer.set_overlay_depth_policy(overlay_depth_policy);
+                                            if config.fullscreen {
+                                                renderer.set_fullscreen(true);
+                                            }
+                                            game_window.release_mouse_capture();
+                                            // Texture ids belonged to the old renderer.
+                                            face_colors.forget_textures();
+                                            if terrain_frames.is_some() {
+                                                terrain_frames =
+                                                    v2k_game::terrain_render::build_terrain_frames(
+                                                        &session.cache,
+                                                        renderer.as_mut(),
+                                                    );
+                                            }
+                                            if water_frames.is_some() {
+                                                water_frames = v2k_game::water::build_water_frames(
+                                                    &session.cache,
+                                                    renderer.as_mut(),
+                                                );
+                                            }
+                                            log!("Renderer: {}", renderer.backend_name());
+                                        }
+                                        Err(error) => eprintln!(
+                                            "Renderer change failed ({error}); keeping {}",
+                                            renderer.backend_name()
+                                        ),
+                                    }
                                 }
                                 _ => {}
                             }
@@ -2154,6 +2238,7 @@ fn run_game(
                                 SettingId::Resolution
                                     | SettingId::Scaling
                                     | SettingId::ClassicFramebuffer
+                                    | SettingId::Rendering
                             ) {
                                 if let Some(tier) =
                                     v2k_game::system_layout::HighSystemLayoutTier::from_variant(
@@ -2189,6 +2274,7 @@ fn run_game(
                                 apply_classic_framebuffer_presentation(
                                     renderer.as_mut(),
                                     &mut config,
+                                    actual_backend,
                                 );
                                 shell.engine.settings.set(
                                     SettingId::ClassicFramebuffer,
@@ -7550,11 +7636,33 @@ fn run_game(
                         }
                     }
                     {
-                        let notification_presentation = gameplay_notifications.presentation(
-                            retail_tick as i32,
-                            &mut text_typewriter_cadence,
-                            |id| session.cache.global_string(id),
-                        );
+                        // FUN_00452CB0 first draws the world's arrival records
+                        // (its strings up to `#`) unless its control slot is
+                        // already completed.
+                        let world_records: Vec<&str> = current_level_id
+                            .and_then(world_control_slot)
+                            .filter(|&slot| {
+                                player_campaign_progress
+                                    .control_slot_bits(slot)
+                                    .is_none_or(|bits| bits & 1 == 0)
+                            })
+                            .and_then(|_| session.cache.level())
+                            .map(|level| {
+                                level
+                                    .strings
+                                    .iter()
+                                    .map(String::as_str)
+                                    .take_while(|record| !record.starts_with('#'))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let notification_presentation = gameplay_notifications
+                            .presentation_with_world_text(
+                                retail_tick as i32,
+                                &mut text_typewriter_cadence,
+                                &world_records,
+                                |id| session.cache.global_string(id),
+                            );
                         if notification_presentation.play_typewriter_sound && menu_fonts.is_some() {
                             if let Some(sound_manager) = sound_manager.as_mut() {
                                 sound_manager.play_centered_sound_with_gain(
@@ -8099,6 +8207,7 @@ fn draw_gameplay_world(
             projection_effect,
         ),
     );
+    renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(
         renderer,
         cache,
@@ -8541,6 +8650,7 @@ fn draw_gameplay_world(
         cache,
         face_colors,
         camera,
+        camera_mode,
         terrain_frames,
         Some(terrain_lights),
         retail_tick,
@@ -8707,6 +8817,7 @@ fn render_opening_cinematic(
             projection_effect,
         ),
     );
+    renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(renderer, cache, None, face_colors, camera, retail_tick);
 
     // 530D0/53570 and pre-actor light writers precede 53760. Actor
@@ -8974,6 +9085,7 @@ fn render_opening_cinematic(
         cache,
         face_colors,
         camera,
+        GameplayWorldCameraMode::RetailChase,
         terrain_frames,
         Some(terrain_lights),
         retail_tick,
@@ -9425,6 +9537,29 @@ fn draw_world_fx(
             .unwrap_or(0);
         let (blend, color) = particle_sprite_material(flags);
         let position = camera_relative(camera, particle.presentation_position());
+        let native = descriptor.map(|descriptor| {
+            let raw = |value: f32| (value * 256.0).round() as i32 as i16;
+            let world = particle.presentation_position();
+            let position_raw = [raw(world[0]), raw(world[1]), raw(world[2])];
+            v2k_render::NativeParticle {
+                position_raw,
+                scale_raw: draw_scale_raw.wrapping_mul(i32::from(frame.scale_raw as i16)),
+                frame_size_raw: frame.scale_raw,
+                flags: descriptor.flags(),
+                sort_bias_raw: descriptor.sort_bias_raw(),
+                fog_near_raw: fog_planes.near_raw,
+                fog_far_raw: fog_planes.far_raw,
+                shadow: (descriptor.shadow_size_raw() != 0).then(|| {
+                    v2k_render::NativeParticleShadow {
+                        size: descriptor.shadow_size_raw(),
+                        ground_raw: cache.terrain().map_or(0, |terrain| {
+                            particle_ground_raw(terrain, position_raw[0], position_raw[2])
+                        }),
+                        colour: particle_shadow_colour(cache),
+                    }
+                }),
+            }
+        });
         sprites.push(WorldSprite {
             texture,
             position,
@@ -9438,10 +9573,39 @@ fn draw_world_fx(
             blend,
             flat_shade_row: v2k_game::model_color::sprite_flat_shade_row(flags),
             fog,
+            native,
         });
     }
     renderer.draw_world_sprites(&sprites);
     spray_presented
+}
+
+/// `FUN_0043DB60` for a drawn particle: the terrain height under it,
+/// bilinear between the four surrounding cells.
+fn particle_ground_raw(terrain: &v2k_formats::terrain::TerrainGrid, x_raw: i16, z_raw: i16) -> i16 {
+    let (x, z) = (x_raw as u16, z_raw as u16);
+    let (x_cell, z_cell) = (usize::from(x >> 8), usize::from(z >> 8));
+    let height = |x: usize, z: usize| {
+        terrain
+            .cell(x & 0xFF, z & 0xFF)
+            .map_or(0, |cell| i32::from(cell.height as i8) * 0x20)
+    };
+    let (fx, fz) = (i32::from(x & 0xFF), i32::from(z & 0xFF));
+    let near = height(x_cell, z_cell);
+    let near = (((height(x_cell + 1, z_cell) - near) * fx) >> 8) + near;
+    let far = height(x_cell, z_cell + 1);
+    let far = (((height(x_cell + 1, z_cell + 1) - far) * fx) >> 8) + far;
+    (near + (((far - near) * fz) >> 8)) as i16
+}
+
+/// System-2 palette entry 32, the particle shadow colour, as a display word.
+fn particle_shadow_colour(cache: &v2k_game::resource_cache::ResourceCache) -> u32 {
+    cache
+        .master_color_palette()
+        .and_then(|palette| palette.get(32))
+        .map_or(0, |entry| {
+            u32::from(((entry.rgb555 & 0x7FE0) << 1) | (entry.rgb555 & 0x1F))
+        })
 }
 
 /// `LAB_0041CB10` continues after the admitted hive's ordinary body draw.
@@ -9760,8 +9924,11 @@ fn draw_story_caption(
         policy: renderer.ui_submission_policy(),
     });
     let font = &fonts.selected;
-    let margin_x = 24.0;
-    let max_width = fonts.virtual_w - margin_x * 2.0;
+    let placement = v2k_game::opening::StoryCaptionPlacement::for_display(
+        fonts.virtual_w as i32,
+        fonts.virtual_h as i32,
+    );
+    let max_width = placement.wrap_width as f32;
     let mut lines = Vec::<String>::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -9781,15 +9948,15 @@ fn draw_story_caption(
         lines.push(line);
     }
 
-    // Retail places the yellow narrative line near the top-left of the 640×480
-    // authored frame. It is independent of the bottom-left V2000 emblem.
-    let base = 60.0;
+    // The display mode's percentages, independent of the bottom-left V2000
+    // emblem.
+    let base = placement.baseline as f32;
     for (index, line) in lines.iter().enumerate() {
         draw_menu_text(
             renderer,
             font,
             line,
-            [margin_x, base + index as f32 * font.line_step],
+            [placement.x as f32, base + index as f32 * font.line_step],
             false,
             usize::MAX,
             mapping,
@@ -11514,11 +11681,13 @@ fn world_model_shade_shift(
 /// footprint as opaque terrain. `FUN_0042F650` uses an identity root basis,
 /// raw cell centre `+0x80`, and exposes only the global 50 Hz tick on dynamic
 /// animation channel zero.
+#[allow(clippy::too_many_arguments)]
 fn draw_static_terrain_objects(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,
     colors: &v2k_game::model_color::ModelMaterialCache,
     camera: &Camera,
+    camera_mode: GameplayWorldCameraMode,
     terrain_frames: Option<&v2k_render::TerrainFrames>,
     terrain_lights: Option<&v2k_render::TerrainLightWindow>,
     retail_tick: u32,
@@ -11534,13 +11703,23 @@ fn draw_static_terrain_objects(
     vars.dynamic[0] = (retail_tick & 0xFFFF) as i32;
     let orientation = orientation_from_ypr(0.0, 0.0, 0.0);
 
-    let visible_objects = collect_static_terrain_objects(
-        terrain,
-        objects,
-        camera.position,
-        camera.forward(),
-        scan_dimensions,
-    );
+    let visible_objects = match camera_mode {
+        // FUN_0042F530 walks whole cell words on the world axes.
+        GameplayWorldCameraMode::RetailChase => collect_retail_static_terrain_objects(
+            terrain,
+            objects,
+            camera.position.map(|value| (value * 256.0).round() as i32),
+            v2k_core::render_scan::terrain_row_lead_raw(camera.forward()[1]),
+            scan_dimensions,
+        ),
+        GameplayWorldCameraMode::Free => collect_static_terrain_objects(
+            terrain,
+            objects,
+            camera.position,
+            camera.forward(),
+            scan_dimensions,
+        ),
+    };
     let sea_level = terrain.water_enabled().then(|| terrain.sea_level_world_y());
     world_fx.emit_static_terrain_object_particles(&visible_objects, sea_level);
     // Retail allocates these records directly from the static-object draw
@@ -11876,6 +12055,7 @@ mod particle_collision_projection_tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: None,
         }
     }

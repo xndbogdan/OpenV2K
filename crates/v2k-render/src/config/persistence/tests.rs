@@ -277,7 +277,7 @@ fn low_detail_uses_minimum_window_while_preserving_native_low_tier_on_save() {
 }
 
 #[test]
-fn unsupported_software_preferences_normalize_without_rewriting_native_renderer_evidence() {
+fn software_preferences_persist_without_rewriting_native_renderer_evidence() {
     for renderer_word in [0, 0x76543210] {
         let dir = Directory::new();
         let imported = serde_json::to_vec(&GameConfig {
@@ -289,24 +289,22 @@ fn unsupported_software_preferences_normalize_without_rewriting_native_renderer_
         let mut native = NativeSettings::default();
         native.set(5, renderer_word);
         let mut config = load_from_sources(&dir.0, Some(native.clone()), None);
-        assert_eq!(config.renderer, RendererChoice::OpenGL);
+        assert_eq!(config.renderer, RendererChoice::Software);
         assert_eq!(native_to_save(&config), native);
         assert_eq!(fs::read(dir.0.join("config.json")).unwrap(), imported);
 
-        // Normalize stale callers as well, before comparing the projected
-        // settings to the lossless imported DWORD baseline.
-        config.renderer = RendererChoice::Software;
+        // An unchanged preference keeps the lossless imported DWORD.
         save_with_registry(&mut config, &dir.0, |stored| {
             assert_eq!(stored, &native);
             Ok(())
         })
         .unwrap();
-        assert_eq!(config.renderer, RendererChoice::OpenGL);
+        assert_eq!(config.renderer, RendererChoice::Software);
         let stored: PortPreferences = read_json(&dir.0.join("port-config.json")).unwrap();
-        assert_eq!(stored.renderer, RendererChoice::OpenGL);
+        assert_eq!(stored.renderer, RendererChoice::Software);
         assert_eq!(fs::read(dir.0.join("config.json")).unwrap(), imported);
         let restored = load_from_sources(&dir.0, None, None);
-        assert_eq!(restored.renderer, RendererChoice::OpenGL);
+        assert_eq!(restored.renderer, RendererChoice::Software);
         assert_eq!(native_to_save(&restored), native);
     }
 }

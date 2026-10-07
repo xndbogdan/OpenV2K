@@ -35,6 +35,10 @@ pub struct Glyph {
     pub advance: f32,
     /// Inter-glyph kerning metric `b`, converted from fixed-point pen units.
     pub kern: f32,
+    /// The same two metrics in the record's pen units ([`MenuFont::pen_scale`]
+    /// per pixel), which retail accumulates before truncating to pixels.
+    pub advance_raw: i32,
+    pub kern_raw: i32,
     /// Signed whole-pixel horizontal blit offset from the pen.
     pub xoff: f32,
     /// Signed whole-pixel vertical blit offset from the baseline.
@@ -49,6 +53,8 @@ pub struct MenuFont {
     fallback: usize,
     /// Word-wrap line step ((line_advance + line_gap)/100), px.
     pub line_step: f32,
+    /// Record `+0x10`: pen units per pixel (100 in every tier).
+    pub pen_scale: i32,
 }
 
 impl MenuFont {
@@ -72,8 +78,11 @@ impl MenuFont {
     /// The value column typewriter draws this prefix right-aligned at
     /// `label_x + pt7.x`. Measuring the full string and then clipping
     /// from that left x grows the option rightward.
+    ///
+    /// `FUN_00470F80`: every advance plus every kern but the last, in pen
+    /// units, truncated to whole pixels.
     pub fn measure_prefix(&self, text: &str, max_chars: usize) -> f32 {
-        let mut width = 0.0;
+        let mut width = 0;
         let mut remaining = max_chars;
         let mut chars = text.chars().peekable();
         while remaining > 0 {
@@ -82,13 +91,13 @@ impl MenuFont {
             };
             remaining -= 1;
             if let Some(g) = self.glyph(c) {
-                width += g.advance;
+                width += g.advance_raw;
                 if remaining > 0 && chars.peek().is_some() {
-                    width += g.kern;
+                    width += g.kern_raw;
                 }
             }
         }
-        width
+        (width / self.pen_scale) as f32
     }
 
     /// Largest distance from a glyph baseline to its top edge. This lets the
@@ -202,10 +211,18 @@ impl MenuFonts {
         let build = |rec: &v2k_formats::params::ParamRecord| -> MenuFont {
             let n = rec.params.len().min(rec.indices.len()).min(256);
             let mut glyphs: Vec<Option<Glyph>> = Vec::with_capacity(n);
+            // A zero word, or one that is not a positive divisor, falls
+            // back to 100 pen units per pixel.
+            let pen_scale = i32::try_from(rec.param_b)
+                .ok()
+                .filter(|&scale| scale > 0)
+                .unwrap_or(100);
             for c in 0..n {
                 let t = &rec.params[c];
-                let advance = t.a as i16 as f32 / 100.0;
-                let kern = t.b as i16 as f32 / 100.0;
+                let advance_raw = i32::from(t.a as i16);
+                let kern_raw = i32::from(t.b as i16);
+                let advance = advance_raw as f32 / pen_scale as f32;
+                let kern = kern_raw as f32 / pen_scale as f32;
                 // FUN_00470B60 divides the running pen by the record's
                 // +0x10 scale before adding metrics +4/+6 directly. These
                 // offsets are integer pixels, not more fixed-point pen data.
@@ -218,9 +235,10 @@ impl MenuFonts {
                     .iter()
                     .find(|entry| entry.index == sprite_id)
                     .and_then(|entry| {
-                        atlas
-                            .decode_sprite(entry, v2k_formats::palette::BRIGHTEST_SHADE)
-                            .ok()
+                        // Glyphs are blitted by `FUN_0047AD90`, which reads
+                        // palette row 28 for their flag-0x04 records.
+                        let row = crate::model_color::sprite_flat_shade_row(entry.pal_size as u8);
+                        atlas.decode_sprite(entry, usize::from(row)).ok()
                     });
                 glyphs.push(match decoded {
                     Some(d) if d.width > 0 && d.height > 0 => Some(Glyph {
@@ -229,6 +247,8 @@ impl MenuFonts {
                         rgba: d.rgba,
                         advance,
                         kern,
+                        advance_raw,
+                        kern_raw,
                         xoff,
                         yoff,
                     }),
@@ -239,6 +259,8 @@ impl MenuFonts {
                         height: 0,
                         advance,
                         kern,
+                        advance_raw,
+                        kern_raw,
                         xoff,
                         yoff,
                     }),
@@ -248,6 +270,7 @@ impl MenuFonts {
                 glyphs,
                 fallback: (rec.unk_2c as usize).min(n.saturating_sub(1)),
                 line_step: (rec.param_c + rec.param_d) as f32 / 100.0,
+                pen_scale,
             }
         };
 
@@ -333,6 +356,7 @@ mod tests {
             glyphs,
             fallback: 0,
             line_step: 0.0,
+            pen_scale: 100,
         }
     }
 
@@ -343,6 +367,8 @@ mod tests {
             height: 0,
             advance,
             kern,
+            advance_raw: (advance * 100.0) as i32,
+            kern_raw: (kern * 100.0) as i32,
             xoff: 0.0,
             yoff: 0.0,
         }
@@ -377,6 +403,20 @@ mod tests {
             full_x,
             "the completed value keeps the same right edge"
         );
+    }
+
+    #[test]
+    fn measure_truncates_pen_units_like_retail() {
+        let mut glyphs = Vec::new();
+        glyphs.resize_with(256, || None);
+        let mut a = glyph(0.0, 0.0);
+        a.advance_raw = 1_237;
+        a.kern_raw = 150;
+        glyphs[b'A' as usize] = Some(a);
+        let font = test_font(glyphs);
+        // 1237 + 150 + 1237 pen units: 26.24 px truncates to 26.
+        assert_eq!(font.measure("AA"), 26.0);
+        assert_eq!(font.measure("A"), 12.0);
     }
 
     #[test]

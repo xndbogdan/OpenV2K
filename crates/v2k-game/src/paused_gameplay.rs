@@ -211,5 +211,6 @@ pub(super) fn setting_requires_paused_redraw(id: SettingId) -> bool {
             | SettingId::Scaling
             | SettingId::Resolution
             | SettingId::FullScreen
+            | SettingId::Rendering
     )
 }

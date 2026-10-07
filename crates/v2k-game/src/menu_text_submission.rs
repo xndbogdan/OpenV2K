@@ -34,7 +34,9 @@ pub(super) fn apply_menu_text_tone(rgba: &mut [u8], tone: MenuTextTone) {
 
 /// Draw `text` with an original sprite font at a virtual-space position
 /// (x = pen start, y = BASELINE), scaled to the window. `max_chars` limits
-/// the drawn prefix (typewriter reveal); `centered` centers on x instead.
+/// the drawn prefix (typewriter reveal); `centered` starts at
+/// `x - width / 2` with the whole-pixel width halved by truncation, as the
+/// menu label (`FUN_0043B1C0`) and loading text (`FUN_0042B040`) do.
 pub(super) fn draw_menu_text(
     renderer: &mut dyn v2k_render::Renderer,
     font: &v2k_game::menu_text::MenuFont,
@@ -72,16 +74,24 @@ pub(super) fn draw_menu_text_toned(
         offset_x: ox,
         offset_y: oy,
     } = mapping;
-    let mut pen = if centered {
-        x - font.measure(text) / 2.0
+    // FUN_0043B1C0 centres on the whole-pixel width, halved with truncation;
+    // FUN_00470B60 keeps the pen in record units and truncates each glyph.
+    // Retail positions are whole pixels; a port anchor's fraction is kept.
+    let start = x.floor();
+    let fraction = x - start;
+    let start = start as i32;
+    let start = if centered {
+        start - font.measure(text) as i32 / 2
     } else {
-        x
+        start
     };
+    let mut pen_raw = start * font.pen_scale;
     for (n, c) in text.chars().enumerate() {
         if n >= max_chars {
             break;
         }
         let Some(g) = font.glyph(c) else { continue };
+        let pen = (pen_raw / font.pen_scale) as f32 + fraction;
         if g.width > 0 && g.height > 0 {
             // Baseline blit: y = baseline + yoff − sprite_h + 1 (asset px).
             let x0 = ox + ((pen + g.xoff) * s) as i32;
@@ -94,7 +104,7 @@ pub(super) fn draw_menu_text_toned(
             apply_menu_text_tone(&mut scaled, tone);
             renderer.draw_sprite(&scaled, w, h, x0, y0);
         }
-        pen += g.advance + g.kern;
+        pen_raw += g.advance_raw + g.kern_raw;
     }
 }
 

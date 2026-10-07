@@ -157,12 +157,19 @@ fn draw_world_notification(
                 continue;
             }
         }
+        // FUN_00452790 centres presets above 9 at (width - text width) / 2,
+        // unlike the menu routines' `x - width / 2`.
+        let pen = if notification.center_x {
+            pen_font_pixels - font.measure(line) / 2.0
+        } else {
+            pen_font_pixels
+        };
         draw_menu_text(
             renderer,
             font,
             line,
-            [pen_font_pixels, baseline],
-            notification.center_x,
+            [pen, baseline],
+            false,
             usize::MAX,
             mapping,
         );
@@ -343,16 +350,18 @@ mod tests {
         ];
         for (variant, authored) in [
             (
+                // FUN_00452790 centres at (640 - 10) / 2 with the truncated
+                // whole-pixel width.
                 1,
-                [(314, 20, 11, 14), (160, 404, 11, 14), (314, 443, 11, 14)],
+                [(315, 20, 11, 14), (160, 404, 11, 14), (315, 443, 11, 14)],
             ),
             (
                 2,
-                [(394, 29, 11, 14), (200, 509, 11, 14), (394, 557, 11, 14)],
+                [(395, 29, 11, 14), (200, 509, 11, 14), (395, 557, 11, 14)],
             ),
             (
                 3,
-                [(506, 40, 11, 14), (256, 655, 11, 14), (506, 716, 11, 14)],
+                [(507, 40, 11, 14), (256, 655, 11, 14), (507, 716, 11, 14)],
             ),
         ] {
             let fonts = fonts(variant);

@@ -305,7 +305,15 @@ Pipeline: `FUN_0043B3E0` → `FUN_0043B1C0(rt, pos, flags, reveal, label,
 value)` → `FUN_00470AE0` (word-wrap at spaces, wrap width = 60% of screen
 width) / `FUN_00470A70` (single line) → `FUN_00470B60` per glyph →
 `FUN_00470F30` blit at `(pen_x/100 + xoff, pen_y/100 + yoff − sprite_h + 1)`
-— **y is the baseline**. Sprite resolver callback = 0x4291D0 =
+— **y is the baseline**. The pen stays in 1/100-px units and each glyph's
+position truncates. `FUN_00470F80` measures every advance plus every kern but
+the last, truncated to whole pixels; `FUN_0043B1C0` (flag 2) and the loading
+text `FUN_0042B040` centre at `x − width/2` with that halving truncated, while
+`FUN_00452790`'s presets above 9 start at `(screen width − width) / 2`. The
+glyphs are `0x04`-flagged records drawn through the `FUN_0047AD90` blit, so
+they use palette row 28, not the brightest row. With those rules the port's
+frontend label, copyright banner and both logos match DirectDraw trace frame
+`324003` pixel for pixel (2026-10-07). Sprite resolver callback = 0x4291D0 =
 `return DAT_004FE62C[id]` (passing NULL = measure-only pass, used to measure
 scrolled-out items). Setting rows: value string = `string_pool[label_id + 1 +
 *value_ptr]`, drawn right-aligned at `label_x + pt7.x (185)`. FUN_0043B740
@@ -994,6 +1002,31 @@ an attract-table policy.
   count FUN_00493EB0). Packed ids: lo16 = label string id, value strings
   follow (Sound 46 → Off/On 47/48; Self Righting 42 → Off/Level/Angled
   43-45; Joystick 52 → Absolute/Relative 53/54).
+
+### Display changes and the startup display search
+
+Each Display callback (`FUN_0043CBF0` Resolution, `FUN_0043CC70` Rendering,
+`FUN_0043CCA0` Bilinear, `FUN_0043CCD0` window/full screen) calls
+`FUN_0043CC40` when its value changed. That passes `min(Resolution, 3)` to
+`FUN_0044E0E0`, which releases the current display and starts one built from
+the settings (`FUN_0042D2A0`). If the new display fails, it is freed and the
+previous one started again; the menu value stays as chosen. On success
+`FUN_00493A40` reloads the resolution tier's resources if the tier changed.
+
+Startup instead runs `FUN_0044E2E0` -> `FUN_0042D340`. Beginning with the
+saved values it tries every display mode (the Section-5 count), then the
+other window mode, then the other renderer, then the other Bilinear value,
+and keeps the first combination that starts; the settings then hold that
+combination. Error `0xA08` shows `V2000 cannot run in the desktop. Trying
+full screen...` (windowed) or `V2000 cannot run in this mode...` once.
+
+The port's Rendering row offers Software (retail string 9) and OpenGL. The
+retail Direct3D table is not ported, so the second value names the renderer
+the port actually runs. A change replaces the renderer at once and keeps the
+current one when the new backend cannot start, as `FUN_0044E0E0` does; the
+port creates the replacement before dropping the old renderer. At startup
+only the backend can fail, so OpenGL falls back to Software unless
+`--renderer` forced a choice, and the backend that started is saved.
 
 ### Port Network availability
 

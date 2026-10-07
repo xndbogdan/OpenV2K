@@ -186,6 +186,22 @@ impl SpriteAtlas {
         })
     }
 
+    /// The record/palette block as display-format words, the form retail's
+    /// loader leaves palettes in (`((p & 0x7FE0) << 1) | (p & 0x1F)`).
+    /// A record's palette starts at word `pal_offset / 2`; software fillers
+    /// may read past it into the following palettes, so the whole block is
+    /// kept. Record words before the first palette are converted too but no
+    /// palette lookup reaches them.
+    pub fn display_palette_words(&self) -> Vec<u16> {
+        self.entry_data
+            .chunks_exact(2)
+            .map(|pair| {
+                let word = u16::from_le_bytes([pair[0], pair[1]]);
+                ((word & 0x7FE0) << 1) | (word & 0x1F)
+            })
+            .collect()
+    }
+
     /// Return the palette row used for a shade input. Normal sprites expose
     /// the engine's 32×16 ramp; direct-indexed sprites return their flat table.
     /// RGB555 texels have no palette and are rejected.

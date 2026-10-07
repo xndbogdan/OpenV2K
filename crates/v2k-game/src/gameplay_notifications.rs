@@ -676,9 +676,53 @@ impl GameplayNotifications {
         &mut self,
         retail_tick: i32,
         typewriter_cadence: &mut TextTypewriterCadence,
+        resolve_string: impl FnMut(usize) -> Option<&'a str>,
+    ) -> GameplayNotificationPresentation {
+        self.presentation_with_world_text(retail_tick, typewriter_cadence, &[], resolve_string)
+    }
+
+    /// [`Self::presentation`] preceded by `FUN_00452CB0`'s first pass: the
+    /// world's timed Section-2 records (its arrival messages), from the
+    /// world's first string up to the `#` sentinel. Retail draws them on the
+    /// world clock with the blinking cursor, before the direct and resource
+    /// slots, unless the world's control slot is already completed.
+    pub fn presentation_with_world_text<'a>(
+        &mut self,
+        retail_tick: i32,
+        typewriter_cadence: &mut TextTypewriterCadence,
+        world_records: &[&str],
         mut resolve_string: impl FnMut(usize) -> Option<&'a str>,
     ) -> GameplayNotificationPresentation {
         let mut presentation = GameplayNotificationPresentation::default();
+        // `(DAT_004FED60 * 1000) / 50`.
+        let world_ms = retail_tick.wrapping_mul(1000) / 50;
+        let cursor_visible = ((retail_tick / 10) & 1) != 0;
+        for raw in world_records {
+            let Some(parsed) = parse_authored_notification(
+                raw,
+                None,
+                self.people_left,
+                world_ms,
+                retail_tick,
+                cursor_visible,
+            ) else {
+                continue;
+            };
+            if typewriter_cadence.observe_active_line(parsed.reveal_incomplete, retail_tick) {
+                presentation.play_typewriter_sound = true;
+            }
+            if parsed.text.is_empty() {
+                continue;
+            }
+            presentation.lines.push(GameplayNotificationLine {
+                string_id: 0,
+                text: parsed.text,
+                x_percent: parsed.x_percent,
+                baseline_percent: parsed.baseline_percent,
+                width_percent: parsed.width_percent,
+                center_x: parsed.center_x,
+            });
+        }
         for slot in [self.direct, self.resource].into_iter().flatten() {
             let Some(raw) = resolve_string(slot.string_id) else {
                 continue;
@@ -757,6 +801,15 @@ struct ParsedNotification {
     reveal_incomplete: bool,
 }
 
+/// The first `bytes` retail bytes of decoded Section-2 text. The decoder
+/// turns every byte into one char (non-ASCII bytes into U+FFFD), so the
+/// cut counts chars and always lands on a UTF-8 boundary.
+pub(crate) fn retail_text_prefix(text: &str, bytes: usize) -> &str {
+    text.char_indices()
+        .nth(bytes)
+        .map_or(text, |(end, _)| &text[..end])
+}
+
 fn parse_authored_notification(
     raw: &str,
     substitution: Option<&str>,
@@ -830,12 +883,11 @@ fn parse_authored_notification(
         .checked_div(reveal_interval_ms)
         .unwrap_or(0)
         .max(0) as usize;
-    let reveal_incomplete = reveal_interval_ms > 1 && visible_bytes < body.len();
+    // FUN_00452790 truncates at this byte index (except for a '%'
+    // formatting escape, which none of the cargo strings use).
+    let reveal_incomplete = reveal_interval_ms > 1 && visible_bytes < body.chars().count();
     let mut text = if reveal_incomplete {
-        // The authored gameplay strings are single-byte ASCII. FUN_00452790
-        // truncates at this byte index (except for a '%' formatting escape,
-        // which none of the cargo strings use).
-        body[..visible_bytes.min(body.len())].to_owned()
+        retail_text_prefix(body, visible_bytes).to_owned()
     } else {
         body.to_owned()
     };
@@ -900,6 +952,50 @@ mod tests {
             event: ATTRACT_ATTENTION_RESOURCE_TEXT_EVENT,
             global_resource_id: ATTRACT_ATTENTION_RESOURCE_TEXT_GLOBAL_ID,
         }
+    }
+
+    #[test]
+    fn world_arrival_records_type_on_the_world_clock() {
+        let records = [
+            "       <    *, 3000,2,30,*>Entering Peasant World",
+            "< 4000, 7000,2,30,*>Save the world by killing the creatures.",
+        ];
+        let mut notifications = GameplayNotifications::new();
+        let mut cadence = TextTypewriterCadence::default();
+        // Tick 50 is 1000 ms: the first record is complete and the cursor
+        // phase `(50 / 10) & 1` is on.
+        let shown =
+            notifications.presentation_with_world_text(50, &mut cadence, &records, |_| None);
+        assert_eq!(shown.lines.len(), 1);
+        assert_eq!(shown.lines[0].text, "Entering Peasant World _");
+        let line = &shown.lines[0];
+        assert_eq!(
+            (line.x_percent, line.baseline_percent, line.width_percent),
+            (5, 16, 80)
+        );
+        // 3500 ms falls between the two records.
+        assert!(notifications
+            .presentation_with_world_text(175, &mut cadence, &records, |_| None)
+            .lines
+            .is_empty());
+        // 4100 ms reveals three characters of the second, with the type-on cue.
+        let typing =
+            notifications.presentation_with_world_text(205, &mut cadence, &records, |_| None);
+        assert_eq!(typing.lines[0].text, "Sav");
+        assert!(typing.play_typewriter_sound);
+    }
+
+    #[test]
+    fn type_on_counts_a_replaced_byte_as_one_step() {
+        // `extract_strings` turns a non-ASCII byte (a Latin-1 'é') into one
+        // U+FFFD, three bytes in UTF-8. Retail reveals it in one step.
+        let records = ["< 4000, 7000,2,30,*>Caf\u{FFFD} au lait"];
+        let mut notifications = GameplayNotifications::new();
+        let mut cadence = TextTypewriterCadence::default();
+        // 4120 ms: (4120 - 4000) / 30 = four bytes.
+        let typing =
+            notifications.presentation_with_world_text(206, &mut cadence, &records, |_| None);
+        assert_eq!(typing.lines[0].text, "Caf\u{FFFD}");
     }
 
     #[test]
