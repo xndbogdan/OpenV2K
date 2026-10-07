@@ -4075,7 +4075,6 @@ fn run_game(
                                 native_viewport: intro_camera.native_viewport(),
                                 world_projection: Some(world_projection),
                             },
-                            &menu_resources,
                             billboard_sprite_id,
                             retail_tick,
                             elapsed_micros,
@@ -4110,7 +4109,6 @@ fn run_game(
                                 native_viewport: intro_camera.native_viewport(),
                                 world_projection: Some(world_projection),
                             },
-                            &menu_resources,
                             billboard_sprite_id,
                             retail_tick,
                             elapsed_micros,
@@ -8747,7 +8745,6 @@ fn render_opening_cinematic(
     terrain_frames: Option<&v2k_render::TerrainFrames>,
     water_frames: Option<&v2k_render::WaterFrames>,
     effects: OpeningWorldEffects<'_>,
-    menu_resources: &v2k_game::menu::MenuResources,
     billboard_sprite_id: u16,
     retail_tick: u32,
     elapsed_micros: u32,
@@ -8768,7 +8765,6 @@ fn render_opening_cinematic(
             renderer,
             cache,
             fonts,
-            menu_resources,
             billboard_sprite_id,
             retail_tick,
             presentation,
@@ -9116,7 +9112,6 @@ fn render_opening_cinematic(
         renderer,
         cache,
         fonts,
-        menu_resources,
         billboard_sprite_id,
         retail_tick,
         presentation,
@@ -9126,12 +9121,10 @@ fn render_opening_cinematic(
 
 /// Complete an Intro2 frame with the overlays shared by world shots and the
 /// final black card.
-#[allow(clippy::too_many_arguments)]
 fn finish_opening_cinematic_frame(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,
     fonts: Option<&v2k_game::menu_text::MenuFonts>,
-    menu_resources: &v2k_game::menu::MenuResources,
     billboard_sprite_id: u16,
     retail_tick: u32,
     presentation: OpeningCinematicPresentation<'_>,
@@ -9155,7 +9148,7 @@ fn finish_opening_cinematic_frame(
             draw_story_caption(renderer, fonts, &text);
         }
     }
-    draw_intro_billboard(renderer, cache, menu_resources, billboard_sprite_id);
+    draw_intro_billboard(renderer, cache, billboard_sprite_id);
     renderer.present();
 }
 
@@ -9863,7 +9856,7 @@ fn play_world_audio(
 /// FUN_004537F0 queues the global nine-frame V2000 emblem in every cinematic
 /// phase through FUN_0042D030 at unit scale: a quarter of the focal length
 /// tall at the bottom left ([`MenuBillboardLayout::cinematic_rect`]), the
-/// selected frame stretched over that quad.
+/// frame stretched over that quad.
 ///
 /// Its queue key is -10000, below every other key of the frame, so it drains
 /// last and nothing masks it: the emblem adds over the finished frame,
@@ -9872,21 +9865,16 @@ fn play_world_audio(
 fn draw_intro_billboard(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,
-    menu_resources: &v2k_game::menu::MenuResources,
     billboard_sprite_id: u16,
 ) {
-    let gid = billboard_sprite_id;
-    let idx = (gid as usize).saturating_sub(1294);
-    let Some(frame) = menu_resources.flame_frames.get(idx) else {
-        return;
-    };
-    if frame.width == 0 || frame.height == 0 {
-        return;
-    }
     let Some(layout) = MenuBillboardLayout::from_cache(cache) else {
         return;
     };
-    let Some((_, entry)) = cache.global_sprite(gid) else {
+    let Some((atlas, entry)) = cache.global_sprite(billboard_sprite_id) else {
+        return;
+    };
+    let row = v2k_game::model_color::sprite_flat_shade_row(entry.pal_size as u8);
+    let Ok(frame) = atlas.decode_sprite(entry, usize::from(row)) else {
         return;
     };
     let frame_size = [entry.flags as u16, (entry.flags >> 16) as u16];
@@ -9906,8 +9894,8 @@ fn draw_intro_billboard(
     let (right, bottom) = (left + rect.width as i32, top + rect.height as i32);
     renderer.draw_material_sprite_quad(
         &frame.rgba,
-        frame.width,
-        frame.height,
+        u32::from(frame.width),
+        u32::from(frame.height),
         [(left, top), (right, top), (right, bottom), (left, bottom)],
         WorldSpriteBlend::Additive,
     );
@@ -10854,17 +10842,19 @@ struct BillboardRenderFrame {
     row_depth_fade_near_raw: f32,
 }
 
-/// (global sprite id, duration µs). Frame 0 lasts a single video frame.
-const BILLBOARD_FRAMES: [(u16, u32); 9] = [
-    (1295, 0),
-    (1299, 120_000),
-    (1298, 80_000),
-    (1297, 80_000),
-    (1296, 80_000),
-    (1295, 80_000),
-    (1294, 180_000),
-    (1295, 140_000),
-    (1294, 180_000),
+/// The `0x004CA938` entries: (global sprite id, the sprite `FUN_0042D030`
+/// takes while that slot is empty, duration µs). Frame 0 lasts a single
+/// video frame.
+const BILLBOARD_FRAMES: [(u16, u16, u32); 9] = [
+    (1295, 421, 0),
+    (1299, 425, 120_000),
+    (1298, 424, 80_000),
+    (1297, 423, 80_000),
+    (1296, 422, 80_000),
+    (1295, 421, 80_000),
+    (1294, 420, 180_000),
+    (1295, 421, 140_000),
+    (1294, 420, 180_000),
 ];
 
 impl BillboardAnim {
@@ -10909,8 +10899,10 @@ impl BillboardAnim {
 
     /// Intro2's `FUN_004537F0` calls `FUN_0042D030` directly: queue the old
     /// sprite and advance its clock without evolving or pinning menu planes.
+    /// Loading the Intro2 world empties the menu graphics' slots (1294..1299)
+    /// before its first frame, so `FUN_0042D030` takes each entry's fallback.
     fn prepare_cinematic_frame(&mut self, elapsed_micros: u32) -> (u16, bool) {
-        let sprite_id = self.sprite_id();
+        let sprite_id = BILLBOARD_FRAMES[self.frame].1;
         let wrapped = self.advance(elapsed_micros);
         (sprite_id, wrapped)
     }
@@ -10937,7 +10929,7 @@ impl BillboardAnim {
     fn advance(&mut self, elapsed_micros: u32) -> bool {
         self.accum_micros += elapsed_micros;
         let mut wrapped = false;
-        let dur = BILLBOARD_FRAMES[self.frame].1;
+        let dur = BILLBOARD_FRAMES[self.frame].2;
         if dur < self.accum_micros {
             self.accum_micros -= dur;
             self.frame += 1;
@@ -15999,7 +15991,7 @@ mod menu_visual_tests {
         assert_eq!(anim.frame, 1, "zero-duration flash advances after drawing");
 
         anim.frame = 3;
-        anim.accum_micros = BILLBOARD_FRAMES[3].1;
+        anim.accum_micros = BILLBOARD_FRAMES[3].2;
         anim.depth_fade_near_raw = 0xC00;
         anim.depth_fade_far_raw = 0x1400;
         let (attack, wrapped) = anim.prepare_frontend_render_frame(
@@ -16127,9 +16119,9 @@ mod menu_visual_tests {
         anim.frame = 1;
         anim.accum_micros = 0;
 
-        assert!(!anim.advance(BILLBOARD_FRAMES[1].1));
+        assert!(!anim.advance(BILLBOARD_FRAMES[1].2));
         assert_eq!(anim.frame, 1);
-        assert_eq!(anim.accum_micros, BILLBOARD_FRAMES[1].1);
+        assert_eq!(anim.accum_micros, BILLBOARD_FRAMES[1].2);
 
         assert!(!anim.advance(1));
         assert_eq!(anim.frame, 2);
@@ -16140,13 +16132,13 @@ mod menu_visual_tests {
     fn cinematic_billboard_advance_does_not_touch_frontend_planes() {
         let mut anim = BillboardAnim::new();
         anim.frame = 3;
-        anim.accum_micros = BILLBOARD_FRAMES[3].1;
+        anim.accum_micros = BILLBOARD_FRAMES[3].2;
         anim.depth_fade_near_raw = 0xC00;
         anim.depth_fade_far_raw = 0x1400;
 
         let (sprite_id, wrapped) = anim.prepare_cinematic_frame(1_000);
         assert!(!wrapped);
-        assert_eq!(sprite_id, BILLBOARD_FRAMES[3].0);
+        assert_eq!(sprite_id, BILLBOARD_FRAMES[3].1);
         assert_eq!(anim.frame, 4);
         assert_eq!(anim.depth_fade_near_raw, 0xC00);
         assert_eq!(anim.depth_fade_far_raw, 0x1400);
