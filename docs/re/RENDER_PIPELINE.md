@@ -548,6 +548,14 @@ actor callbacks. This does not classify another recording: the tick952
 indexed draw independently executes the shipped alternate/Direct3D table
 and presents without that CPU Lock route ([backend custody](MODEL_DRAW_CUSTODY.md#same-draw-backend-discrimination)).
 
+The trace's earlier 640×480 epoch, before call `321664`, is not a colour
+oracle: its frames carry zero red throughout (white logos read cyan, the
+yellow ring label green) while their green and blue match the same assets
+exactly. Static screen elements of the 1024×768 epoch do compare exactly:
+the frontend's ring label, copyright banner and logos (Flip `324003`) and the
+Intro2 caption band (Flip `345026`) match the port's software frames pixel
+for pixel.
+
 The frontend's last per-frame DirectDraw black `COLORFILL` is call `325164`.
 Intro2 then presents complete world frames without that external fill until
 the black outro begins at call `356152`, immediately after Flip `356151`.
