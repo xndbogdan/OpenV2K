@@ -125,6 +125,20 @@ impl ModelScene {
         ]
     }
 
+    /// The eye in the world image nearest `node`: the native viewport's
+    /// origin brought within a signed word of the node, else the floating
+    /// camera (which, in a native scene, may sit in another torus image).
+    fn eye_near(&self, node: [f32; 3]) -> [f32; 3] {
+        match self.native {
+            Some(native) => std::array::from_fn(|axis| {
+                let node_raw = (node[axis] * 256.0).round() as i32;
+                let delta = native.origin_raw[axis].wrapping_sub(node_raw) as i16;
+                node[axis] + f32::from(delta) / 256.0
+            }),
+            None => self.camera_position,
+        }
+    }
+
     /// `FUN_00464E60`'s table choice for this node, or `None` when the node
     /// lies wholly beyond the far plane.
     fn draw_fog(&self, draw: &ModelDraw<'_>) -> Option<DrawFog> {
@@ -416,7 +430,9 @@ pub(crate) fn prepare_model_body(
         fade: fog.fade,
         ..scene.lens
     };
-    let resolved = resolve_model_vertices(draw, scene.camera_position, scene.camera_basis);
+    // Camera-dependent vertices and back faces need the eye beside the node.
+    let eye = scene.eye_near(draw.transform.position);
+    let resolved = resolve_model_vertices(draw, eye, scene.camera_basis);
     let node = draw.transform.position;
     let mut corners: Vec<ModelCorner> = resolved
         .world
@@ -469,8 +485,10 @@ pub(crate) fn prepare_model_body(
             .get(index)
             .copied()
             .unwrap_or(ModelFaceVertices::Triangle(*triangle));
-        if let Some((face, first)) = previous {
-            if face == source {
+        // A quad spans exactly two triangles; a following face with the
+        // same corners (a front/back pair) is a polygon of its own.
+        if let Some((face, first)) = previous.take() {
+            if face == source && matches!(source, ModelFaceVertices::Quad(_)) {
                 // Second triangle of a quad: its last corner's normal is the
                 // quad's fourth Gouraud reference.
                 if let (ModelFaceShading::Gouraud, Some(corner)) = (
@@ -507,7 +525,7 @@ pub(crate) fn prepare_model_body(
                 draw.transform.orientation,
                 draw.transform.position,
                 draw.transform.scale,
-                scene.camera_position,
+                eye,
             ))
         });
         let face_normal = mesh.normals.get(index).copied().unwrap_or([0.0, 1.0, 0.0]);
@@ -994,5 +1012,79 @@ impl PreparedNode {
             face_order: order,
             edges: Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::renderer::{
+        ExternalFrameMode, FaceMaterial, ModelDepthPolicy, ModelMesh, ModelOverlayKind,
+        ModelSurfaceResolution, ModelTransform, ViewPinMode,
+    };
+    use v2k_formats::models::ModelEntry;
+
+    struct NoSprites;
+
+    impl ModelMaterials for NoSprites {
+        fn face_material(&mut self, _texture: u32, _flags: u16) -> Option<MaterialId> {
+            None
+        }
+        fn material_size(&self, _id: MaterialId) -> Option<(u16, u16)> {
+            None
+        }
+    }
+
+    #[test]
+    fn a_front_back_quad_pair_stays_two_faces() {
+        let quad = ModelFaceVertices::Quad([0, 1, 2, 3]);
+        let model = ModelEntry {
+            vertices: vec![
+                [0.0, 0.0, 0.0],
+                [256.0, 0.0, 0.0],
+                [256.0, 256.0, 0.0],
+                [0.0, 256.0, 0.0],
+            ],
+            vertex_type_flags: vec![0; 4],
+            vertex_projection: vec![ModelVertexProjection::Position; 4],
+            vertex_clip: vec![ModelSlotClip::Clear; 4],
+            triangles: vec![[0, 1, 2], [0, 2, 3], [0, 1, 2], [0, 2, 3]],
+            face_vertices: vec![quad; 4],
+            normals: vec![[0.0, 0.0, 1.0]; 4],
+            face_shading: vec![ModelFaceShading::Flat; 4],
+            ..ModelEntry::default()
+        };
+        let materials = vec![
+            FaceMaterial {
+                color: [1.0; 3],
+                palette_rgb555: Some(0x7FFF),
+                emissive: [0.0; 3],
+                texture: None,
+                blend: WorldSpriteBlend::Masked,
+                flat_shade_row: 28,
+            };
+            4
+        ];
+        let draw = ModelDraw {
+            mesh: ModelMesh::from_model(&model, &materials),
+            projection_authority: Default::default(),
+            transform: ModelTransform {
+                orientation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                position: [0.0, 0.0, -10.0],
+                scale: 100.0 / 256.0,
+            },
+            near_clip: ModelNearClip::Camera,
+            depth_fade: ModelDepthFade::Disabled,
+            depth_policy: ModelDepthPolicy::Geometry,
+            view_pin: ViewPinMode::Raw,
+            surface_resolution: ModelSurfaceResolution::Intrinsic,
+            world_surface: None,
+            external_frame: ExternalFrameMode::Raw,
+            overlay: ModelOverlayKind::None,
+            painter: None,
+        };
+        let scene = PreparedNode::test_triangles(&[]).scene;
+        let node = prepare_model_body(&draw, &scene, &mut NoSprites).unwrap();
+        assert_eq!(node.face_order, [0, 2], "the back face is its own polygon");
     }
 }
