@@ -25,6 +25,50 @@ pub enum GameEvent {
 ///
 /// Owns the SDL context and event pump. The actual window is owned by
 /// the renderer (GL takes ownership, software consumes via into_canvas).
+/// Where a replacement game window opens, so a renderer switch does not
+/// move the game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowPlacement {
+    /// A windowed game keeps its position and size.
+    Windowed {
+        x: i32,
+        y: i32,
+        width: u32,
+        height: u32,
+    },
+    /// A full-screen game reopens on the same display.
+    FullScreenOn { display: i32 },
+}
+
+impl WindowPlacement {
+    /// Placement of an existing game window.
+    pub fn of(window: &sdl2::video::Window) -> Option<Self> {
+        if window.fullscreen_state() != sdl2::video::FullscreenType::Off {
+            return window
+                .display_index()
+                .ok()
+                .map(|display| Self::FullScreenOn { display });
+        }
+        let (x, y) = window.position();
+        let (width, height) = window.size();
+        Some(Self::Windowed {
+            x,
+            y,
+            width,
+            height,
+        })
+    }
+
+    /// The window size to create: a windowed game's own size, else the
+    /// requested one (a full-screen game is sized by its display later).
+    pub fn size_or(self, width: u32, height: u32) -> (u32, u32) {
+        match self {
+            Self::Windowed { width, height, .. } => (width, height),
+            Self::FullScreenOn { .. } => (width, height),
+        }
+    }
+}
+
 pub struct GameWindow {
     pub sdl: Sdl,
     pub video: VideoSubsystem,
@@ -55,23 +99,13 @@ impl GameWindow {
         title: &str,
         width: u32,
         height: u32,
+        placement: Option<WindowPlacement>,
     ) -> Result<sdl2::video::Window, String> {
         let gl_attr = self.video.gl_attr();
         gl_attr.set_context_profile(sdl2::video::GLProfile::Compatibility);
         gl_attr.set_context_version(2, 1);
         gl_attr.set_double_buffer(true);
-
-        let mut window = self
-            .video
-            .window(title, width, height)
-            .position_centered()
-            .resizable()
-            .opengl()
-            .build()
-            .map_err(|e| e.to_string())?;
-        apply_app_window_icon(&mut window);
-        self.primary_window_id.set(Some(window.id()));
-        Ok(window)
+        self.build_window(title, width, height, placement, true)
     }
 
     /// Create an SDL2 window suitable for the software backend.
@@ -80,14 +114,49 @@ impl GameWindow {
         title: &str,
         width: u32,
         height: u32,
+        placement: Option<WindowPlacement>,
     ) -> Result<sdl2::video::Window, String> {
-        let mut window = self
-            .video
-            .window(title, width, height)
-            .position_centered()
-            .resizable()
-            .build()
-            .map_err(|e| e.to_string())?;
+        self.build_window(title, width, height, placement, false)
+    }
+
+    fn build_window(
+        &self,
+        title: &str,
+        width: u32,
+        height: u32,
+        placement: Option<WindowPlacement>,
+        opengl: bool,
+    ) -> Result<sdl2::video::Window, String> {
+        let (width, height) = placement.map_or((width, height), |placement| {
+            placement.size_or(width, height)
+        });
+        let mut builder = self.video.window(title, width, height);
+        match placement {
+            Some(WindowPlacement::Windowed { x, y, .. }) => {
+                builder.position(x, y);
+            }
+            Some(WindowPlacement::FullScreenOn { display }) => {
+                match self.video.display_bounds(display) {
+                    Ok(bounds) => {
+                        builder.position(
+                            bounds.x() + (bounds.width() as i32 - width as i32) / 2,
+                            bounds.y() + (bounds.height() as i32 - height as i32) / 2,
+                        );
+                    }
+                    Err(_) => {
+                        builder.position_centered();
+                    }
+                }
+            }
+            None => {
+                builder.position_centered();
+            }
+        }
+        builder.resizable();
+        if opengl {
+            builder.opengl();
+        }
+        let mut window = builder.build().map_err(|e| e.to_string())?;
         apply_app_window_icon(&mut window);
         self.primary_window_id.set(Some(window.id()));
         Ok(window)

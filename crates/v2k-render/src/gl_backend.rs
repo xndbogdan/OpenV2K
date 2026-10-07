@@ -5031,6 +5031,10 @@ impl Renderer for GlRenderer {
         self.resize(w, h);
     }
 
+    fn window_placement(&self) -> Option<crate::WindowPlacement> {
+        crate::WindowPlacement::of(&self.window)
+    }
+
     fn set_window_size(&mut self, width: u32, height: u32) {
         if let Err(e) = self.window.set_size(width, height) {
             eprintln!("set window size failed: {e}");

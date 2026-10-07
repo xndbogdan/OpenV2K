@@ -259,7 +259,8 @@ fn world_control_slot(level_id: u32) -> Option<usize> {
 /// `FUN_0044E0E0`). Retail rebuilds the display at once and, when the new
 /// one cannot start, keeps running on the previous one; the menu value stays
 /// as chosen. The new renderer starts without textures, so the caller
-/// re-uploads what the previous one held.
+/// re-uploads what the previous one held. Its window opens where the old
+/// one was.
 fn replace_renderer(
     game_window: &GameWindow,
     renderer: &mut Box<dyn Renderer>,
@@ -272,6 +273,7 @@ fn replace_renderer(
         config.height,
         config.resolve_backend(None),
         false,
+        renderer.window_placement(),
     )?;
     let world_model_fog = renderer.retained_world_model_fog();
     drop(std::mem::replace(renderer, replacement));
@@ -1531,6 +1533,7 @@ fn run_game(
         // start here, so without a command-line choice OpenGL falls back to
         // the software renderer.
         cli_override.is_none(),
+        None,
     )?;
 
     let initial_menu_size = config.detail.menu_virtual_size();
