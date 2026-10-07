@@ -33,7 +33,8 @@ use crate::software::model::{
     construct_billboard, construct_edge, construct_face, screen_midpoint, BillboardCommand,
     EdgeCommand, FaceContext, FacePass, ModelCorner, ModelNormal,
 };
-use crate::software::terrain::GroundProjection;
+use crate::software::particle::{queue_particle, Particle, ParticleScene, ParticleShadow};
+use crate::software::terrain::{GroundMaterial, GroundProjection};
 use crate::software::{material_flags, MaterialId, PrimitiveQueue, QueueError};
 
 /// The scene a model body is queued into.
@@ -197,6 +198,8 @@ impl ModelScene {
 /// flags the face carries (keyed, row 28, half-additive, additive).
 pub(crate) trait ModelMaterials {
     fn face_material(&mut self, texture: u32, flags: u16) -> Option<MaterialId>;
+    /// A bound material's sprite-record size.
+    fn material_size(&self, id: MaterialId) -> Option<(u16, u16)>;
 }
 
 fn face_flags(blend: WorldSpriteBlend, shade_row: u8) -> u16 {
@@ -818,27 +821,66 @@ pub(crate) fn prepare_model_billboards(
     })
 }
 
+/// `FUN_0043D410` for one particle: the scene's projector with the
+/// particle fog planes as its fade ramp.
+fn queue_native_particle(
+    queue: &mut PrimitiveQueue,
+    base: &ParticleScene,
+    native: crate::renderer::NativeParticle,
+    sprite: GroundMaterial,
+) -> Result<(), QueueError> {
+    let mut scene = *base;
+    scene.fog_near = native.fog_near_raw;
+    scene.far = native.fog_far_raw;
+    scene.projection.fade = fade_terms(native.fog_near_raw, native.fog_far_raw);
+    let particle = Particle {
+        position: native.position_raw,
+        scale: native.scale_raw,
+        sprite,
+        flags: native.flags,
+        sort_bias: native.sort_bias_raw,
+        frame_size: native.frame_size_raw,
+        shadow: native.shadow.map(|shadow| ParticleShadow {
+            size: shadow.size,
+            ground: shadow.ground_raw,
+            colour: shadow.colour,
+        }),
+    };
+    queue_particle(queue, &scene, &particle).map(|_| ())
+}
+
 /// Derived sprite materials, keyed by texture and face flags.
 #[derive(Default)]
 pub(crate) struct DerivedMaterials {
     pub(crate) by_flags: HashMap<(u32, u16), MaterialId>,
 }
 
-/// Queue camera-facing world sprites (`FUN_0043D410`'s particle quads):
-/// an axis-aligned textured quad around the projected centre, keyed by the
-/// sprite's retail painter key, `+0x1098` near or `+0x109C` with the
-/// sprite's far fade byte. The port supplies sprites after its own
-/// presentation choices, so sizes come from the sprite's world extent.
+/// Queue camera-facing world sprites. Particles that carry their
+/// `FUN_0043D410` inputs go through the ported drawer when the scene has a
+/// native context (`particles`). Any other sprite is approximated by an
+/// axis-aligned textured quad around its projected centre, sized from its
+/// world extent and keyed by its painter key, `+0x1098` near or `+0x109C`
+/// with its far fade byte.
 pub(crate) fn queue_world_sprites(
     queue: &mut PrimitiveQueue,
     sprites: &[crate::renderer::WorldSprite],
     scene: &ModelScene,
+    particles: Option<&ParticleScene>,
     materials: &mut dyn ModelMaterials,
 ) -> Result<(), QueueError> {
     use crate::renderer::SpriteFog;
     use crate::software::FillSlot;
     let fog_colour = scene.world_fog.map_or(0, |fog| colour_word(fog.color));
     for sprite in sprites {
+        if let (Some(native), Some(base)) = (sprite.native, particles) {
+            let flags = face_flags(sprite.blend, sprite.flat_shade_row);
+            let Some(id) = materials.face_material(sprite.texture.0, flags) else {
+                continue;
+            };
+            let (width, height) = materials.material_size(id).unwrap_or((1, 1));
+            queue_native_particle(queue, base, native, GroundMaterial { id, width, height })?;
+            continue;
+        }
         if !sprite.position.iter().all(|v| v.is_finite())
             || !sprite.size.iter().all(|v| v.is_finite() && *v > 0.0)
         {

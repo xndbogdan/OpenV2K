@@ -793,6 +793,38 @@ pub struct WorldSprite {
     pub flat_shade_row: u8,
     /// Center-depth fade selected by this sprite's explicit draw context.
     pub fog: SpriteFog,
+    /// The particle inputs `FUN_0043D410` reads, for backends that queue the
+    /// retail particle primitives; `None` for other sprites.
+    pub native: Option<NativeParticle>,
+}
+
+/// One particle as `FUN_0043D410` draws it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeParticle {
+    /// World words (particle `+0x08/+0x0A/+0x0C`).
+    pub position_raw: [i16; 3],
+    /// Draw scale after its record-address jitter times the frame's size word.
+    pub scale_raw: i32,
+    /// The frame's size word, which alone scales the shadow.
+    pub frame_size_raw: u16,
+    /// Descriptor `+0x07`: 1 mirrors, 4 centres, 8 keeps one pixel.
+    pub flags: u8,
+    /// Descriptor `+0x12`, added to the depth key.
+    pub sort_bias_raw: i16,
+    /// Render-context particle fog planes (`+0x74`, `+0x78`).
+    pub fog_near_raw: i32,
+    pub fog_far_raw: i32,
+    pub shadow: Option<NativeParticleShadow>,
+}
+
+/// A particle class's ground shadow (descriptor `+0x09`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeParticleShadow {
+    pub size: u8,
+    /// Ground height under the particle (`FUN_0043DB60`).
+    pub ground_raw: i16,
+    /// System-2 palette entry 32 as a display word.
+    pub colour: u32,
 }
 
 impl WorldSprite {
@@ -808,6 +840,7 @@ impl WorldSprite {
             blend: WorldSpriteBlend::Additive,
             flat_shade_row: 28,
             fog: SpriteFog::Near,
+            native: None,
         }
     }
 }

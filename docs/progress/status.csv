@@ -191,3 +191,5 @@ address,status,note
 0x00459D10,implemented,software primitive queue FIFO record; exercised by every native producer receipt (docs/re/SOFTWARE_RASTER.md)
 0x0045B220,implemented,software primitive queue keyed record; exercised by every native producer receipt (docs/re/SOFTWARE_RASTER.md)
 0x0045B280,implemented,software primitive queue record by scope; exercised by every native producer receipt (docs/re/SOFTWARE_RASTER.md)
+0x0043D410,implemented,software particle drawer; byte-exact on native particle receipts (docs/re/SOFTWARE_RASTER.md)
+0x0046D010,implemented,software dry projector without fade (particle shadows); byte-exact through particle receipts (docs/re/SOFTWARE_RASTER.md)

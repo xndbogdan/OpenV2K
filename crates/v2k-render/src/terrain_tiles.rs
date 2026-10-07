@@ -230,6 +230,9 @@ pub struct NativeTerrainMaterials {
     pub sprites: Vec<NativeSpriteRef>,
     /// The first eight Section-6 dwords, as `FUN_00431890` copies them.
     pub shade_words: [u32; 8],
+    /// System-2 master palette entry 11 as a display word: the colour of
+    /// `FUN_00431970`'s bottom caps.
+    pub cap_colour: u32,
 }
 
 #[cfg(test)]

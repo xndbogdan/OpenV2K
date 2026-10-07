@@ -16,6 +16,7 @@ mod fog;
 mod format;
 mod material;
 pub mod model;
+pub mod particle;
 mod queue;
 mod rows;
 mod scan;

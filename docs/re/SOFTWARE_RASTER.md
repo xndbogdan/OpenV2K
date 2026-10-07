@@ -15,8 +15,7 @@ type-1 vertex projector are ported and byte-exact against retail on their
 receipts, and model painter programs run their queue groups as retail
 does. `--renderer software` (`crates/v2k-render/src/sw_backend.rs`) draws
 videos, menus, the frontend models, 2-D overlays and whole gameplay and
-cinematic frames through them. World sprites (particles) are still an
-adapter of the port's presentation rather than `FUN_0043D410`.
+cinematic frames through them, particles included.
 
 ## Pipeline
 
@@ -291,6 +290,25 @@ group. Leftover groups close when the tree's root ends. Runs of draws the
 game has already painter-ordered (the frontend's Klaus hierarchy) go in one
 FIFO group keyed by their outer group.
 
+## Particles
+
+`FUN_0043D410` draws one particle (`crates/v2k-render/src/software/particle.rs`).
+It projects the particle through the world projector and draws nothing when
+the centre is behind the near plane, past the context's far plane, or off
+screen by more than the screen size. The quad's half width is
+`((w * scale) >> 8) * focal / (depth << 9)` (height likewise) for the frame's
+sprite record and `scale` = the class draw scale (plus a jitter from the
+particle record's address) times the frame's size word; class flag 8 keeps
+at least one pixel. A quad that cannot reach the screen is dropped. Unless
+class flag 4 centres it, the quad stands on the particle; flag 1 mirrors
+it. It is keyed by the depth plus the class's signed bias: a near textured
+quad before the context's fog plane, else a fogged one with the centre's
+fade byte. A class with a shadow size (descriptor `+0x09`) also queues a
+one-pixel flat quad between two ground points projected by `FUN_0046D010`,
+in master palette entry 32, keyed one unit deeper. The game supplies each
+particle's frame, jittered scale, descriptor flags, bias and shadow size,
+its fog planes and the bilinear ground height (`FUN_0043DB60`).
+
 ## Screen billboards and overlays
 
 `FUN_0042D030` (the menu and cinematic V2000 emblems) queues a textured
@@ -336,6 +354,11 @@ allocation order are all covered.
 static sea, late and negative clocks, a high and a drowning sea, the near
 plane, heavy fog, a full scan and a translated view) the same way.
 
+`software_particle_receipts.rs` replays 124 particles (66 drawn) on
+synthetic class descriptors: mirrored, centred and clamped quads, signed
+biases, near and fogged quads, wet projection, ground shadows, size jitter,
+the near plane and off-screen rejection.
+
 `software_model_face_receipts.rs` (384), `software_model_billboard_receipts.rs`
 (96) and `software_model_edge_receipts.rs` (128) run every face, billboard
 and edge opcode of both constructor tables on generated warm vertex caches,
@@ -356,10 +379,9 @@ span-reciprocal overrun; and the zero fog-mask state.
 - The retail stack address at the scan converter, which `00478510`'s pixels
   depend on, has not been measured in the shipped game; receipts use a fixed
   synthetic stack.
-- Particles: `FUN_0043D410` is not ported. The backend queues the port's
-  world sprites as axis-aligned textured quads sized from their world
-  extent, keyed by the port's painter key; its frame selection, anchoring,
-  mirroring and shadow quads are not reproduced.
+- Particle positions come from the port's floating-point particle state,
+  rounded to world words; world sprites without particle inputs still use
+  an approximate quad.
 - Model VIEW points come from the port's floating-point materialized world
   points, not retail's Q31 node transforms, so they can differ by a unit.
   Billboards still queue after their body rather than at their command when

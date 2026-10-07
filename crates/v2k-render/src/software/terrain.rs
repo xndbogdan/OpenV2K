@@ -204,7 +204,7 @@ impl GroundProjection {
 
     /// `FUN_0046D1E0` / `FUN_00436440`: project `delta` (point minus eye);
     /// returns the depth.
-    fn project(&self, point: &mut GroundPoint, delta: [i32; 3]) -> i32 {
+    pub(crate) fn project(&self, point: &mut GroundPoint, delta: [i32; 3]) -> i32 {
         let [x, y, depth] = self.view(delta);
         if depth < 0x40 {
             point.clip = 0x40;
@@ -229,6 +229,23 @@ impl GroundProjection {
             point.clip = dry.finish(point, x, y, depth);
         }
         depth
+    }
+
+    /// `FUN_0046D010`: the dry projector without a fade byte. Behind the near
+    /// plane it returns 0x40 and leaves `screen` as it was.
+    pub(crate) fn project_plain(&self, screen: &mut [i16; 2], delta: [i32; 3]) -> u8 {
+        let [x, y, depth] = self.view(delta);
+        if depth < 0x40 {
+            return 0x40;
+        }
+        let mut point = GroundPoint::default();
+        let dry = Self {
+            wet_clock: None,
+            ..*self
+        };
+        let clip = dry.finish(&mut point, x, y, depth);
+        *screen = point.screen;
+        clip
     }
 
     /// Project an already transformed VIEW point: outcode (0x40 behind the

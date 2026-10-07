@@ -81,6 +81,12 @@ impl ParticleDescriptor {
         self.raw_byte(0x08)
     }
 
+    /// Ground-shadow size `FUN_0043D410` scales by the frame size; zero
+    /// draws no shadow (`descriptor + 0x09`).
+    pub const fn shadow_size_raw(&self) -> u8 {
+        self.raw_byte(0x09)
+    }
+
     /// Class draw scale passed to the particle sprite renderer.
     pub const fn draw_scale_raw(&self) -> u16 {
         self.raw_u16(0x0a)

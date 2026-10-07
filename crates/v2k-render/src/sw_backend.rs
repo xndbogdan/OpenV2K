@@ -34,6 +34,7 @@ use crate::renderer::{
     CapturedFrame, FrameCaptureSource, RenderScene, RenderViewport, Renderer, TextureId,
     WorldModelFog, WorldSpriteBlend,
 };
+use crate::software::particle::ParticleScene;
 use crate::software::store::{rgb565, rgba8, MaterialStore, OwnedMaterial};
 use crate::software::terrain::{
     draw_ground, ground_lead, GroundMaterial, GroundProjection, GroundScene,
@@ -327,6 +328,12 @@ impl ModelMaterials for BackendMaterials<'_> {
         };
         self.derived.by_flags.insert((texture, flags), id);
         Some(id)
+    }
+
+    fn material_size(&self, id: MaterialId) -> Option<(u16, u16)> {
+        self.store
+            .get(id)
+            .map(|material| (material.width, material.height))
     }
 }
 
@@ -676,7 +683,7 @@ impl Renderer for SoftwareRenderer {
     fn draw_terrain(
         &mut self,
         terrain: &TerrainGrid,
-        colors: &[PaletteEntry],
+        _colors: &[PaletteEntry],
         frames: Option<&crate::terrain_tiles::TerrainFrames>,
         lights: Option<&crate::terrain_light::TerrainLightWindow>,
         elapsed_micros: u32,
@@ -712,7 +719,6 @@ impl Renderer for SoftwareRenderer {
                 .unwrap_or_default(),
         });
         let motion = self.infection.frame();
-        let display = |rgb555: u16| u32::from(((rgb555 & 0x7FE0) << 1) | (rgb555 & 0x1F));
         let fog_colour = self.ground_fog_colour();
         let sprites = &native.sprites;
         let tile_base = native.tile_base;
@@ -740,7 +746,7 @@ impl Renderer for SoftwareRenderer {
             screen_height: viewport_pixels[1] as i16,
             shade_words: native.shade_words,
             fog_colour,
-            cap_colour: colors.get(11).map_or(0, |entry| display(entry.rgb555)),
+            cap_colour: native.cap_colour,
             rows: frames.scan_columns,
             points,
             light,
@@ -848,11 +854,29 @@ impl Renderer for SoftwareRenderer {
         let Some(scene) = self.model_scene(crate::renderer::ModelNearClip::RetailWorld) else {
             return;
         };
+        // FUN_0043D410's context: the world projector, eye words and fog
+        // colour; each particle brings its fog planes.
+        let particles = match (self.native_viewport, self.authority) {
+            (Some(viewport), SceneProjectionAuthority::Native(lens)) => Some(ParticleScene {
+                projection: self.ground_projection(lens, viewport),
+                eye: viewport.origin_raw.map(|value| value as i16),
+                fog_near: i32::MAX,
+                far: i32::MAX,
+                fog_colour: self.ground_fog_colour(),
+            }),
+            _ => None,
+        };
         let mut materials = BackendMaterials {
             store: &mut self.materials,
             derived: &mut self.derived,
         };
-        if let Err(error) = queue_world_sprites(&mut self.queue, sprites, &scene, &mut materials) {
+        if let Err(error) = queue_world_sprites(
+            &mut self.queue,
+            sprites,
+            &scene,
+            particles.as_ref(),
+            &mut materials,
+        ) {
             if !self.model_error_reported {
                 self.model_error_reported = true;
                 eprintln!("software sprites: {error:?}; later ones this frame are dropped");

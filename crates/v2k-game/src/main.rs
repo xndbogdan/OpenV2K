@@ -9427,6 +9427,29 @@ fn draw_world_fx(
             .unwrap_or(0);
         let (blend, color) = particle_sprite_material(flags);
         let position = camera_relative(camera, particle.presentation_position());
+        let native = descriptor.map(|descriptor| {
+            let raw = |value: f32| (value * 256.0).round() as i32 as i16;
+            let world = particle.presentation_position();
+            let position_raw = [raw(world[0]), raw(world[1]), raw(world[2])];
+            v2k_render::NativeParticle {
+                position_raw,
+                scale_raw: draw_scale_raw.wrapping_mul(i32::from(frame.scale_raw as i16)),
+                frame_size_raw: frame.scale_raw,
+                flags: descriptor.flags(),
+                sort_bias_raw: descriptor.sort_bias_raw(),
+                fog_near_raw: fog_planes.near_raw,
+                fog_far_raw: fog_planes.far_raw,
+                shadow: (descriptor.shadow_size_raw() != 0).then(|| {
+                    v2k_render::NativeParticleShadow {
+                        size: descriptor.shadow_size_raw(),
+                        ground_raw: cache.terrain().map_or(0, |terrain| {
+                            particle_ground_raw(terrain, position_raw[0], position_raw[2])
+                        }),
+                        colour: particle_shadow_colour(cache),
+                    }
+                }),
+            }
+        });
         sprites.push(WorldSprite {
             texture,
             position,
@@ -9440,10 +9463,39 @@ fn draw_world_fx(
             blend,
             flat_shade_row: v2k_game::model_color::sprite_flat_shade_row(flags),
             fog,
+            native,
         });
     }
     renderer.draw_world_sprites(&sprites);
     spray_presented
+}
+
+/// `FUN_0043DB60` for a drawn particle: the terrain height under it,
+/// bilinear between the four surrounding cells.
+fn particle_ground_raw(terrain: &v2k_formats::terrain::TerrainGrid, x_raw: i16, z_raw: i16) -> i16 {
+    let (x, z) = (x_raw as u16, z_raw as u16);
+    let (x_cell, z_cell) = (usize::from(x >> 8), usize::from(z >> 8));
+    let height = |x: usize, z: usize| {
+        terrain
+            .cell(x & 0xFF, z & 0xFF)
+            .map_or(0, |cell| i32::from(cell.height as i8) * 0x20)
+    };
+    let (fx, fz) = (i32::from(x & 0xFF), i32::from(z & 0xFF));
+    let near = height(x_cell, z_cell);
+    let near = (((height(x_cell + 1, z_cell) - near) * fx) >> 8) + near;
+    let far = height(x_cell, z_cell + 1);
+    let far = (((height(x_cell + 1, z_cell + 1) - far) * fx) >> 8) + far;
+    (near + (((far - near) * fz) >> 8)) as i16
+}
+
+/// System-2 palette entry 32, the particle shadow colour, as a display word.
+fn particle_shadow_colour(cache: &v2k_game::resource_cache::ResourceCache) -> u32 {
+    cache
+        .master_color_palette()
+        .and_then(|palette| palette.get(32))
+        .map_or(0, |entry| {
+            u32::from(((entry.rgb555 & 0x7FE0) << 1) | (entry.rgb555 & 0x1F))
+        })
 }
 
 /// `LAB_0041CB10` continues after the admitted hive's ordinary body draw.

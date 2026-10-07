@@ -220,10 +220,17 @@ fn native_terrain_materials(
         sprites.push(NativeSpriteRef { id, width, height });
     }
     debug_assert_eq!(INFECTION_BASE_OFFSET, CANONICAL_FRAME_COUNT as u32);
+    let cap_colour = cache
+        .master_color_palette()
+        .and_then(|palette| palette.get(11))
+        .map_or(0, |entry| {
+            u32::from(((entry.rgb555 & 0x7FE0) << 1) | (entry.rgb555 & 0x1F))
+        });
     Some(NativeTerrainMaterials {
         tile_base: base,
         sprites,
         shade_words,
+        cap_colour,
     })
 }
 
