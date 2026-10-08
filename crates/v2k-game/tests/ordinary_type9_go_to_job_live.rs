@@ -142,7 +142,6 @@ fn ordinary_section13_rebuilds_use_shared_publication() {
         v2k_game::save::NativeSaveRestore::decode(&v2k_game::save::NativeCompatibilityPreview {
             logical_level_id: 1,
             state_payload: payload,
-            saved_hint_mask: None,
         })
         .unwrap();
     assert!(LoadingPurpose::NativeSave {

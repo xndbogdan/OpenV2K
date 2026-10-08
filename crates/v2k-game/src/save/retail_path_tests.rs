@@ -49,7 +49,6 @@ fn checkpoint(name: &str, logical: u32) -> NativeCompatibilityPreview {
     NativeCompatibilityPreview {
         logical_level_id: logical,
         state_payload,
-        saved_hint_mask: None,
     }
 }
 

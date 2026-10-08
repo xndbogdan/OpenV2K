@@ -137,7 +137,6 @@ fn completed_hive_constructor_damage_survives_final_hull_readback() {
         let restore = NativeSaveRestore::decode(&NativeCompatibilityPreview {
             logical_level_id: 2,
             state_payload: payload,
-            saved_hint_mask: None,
         })
         .unwrap();
         let extent = |id| session.cache.global_model(id).map(|model| model.radius);
@@ -357,7 +356,6 @@ fn native_save_worlds_publish_restored_player_before_authored_allocations() {
         let restore = NativeSaveRestore::decode(&NativeCompatibilityPreview {
             logical_level_id,
             state_payload: payload,
-            saved_hint_mask: None,
         })
         .expect("native controller profile");
         let mut fx = WorldFx::new();
