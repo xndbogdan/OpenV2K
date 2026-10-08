@@ -281,6 +281,72 @@ fn cleansing_pair_callback_uses_native_custody_and_preserves_task_clock() {
 }
 
 #[v2k_test_support::retail_test]
+fn a_rover_far_from_infection_mills_about_its_drop_point() {
+    let (mut session, mut manager, mut fx) = super::super::tests::fixture(15);
+    let id = manager.iter_all().find(|e| e.entity_type == 49).unwrap().id;
+    publish(&mut manager, id, 42, &mut fx);
+    let entity = manager.entity_mut(id).unwrap();
+    entity.collision.state_flags_at_0x08.overwrite(
+        SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT,
+        SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT,
+    );
+    let anchor = entity
+        .cleansing_vehicle_runtime
+        .unwrap()
+        .immutable_anchor_raw;
+    // Clean the world, then infect one cell forty columns away: beyond the
+    // eight probes, which reach about seventeen cells.
+    let terrain = session.cache.level_terrain_mut().unwrap();
+    for cell in &mut terrain.cells {
+        cell.terrain_type &= !INFECTION_TERRAIN_TYPE_BIT;
+    }
+    let far = [
+        ((anchor[0] as u16 >> 8) as usize + 40) % 256,
+        (anchor[2] as u16 >> 8) as usize,
+    ];
+    terrain.cells[far[0] * 256 + far[1]].terrain_type |= INFECTION_TERRAIN_TYPE_BIT;
+    let mut owner = CleansingVehicleOwner::adopt(&manager, id).unwrap();
+    for retail_tick in 1001..1051 {
+        let tick = tick_cleansing_vehicle(
+            &mut manager,
+            owner,
+            CleansingVehicleFrame {
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                elapsed_micros: 20_000,
+                global_elapsed_micros: 20_000,
+                retail_tick,
+            },
+        );
+        assert!(
+            matches!(tick.outcome, CleansingVehicleOutcome::Advanced { .. }),
+            "{:?}",
+            tick.outcome
+        );
+        owner = tick.retained_owner.unwrap();
+        let Some(ActorTaskRuntime::CleansingLandscape(state)) = manager
+            .entity_mut(id)
+            .unwrap()
+            .actor_task_state(ActorTaskSlot::Primary)
+            .copied()
+        else {
+            panic!("cleansing movement task");
+        };
+        // Retail keeps the eighth probe around the drop point: never the
+        // distant infected cell.
+        let target = state.private.target_position_raw;
+        for axis in [0, 2] {
+            let offset = i32::from(target[axis].wrapping_sub(anchor[axis]));
+            assert!(
+                (-4374..=4988).contains(&offset),
+                "tick {retail_tick}: target {target:?}, anchor {anchor:?}"
+            );
+        }
+        assert_eq!(target[1], anchor[1]);
+    }
+}
+
+#[v2k_test_support::retail_test]
 fn late_mover_block_retains_prefix_without_replaying_rng_or_task_age() {
     let (mut session, mut manager, mut fx) = super::super::tests::fixture(15);
     let id = manager.iter_all().find(|e| e.entity_type == 49).unwrap().id;

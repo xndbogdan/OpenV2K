@@ -24,15 +24,18 @@ The following properties describe the audited **software filler** path:
 | Shading | Separate unlit, uniformly lit and Gouraud face families | Authored normals and solid near/far composition; RGB565 Gouraud packing after affine interpolation | Implemented; matched visual acceptance open |
 | Hidden surface | **Painter's algorithm** — depth-sorted queue, NO z-buffer | Geometric GL depth with explicit painter groups in selected paths | Partial; opaque geometry is not universally equivalent |
 | Backface cull | Authored anchor/normal plane, strict negative camera dot | Exact world-space equivalent | ✓ |
-| Color depth | 16 bpp RGB565 | Classic final logical pixels quantized to RGB565; draw composition remains RGBA8 | Approximation; packed blend/fog acceptance open |
+| Color depth | 16 bpp RGB565 | Software renderer: RGB565 through the retail fill slots. OpenGL: RGBA8 composition | Software exact on receipts; OpenGL approximation |
 
-## Classic framebuffer colour and resolution
+## Colour depth and resolution
 
 The retained [DirectDraw surface](#full-frame-directdraw-trace-acceptance-2026-07-27)
 proves 1024×768×16 with RGB565 masks, rather than an 8-bit final framebuffer.
 Indexed textures, their authored shade palettes, point sampling and quantized
 lighting also contribute to the stepped look; reducing final colour depth alone
-does not recreate the integer software rasterizer.
+does not recreate the integer software rasterizer. The software renderer
+([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md)) is that rasterizer; it replaced the
+OpenGL Classic Framebuffer option, which only quantized a finished RGBA8 frame
+to RGB565 (removed 2026-10-07).
 
 Display Resolution offers the original 640×480, 800×600 and 1024×768 presets.
 The selected preset supplies the authored High layout and window size;
@@ -520,8 +523,13 @@ linkage policy therefore applies to every selected presentation tier.
 `FUN_004A9CE0` (`directx_wrappers.c`, tagged `…\Windows\DDCalls.c`) calls
 **`IDirectDrawSurface::Lock`** (vtable +0x64) for a raw 16-bpp framebuffer
 pointer; scanline fillers write pixels with the classic `push dx` trick (ESP
-redirected to the destination scanline). ~44 in-EXE software fillers
-(`0x47AC30…0x492A10`), 16-bpp variants selected by `piVar3[1]==0x10`.
+redirected to the destination scanline). The 16-bpp software table (mode
+descriptor `+8` zero, `+4` = 16 bits per pixel) consists of the fill-slot handlers
+`0x47AB20…0x480790`, the scan converter `0x472B20` with its helpers, and the
+span-row routines `0x473690…0x47A540`; `0x481240…0x492A10` belongs to the
+alternate/Direct3D table.
+[SOFTWARE_RASTER.md](SOFTWARE_RASTER.md) is the full contract and the state
+of its byte-exact port.
 
 ### Full-frame DirectDraw trace acceptance (2026-07-27)
 
@@ -542,6 +550,14 @@ recover individual software depth keys, material flags, camera matrices or
 actor callbacks. This does not classify another recording: the tick952
 indexed draw independently executes the shipped alternate/Direct3D table
 and presents without that CPU Lock route ([backend custody](MODEL_DRAW_CUSTODY.md#same-draw-backend-discrimination)).
+
+The trace's earlier 640×480 epoch, before call `321664`, is not a colour
+oracle: its frames carry zero red throughout (white logos read cyan, the
+yellow ring label green) while their green and blue match the same assets
+exactly. Static screen elements of the 1024×768 epoch do compare exactly:
+the frontend's ring label, copyright banner and logos (Flip `324003`) and the
+Intro2 caption band (Flip `345026`) match the port's software frames pixel
+for pixel.
 
 The frontend's last per-frame DirectDraw black `COLORFILL` is call `325164`.
 Intro2 then presents complete world frames without that external fill until
@@ -1284,11 +1300,14 @@ requires affine interpolation (for example linear UV or `q=1`), rather than
 GL's default perspective correction. This does not establish the observed
 alternate/Direct3D consumer's interpolation state or change port defaults.
 
-## 4. Filtering = POINT SAMPLING (no bilinear, no dither)
+## 4. Filtering = POINT SAMPLING (no bilinear)
 
 The audited software fillers fetch one texel per pixel —
 `mov cl,[eax+ecx*1]` — without a four-tap average. This establishes point
 sampling for those software tables, not alternate/Direct3D render state.
+The shaded and fogged indexed fillers do dither, though: they add generator
+noise to the palette shade row and the fog level per pixel (see
+[SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#span-rows-and-fillers)).
 
 The source audit of the "Bilinear Filtering" setting global `0x4CB3F0`
 (toggle handler `FUN_0043CCA0`) found its reference only in the menu handler;
@@ -1364,17 +1383,39 @@ The local menu-prop context (`FUN_0043AA40`) and ordinary world context
 [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0]
 ```
 
-Those two contexts use light vector `(0x49, 0x49, -0x49)`. The separate
-frontend Klaus/world setup instead writes `(-100, 50, -50)` at
-`DAT_004CA838 +0x50/+0x54/+0x58`; it must not be conflated with the local
-ring-prop context. `FUN_00466160` transforms the active vector into model
-orientation; `FUN_0046D3F0` selects the table with
-`((73*nx + 73*ny - 73*nz) >> 19) & 0x0F`. On the authored signed-16 unit-normal
-scale this is equivalent to `floor(dot(n, normalize(1,1,-1)) * 7.9022406)`.
-Positive bins select Section-6 entries 0..7; every negative bin maps back to
-entry 0 through slots 8..15. Each entry contains an RGB triplet used by the
+Their light vectors differ, and every one is a VIEW-space vector. The local
+contexts use `(0x49, 0x49, -0x49)`. The world context's vector is world
+descriptor `+0x50/+0x54/+0x58`, which `FUN_0042EA30` fills from the Section-10
+direction with X and Z divided by four, rounding toward zero: Level 1's
+`(-73,73,-73)` becomes `(-18,73,-18)`. `FUN_00433BD0` copies the descriptor
+to `DAT_004FEC40`, and `FUN_00433FA0` installs `DAT_004FEC90..98`,
+unrotated, as the view context's `+0x3C..+0x44` every frame. The frontend
+Klaus world descriptor `DAT_004CA838` supplies `(-100, 50, -50)` through the
+same path; it must not be conflated with the local ring-prop context.
+
+`FUN_00466160` forms the model-space light as the node's VIEW axes times the
+context vector, and those axes are the camera rows times the model basis
+(`FUN_00465870`). `FUN_0046D3F0` then selects the table with
+`((Lx*nx + Ly*ny + Lz*nz) >> 19) & 0x0F`, so the dot is effectively taken
+between the VIEW-space normal and the context vector: model lighting is fixed
+to the camera, not to the world. Local contexts have identity camera rows, so
+their VIEW frame is the context's own. A time-travel replay of a retail
+Alpine session shows the world view context holding `(-18,73,-18)` across
+frames whose camera rows differ. On the authored signed-16 unit-normal scale
+the bin is `floor(dot(n_view, L) * 32767 / 2^19)`. Positive bins select
+Section-6 entries 0..7; every negative bin maps back to entry 0 through slots
+8..15. Each entry contains an RGB triplet used by the
 untextured lit paths and a 0..31 Section-3 palette row used by the indexed
 textured path.
+
+In integers, each model-light component is a sum of three separately
+shifted Q31 products of the context vector with one node axis (an identity
+context copies the vector), the dot uses the raw pool normal (X negated for
+an odd reference) in wrapping 32-bit arithmetic, and the slot is the dot's
+low four bits after the shift, not a clamped bin. The software renderer
+shades that way whenever the node's integer frame is owned
+([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); rotating a
+floating-point normal instead lands some faces on a neighbouring bin.
 
 `FUN_0046D5A0` initializes reserved normal-cache references 0/1 from the
 current table's slot 0. A stored zero normal also resolves slot 0 through
@@ -1726,11 +1767,14 @@ palette-plus-light operation; Gouraud solids pack their interpolated channel
 accumulators in the fragment shader. Shader-unavailable textured fallback uses the
 Section-6 RGB values for both lit families; unlit fallback textures keep their
 authored row 0/28. It never reinstates the former made-up light curve.
-`ModelMesh` also carries the active signed raw light vector: ordinary world and
-local-menu submissions default to `(73,73,-73)`, while the frontend Klaus
-submission explicitly installs `(-100,50,-50)`. The backend retains the raw
-magnitude when applying `FUN_0046D3F0`'s signed-16-normal `>>19` binning rather
-than normalizing these two distinct contexts into one direction.
+`ModelMesh` also carries the active signed raw VIEW-space light vector: local
+submissions default to `(73,73,-73)`, world trees install the level's reduced
+Section-10 direction, and the frontend Klaus submission installs
+`(-100,50,-50)`. Both backends dot it with VIEW-space normals, through the
+same camera rows that place the vertices, and retain the raw magnitude when
+applying `FUN_0046D3F0`'s signed-16-normal `>>19` binning. Before 2026-10-07
+world models used `(73,73,-73)` against world-space normals, which lit Intro2's
+tower walls about twice as bright as the retail trace.
 
 ## Open foundational mismatches
 

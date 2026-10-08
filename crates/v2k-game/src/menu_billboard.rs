@@ -1,4 +1,5 @@
-//! Authored menu billboard geometry from `FUN_0042C090` and `FUN_0042D030`.
+//! Authored menu billboard geometry from `FUN_0042C090` and `FUN_0042D030`,
+//! and the cinematic emblem `FUN_004537F0` queues through the latter.
 //!
 //! The reference sprite (global 420) positions the billboard; the selected
 //! animation frame supplies its aspect ratio. All coordinates remain in the
@@ -90,7 +91,32 @@ impl MenuBillboardLayout {
                 (reference_h.wrapping_mul(framebuffer_h) / 480).wrapping_sub(reference_h);
             top = top.wrapping_sub((height_delta / 2) as i16);
         }
+        self.queued_rect(left, top, scale, frame_size)
+    }
 
+    /// `FUN_004537F0`'s emblem at unit scale: on the framebuffer's left edge,
+    /// its top the reference's height above the bottom row, raised by a
+    /// tenth of the framebuffer height when that exceeds 480 rows.
+    pub fn cinematic_rect(self, frame_size: [u16; 2]) -> Option<MenuBillboardRect> {
+        if !self.has_dimensions() || frame_size.contains(&0) {
+            return None;
+        }
+        let framebuffer_h = self.framebuffer[1];
+        let mut top = (framebuffer_h as i16).wrapping_sub(self.reference_size[1] as i16);
+        if framebuffer_h > 480 {
+            top = top.wrapping_add((framebuffer_h / -10) as i16);
+        }
+        self.queued_rect(0, top, 0x10000, frame_size)
+    }
+
+    /// `FUN_0042D030`'s corners from its origin words.
+    fn queued_rect(
+        self,
+        left: i16,
+        top: i16,
+        scale: i32,
+        frame_size: [u16; 2],
+    ) -> Option<MenuBillboardRect> {
         // FUN_0042D030 narrows only the final corner additions. Its focal
         // quarter and scale product first retain x86 signed-dword wrapping.
         let product = (self.focal_y.wrapping_shl(6) >> 8).wrapping_mul(scale);
@@ -262,6 +288,43 @@ mod tests {
             components(other_reference.rect(pose(65535, 0), [203, 254]).unwrap()),
             [216, 110, 206, 258],
         );
+    }
+
+    #[test]
+    fn cinematic_emblem_rests_the_reference_height_above_the_bottom() {
+        // Independent integer evaluations of 4537F0 -> 42D030 at scale
+        // 0x10000, using each tier's reference-420 and selected-1294 sizes.
+        let expected = [
+            [0, 176, 51, 64],
+            [0, 351, 102, 128],
+            [0, 411, 127, 160],
+            [0, 563, 163, 205],
+        ];
+        for (tier, layout) in TIERS.into_iter().enumerate() {
+            let frame = if tier == 0 { [102, 128] } else { [203, 254] };
+            assert_eq!(
+                components(layout.cinematic_rect(frame).unwrap()),
+                expected[tier]
+            );
+        }
+    }
+
+    #[test]
+    fn cinematic_emblem_rises_a_tenth_only_above_480_rows() {
+        let mut layout = TIERS[1];
+        for (height, top) in [(479, 350), (480, 351), (481, 304), (490, 312)] {
+            layout.framebuffer[1] = height;
+            assert_eq!(layout.cinematic_rect([203, 254]).unwrap().y, top);
+        }
+        let other_reference = MenuBillboardLayout {
+            reference_size: [1, 100],
+            ..TIERS[1]
+        };
+        assert_eq!(
+            components(other_reference.cinematic_rect([203, 254]).unwrap()),
+            [0, 380, 102, 128],
+        );
+        assert_eq!(TIERS[1].cinematic_rect([0, 254]), None);
     }
 
     #[test]

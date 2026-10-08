@@ -140,11 +140,6 @@ pub struct GameConfig {
     /// Modern/native, preserved 4:3, or legacy stretched presentation.
     #[serde(default)]
     pub scaling: ScalingMode,
-    /// Port-only presentation option: render the selected tier's authored
-    /// frame offscreen before scaling it to the output. Native scaling
-    /// deliberately bypasses this path.
-    #[serde(default)]
-    pub classic_framebuffer: bool,
     /// Persisted value of retail's inert Bilinear Filtering menu option.
     /// The software renderer never consumed it; world textures stay point sampled.
     #[serde(default = "default_true")]
@@ -249,7 +244,6 @@ impl Default for GameConfig {
             height: 600,
             fullscreen: false,
             scaling: ScalingMode::Native,
-            classic_framebuffer: false,
             bilinear_filtering: true,
             sound_enabled: true,
             ambient_enabled: true,
@@ -270,18 +264,11 @@ impl Default for GameConfig {
 }
 
 impl GameConfig {
-    /// Whether the classic authored-tier presentation path is effective for
-    /// the current output mode. Native presentation always renders directly
-    /// at the drawable resolution.
-    pub const fn classic_framebuffer_effective(&self) -> bool {
-        self.classic_framebuffer && !matches!(self.scaling, ScalingMode::Native)
-    }
-
     /// Select the retail display tier for the configured output.
     /// High-detail modes retain the largest authored 4:3 size that fits the
     /// configured output, through retail's 1024x768 ceiling. Low detail remains
-    /// the explicit 320x240 tier. The same authored layouts serve Native and
-    /// Classic presentation; high-tier layout changes can be applied live.
+    /// the explicit 320x240 tier. The same authored layouts serve every
+    /// scaling mode; high-tier layout changes can be applied live.
     pub const fn system_graphics_variant(&self) -> u32 {
         if matches!(self.detail, GraphicsDetail::Low) {
             0
@@ -300,11 +287,6 @@ impl GameConfig {
     }
 
     fn normalize_presentation(&mut self) {
-        // Software remains an explicit diagnostic CLI backend, rather than a
-        // persisted interactive preference for the incomplete desktop path.
-        if self.renderer == RendererChoice::Software {
-            self.renderer = RendererChoice::OpenGL;
-        }
         // Older port preferences allowed custom/HD output sizes. Retain the
         // largest authored tier that fits both dimensions, with a 640x480
         // minimum window even when Low detail selects 320x240 game art.
@@ -316,9 +298,6 @@ impl GameConfig {
             .unwrap_or(RESOLUTIONS[0]);
         self.width = width;
         self.height = height;
-        if self.scaling == ScalingMode::Native {
-            self.classic_framebuffer = false;
-        }
     }
 
     /// Persist to the port-owned native namespace and presentation file.
@@ -411,8 +390,6 @@ mod tests {
         assert_eq!(cfg.height, 600);
         assert!(!cfg.fullscreen);
         assert_eq!(cfg.scaling, ScalingMode::Native);
-        assert!(!cfg.classic_framebuffer);
-        assert!(!cfg.classic_framebuffer_effective());
         assert!(cfg.bilinear_filtering);
         assert!(cfg.sound_enabled);
         assert!(cfg.ambient_enabled);
@@ -432,7 +409,6 @@ mod tests {
         assert_eq!(cfg.renderer, cfg2.renderer);
         assert_eq!(cfg.width, cfg2.width);
         assert_eq!(cfg.scaling, cfg2.scaling);
-        assert_eq!(cfg.classic_framebuffer, cfg2.classic_framebuffer);
         assert_eq!(cfg.difficulty, cfg2.difficulty);
     }
 
@@ -465,18 +441,15 @@ mod tests {
     }
 
     #[test]
-    fn normalized_preferences_keep_software_available_only_as_a_cli_override() {
+    fn normalized_preferences_keep_a_software_choice() {
         let mut cfg = GameConfig {
             renderer: RendererChoice::Software,
             ..GameConfig::default()
         };
         cfg.normalize_presentation();
-        assert_eq!(cfg.renderer, RendererChoice::OpenGL);
-        assert_eq!(cfg.resolve_backend(None), RenderBackend::OpenGL);
-        assert_eq!(
-            cfg.resolve_backend(Some("software")),
-            RenderBackend::Software
-        );
+        assert_eq!(cfg.renderer, RendererChoice::Software);
+        assert_eq!(cfg.resolve_backend(None), RenderBackend::Software);
+        assert_eq!(cfg.resolve_backend(Some("opengl")), RenderBackend::OpenGL);
     }
 
     #[test]
@@ -487,32 +460,15 @@ mod tests {
         assert_eq!(cfg.width, 1024);
         assert!(cfg.fullscreen);
         assert_eq!(cfg.scaling, ScalingMode::Native);
-        assert!(!cfg.classic_framebuffer);
         assert!(cfg.sound_enabled);
         assert!((cfg.music_volume - 1.0).abs() < 0.01);
         assert_eq!(cfg.difficulty, Difficulty::Medium);
     }
 
     #[test]
-    fn classic_framebuffer_is_effective_only_for_scaled_output() {
-        let mut cfg = GameConfig {
-            classic_framebuffer: true,
-            ..GameConfig::default()
-        };
-        assert!(!cfg.classic_framebuffer_effective());
-
-        cfg.scaling = ScalingMode::FourThree;
-        assert!(cfg.classic_framebuffer_effective());
-
-        cfg.scaling = ScalingMode::Stretched;
-        assert!(cfg.classic_framebuffer_effective());
-    }
-
-    #[test]
     fn output_resolution_selects_authored_tiers_through_1024_in_every_presentation_mode() {
         let mut config = GameConfig {
             scaling: ScalingMode::FourThree,
-            classic_framebuffer: true,
             ..GameConfig::default()
         };
         for (width, height, variant) in [
@@ -529,11 +485,8 @@ mod tests {
                 ScalingMode::FourThree,
                 ScalingMode::Stretched,
             ] {
-                for classic_framebuffer in [false, true] {
-                    config.scaling = scaling;
-                    config.classic_framebuffer = classic_framebuffer;
-                    assert_eq!(config.system_graphics_variant(), variant);
-                }
+                config.scaling = scaling;
+                assert_eq!(config.system_graphics_variant(), variant);
             }
         }
         config.detail = GraphicsDetail::Low;
@@ -542,19 +495,7 @@ mod tests {
         config.scaling = ScalingMode::Native;
         assert_eq!(config.system_graphics_variant(), 2);
         config.scaling = ScalingMode::FourThree;
-        config.classic_framebuffer = false;
         assert_eq!(config.system_graphics_variant(), 2);
-    }
-
-    #[test]
-    fn loaded_native_config_cannot_retain_a_hidden_classic_request() {
-        let mut cfg = GameConfig {
-            scaling: ScalingMode::Native,
-            classic_framebuffer: true,
-            ..GameConfig::default()
-        };
-        cfg.normalize_presentation();
-        assert!(!cfg.classic_framebuffer);
     }
 
     #[test]

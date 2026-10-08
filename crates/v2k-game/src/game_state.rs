@@ -1871,19 +1871,20 @@ fn item_value(
 
     let text = match setting {
         SettingId::Resolution => ctx.config.resolution_label(),
-        SettingId::Rendering => "OpenGL".to_string(),
+        // Retail's values are Software (string 9) and Direct3D (string 10);
+        // the port's hardware renderer is OpenGL.
+        SettingId::Rendering => {
+            if v == 0 {
+                ctx.string_or(9, "Software")
+            } else {
+                "OpenGL".to_string()
+            }
+        }
         SettingId::FullScreen => ctx.string_or(
             6 + v as usize,
             if v == 0 { "In a Window" } else { "Full Screen" },
         ),
         SettingId::Scaling => v2k_render::ScalingMode::from_index(v).label().to_string(),
-        SettingId::ClassicFramebuffer => {
-            if engine.settings.get(SettingId::Scaling) == 0 {
-                "Disabled".to_string()
-            } else {
-                ctx.string_or(12 + v as usize, if v == 0 { "Disabled" } else { "Enabled" })
-            }
-        }
         SettingId::Bilinear | SettingId::Targetter | SettingId::AbsoluteMode => {
             ctx.string_or(12 + v as usize, if v == 0 { "Disabled" } else { "Enabled" })
         }
@@ -1982,10 +1983,6 @@ pub fn sync_settings_from_config(engine: &mut MenuEngine, config: &GameConfig) {
     s.set(SettingId::SelfRighting, config.self_righting.min(15) as u32);
     s.set(SettingId::FullScreen, config.fullscreen as u32);
     s.set(SettingId::Scaling, config.scaling.index());
-    s.set(
-        SettingId::ClassicFramebuffer,
-        config.classic_framebuffer_effective() as u32,
-    );
     s.set(SettingId::Bilinear, config.bilinear_filtering as u32);
     s.set(SettingId::Joystick, config.joystick_mode.min(1) as u32);
     s.set(SettingId::AbsoluteMode, config.absolute_mode as u32);
@@ -1993,9 +1990,11 @@ pub fn sync_settings_from_config(engine: &mut MenuEngine, config: &GameConfig) {
     s.set(SettingId::Targetter, config.targetter as u32);
     s.set(SettingId::Hud, config.hud as u32);
     s.set(SettingId::Language, config.language as u32);
-    // Only OpenGL is implemented for interactive play. Keep the authored
-    // renderer row aligned with its disabled port presentation.
-    s.set(SettingId::Rendering, 1);
+    // Retail's toggle: 0 = Software, 1 = hardware (OpenGL in the port).
+    s.set(
+        SettingId::Rendering,
+        u32::from(config.renderer != v2k_render::RendererChoice::Software),
+    );
 }
 
 /// Apply a changed setting back to the GameConfig.
@@ -2015,17 +2014,7 @@ pub fn apply_setting_to_config(config: &mut GameConfig, id: SettingId, v: u32) {
         SettingId::Sensitivity => config.sensitivity = v as f32 / 15.0,
         SettingId::SelfRighting => config.self_righting = v.min(15) as u8,
         SettingId::FullScreen => config.fullscreen = v == 1,
-        SettingId::Scaling => {
-            let was_native = config.scaling == v2k_render::ScalingMode::Native;
-            config.scaling = v2k_render::ScalingMode::from_index(v);
-            if was_native || config.scaling == v2k_render::ScalingMode::Native {
-                config.classic_framebuffer = false;
-            }
-        }
-        SettingId::ClassicFramebuffer => {
-            config.classic_framebuffer =
-                v != 0 && config.scaling != v2k_render::ScalingMode::Native;
-        }
+        SettingId::Scaling => config.scaling = v2k_render::ScalingMode::from_index(v),
         SettingId::Bilinear => config.bilinear_filtering = v != 0,
         SettingId::Joystick => config.joystick_mode = v.min(1) as u8,
         SettingId::AbsoluteMode => config.absolute_mode = v != 0,
@@ -2034,9 +2023,11 @@ pub fn apply_setting_to_config(config: &mut GameConfig, id: SettingId, v: u32) {
         SettingId::Hud => config.hud = v != 0,
         SettingId::Language => config.language = v as u8,
         SettingId::Rendering => {
-            // This authored row is inert in the port; a stale native value must
-            // never select the unimplemented software backend for normal play.
-            config.renderer = v2k_render::RendererChoice::OpenGL;
+            config.renderer = if v == 0 {
+                v2k_render::RendererChoice::Software
+            } else {
+                v2k_render::RendererChoice::OpenGL
+            };
         }
         SettingId::Resolution => {
             // The port spinner selects output size, independently of Low's
@@ -3743,12 +3734,12 @@ mod tests {
     }
 
     #[test]
-    fn interactive_rendering_bridge_never_selects_software() {
-        for renderer in [
-            v2k_render::RendererChoice::Auto,
-            v2k_render::RendererChoice::OpenGL,
-            v2k_render::RendererChoice::Software,
-            v2k_render::RendererChoice::Wgpu,
+    fn rendering_row_toggles_between_software_and_opengl() {
+        for (renderer, row) in [
+            (v2k_render::RendererChoice::Auto, 1),
+            (v2k_render::RendererChoice::OpenGL, 1),
+            (v2k_render::RendererChoice::Software, 0),
+            (v2k_render::RendererChoice::Wgpu, 1),
         ] {
             let mut config = GameConfig {
                 renderer,
@@ -3756,34 +3747,12 @@ mod tests {
             };
             let mut engine = MenuEngine::main_menu();
             sync_settings_from_config(&mut engine, &config);
-            assert_eq!(engine.settings.get(SettingId::Rendering), 1);
+            assert_eq!(engine.settings.get(SettingId::Rendering), row);
             apply_setting_to_config(&mut config, SettingId::Rendering, 0);
+            assert_eq!(config.renderer, v2k_render::RendererChoice::Software);
+            apply_setting_to_config(&mut config, SettingId::Rendering, 1);
             assert_eq!(config.renderer, v2k_render::RendererChoice::OpenGL);
         }
-    }
-
-    #[test]
-    fn native_scaling_disables_persisted_classic_framebuffer() {
-        let mut config = GameConfig::default();
-        apply_setting_to_config(&mut config, SettingId::Scaling, 1);
-        apply_setting_to_config(&mut config, SettingId::ClassicFramebuffer, 1);
-        assert!(config.classic_framebuffer_effective());
-
-        apply_setting_to_config(&mut config, SettingId::Scaling, 0);
-        assert_eq!(config.scaling, v2k_render::ScalingMode::Native);
-        assert!(!config.classic_framebuffer);
-        assert!(!config.classic_framebuffer_effective());
-
-        let mut engine = MenuEngine::main_menu();
-        sync_settings_from_config(&mut engine, &config);
-        assert_eq!(engine.settings.get(SettingId::ClassicFramebuffer), 0);
-
-        // A contradictory hand-built config must not resurrect a hidden
-        // request merely because Scaling leaves Native.
-        config.classic_framebuffer = true;
-        apply_setting_to_config(&mut config, SettingId::Scaling, 1);
-        assert_eq!(config.scaling, v2k_render::ScalingMode::FourThree);
-        assert!(!config.classic_framebuffer);
     }
 
     #[test]

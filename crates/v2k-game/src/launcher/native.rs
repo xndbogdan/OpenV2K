@@ -37,8 +37,6 @@ const WM_TIMER: u32 = 0x0113;
 const WM_VSCROLL: u32 = 0x0115;
 const SB_BOTTOM: usize = 7;
 const WM_SETFONT: u32 = 0x0030;
-const CBN_SELCHANGE: usize = 1;
-const BM_SETCHECK: u32 = 0x00f1;
 const DM_GETDEFID: u32 = 0x0400;
 const WS_CHILD: u32 = 0x4000_0000;
 const WS_VISIBLE: u32 = 0x1000_0000;
@@ -61,7 +59,6 @@ const ID_RENDERER: usize = 202;
 const ID_SCALING: usize = 203;
 const ID_DETAIL: usize = 204;
 const ID_FULLSCREEN: usize = 205;
-const ID_CLASSIC_FRAMEBUFFER: usize = 206;
 const ID_MUSIC: usize = 207;
 const ID_EFFECTS: usize = 208;
 const ID_EFFECTS_VOLUME: usize = 209;
@@ -93,7 +90,6 @@ struct OptionControls {
     scaling: Handle,
     detail: Handle,
     fullscreen: Handle,
-    classic_framebuffer: Handle,
     music: Handle,
     music_availability: Handle,
     effects: Handle,
@@ -467,10 +463,6 @@ unsafe extern "system" fn options_procedure(
     if !host.is_null() {
         if let Ok(mut state) = (*host).0.try_borrow_mut() {
             match message {
-                WM_COMMAND if wparam & 0xffff == ID_SCALING && wparam >> 16 == CBN_SELCHANGE => {
-                    state.sync_classic_framebuffer_control();
-                    return 0;
-                }
                 WM_COMMAND if wparam >> 16 == 0 => {
                     state.command(wparam & 0xffff);
                     return 0;
@@ -1261,26 +1253,17 @@ impl WindowState {
         let renderer_index = match config.renderer {
             RendererChoice::Auto => 0,
             RendererChoice::OpenGL => 1,
-            RendererChoice::Software => 1,
+            RendererChoice::Software => 2,
             RendererChoice::Wgpu => 0,
         };
         let renderer = self.combo(
             window,
-            &strings(&["Automatic", "OpenGL"]),
+            &strings(&["Automatic", "OpenGL", "Software"]),
             renderer_index,
             ID_RENDERER,
             136,
             70,
             194,
-        );
-        let classic_framebuffer = self.checkbox(
-            window,
-            "Classic framebuffer",
-            ID_CLASSIC_FRAMEBUFFER,
-            350,
-            70,
-            184,
-            config.classic_framebuffer_effective(),
         );
         self.label(window, "Image scaling:", 24, 110, 106, 20);
         let scaling = self.combo(
@@ -1378,7 +1361,6 @@ impl WindowState {
             scaling,
             detail,
             fullscreen,
-            classic_framebuffer,
             music,
             music_availability,
             effects,
@@ -1391,7 +1373,6 @@ impl WindowState {
             progress,
         };
         self.option_config = Some(config);
-        self.sync_classic_framebuffer_control();
         self.set_busy(self.busy);
         if !self.can_play() {
             self.set_progress(
@@ -1402,16 +1383,6 @@ impl WindowState {
         show_interactive_window(window);
 
         SetFocus(resolution);
-    }
-
-    unsafe fn sync_classic_framebuffer_control(&self) {
-        let controls = &self.option_controls;
-        let scaling = ScalingMode::from_index(combo_selection(controls.scaling) as u32);
-        let available = scaling != ScalingMode::Native;
-        if !available {
-            SendMessageW(controls.classic_framebuffer, BM_SETCHECK, 0, 0);
-        }
-        EnableWindow(controls.classic_framebuffer, i32::from(available));
     }
 
     unsafe fn close_options(&mut self) {
@@ -1438,6 +1409,7 @@ impl WindowState {
         config.set_resolution_index(combo_selection(controls.resolution));
         config.renderer = match combo_selection(controls.renderer) {
             1 => RendererChoice::OpenGL,
+            2 => RendererChoice::Software,
             _ => RendererChoice::Auto,
         };
         config.scaling = ScalingMode::from_index(combo_selection(controls.scaling) as u32);
@@ -1447,8 +1419,6 @@ impl WindowState {
             GraphicsDetail::High
         };
         config.fullscreen = checked(controls.fullscreen);
-        config.classic_framebuffer =
-            checked(controls.classic_framebuffer) && config.scaling != ScalingMode::Native;
         config.ambient_enabled = checked(controls.music);
         config.music_volume = if config.ambient_enabled {
             if config.music_volume > 0.0 {

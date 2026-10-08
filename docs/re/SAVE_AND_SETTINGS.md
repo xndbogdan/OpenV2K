@@ -89,9 +89,13 @@ Session `+0x1C4` (state `+0x1B0`, applied by `44F830 ->450FC0`) and controller
 bounded native restoration, not a claim that every saved field is implemented.
 
 The four-byte tail has separate semantics: `456C70 ->438020` restores it to
-the resource-notification seen-event mask at `[session+0x2C4]+0x0C`. Mode 6
-then clears that mask through `437FF0` at `44F7E1`, before authored/cargo
-events repopulate it. Do not import the tail directly into the final HUD mask.
+the resource-notification seen-event mask at `[session+0x2C4]+0x0C`.
+`FUN_0044F650` then clears that mask through `437FF0` at `44F7E1`, for every
+mode, before authored/cargo events repopulate it, so retail shows each
+one-time hint again after a load. A TTD recording of a quick-start Slot02 load
+shows both writes: the slot's tail `0x006B7EFF` at `8AF81`, then zero from
+`437FF4` at `8D3E4:300`, with no later write. Do not import the tail into the
+live mask.
 
 Portable JSON saves are also explicit compatibility previews. New writes carry
 position, velocity, heading, port-owned body pitch/roll, and health; their
@@ -213,8 +217,9 @@ and unknown fallback DWORDs survive the save. Registry writes leave unrelated
 values untouched.
 
 Modern backend choice, output width/height, Native/4:3/Stretched scaling,
-classic framebuffer policy, graphics detail, and port Difficulty are kept
-separately in `<data-dir>/port-config.json`. Existing legacy display values
+graphics detail, and port Difficulty are kept separately in
+`<data-dir>/port-config.json`; a retired `classic_framebuffer` key there is
+ignored. Existing legacy display values
 are retained on upgrade and this small file takes precedence afterward.
 The old `config.json` is never deleted, renamed, or rewritten. This avoids
 losing existing preferences while moving retail options out of that file.

@@ -416,6 +416,7 @@ impl ModelNodeGeometry<'_> {
             vertex_projection: self.vertex_projection,
             vertex_clip: self.vertex_clip,
             vertex_surface_origin: self.vertex_surface_origin,
+            vertex_view_raw: self.vertex_view_raw,
             triangles: face_slice(self.triangles, range.clone()),
             face_vertices: face_slice(self.face_vertices, range.clone()),
             normals: face_slice(self.normals, range.clone()),
@@ -423,10 +424,12 @@ impl ModelNodeGeometry<'_> {
             face_materials: face_slice(self.face_materials, range.clone()),
             face_uvs: face_slice(self.face_uvs, range.clone()),
             face_corner_normals: face_slice(self.face_corner_normals, range.clone()),
+            face_normals_raw: face_slice(self.face_normals_raw, range.clone()),
             face_shading: face_slice(self.face_shading, range),
             edges: &[],
             edge_projection: v2k_render::renderer::ModelEdgeProjection::Compatibility,
             billboards: &[],
+            painter_program: &[],
         }
     }
 
@@ -588,6 +591,7 @@ impl ModelTreeRenderer<'_> {
                     node.depth_fade.unwrap_or_else(|| {
                         model_node_depth_fade(node.model_flags, self.depth_fade)
                     }),
+                    NodePainter::Ordered,
                 ),
                 PainterPrimitive::Edge { edge, .. } => self.submit_node(
                     geometry.edge_index(edge),
@@ -599,6 +603,7 @@ impl ModelTreeRenderer<'_> {
                     node.depth_fade.unwrap_or_else(|| {
                         model_node_depth_fade(node.model_flags, self.depth_fade)
                     }),
+                    NodePainter::Ordered,
                 ),
                 PainterPrimitive::Billboard { billboard, .. } => self.submit_node_billboards(
                     &geometry.billboard_index(billboard),

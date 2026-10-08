@@ -42,6 +42,12 @@ impl ModelMaterialCache {
         Self::default()
     }
 
+    /// Drop the uploaded texture ids after the renderer that owned them was
+    /// replaced; the next draw uploads each sprite again.
+    pub fn forget_textures(&self) {
+        self.sprite_textures.borrow_mut().clear();
+    }
+
     /// Resolve the cached geometry materials for one global model id.
     pub fn materials_for_model(
         &self,

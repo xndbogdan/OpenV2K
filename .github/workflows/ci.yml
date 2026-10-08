@@ -1,8 +1,11 @@
 name: CI
 
-# Runs when work lands on main (merged pull requests). Pull requests themselves
-# are validated locally with scripts/check.ps1 to save Actions minutes.
+# Pull requests go to `staging` and are validated locally with
+# scripts/check.ps1. CI runs on the milestone pull request from `staging` into
+# `main` and again when it lands; each merge into `main` is a release.
 on:
+  pull_request:
+    branches: [main]
   push:
     branches: [main]
 

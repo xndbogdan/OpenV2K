@@ -213,6 +213,79 @@ pub fn collect_static_terrain_objects(
     instances
 }
 
+/// `FUN_0042F530`'s static-object traversal behind retail's fixed-bearing
+/// cameras, in exact cell words.
+///
+/// The window is world-axis aligned: `columns - 3` cells starting at the
+/// eye's cell minus `(columns - 1) / 2` plus one, and `rows - 1` cells
+/// starting one past the eye's lead row (`(eye_z + lead) >> 8` in 16-bit
+/// words). Rows run toward +Z and each row toward +X. `FUN_0042F650` places
+/// each object at the cell-centre image nearest the eye.
+pub fn collect_retail_static_terrain_objects(
+    terrain: &TerrainGrid,
+    objects: &TerrainObjectTable,
+    eye_raw: [i32; 3],
+    lead_raw: i32,
+    scan_dimensions: (u32, u32),
+) -> Vec<StaticTerrainObjectInstance> {
+    let columns = scan_dimensions.0 as i32;
+    let rows = scan_dimensions.1 as i32;
+    let eye_column = (eye_raw[0] >> 8) & 0xFF;
+    let first_column = eye_column - (columns - 1) / 2 + 1;
+    let lead_row = i32::from(((eye_raw[2] as i16).wrapping_add(lead_raw as i16) as u16) >> 8);
+    // The nearest image of a cell centre, as `(short)(centre - eye) + eye`.
+    let nearest = |cell: i32, eye: i32| {
+        let centre = ((cell & 0xFF) << 8) + 0x80;
+        eye + i32::from((centre as i16).wrapping_sub(eye as i16))
+    };
+    let mut instances = Vec::new();
+    for row in 1..rows {
+        let z = (lead_row + row) & 0xFF;
+        for column in 0..columns - 3 {
+            let x = (first_column + column) & 0xFF;
+            let cell = terrain
+                .cell(x as usize, z as usize)
+                .expect("wrapped terrain cell");
+            if cell.attribute == 0 {
+                continue;
+            }
+            let Some(descriptor) = objects.records.get(usize::from(cell.attribute)) else {
+                continue;
+            };
+            let (xn, zn) = ((x as usize + 1) % GRID_SIZE, (z as usize + 1) % GRID_SIZE);
+            let height_sum_raw = [
+                (x as usize, z as usize),
+                (xn, z as usize),
+                (x as usize, zn),
+                (xn, zn),
+            ]
+            .map(|(corner_x, corner_z)| {
+                let corner = terrain
+                    .cell(corner_x, corner_z)
+                    .expect("wrapped terrain corner");
+                i32::from(corner.height as i8) * 32
+            })
+            .into_iter()
+            .sum::<i32>();
+            let world_x = nearest(x, eye_raw[0]);
+            let world_z = nearest(z, eye_raw[2]);
+            instances.push(StaticTerrainObjectInstance {
+                model_id: descriptor.model_id_for(cell.terrain_type),
+                kind_index: descriptor.kind_index,
+                attribute: cell.attribute,
+                terrain_type: cell.terrain_type,
+                cell: [world_x >> 8, world_z >> 8],
+                position: [
+                    world_x as f32 / 256.0,
+                    (height_sum_raw / 4) as f32 / 256.0,
+                    world_z as f32 / 256.0,
+                ],
+            });
+        }
+    }
+    instances
+}
+
 fn horizontal_forward(forward: [f32; 3]) -> [f32; 2] {
     let length = (forward[0] * forward[0] + forward[2] * forward[2]).sqrt();
     if length > 1.0e-5 {
@@ -355,6 +428,49 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![[20, 14], [20, 17], [21, 17], [22, 17]]
         );
+    }
+
+    #[test]
+    fn retail_window_uses_whole_cell_words_on_world_axes() {
+        let mut terrain = flat_terrain();
+        let table = object_table(3, [77; 4], 1);
+        // Eye at cell (40, 100) with a fractional Z of 0xF0: the default
+        // 0x200 lead lands on row 102, so rows 103..=109 remain for an 8x8
+        // scan, and columns 38..=42 (eye - 3 + 1, five cells).
+        for (x, z) in [
+            (38, 103),
+            (42, 109),
+            (37, 103),
+            (43, 103),
+            (38, 102),
+            (38, 110),
+        ] {
+            cell_mut(&mut terrain, x, z).attribute = 3;
+        }
+        let eye = [40 * 256 + 0x10, 0, 100 * 256 + 0xF0];
+        let instances = collect_retail_static_terrain_objects(&terrain, &table, eye, 0x200, (8, 8));
+        assert_eq!(
+            instances
+                .iter()
+                .map(|instance| instance.cell)
+                .collect::<Vec<_>>(),
+            vec![[38, 103], [42, 109]]
+        );
+        assert_eq!(instances[0].position, [38.5, 0.0, 103.5]);
+
+        // Cells wrap at the torus seam but keep the image nearest the eye.
+        let mut terrain = flat_terrain();
+        cell_mut(&mut terrain, 1, 4).attribute = 3;
+        let instances = collect_retail_static_terrain_objects(
+            &terrain,
+            &table,
+            [255 * 256 + 0x80, 0, 0x80],
+            0x200,
+            (8, 8),
+        );
+        assert_eq!(instances.len(), 1);
+        assert_eq!(instances[0].cell, [257, 4]);
+        assert_eq!(instances[0].position, [257.5, 0.0, 4.5]);
     }
 
     #[test]

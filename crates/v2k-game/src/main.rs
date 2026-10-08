@@ -175,7 +175,8 @@ use v2k_game::static_damage::{
 };
 use v2k_game::static_damage_live::resolve_current_static_damage_target;
 use v2k_game::static_objects::{
-    collect_static_terrain_objects, free_camera_entity_view_contains_position,
+    collect_retail_static_terrain_objects, collect_static_terrain_objects,
+    free_camera_entity_view_contains_position,
 };
 use v2k_game::targetter::{
     fun_0044ea60, targetter_model_scale_raw, targetter_terrain_height_raw, TargetterCandidate,
@@ -254,14 +255,30 @@ fn world_control_slot(level_id: u32) -> Option<usize> {
         .filter(|slot| *slot < RETAIL_CONTROL_SLOT_COUNT)
 }
 
-fn apply_classic_framebuffer_presentation(renderer: &mut dyn Renderer, config: &mut GameConfig) {
-    let requested = config.classic_framebuffer_effective();
-    let active = renderer.set_classic_framebuffer(requested);
-    if requested && !active {
-        log!("Classic framebuffer is unavailable on the active renderer; disabling the option");
-        config.classic_framebuffer = false;
-        renderer.set_classic_framebuffer(false);
-    }
+/// Display-menu Rendering change (`FUN_0043CC70` -> `FUN_0043CC40` ->
+/// `FUN_0044E0E0`). Retail rebuilds the display at once and, when the new
+/// one cannot start, keeps running on the previous one; the menu value stays
+/// as chosen. The new renderer starts without textures, so the caller
+/// re-uploads what the previous one held. Its window opens where the old
+/// one was.
+fn replace_renderer(
+    game_window: &GameWindow,
+    renderer: &mut Box<dyn Renderer>,
+    config: &GameConfig,
+) -> Result<v2k_render::RenderBackend, String> {
+    let (replacement, backend) = v2k_render::create_renderer(
+        game_window,
+        "V2K",
+        config.width,
+        config.height,
+        config.resolve_backend(None),
+        false,
+        renderer.window_placement(),
+    )?;
+    let world_model_fog = renderer.retained_world_model_fog();
+    drop(std::mem::replace(renderer, replacement));
+    renderer.set_world_model_fog(world_model_fog);
+    Ok(backend)
 }
 
 /// Ordinary worlds run the conversion/intake walkers on authenticated owners.
@@ -1465,6 +1482,13 @@ fn run_game(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
+    // `V2K_NEW_GAME_AFTER_TICKS`: headless diagnostics confirm the frontend
+    // ring's default New Game after this many frontend ticks, so a capture
+    // takes the production Begin-Intro path rather than the generic debug
+    // load of `--level 50`.
+    let mut auto_new_game_tick = std::env::var("V2K_NEW_GAME_AFTER_TICKS")
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok());
     let mut config = GameConfig::load(data_dir);
     log!(
         "Controls: {} => Sensitivity {}/15, Self Righting {}",
@@ -1497,14 +1521,19 @@ fn run_game(
     };
     let mut vtol_trace_sequence = 0u64;
 
-    let (mut renderer, actual_backend) = v2k_render::create_renderer(
+    let (mut renderer, mut actual_backend) = v2k_render::create_renderer(
         &game_window,
         "V2K",
         config.width,
         config.height,
         preferred,
-        // The software stub requires an explicit diagnostic CLI selection.
-        false,
+        // Retail's startup search (`FUN_0044E2E0` -> `FUN_0042D340`) tries
+        // each resolution and window mode, then the other renderer, and keeps
+        // the first combination that starts. Only the backend can fail to
+        // start here, so without a command-line choice OpenGL falls back to
+        // the software renderer.
+        cli_override.is_none(),
+        None,
     )?;
 
     let initial_menu_size = config.detail.menu_virtual_size();
@@ -1513,15 +1542,15 @@ fn run_game(
     if overlay_depth_policy == v2k_render::OverlayDepthPolicy::OverlayAlways {
         log!("Overlay depth diagnosis policy active: {overlay_depth_policy:?} (presentation only)");
     }
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config);
     if config.fullscreen {
         renderer.set_fullscreen(true);
     }
 
     log!("Renderer: {}", renderer.backend_name());
 
-    // Save detected backend to config
-    if config.renderer == RendererChoice::Auto {
+    // Keep the backend that started, as the retail search leaves the
+    // working combination in the settings.
+    if config.renderer == RendererChoice::Auto || actual_backend != preferred {
         config.set_detected_backend(actual_backend);
         if let Err(error) = config.try_save(data_dir) {
             eprintln!("Could not save settings: {error}");
@@ -1618,7 +1647,6 @@ fn run_game(
     }
     renderer.set_scaling_mode(config.scaling, menu_reference_size.0, menu_reference_size.1);
     renderer.set_ui_submission_policy(live_display::ui_policy(&config, gameplay_hud_variant));
-    apply_classic_framebuffer_presentation(renderer.as_mut(), &mut config);
 
     // --- Background flame billboard animation (table 0x4CA938) ---
     // .data initial state (frame 8, accumulator 2,000,000 µs) wraps on the
@@ -2111,6 +2139,18 @@ fn run_game(
                     }
                 }
 
+                if let Some(tick) = auto_new_game_tick {
+                    if !menu_is_paused && retail_tick >= tick && !shell.is_transitioning() {
+                        auto_new_game_tick = None;
+                        let ctx = MenuCtx {
+                            cache: &session.cache,
+                            config: &config,
+                            saves: Some(&save_manager),
+                        };
+                        shell_events.extend(shell.input(MenuInput::Select, &ctx));
+                    }
+                }
+
                 // Apply side effects from the menu engine.
                 let mut next_state: Option<GameState> = None;
                 for ev in shell_events {
@@ -2141,19 +2181,45 @@ fn run_game(
                                 v2k_game::menu_data::SettingId::Resolution => {
                                     renderer.set_window_size(config.width, config.height);
                                 }
-                                v2k_game::menu_data::SettingId::Rendering => {
-                                    // Replacing a live SDL/OpenGL renderer would invalidate
-                                    // every cached GPU resource. Persist the choice for the
-                                    // next launch, matching the original's mode-rebuild boundary.
-                                    log!("Renderer change will apply on next launch");
+                                v2k_game::menu_data::SettingId::Rendering
+                                    if config.resolve_backend(None) != actual_backend =>
+                                {
+                                    match replace_renderer(&game_window, &mut renderer, &config) {
+                                        Ok(backend) => {
+                                            actual_backend = backend;
+                                            renderer.set_overlay_depth_policy(overlay_depth_policy);
+                                            if config.fullscreen {
+                                                renderer.set_fullscreen(true);
+                                            }
+                                            game_window.release_mouse_capture();
+                                            // Texture ids belonged to the old renderer.
+                                            face_colors.forget_textures();
+                                            if terrain_frames.is_some() {
+                                                terrain_frames =
+                                                    v2k_game::terrain_render::build_terrain_frames(
+                                                        &session.cache,
+                                                        renderer.as_mut(),
+                                                    );
+                                            }
+                                            if water_frames.is_some() {
+                                                water_frames = v2k_game::water::build_water_frames(
+                                                    &session.cache,
+                                                    renderer.as_mut(),
+                                                );
+                                            }
+                                            log!("Renderer: {}", renderer.backend_name());
+                                        }
+                                        Err(error) => eprintln!(
+                                            "Renderer change failed ({error}); keeping {}",
+                                            renderer.backend_name()
+                                        ),
+                                    }
                                 }
                                 _ => {}
                             }
                             if matches!(
                                 id,
-                                SettingId::Resolution
-                                    | SettingId::Scaling
-                                    | SettingId::ClassicFramebuffer
+                                SettingId::Resolution | SettingId::Scaling | SettingId::Rendering
                             ) {
                                 if let Some(tier) =
                                     v2k_game::system_layout::HighSystemLayoutTier::from_variant(
@@ -2186,14 +2252,6 @@ fn run_game(
                                     &config,
                                     gameplay_hud_variant,
                                 ));
-                                apply_classic_framebuffer_presentation(
-                                    renderer.as_mut(),
-                                    &mut config,
-                                );
-                                shell.engine.settings.set(
-                                    SettingId::ClassicFramebuffer,
-                                    config.classic_framebuffer_effective() as u32,
-                                );
                             }
                             world_projection.apply_to(&mut camera, renderer.viewport_size());
                             if let Err(error) = config.try_save(data_dir) {
@@ -4011,7 +4069,6 @@ fn run_game(
                                 native_viewport: intro_camera.native_viewport(),
                                 world_projection: Some(world_projection),
                             },
-                            &menu_resources,
                             billboard_sprite_id,
                             retail_tick,
                             elapsed_micros,
@@ -4046,7 +4103,6 @@ fn run_game(
                                 native_viewport: intro_camera.native_viewport(),
                                 world_projection: Some(world_projection),
                             },
-                            &menu_resources,
                             billboard_sprite_id,
                             retail_tick,
                             elapsed_micros,
@@ -7550,11 +7606,33 @@ fn run_game(
                         }
                     }
                     {
-                        let notification_presentation = gameplay_notifications.presentation(
-                            retail_tick as i32,
-                            &mut text_typewriter_cadence,
-                            |id| session.cache.global_string(id),
-                        );
+                        // FUN_00452CB0 first draws the world's arrival records
+                        // (its strings up to `#`) unless its control slot is
+                        // already completed.
+                        let world_records: Vec<&str> = current_level_id
+                            .and_then(world_control_slot)
+                            .filter(|&slot| {
+                                player_campaign_progress
+                                    .control_slot_bits(slot)
+                                    .is_none_or(|bits| bits & 1 == 0)
+                            })
+                            .and_then(|_| session.cache.level())
+                            .map(|level| {
+                                level
+                                    .strings
+                                    .iter()
+                                    .map(String::as_str)
+                                    .take_while(|record| !record.starts_with('#'))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let notification_presentation = gameplay_notifications
+                            .presentation_with_world_text(
+                                retail_tick as i32,
+                                &mut text_typewriter_cadence,
+                                &world_records,
+                                |id| session.cache.global_string(id),
+                            );
                         if notification_presentation.play_typewriter_sound && menu_fonts.is_some() {
                             if let Some(sound_manager) = sound_manager.as_mut() {
                                 sound_manager.play_centered_sound_with_gain(
@@ -8099,6 +8177,7 @@ fn draw_gameplay_world(
             projection_effect,
         ),
     );
+    renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(
         renderer,
         cache,
@@ -8410,6 +8489,15 @@ fn draw_gameplay_world(
             .with_submission_buffer(&mut model_submissions)
             .with_view(camera.into())
             .with_shade_shift(shade_shift);
+            // A plain body keeps 4138F0's integer frame for its VIEW points.
+            // Sub-H/M presentations below install their own frame owners.
+            if !cache
+                .global_model(model_id)
+                .is_some_and(|model| model_is_camera_facing_actor(model))
+            {
+                tree =
+                    tree.with_native_external_frame(ExternalFrameMode::Raw, native_context.clone());
+            }
             if let (Some(descriptor), Some(model), RetailRuntimeValue::Known(Some(runtime))) = (
                 descriptor.as_ref(),
                 cache.global_model(model_id),
@@ -8541,10 +8629,12 @@ fn draw_gameplay_world(
         cache,
         face_colors,
         camera,
+        camera_mode,
         terrain_frames,
         Some(terrain_lights),
         retail_tick,
         world_fx,
+        native_viewport,
     );
     model_submissions.flush(
         renderer,
@@ -8659,7 +8749,6 @@ fn render_opening_cinematic(
     terrain_frames: Option<&v2k_render::TerrainFrames>,
     water_frames: Option<&v2k_render::WaterFrames>,
     effects: OpeningWorldEffects<'_>,
-    menu_resources: &v2k_game::menu::MenuResources,
     billboard_sprite_id: u16,
     retail_tick: u32,
     elapsed_micros: u32,
@@ -8678,8 +8767,8 @@ fn render_opening_cinematic(
         renderer.clear(0.0, 0.0, 0.0);
         finish_opening_cinematic_frame(
             renderer,
+            cache,
             fonts,
-            menu_resources,
             billboard_sprite_id,
             retail_tick,
             presentation,
@@ -8707,6 +8796,7 @@ fn render_opening_cinematic(
             projection_effect,
         ),
     );
+    renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(renderer, cache, None, face_colors, camera, retail_tick);
 
     // 530D0/53570 and pre-actor light writers precede 53760. Actor
@@ -8868,6 +8958,16 @@ fn render_opening_cinematic(
                 cache.terrain(),
                 Some(terrain_lights),
             ));
+            // A plain body at its physical pose keeps 4138F0's integer frame
+            // for its VIEW points; a cinematic pose proxy is not that frame.
+            if live_actor_pose
+                && !cache
+                    .global_model(model_id)
+                    .is_some_and(|model| model_is_camera_facing_actor(model))
+            {
+                tree =
+                    tree.with_native_external_frame(ExternalFrameMode::Raw, native_context.clone());
+            }
             // D360 writes persistent caches in the physical actor's coordinate
             // system. A remaining cinematic pose proxy cannot own those writes.
             if let (true, Some(descriptor), Some(model), RetailRuntimeValue::Known(Some(runtime))) = (
@@ -8974,10 +9074,12 @@ fn render_opening_cinematic(
         cache,
         face_colors,
         camera,
+        GameplayWorldCameraMode::RetailChase,
         terrain_frames,
         Some(terrain_lights),
         retail_tick,
         world_fx,
+        native_viewport,
     );
     model_submissions.flush(
         renderer,
@@ -9023,8 +9125,8 @@ fn render_opening_cinematic(
     );
     finish_opening_cinematic_frame(
         renderer,
+        cache,
         fonts,
-        menu_resources,
         billboard_sprite_id,
         retail_tick,
         presentation,
@@ -9036,8 +9138,8 @@ fn render_opening_cinematic(
 /// final black card.
 fn finish_opening_cinematic_frame(
     renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
     fonts: Option<&v2k_game::menu_text::MenuFonts>,
-    menu_resources: &v2k_game::menu::MenuResources,
     billboard_sprite_id: u16,
     retail_tick: u32,
     presentation: OpeningCinematicPresentation<'_>,
@@ -9061,7 +9163,7 @@ fn finish_opening_cinematic_frame(
             draw_story_caption(renderer, fonts, &text);
         }
     }
-    draw_intro_billboard(renderer, menu_resources, billboard_sprite_id);
+    draw_intro_billboard(renderer, cache, billboard_sprite_id);
     renderer.present();
 }
 
@@ -9425,6 +9527,29 @@ fn draw_world_fx(
             .unwrap_or(0);
         let (blend, color) = particle_sprite_material(flags);
         let position = camera_relative(camera, particle.presentation_position());
+        let native = descriptor.map(|descriptor| {
+            let raw = |value: f32| (value * 256.0).round() as i32 as i16;
+            let world = particle.presentation_position();
+            let position_raw = [raw(world[0]), raw(world[1]), raw(world[2])];
+            v2k_render::NativeParticle {
+                position_raw,
+                scale_raw: draw_scale_raw.wrapping_mul(i32::from(frame.scale_raw as i16)),
+                frame_size_raw: frame.scale_raw,
+                flags: descriptor.flags(),
+                sort_bias_raw: descriptor.sort_bias_raw(),
+                fog_near_raw: fog_planes.near_raw,
+                fog_far_raw: fog_planes.far_raw,
+                shadow: (descriptor.shadow_size_raw() != 0).then(|| {
+                    v2k_render::NativeParticleShadow {
+                        size: descriptor.shadow_size_raw(),
+                        ground_raw: cache.terrain().map_or(0, |terrain| {
+                            particle_ground_raw(terrain, position_raw[0], position_raw[2])
+                        }),
+                        colour: particle_shadow_colour(cache),
+                    }
+                }),
+            }
+        });
         sprites.push(WorldSprite {
             texture,
             position,
@@ -9438,10 +9563,39 @@ fn draw_world_fx(
             blend,
             flat_shade_row: v2k_game::model_color::sprite_flat_shade_row(flags),
             fog,
+            native,
         });
     }
     renderer.draw_world_sprites(&sprites);
     spray_presented
+}
+
+/// `FUN_0043DB60` for a drawn particle: the terrain height under it,
+/// bilinear between the four surrounding cells.
+fn particle_ground_raw(terrain: &v2k_formats::terrain::TerrainGrid, x_raw: i16, z_raw: i16) -> i16 {
+    let (x, z) = (x_raw as u16, z_raw as u16);
+    let (x_cell, z_cell) = (usize::from(x >> 8), usize::from(z >> 8));
+    let height = |x: usize, z: usize| {
+        terrain
+            .cell(x & 0xFF, z & 0xFF)
+            .map_or(0, |cell| i32::from(cell.height as i8) * 0x20)
+    };
+    let (fx, fz) = (i32::from(x & 0xFF), i32::from(z & 0xFF));
+    let near = height(x_cell, z_cell);
+    let near = (((height(x_cell + 1, z_cell) - near) * fx) >> 8) + near;
+    let far = height(x_cell, z_cell + 1);
+    let far = (((height(x_cell + 1, z_cell + 1) - far) * fx) >> 8) + far;
+    (near + (((far - near) * fz) >> 8)) as i16
+}
+
+/// System-2 palette entry 32, the particle shadow colour, as a display word.
+fn particle_shadow_colour(cache: &v2k_game::resource_cache::ResourceCache) -> u32 {
+    cache
+        .master_color_palette()
+        .and_then(|palette| palette.get(32))
+        .map_or(0, |entry| {
+            u32::from(((entry.rgb555 & 0x7FE0) << 1) | (entry.rgb555 & 0x1F))
+        })
 }
 
 /// `LAB_0041CB10` continues after the admitted hive's ordinary body draw.
@@ -9715,36 +9869,50 @@ fn play_world_audio(
 }
 
 /// FUN_004537F0 queues the global nine-frame V2000 emblem in every cinematic
-/// phase through FUN_0042D030. Unlike the large centered menu billboard, this
-/// HUD instance is one quarter of the framebuffer width tall and bottom-left.
+/// phase through FUN_0042D030 at unit scale: a quarter of the focal length
+/// tall at the bottom left ([`MenuBillboardLayout::cinematic_rect`]), the
+/// frame stretched over that quad.
+///
+/// Its queue key is -10000, below every other key of the frame, so it drains
+/// last and nothing masks it: the emblem adds over the finished frame,
+/// Klaus's cover included. The port draws it as the frame's last additive
+/// overlay.
 fn draw_intro_billboard(
     renderer: &mut dyn v2k_render::Renderer,
-    menu_resources: &v2k_game::menu::MenuResources,
+    cache: &v2k_game::resource_cache::ResourceCache,
     billboard_sprite_id: u16,
 ) {
-    let gid = billboard_sprite_id;
-    let idx = (gid as usize).saturating_sub(1294);
-    let Some(frame) = menu_resources.flame_frames.get(idx) else {
+    let Some(layout) = MenuBillboardLayout::from_cache(cache) else {
         return;
     };
-    if frame.width == 0 || frame.height == 0 {
+    let Some((atlas, entry)) = cache.global_sprite(billboard_sprite_id) else {
         return;
-    }
+    };
+    let row = v2k_game::model_color::sprite_flat_shade_row(entry.pal_size as u8);
+    let Ok(frame) = atlas.decode_sprite(entry, usize::from(row)) else {
+        return;
+    };
+    let frame_size = [entry.flags as u16, (entry.flags >> 16) as u16];
     let (vw, vh) = renderer.viewport_size();
-    let h = (vw / 4).max(1);
-    let w = (frame.width as f32 * h as f32 / frame.height as f32)
-        .round()
-        .max(1.0) as u32;
-    let scaled = scale_rgba(&frame.rgba, frame.width, frame.height, w, h);
-    renderer.draw_additive_sprite_at_depth(
-        &scaled,
-        w,
-        h,
-        0,
-        vh.saturating_sub(h) as i32,
-        0.1,
-        0.1,
-        1_000.0,
+    let mapping = UiMapping::new(UiMappingRequest {
+        viewport: [vw, vh],
+        authored_canvas: layout.framebuffer.map(|dimension| dimension as u32),
+        policy: renderer.ui_submission_policy(),
+    });
+    let Some(rect) = layout
+        .cinematic_rect(frame_size)
+        .and_then(|rect| billboard_viewport_rect(mapping, rect))
+    else {
+        return;
+    };
+    let (left, top) = (rect.x, rect.y);
+    let (right, bottom) = (left + rect.width as i32, top + rect.height as i32);
+    renderer.draw_material_sprite_quad(
+        &frame.rgba,
+        u32::from(frame.width),
+        u32::from(frame.height),
+        [(left, top), (right, top), (right, bottom), (left, bottom)],
+        WorldSpriteBlend::Additive,
     );
 }
 
@@ -9760,8 +9928,11 @@ fn draw_story_caption(
         policy: renderer.ui_submission_policy(),
     });
     let font = &fonts.selected;
-    let margin_x = 24.0;
-    let max_width = fonts.virtual_w - margin_x * 2.0;
+    let placement = v2k_game::opening::StoryCaptionPlacement::for_display(
+        fonts.virtual_w as i32,
+        fonts.virtual_h as i32,
+    );
+    let max_width = placement.wrap_width as f32;
     let mut lines = Vec::<String>::new();
     let mut line = String::new();
     for word in text.split_whitespace() {
@@ -9781,15 +9952,15 @@ fn draw_story_caption(
         lines.push(line);
     }
 
-    // Retail places the yellow narrative line near the top-left of the 640×480
-    // authored frame. It is independent of the bottom-left V2000 emblem.
-    let base = 60.0;
+    // The display mode's percentages, independent of the bottom-left V2000
+    // emblem.
+    let base = placement.baseline as f32;
     for (index, line) in lines.iter().enumerate() {
         draw_menu_text(
             renderer,
             font,
             line,
-            [margin_x, base + index as f32 * font.line_step],
+            [placement.x as f32, base + index as f32 * font.line_step],
             false,
             usize::MAX,
             mapping,
@@ -10686,17 +10857,19 @@ struct BillboardRenderFrame {
     row_depth_fade_near_raw: f32,
 }
 
-/// (global sprite id, duration µs). Frame 0 lasts a single video frame.
-const BILLBOARD_FRAMES: [(u16, u32); 9] = [
-    (1295, 0),
-    (1299, 120_000),
-    (1298, 80_000),
-    (1297, 80_000),
-    (1296, 80_000),
-    (1295, 80_000),
-    (1294, 180_000),
-    (1295, 140_000),
-    (1294, 180_000),
+/// The `0x004CA938` entries: (global sprite id, the sprite `FUN_0042D030`
+/// takes while that slot is empty, duration µs). Frame 0 lasts a single
+/// video frame.
+const BILLBOARD_FRAMES: [(u16, u16, u32); 9] = [
+    (1295, 421, 0),
+    (1299, 425, 120_000),
+    (1298, 424, 80_000),
+    (1297, 423, 80_000),
+    (1296, 422, 80_000),
+    (1295, 421, 80_000),
+    (1294, 420, 180_000),
+    (1295, 421, 140_000),
+    (1294, 420, 180_000),
 ];
 
 impl BillboardAnim {
@@ -10741,8 +10914,10 @@ impl BillboardAnim {
 
     /// Intro2's `FUN_004537F0` calls `FUN_0042D030` directly: queue the old
     /// sprite and advance its clock without evolving or pinning menu planes.
+    /// Loading the Intro2 world empties the menu graphics' slots (1294..1299)
+    /// before its first frame, so `FUN_0042D030` takes each entry's fallback.
     fn prepare_cinematic_frame(&mut self, elapsed_micros: u32) -> (u16, bool) {
-        let sprite_id = self.sprite_id();
+        let sprite_id = BILLBOARD_FRAMES[self.frame].1;
         let wrapped = self.advance(elapsed_micros);
         (sprite_id, wrapped)
     }
@@ -10769,7 +10944,7 @@ impl BillboardAnim {
     fn advance(&mut self, elapsed_micros: u32) -> bool {
         self.accum_micros += elapsed_micros;
         let mut wrapped = false;
-        let dur = BILLBOARD_FRAMES[self.frame].1;
+        let dur = BILLBOARD_FRAMES[self.frame].2;
         if dur < self.accum_micros {
             self.accum_micros -= dur;
             self.frame += 1;
@@ -11514,15 +11689,18 @@ fn world_model_shade_shift(
 /// footprint as opaque terrain. `FUN_0042F650` uses an identity root basis,
 /// raw cell centre `+0x80`, and exposes only the global 50 Hz tick on dynamic
 /// animation channel zero.
+#[allow(clippy::too_many_arguments)]
 fn draw_static_terrain_objects(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,
     colors: &v2k_game::model_color::ModelMaterialCache,
     camera: &Camera,
+    camera_mode: GameplayWorldCameraMode,
     terrain_frames: Option<&v2k_render::TerrainFrames>,
     terrain_lights: Option<&v2k_render::TerrainLightWindow>,
     retail_tick: u32,
     world_fx: &mut WorldFx,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
 ) {
     let (Some(terrain), Some(objects)) = (cache.terrain(), cache.terrain_objects()) else {
         return;
@@ -11534,13 +11712,23 @@ fn draw_static_terrain_objects(
     vars.dynamic[0] = (retail_tick & 0xFFFF) as i32;
     let orientation = orientation_from_ypr(0.0, 0.0, 0.0);
 
-    let visible_objects = collect_static_terrain_objects(
-        terrain,
-        objects,
-        camera.position,
-        camera.forward(),
-        scan_dimensions,
-    );
+    let visible_objects = match camera_mode {
+        // FUN_0042F530 walks whole cell words on the world axes.
+        GameplayWorldCameraMode::RetailChase => collect_retail_static_terrain_objects(
+            terrain,
+            objects,
+            camera.position.map(|value| (value * 256.0).round() as i32),
+            v2k_core::render_scan::terrain_row_lead_raw(camera.forward()[1]),
+            scan_dimensions,
+        ),
+        GameplayWorldCameraMode::Free => collect_static_terrain_objects(
+            terrain,
+            objects,
+            camera.position,
+            camera.forward(),
+            scan_dimensions,
+        ),
+    };
     let sea_level = terrain.water_enabled().then(|| terrain.sea_level_world_y());
     world_fx.emit_static_terrain_object_particles(&visible_objects, sea_level);
     // Retail allocates these records directly from the static-object draw
@@ -11550,7 +11738,19 @@ fn draw_static_terrain_objects(
         // Retail draws static terrain objects with the identity root
         // orientation (FORMAT_DOCUMENTATION.md §9); tree trunks stay authored
         // and their bases are grounded by the world tf-12 callback family in
-        // the renderer, not by yawing geometry toward the camera.
+        // the renderer, not by yawing geometry toward the camera. With the
+        // native viewport, the node frame and its VIEW points are integer.
+        let native = native_viewport.map(|viewport| {
+            let origin_raw = object
+                .position
+                .map(|value| (value * 256.0).round() as i32 as i16);
+            (
+                v2k_game::native_model_frame::NativeModelFrame::from_static_object(
+                    viewport, origin_raw,
+                ),
+                viewport,
+            )
+        });
         ModelTreeRenderer::new_world(
             renderer,
             cache,
@@ -11560,9 +11760,10 @@ fn draw_static_terrain_objects(
             retail_tick as i32,
         )
         .with_view(camera.into())
-        .with_external_frame(ExternalFrameMode::WorldPoint(
-            object.external_frame_world_point(),
-        ))
+        .with_native_external_frame(
+            ExternalFrameMode::WorldPoint(object.external_frame_world_point()),
+            native,
+        )
         .with_shade_shift(world_model_shade_shift(
             object.position,
             cache.terrain(),
@@ -11876,6 +12077,7 @@ mod particle_collision_projection_tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: None,
         }
     }
@@ -13164,7 +13366,14 @@ fn menu_billboard_viewport_rect(
     pose: MenuBillboardPose,
     frame_size: [u16; 2],
 ) -> Option<MenuBillboardRect> {
-    let rect = layout.rect(pose, frame_size)?;
+    billboard_viewport_rect(mapping, layout.rect(pose, frame_size)?)
+}
+
+/// Map a framebuffer-pixel D030 rectangle into the port's viewport.
+fn billboard_viewport_rect(
+    mapping: UiMapping,
+    rect: MenuBillboardRect,
+) -> Option<MenuBillboardRect> {
     let UiMapping {
         scale: s,
         offset_x: ox,
@@ -13748,8 +13957,7 @@ fn render_list(
             continue;
         }
         // Disabled port-extension rows stay visible but use a deliberately
-        // darkened green font. In particular, Classic Framebuffer is visibly
-        // unavailable while Scaling is Native.
+        // darkened green font.
         let selected = i == menu.selected && item.is_interactive();
         let font = f.font(selected);
         let tone = if item.enabled {
@@ -15812,7 +16020,7 @@ mod menu_visual_tests {
         assert_eq!(anim.frame, 1, "zero-duration flash advances after drawing");
 
         anim.frame = 3;
-        anim.accum_micros = BILLBOARD_FRAMES[3].1;
+        anim.accum_micros = BILLBOARD_FRAMES[3].2;
         anim.depth_fade_near_raw = 0xC00;
         anim.depth_fade_far_raw = 0x1400;
         let (attack, wrapped) = anim.prepare_frontend_render_frame(
@@ -15940,9 +16148,9 @@ mod menu_visual_tests {
         anim.frame = 1;
         anim.accum_micros = 0;
 
-        assert!(!anim.advance(BILLBOARD_FRAMES[1].1));
+        assert!(!anim.advance(BILLBOARD_FRAMES[1].2));
         assert_eq!(anim.frame, 1);
-        assert_eq!(anim.accum_micros, BILLBOARD_FRAMES[1].1);
+        assert_eq!(anim.accum_micros, BILLBOARD_FRAMES[1].2);
 
         assert!(!anim.advance(1));
         assert_eq!(anim.frame, 2);
@@ -15953,13 +16161,13 @@ mod menu_visual_tests {
     fn cinematic_billboard_advance_does_not_touch_frontend_planes() {
         let mut anim = BillboardAnim::new();
         anim.frame = 3;
-        anim.accum_micros = BILLBOARD_FRAMES[3].1;
+        anim.accum_micros = BILLBOARD_FRAMES[3].2;
         anim.depth_fade_near_raw = 0xC00;
         anim.depth_fade_far_raw = 0x1400;
 
         let (sprite_id, wrapped) = anim.prepare_cinematic_frame(1_000);
         assert!(!wrapped);
-        assert_eq!(sprite_id, BILLBOARD_FRAMES[3].0);
+        assert_eq!(sprite_id, BILLBOARD_FRAMES[3].1);
         assert_eq!(anim.frame, 4);
         assert_eq!(anim.depth_fade_near_raw, 0xC00);
         assert_eq!(anim.depth_fade_far_raw, 0x1400);

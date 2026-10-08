@@ -1,5 +1,5 @@
 use v2k_formats::models::{
-    Billboard, ModelEntry, ModelFaceCull, ModelFaceShading, ModelFaceVertices,
+    Billboard, ModelEntry, ModelFaceCull, ModelFaceShading, ModelFaceVertices, ModelPainterOp,
     ModelVertexProjection,
 };
 use v2k_formats::system::{FogGradientEntry, PaletteEntry};
@@ -69,6 +69,38 @@ impl RenderBackend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TextureId(pub u32);
 
+/// One Section-3 record in its retail memory form.
+#[derive(Debug, Clone)]
+pub struct NativeSprite<'a> {
+    /// Render flags (record `+0x04` low byte).
+    pub flags: u16,
+    pub shade_count: u16,
+    pub width: u16,
+    pub height: u16,
+    pub texels: NativeTexels<'a>,
+}
+
+/// A record's texels: indices with display-format palette words (row-major
+/// shade rows of sixteen, or a flat table), or raw display-format words.
+#[derive(Debug, Clone)]
+pub enum NativeTexels<'a> {
+    Indexed {
+        indices: &'a [u8],
+        palette: NativePalette,
+    },
+    Raw {
+        words: &'a [u16],
+    },
+}
+
+/// A Section-3 palette block shared by its records, and where one record's
+/// palette starts in it.
+#[derive(Debug, Clone)]
+pub struct NativePalette {
+    pub block: std::sync::Arc<[u16]>,
+    pub start: usize,
+}
+
 /// Indexed Section-3 image plus its complete 32×16 shade ramp.
 ///
 /// `fallback_rgba` keeps the texture handle usable by renderer paths that do
@@ -126,14 +158,30 @@ impl FaceMaterial {
     }
 }
 
-/// Raw model-light vector installed by the ordinary world and local-menu
-/// render contexts.
+/// Raw model-light vector of the local render contexts (templates
+/// `0x4CB460` and `0x4CA628`: frontend prop rows and gameplay HUD models),
+/// whose camera rows are identity.
 ///
-/// Retail transforms these signed integer components into model orientation
-/// before resolving face/corner normal references through the Section-6 table.
+/// Every context's light is a VIEW-space vector: `FUN_00466160` brings it
+/// into model space through the node's VIEW axes before `FUN_0046D3F0`
+/// resolves face/corner normal references through the Section-6 table.
 /// Keeping the authored scale matters because the final bin is selected after
-/// a fixed `>> 19`, not from a normalized direction alone.
+/// a fixed `>> 19`, not from a normalized direction alone. World contexts
+/// use [`retail_world_model_light_direction_raw`] instead.
 pub const RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW: [i32; 3] = [73, 73, -73];
+
+/// The world context's model light: `FUN_0042EA30` stores the Section-10
+/// direction with X and Z divided by four (rounding toward zero), and
+/// `FUN_00433FA0` installs it, unrotated, as the VIEW-space light of every
+/// frame. Model shading in the world is therefore fixed to the camera.
+/// Level 1's `(-73,73,-73)` becomes `(-18,73,-18)`.
+pub fn retail_world_model_light_direction_raw(terrain: &TerrainGrid) -> [i32; 3] {
+    [
+        terrain.header[1] / 4,
+        terrain.header[2],
+        terrain.header[3] / 4,
+    ]
+}
 
 /// Endpoint producer mode for the manual 0x02/0x22 screen constructor.
 #[derive(Debug, Clone, Copy)]
@@ -165,6 +213,11 @@ pub struct ModelMesh<'a> {
     /// World tf13 provenance after dependency resolution, including linked
     /// imports. Used only with [`ModelSurfaceResolution::ContextResolved`].
     pub vertex_surface_origin: &'a [v2k_formats::models::ModelSurfaceOrigin],
+    /// Source-owned VIEW points parallel to `vertices`, from the node's
+    /// integer frame (`FUN_0046D610`'s cache). Empty, or `None` for a vertex,
+    /// when the producer does not own that frame. Backends projecting with
+    /// the native viewport use these instead of transforming the vertex.
+    pub vertex_view_raw: &'a [Option<[i32; 3]>],
     pub triangles: &'a [[u16; 3]],
     /// Original triangle or quad for each triangulated face. A quad's two
     /// triangles retain all four vertices for atomic retail near rejection.
@@ -174,6 +227,10 @@ pub struct ModelMesh<'a> {
     pub face_cull: &'a [ModelFaceCull],
     pub face_uvs: &'a [[[f32; 2]; 3]],
     pub face_corner_normals: &'a [[[f32; 3]; 3]],
+    /// The pool vectors behind `normals` and `face_corner_normals` (face
+    /// normal, then corners), parallel to `triangles`. Empty when the
+    /// producer kept only unit normals.
+    pub face_normals_raw: &'a [[[i32; 3]; 4]],
     pub face_shading: &'a [ModelFaceShading],
     /// Authored `0x02`/`0x22` segments into `vertices`.
     pub edges: &'a [v2k_formats::models::ModelEdge],
@@ -189,10 +246,15 @@ pub struct ModelMesh<'a> {
     /// Active Section-6 render-shade table. The recovered retail model light
     /// table addresses entries 0..7 and maps its remaining slots to entry 0.
     pub shade_table: Option<&'a [FogGradientEntry]>,
-    /// Signed raw light vector active for this render context. Ordinary world
-    /// and local menu props use `(73,73,-73)`; the frontend Klaus context uses
-    /// its separately authored `(-100,50,-50)` vector.
+    /// Signed raw VIEW-space light vector active for this render context.
+    /// World draws use the level's reduced Section-10 direction, local
+    /// contexts `(73,73,-73)` and the frontend Klaus context its separately
+    /// authored `(-100,50,-50)`. Backends shade with VIEW-space normals.
     pub light_direction_raw: [i32; 3],
+    /// `FUN_00466160`'s light in the node's model axes, when the producer
+    /// owns the node's integer frame. Backends shading with the native
+    /// viewport dot it with `face_normals_raw` instead of rotating normals.
+    pub native_light_raw: Option<[i32; 3]>,
     /// Signed contextual shift applied to the 16-slot model-light table.
     /// World entity draws use terrain light minus the 0..8 underwater
     /// darkness step; menu and diagnostic draws leave this at zero.
@@ -209,12 +271,14 @@ impl<'a> ModelMesh<'a> {
             vertex_projection: &model.vertex_projection,
             vertex_clip: &model.vertex_clip,
             vertex_surface_origin: &model.vertex_surface_origin,
+            vertex_view_raw: &[],
             triangles: &model.triangles,
             face_vertices: &model.face_vertices,
             normals: &model.normals,
             face_cull: &model.face_cull,
             face_uvs: &model.face_uvs,
             face_corner_normals: &model.face_corner_normals,
+            face_normals_raw: &[],
             face_shading: &model.face_shading,
             edges: &model.edges,
             edge_projection: ModelEdgeProjection::Compatibility,
@@ -222,6 +286,7 @@ impl<'a> ModelMesh<'a> {
             edge_widths: &[],
             shade_table: None,
             light_direction_raw: RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
+            native_light_raw: None,
             shade_shift: 0,
             materials,
         }
@@ -557,9 +622,8 @@ impl<'a> WorldSurfaceProjection<'a> {
     }
 
     pub fn new(terrain: &'a TerrainGrid, retail_tick: i32) -> Self {
-        let direction_x = terrain.header[1] / 4;
-        let direction_y = terrain.header[2];
-        let direction_z = terrain.header[3] / 4;
+        let [direction_x, direction_y, direction_z] =
+            retail_world_model_light_direction_raw(terrain);
         Self {
             terrain,
             retail_tick,
@@ -665,6 +729,22 @@ pub struct ModelDraw<'a> {
     /// Explicit terrain-overlay opt-in for draws that sit on the recovered
     /// terrain hit without authored type-13 vertices.
     pub overlay: ModelOverlayKind,
+    /// The node's place in its tree's retail painter program, for backends
+    /// that queue primitives the way the original does. `Some` promises a
+    /// [`Renderer::end_model_node`] once the node's children are submitted;
+    /// `None` draws the body on its own.
+    pub painter: Option<ModelPainterNode<'a>>,
+}
+
+/// A model-tree node's retail painter program (`FUN_00466xxx` group,
+/// primitive and instance commands in command order). Children expand at
+/// their parent's `Instance` op, inside whatever groups are open there.
+#[derive(Debug, Clone, Copy)]
+pub struct ModelPainterNode<'a> {
+    pub program: &'a [ModelPainterOp],
+    /// The parent program's `Instance` op (its `instance_index`) this node
+    /// expands; `None` for a tree root.
+    pub parent_instance: Option<usize>,
 }
 
 /// Resolved material and authored sprite dimensions for one Section-8
@@ -688,6 +768,9 @@ pub struct ModelBillboardDraw<'a> {
     /// The owning resolved slot's clip state, with the same contract as
     /// [`ModelMesh::vertex_clip`].
     pub vertex_clip: &'a [v2k_formats::models::ModelSlotClip],
+    /// Source-owned VIEW points, with the same contract as
+    /// [`ModelMesh::vertex_view_raw`].
+    pub vertex_view_raw: &'a [Option<[i32; 3]>],
     pub billboards: &'a [Billboard],
     pub materials: &'a [BillboardMaterial],
     pub transform: ModelTransform,
@@ -745,6 +828,38 @@ pub struct WorldSprite {
     pub flat_shade_row: u8,
     /// Center-depth fade selected by this sprite's explicit draw context.
     pub fog: SpriteFog,
+    /// The particle inputs `FUN_0043D410` reads, for backends that queue the
+    /// retail particle primitives; `None` for other sprites.
+    pub native: Option<NativeParticle>,
+}
+
+/// One particle as `FUN_0043D410` draws it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeParticle {
+    /// World words (particle `+0x08/+0x0A/+0x0C`).
+    pub position_raw: [i16; 3],
+    /// Draw scale after its record-address jitter times the frame's size word.
+    pub scale_raw: i32,
+    /// The frame's size word, which alone scales the shadow.
+    pub frame_size_raw: u16,
+    /// Descriptor `+0x07`: 1 mirrors, 4 centres, 8 keeps one pixel.
+    pub flags: u8,
+    /// Descriptor `+0x12`, added to the depth key.
+    pub sort_bias_raw: i16,
+    /// Render-context particle fog planes (`+0x74`, `+0x78`).
+    pub fog_near_raw: i32,
+    pub fog_far_raw: i32,
+    pub shadow: Option<NativeParticleShadow>,
+}
+
+/// A particle class's ground shadow (descriptor `+0x09`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeParticleShadow {
+    pub size: u8,
+    /// Ground height under the particle (`FUN_0043DB60`).
+    pub ground_raw: i16,
+    /// System-2 palette entry 32 as a display word.
+    pub colour: u32,
 }
 
 impl WorldSprite {
@@ -760,6 +875,7 @@ impl WorldSprite {
             blend: WorldSpriteBlend::Additive,
             flat_shade_row: 28,
             fog: SpriteFog::Near,
+            native: None,
         }
     }
 }
@@ -948,6 +1064,12 @@ pub trait Renderer {
         None
     }
 
+    /// The world fog last published with [`Self::set_world_model_fog`],
+    /// whatever scene is active, so a replacement renderer can inherit it.
+    fn retained_world_model_fog(&self) -> Option<WorldModelFog> {
+        self.world_model_fog()
+    }
+
     /// World fog planes inherited by the active scene, independent of
     /// temporary GL state during model/overlay submission. Menu scenes and
     /// backends without world fog return None. Hierarchy traversal uses the far plane before
@@ -1013,6 +1135,10 @@ pub trait Renderer {
         let _ = draw;
     }
 
+    /// The children of the latest [`ModelDraw::painter`] node still open
+    /// have all been submitted. Backends without a primitive queue ignore it.
+    fn end_model_node(&mut self) {}
+
     /// Draw camera-facing, depth-tested sprites in world space after opaque
     /// terrain/models. The sprite textures must have been created through
     /// [`Self::create_texture`] or [`Self::create_indexed_model_texture`].
@@ -1060,6 +1186,22 @@ pub trait Renderer {
         texture: IndexedModelTexture<'_>,
     ) -> Option<TextureId> {
         self.create_texture(texture.fallback_rgba, texture.width, texture.height)
+    }
+
+    /// Register a Section-3 record for backends that rasterize retail
+    /// materials directly, returning its material id. Other backends keep
+    /// the default `None`.
+    fn create_native_sprite(&mut self, _sprite: NativeSprite<'_>) -> Option<u32> {
+        None
+    }
+
+    /// Publish the retained world viewport words for producers that
+    /// transform natively. Scene boundaries do not clear it; callers pass
+    /// `None` when the scene has no native viewport.
+    fn set_native_world_viewport(
+        &mut self,
+        _viewport: Option<crate::projection::NativeViewportWords>,
+    ) {
     }
 
     /// Free a texture created with [`Renderer::create_texture`]. Default no-op.
@@ -1158,6 +1300,12 @@ pub trait Renderer {
     /// (Alt+Enter). Default no-op for backends without a togglable window.
     fn set_fullscreen(&mut self, _on: bool) {}
 
+    /// Where this renderer's window is, for a replacement renderer to reopen
+    /// in the same place. Backends without a window return `None`.
+    fn window_placement(&self) -> Option<crate::WindowPlacement> {
+        None
+    }
+
     /// Change the OS window's drawable size. Display→Resolution uses this;
     /// unlike [`Self::resize`], it requests a real window mode change.
     fn set_window_size(&mut self, width: u32, height: u32) {
@@ -1171,25 +1319,6 @@ pub trait Renderer {
         _reference_width: u32,
         _reference_height: u32,
     ) {
-    }
-
-    /// Render the complete scene into the selected authored-resolution
-    /// framebuffer before presenting it to the physical output. This keeps
-    /// texture lookup point-sampled while allowing one final filtered scale,
-    /// with the OpenGL classic adapter quantizing logical pixels to RGB565
-    /// before that scale. Packed per-draw software composition remains separate.
-    /// matching the way a completed retail frame was enlarged for a modern
-    /// display. Backends without an offscreen color/depth target return
-    /// `false`; Native presentation may also reject the request.
-    fn set_classic_framebuffer(&mut self, _enabled: bool) -> bool {
-        false
-    }
-
-    /// Whether authored-resolution offscreen presentation is currently in
-    /// use. A requested mode can become inactive after switching to Native or
-    /// when the graphics driver cannot provide framebuffer objects.
-    fn classic_framebuffer_active(&self) -> bool {
-        false
     }
 }
 

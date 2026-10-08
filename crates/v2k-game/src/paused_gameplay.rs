@@ -207,9 +207,6 @@ pub(super) struct PausedGameplayDraw<'a> {
 pub(super) fn setting_requires_paused_redraw(id: SettingId) -> bool {
     matches!(
         id,
-        SettingId::ClassicFramebuffer
-            | SettingId::Scaling
-            | SettingId::Resolution
-            | SettingId::FullScreen
+        SettingId::Scaling | SettingId::Resolution | SettingId::FullScreen | SettingId::Rendering
     )
 }

@@ -59,6 +59,14 @@ with varying infection density, wrapped coordinates, and both callback modes.
 Only handle lookup and the following mover were stubbed. This is a static PE
 oracle, not a TTD execution receipt (`.tmp/cleansing-seek-oracle.py`).
 
+The probes stay around the anchor, which only construction and a release
+from cargo set: the point the rover was beamed out at. The eighth probe
+reaches about seventeen cells, so a rover beamed out farther than that from
+any infection never finds it; each tick its target becomes another random
+clean point and it mills about the drop point. Within the common-axis limit
+of the Main Base (twelve cells), Base Nearby parks it in Stationary instead.
+This is retail behaviour and the port keeps it.
+
 402850 suppresses its callback while attached (1000h). Detailed mode emits
 class6 through440DC0, caller return4029DB; coarse mode directly clears through
 33720, return4028EB. Class6's43E1A0 terminal response clears through33720 with
@@ -134,12 +142,10 @@ are both936448 bytes at image base400000h, with identical sections and entry.
 | Image | SHA256 |
 |---|---|
 | Retail `V2000.EXE` | `e9be7a833612fba3a5a5ab92a974ece1a689e4b7e72409d9ee8331380573b4ba` |
-| `V2000-nocd.exe` | `d8365a3eaae541c071214835833ccf6db8dc491646c713f2c4d0017a04a6a720` |
 
-The only differing byte is file offset3B4CFh / VA43C0CFh, `74→EB` in the
-protection branch. Gameplay addresses used here are unchanged. The user-supplied
-executable is retained locally as `v2000/V2000-nocd.exe`; its bytes are private
-installation data, while the hashes and patch provenance above remain versioned.
+The NoCD image differs from retail only in its protection branch; gameplay
+addresses used here are unchanged. The user-supplied executable stays local
+and private; only the retail hash above is versioned.
 
 Accepted query stems are `nocd02-timeline`, `nocd02-save-state`,
 `nocd02-cleansing-events`, `nocd02-cleansing-oracle-v2`,

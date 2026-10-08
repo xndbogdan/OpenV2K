@@ -96,6 +96,12 @@ impl TerrainLightWindow {
         }
     }
 
+    /// The X-major cells and their origin cells `(x, z)`, as `0x004FE820`
+    /// and `0x004FEC20/0x004FE818` hold them.
+    pub fn window(&self) -> (&[i8; LIGHT_WINDOW_LEN], [u8; 2]) {
+        (&self.values, [self.origin_x, self.origin_z])
+    }
+
     pub fn sample(&self, world_x: i32, world_z: i32) -> i8 {
         let local_x = (world_x.rem_euclid(256) as u8).wrapping_sub(self.origin_x) as usize;
         let local_z = (world_z.rem_euclid(256) as u8).wrapping_sub(self.origin_z) as usize;

@@ -47,8 +47,8 @@ fn legacy_upgrade_wins_over_retail_and_normalizes_unsupported_display() {
     let config = load_from_sources(&dir.0, None, Some(retail));
     assert_eq!((config.width, config.height), (1024, 768));
     assert_eq!(config.renderer, RendererChoice::Wgpu);
+    // The retired `classic_framebuffer` key in this file is ignored.
     assert_eq!(config.scaling, ScalingMode::Stretched);
-    assert!(config.classic_framebuffer_effective());
     assert_eq!(config.difficulty, Difficulty::Hard);
     assert_eq!(config.self_righting, 0);
     assert!(!config.fullscreen);
@@ -125,7 +125,6 @@ fn persistence_separates_native_and_port_files_and_preserves_original_evidence()
         width: 1920,
         height: 1080,
         scaling: ScalingMode::FourThree,
-        classic_framebuffer: true,
         music_volume: 7.0 / 15.0,
         ..GameConfig::default()
     };
@@ -147,6 +146,7 @@ fn persistence_separates_native_and_port_files_and_preserves_original_evidence()
     assert_eq!(port["height"], 768);
     assert!(port.get("music_volume").is_none());
     assert!(port.get("self_righting").is_none());
+    assert!(port.get("classic_framebuffer").is_none());
     assert_eq!(fs::read(dir.0.join("config.json")).unwrap(), legacy);
     assert_eq!(
         fs::read(dir.0.join("Slot00")).unwrap(),
@@ -156,7 +156,6 @@ fn persistence_separates_native_and_port_files_and_preserves_original_evidence()
     assert_eq!((config.width, config.height), (1024, 768));
     assert_eq!((restored.width, restored.height), (1024, 768));
     assert_eq!(restored.scaling, ScalingMode::FourThree);
-    assert!(restored.classic_framebuffer_effective());
     assert_eq!(native_to_save(&restored).get(1), 7);
 }
 
@@ -277,7 +276,7 @@ fn low_detail_uses_minimum_window_while_preserving_native_low_tier_on_save() {
 }
 
 #[test]
-fn unsupported_software_preferences_normalize_without_rewriting_native_renderer_evidence() {
+fn software_preferences_persist_without_rewriting_native_renderer_evidence() {
     for renderer_word in [0, 0x76543210] {
         let dir = Directory::new();
         let imported = serde_json::to_vec(&GameConfig {
@@ -289,24 +288,22 @@ fn unsupported_software_preferences_normalize_without_rewriting_native_renderer_
         let mut native = NativeSettings::default();
         native.set(5, renderer_word);
         let mut config = load_from_sources(&dir.0, Some(native.clone()), None);
-        assert_eq!(config.renderer, RendererChoice::OpenGL);
+        assert_eq!(config.renderer, RendererChoice::Software);
         assert_eq!(native_to_save(&config), native);
         assert_eq!(fs::read(dir.0.join("config.json")).unwrap(), imported);
 
-        // Normalize stale callers as well, before comparing the projected
-        // settings to the lossless imported DWORD baseline.
-        config.renderer = RendererChoice::Software;
+        // An unchanged preference keeps the lossless imported DWORD.
         save_with_registry(&mut config, &dir.0, |stored| {
             assert_eq!(stored, &native);
             Ok(())
         })
         .unwrap();
-        assert_eq!(config.renderer, RendererChoice::OpenGL);
+        assert_eq!(config.renderer, RendererChoice::Software);
         let stored: PortPreferences = read_json(&dir.0.join("port-config.json")).unwrap();
-        assert_eq!(stored.renderer, RendererChoice::OpenGL);
+        assert_eq!(stored.renderer, RendererChoice::Software);
         assert_eq!(fs::read(dir.0.join("config.json")).unwrap(), imported);
         let restored = load_from_sources(&dir.0, None, None);
-        assert_eq!(restored.renderer, RendererChoice::OpenGL);
+        assert_eq!(restored.renderer, RendererChoice::Software);
         assert_eq!(native_to_save(&restored), native);
     }
 }

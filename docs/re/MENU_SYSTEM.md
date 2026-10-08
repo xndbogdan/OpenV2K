@@ -305,7 +305,15 @@ Pipeline: `FUN_0043B3E0` → `FUN_0043B1C0(rt, pos, flags, reveal, label,
 value)` → `FUN_00470AE0` (word-wrap at spaces, wrap width = 60% of screen
 width) / `FUN_00470A70` (single line) → `FUN_00470B60` per glyph →
 `FUN_00470F30` blit at `(pen_x/100 + xoff, pen_y/100 + yoff − sprite_h + 1)`
-— **y is the baseline**. Sprite resolver callback = 0x4291D0 =
+— **y is the baseline**. The pen stays in 1/100-px units and each glyph's
+position truncates. `FUN_00470F80` measures every advance plus every kern but
+the last, truncated to whole pixels; `FUN_0043B1C0` (flag 2) and the loading
+text `FUN_0042B040` centre at `x − width/2` with that halving truncated, while
+`FUN_00452790`'s presets above 9 start at `(screen width − width) / 2`. The
+glyphs are `0x04`-flagged records drawn through the `FUN_0047AD90` blit, so
+they use palette row 28, not the brightest row. With those rules the port's
+frontend label, copyright banner and both logos match DirectDraw trace frame
+`324003` pixel for pixel (2026-10-07). Sprite resolver callback = 0x4291D0 =
 `return DAT_004FE62C[id]` (passing NULL = measure-only pass, used to measure
 scrolled-out items). Setting rows: value string = `string_pool[label_id + 1 +
 *value_ptr]`, drawn right-aligned at `label_x + pt7.x (185)`. FUN_0043B740
@@ -379,8 +387,8 @@ full-frame video, background images and retained pause underlays keep their
 dedicated policies. Matching 640×480, 800×600 and 1024×768 layouts retain their
 original geometry; growth beyond them is a modern port-owned extension, not
 retail acceptance. The scale and mode boundaries are owned by
-[Render presentation](RENDER_PIPELINE.md#classic-framebuffer-colour-and-resolution).
-High Resolution/Scaling/Classic changes stage the selected system layouts and
+[Render presentation](RENDER_PIPELINE.md#colour-depth-and-resolution).
+High Resolution/Scaling changes stage the selected system layouts and
 font, projection, HUD/radar/map-status snapshots before atomic publication,
 without replacing intrinsic glyph pixels or advancing world/effect clocks.
 Low/High artwork and renderer replacement remain their existing launch-time
@@ -603,6 +611,17 @@ near/far −0x200/0x200, +0x7C terminal depth-fade color.
   with only the two frontend menu scenes differing. Cinematic, gameplay and
   Klaus-only controls remain identical in that billboard comparison. Selected
   tier font/layout submission follows the separate explicit UI policy above.
+- CINEMATIC EMBLEM (`FUN_004537F0`, every Intro2 frame): the same table and
+  D030 at unit scale (`S = 0x10000`, so `h = (focal_y << 6) >> 8`) with
+  queue key **-10000**, below every other key of the frame: it drains last
+  and adds over everything, Klaus's cover included. Its origin is `x = 0`,
+  `y = H - rh` (reference sprite 420), less `trunc(H/10)` above 480 lines.
+  Loading the Intro2 world empties the 1294–1299 slots (written to zero at
+  `00493B45`) before the first cinematic frame, so D030 takes each entry's
+  420–425 alternative: 16-colour 102×129 frames in tiers 1–3, a 101×128 quad
+  at `(0,351)` on the 640×480 tier. A TTD recording of retail Intro2 matches
+  this pixel for pixel at tick 13 (frame 425 over the cover) and tick 4003
+  (frame 423 over the grey final card).
 - BOTTOM SPRITES (`FUN_0042B040(rt,0,1,0)` every frame): global sprite ids
   1290 (Frontier logo, x=0), 1292 (copyright line, centered), and 1291
   (Grolier logo, right), each at y = screen_h − sprite_h. Variant-0 dimensions
@@ -995,6 +1014,32 @@ an attract-table policy.
   follow (Sound 46 → Off/On 47/48; Self Righting 42 → Off/Level/Angled
   43-45; Joystick 52 → Absolute/Relative 53/54).
 
+### Display changes and the startup display search
+
+Each Display callback (`FUN_0043CBF0` Resolution, `FUN_0043CC70` Rendering,
+`FUN_0043CCA0` Bilinear, `FUN_0043CCD0` window/full screen) calls
+`FUN_0043CC40` when its value changed. That passes `min(Resolution, 3)` to
+`FUN_0044E0E0`, which releases the current display and starts one built from
+the settings (`FUN_0042D2A0`). If the new display fails, it is freed and the
+previous one started again; the menu value stays as chosen. On success
+`FUN_00493A40` reloads the resolution tier's resources if the tier changed.
+
+Startup instead runs `FUN_0044E2E0` -> `FUN_0042D340`. Beginning with the
+saved values it tries every display mode (the Section-5 count), then the
+other window mode, then the other renderer, then the other Bilinear value,
+and keeps the first combination that starts; the settings then hold that
+combination. Error `0xA08` shows `V2000 cannot run in the desktop. Trying
+full screen...` (windowed) or `V2000 cannot run in this mode...` once.
+
+The port's Rendering row offers Software (retail string 9) and OpenGL. The
+retail Direct3D table is not ported, so the second value names the renderer
+the port actually runs. A change replaces the renderer at once and keeps the
+current one when the new backend cannot start, as `FUN_0044E0E0` does; the
+port creates the replacement before dropping the old renderer, and opens its
+window where the old one was (a full-screen game stays on its display). At startup
+only the backend can fail, so OpenGL falls back to Software unless
+`--renderer` forced a choice, and the backend that started is saved.
+
 ### Port Network availability
 
 The port intentionally replaces `0x4C11D0`'s runtime session placeholders with
@@ -1121,27 +1166,15 @@ The two independent 60-Hz audits `20260717-032247-complete-menu-audit` and
 the zero-clock replacement, and the expected retail process loss after a Load
 selection.
 
-### Local Load-only preservation patch (2026-08-02)
+### Copy protection
 
-For the canonical 936,448-byte retail executable with SHA-256
-`E9BE7A833612FBA3A5A5AB92A974ECE1A689E4B7E72409D9EE8331380573B4BA`, the
-Load-only failure response is the conditional branch `74 05` at virtual address
-`0x0043C0CF` (file offset `0x0003B4CF`). Changing only its first byte to `EB`
-makes the branch unconditionally skip the call to the shared shutdown routine.
-The guard window changes from `85 F6 74 05 E8 FA 9D 05 00` to
-`85 F6 EB 05 E8 FA 9D 05 00`; the resulting executable SHA-256 is
-`D8365A3EAAE541C071214835833CCF6DB8DC491646C713F2C4D0017A04A6A720`.
+The process loss after a retail Load selection comes from the game's copy
+protection. The Rust port has no media or copy-protection checks.
 
-This compatibility patch must be applied only to a copied, exact-hash
-executable. It intentionally leaves the media probes, native save reader,
-normal Quit path, and separate network-host policy intact. Never stub
-`FUN_00495ED0` globally because it is also the legitimate engine shutdown
-routine. The Rust port omits this obsolete protection policy entirely.
-
-The later NoCD05 Alpine failure is a [short overlay read followed by an
+The NoCD05 Alpine failure is a [short overlay read followed by an
 error-dialog callback crash](RETAIL_DATA_INTEGRITY.md#nocd05-alpine-load-failure),
-not evidence for another protection bypass. Its missing-file text is stale
-CRT errno from EOF; the requested file opens successfully.
+not a protection failure. Its missing-file text is stale CRT errno from EOF;
+the requested file opens successfully.
 
 ## Decompilation artifacts & tools
 

@@ -16,11 +16,13 @@ use v2k_formats::models::{
 };
 use v2k_formats::system::PaletteEntry;
 use v2k_render::renderer::ModelSurfaceResolution;
-use v2k_render::renderer::RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW;
+use v2k_render::renderer::{
+    retail_world_model_light_direction_raw, RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
+};
 use v2k_render::{
     mat3_mul, orientation_f32, BillboardMaterial, ExternalFrameMode, FaceMaterial,
     ModelBillboardDraw, ModelDepthFade, ModelDraw, ModelMesh, ModelNearClip, ModelOverlayKind,
-    ModelTransform, Renderer, ViewPinMode, WorldSurfaceProjection,
+    ModelPainterNode, ModelTransform, Renderer, ViewPinMode, WorldSurfaceProjection,
 };
 
 use crate::model_color::ModelMaterialCache;
@@ -447,6 +449,7 @@ struct ModelNodeGeometry<'a> {
     vertex_projection: &'a [ModelVertexProjection],
     vertex_clip: &'a [v2k_formats::models::ModelSlotClip],
     vertex_surface_origin: &'a [v2k_formats::models::ModelSurfaceOrigin],
+    vertex_view_raw: &'a [Option<[i32; 3]>],
     triangles: &'a [[u16; 3]],
     face_vertices: &'a [ModelFaceVertices],
     normals: &'a [[f32; 3]],
@@ -454,10 +457,23 @@ struct ModelNodeGeometry<'a> {
     face_materials: &'a [u16],
     face_uvs: &'a [[[f32; 2]; 3]],
     face_corner_normals: &'a [[[f32; 3]; 3]],
+    face_normals_raw: &'a [[[i32; 3]; 4]],
     face_shading: &'a [ModelFaceShading],
     edges: &'a [v2k_formats::models::ModelEdge],
     edge_projection: v2k_render::renderer::ModelEdgeProjection<'a>,
     billboards: &'a [Billboard],
+    /// Retail group, primitive and instance order; empty for subsets.
+    painter_program: &'a [v2k_formats::models::ModelPainterOp],
+}
+
+/// How a submitted node takes part in a backend's retail painter queue.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NodePainter {
+    /// A tree node expanding its parent's `Instance` op (`None`: a root).
+    /// [`ModelTreeRenderer::end_model_node`] follows its children.
+    Tree { parent_instance: Option<usize> },
+    /// Already ordered by the caller (the isolated painter path).
+    Ordered,
 }
 
 impl<'a> ModelNodeGeometry<'a> {
@@ -497,6 +513,7 @@ impl<'a> ModelNodeGeometry<'a> {
             vertex_projection: &model.vertex_projection,
             vertex_clip: &model.vertex_clip,
             vertex_surface_origin: &model.vertex_surface_origin,
+            vertex_view_raw: &[],
             triangles: &model.triangles,
             face_vertices: &model.face_vertices,
             normals: &model.normals,
@@ -504,10 +521,12 @@ impl<'a> ModelNodeGeometry<'a> {
             face_materials: &model.face_materials,
             face_uvs: &model.face_uvs,
             face_corner_normals: &model.face_corner_normals,
+            face_normals_raw: &[],
             face_shading: &model.face_shading,
             edges: &model.edges,
             edge_projection: v2k_render::renderer::ModelEdgeProjection::Compatibility,
             billboards: &model.billboards,
+            painter_program: &model.painter_program,
         }
     }
 
@@ -520,6 +539,7 @@ impl<'a> ModelNodeGeometry<'a> {
             vertex_projection: &model.vertex_projection,
             vertex_clip: &model.vertex_clip,
             vertex_surface_origin: &model.vertex_surface_origin,
+            vertex_view_raw: &model.vertex_view_raw,
             triangles: &model.triangles,
             face_vertices: &model.face_vertices,
             normals: &model.normals,
@@ -527,12 +547,14 @@ impl<'a> ModelNodeGeometry<'a> {
             face_materials: &model.face_materials,
             face_uvs: &model.face_uvs,
             face_corner_normals: &model.face_corner_normals,
+            face_normals_raw: &model.face_normals_raw,
             face_shading: &model.face_shading,
             edges: &model.edges,
             edge_projection: v2k_render::renderer::ModelEdgeProjection::CommandSnapshots(
                 &model.edge_endpoint_snapshots,
             ),
             billboards: &model.billboards,
+            painter_program: &model.painter_program,
         }
     }
 }
@@ -717,6 +739,9 @@ impl<'a> ModelTreeRenderer<'a> {
                     != 0,
             )
         });
+        if let Some(terrain) = cache.terrain() {
+            tree.light_direction_raw = retail_world_model_light_direction_raw(terrain);
+        }
         tree.near_clip = ModelNearClip::RetailWorld;
         tree
     }
@@ -758,6 +783,15 @@ impl<'a> ModelTreeRenderer<'a> {
         }
     }
 
+    /// Close the latest tree node opened by [`NodePainter::Tree`].
+    fn end_model_node(&mut self) {
+        if let Some(buffer) = self.submission_buffer.as_mut() {
+            buffer.push_end_node();
+        } else {
+            self.renderer.end_model_node();
+        }
+    }
+
     pub fn with_style(mut self, style: ModelTreeStyle) -> Self {
         self.style = style;
         self
@@ -770,6 +804,26 @@ impl<'a> ModelTreeRenderer<'a> {
     /// node rather than being recomputed from a child attachment.
     pub fn with_external_frame(mut self, external_frame: ExternalFrameMode) -> Self {
         self.external_frame = ModelTreeExternalFrame::Fixed(external_frame);
+        self
+    }
+
+    /// [`Self::with_external_frame`] for a hierarchy whose root node frame is
+    /// source-owned, as static terrain objects' is: every reached node then
+    /// carries its integer VIEW frame, which its vertices' VIEW points,
+    /// view-dependent commands and node fog selection use. Children derive
+    /// their frames from their parent's as they are reached.
+    pub fn with_native_external_frame(
+        mut self,
+        external_frame: ExternalFrameMode,
+        root: Option<(
+            crate::native_model_frame::NativeModelFrame,
+            crate::native_model_frame::NativeWorldViewport,
+        )>,
+    ) -> Self {
+        self.external_frame = ModelTreeExternalFrame::NativeFixed {
+            mode: external_frame,
+            native_context: root,
+        };
         self
     }
 
@@ -814,11 +868,13 @@ impl<'a> ModelTreeRenderer<'a> {
         self
     }
 
-    /// Install the signed raw model-light vector for this hierarchy.
+    /// Install the signed raw VIEW-space model-light vector for this
+    /// hierarchy.
     ///
-    /// Ordinary world and local-menu contexts retain the default
-    /// `(73,73,-73)`. Frontend Klaus uses the distinct `(-100,50,-50)` vector
-    /// recovered from its persistent world context.
+    /// Local contexts retain the default `(73,73,-73)` and world trees start
+    /// from the level's reduced Section-10 direction. Frontend Klaus uses the
+    /// distinct `(-100,50,-50)` vector recovered from its persistent world
+    /// context.
     pub fn with_light_direction_raw(mut self, light_direction_raw: [i32; 3]) -> Self {
         self.light_direction_raw = light_direction_raw;
         self
@@ -1031,6 +1087,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 vertex_projection: &[],
                 vertex_clip: &[],
                 vertex_surface_origin: &[],
+                vertex_view_raw: &[],
                 triangles: &triangles,
                 // Filtered workbench shadow previews use triangle fallback.
                 face_vertices: &[],
@@ -1038,6 +1095,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 face_cull: &[],
                 face_uvs: &[],
                 face_corner_normals: &[],
+                face_normals_raw: &[],
                 face_shading: &[],
                 edges: &[],
                 edge_projection: v2k_render::renderer::ModelEdgeProjection::Compatibility,
@@ -1045,6 +1103,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 edge_widths: &[],
                 shade_table: None,
                 light_direction_raw: RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
+                native_light_raw: None,
                 shade_shift: 0,
                 materials: &materials,
             },
@@ -1061,6 +1120,7 @@ impl<'a> ModelTreeRenderer<'a> {
             world_surface: None,
             external_frame: ExternalFrameMode::Raw,
             overlay: ModelOverlayKind::None,
+            painter: None,
         });
     }
 
@@ -1085,6 +1145,7 @@ impl<'a> ModelTreeRenderer<'a> {
         depth_policy: ModelDepthPolicy,
         surface_resolution: ModelSurfaceResolution,
         depth_fade: ModelDepthFade,
+        painter: NodePainter,
     ) {
         let external_frame = if surface_resolution == ModelSurfaceResolution::ContextResolved
             && self.external_frame.owns_external_vertices()
@@ -1146,12 +1207,14 @@ impl<'a> ModelTreeRenderer<'a> {
             vertex_projection: geometry.vertex_projection,
             vertex_clip: geometry.vertex_clip,
             vertex_surface_origin: geometry.vertex_surface_origin,
+            vertex_view_raw: geometry.vertex_view_raw,
             triangles: geometry.triangles,
             face_vertices: geometry.face_vertices,
             normals: geometry.normals,
             face_cull: geometry.face_cull,
             face_uvs: geometry.face_uvs,
             face_corner_normals: geometry.face_corner_normals,
+            face_normals_raw: geometry.face_normals_raw,
             face_shading: geometry.face_shading,
             edges: geometry.edges,
             edge_projection: geometry.edge_projection,
@@ -1159,6 +1222,10 @@ impl<'a> ModelTreeRenderer<'a> {
             edge_widths: &edge_widths,
             shade_table: self.cache.fog_gradient().map(Vec::as_slice),
             light_direction_raw: self.light_direction_raw,
+            native_light_raw: self
+                .external_frame
+                .native_context()
+                .map(|(frame, _)| frame.model_light_raw(self.light_direction_raw)),
             shade_shift: self.shade_shift,
             materials: &face_materials,
         };
@@ -1178,6 +1245,13 @@ impl<'a> ModelTreeRenderer<'a> {
             world_surface: self.world_surface,
             external_frame,
             overlay: self.overlay,
+            painter: match painter {
+                NodePainter::Tree { parent_instance } => Some(ModelPainterNode {
+                    program: geometry.painter_program,
+                    parent_instance,
+                }),
+                NodePainter::Ordered => None,
+            },
         });
         self.submit_node_billboards(&geometry, orientation, position, depth_policy, depth_fade);
     }
@@ -1197,6 +1271,7 @@ impl<'a> ModelTreeRenderer<'a> {
             vertices: geometry.vertices,
             vertex_projection: geometry.vertex_projection,
             vertex_clip: geometry.vertex_clip,
+            vertex_view_raw: geometry.vertex_view_raw,
             billboards: geometry.billboards,
             materials: &billboard_materials,
             transform: ModelTransform {
@@ -1228,9 +1303,11 @@ impl<'a> ModelTreeRenderer<'a> {
             depth,
             child_transform,
             &vars,
+            None,
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn draw_static_node(
         &mut self,
         model_id: usize,
@@ -1239,6 +1316,7 @@ impl<'a> ModelTreeRenderer<'a> {
         depth: u8,
         child_transform: Option<&dyn ModelTreeChildTransform>,
         vars: &AnimVars,
+        parent_instance: Option<usize>,
     ) {
         let Some(model) = self.cache.global_model(model_id) else {
             return;
@@ -1266,6 +1344,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 vars,
                 child_transform,
                 ModelTreeRootLinkPolicy::Authored,
+                parent_instance,
             );
             return;
         }
@@ -1277,11 +1356,13 @@ impl<'a> ModelTreeRenderer<'a> {
             ModelDepthPolicy::Geometry,
             ModelSurfaceResolution::Intrinsic,
             depth_fade,
+            NodePainter::Tree { parent_instance },
         );
         if depth == 0 {
+            self.end_model_node();
             return;
         }
-        for instance in &model.instances {
+        for (index, instance) in model.instances.iter().enumerate() {
             if instance.model_id as usize == model_id {
                 continue;
             }
@@ -1319,8 +1400,10 @@ impl<'a> ModelTreeRenderer<'a> {
                 &child_vars,
                 child_transform,
                 ModelTreeRootLinkPolicy::Authored,
+                Some(index),
             );
         }
+        self.end_model_node();
     }
 
     /// Materialize a model with live animation variables and linked-parent
@@ -1375,6 +1458,7 @@ impl<'a> ModelTreeRenderer<'a> {
             vars,
             child_transform,
             self.root_link_policy,
+            None,
         );
     }
 
@@ -1389,6 +1473,7 @@ impl<'a> ModelTreeRenderer<'a> {
         vars: &AnimVars,
         child_transform: Option<&dyn ModelTreeChildTransform>,
         root_link_policy: ModelTreeRootLinkPolicy,
+        parent_instance: Option<usize>,
     ) {
         let Some(model) = self.cache.global_model(model_id) else {
             return;
@@ -1414,11 +1499,18 @@ impl<'a> ModelTreeRenderer<'a> {
             ModelDepthPolicy::Geometry,
             surface_resolution,
             depth_fade,
+            NodePainter::Tree { parent_instance },
         );
         if depth == 0 {
+            self.end_model_node();
             return;
         }
-        for (instance, child_linked) in materialized.instances.iter().zip(child_links.iter()) {
+        for (index, (instance, child_linked)) in materialized
+            .instances
+            .iter()
+            .zip(child_links.iter())
+            .enumerate()
+        {
             if instance.model_id as usize == model_id {
                 continue;
             }
@@ -1463,9 +1555,11 @@ impl<'a> ModelTreeRenderer<'a> {
                 &child_vars,
                 child_transform,
                 ModelTreeRootLinkPolicy::Authored,
+                Some(index),
             );
             self.external_frame.end_child(native_parent);
         }
+        self.end_model_node();
     }
 
     /// One reached node is materialized once with the live H/E and native
@@ -2206,6 +2300,9 @@ mod tests {
         face_uvs: Vec<[[f32; 2]; 3]>,
         face_corner_normals: Vec<[[f32; 3]; 3]>,
         face_shading: Vec<ModelFaceShading>,
+        vertex_view_raw: Vec<Option<[i32; 3]>>,
+        face_normals_raw: Vec<[[i32; 3]; 4]>,
+        native_light_raw: Option<[i32; 3]>,
         shade_table: Vec<FogGradientEntry>,
         light_direction_raw: [i32; 3],
         shade_shift: i32,
@@ -2310,6 +2407,9 @@ mod tests {
                 face_uvs: draw.mesh.face_uvs.to_vec(),
                 face_corner_normals: draw.mesh.face_corner_normals.to_vec(),
                 face_shading: draw.mesh.face_shading.to_vec(),
+                vertex_view_raw: draw.mesh.vertex_view_raw.to_vec(),
+                face_normals_raw: draw.mesh.face_normals_raw.to_vec(),
+                native_light_raw: draw.mesh.native_light_raw,
                 shade_table: draw.mesh.shade_table.unwrap_or_default().to_vec(),
                 light_direction_raw: draw.mesh.light_direction_raw,
                 shade_shift: draw.mesh.shade_shift,
@@ -2751,6 +2851,7 @@ mod tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: Some(name.to_owned()),
         };
         let materialized = entry.materialize(&AnimVars::default());
@@ -3581,8 +3682,6 @@ mod tests {
                 ScalingMode::FourThree,
                 ScalingMode::Stretched,
             ] {
-                // Classic Framebuffer uses this same logical surface, then
-                // presents it into the physical viewport after all draws.
                 let viewport = RenderViewport::for_output(width, height, 640, 480, mode);
                 let aspect = f64::from(viewport.logical_width) / f64::from(viewport.logical_height);
                 let policy = ModelTreeRootLinkPolicy::KlausMatte {
@@ -4373,6 +4472,74 @@ mod tests {
         session.load_auxiliary_ovl(3, 1).unwrap();
         session.load_level_by_id(13, 1).unwrap();
         session
+    }
+
+    #[v2k_test_support::retail_test]
+    fn static_objects_publish_integer_view_points_and_model_light() {
+        use crate::native_model_frame::{NativeModelFrame, NativeWorldViewport};
+        use v2k_render::projection::{
+            NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
+        };
+        let data = v2k_test_support::retail_dir();
+        let mut session = crate::session::GameSession::init(&data).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        session.load_level_by_id(50, 1).unwrap();
+        let cache = &session.cache;
+        // Intro2's tick-98 camera and the village hut at cell [139, 124].
+        let viewport = NativeWorldViewport {
+            origin_raw: [-29184, 590, 30834],
+            axes_q31: [
+                [2147347834, 0, 0],
+                [0, 2072352042, 560095147],
+                [0, -560130571, 2072483113],
+            ],
+            identity: false,
+        };
+        let frame = NativeModelFrame::from_static_object(viewport, [35712_u16 as i16, -272, 31872]);
+        assert_eq!(frame.origin_view_raw, [-640, -562, 1225]);
+        let colors = ModelMaterialCache::new();
+        let mut renderer = RecordingRenderer::default();
+        let position = [139.5, -272.0 / 256.0, 124.5];
+        let mut tree =
+            ModelTreeRenderer::new_world(&mut renderer, cache, &colors, 100.0 / 256.0, None, 98)
+                .with_scene_projection_authority(SceneProjectionAuthority::Native(
+                    NativeScreenProjection::new(
+                        [512, 512],
+                        [320, 240],
+                        [640, 480],
+                        ProjectionEffect::None,
+                    )
+                    .unwrap(),
+                ))
+                .with_view(ModelTreeView {
+                    position: [142.0, 590.0 / 256.0, 30834.0 / 256.0],
+                    forward: [0.0, 0.0, 1.0],
+                })
+                .with_native_external_frame(
+                    ExternalFrameMode::WorldPoint([position[0], 0.0, position[2]]),
+                    Some((frame.clone(), viewport)),
+                );
+        tree.draw_linked(
+            364,
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            position,
+            8,
+            None,
+            &AnimVars::default(),
+        );
+        drop(tree);
+        let body = renderer.bodies.first().expect("hut body");
+        assert!(!body.triangles.is_empty());
+        assert_eq!(body.vertex_view_raw.len(), body.vertices.len());
+        assert!(
+            body.vertex_view_raw.iter().all(Option::is_some),
+            "every hut vertex is a plain slot of the static node"
+        );
+        assert_eq!(body.face_normals_raw.len(), body.triangles.len());
+        assert_eq!(
+            body.native_light_raw,
+            Some(frame.model_light_raw(body.light_direction_raw))
+        );
     }
 
     #[v2k_test_support::retail_test]

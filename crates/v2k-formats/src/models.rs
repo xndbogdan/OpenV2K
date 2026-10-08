@@ -193,6 +193,10 @@ pub struct MaterializedModel {
     pub vertex_clip: Vec<ModelSlotClip>,
     /// World-surface endpoint provenance, parallel to vertices.
     pub vertex_surface_origin: Vec<ModelSurfaceOrigin>,
+    /// Each vertex's current-node VIEW point (`FUN_0046D610`'s cache) when a
+    /// vertex resolver owns that frame, parallel to `vertices`; `None` where
+    /// the frame does not own the slot. Empty for intrinsic geometry.
+    pub vertex_view_raw: Vec<Option<[i32; 3]>>,
     /// Triangle indices into `vertices`.
     pub triangles: Vec<[u16; 3]>,
     /// Complete source polygon for each triangle, indexed into `vertices`.
@@ -219,6 +223,11 @@ pub struct MaterializedModel {
     /// uniformly lit faces repeat their one face normal at all three corners.
     /// Unlit faces also retain that normal as diagnostic geometry.
     pub face_corner_normals: Vec<[[f32; 3]; 3]>,
+    /// The pool vectors behind `normals` and `face_corner_normals` as
+    /// `FUN_0046D3F0` reads them (odd references X-negated, references 0/1
+    /// zero): the face normal, then its three corners. Parallel to
+    /// `triangles`.
+    pub face_normals_raw: Vec<[[i32; 3]; 4]>,
     /// Retail unlit/uniformly lit/Gouraud handler family for each triangle.
     pub face_shading: Vec<ModelFaceShading>,
     /// Legacy diagnostic layer. Canonical materialization keeps authored
@@ -487,6 +496,9 @@ pub struct ModelEntry {
     pub billboards: Vec<Billboard>,
     /// Inline instances of other models (op 0x0E, global pool ids).
     pub instances: Vec<ModelInstance>,
+    /// Authored primitive, child-instance and painter-group order of the
+    /// intrinsic materialization (see [`MaterializedModel::painter_program`]).
+    pub painter_program: Vec<ModelPainterOp>,
     /// Embedded name string (e.g. "hovercraft"), if present and non-empty.
     pub name: Option<String>,
 }
@@ -1579,6 +1591,23 @@ fn interpret(
 
 // ── Materialization ─────────────────────────────────────────────────────────
 
+/// The pool vector `FUN_0046D3F0` dots with the model-space light: odd refs
+/// negate X, and the reserved refs 0/1 (or a missing record) are zero.
+fn pool_normal_raw(pool: &[[i16; 4]], nref: u16) -> [i32; 3] {
+    let Some(rec) = nref
+        .checked_sub(2)
+        .and_then(|index| pool.get(usize::from(index >> 1)))
+    else {
+        return [0; 3];
+    };
+    let x = i32::from(rec[1]);
+    [
+        if nref & 1 != 0 { -x } else { x },
+        i32::from(rec[2]),
+        i32::from(rec[3]),
+    ]
+}
+
 /// Resolve a normal pool ref to a unit normal. Odd refs are the X-negated
 /// mirror pair of the even entry.
 fn pool_normal(pool: &[[i16; 4]], nref: u16) -> [f32; 3] {
@@ -1677,6 +1706,7 @@ struct ResolvedGeometry {
     vertex_projection: Vec<ModelVertexProjection>,
     vertex_clip: Vec<ModelSlotClip>,
     vertex_surface_origin: Vec<ModelSurfaceOrigin>,
+    vertex_view_raw: Vec<Option<[i32; 3]>>,
     triangles: Vec<[u16; 3]>,
     face_vertices: Vec<ModelFaceVertices>,
     normals: Vec<[f32; 3]>,
@@ -1684,6 +1714,7 @@ struct ResolvedGeometry {
     face_materials: Vec<u16>,
     face_uvs: Vec<[[f32; 2]; 3]>,
     face_corner_normals: Vec<[[f32; 3]; 3]>,
+    face_normals_raw: Vec<[[i32; 3]; 4]>,
     face_shading: Vec<ModelFaceShading>,
     shadow_triangles: Vec<[u16; 3]>,
     edges: Vec<ModelEdge>,
@@ -1706,6 +1737,7 @@ struct ResolvedVertexPool {
     projection: Vec<ModelVertexProjection>,
     clip: Vec<ModelSlotClip>,
     surface_origin: Vec<ModelSurfaceOrigin>,
+    view_raw: Vec<Option<[i32; 3]>>,
 }
 
 impl ResolvedVertexPool {
@@ -1726,6 +1758,7 @@ impl ResolvedVertexPool {
         self.positions.push(position.position_raw);
         self.clip.push(position.clip);
         self.surface_origin.push(position.surface_origin);
+        self.view_raw.push(position.native_view_point);
         self.type_flags.push(record[0]);
         self.projection.push(position.world_point.map_or(
             ModelVertexProjection::Position,
@@ -1759,6 +1792,7 @@ fn resolve_stream(
     let mut face_materials: Vec<u16> = Vec::new();
     let mut face_uvs = Vec::new();
     let mut face_corner_normals = Vec::new();
+    let mut face_normals_raw = Vec::new();
     let mut face_shading = Vec::new();
     let shadow_tris: Vec<[u16; 3]> = Vec::new();
     let mut triangle_prefix = vec![0];
@@ -1808,6 +1842,12 @@ fn resolve_stream(
                 pool_normal(normal_pool, face.corner_normals[0]),
                 pool_normal(normal_pool, face.corner_normals[1]),
                 pool_normal(normal_pool, face.corner_normals[2]),
+            ]);
+            face_normals_raw.push([
+                pool_normal_raw(normal_pool, face.normal),
+                pool_normal_raw(normal_pool, face.corner_normals[0]),
+                pool_normal_raw(normal_pool, face.corner_normals[1]),
+                pool_normal_raw(normal_pool, face.corner_normals[2]),
             ]);
             face_shading.push(face.shading);
         }
@@ -1900,6 +1940,7 @@ fn resolve_stream(
         vertex_projection: vertices.projection,
         vertex_clip: vertices.clip,
         vertex_surface_origin: vertices.surface_origin,
+        vertex_view_raw: vertices.view_raw,
         triangles: tris,
         face_vertices,
         normals,
@@ -1907,6 +1948,7 @@ fn resolve_stream(
         face_materials,
         face_uvs,
         face_corner_normals,
+        face_normals_raw,
         face_shading,
         shadow_triangles: shadow_tris,
         edges,
@@ -2131,6 +2173,7 @@ pub fn parse_model_subblocks(data: &[u8], header_value: u32) -> Result<ModelColl
                 edges: Vec::new(),
                 billboards: Vec::new(),
                 instances: Vec::new(),
+                painter_program: Vec::new(),
                 name,
             };
             let m = entry.materialize_into(&AnimVars::default(), &mut stats);
@@ -2152,6 +2195,7 @@ pub fn parse_model_subblocks(data: &[u8], header_value: u32) -> Result<ModelColl
             entry.edges = m.edges;
             entry.billboards = m.billboards;
             entry.instances = m.instances;
+            entry.painter_program = m.painter_program;
             all_entries.push(entry);
 
             if q <= p {
@@ -3458,6 +3502,7 @@ impl ModelEntry {
             mut vertex_projection,
             mut vertex_clip,
             mut vertex_surface_origin,
+            mut vertex_view_raw,
             triangles,
             face_vertices,
             normals,
@@ -3465,6 +3510,7 @@ impl ModelEntry {
             face_materials,
             face_uvs,
             face_corner_normals,
+            face_normals_raw,
             face_shading,
             shadow_triangles,
             edges,
@@ -3493,6 +3539,7 @@ impl ModelEntry {
             vertex_projection = vec![ModelVertexProjection::Position; vertices.len()];
             vertex_clip = vec![ModelSlotClip::Clear; vertices.len()];
             vertex_surface_origin = vec![ModelSurfaceOrigin::None; vertices.len()];
+            vertex_view_raw = Vec::new();
         }
 
         MaterializedModel {
@@ -3502,6 +3549,7 @@ impl ModelEntry {
             vertex_projection,
             vertex_clip,
             vertex_surface_origin,
+            vertex_view_raw,
             triangles,
             face_vertices,
             normals,
@@ -3509,6 +3557,7 @@ impl ModelEntry {
             face_materials,
             face_uvs,
             face_corner_normals,
+            face_normals_raw,
             face_shading,
             shadow_triangles,
             edges,
@@ -3683,7 +3732,61 @@ mod tests {
         // shade slot zero. Scene shade shifts remain renderer-owned.
         for reference in [0, 1, 4, 5] {
             assert_eq!(pool_normal(&pool, reference), [0.0; 3]);
+            assert_eq!(pool_normal_raw(&pool, reference), [0; 3]);
         }
+        // 46D3F0 dots the stored vector, X negated for the mirrored pair.
+        assert_eq!(
+            geometry.face_normals_raw,
+            [
+                [[16_384, 0, 0]; 4],
+                [[16_384, 0, 0]; 4],
+                [[-16_384, 0, 0]; 4],
+                [[-16_384, 0, 0]; 4]
+            ]
+        );
+    }
+
+    #[test]
+    fn native_view_points_follow_each_materialized_vertex() {
+        struct Owner;
+        impl ModelVertexResolver for Owner {
+            fn resolve_vertex_raw(
+                &self,
+                _: ModelVertexKind,
+                _: ResolvedModelSlot,
+            ) -> Option<ResolvedModelSlot> {
+                None
+            }
+            fn owns_native_view(&self) -> bool {
+                true
+            }
+            fn resolve_native_view_point(&self, slot: u16, _: &AnimVars) -> Option<[i32; 3]> {
+                Some([i32::from(slot), -i32::from(slot), 1_000 + i32::from(slot)])
+            }
+        }
+        let model = ModelEntry {
+            records: vec![[0, 0, 0, 0], [0, 100, 0, 0], [0, 100, 100, 0]],
+            normal_pool: vec![[0, 0, 0, 16_384]],
+            cmd_words: vec![0x43, 17, 2, 4, 0, 2, 0],
+            ..ModelEntry::default()
+        };
+        let vars = AnimVars::default();
+        let geometry = model.materialize_with_context(ModelMaterializationContext {
+            vertex_resolver: Some(&Owner),
+            ..ModelMaterializationContext::intrinsic(&vars, None)
+        });
+        // First-reference order: slots 4, 0, 2.
+        assert_eq!(
+            geometry.vertex_view_raw,
+            [
+                Some([4, -4, 1_004]),
+                Some([0, 0, 1_000]),
+                Some([2, -2, 1_002])
+            ]
+        );
+        assert_eq!(geometry.face_normals_raw, [[[0, 0, 16_384]; 4]]);
+        let intrinsic = model.materialize(&vars);
+        assert_eq!(intrinsic.vertex_view_raw, [None; 3]);
     }
 
     #[test]
@@ -3742,6 +3845,7 @@ mod tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: None,
         }
     }
@@ -5408,6 +5512,7 @@ mod tests {
             edges: Vec::new(),
             billboards: Vec::new(),
             instances: Vec::new(),
+            painter_program: Vec::new(),
             name: None,
         };
         let m = entry.materialize(&AnimVars::default());

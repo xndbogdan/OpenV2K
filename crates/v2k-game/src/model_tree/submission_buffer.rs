@@ -38,6 +38,7 @@ impl ModelTreeSubmissionBuffer {
                 OwnedSubmission::Billboards(billboards) => {
                     renderer.draw_model_billboards(billboards.borrow())
                 }
+                OwnedSubmission::EndNode => renderer.end_model_node(),
             }
         }
     }
@@ -50,11 +51,15 @@ impl ModelTreeSubmissionBuffer {
         self.commands
             .push(OwnedSubmission::Billboards(OwnedBillboards::new(draw)));
     }
+    pub(super) fn push_end_node(&mut self) {
+        self.commands.push(OwnedSubmission::EndNode);
+    }
 }
 
 enum OwnedSubmission {
     Body(OwnedBody),
     Billboards(OwnedBillboards),
+    EndNode,
 }
 
 struct OwnedBody {
@@ -64,12 +69,14 @@ struct OwnedBody {
     vertex_projection: Vec<ModelVertexProjection>,
     vertex_clip: Vec<ModelSlotClip>,
     vertex_surface_origin: Vec<ModelSurfaceOrigin>,
+    vertex_view_raw: Vec<Option<[i32; 3]>>,
     triangles: Vec<[u16; 3]>,
     face_vertices: Vec<ModelFaceVertices>,
     normals: Vec<[f32; 3]>,
     face_cull: Vec<ModelFaceCull>,
     face_uvs: Vec<[[f32; 2]; 3]>,
     face_corner_normals: Vec<[[f32; 3]; 3]>,
+    face_normals_raw: Vec<[[i32; 3]; 4]>,
     face_shading: Vec<ModelFaceShading>,
     edges: Vec<ModelEdge>,
     edge_materials: Vec<FaceMaterial>,
@@ -77,6 +84,7 @@ struct OwnedBody {
     edge_widths: Vec<(u16, u16)>,
     shade_table: Option<Vec<FogGradientEntry>>,
     light_direction_raw: [i32; 3],
+    native_light_raw: Option<[i32; 3]>,
     shade_shift: i32,
     materials: Vec<FaceMaterial>,
     transform: ModelTransform,
@@ -89,6 +97,8 @@ struct OwnedBody {
     surface_waves_enabled: Option<bool>,
     external_frame: ExternalFrameMode,
     overlay: ModelOverlayKind,
+    /// The node's painter program and parent instance, when it is a tree node.
+    painter: Option<(Vec<v2k_formats::models::ModelPainterOp>, Option<usize>)>,
 }
 
 impl OwnedBody {
@@ -101,12 +111,14 @@ impl OwnedBody {
             vertex_projection: mesh.vertex_projection.to_vec(),
             vertex_clip: mesh.vertex_clip.to_vec(),
             vertex_surface_origin: mesh.vertex_surface_origin.to_vec(),
+            vertex_view_raw: mesh.vertex_view_raw.to_vec(),
             triangles: mesh.triangles.to_vec(),
             face_vertices: mesh.face_vertices.to_vec(),
             normals: mesh.normals.to_vec(),
             face_cull: mesh.face_cull.to_vec(),
             face_uvs: mesh.face_uvs.to_vec(),
             face_corner_normals: mesh.face_corner_normals.to_vec(),
+            face_normals_raw: mesh.face_normals_raw.to_vec(),
             face_shading: mesh.face_shading.to_vec(),
             edges: mesh.edges.to_vec(),
             edge_materials: mesh.edge_materials.to_vec(),
@@ -119,6 +131,7 @@ impl OwnedBody {
             edge_widths: mesh.edge_widths.to_vec(),
             shade_table: mesh.shade_table.map(<[_]>::to_vec),
             light_direction_raw: mesh.light_direction_raw,
+            native_light_raw: mesh.native_light_raw,
             shade_shift: mesh.shade_shift,
             materials: mesh.materials.to_vec(),
             transform: draw.transform,
@@ -131,6 +144,9 @@ impl OwnedBody {
             surface_waves_enabled: draw.world_surface.map(|surface| surface.waves_enabled()),
             external_frame: draw.external_frame,
             overlay: draw.overlay,
+            painter: draw
+                .painter
+                .map(|node| (node.program.to_vec(), node.parent_instance)),
         }
     }
 
@@ -143,12 +159,14 @@ impl OwnedBody {
                 vertex_projection: &self.vertex_projection,
                 vertex_clip: &self.vertex_clip,
                 vertex_surface_origin: &self.vertex_surface_origin,
+                vertex_view_raw: &self.vertex_view_raw,
                 triangles: &self.triangles,
                 face_vertices: &self.face_vertices,
                 normals: &self.normals,
                 face_cull: &self.face_cull,
                 face_uvs: &self.face_uvs,
                 face_corner_normals: &self.face_corner_normals,
+                face_normals_raw: &self.face_normals_raw,
                 face_shading: &self.face_shading,
                 edge_projection: self.edge_snapshots.as_deref().map_or(
                     v2k_render::renderer::ModelEdgeProjection::Compatibility,
@@ -159,6 +177,7 @@ impl OwnedBody {
                 edge_widths: &self.edge_widths,
                 shade_table: self.shade_table.as_deref(),
                 light_direction_raw: self.light_direction_raw,
+                native_light_raw: self.native_light_raw,
                 shade_shift: self.shade_shift,
                 materials: &self.materials,
             },
@@ -174,6 +193,13 @@ impl OwnedBody {
                 .and_then(|enabled| surface.map(|surface| surface.with_waves_enabled(enabled))),
             external_frame: self.external_frame,
             overlay: self.overlay,
+            painter: self
+                .painter
+                .as_ref()
+                .map(|(program, parent_instance)| ModelPainterNode {
+                    program,
+                    parent_instance: *parent_instance,
+                }),
         }
     }
 }
@@ -182,6 +208,7 @@ struct OwnedBillboards {
     vertices: Vec<[f64; 3]>,
     vertex_projection: Vec<ModelVertexProjection>,
     vertex_clip: Vec<ModelSlotClip>,
+    vertex_view_raw: Vec<Option<[i32; 3]>>,
     billboards: Vec<Billboard>,
     materials: Vec<BillboardMaterial>,
     transform: ModelTransform,
@@ -196,6 +223,7 @@ impl OwnedBillboards {
             vertices: draw.vertices.to_vec(),
             vertex_projection: draw.vertex_projection.to_vec(),
             vertex_clip: draw.vertex_clip.to_vec(),
+            vertex_view_raw: draw.vertex_view_raw.to_vec(),
             billboards: draw.billboards.to_vec(),
             materials: draw.materials.to_vec(),
             transform: draw.transform,
@@ -210,6 +238,7 @@ impl OwnedBillboards {
             vertices: &self.vertices,
             vertex_projection: &self.vertex_projection,
             vertex_clip: &self.vertex_clip,
+            vertex_view_raw: &self.vertex_view_raw,
             billboards: &self.billboards,
             materials: &self.materials,
             transform: self.transform,
@@ -272,6 +301,7 @@ mod tests {
                 ),
                 external_frame: ExternalFrameMode::Raw,
                 overlay: ModelOverlayKind::TerrainSurface,
+                painter: None,
             };
             let mut later = OwnedBody::new(ModelDraw {
                 projection_authority: draw.projection_authority,
@@ -285,6 +315,7 @@ mod tests {
                 world_surface: None,
                 external_frame: draw.external_frame,
                 overlay: draw.overlay,
+                painter: None,
             });
             later.shade_shift = 19;
             buffer.push_body(draw);
@@ -292,6 +323,7 @@ mod tests {
                 vertices: &model.vertices,
                 vertex_projection: &model.vertex_projection,
                 vertex_clip: &model.vertex_clip,
+                vertex_view_raw: &[],
                 billboards: &[],
                 materials: &[],
                 transform,
@@ -383,6 +415,7 @@ mod native_edge_buffer_tests {
             world_surface: None,
             external_frame: ExternalFrameMode::Raw,
             overlay: ModelOverlayKind::None,
+            painter: None,
         });
         snapshots[0] = ModelEdgeEndpointSnapshot::Compatibility;
         let draw = owned.borrow(None);
