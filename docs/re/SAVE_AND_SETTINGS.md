@@ -91,14 +91,11 @@ bounded native restoration, not a claim that every saved field is implemented.
 The four-byte tail has separate semantics: `456C70 ->438020` restores it to
 the resource-notification seen-event mask at `[session+0x2C4]+0x0C`.
 `FUN_0044F650` then clears that mask through `437FF0` at `44F7E1`, for every
-mode, before authored/cargo events repopulate it. Retail therefore shows every
-one-time hint again after a load, although the save recorded it.
-
-**Port extension:** the port keeps the saved mask. After its usual session
-reset, a native load ORs the slot's tail back in
-(`GameplayNotifications::restore_saved_hints`), and hints raised during the
-load still add to it. A loaded save no longer repeats hints it had already
-shown. New Game still starts with an empty mask, as in retail.
+mode, before authored/cargo events repopulate it, so retail shows each
+one-time hint again after a load. A TTD recording of a quick-start Slot02 load
+shows both writes: the slot's tail `0x006B7EFF` at `8AF81`, then zero from
+`437FF4` at `8D3E4:300`, with no later write. Do not import the tail into the
+live mask.
 
 Portable JSON saves are also explicit compatibility previews. New writes carry
 position, velocity, heading, port-owned body pitch/roll, and health; their

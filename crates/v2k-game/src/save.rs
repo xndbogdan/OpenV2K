@@ -98,11 +98,6 @@ impl From<NativePlayerSnapshot> for SavedPlayerState {
 pub struct NativeCompatibilityPreview {
     pub logical_level_id: u32,
     pub state_payload: [u8; STATE_PAYLOAD_SIZE],
-    /// The slot file's four-byte tail: `FUN_004568B0`'s mask of resource
-    /// hints already shown (`456C50` writes it, `456C70` restores it).
-    /// `None` for checkpoints built in memory, which write the live mask
-    /// when saved.
-    pub saved_hint_mask: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -575,7 +570,6 @@ fn parse_native_slot(bytes: &[u8], timestamp: &str) -> SaveSlotEntry {
         native: Some(NativeCompatibilityPreview {
             logical_level_id: retail.game_state.logical_level_id,
             state_payload: retail.state_payload,
-            saved_hint_mask: Some(retail.tail_value),
         }),
     };
     if level_id.is_none() {

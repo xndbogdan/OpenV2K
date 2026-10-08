@@ -162,7 +162,6 @@ impl NativeSaveSnapshot<'_> {
         Ok(NativeCompatibilityPreview {
             logical_level_id: self.logical_level_id,
             state_payload: payload,
-            saved_hint_mask: None,
         })
     }
 }
