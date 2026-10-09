@@ -78,7 +78,9 @@ with V2000's hardware path.
 
 The data order also survived: sine, arcsine, model dispatch tables, then the
 reciprocal table. V2000 reads the arcsine table in `FUN_00457F70`,
-`FUN_00457FA0` and `FUN_00457FB0`; these notes do not document them yet.
+`FUN_00457FA0` and `FUN_00457FB0`, the counterparts of Infestation's
+inverse-sine helper `0048F520`; their wrap and rounding policies are not yet
+recorded here.
 
 ## Formats
 
