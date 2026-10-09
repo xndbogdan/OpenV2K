@@ -25,8 +25,8 @@ pub mod window;
 pub use audio::AudioPlayer;
 pub use camera::Camera;
 pub use config::{
-    Difficulty, DisplayModes, DisplayRequest, GameConfig, RendererChoice, ScalingMode, WindowMode,
-    ORIGINAL_RESOLUTIONS,
+    ControllerLayout, Difficulty, DisplayModes, DisplayRequest, GameConfig, RendererChoice,
+    ScalingMode, WindowMode, ORIGINAL_RESOLUTIONS,
 };
 pub use music::MusicPlayer;
 pub use projection::{
@@ -52,7 +52,7 @@ pub use ui_mapping::{UiAnchor, UiMapping, UiMappingRequest, UiSubmissionPolicy};
 pub use water::WaterFrames;
 pub use window::{
     apply_app_window_icon, declare_dpi_awareness, ControllerSample, GameEvent, GameWindow,
-    PadSnapshot, PointerMode, WindowPlacement,
+    PadButton, PadSnapshot, PointerMode, WindowPlacement,
 };
 
 pub use gl_backend::{authored_face_plane_visible, GlRenderer};

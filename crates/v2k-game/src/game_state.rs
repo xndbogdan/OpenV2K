@@ -1272,6 +1272,20 @@ impl MenuShell {
         self.commit_list_window();
     }
 
+    /// A Remastered pad's resume. On a gameplay pause root, which retail's
+    /// Back cannot pop, it selects the Continue row as Enter on that row
+    /// would, sound and fly-out included. Anywhere else it does nothing.
+    pub fn select_continue(&mut self, ctx: &MenuCtx) -> Vec<ShellEvent> {
+        if self.is_transitioning() || !self.from_gameplay || !self.back_is_inert() {
+            return Vec::new();
+        }
+        let commands = self.engine.select_continue();
+        let events = self.apply_commands(&commands);
+        self.rebuild_view(ctx);
+        self.commit_list_window();
+        events
+    }
+
     /// Handle a menu input, returning side effects for the main loop.
     ///
     /// Ignored during transitions (the original's screen-engine tick
@@ -2264,6 +2278,40 @@ mod tests {
             shell.engine.current_va(),
             Some(crate::menu_data::PAUSE_SIMPLE)
         );
+    }
+
+    #[test]
+    fn select_continue_resumes_only_from_a_gameplay_pause_root() {
+        let cache = ResourceCache::new(Vec::new());
+        let config = GameConfig::default();
+        let ctx = MenuCtx {
+            cache: &cache,
+            config: &config,
+            saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
+        };
+        let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        shell.input(MenuInput::Down, &ctx);
+
+        let events = shell.select_continue(&ctx);
+        assert!(events.contains(&ShellEvent::Sound(3)));
+        assert_eq!(shell.view().selected, 0);
+        assert_eq!(
+            shell.phase,
+            MenuPhase::FlyOut {
+                remaining: FLY_LEG_SECS
+            }
+        );
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        assert_eq!(shell.take_switch_away_event(), Some(ShellEvent::ResumeGame));
+
+        // The frontend is not a gameplay pause.
+        let mut frontend =
+            MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
+        frontend.from_gameplay = false;
+        update_shell_for(&mut frontend, FLY_LEG_SECS);
+        assert!(frontend.select_continue(&ctx).is_empty());
     }
 
     #[test]

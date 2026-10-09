@@ -219,7 +219,9 @@ and unknown fallback DWORDs survive the save. Registry writes leave unrelated
 values untouched.
 
 Modern backend choice, the exact resolution, Borderless, Native/4:3/Stretched
-scaling, graphics detail, and port Difficulty are kept separately in
+scaling, graphics detail, port Difficulty and the game-controller layout
+(`controller_layout`: `pc_original`, `console_original` or `remastered`; see
+[CONTROLS](CONTROLS.md#port-controller-layouts)) are kept separately in
 `<data-dir>/port-config.json`; a retired `classic_framebuffer` key there is
 ignored. Existing legacy display values
 are retained on upgrade and this small file takes precedence afterward.
