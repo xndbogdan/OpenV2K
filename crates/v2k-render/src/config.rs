@@ -4,7 +4,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::renderer::RenderBackend;
 
+mod display;
 mod persistence;
+
+pub use display::{
+    holds_an_original, original_layout, DisplayModes, DisplayRequest, WindowMode,
+    ORIGINAL_RESOLUTIONS,
+};
 
 /// Read retail's optional REG_SZ Save Path without changing the installation.
 /// Callers explicitly choose whether to import this directory; tests and
@@ -134,9 +140,19 @@ pub struct GameConfig {
     pub settings_snapshot: Option<persistence::SettingsSnapshot>,
     // Display
     pub renderer: RendererChoice,
+    /// The selected resolution: a window's client size or a full-screen
+    /// display mode, in physical pixels. Borderless keeps it and draws with
+    /// its original layout.
     pub width: u32,
     pub height: u32,
-    pub fullscreen: bool,
+    /// Display row. Older port files stored a `fullscreen` boolean, which
+    /// loads as the exclusive Full Screen it now names.
+    #[serde(
+        default,
+        alias = "fullscreen",
+        deserialize_with = "deserialize_display"
+    )]
+    pub display: WindowMode,
     /// Modern/native, preserved 4:3, or legacy stretched presentation.
     #[serde(default)]
     pub scaling: ScalingMode,
@@ -232,8 +248,23 @@ where
     })
 }
 
-/// Authored game resolution presets; fullscreen drawable size is independent.
-pub const RESOLUTIONS: &[(u32, u32)] = &[(640, 480), (800, 600), (1024, 768)];
+fn deserialize_display<'de, D>(deserializer: D) -> Result<WindowMode, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Compat {
+        FullScreen(bool),
+        Mode(WindowMode),
+    }
+
+    Ok(match Compat::deserialize(deserializer)? {
+        Compat::FullScreen(true) => WindowMode::FullScreen,
+        Compat::FullScreen(false) => WindowMode::Window,
+        Compat::Mode(mode) => mode,
+    })
+}
 
 impl Default for GameConfig {
     fn default() -> Self {
@@ -242,7 +273,7 @@ impl Default for GameConfig {
             renderer: RendererChoice::Auto,
             width: 800,
             height: 600,
-            fullscreen: false,
+            display: WindowMode::Window,
             scaling: ScalingMode::Native,
             bilinear_filtering: true,
             sound_enabled: true,
@@ -264,11 +295,12 @@ impl Default for GameConfig {
 }
 
 impl GameConfig {
-    /// Select the retail display tier for the configured output.
-    /// High-detail modes retain the largest authored 4:3 size that fits the
-    /// configured output, through retail's 1024x768 ceiling. Low detail remains
-    /// the explicit 320x240 tier. The same authored layouts serve every
-    /// scaling mode; high-tier layout changes can be applied live.
+    /// Select the retail display tier for the configured resolution.
+    /// High detail takes the largest original size that fits it (and so its
+    /// 4:3 area), through retail's 1024x768 ceiling; Borderless's layout is
+    /// the same tier. Low detail remains the explicit 320x240 tier. The same
+    /// authored layouts serve every scaling mode; high-tier layout changes
+    /// can be applied live.
     pub const fn system_graphics_variant(&self) -> u32 {
         if matches!(self.detail, GraphicsDetail::Low) {
             0
@@ -287,17 +319,12 @@ impl GameConfig {
     }
 
     fn normalize_presentation(&mut self) {
-        // Older port preferences allowed custom/HD output sizes. Retain the
-        // largest authored tier that fits both dimensions, with a 640x480
-        // minimum window even when Low detail selects 320x240 game art.
-        let (width, height) = RESOLUTIONS
-            .iter()
-            .rev()
-            .copied()
-            .find(|&(width, height)| width <= self.width && height <= self.height)
-            .unwrap_or(RESOLUTIONS[0]);
-        self.width = width;
-        self.height = height;
+        // Any size that holds an original tier is kept; whether the monitor
+        // offers it is the startup search's question. Smaller sizes, including
+        // Low detail's 320x240 tier word, take the 640x480 minimum window.
+        if !holds_an_original((self.width, self.height)) {
+            (self.width, self.height) = ORIGINAL_RESOLUTIONS[0];
+        }
     }
 
     /// Persist to the port-owned native namespace and presentation file.
@@ -328,43 +355,59 @@ impl GameConfig {
         };
     }
 
-    /// Set resolution by preset index (clamped).
-    pub fn set_resolution_index(&mut self, idx: usize) {
-        let idx = idx.min(RESOLUTIONS.len() - 1);
-        self.width = RESOLUTIONS[idx].0;
-        self.height = RESOLUTIONS[idx].1;
+    /// The exact selected size.
+    pub const fn size(&self) -> (u32, u32) {
+        (self.width, self.height)
     }
 
-    /// Index of the current resolution in the preset list, if it matches one.
-    pub fn resolution_index(&self) -> Option<usize> {
-        RESOLUTIONS
-            .iter()
-            .position(|&(w, h)| w == self.width && h == self.height)
+    /// The Resolution row's value: the size, or in Borderless its original
+    /// layout.
+    pub fn resolution(&self) -> (u32, u32) {
+        match self.display {
+            WindowMode::Borderless => original_layout(self.size()),
+            WindowMode::Window | WindowMode::FullScreen => self.size(),
+        }
     }
 
-    /// Cycle resolution to the next preset.
-    pub fn cycle_resolution(&mut self, dir: i32) {
-        let current = RESOLUTIONS
-            .iter()
-            .position(|&(w, h)| w == self.width && h == self.height);
-        let idx = current.unwrap_or(1); // default to 800x600 position
-        let new_idx = (idx as i32 + dir).rem_euclid(RESOLUTIONS.len() as i32) as usize;
-        self.width = RESOLUTIONS[new_idx].0;
-        self.height = RESOLUTIONS[new_idx].1;
+    /// Take `mode` with the row entry `size`. Borderless keeps an exact size
+    /// whose layout is already that entry, so leaving it restores the size.
+    pub fn adopt(&mut self, mode: WindowMode, size: (u32, u32)) {
+        self.display = mode;
+        if self.resolution() != size {
+            (self.width, self.height) = size;
+        }
+    }
+
+    /// Change the Display row; the size becomes the entry it selects in
+    /// the new row. An empty row (no reported modes) keeps the size.
+    pub fn select_window_mode(&mut self, mode: WindowMode, modes: &DisplayModes) {
+        match modes.resolve(mode, self.size()) {
+            Some(size) => self.adopt(mode, size),
+            None => self.display = mode,
+        }
+    }
+
+    /// Choose the Resolution row's `index`th entry for the current display.
+    pub fn select_resolution(&mut self, index: usize, modes: &DisplayModes) {
+        if let Some(&size) = modes.resolutions(self.display).get(index) {
+            self.adopt(self.display, size);
+        }
+    }
+
+    /// What the game window should be for this configuration, as
+    /// `FUN_0042D2A0` describes the display from the settings words. The
+    /// renderer is created separately and Bilinear never reaches the display.
+    pub const fn display_request(&self) -> DisplayRequest {
+        DisplayRequest {
+            mode: self.display,
+            size: (self.width, self.height),
+        }
     }
 
     /// Get a human-readable label for the current resolution.
     pub fn resolution_label(&self) -> String {
-        format!("{}x{}", self.width, self.height)
-    }
-
-    /// Get a label for the fullscreen setting.
-    pub fn fullscreen_label(&self) -> &str {
-        if self.fullscreen {
-            "Full Screen"
-        } else {
-            "In a Window"
-        }
+        let (width, height) = self.resolution();
+        format!("{width}x{height}")
     }
 
     /// Get a label for the renderer.
@@ -388,7 +431,7 @@ mod tests {
         assert_eq!(cfg.renderer, RendererChoice::Auto);
         assert_eq!(cfg.width, 800);
         assert_eq!(cfg.height, 600);
-        assert!(!cfg.fullscreen);
+        assert_eq!(cfg.display, WindowMode::Window);
         assert_eq!(cfg.scaling, ScalingMode::Native);
         assert!(cfg.bilinear_filtering);
         assert!(cfg.sound_enabled);
@@ -408,6 +451,7 @@ mod tests {
         let cfg2: GameConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(cfg.renderer, cfg2.renderer);
         assert_eq!(cfg.width, cfg2.width);
+        assert_eq!(cfg.display, cfg2.display);
         assert_eq!(cfg.scaling, cfg2.scaling);
         assert_eq!(cfg.difficulty, cfg2.difficulty);
     }
@@ -454,11 +498,12 @@ mod tests {
 
     #[test]
     fn backward_compat_old_config() {
-        // Old config with only display fields — new fields should get defaults
+        // Old config with only display fields — new fields should get defaults.
+        // Its desktop-mode `fullscreen` loads as the exclusive Full Screen.
         let json = r#"{"renderer":"opengl","width":1024,"height":768,"fullscreen":true}"#;
         let cfg: GameConfig = serde_json::from_str(json).unwrap();
         assert_eq!(cfg.width, 1024);
-        assert!(cfg.fullscreen);
+        assert_eq!(cfg.display, WindowMode::FullScreen);
         assert_eq!(cfg.scaling, ScalingMode::Native);
         assert!(cfg.sound_enabled);
         assert!((cfg.music_volume - 1.0).abs() < 0.01);
@@ -511,47 +556,41 @@ mod tests {
     }
 
     #[test]
-    fn cycle_resolution() {
-        let mut cfg = GameConfig::default(); // 800x600
-        cfg.cycle_resolution(1); // → 1024x768
-        assert_eq!((cfg.width, cfg.height), (1024, 768));
-        cfg.cycle_resolution(-1); // → 800x600
-        assert_eq!((cfg.width, cfg.height), (800, 600));
-        cfg.cycle_resolution(-1); // → 640x480
-        assert_eq!((cfg.width, cfg.height), (640, 480));
-        cfg.cycle_resolution(-1); // → wraps to 1024x768
-        assert_eq!((cfg.width, cfg.height), (1024, 768));
-        cfg.cycle_resolution(1); // → wraps to 640x480
-        assert_eq!((cfg.width, cfg.height), (640, 480));
-    }
-
-    #[test]
-    fn resolution_presets_and_clamped_selection_stay_within_authored_modes() {
-        assert_eq!(RESOLUTIONS, &[(640, 480), (800, 600), (1024, 768)]);
-        let mut cfg = GameConfig::default();
-        for (index, &(width, height)) in RESOLUTIONS.iter().enumerate() {
-            cfg.set_resolution_index(index);
-            assert_eq!((cfg.width, cfg.height), (width, height));
-            assert_eq!(cfg.resolution_index(), Some(index));
+    fn display_field_reads_old_booleans_and_new_values() {
+        for (json, display) in [
+            (
+                r#"{"renderer":"opengl","width":800,"height":600,"fullscreen":false}"#,
+                WindowMode::Window,
+            ),
+            (
+                r#"{"renderer":"opengl","width":800,"height":600,"fullscreen":true}"#,
+                WindowMode::FullScreen,
+            ),
+            (
+                r#"{"renderer":"opengl","width":800,"height":600,"display":"borderless"}"#,
+                WindowMode::Borderless,
+            ),
+            (
+                r#"{"renderer":"opengl","width":800,"height":600}"#,
+                WindowMode::Window,
+            ),
+        ] {
+            let cfg: GameConfig = serde_json::from_str(json).unwrap();
+            assert_eq!(cfg.display, display, "{json}");
         }
-        cfg.set_resolution_index(usize::MAX);
-        assert_eq!((cfg.width, cfg.height), (1024, 768));
     }
 
     #[test]
-    fn unsupported_dimensions_normalize_to_the_largest_fitting_authored_mode() {
+    fn exact_sizes_survive_normalization_and_small_ones_take_the_minimum() {
         for (input, expected) in [
             ((0, 0), (640, 480)),
             ((320, 240), (640, 480)),
-            ((799, 599), (640, 480)),
+            ((639, 1024), (640, 480)),
             ((640, 480), (640, 480)),
-            ((800, 600), (800, 600)),
-            ((1000, 1000), (800, 600)),
-            ((768, 1024), (640, 480)),
-            ((1024, 768), (1024, 768)),
-            ((1280, 720), (800, 600)),
-            ((1920, 1080), (1024, 768)),
-            ((3840, 2160), (1024, 768)),
+            ((799, 599), (799, 599)),
+            ((768, 1024), (768, 1024)),
+            ((1280, 720), (1280, 720)),
+            ((3840, 2160), (3840, 2160)),
         ] {
             for detail in [GraphicsDetail::Low, GraphicsDetail::High] {
                 let mut cfg = GameConfig {
@@ -566,6 +605,63 @@ mod tests {
                 assert_eq!(cfg.detail, detail);
                 assert_eq!(cfg.system_graphics_variant(), original_variant);
             }
+        }
+    }
+
+    #[test]
+    fn selecting_display_and_resolution_follows_the_rows() {
+        let modes = DisplayModes::new(
+            Some((1920, 1080)),
+            [(640, 480), (1024, 768), (1280, 720), (1920, 1080)],
+        );
+        let mut cfg = GameConfig::default(); // In a Window at 800x600
+        assert_eq!(cfg.resolution(), (800, 600));
+        assert_eq!(modes.selection(cfg.display, cfg.size()), Some(1));
+
+        cfg.select_resolution(4, &modes);
+        assert_eq!(cfg.size(), (1920, 1080));
+        assert_eq!(cfg.system_graphics_variant(), 3);
+
+        // Borderless shows the layout and keeps the exact size until the
+        // row changes, so a window comes back at 1920x1080.
+        cfg.select_window_mode(WindowMode::Borderless, &modes);
+        assert_eq!(cfg.size(), (1920, 1080));
+        assert_eq!(cfg.resolution(), (1024, 768));
+        assert_eq!(cfg.resolution_label(), "1024x768");
+        cfg.select_window_mode(WindowMode::Window, &modes);
+        assert_eq!(cfg.size(), (1920, 1080));
+        cfg.select_window_mode(WindowMode::Borderless, &modes);
+        cfg.select_resolution(1, &modes);
+        assert_eq!(cfg.size(), (800, 600));
+        assert_eq!(cfg.system_graphics_variant(), 2);
+
+        // Full Screen offers reported modes only: 800x600 is not one.
+        cfg.select_window_mode(WindowMode::FullScreen, &modes);
+        assert_eq!(cfg.size(), (1024, 768));
+        assert_eq!(
+            cfg.display_request(),
+            DisplayRequest {
+                mode: WindowMode::FullScreen,
+                size: (1024, 768)
+            }
+        );
+        // An index past the row leaves the choice alone.
+        cfg.select_resolution(9, &modes);
+        assert_eq!(cfg.size(), (1024, 768));
+        // A monitor reporting nothing keeps the size and takes the mode.
+        cfg.select_window_mode(WindowMode::Window, &modes);
+        cfg.select_window_mode(WindowMode::FullScreen, &DisplayModes::default());
+        assert_eq!(cfg.display, WindowMode::FullScreen);
+        assert_eq!(cfg.size(), (1024, 768));
+    }
+
+    #[test]
+    fn original_resolutions_are_the_high_display_records() {
+        assert_eq!(ORIGINAL_RESOLUTIONS, [(640, 480), (800, 600), (1024, 768)]);
+        let mut cfg = GameConfig::default();
+        for (variant, size) in (1..).zip(ORIGINAL_RESOLUTIONS) {
+            (cfg.width, cfg.height) = size;
+            assert_eq!(cfg.system_graphics_variant(), variant);
         }
     }
 

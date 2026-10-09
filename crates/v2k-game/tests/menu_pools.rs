@@ -865,6 +865,7 @@ fn frontend_menu_ring_labels_resolve() {
         cache: &session.cache,
         config: &config,
         saves: None,
+        display_modes: &v2k_render::DisplayModes::default(),
     };
     let shell = MenuShell::new_frontend(&ctx, false);
     let view = shell.view();
@@ -896,6 +897,7 @@ fn settings_screens_resolve_values() {
         cache: &session.cache,
         config: &config,
         saves: None,
+        display_modes: &v2k_render::DisplayModes::default(),
     };
     let mut shell = MenuShell::new_frontend(&ctx, false);
 
@@ -984,6 +986,7 @@ fn sound_volume_bar_uses_original_row_width_hint() {
         cache: &session.cache,
         config: &config,
         saves: None,
+        display_modes: &v2k_render::DisplayModes::default(),
     };
     let mut shell = MenuShell::new_frontend(&ctx, false);
     shell.engine.settings.set(SettingId::SoundVolume, 15);
@@ -1010,6 +1013,7 @@ fn network_shows_disabled_notice_and_only_back_is_interactive() {
         cache: &session.cache,
         config: &config,
         saves: None,
+        display_modes: &v2k_render::DisplayModes::default(),
     };
 
     for back_input in [MenuInput::Select, MenuInput::Back] {
@@ -1070,6 +1074,7 @@ fn display_exposes_retail_rows_and_port_scaling() {
         cache: &session.cache,
         config: &config,
         saves: None,
+        display_modes: &v2k_render::DisplayModes::default(),
     };
     let mut shell = MenuShell::new_frontend(&ctx, false);
     shell.engine.settings.set(SettingId::ActiveCamera, 0);
@@ -1192,6 +1197,7 @@ fn runtime_setting_bridge_round_trips_authored_and_external_values() {
 
     let mut config = GameConfig::default();
     let mut engine = v2k_game::menu_engine::MenuEngine::main_menu();
+    let modes = v2k_render::DisplayModes::default();
     for (setting, value) in [
         (SettingId::Bilinear, 0),
         (SettingId::Joystick, 0),
@@ -1202,9 +1208,9 @@ fn runtime_setting_bridge_round_trips_authored_and_external_values() {
         (SettingId::Scaling, 2),
         (SettingId::AmbientVolume, 7),
     ] {
-        apply_setting_to_config(&mut config, setting, value);
+        apply_setting_to_config(&mut config, setting, value, &modes);
     }
-    sync_settings_from_config(&mut engine, &config);
+    sync_settings_from_config(&mut engine, &config, &modes);
 
     assert_eq!(engine.settings.get(SettingId::Bilinear), 0);
     assert_eq!(engine.settings.get(SettingId::Joystick), 0);

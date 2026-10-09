@@ -9,6 +9,53 @@ use sdl2::Sdl;
 use sdl2::VideoSubsystem;
 use sdl2::{EventPump, GameControllerSubsystem, JoystickSubsystem};
 
+use crate::config::DisplayModes;
+
+mod display;
+pub use display::{apply_display, display_modes};
+
+/// Make this process per-monitor DPI aware, so windows, display modes and
+/// the desktop are measured in physical pixels, as games are. Call it before
+/// any window exists; SDL's own hint covers processes that start SDL first.
+pub fn declare_dpi_awareness() {
+    #[cfg(windows)]
+    {
+        use std::ffi::c_void;
+
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetModuleHandleW(name: *const u16) -> *mut c_void;
+            fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
+        }
+        #[link(name = "user32")]
+        unsafe extern "system" {
+            fn SetProcessDPIAware() -> i32;
+        }
+        type SetProcessDpiAwarenessContext = unsafe extern "system" fn(isize) -> i32;
+        const PER_MONITOR_AWARE_V2: isize = -4;
+
+        let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
+        // SAFETY: plain Win32 calls; the looked-up export has the declared
+        // signature (Windows 10 1703 and later).
+        unsafe {
+            let module = GetModuleHandleW(user32.as_ptr());
+            let set = if module.is_null() {
+                std::ptr::null_mut()
+            } else {
+                GetProcAddress(module, b"SetProcessDpiAwarenessContext\0".as_ptr())
+            };
+            if !set.is_null() {
+                let set: SetProcessDpiAwarenessContext = std::mem::transmute(set);
+                if set(PER_MONITOR_AWARE_V2) != 0 {
+                    return;
+                }
+            }
+            // Older Windows: aware of the system DPI at least.
+            SetProcessDPIAware();
+        }
+    }
+}
+
 /// Input events consumed by the game loop.
 pub enum GameEvent {
     Quit,
@@ -258,6 +305,9 @@ pub struct GameWindow {
 impl GameWindow {
     /// Initialize SDL2. Call this before creating a window or renderer.
     pub fn new() -> Result<Self, String> {
+        // Physical pixels throughout (see `declare_dpi_awareness`); window
+        // sizes stay unscaled pixels too.
+        sdl2::hint::set("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
         let sdl = sdl2::init()?;
         let video = sdl.video()?;
         // Controllers are optional: the keyboard and mouse still play.
@@ -275,6 +325,11 @@ impl GameWindow {
             controllers,
             primary_window_id: Cell::new(None),
         })
+    }
+
+    /// What `display` offers, in physical pixels.
+    pub fn display_modes(&self, display: i32) -> DisplayModes {
+        display_modes(&self.video, display)
     }
 
     /// Create an SDL2 window suitable for the OpenGL backend.

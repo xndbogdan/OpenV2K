@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use super::{Difficulty, GameConfig, GraphicsDetail, RendererChoice, ScalingMode};
+use super::{Difficulty, GameConfig, GraphicsDetail, RendererChoice, ScalingMode, WindowMode};
 
 #[cfg(windows)]
 mod registry;
@@ -88,7 +88,13 @@ impl NativeSettings {
             RendererChoice::OpenGL
         };
         config.bilinear_filtering = self.get(6) != 0;
-        config.fullscreen = self.get(7) != 0;
+        // Any nonzero Full Screen word is retail's exclusive mode; Borderless
+        // is a port preference applied over it.
+        config.display = if self.get(7) == 0 {
+            WindowMode::Window
+        } else {
+            WindowMode::FullScreen
+        };
         config.self_righting = self.get(8).min(15) as u8;
         config.absolute_mode = self.get(9) != 0;
         config.sensitivity = self.get(10).min(15) as f32 / 15.0;
@@ -112,10 +118,13 @@ impl NativeSettings {
             volume(config.ambient_enabled, config.music_volume),
             config.joystick_mode.min(1) as u32,
             0, // Game type is retained, never inferred from Difficulty.
-            u32::from(config.detail == GraphicsDetail::High),
+            // Retail's Resolution word indexes the Section-5 display records,
+            // which are the tiers; the exact size is a port preference.
+            config.system_graphics_variant(),
             u32::from(config.renderer != RendererChoice::Software),
             config.bilinear_filtering as u32,
-            config.fullscreen as u32,
+            // Borderless also covers the display: retail's word is 1.
+            u32::from(config.display.covers_display()),
             config.self_righting.min(15) as u32,
             config.absolute_mode as u32,
             volume(true, config.sensitivity),
@@ -156,8 +165,12 @@ fn native_to_save(config: &GameConfig) -> NativeSettings {
 #[derive(Debug, Serialize, Deserialize)]
 struct PortPreferences {
     renderer: RendererChoice,
+    /// The exact resolution; the native word keeps only its tier.
     width: u32,
     height: u32,
+    /// Refines a nonzero native Full Screen word.
+    #[serde(default)]
+    borderless: bool,
     #[serde(default)]
     scaling: ScalingMode,
     #[serde(default)]
@@ -172,6 +185,7 @@ impl PortPreferences {
             renderer: config.renderer.clone(),
             width: config.width,
             height: config.height,
+            borderless: config.display == WindowMode::Borderless,
             scaling: config.scaling,
             detail: config.detail,
             difficulty: config.difficulty,
@@ -181,6 +195,9 @@ impl PortPreferences {
         config.renderer = self.renderer;
         config.width = self.width;
         config.height = self.height;
+        if self.borderless && config.display.covers_display() {
+            config.display = WindowMode::Borderless;
+        }
         config.scaling = self.scaling;
         config.detail = self.detail;
         config.difficulty = self.difficulty;

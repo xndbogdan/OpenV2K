@@ -1160,34 +1160,21 @@ impl Renderer for SoftwareRenderer {
         )
     }
 
-    fn set_fullscreen(&mut self, on: bool) {
-        use sdl2::video::FullscreenType;
-        let mode = if on {
-            FullscreenType::Desktop
-        } else {
-            FullscreenType::Off
-        };
-        if let Err(e) = self.canvas.window_mut().set_fullscreen(mode) {
-            eprintln!("set_fullscreen failed: {e}");
-            return;
-        }
+    fn set_display(&mut self, request: crate::config::DisplayRequest) -> Result<(), String> {
+        let result = crate::window::apply_display(self.canvas.window_mut(), request);
+        // Adopt the output either way: a restored window may still differ.
         if let Ok((w, h)) = self.canvas.output_size() {
             self.resize(w, h);
         }
+        result
+    }
+
+    fn display_index(&self) -> Option<i32> {
+        self.canvas.window().display_index().ok()
     }
 
     fn window_placement(&self) -> Option<crate::WindowPlacement> {
         crate::WindowPlacement::of(self.canvas.window())
-    }
-
-    fn set_window_size(&mut self, width: u32, height: u32) {
-        if let Err(e) = self.canvas.window_mut().set_size(width, height) {
-            eprintln!("set window size failed: {e}");
-            return;
-        }
-        if let Ok((w, h)) = self.canvas.output_size() {
-            self.resize(w, h);
-        }
     }
 
     fn set_scaling_mode(&mut self, mode: ScalingMode, reference_width: u32, reference_height: u32) {

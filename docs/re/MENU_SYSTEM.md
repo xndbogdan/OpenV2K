@@ -1023,6 +1023,25 @@ Each Display callback (`FUN_0043CBF0` Resolution, `FUN_0043CC70` Rendering,
 the settings (`FUN_0042D2A0`). If the new display fails, it is freed and the
 previous one started again; the menu value stays as chosen. On success
 `FUN_00493A40` reloads the resolution tier's resources if the tier changed.
+Alt+Enter (`FUN_0042D5D0`) stores `Full Screen = (Full Screen == 0)` and
+rebuilds the display the same way.
+
+`FUN_0042D2A0` copies the Section-5 record that the Resolution word selects
+(width, height, 16 bpp) and adds the Rendering, Bilinear and Full Screen
+words. `FUN_004A8D90` starts it:
+
+- **In a Window** calls `IDirectDraw::SetCooperativeLevel(hwnd, DDSCL_NORMAL)`.
+  It sizes the window's client area to the record at the window's current
+  corner, then moves the frame into the work area (`SPI_GETWORKAREA`): first
+  onto its right and bottom edges, then its left and top ones.
+- **Full Screen** saves the window's style and rectangle, makes the window a
+  `WS_POPUP` without caption or frame, then calls
+  `SetCooperativeLevel(hwnd, 0x51)` (`FULLSCREEN | EXCLUSIVE | ALLOWMODEX`)
+  and `SetDisplayMode(width, height, 16, 0, 0)` (vtable `+0x50`, `+0x54`).
+  Retail full screen is therefore a real display-mode change to the selected
+  record.
+
+`FUN_00494720` starts the display again once the window is no longer minimized.
 
 Startup instead runs `FUN_0044E2E0` -> `FUN_0042D340`. Beginning with the
 saved values it tries every display mode (the Section-5 count), then the
@@ -1030,6 +1049,42 @@ other window mode, then the other renderer, then the other Bilinear value,
 and keeps the first combination that starts; the settings then hold that
 combination. Error `0xA08` shows `V2000 cannot run in the desktop. Trying
 full screen...` (windowed) or `V2000 cannot run in this mode...` once.
+
+The port's Display row adds Borderless after retail's In a Window (string 6)
+and Full Screen (string 7). Its Resolution row lists sizes rather than the
+four records; [colour depth and resolution](RENDER_PIPELINE.md#colour-depth-and-resolution)
+gives the lists and the tier each size draws with. All sizes are physical
+pixels: the process is per-monitor DPI aware.
+
+- The settings keep retail's words: Full Screen is 0 for In a Window and 1 for
+  both covering values, and Resolution holds the tier. Borderless and the
+  exact size are port preferences in `port-config.json`. A saved port full
+  screen from before Borderless existed (word 1, no Borderless preference)
+  loads as Full Screen at its saved resolution.
+- In a Window takes the client size and retail's work-area placement.
+- Full Screen switches the window's display to the chosen mode through SDL,
+  which picks the desktop's colour depth and refresh rate for it. The mode
+  must be one the display reports, and a mode SDL would substitute is
+  rejected. SDL restores the desktop mode when the game leaves Full Screen,
+  exits, or loses focus; it minimizes the window then and sets the mode again
+  when the window is restored.
+- Borderless covers the window's desktop without changing its mode.
+- A change that cannot start restores the previous window, display mode and
+  tier resources, and the setting stays as chosen, as in `FUN_0044E0E0`.
+  Alt+Enter goes from In a Window to Full Screen and from either covering
+  value to In a Window.
+
+At startup the port follows `FUN_0042D340` from the saved choice. It tries
+every Resolution entry of the saved Display value, beginning at the saved
+size or the next listed one and wrapping, then does the same for the other
+Display values in row order, wrapping as the incremented word does (after
+Full Screen come Borderless, then In a Window). It keeps the first display
+that starts. The settings hold it without being written: retail writes its
+registry only from `FUN_00448CF0` (`FUN_00449140`, when a game is saved), and
+the port's next settings save writes it. The renderer has already fallen back
+by then, because only its backend can fail to start, and Bilinear never
+changes the display. The port has no counterpart to error `0xA08` or its
+messages.
 
 The port's Rendering row offers Software (retail string 9) and OpenGL. The
 retail Direct3D table is not ported, so the second value names the renderer

@@ -178,10 +178,11 @@ not the index into the port's modern output-mode list. Ambient's exact
 0..15 word persists even though its consumer is only a zero/nonzero CD
 pause gate. Self Righting is a strength word, not a boolean.
 
-The port currently projects native tier 0 to Low and tiers 1..3 to High while
-retaining the exact DWORD. Its Low/High presentation selects overlay variants
-0/1; importing a native 800×600 or 1024×768 mode does not add variant 2/3 layout
-support. Modern output dimensions and scaling remain separate port preferences.
+The port projects native tier 0 to Low and tiers 1..3 to High at that tier's
+size, retaining the exact DWORD; choosing another resolution writes its own
+tier. Full Screen is 0 for In a Window and 1 for both Full Screen and the
+port's Borderless. The exact resolution, Borderless and scaling are port
+preferences ([display changes](MENU_SYSTEM.md#display-changes-and-the-startup-display-search)).
 
 `FUN_00449270` separately queries the string values Player Name and Player
 Initials. The port has no corresponding live menu/controller owner yet;
@@ -216,8 +217,8 @@ editing one menu setting changes only that setting's word. Opaque Game type
 and unknown fallback DWORDs survive the save. Registry writes leave unrelated
 values untouched.
 
-Modern backend choice, output width/height, Native/4:3/Stretched scaling,
-graphics detail, and port Difficulty are kept separately in
+Modern backend choice, the exact resolution, Borderless, Native/4:3/Stretched
+scaling, graphics detail, and port Difficulty are kept separately in
 `<data-dir>/port-config.json`; a retired `classic_framebuffer` key there is
 ignored. Existing legacy display values
 are retained on upgrade and this small file takes precedence afterward.
