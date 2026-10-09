@@ -1,9 +1,12 @@
 # Infestation cross-reference
 
-Infestation (Frontier Developments, 2000) runs on the C++ successor of V2000's
-engine. A comparison of the two retail executables, by instruction-level
-function similarity, shared strings and identical data, shows which V2000
-subsystems survived into Infestation and which were rewritten. This note
+V2000 is the direct predecessor of Infestation (Frontier Developments, 2000).
+Infestation's source tree was named `V3000`, and the game runs on a C++ port of
+V2000's engine with much of V2000's code carried over; the
+[lineage section](#lineage-v2000-is-infestations-predecessor) gives the proof.
+A comparison of the two retail executables, by instruction-level function
+similarity, shared strings and identical data, shows which V2000 subsystems
+survived into Infestation and which were rewritten. This note
 records those conclusions so that each game can serve as a second witness for
 the other: when a V2000 routine is hard to read, its Infestation counterpart
 may already be understood, and the reverse.
@@ -13,24 +16,42 @@ the rest of the primary evidence. A counterpart is a lead to confirm in
 `V2000.EXE`, never evidence on its own: even near-identical functions can
 differ in constants, field offsets and calling conventions.
 
-## Lineage
+## Lineage: V2000 is Infestation's predecessor
+
+Both retail executables keep Frontier's build paths, which the compiler stored
+as `__FILE__` strings. They name Infestation's source tree `V3000`, beside
+`Fgdk2`, the C++ port of the `FGDK` engine V2000 was built on. V2000's own tree
+is `virus2`.
 
 | | V2000 | Infestation |
 |---|---|---|
 | Build | 1998-09-16, MSVC 5 linker | 2000-07-14, MSVC 6 linker |
 | Engine source tags | `C:\Coding\FGDK\Code\Windows\DDCalls.c`, `Graph2D.c`, `movie.c` | `C:\Coding\Fgdk2\Code\Windows\DDCalls.cpp`, `Graph2D.cpp`, `movie.cpp` |
 | Game source tag | `c:\Coding\virus2\code\common\objtable.c` | `C:\Coding\V3000\Code\Common\Objtable.cpp` |
+| Game tag location | `V2000.EXE` file offset `0xC98C8` (address `0x004CB0C8`) | `Infest.exe` file offset `0x138A88` (address `0x00538A88`) |
 
-Infestation's project was named "V3000", and the engine moved from C (FGDK)
-to C++ (Fgdk2). Both executables import the same eleven DLLs and reach
+To check, open either executable in a hex editor at that offset, or search it
+for `V3000` or `virus2`. Each tag directly follows the format
+"FATAL ERROR: File %s Line %d". The object table's failure paths pass the tag
+and their line number to it: `FUN_0043A0C0`, `FUN_0043A290`, `FUN_0043A3C0` and
+`FUN_0043A6E0` in V2000, and `00461CE0`, `00461EA0`, `00461FE0` and `004622F0`
+in Infestation. The text is only displayed if that error fires, which is why
+neither game shows it.
+
+The line numbers prove the file was carried forward rather than rewritten:
+248 stays 248, 300 becomes 301, 328 becomes 331, 362/371/376 become
+365/374/379, and 563/565 become 566/568. It is the same source file with three
+lines added, its C `cdecl` returns turned into C++ `ret 4`.
+
+The rest of the executables agree. Both import the same eleven DLLs and reach
 Direct3D only through DirectDraw. About 300 strings of eight or more
-characters occur in both. They include the DirectX error tables with identical
+characters occur in both, including the DirectX error tables with identical
 typos ("Somethic went wrong (generic)", "Other appplication has priority"), the
 object-table fatal errors, the multiplayer message files (`Host.txt`,
 `Names.txt`, `Die.txt`, `kill.txt`, `selfkill.txt`) and the settings value
-names. The object table is the same source file, edited: its `__LINE__`
-arguments moved from 362/371/376 to 365/374/379, and its C `cdecl` returns
-became C++ `ret 4`.
+names. The shared code and tables below complete the picture. The binaries
+prove the internal name and the continuity of code; they say nothing about
+how Frontier presented Infestation in public.
 
 ## Shared code
 

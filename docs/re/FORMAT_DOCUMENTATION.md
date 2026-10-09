@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the file formats used by V2000 (1998) by Frontier Developments, based on reverse engineering of `V2000.EXE` (915 KB, 32-bit PE, MSVC compiled). V2000 is built on Frontier's C engine, FGDK. Infestation (2000) runs on its C++ successor and shares the OVL container and many engine-level structures; see the [Infestation cross-reference](INFESTATION_CROSS_REFERENCE.md).
+This document describes the file formats used by V2000 (1998) by Frontier Developments, based on reverse engineering of `V2000.EXE` (915 KB, 32-bit PE, MSVC compiled). V2000 is built on Frontier's C engine, FGDK, and is the direct predecessor of Infestation (2000), whose source tree was named `V3000`. Infestation runs on a C++ port of the same engine and shares the OVL container and many engine-level structures; see the [Infestation cross-reference](INFESTATION_CROSS_REFERENCE.md).
 
 ## OVL (Overlay) File Format
 

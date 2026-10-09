@@ -21,11 +21,11 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.9%25%20code%20%2F%2047.7%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.9%25%20code%20%2F%2047.9%25%20notes-orange)](docs/progress/README.md)
 
 Of the **2,382** game functions in retail `V2000.EXE`,
 **879 (36.9%)** are referenced by the port's code and
-**1,137 (47.7%)** by its code or RE notes.
+**1,140 (47.9%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
 
@@ -69,6 +69,13 @@ more. Start with [`FORMAT_DOCUMENTATION.md`](docs/re/FORMAT_DOCUMENTATION.md),
 [`RENDER_PIPELINE.md`](docs/re/RENDER_PIPELINE.md). The notes cite retail
 functions and addresses. Some mention private analysis material, such as
 decompiler output and time-travel debugging traces, that is not published here.
+
+V2000 is the direct predecessor of Frontier's **Infestation** (2000). The
+build paths left in Infestation's executable name its source tree `V3000`, and
+it runs on a C++ port of V2000's engine, with V2000's software rasterizer,
+data formats and much of its platform code carried over.
+[`INFESTATION_CROSS_REFERENCE.md`](docs/re/INFESTATION_CROSS_REFERENCE.md)
+gives the proof and maps the shared parts.
 
 ## Building
 
