@@ -8,8 +8,7 @@ mod display;
 mod persistence;
 
 pub use display::{
-    holds_an_original, original_layout, DisplayModes, DisplayRequest, WindowMode,
-    ORIGINAL_RESOLUTIONS,
+    holds_an_original, DisplayModes, DisplayRequest, WindowMode, ORIGINAL_RESOLUTIONS,
 };
 
 /// Read retail's optional REG_SZ Save Path without changing the installation.
@@ -141,8 +140,8 @@ pub struct GameConfig {
     // Display
     pub renderer: RendererChoice,
     /// The selected resolution: a window's client size or a full-screen
-    /// display mode, in physical pixels. Borderless keeps it and draws with
-    /// its original layout.
+    /// display mode, in physical pixels. Borderless covers the desktop and
+    /// keeps this for the next window or mode.
     pub width: u32,
     pub height: u32,
     /// Display row. Older port files stored a `fullscreen` boolean, which
@@ -153,6 +152,10 @@ pub struct GameConfig {
         deserialize_with = "deserialize_display"
     )]
     pub display: WindowMode,
+    /// The desktop size of the window's display, which Borderless covers.
+    /// The display code sets it whenever it reads the monitor; never saved.
+    #[serde(skip)]
+    pub desktop: Option<(u32, u32)>,
     /// Modern/native, preserved 4:3, or legacy stretched presentation.
     #[serde(default)]
     pub scaling: ScalingMode,
@@ -274,6 +277,7 @@ impl Default for GameConfig {
             width: 800,
             height: 600,
             display: WindowMode::Window,
+            desktop: None,
             scaling: ScalingMode::Native,
             bilinear_filtering: true,
             sound_enabled: true,
@@ -297,16 +301,17 @@ impl Default for GameConfig {
 impl GameConfig {
     /// Select the retail display tier for the configured resolution.
     /// High detail takes the largest original size that fits it (and so its
-    /// 4:3 area), through retail's 1024x768 ceiling; Borderless's layout is
-    /// the same tier. Low detail remains the explicit 320x240 tier. The same
-    /// authored layouts serve every scaling mode; high-tier layout changes
-    /// can be applied live.
+    /// 4:3 area), through retail's 1024x768 ceiling; in Borderless that
+    /// resolution is the desktop. Low detail remains the explicit 320x240
+    /// tier. The same authored layouts serve every scaling mode; high-tier
+    /// layout changes can be applied live.
     pub const fn system_graphics_variant(&self) -> u32 {
+        let (width, height) = self.resolution();
         if matches!(self.detail, GraphicsDetail::Low) {
             0
-        } else if self.width >= 1024 && self.height >= 768 {
+        } else if width >= 1024 && height >= 768 {
             3
-        } else if self.width >= 800 && self.height >= 600 {
+        } else if width >= 800 && height >= 600 {
             2
         } else {
             1
@@ -360,20 +365,20 @@ impl GameConfig {
         (self.width, self.height)
     }
 
-    /// The Resolution row's value: the size, or in Borderless its original
-    /// layout.
-    pub fn resolution(&self) -> (u32, u32) {
-        match self.display {
-            WindowMode::Borderless => original_layout(self.size()),
-            WindowMode::Window | WindowMode::FullScreen => self.size(),
+    /// The Resolution row's value: the size, or in Borderless the desktop
+    /// it covers (the size until the desktop is known).
+    pub const fn resolution(&self) -> (u32, u32) {
+        match (self.display, self.desktop) {
+            (WindowMode::Borderless, Some(desktop)) => desktop,
+            _ => self.size(),
         }
     }
 
-    /// Take `mode` with the row entry `size`. Borderless keeps an exact size
-    /// whose layout is already that entry, so leaving it restores the size.
+    /// Take `mode` with the row entry `size`. Borderless's only entry is the
+    /// desktop, so it keeps the saved size, and leaving it restores that.
     pub fn adopt(&mut self, mode: WindowMode, size: (u32, u32)) {
         self.display = mode;
-        if self.resolution() != size {
+        if mode != WindowMode::Borderless {
             (self.width, self.height) = size;
         }
     }
@@ -622,16 +627,22 @@ mod tests {
         assert_eq!(cfg.size(), (1920, 1080));
         assert_eq!(cfg.system_graphics_variant(), 3);
 
-        // Borderless shows the layout and keeps the exact size until the
-        // row changes, so a window comes back at 1920x1080.
-        cfg.select_window_mode(WindowMode::Borderless, &modes);
-        assert_eq!(cfg.size(), (1920, 1080));
-        assert_eq!(cfg.resolution(), (1024, 768));
-        assert_eq!(cfg.resolution_label(), "1024x768");
-        cfg.select_window_mode(WindowMode::Window, &modes);
-        assert_eq!(cfg.size(), (1920, 1080));
-        cfg.select_window_mode(WindowMode::Borderless, &modes);
+        // Borderless shows the desktop, draws with its tier, and keeps the
+        // saved size, so a window comes back at 800x600.
         cfg.select_resolution(1, &modes);
+        assert_eq!(cfg.size(), (800, 600));
+        cfg.desktop = modes.desktop;
+        cfg.select_window_mode(WindowMode::Borderless, &modes);
+        assert_eq!(cfg.size(), (800, 600));
+        assert_eq!(cfg.resolution(), (1920, 1080));
+        assert_eq!(cfg.resolution_label(), "1920x1080");
+        assert_eq!(cfg.system_graphics_variant(), 3);
+        // Its row has one entry; nothing else can be chosen.
+        assert_eq!(modes.resolutions(cfg.display), [(1920, 1080)]);
+        cfg.select_resolution(0, &modes);
+        cfg.select_resolution(1, &modes);
+        assert_eq!(cfg.size(), (800, 600));
+        cfg.select_window_mode(WindowMode::Window, &modes);
         assert_eq!(cfg.size(), (800, 600));
         assert_eq!(cfg.system_graphics_variant(), 2);
 

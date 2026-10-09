@@ -45,15 +45,17 @@ so a 3840×2160 monitor at 125% scaling lists 3840×2160, never 3072×1728.
 |---|---|---|
 | In a Window | 640×480, 800×600, 1024×768 and every mode the window's display reports, if it fits the desktop | a window with that client size |
 | Full Screen | the modes the display reports | the display switches to that mode, as retail's `SetDisplayMode` did |
-| Borderless | 640×480, 800×600, 1024×768 | the desktop, without a mode change |
+| Borderless | the desktop's size alone, so it can't be changed | the desktop, without a mode change |
 
 Sizes that cannot hold 640×480 are not offered.
 [Display changes](MENU_SYSTEM.md#display-changes-and-the-startup-display-search)
 owns the switching, the retail evidence and the startup search.
 
 Each size draws with the largest original tier that fits it, which is also the
-largest that fits its 4:3 area; Borderless draws with the tier its Resolution
-names. An original size is its own tier and behaves as before, with the same
+largest that fits its 4:3 area; Borderless's size is the desktop, so a
+3840×2160 desktop draws the 1024×768 tier. Borderless keeps the saved
+resolution for the next window or Full Screen. An original size is its own
+tier and behaves as before, with the same
 software frames, while 1280×720 uses the 800×600 tier and 1920×1080 the
 1024×768 one. OpenGL draws at the full output size; the software renderer
 draws the tier's frame and enlarges it. Explicit Low retains its 320×240

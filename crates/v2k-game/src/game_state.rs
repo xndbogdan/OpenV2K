@@ -3827,7 +3827,10 @@ mod tests {
             Some((1920, 1080)),
             [(640, 480), (1024, 768), (1280, 720), (1920, 1080)],
         );
-        let mut config = GameConfig::default();
+        let mut config = GameConfig {
+            desktop: modes.desktop,
+            ..GameConfig::default()
+        };
         let mut engine = MenuEngine::main_menu();
         sync_settings_from_config(&mut engine, &config, &modes);
         // In a Window: 640x480, 800x600, 1024x768, 1280x720, 1920x1080.
@@ -3843,12 +3846,17 @@ mod tests {
         assert_eq!(config.display, v2k_render::WindowMode::FullScreen);
         assert_eq!(engine.resolution_count, 4);
         assert_eq!(engine.settings.get(SettingId::Resolution), 2);
-        // Borderless lists the originals and shows the layout of 1280x720.
+        // Borderless lists only the desktop, draws with its tier and keeps
+        // the saved size for the next mode.
         apply_setting_to_config(&mut config, SettingId::FullScreen, 2, &modes);
         sync_display_settings(&mut engine, &config, &modes);
         assert_eq!(engine.settings.get(SettingId::FullScreen), 2);
-        assert_eq!(engine.resolution_count, 3);
-        assert_eq!(engine.settings.get(SettingId::Resolution), 1);
+        assert_eq!(engine.resolution_count, 1);
+        assert_eq!(engine.settings.get(SettingId::Resolution), 0);
+        assert_eq!(config.resolution_label(), "1920x1080");
+        assert_eq!(config.system_graphics_variant(), 3);
+        assert_eq!(config.size(), (1280, 720));
+        apply_setting_to_config(&mut config, SettingId::FullScreen, 0, &modes);
         assert_eq!(config.size(), (1280, 720));
     }
 }

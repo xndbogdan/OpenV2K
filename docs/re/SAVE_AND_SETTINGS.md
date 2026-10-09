@@ -181,8 +181,9 @@ pause gate. Self Righting is a strength word, not a boolean.
 The port projects native tier 0 to Low and tiers 1..3 to High at that tier's
 size, retaining the exact DWORD; choosing another resolution writes its own
 tier. Full Screen is 0 for In a Window and 1 for both Full Screen and the
-port's Borderless. The exact resolution, Borderless and scaling are port
-preferences ([display changes](MENU_SYSTEM.md#display-changes-and-the-startup-display-search)).
+port's Borderless, whose Resolution word is the desktop's tier. The exact
+resolution, Borderless and scaling are port preferences
+([display changes](MENU_SYSTEM.md#display-changes-and-the-startup-display-search)).
 
 `FUN_00449270` separately queries the string values Player Name and Player
 Initials. The port has no corresponding live menu/controller owner yet;
