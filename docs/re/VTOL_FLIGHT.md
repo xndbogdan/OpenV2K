@@ -247,7 +247,9 @@ normal with wrapping 32-bit accumulation, and enters feedback only when the
 inward speed is strictly greater than `0x200`. The port has no force-feedback
 backend, but retains the exact staged strength
 `min(0xFF, vibration * (inward - 0x200) / 15)` as an unsupported-presentation
-result rather than suppressing later gameplay.
+result rather than suppressing later gameplay. How the PlayStation release
+turns these strengths into DualShock vibration is in
+[CONTROLS](CONTROLS.md#console-vibration).
 
 The same callback samples the nearest wrapped X-major terrain cell with
 `(u16(position) + 0x80) >> 8`, maps `terrain_type & 7` through the active
