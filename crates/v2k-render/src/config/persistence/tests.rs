@@ -310,6 +310,45 @@ fn window_modes_keep_retail_full_screen_words_and_a_port_borderless_flag() {
 }
 
 #[test]
+fn controller_layout_is_a_port_preference_beside_the_native_words() {
+    let baseline = native_to_save(&GameConfig::default());
+    for layout in ControllerLayout::ALL {
+        let dir = Directory::new();
+        let mut config = GameConfig {
+            controller_layout: layout,
+            ..GameConfig::default()
+        };
+        let mut written = None;
+        save_with_registry(&mut config, &dir.0, |native| {
+            written = Some(native.clone());
+            Ok(())
+        })
+        .unwrap();
+        // No invented retail word: the layout never reaches the native table.
+        assert_eq!(written.clone().unwrap(), baseline, "{layout:?}");
+        let port: PortPreferences = read_json(&dir.0.join("port-config.json")).unwrap();
+        assert_eq!(port.controller_layout, layout);
+        let restored = load_from_sources(&dir.0, written, None);
+        assert_eq!(restored.controller_layout, layout);
+    }
+
+    // Port files written before the choice existed load the PC original.
+    let dir = Directory::new();
+    fs::write(
+        dir.0.join("port-config.json"),
+        br#"{"renderer":"opengl","width":800,"height":600}"#,
+    )
+    .unwrap();
+    let config = load_from_sources(&dir.0, None, None);
+    assert_eq!(config.controller_layout, ControllerLayout::PcOriginal);
+    let named: PortPreferences = serde_json::from_slice(
+        br#"{"renderer":"auto","width":800,"height":600,"controller_layout":"console_original"}"#,
+    )
+    .unwrap();
+    assert_eq!(named.controller_layout, ControllerLayout::ConsoleOriginal);
+}
+
+#[test]
 fn low_detail_uses_minimum_window_while_preserving_native_low_tier_on_save() {
     let dir = Directory::new();
     let mut retail = NativeSettings::default();

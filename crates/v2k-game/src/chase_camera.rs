@@ -65,6 +65,19 @@ pub struct ChaseCameraTarget {
     /// Exact body vectors retained in their authored/runtime signed-Q31 form.
     pub body_basis: ChaseBodyBasis,
     pub active_camera: u8,
+    pub parameters: ChaseCameraParameters,
+}
+
+/// `FUN_0040ED10` parameters 3 and 4. In play the console's in-play binding
+/// set feeds them from the analog pad's right stick, through FGDK channels
+/// that hold each write unfiltered (`0x004F71C0`, `0x004F71C8`). The PC
+/// never has that device, so on the PC both stay zero.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ChaseCameraParameters {
+    /// Parameter 3: the eye moves sideways by `distance * swing >> 11`.
+    pub swing: i32,
+    /// Parameter 4: added to the chase distance.
+    pub distance: i32,
 }
 
 /// Authored world data consulted only by active gameplay's terrain-aware eye
@@ -132,11 +145,13 @@ impl ChaseCameraState {
         terrain: Option<ChaseTerrainContext<'_>>,
         elapsed_micros: u32,
     ) -> ChaseCameraPose {
-        let distance_raw = chase_distance_raw(target.body_basis, target.active_camera);
+        let distance_raw = chase_distance_raw(target.body_basis, target.active_camera)
+            .wrapping_add(target.parameters.distance);
         let targets = camera_targets(
             target.position_raw,
             target.body_basis.forward,
             distance_raw,
+            target.parameters.swing,
             terrain,
         );
 
@@ -175,12 +190,16 @@ fn camera_targets(
     position: [i16; 3],
     body_forward: [i32; 3],
     distance_raw: i32,
+    swing: i32,
     terrain: Option<ChaseTerrainContext<'_>>,
 ) -> CameraTargets {
-    let eye = terrain.map_or_else(
+    let mut eye = terrain.map_or_else(
         || no_ray_eye_target(position, distance_raw),
         |context| terrain_eye_target(position, distance_raw, context),
     );
+    // The clearance probe stays on the entity's X; only the finished eye
+    // moves sideways, by a 32-bit product shifted right 11.
+    eye[0] = eye[0].wrapping_sub((distance_raw.wrapping_mul(swing) >> 11) as i16);
     targets_with_eye(position, body_forward, eye)
 }
 
@@ -710,7 +729,38 @@ mod tests {
             position_raw: raw_position(position),
             body_basis: ChaseBodyBasis::RETAIL_IDENTITY,
             active_camera,
+            parameters: ChaseCameraParameters::default(),
         }
+    }
+
+    #[test]
+    fn parameters_swing_the_eye_and_change_the_distance() {
+        // A full right stick on the console pad: (0xFF - 0x80) * -8 = -1016
+        // swings the eye towards +X by about half the distance; a full push
+        // forward, (0 - 0x80) * 8 = -1024, halves the base distance.
+        let mut camera = ChaseCameraState::default();
+        let pose = camera.update(
+            ChaseCameraTarget {
+                parameters: ChaseCameraParameters {
+                    swing: -1016,
+                    distance: -1024,
+                },
+                ..identity_target([77.0, 0.0, 58.0], 0)
+            },
+            None,
+            20_000,
+        );
+        let distance = 0x800 - 1024;
+        assert_eq!(pose.distance, distance as f32 / 256.0);
+        let swing = (distance * -1016) >> 11;
+        assert_eq!(swing, -508);
+        assert_eq!(pose.eye[0], 77.0 + 508.0 / 256.0);
+        assert_eq!(pose.eye[2], 58.0 - distance as f32 / 256.0);
+
+        // Released, the targets return to the plain chase position.
+        let mut plain = ChaseCameraState::default();
+        let rest = plain.update(identity_target([77.0, 0.0, 58.0], 0), None, 20_000);
+        assert_eq!(rest.eye, [77.0, 0.0, 58.0 - 8.0]);
     }
 
     #[test]
@@ -1117,6 +1167,7 @@ mod tests {
                 forward: [0x7FFE_0000, 0, 0],
             },
             active_camera: 0,
+            parameters: ChaseCameraParameters::default(),
         };
         let pose = state.update(target, None, 20_000);
         assert_eq!(pose.eye, [10.0, 4.0, 12.0]);

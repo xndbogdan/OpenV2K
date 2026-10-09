@@ -347,7 +347,9 @@ shows it is not traced.
 The port opens every device SDL announces, at start-up and when one is
 plugged in, as an SDL game controller when SDL has a mapping and as a plain
 joystick otherwise, and drops it when it is removed. Each frame it reads the
-first device still attached.
+device used last, or the first attached one until any is used. A button, a
+trigger or a stick pushed past half deflection makes a device the active one,
+and the buttons still held on the previous pad are released.
 
 ### Console vibration
 
@@ -374,6 +376,59 @@ runs it every frame, and each `0x20` below that drops one frame in seven. The
 poll then multiplies the level by 15/16 (`(level × 15) >> 4`), so a
 full-strength hit buzzes for 30 polls, 240 ms, thinning out as it fades. The
 large-motor byte is never written.
+
+## Port controller layouts
+
+The launcher's Options (Controls, Controller) choose how a standard game
+controller plays. `port-config.json` keeps the choice as `controller_layout`,
+and `--controller-layout` overrides it for one run. SDL names a pad's buttons
+by position (the port sets `SDL_GAMECONTROLLER_USE_BUTTON_LABELS` to 0, so
+Nintendo pads, whose prints swap A/B and X/Y, follow position too), so one
+layout lands the same on PlayStation, Xbox, Switch and Steam Deck controls:
+Cross is the bottom face button (Xbox A), Circle the
+right one (B), Square the left one (X), Triangle the top one (Y), L1/R1 the
+bumpers, L2/R2 the triggers, Start the Menu button and Select the View
+button. A trigger counts as pressed past XInput's 30-of-255 threshold. Plain
+joysticks, which SDL has no game-controller mapping for, always take the PC
+path.
+
+- **PC original**, the default, is retail PC. A pad is a WinMM joystick that
+  only the craft reader consults: button 1 (A) fires, button 2 (B) thrusts
+  and the left stick steers. The menus, the intro and the other screens ignore
+  it, since no screen set has a joystick table.
+- **Console original** evaluates the console's own sets on every screen the
+  port has (`crates/v2k-game/src/pad_layout.rs`): the menus, the intro, the
+  level opening, play (the in-play set and craft configuration 0, Relative
+  1, the console's default), the full-screen map and the progress map (the
+  console briefing set). The left stick reaches the craft reader at the
+  console pad's 8-bit resolution, and the right stick drives `FUN_0040ED10`
+  parameters 3 and 4. The steering mode stays the Joystick option's, whose
+  default is the Relative that Relative 1 selects.
+- **Remastered** is the port's own layout, menus included:
+
+| Screen | Remastered (Xbox names) |
+|---|---|
+| Menus | D-pad or left stick move; A selects (Menu too on the frontend); B goes back; on a pause menu's root B or Menu resume, through its Continue row |
+| Intro movie | any button skips |
+| Level opening | A, B, X, Y or Menu skip |
+| Flight | left stick or D-pad steer and pitch; LT throttle; RT fire; B reverse thrust; A Hover/VTOL; X beam in; Y beam out; LB/RB previous/next weapon; LB+RB special weapon; R3 next target; right stick camera; Menu pause; View map |
+| Full-screen map | View, B or A close it |
+| Progress map | A or Menu continue; Y saves |
+
+Both index fingers hold the two continuous actions, as the PC mouse's buttons
+do (left thrusts, right fires), and the special weapon keeps the deliberate
+chord both retail versions use.
+
+Records follow FGDK's rule: a record is active while all of its "down"
+inputs are held and none of its "up" inputs are. A held action lasts while
+any of its records is active; any other action acts when a record becomes
+active. When the screen changes, a record already satisfied by held buttons
+starts active without acting, so a button held through a screen change does
+not act on the new screen, while held flight controls carry over. Actions
+the port has no owner for yet act on nothing: the console's continue after
+the opening, abort, the special weapon, next target, the debug spawn and the
+cheat digits. During the Intro2 opening the camera keeps zero parameters;
+whether the console pad moves it there is not traced.
 
 ## Mode toggle + fuel
 
@@ -476,8 +531,8 @@ impact/destruction remain follow-ups.
 Against [every binding set](#every-binding-set), the port does not yet bind
 `/` or A to fire, the A+`/` special weapon, E (next target), T (Targetter),
 the cheat digits, N on the briefing, or the debug keys (the port uses F11 and
-F12 for its own camera and debug window). A pad works only in flight,
-through the PC joystick path; the intro skips on any key or click but not on
-a pad button. Nothing of the console's pad handling is ported yet: its screen
-bindings, the Controller Config layouts, the right-stick camera, the pause on
-removal and vibration.
+F12 for its own camera and debug window). With the PC original layout a pad
+works only in flight, through the PC joystick path. The Console original and
+[Remastered](#port-controller-layouts) layouts bind every screen the port
+has, the right-stick camera included. Not ported: the console's other five
+Controller Config layouts, the pause on removal and vibration.

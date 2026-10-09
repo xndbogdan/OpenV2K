@@ -138,6 +138,9 @@ mode when the game starts; Borderless covers the desktop, so Resolution shows
 the desktop's size and is disabled.
 Renderer offers Automatic, OpenGL and Software; without a command-line choice,
 OpenGL that cannot start falls back to Software.
+Controls offers the game-controller layout: PC original, Console original or
+Remastered ([layouts](docs/re/CONTROLS.md#port-controller-layouts)), saved as a
+port preference. `--controller-layout` chooses one for a single run.
 The game is per-monitor DPI aware. The launcher's own windows keep their
 system-DPI layout.
 The launcher remembers its data directory, last image and automatic-launch

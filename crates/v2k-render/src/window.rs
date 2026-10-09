@@ -12,7 +12,10 @@ use sdl2::{EventPump, GameControllerSubsystem, JoystickSubsystem};
 use crate::config::DisplayModes;
 
 mod display;
+mod pad;
 pub use display::{apply_display, display_modes};
+pub use pad::PadButton;
+use pad::{pad_button, Routing};
 
 /// Make this process per-monitor DPI aware, so windows, display modes and
 /// the desktop are measured in physical pixels, as games are. Call it before
@@ -74,6 +77,12 @@ pub enum GameEvent {
     MouseWheel {
         y: i32,
     },
+    /// A positional control of the active game controller changed. Every
+    /// press is matched by a release, also when the pad stops being active.
+    PadButton {
+        button: PadButton,
+        pressed: bool,
+    },
     FocusLost,
     FocusGained,
     AuxiliaryWindowClick {
@@ -134,7 +143,7 @@ pub struct PadSnapshot {
     pub buttons: [bool; 10],
 }
 
-/// One frame's state of the first attached controller.
+/// One frame's state of the active controller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ControllerSample {
     /// A device SDL recognises as a standard game controller.
@@ -194,11 +203,22 @@ impl OpenController {
 
 /// Attached pads and joysticks, opened as SDL reports them. This stands in for
 /// V2000's WinMM probe (`FUN_004AC110`, up to 16 joysticks) and its 20 ms poll
-/// (`FUN_004AC2A0`); the game samples the first device once per frame.
+/// (`FUN_004AC2A0`); the game samples one device once per frame. That is the
+/// device used last, or the first attached one until any is used.
 struct Controllers {
     pads: GameControllerSubsystem,
     joysticks: JoystickSubsystem,
     open: Vec<OpenController>,
+    routing: Routing,
+}
+
+/// Each routed change as the game's pad event.
+fn emit(changes: Vec<pad::Change>, events: &mut Vec<GameEvent>) {
+    events.extend(
+        changes
+            .into_iter()
+            .map(|(button, pressed)| GameEvent::PadButton { button, pressed }),
+    );
 }
 
 impl Controllers {
@@ -207,7 +227,64 @@ impl Controllers {
             pads: sdl.game_controller()?,
             joysticks: sdl.joystick()?,
             open: Vec::new(),
+            routing: Routing::default(),
         })
+    }
+
+    fn is_joystick(&self, instance_id: u32) -> bool {
+        self.open.iter().any(|open| {
+            matches!(open, OpenController::Joystick(_)) && open.instance_id() == instance_id
+        })
+    }
+
+    fn release_all(&mut self, events: &mut Vec<GameEvent>) {
+        let mut changes = Vec::new();
+        self.routing.release_all(&mut changes);
+        emit(changes, events);
+    }
+
+    fn pad_button_changed(
+        &mut self,
+        instance_id: u32,
+        button: Button,
+        pressed: bool,
+        events: &mut Vec<GameEvent>,
+    ) {
+        if let Some(button) = pad_button(button) {
+            let mut changes = Vec::new();
+            self.routing
+                .button(instance_id, button, pressed, &mut changes);
+            emit(changes, events);
+        }
+    }
+
+    fn pad_axis_moved(
+        &mut self,
+        instance_id: u32,
+        axis: Axis,
+        value: i16,
+        events: &mut Vec<GameEvent>,
+    ) {
+        let mut changes = Vec::new();
+        self.routing.axis(instance_id, axis, value, &mut changes);
+        emit(changes, events);
+    }
+
+    /// A plain joystick has no pad buttons; using it only makes it active.
+    fn joystick_used(&mut self, instance_id: u32, events: &mut Vec<GameEvent>) {
+        if self.is_joystick(instance_id) {
+            let mut changes = Vec::new();
+            self.routing.joystick_used(instance_id, &mut changes);
+            emit(changes, events);
+        }
+    }
+
+    /// The active device, else the first attached one.
+    fn sampled(&self) -> Option<&OpenController> {
+        self.routing
+            .active()
+            .and_then(|active| self.open.iter().find(|open| open.instance_id() == active))
+            .or_else(|| self.open.first())
     }
 
     /// Open device `index` once; SDL announces every device present at
@@ -238,7 +315,10 @@ impl Controllers {
         }
     }
 
-    fn detach(&mut self, instance_id: u32) {
+    fn detach(&mut self, instance_id: u32, events: &mut Vec<GameEvent>) {
+        let mut changes = Vec::new();
+        self.routing.removed(instance_id, &mut changes);
+        emit(changes, events);
         self.open.retain(|open| open.instance_id() != instance_id);
     }
 }
@@ -308,6 +388,10 @@ impl GameWindow {
         // Physical pixels throughout (see `declare_dpi_awareness`); window
         // sizes stay unscaled pixels too.
         sdl2::hint::set("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
+        // Name every pad's face buttons by position. Nintendo pads print A/B
+        // and X/Y the other way round, and SDL would otherwise follow the
+        // print, moving their bottom button to "B".
+        sdl2::hint::set("SDL_GAMECONTROLLER_USE_BUTTON_LABELS", "0");
         let sdl = sdl2::init()?;
         let video = sdl.video()?;
         // Controllers are optional: the keyboard and mouse still play.
@@ -430,6 +514,11 @@ impl GameWindow {
                     // Free the pointer at once; the next policy keeps it free
                     // until focus returns.
                     self.release_mouse_capture();
+                    // SDL stops sending pad events in the background, so a
+                    // button released there would otherwise stay held.
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.release_all(&mut events);
+                    }
                     events.push(GameEvent::FocusLost);
                 }
                 Event::Window {
@@ -502,7 +591,36 @@ impl GameWindow {
                 }
                 Event::JoyDeviceRemoved { which, .. } => {
                     if let Some(controllers) = self.controllers.as_mut() {
-                        controllers.detach(which);
+                        controllers.detach(which, &mut events);
+                    }
+                }
+                Event::ControllerButtonDown { which, button, .. } => {
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.pad_button_changed(which, button, true, &mut events);
+                    }
+                }
+                Event::ControllerButtonUp { which, button, .. } => {
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.pad_button_changed(which, button, false, &mut events);
+                    }
+                }
+                Event::ControllerAxisMotion {
+                    which, axis, value, ..
+                } => {
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.pad_axis_moved(which, axis, value, &mut events);
+                    }
+                }
+                Event::JoyButtonDown { which, .. } => {
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.joystick_used(which, &mut events);
+                    }
+                }
+                Event::JoyAxisMotion { which, value, .. }
+                    if value.unsigned_abs() >= pad::ACTIVITY as u16 =>
+                {
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.joystick_used(which, &mut events);
                     }
                 }
                 _ => {}
@@ -540,10 +658,13 @@ impl GameWindow {
         self.pointer_mode = None;
     }
 
-    /// State of the first attached controller after the latest poll.
+    /// State of the active controller after the latest poll: the one used
+    /// last, or the first attached one until any is used.
     pub fn controller_sample(&self) -> Option<ControllerSample> {
-        let controllers = self.controllers.as_ref()?;
-        controllers.open.first().map(OpenController::sample)
+        self.controllers
+            .as_ref()?
+            .sampled()
+            .map(OpenController::sample)
     }
 }
 

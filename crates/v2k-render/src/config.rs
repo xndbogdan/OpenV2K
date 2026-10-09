@@ -67,6 +67,48 @@ impl ScalingMode {
     }
 }
 
+/// Which bindings a standard game controller plays with. A port policy, kept
+/// with the other port preferences rather than in the retail settings table.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ControllerLayout {
+    /// Retail PC: a pad is a WinMM joystick that only flies the craft.
+    #[default]
+    PcOriginal,
+    /// The PlayStation release's own bindings on every screen.
+    ConsoleOriginal,
+    /// The port's modern layout, menus included.
+    Remastered,
+}
+
+impl ControllerLayout {
+    pub const ALL: [Self; 3] = [Self::PcOriginal, Self::ConsoleOriginal, Self::Remastered];
+
+    pub const fn index(self) -> u32 {
+        match self {
+            Self::PcOriginal => 0,
+            Self::ConsoleOriginal => 1,
+            Self::Remastered => 2,
+        }
+    }
+
+    pub const fn from_index(index: u32) -> Self {
+        match index {
+            1 => Self::ConsoleOriginal,
+            2 => Self::Remastered,
+            _ => Self::PcOriginal,
+        }
+    }
+
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::PcOriginal => "PC original",
+            Self::ConsoleOriginal => "Console original",
+            Self::Remastered => "Remastered",
+        }
+    }
+}
+
 /// Difficulty level.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -201,6 +243,9 @@ pub struct GameConfig {
     pub hud: bool,
     #[serde(default)]
     pub language: u8,
+    /// How a standard game controller is bound; a port preference.
+    #[serde(default)]
+    pub controller_layout: ControllerLayout,
 
     // Game
     #[serde(default)]
@@ -292,6 +337,7 @@ impl Default for GameConfig {
             targetter: true,
             hud: true,
             language: 0,
+            controller_layout: ControllerLayout::PcOriginal,
             difficulty: Difficulty::Medium,
             detail: GraphicsDetail::High,
         }

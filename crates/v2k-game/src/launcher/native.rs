@@ -20,7 +20,8 @@ use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
 use v2k_render::config::{
-    DisplayModes, GameConfig, GraphicsDetail, RendererChoice, ScalingMode, WindowMode,
+    ControllerLayout, DisplayModes, GameConfig, GraphicsDetail, RendererChoice, ScalingMode,
+    WindowMode,
 };
 use v2k_render::music::SoundtrackAvailability;
 
@@ -70,6 +71,7 @@ const ID_MUSIC: usize = 207;
 const ID_EFFECTS: usize = 208;
 const ID_EFFECTS_VOLUME: usize = 209;
 const ID_SKIP: usize = 210;
+const ID_CONTROLLER: usize = 211;
 const WORKER_TIMER: usize = 1;
 const HEADER_TIMER: usize = 2;
 
@@ -101,6 +103,7 @@ struct OptionControls {
     music_availability: Handle,
     effects: Handle,
     effects_volume: Handle,
+    controller: Handle,
     skip: Handle,
     save: Handle,
     install: Handle,
@@ -1248,7 +1251,7 @@ impl WindowState {
         let mut config = GameConfig::load(&self.root);
         self.display_modes = primary_display_modes();
         config.desktop = self.display_modes.desktop;
-        self.group(window, " Display ", 12, 12, 536, 250);
+        self.group(window, " Display ", 12, 12, 536, 200);
         self.label(window, "&Display:", 24, 38, 106, 20);
         let display = self.combo(
             window,
@@ -1259,10 +1262,10 @@ impl WindowState {
             34,
             194,
         );
-        self.label(window, "&Resolution:", 24, 74, 106, 20);
-        let resolution = self.combo(window, &[], 0, ID_RESOLUTION, 136, 70, 194);
+        self.label(window, "&Resolution:", 24, 72, 106, 20);
+        let resolution = self.combo(window, &[], 0, ID_RESOLUTION, 136, 68, 194);
         fill_resolutions(resolution, &self.display_modes, &config);
-        self.label(window, "Renderer:", 24, 110, 106, 20);
+        self.label(window, "Renderer:", 24, 106, 106, 20);
         let renderer_index = match config.renderer {
             RendererChoice::Auto => 0,
             RendererChoice::OpenGL => 1,
@@ -1275,44 +1278,44 @@ impl WindowState {
             renderer_index,
             ID_RENDERER,
             136,
-            106,
+            102,
             194,
         );
-        self.label(window, "Image scaling:", 24, 146, 106, 20);
+        self.label(window, "Image scaling:", 24, 140, 106, 20);
         let scaling = self.combo(
             window,
             &strings(&["Native", "Preserve 4:3", "Stretched 4:3"]),
             config.scaling.index() as usize,
             ID_SCALING,
             136,
-            142,
+            136,
             194,
         );
-        self.label(window, "Art detail:", 24, 182, 106, 20);
+        self.label(window, "Art detail:", 24, 174, 106, 20);
         let detail = self.combo(
             window,
             &strings(&["High (normal)", "Low (320 x 240)"]),
             usize::from(config.detail == GraphicsDetail::Low),
             ID_DETAIL,
             136,
-            178,
+            170,
             194,
         );
         self.label(
             window,
             "Display settings apply when Play starts the game.",
-            24,
-            220,
-            504,
-            24,
+            346,
+            38,
+            186,
+            52,
         );
-        self.group(window, " Sound ", 12, 274, 536, 94);
+        self.group(window, " Sound ", 12, 220, 536, 90);
         let music = self.checkbox(
             window,
             "&Music enabled",
             ID_MUSIC,
             24,
-            296,
+            242,
             188,
             config.ambient_enabled && config.music_volume > 0.0,
         );
@@ -1321,21 +1324,40 @@ impl WindowState {
             "Sound &effects",
             ID_EFFECTS,
             24,
-            330,
+            274,
             188,
             config.sound_enabled,
         );
-        self.label(window, "Effects volume:", 234, 335, 112, 20);
+        self.label(window, "Effects volume:", 234, 279, 112, 20);
         let effects_volume = self.combo(
             window,
             &(0..=15).map(|n| n.to_string()).collect::<Vec<_>>(),
             (config.sfx_volume.clamp(0.0, 1.0) * 15.0).round() as usize,
             ID_EFFECTS_VOLUME,
             356,
-            330,
+            274,
             168,
         );
-        let music_availability = self.label(window, "", 234, 298, 294, 28);
+        let music_availability = self.label(window, "", 234, 244, 294, 28);
+        self.group(window, " Controls ", 12, 316, 536, 54);
+        self.label(window, "&Controller:", 24, 340, 106, 20);
+        let controller = self.combo(
+            window,
+            &ControllerLayout::ALL.map(|layout| layout.label().to_string()),
+            config.controller_layout.index() as usize,
+            ID_CONTROLLER,
+            136,
+            336,
+            194,
+        );
+        self.label(
+            window,
+            "For game controllers; other joysticks keep the PC original.",
+            346,
+            332,
+            186,
+            34,
+        );
         let skip = self.checkbox(
             window,
             "Skip the launcher when this installation is ready",
@@ -1378,6 +1400,7 @@ impl WindowState {
             music_availability,
             effects,
             effects_volume,
+            controller,
             skip,
             save,
             install,
@@ -1463,6 +1486,8 @@ impl WindowState {
         };
         config.sound_enabled = checked(controls.effects);
         config.sfx_volume = combo_selection(controls.effects_volume).min(15) as f32 / 15.0;
+        config.controller_layout =
+            ControllerLayout::from_index(combo_selection(controls.controller) as u32);
         let skip = checked(controls.skip);
         if let Err(error) = config.try_save(&self.root) {
             notice(
