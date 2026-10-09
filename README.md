@@ -21,11 +21,11 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-36.9%25%20code%20%2F%2046.4%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-37.4%25%20code%20%2F%2048.2%25%20notes-orange)](docs/progress/README.md)
 
 Of the **2,382** game functions in retail `V2000.EXE`,
-**879 (36.9%)** are referenced by the port's code and
-**1,106 (46.4%)** by its code or RE notes.
+**890 (37.4%)** are referenced by the port's code and
+**1,149 (48.2%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
 
@@ -69,6 +69,13 @@ more. Start with [`FORMAT_DOCUMENTATION.md`](docs/re/FORMAT_DOCUMENTATION.md),
 [`RENDER_PIPELINE.md`](docs/re/RENDER_PIPELINE.md). The notes cite retail
 functions and addresses. Some mention private analysis material, such as
 decompiler output and time-travel debugging traces, that is not published here.
+
+V2000 is the direct predecessor of Frontier's **Infestation** (2000). The
+build paths left in Infestation's executable name its source tree `V3000`, and
+it runs on a C++ port of V2000's engine, with V2000's software rasterizer,
+data formats and much of its platform code carried over.
+[`INFESTATION_CROSS_REFERENCE.md`](docs/re/INFESTATION_CROSS_REFERENCE.md)
+gives the proof and maps the shared parts.
 
 ## Building
 
@@ -165,11 +172,15 @@ OpenV2K V-only glow icon, rendered from the same authored artwork as the
 animated launcher header. The ICO supplies 16–256-pixel images;
 SDL uses a matching transparent PNG.
 
-Display Resolution offers the original **640x480**, **800x600** and **1024x768**
-presets. Fullscreen is borderless at the desktop resolution; the preset selects
-the window size and authored layout, while Image scaling controls presentation.
-Native and non-Classic 4:3/Stretched render at the full output resolution.
-Classic renders the authored frame before enlarging it to the output.
+Display offers **In a Window**, **Full Screen** (a real mode change, undone
+on exit or alt-tab) and **Borderless** (the desktop, without a mode change).
+Resolution offers the original **640x480**, **800x600** and **1024x768** plus
+every mode the display reports, in physical pixels; in Borderless it is the
+desktop's size and can't be changed. Each size draws with the largest
+original layout inside it, while Image scaling controls presentation. OpenGL
+renders at the full output resolution; the software renderer draws the
+layout's frame before enlarging it to the output
+([colour depth and resolution](docs/re/RENDER_PIPELINE.md#colour-depth-and-resolution)).
 High Native gameplay preserves the original HUD sizing through 1024x768, then
 gradually reaches the 800x600 HUD proportion (1.8x at 1080p, 3.6x at 4K).
 The weapon/cargo group and radar follow the screen's bottom corners; the

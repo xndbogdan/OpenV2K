@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes the file formats used by V2000 (1998) by Frontier Developments, based on reverse engineering of `V2000.EXE` (915 KB, 32-bit PE, MSVC compiled). V2000 is a deathmatch shooter built on an early version of the FGDK engine, which was later used for Infestation (2000). Both games share the OVL overlay file format and many engine-level structures (shade palettes, audio format, handler dispatch pattern).
+This document describes the file formats used by V2000 (1998) by Frontier Developments, based on reverse engineering of `V2000.EXE` (915 KB, 32-bit PE, MSVC compiled). V2000 is built on Frontier's C engine, FGDK, and is the direct predecessor of Infestation (2000), whose source tree was named `V3000`. Infestation runs on a C++ port of the same engine and shares the OVL container and many engine-level structures; see the [Infestation cross-reference](INFESTATION_CROSS_REFERENCE.md).
 
 ## OVL (Overlay) File Format
 
@@ -1135,7 +1135,7 @@ Master volume: DAT_004fbe6c (0x00000–0x10000)
 
 #### Animation System
 
-V2000 uses entity-level animation only — **no mesh-level animation** (no animation frame markers in command streams, unlike Infestation). Animation is driven by:
+Mesh animation is program-driven: model streams select and move geometry with the register-file operations and the `0x2B`/`0x2C` frame-select jumps described above. Neither V2000 nor Infestation stores frame-marker records. Entity-level animation is driven by:
 
 1. **Movement patterns:** 100-entry displacement lookup table at DAT_004cd4b8 (6 bytes per entry: int16 x, int16 y, int16 z). Frame counter DAT_004de840 cycles via `counter % 100`. Displacement is scaled by distance and normalized.
 
@@ -1819,33 +1819,13 @@ uint32[15][53]    Section-major order, little-endian
 
 ## Cross-References with Infestation
 
-V2000 and Infestation share the FGDK engine layer. Key shared patterns:
-
-| Feature | V2000 | Infestation |
-|---------|-------|-------------|
-| OVL format | 15 sections, `"abcd"` delimited | 16 handlers, sequential `[size][data]` blocks |
-| Section count | 15 | 16 |
-| Level count | 53 | 46 (via PreLoad.dat scene tree) |
-| Handler dispatch | vtable at 0x004CE0D8 | vtable at 0x0053AA14 |
-| BulkRead function | FUN_00410380 | Inline in each handler |
-| Shade palettes | RGB555, pixel-major, 32 levels | RGB555, pixel-major, 32 levels |
-| Audio format | 22050 Hz mono 16-bit PCM | 22050 Hz mono 16-bit PCM |
-| Sprites (Section 3 / Handler 3) | 2048-byte-stride indexed8/RGB555 atlas | 2048-stride 8bpp atlas |
-| Parameter tables (Section 4 / Handler 4) | 0x40-byte records, type=1 only | 0x40-byte records, type=1 only |
-| Models (Section 12 / Handler 8) | Parametric collision volumes (0x128) | Command-stream geometry (sub-blocks) |
-| Entity data (Section 13 / Handler 13) | Level descriptors + entity spawns | Entity stat database (type, HP, weapons) |
-| Terrain properties (Section 14 / Handler 14) | Sprite dependency lists + spatial grids (28B records) | Terrain property tables (variable-length pointer chains) |
-| PRELOAD.DAT | Flat 15×53 matrix + 7 embedded OVLs | Recursive scene tree with resource counts |
-| Compression | None | None |
-| Memory management | Mem_Alloc/Mem_Free wrappers | Same pattern |
-| File I/O | File_BufferedRead with progress | Same pattern |
-
-### Notable Differences
-
-- V2000 uses `"abcd"` section delimiters; Infestation uses sequential blocks with no delimiters
-- V2000's PreLoad.dat is a flat matrix; Infestation's is a recursive scene tree
-- V2000's Section 12 contains parametric collision volumes; Infestation's Handler 8 contains full mesh geometry with command streams
-- V2000's Section 13 combines level descriptors + entity spawns in one section; Infestation separates entity definitions (Handler 13) from mission placements (Handler 11/15)
+Infestation's sixteen resource handlers keep the numbers of Sections 3-8
+(sprites, fonts, display records, shade table, colours, models) and renumber
+the rest: strings 2 to 0, sounds 11 to 9, terrain 10 to 12, cell-to-model
+tables 9 to 11, type records 12 to 13 and level placements 13 to 14. Several
+keep identical record layouts. Section-by-section correspondence, shared code
+and identical tables are maintained in the
+[Infestation cross-reference](INFESTATION_CROSS_REFERENCE.md).
 
 ---
 

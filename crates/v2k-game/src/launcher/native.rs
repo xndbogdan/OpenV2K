@@ -19,7 +19,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
 
-use v2k_render::config::{GameConfig, GraphicsDetail, RendererChoice, ScalingMode, RESOLUTIONS};
+use v2k_render::config::{
+    DisplayModes, GameConfig, GraphicsDetail, RendererChoice, ScalingMode, WindowMode,
+};
 use v2k_render::music::SoundtrackAvailability;
 
 use super::{LaunchSelection, LauncherRequest};
@@ -37,6 +39,11 @@ const WM_TIMER: u32 = 0x0113;
 const WM_VSCROLL: u32 = 0x0115;
 const SB_BOTTOM: usize = 7;
 const WM_SETFONT: u32 = 0x0030;
+const CB_RESETCONTENT: u32 = 0x014b;
+const CBN_SELCHANGE: usize = 1;
+const DPI_AWARENESS_CONTEXT_SYSTEM_AWARE: isize = -2;
+const ENUM_CURRENT_SETTINGS: u32 = u32::MAX;
+const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
 const DM_GETDEFID: u32 = 0x0400;
 const WS_CHILD: u32 = 0x4000_0000;
 const WS_VISIBLE: u32 = 0x1000_0000;
@@ -58,7 +65,7 @@ const ID_RESOLUTION: usize = 201;
 const ID_RENDERER: usize = 202;
 const ID_SCALING: usize = 203;
 const ID_DETAIL: usize = 204;
-const ID_FULLSCREEN: usize = 205;
+const ID_DISPLAY: usize = 205;
 const ID_MUSIC: usize = 207;
 const ID_EFFECTS: usize = 208;
 const ID_EFFECTS_VOLUME: usize = 209;
@@ -89,7 +96,7 @@ struct OptionControls {
     renderer: Handle,
     scaling: Handle,
     detail: Handle,
-    fullscreen: Handle,
+    display: Handle,
     music: Handle,
     music_availability: Handle,
     effects: Handle,
@@ -129,7 +136,10 @@ struct WindowState {
     scale: f64,
     root: PathBuf,
     report: Option<ValidationReport>,
+    /// The pending choices while Options is open.
     option_config: Option<GameConfig>,
+    /// What the primary display offers, read when Options opens.
+    display_modes: DisplayModes,
     worker: Option<JoinHandle<()>>,
     sender: Sender<WorkerEvent>,
     receiver: Receiver<WorkerEvent>,
@@ -213,7 +223,9 @@ pub(super) fn attach_parent_console() {
 }
 unsafe fn run_native(request: LauncherRequest) -> Result<Option<LaunchSelection>, String> {
     let header_animation = HeaderAnimation::load()?;
-    SetProcessDPIAware();
+    // The process is per-monitor DPI aware for the game; the launcher keeps
+    // its system-DPI layout, scaled by `GetDpiForSystem` below.
+    let dpi_context = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
     let com_result = CoInitializeEx(null_mut(), 2);
     let dpi = GetDpiForSystem().max(96);
     let root = request
@@ -226,7 +238,7 @@ unsafe fn run_native(request: LauncherRequest) -> Result<Option<LaunchSelection>
     // displays. Every control and font uses the same physical-pixel scale.
     let scale = (f64::from(dpi) / 96.0)
         .min(f64::from((GetSystemMetrics(0) - 32).max(1)) / 660.0)
-        .min(f64::from((GetSystemMetrics(1) - 80).max(1)) / 606.0);
+        .min(f64::from((GetSystemMetrics(1) - 80).max(1)) / 642.0);
     let font = CreateFontW(
         -(13.0 * scale).round() as i32,
         0,
@@ -258,6 +270,7 @@ unsafe fn run_native(request: LauncherRequest) -> Result<Option<LaunchSelection>
         root,
         report: None,
         option_config: None,
+        display_modes: DisplayModes::default(),
         worker: None,
         sender,
         receiver,
@@ -317,6 +330,9 @@ unsafe fn run_native(request: LauncherRequest) -> Result<Option<LaunchSelection>
     DeleteObject(state.header_brush);
     if com_result >= 0 {
         CoUninitialize();
+    }
+    if dpi_context != 0 {
+        SetThreadDpiAwarenessContext(dpi_context);
     }
     result
 }
@@ -465,6 +481,10 @@ unsafe extern "system" fn options_procedure(
             match message {
                 WM_COMMAND if wparam >> 16 == 0 => {
                     state.command(wparam & 0xffff);
+                    return 0;
+                }
+                WM_COMMAND if wparam >> 16 == CBN_SELCHANGE => {
+                    state.display_choice_changed(wparam & 0xffff);
                     return 0;
                 }
                 WM_CLOSE => {
@@ -1213,7 +1233,7 @@ impl WindowState {
             OPTIONS_CLASS,
             "V2K Options",
             560,
-            606,
+            642,
             self.window,
             self.host,
             self.scale,
@@ -1225,31 +1245,24 @@ impl WindowState {
             }
         };
         self.options_window = window;
-        let config = GameConfig::load(&self.root);
-        self.group(window, " Display ", 12, 12, 536, 214);
-        self.label(window, "&Resolution:", 24, 38, 106, 20);
-        let resolution = self.combo(
+        let mut config = GameConfig::load(&self.root);
+        self.display_modes = primary_display_modes();
+        config.desktop = self.display_modes.desktop;
+        self.group(window, " Display ", 12, 12, 536, 250);
+        self.label(window, "&Display:", 24, 38, 106, 20);
+        let display = self.combo(
             window,
-            &RESOLUTIONS
-                .iter()
-                .map(|(w, h)| format!("{w} x {h}"))
-                .collect::<Vec<_>>(),
-            config.resolution_index().unwrap_or(0),
-            ID_RESOLUTION,
+            &WindowMode::ALL.map(|mode| mode.label().to_string()),
+            config.display.index() as usize,
+            ID_DISPLAY,
             136,
             34,
             194,
         );
-        let fullscreen = self.checkbox(
-            window,
-            "&Fullscreen",
-            ID_FULLSCREEN,
-            350,
-            34,
-            178,
-            config.fullscreen,
-        );
-        self.label(window, "Renderer:", 24, 74, 106, 20);
+        self.label(window, "&Resolution:", 24, 74, 106, 20);
+        let resolution = self.combo(window, &[], 0, ID_RESOLUTION, 136, 70, 194);
+        fill_resolutions(resolution, &self.display_modes, &config);
+        self.label(window, "Renderer:", 24, 110, 106, 20);
         let renderer_index = match config.renderer {
             RendererChoice::Auto => 0,
             RendererChoice::OpenGL => 1,
@@ -1262,44 +1275,44 @@ impl WindowState {
             renderer_index,
             ID_RENDERER,
             136,
-            70,
+            106,
             194,
         );
-        self.label(window, "Image scaling:", 24, 110, 106, 20);
+        self.label(window, "Image scaling:", 24, 146, 106, 20);
         let scaling = self.combo(
             window,
             &strings(&["Native", "Preserve 4:3", "Stretched 4:3"]),
             config.scaling.index() as usize,
             ID_SCALING,
             136,
-            106,
+            142,
             194,
         );
-        self.label(window, "Art detail:", 24, 146, 106, 20);
+        self.label(window, "Art detail:", 24, 182, 106, 20);
         let detail = self.combo(
             window,
             &strings(&["High (normal)", "Low (320 x 240)"]),
             usize::from(config.detail == GraphicsDetail::Low),
             ID_DETAIL,
             136,
-            142,
+            178,
             194,
         );
         self.label(
             window,
             "Display settings apply when Play starts the game.",
             24,
-            184,
+            220,
             504,
             24,
         );
-        self.group(window, " Sound ", 12, 238, 536, 94);
+        self.group(window, " Sound ", 12, 274, 536, 94);
         let music = self.checkbox(
             window,
             "&Music enabled",
             ID_MUSIC,
             24,
-            260,
+            296,
             188,
             config.ambient_enabled && config.music_volume > 0.0,
         );
@@ -1308,27 +1321,27 @@ impl WindowState {
             "Sound &effects",
             ID_EFFECTS,
             24,
-            294,
+            330,
             188,
             config.sound_enabled,
         );
-        self.label(window, "Effects volume:", 234, 299, 112, 20);
+        self.label(window, "Effects volume:", 234, 335, 112, 20);
         let effects_volume = self.combo(
             window,
             &(0..=15).map(|n| n.to_string()).collect::<Vec<_>>(),
             (config.sfx_volume.clamp(0.0, 1.0) * 15.0).round() as usize,
             ID_EFFECTS_VOLUME,
             356,
-            294,
+            330,
             168,
         );
-        let music_availability = self.label(window, "", 234, 262, 294, 28);
+        let music_availability = self.label(window, "", 234, 298, 294, 28);
         let skip = self.checkbox(
             window,
             "Skip the launcher when this installation is ready",
             ID_SKIP,
             16,
-            346,
+            382,
             528,
             self.request.preferences.skip_launcher,
         );
@@ -1336,31 +1349,31 @@ impl WindowState {
             window,
             "Use --launcher to open it again. Missing game files still open setup.",
             34,
-            372,
+            408,
             510,
             20,
         );
-        self.group(window, " Installation tools ", 12, 404, 536, 132);
-        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 428, 248, 30);
-        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 428, 252, 30);
+        self.group(window, " Installation tools ", 12, 440, 536, 132);
+        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 464, 248, 30);
+        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 464, 252, 30);
         let install = self.button(
             window,
             "&Install from disc image...",
             ID_INSTALL,
             24,
-            470,
+            506,
             512,
             30,
         );
-        let progress = self.label(window, "", 24, 509, 512, 22);
-        let save = self.button(window, "&Save", ID_SAVE, 308, 556, 112, 32);
-        self.button(window, "Cancel", ID_CANCEL, 436, 556, 112, 32);
+        let progress = self.label(window, "", 24, 545, 512, 22);
+        let save = self.button(window, "&Save", ID_SAVE, 308, 592, 112, 32);
+        self.button(window, "Cancel", ID_CANCEL, 436, 592, 112, 32);
         self.option_controls = OptionControls {
             resolution,
             renderer,
             scaling,
             detail,
-            fullscreen,
+            display,
             music,
             music_availability,
             effects,
@@ -1382,7 +1395,27 @@ impl WindowState {
         EnableWindow(self.window, 0);
         show_interactive_window(window);
 
-        SetFocus(resolution);
+        SetFocus(self.option_controls.display);
+    }
+
+    /// Display or Resolution changed: update the pending choice. A new
+    /// Display offers a new Resolution row.
+    unsafe fn display_choice_changed(&mut self, id: usize) {
+        let controls = &self.option_controls;
+        let Some(config) = self.option_config.as_mut() else {
+            return;
+        };
+        match id {
+            ID_DISPLAY => {
+                let mode = WindowMode::from_index(combo_selection(controls.display) as u32);
+                config.select_window_mode(mode, &self.display_modes);
+                fill_resolutions(controls.resolution, &self.display_modes, config);
+            }
+            ID_RESOLUTION => {
+                config.select_resolution(combo_selection(controls.resolution), &self.display_modes);
+            }
+            _ => {}
+        }
     }
 
     unsafe fn close_options(&mut self) {
@@ -1406,7 +1439,7 @@ impl WindowState {
             return;
         };
         let controls = &self.option_controls;
-        config.set_resolution_index(combo_selection(controls.resolution));
+        // Display and Resolution already hold their pending choices.
         config.renderer = match combo_selection(controls.renderer) {
             1 => RendererChoice::OpenGL,
             2 => RendererChoice::Software,
@@ -1418,7 +1451,6 @@ impl WindowState {
         } else {
             GraphicsDetail::High
         };
-        config.fullscreen = checked(controls.fullscreen);
         config.ambient_enabled = checked(controls.music);
         config.music_volume = if config.ambient_enabled {
             if config.music_volume > 0.0 {
@@ -1453,6 +1485,49 @@ impl WindowState {
         self.close_options();
         self.set_progress("Options saved.");
     }
+}
+
+/// The Resolution row for `config`'s display, with its entry selected.
+/// Borderless shows the desktop it covers and can't be changed.
+unsafe fn fill_resolutions(control: Handle, modes: &DisplayModes, config: &GameConfig) {
+    SendMessageW(control, CB_RESETCONTENT, 0, 0);
+    for (width, height) in modes.resolutions(config.display) {
+        SendMessageW(
+            control,
+            0x0143,
+            0,
+            wide(format!("{width} x {height}")).as_ptr() as isize,
+        );
+    }
+    if let Some(index) = modes.selection(config.display, config.size()) {
+        SendMessageW(control, 0x014e, index, 0);
+    }
+    EnableWindow(control, i32::from(config.display != WindowMode::Borderless));
+}
+
+/// What the primary display offers; the game opens there. The same list as
+/// SDL's display 0: its 15- to 32-bit modes as sizes, and the desktop mode.
+/// `DEVMODE` sizes are physical pixels whatever the thread's DPI awareness.
+unsafe fn primary_display_modes() -> DisplayModes {
+    let mut monitor: MonitorInfo = zeroed();
+    monitor.size = size_of::<MonitorInfo>() as u32;
+    let primary = MonitorFromPoint(Point::default(), MONITOR_DEFAULTTOPRIMARY);
+    if GetMonitorInfoW(primary, &mut monitor) == 0 {
+        return DisplayModes::default();
+    }
+    let device = monitor.device.as_ptr();
+    let mode = |index: u32| {
+        let mut settings: DevMode = zeroed();
+        settings.size = size_of::<DevMode>() as u16;
+        (EnumDisplaySettingsW(device, index, &mut settings) != 0).then_some(settings)
+    };
+    let desktop =
+        mode(ENUM_CURRENT_SETTINGS).map(|settings| (settings.pels_width, settings.pels_height));
+    let reported = (0..)
+        .map_while(mode)
+        .filter(|settings| matches!(settings.bits_per_pel, 15 | 16 | 24 | 32))
+        .map(|settings| (settings.pels_width, settings.pels_height));
+    DisplayModes::new(desktop, reported)
 }
 
 fn strings(values: &[&str]) -> Vec<String> {

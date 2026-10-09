@@ -1296,20 +1296,23 @@ pub trait Renderer {
         1.0
     }
 
-    /// Toggle the window between fullscreen-desktop and windowed at runtime
-    /// (Alt+Enter). Default no-op for backends without a togglable window.
-    fn set_fullscreen(&mut self, _on: bool) {}
+    /// Make the window what `request` asks for and adopt its output size,
+    /// or keep the window as it was and report why
+    /// ([`crate::window::apply_display`]). Backends without a window have
+    /// nothing to change.
+    fn set_display(&mut self, _request: crate::config::DisplayRequest) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// The display showing this renderer's window, if it has one.
+    fn display_index(&self) -> Option<i32> {
+        None
+    }
 
     /// Where this renderer's window is, for a replacement renderer to reopen
     /// in the same place. Backends without a window return `None`.
     fn window_placement(&self) -> Option<crate::WindowPlacement> {
         None
-    }
-
-    /// Change the OS window's drawable size. Display→Resolution uses this;
-    /// unlike [`Self::resize`], it requests a real window mode change.
-    fn set_window_size(&mut self, width: u32, height: u32) {
-        self.resize(width, height);
     }
 
     /// Change how the authored 4:3 frame maps onto the current drawable.

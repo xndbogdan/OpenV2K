@@ -172,7 +172,7 @@ by leverage:
    phase/Y/Z/zoom state and C710 fixed-point pose are live. Only the shared
    process-global RNG call order (exact twitch onset) remains unresolved.
 4. ✅ **Extra keybindings** (gap 12) *(DONE 2026-07-06)* — Shift+Esc instant
-   quit, Alt+Enter fullscreen toggle (new `Renderer::set_fullscreen`), keys
+   quit, Alt+Enter fullscreen toggle (now the Display row's rebuild), keys
    1–3 direct quick-load of save slots. Verified on-screen.
 5. **Attract-mode demo** (gap 15) — 60 s idle → demo; needs the gameplay/AI
    path. Low priority, forward-looking.

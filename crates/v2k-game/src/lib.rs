@@ -222,6 +222,7 @@ pub mod projectile_emitter;
 pub mod radial_damage;
 pub mod resource_cache;
 pub mod retail_clock;
+pub mod retail_input;
 pub mod retail_rng;
 pub mod run_away;
 pub mod save;

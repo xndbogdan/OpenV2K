@@ -37,12 +37,31 @@ does not recreate the integer software rasterizer. The software renderer
 OpenGL Classic Framebuffer option, which only quantized a finished RGBA8 frame
 to RGB565 (removed 2026-10-07).
 
-Display Resolution offers the original 640×480, 800×600 and 1024×768 presets.
-The selected preset supplies the authored High layout and window size;
-explicit Low retains its 320×240 internal canvas. Fullscreen uses SDL Desktop
-mode and the actual desktop drawable, independently of the selected preset.
-Older unsupported presets normalize to the largest original preset fitting
-both dimensions, with 640×480 as the minimum window size.
+The Display row offers In a Window, Full Screen and Borderless, and
+Resolution lists sizes in physical pixels: the port is per-monitor DPI aware,
+so a 3840×2160 monitor at 125% scaling lists 3840×2160, never 3072×1728.
+
+| Display | Resolution offers | Output |
+|---|---|---|
+| In a Window | 640×480, 800×600, 1024×768 and every mode the window's display reports, if it fits the desktop | a window with that client size |
+| Full Screen | the modes the display reports | the display switches to that mode, as retail's `SetDisplayMode` did |
+| Borderless | the desktop's size alone, so it can't be changed | the desktop, without a mode change |
+
+Sizes that cannot hold 640×480 are not offered.
+[Display changes](MENU_SYSTEM.md#display-changes-and-the-startup-display-search)
+owns the switching, the retail evidence and the startup search.
+
+Each size draws with the largest original tier that fits it, which is also the
+largest that fits its 4:3 area; Borderless's size is the desktop, so a
+3840×2160 desktop draws the 1024×768 tier. Borderless keeps the saved
+resolution for the next window or Full Screen. An original size is its own
+tier and behaves as before, with the same
+software frames, while 1280×720 uses the 800×600 tier and 1920×1080 the
+1024×768 one. OpenGL draws at the full output size; the software renderer
+draws the tier's frame and enlarges it. Explicit Low retains its 320×240
+internal canvas. On a non-4:3 output the Scaling row decides the picture:
+Native fills it (OpenGL only; the software frame keeps 4:3), 4:3 adds bars
+and Stretched stretches the 4:3 frame.
 High Native uses a port-owned readability scale above the original outputs.
 With `H = min(drawable_height, drawable_width * 3/4)`, this scale stays at 1
 through H=768, ramps linearly to 1.8 at H=1080, then becomes H/600. Ultrawide

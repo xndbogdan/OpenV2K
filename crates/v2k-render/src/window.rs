@@ -1,11 +1,60 @@
 use std::cell::Cell;
 
+use sdl2::controller::{Axis, Button, GameController};
 use sdl2::event::Event;
+use sdl2::joystick::Joystick;
 use sdl2::keyboard::Keycode;
-use sdl2::mouse::MouseButton;
-use sdl2::EventPump;
+use sdl2::mouse::{MouseButton, MouseWheelDirection};
 use sdl2::Sdl;
 use sdl2::VideoSubsystem;
+use sdl2::{EventPump, GameControllerSubsystem, JoystickSubsystem};
+
+use crate::config::DisplayModes;
+
+mod display;
+pub use display::{apply_display, display_modes};
+
+/// Make this process per-monitor DPI aware, so windows, display modes and
+/// the desktop are measured in physical pixels, as games are. Call it before
+/// any window exists; SDL's own hint covers processes that start SDL first.
+pub fn declare_dpi_awareness() {
+    #[cfg(windows)]
+    {
+        use std::ffi::c_void;
+
+        #[link(name = "kernel32")]
+        unsafe extern "system" {
+            fn GetModuleHandleW(name: *const u16) -> *mut c_void;
+            fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
+        }
+        #[link(name = "user32")]
+        unsafe extern "system" {
+            fn SetProcessDPIAware() -> i32;
+        }
+        type SetProcessDpiAwarenessContext = unsafe extern "system" fn(isize) -> i32;
+        const PER_MONITOR_AWARE_V2: isize = -4;
+
+        let user32: Vec<u16> = "user32.dll\0".encode_utf16().collect();
+        // SAFETY: plain Win32 calls; the looked-up export has the declared
+        // signature (Windows 10 1703 and later).
+        unsafe {
+            let module = GetModuleHandleW(user32.as_ptr());
+            let set = if module.is_null() {
+                std::ptr::null_mut()
+            } else {
+                GetProcAddress(module, b"SetProcessDpiAwarenessContext\0".as_ptr())
+            };
+            if !set.is_null() {
+                let set: SetProcessDpiAwarenessContext = std::mem::transmute(set);
+                if set(PER_MONITOR_AWARE_V2) != 0 {
+                    return;
+                }
+            }
+            // Older Windows: aware of the system DPI at least.
+            SetProcessDPIAware();
+        }
+    }
+}
 
 /// Input events consumed by the game loop.
 pub enum GameEvent {
@@ -13,12 +62,185 @@ pub enum GameEvent {
     Resize(u32, u32),
     KeyDown(Keycode),
     KeyUp(Keycode),
-    MouseMotion { xrel: i32, yrel: i32 },
+    /// Relative motion, reported only while the pointer is captured.
+    MouseMotion {
+        xrel: i32,
+        yrel: i32,
+    },
     MouseButtonDown(MouseButton),
     MouseButtonUp(MouseButton),
+    /// Wheel notches, positive away from the player whatever the system's
+    /// scrolling direction.
+    MouseWheel {
+        y: i32,
+    },
     FocusLost,
-    AuxiliaryWindowClick { window_id: u32, x: i32, y: i32 },
+    FocusGained,
+    AuxiliaryWindowClick {
+        window_id: u32,
+        x: i32,
+        y: i32,
+    },
     WindowClosed(u32),
+}
+
+/// How the game window treats the system pointer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerMode {
+    /// Relative motion for craft control. SDL hides the pointer and keeps it
+    /// inside the window.
+    Captured,
+    /// Free but invisible: V2000 hides the pointer over a full-screen game,
+    /// menus included.
+    Hidden,
+    /// Free and visible.
+    Visible,
+}
+
+impl PointerMode {
+    /// Capture during focused gameplay unless a diagnostics window needs the
+    /// pointer. Otherwise hide it over a focused full-screen game, as V2000
+    /// does, and show it everywhere else.
+    pub fn for_frame(
+        gameplay: bool,
+        focused: bool,
+        diagnostics_open: bool,
+        fullscreen: bool,
+    ) -> Self {
+        if !focused || diagnostics_open {
+            Self::Visible
+        } else if gameplay {
+            Self::Captured
+        } else if fullscreen {
+            Self::Hidden
+        } else {
+            Self::Visible
+        }
+    }
+}
+
+/// A standard game-controller pad in SDL's layout: sticks in
+/// `-32768..=32767` (negative left and up), triggers in `0..=32767`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PadSnapshot {
+    pub left_x: i16,
+    pub left_y: i16,
+    pub right_x: i16,
+    pub right_y: i16,
+    pub left_trigger: i16,
+    pub right_trigger: i16,
+    /// South (A), east (B), west (X), north (Y), left shoulder, right
+    /// shoulder, back, start, left stick, right stick.
+    pub buttons: [bool; 10],
+}
+
+/// One frame's state of the first attached controller.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControllerSample {
+    /// A device SDL recognises as a standard game controller.
+    Pad(PadSnapshot),
+    /// Any other joystick: its first six axes and first 32 buttons, in the
+    /// device's own order (bit `n` is button `n + 1`).
+    Joystick { axes: [i16; 6], buttons: u32 },
+}
+
+const PAD_BUTTONS: [Button; 10] = [
+    Button::A,
+    Button::B,
+    Button::X,
+    Button::Y,
+    Button::LeftShoulder,
+    Button::RightShoulder,
+    Button::Back,
+    Button::Start,
+    Button::LeftStick,
+    Button::RightStick,
+];
+
+enum OpenController {
+    Pad(GameController),
+    Joystick(Joystick),
+}
+
+impl OpenController {
+    fn instance_id(&self) -> u32 {
+        match self {
+            Self::Pad(pad) => pad.instance_id(),
+            Self::Joystick(joystick) => joystick.instance_id(),
+        }
+    }
+
+    fn sample(&self) -> ControllerSample {
+        match self {
+            Self::Pad(pad) => ControllerSample::Pad(PadSnapshot {
+                left_x: pad.axis(Axis::LeftX),
+                left_y: pad.axis(Axis::LeftY),
+                right_x: pad.axis(Axis::RightX),
+                right_y: pad.axis(Axis::RightY),
+                left_trigger: pad.axis(Axis::TriggerLeft),
+                right_trigger: pad.axis(Axis::TriggerRight),
+                buttons: PAD_BUTTONS.map(|button| pad.button(button)),
+            }),
+            Self::Joystick(joystick) => {
+                let axes = std::array::from_fn(|index| joystick.axis(index as u32).unwrap_or(0));
+                let buttons = (0..joystick.num_buttons().min(32))
+                    .filter(|&index| joystick.button(index).unwrap_or(false))
+                    .fold(0, |mask, index| mask | 1 << index);
+                ControllerSample::Joystick { axes, buttons }
+            }
+        }
+    }
+}
+
+/// Attached pads and joysticks, opened as SDL reports them. This stands in for
+/// V2000's WinMM probe (`FUN_004AC110`, up to 16 joysticks) and its 20 ms poll
+/// (`FUN_004AC2A0`); the game samples the first device once per frame.
+struct Controllers {
+    pads: GameControllerSubsystem,
+    joysticks: JoystickSubsystem,
+    open: Vec<OpenController>,
+}
+
+impl Controllers {
+    fn new(sdl: &Sdl) -> Result<Self, String> {
+        Ok(Self {
+            pads: sdl.game_controller()?,
+            joysticks: sdl.joystick()?,
+            open: Vec::new(),
+        })
+    }
+
+    /// Open device `index` once; SDL announces every device present at
+    /// start-up the same way as a later hot-plug.
+    fn attach(&mut self, index: u32) {
+        let device = if self.pads.is_game_controller(index) {
+            self.pads
+                .open(index)
+                .map(OpenController::Pad)
+                .map_err(|e| e.to_string())
+        } else {
+            self.joysticks
+                .open(index)
+                .map(OpenController::Joystick)
+                .map_err(|e| e.to_string())
+        };
+        match device {
+            Ok(device) => {
+                if self
+                    .open
+                    .iter()
+                    .all(|open| open.instance_id() != device.instance_id())
+                {
+                    self.open.push(device);
+                }
+            }
+            Err(error) => eprintln!("Controller {index} unavailable: {error}"),
+        }
+    }
+
+    fn detach(&mut self, instance_id: u32) {
+        self.open.retain(|open| open.instance_id() != instance_id);
+    }
 }
 
 /// SDL2 lifecycle and event manager.
@@ -74,14 +296,24 @@ pub struct GameWindow {
     pub video: VideoSubsystem,
     event_pump: EventPump,
     mouse_captured: bool,
+    /// The mode last applied; `None` forces the next request through.
+    pointer_mode: Option<PointerMode>,
+    controllers: Option<Controllers>,
     primary_window_id: Cell<Option<u32>>,
 }
 
 impl GameWindow {
     /// Initialize SDL2. Call this before creating a window or renderer.
     pub fn new() -> Result<Self, String> {
+        // Physical pixels throughout (see `declare_dpi_awareness`); window
+        // sizes stay unscaled pixels too.
+        sdl2::hint::set("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
         let sdl = sdl2::init()?;
         let video = sdl.video()?;
+        // Controllers are optional: the keyboard and mouse still play.
+        let controllers = Controllers::new(&sdl)
+            .map_err(|error| eprintln!("Controller support unavailable: {error}"))
+            .ok();
         let event_pump = sdl.event_pump()?;
 
         Ok(Self {
@@ -89,8 +321,15 @@ impl GameWindow {
             video,
             event_pump,
             mouse_captured: false,
+            pointer_mode: None,
+            controllers,
             primary_window_id: Cell::new(None),
         })
+    }
+
+    /// What `display` offers, in physical pixels.
+    pub fn display_modes(&self, display: i32) -> DisplayModes {
+        display_modes(&self.video, display)
     }
 
     /// Create an SDL2 window suitable for the OpenGL backend.
@@ -188,9 +427,17 @@ impl GameWindow {
                     win_event: sdl2::event::WindowEvent::FocusLost,
                     ..
                 } if self.primary_window_id.get() == Some(window_id) => {
-                    self.sdl.mouse().set_relative_mouse_mode(false);
-                    self.mouse_captured = false;
+                    // Free the pointer at once; the next policy keeps it free
+                    // until focus returns.
+                    self.release_mouse_capture();
                     events.push(GameEvent::FocusLost);
+                }
+                Event::Window {
+                    window_id,
+                    win_event: sdl2::event::WindowEvent::FocusGained,
+                    ..
+                } if self.primary_window_id.get() == Some(window_id) => {
+                    events.push(GameEvent::FocusGained);
                 }
                 Event::KeyDown {
                     window_id,
@@ -198,10 +445,6 @@ impl GameWindow {
                     repeat: false,
                     ..
                 } if self.primary_window_id.get() == Some(window_id) || kc == Keycode::F12 => {
-                    if kc == Keycode::Escape && self.mouse_captured {
-                        self.sdl.mouse().set_relative_mouse_mode(false);
-                        self.mouse_captured = false;
-                    }
                     events.push(GameEvent::KeyDown(kc));
                 }
                 Event::KeyUp {
@@ -227,10 +470,6 @@ impl GameWindow {
                     mouse_btn,
                     ..
                 } if self.primary_window_id.get() == Some(window_id) => {
-                    if !self.mouse_captured {
-                        self.sdl.mouse().set_relative_mouse_mode(true);
-                        self.mouse_captured = true;
-                    }
                     events.push(GameEvent::MouseButtonDown(mouse_btn));
                 }
                 Event::MouseButtonDown {
@@ -243,17 +482,68 @@ impl GameWindow {
                 } if self.primary_window_id.get() == Some(window_id) => {
                     events.push(GameEvent::MouseButtonUp(mouse_btn));
                 }
+                Event::MouseWheel {
+                    window_id,
+                    y,
+                    direction,
+                    ..
+                } if self.primary_window_id.get() == Some(window_id) && y != 0 => {
+                    let y = if direction == MouseWheelDirection::Flipped {
+                        y.saturating_neg()
+                    } else {
+                        y
+                    };
+                    events.push(GameEvent::MouseWheel { y });
+                }
+                Event::JoyDeviceAdded { which, .. } => {
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.attach(which);
+                    }
+                }
+                Event::JoyDeviceRemoved { which, .. } => {
+                    if let Some(controllers) = self.controllers.as_mut() {
+                        controllers.detach(which);
+                    }
+                }
                 _ => {}
             }
         }
         events
     }
 
-    /// Release relative-mode capture so auxiliary diagnostic windows can use
-    /// the normal OS cursor. Clicking the game window captures it again.
+    /// Whether the game window has keyboard focus.
+    pub fn has_focus(&self) -> bool {
+        let focused = self.sdl.keyboard().focused_window_id();
+        focused.is_some() && focused == self.primary_window_id.get()
+    }
+
+    /// Apply a pointer mode. Repeating the current mode costs nothing.
+    pub fn set_pointer_mode(&mut self, mode: PointerMode) {
+        if self.pointer_mode == Some(mode) {
+            return;
+        }
+        let mouse = self.sdl.mouse();
+        let captured = mode == PointerMode::Captured;
+        mouse.set_relative_mouse_mode(captured);
+        mouse.show_cursor(mode == PointerMode::Visible);
+        self.mouse_captured = captured;
+        self.pointer_mode = Some(mode);
+    }
+
+    /// Free and show the pointer now, for example before another window
+    /// takes over. The next [`Self::set_pointer_mode`] applies in full.
     pub fn release_mouse_capture(&mut self) {
-        self.sdl.mouse().set_relative_mouse_mode(false);
+        let mouse = self.sdl.mouse();
+        mouse.set_relative_mouse_mode(false);
+        mouse.show_cursor(true);
         self.mouse_captured = false;
+        self.pointer_mode = None;
+    }
+
+    /// State of the first attached controller after the latest poll.
+    pub fn controller_sample(&self) -> Option<ControllerSample> {
+        let controllers = self.controllers.as_ref()?;
+        controllers.open.first().map(OpenController::sample)
     }
 }
 
@@ -297,6 +587,30 @@ fn app_icon_rgba() -> Option<(u32, u32, Vec<u8>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pointer_is_captured_only_in_focused_gameplay() {
+        use PointerMode::*;
+        for fullscreen in [false, true] {
+            assert_eq!(
+                PointerMode::for_frame(true, true, false, fullscreen),
+                Captured
+            );
+            // Losing focus or opening a diagnostics window frees it.
+            assert_eq!(
+                PointerMode::for_frame(true, false, false, fullscreen),
+                Visible
+            );
+            assert_eq!(
+                PointerMode::for_frame(true, true, true, fullscreen),
+                Visible
+            );
+        }
+        // Menus: V2000 hides the pointer only over a full-screen game.
+        assert_eq!(PointerMode::for_frame(false, true, false, true), Hidden);
+        assert_eq!(PointerMode::for_frame(false, true, false, false), Visible);
+        assert_eq!(PointerMode::for_frame(false, false, false, true), Visible);
+    }
 
     #[test]
     fn app_icon_keeps_authored_size_and_transparent_glow() {

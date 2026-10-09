@@ -45,7 +45,7 @@ integrator that interprets the same motion vector, not in the keys.
 | **RIGHT** 0xCD / `.` | held | **steer/yaw right** (direct) | bank-turn right (yaw+roll) |
 | **S** 0x1F | held | gun depression, finer 0x900 scale | body nose-down; suppresses SPACE's separate powered-pitch coupling, not Self Righting |
 | **X** 0x2D | held | gun elevation, finer 0x900 scale | body nose-up; suppresses SPACE's separate powered-pitch coupling, not Self Righting |
-| **ENTER / right mouse** | held\* | **fire primary weapon** | fire (**NOT locked**) |
+| **ENTER / right mouse / joystick button 1** | held\* | **fire primary weapon** | fire (**NOT locked**) |
 | **A** 0x1E | press | special-weapon deploy (cap 4; cb 0x00444400) | same |
 | **ENTER+LALT** | press | confirm / special-deploy | same |
 | **E** 0x12 | press | next target / rotate selection list | same |
@@ -54,7 +54,11 @@ integrator that interprets the same motion vector, not in the keys.
 | **D** (LShift up) | press | beam-out / drop (`entity+0x20E=−80`) | same |
 | **C** (LShift up) | press | beam-in / collect (`entity+0x20E=+80`) | same |
 | **TAB** 0x0F | press | **Hover↔VTOL toggle** (cb 0x004442B0) | toggle back |
-| (joystick axis) | held | VTOL vertical ±0xA00 (no keyboard key) | same |
+| **Mouse X / joystick X** | analog | steer (see [mouse and joystick](#mouse-joystick-and-pointer)) | bank-turn |
+| **Mouse Y / joystick Y** | analog | gun aim: pulling back elevates | body pitch: pushing forward drops the nose |
+| **Left mouse / joystick button 2** | held | same as SPACE | same as SPACE |
+| **Mouse wheel** | per frame | towards you: next weapon; away: previous | same |
+| (console pads only) | held | VTOL vertical ±0xA00; no PC device binds it | same |
 
 SPACE and RSHIFT contribute `+0x10000` and `-0x10000` to one signed throttle
 channel, but fan speed uses that channel's magnitude. Either key therefore
@@ -126,6 +130,107 @@ binds M (along with its cancel/action aliases) to `FUN_00456650`, returning to
 gameplay descriptor `0x004D0950`. No arrow, keypad plus/minus, pan, or zoom
 binding exists in the map keyboard or joystick tables.
 
+## Mouse, joystick and pointer
+
+FGDK gives each input device a type, and the type selects that device's row
+in the active binding set. `FUN_004292A0` always returns 0 on the PC, so play
+uses craft set `0x004C4120`: slot 0 is the keyboard table above, slot 1 the
+mouse and slot 2 the joystick. Slots 6 and 7 hold console-pad tables that no
+PC device uses. Menu sets bind only the keyboard and those console slots, so
+the mouse and joystick do nothing outside the craft.
+
+**Mouse.** A DirectInput `GUID_SysMouse` device with relative axes, read in
+the background (the game never sets a cooperative level). Binding table
+`0x004C2DE0`:
+
+| Input | Reader effect | Hovercraft | VTOL |
+|---|---|---|---|
+| X | turn `+= 200·Δx` (mickeys, right positive) | steer | bank-turn |
+| Y | pitch `+= -200·Δy` (towards the player positive) | pull back: elevate gun; push: depress | push: nose down, forward; pull: nose up |
+| Wheel | one weapon step per reader call when the total changed | towards the player: B's step (`0x004441D0`); away: V's (`0x00444260`) | same |
+| Button 1 (left) | both SPACE descriptors (`0x4CD838` throttle, `0x4CD848` positive-thrust gate) | thrust | ascent and powered-pitch gate |
+| Button 2 (right) | fire descriptor `0x4CD850`, shared with Enter | fire | fire |
+
+The analog binding scales each axis by -400 and Q31 one half. The reader adds
+`previous - current` of X and `current - previous` of Y as signed words, so
+one fast frame can wrap: 164 mickeys exceed `0x7FFF`. The wheel consumer holds
+the negated `lZ` total. The reader steps forward when it rose and backward
+when it fell, never more than once per call.
+
+**Joystick.** WinMM: `FUN_004AC110` probes up to 16 devices with
+`joyGetPosEx`/`joyGetDevCapsA`, and `FUN_004AC2A0` polls them every 20 ms with
+`JOY_RETURNALL | JOY_RETURNCENTERED`. The type-2 adapter row of `0x004CA448`
+subtracts `0x8000` from each axis. Binding table `0x004C2E90`:
+
+| Input | Value | Effect |
+|---|---|---|
+| X | `(x - 0x8000) >> 3`, then the dead zone | turn, right positive |
+| Y | `(0x8000 - y) >> 3`, then the dead zone | pitch, forward positive: depress gun or nose down |
+| Button 1 | fire descriptor | fire |
+| Button 2 | both SPACE descriptors | thrust |
+
+The reader's dead zone (`0x0044463F..0x00444663`) maps `v < -2000` to
+`v + 2000`, `-2000 <= v < 2000` to 0 and larger values to `v - 2000`. Full
+deflection is therefore about ±2096 words, close to a held arrow's 2303. Z, R,
+U, V, the POV hat and buttons 3 onward are unbound.
+
+**Reader order** (`FUN_004445E0`): clear turn and pitch; read the two joystick
+terms; compute the arrow terms; in Relative mode add arrows plus joystick to
+pitch and turn, in Absolute mode pass those sums and settings `+0x28` to
+`FUN_00444B90`; then mouse Y, the S/X term, mouse X, the console-only vertical
+terms, the wheel step, throttle and fire. Every channel update is a signed
+16-bit addition.
+
+**Absolute mode** (Joystick setting Absolute, `FUN_00444B90`):
+`magnitude = isqrt(pitch² + turn²)` (`FUN_00457730`) and
+`bearing = asin(pitch / magnitude)` (`FUN_00457F70`), mirrored to
+`-0x8000 - bearing` for leftward input. The arcsine table at `0x004D34D0` is
+exactly `floor(asin(i/1024) / 3.14159 × 32768)` for `i = 0..1023`. The bearing
+is a heading word: 0 faces world +X and `0x4000` world +Z, whichever way the
+craft faces. Ground styles 0 and 4 subtract `(bearing - heading) ×
+2·magnitude >> 15` from turn. Flying styles 1 and 3 do the same, but with
+Absolute Mode enabled ("Full") a bearing more than a quarter turn off the nose
+uses `±0x7FFF - offset` and a negated magnitude, and pitch becomes
+`((2·magnitude - body_pitch) × (0x2000 - |turn|)) >> 15 + trunc(body_pitch/4)`.
+Style 2 ignores the request. The arrow keys feed the same sums, so Absolute
+mode makes them compass controls too. The saturated ratio
+`(pitch ^ magnitude) | 0x7FFFFFFF` is -1 for straight-back input, which
+therefore aims at bearing 0, or `-0x8000` with any leftward component, rather
+than `-0x4000`.
+
+**Pointer.** The window procedure `FUN_00495A00` answers `WM_SETCURSOR` with
+`SetCursor(NULL)` only while the game is focused and full-screen
+(`0x004FEE8C`, written by the display-mode routines `FUN_004A8C30` and
+`FUN_004A8D90`), in menus and in play alike. Retail never confines the
+pointer. DirectInput keeps reporting relative motion after it reaches the
+screen edge.
+
+### Port behaviour
+
+- In focused play the port uses SDL relative mouse mode. It hides the pointer
+  and keeps it in the window so motion keeps arriving at the edge, where a
+  windowed retail game shows a free pointer. Menus leave the pointer free:
+  hidden over a full-screen game as in retail, visible in a window. Losing
+  focus, the F12 debug window and the tilde console free it at once.
+- SDL's raw relative motion stands in for DirectInput mickeys. The reader
+  terms, wheel step and button bindings are exact. Modern mice report many
+  more counts per inch than 1999 mice, so the same gain feels much faster, and
+  a fast flick can wrap the word just as it would in retail.
+- Pads with an SDL controller mapping are numbered the way Windows' legacy
+  joystick API numbers an XInput pad: left stick on X/Y, the south button (A)
+  is button 1 and fires, the east button (B) is button 2 and thrusts. Other
+  joysticks use their first two axes and their own button order. The port
+  reads the first attached device every frame instead of on WinMM's 20 ms
+  timer.
+- Not reproduced: the reader turns the change in each mouse consumer's running
+  total into motion. Retail can therefore apply movement made during a pause
+  in the first frame afterwards, and a new craft controller's first comparison
+  depends on stored values whose initialization was not traced. The port drops
+  motion outside play and starts each frame's deltas at zero.
+- The Hover barrel moves by `-(pitch / 2)` once per callback, as in retail,
+  instead of scaling by the 50 Hz tick. Keyboard aim speed follows the frame
+  rate as it does in retail, and mouse aim is the same at any frame rate.
+
 ## Mode toggle + fuel
 
 - Mode vars in the controller struct (`FUN_00443af0`): `+0x86` movement style
@@ -175,10 +280,12 @@ binding exists in the map keyboard or joystick tables.
 | Absolute Mode | 0=Half default; 1=Full (only consulted in Joystick Absolute mode) | settings+0x28 |
 | Pitch-rate cap | 0x900 (2304) | S/X |
 | Throttle clamp | 0x10000 | SPACE/RSHIFT |
-| VTOL vertical rate | ±0xA00 (2560) | joystick only |
+| VTOL vertical rate | ±0xA00 (2560) | console pads only |
+| Mouse axis gain | ±200 words per mickey, wrapping | slot-1 binding `0x004C2DE0` |
+| Joystick axis | `(raw - 0x8000) >> 3`, dead zone ±2000 | slot-2 binding `0x004C2E90`, reader `0x0044463F` |
 | Powered pitch coupling | cap 0x600, gain `-pitch/6`; dedicated SPACE binding active, S/X inactive, Self Righting >1. UP/DOWN and RSHIFT may coexist | FUN_00445310 |
 | Default keyboard turn | held key ≈±0x8FF; `step=((turn*52/28)*(dt>>2))>>15`, heading subtracts it; VTOL roll subtracts it before one A690 damping pass | FUN_004445E0 → FUN_00420360 |
-| Absolute joystick helper | `motion.turn -= (target−heading)·magnitude·2>>15` | FUN_00444B90 |
+| Absolute joystick helper | `motion.turn -= (target−heading)·magnitude·2>>15`; Full flying also writes pitch | FUN_00444B90 |
 | Body-pitch bound | no global ±0x1800 clamp in normal VTOL; its mode recurrence is exact. Roles of those constants in alternate branches remain open | FUN_0041A690 |
 | Hover-height PD (fly) | P=24/1000, D=5/1000, window altErr∈[−299,999] | FUN_00445310 |
 
@@ -201,11 +308,11 @@ is set, and zero-wind first-world play uses Section-13 strength 3 and player mas
 | TAB = fuel-gated mode toggle | ✅ (user-verified 2026-07-03): empty tank REFUSES Hover→VTOL; VTOL→Hover always allowed; VTOL also drains fuel. Earlier "doesn't gate press" verdict retracted — code location of the gate still open |
 | guns locked in heli | ✅ for **aim** (fly integrator forces barrel → 0 every frame); ❌ only for the trigger — fire works in both modes |
 
-## Port status (updated 2026-07-17)
+## Port status (updated 2026-10-09)
 
 `v2k-game` in-game controls remapped to this scheme: LEFT/RIGHT steer (model yaws),
 UP/DOWN aim in Hover or pitch the body in VTOL, SPACE/RSHIFT throttle, TAB Hover↔VTOL (VTOL burns
-`fuel`, empty→Hover), with Enter/right mouse driving the recovered primary-fire
+`fuel`, empty→Hover), with Enter/right mouse/joystick button 1 driving the recovered primary-fire
 scheduler, class-1 particle, class-32 above-water flash/smoke, and global sound
 88. Dev free-fly camera uses F11; Backquote/tilde toggles the Windows text
 console, which starts hidden for a standalone game launch. Type-46 Hover steering,
@@ -215,6 +322,9 @@ VTOL manual/assist lift, signed fuel burn, five-probe ceiling attenuation,
 previous-basis projection, common underwater response, and the Space-versus-
 RShift powered-pitch asymmetry are also ported from the July 16 traces. The
 normal type-46 pitch, yaw, and bank recurrence is exact against the July 17
-trace. Partial-frame key duty cycles, Joystick Absolute mode, the shared RNG
-stream, alternate terrain-target attitude state, runtime turbo/session policy,
-S/X pitch render, and solid-ground impact/destruction remain follow-ups.
+trace. Mouse, wheel and joystick input, the Joystick Absolute mode and the
+per-callback Hover barrel step are ported (see
+[mouse and joystick](#mouse-joystick-and-pointer)). Partial-frame key duty
+cycles, the shared RNG stream, alternate terrain-target attitude state,
+runtime turbo/session policy, S/X pitch render, and solid-ground
+impact/destruction remain follow-ups.

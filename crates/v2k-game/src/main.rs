@@ -133,10 +133,11 @@ use v2k_game::opening::{
 use v2k_game::overlay_51_backdrop::Overlay51Backdrop;
 use v2k_game::particle_descriptors::particle_descriptor;
 use v2k_game::player::{
-    FuelWarningCadence, MotionChannels, PlayerCraft, PlayerHoverAttitudeRequest,
-    VehicleModeToggleOutcome,
+    AnalogInput, FuelWarningCadence, MotionChannels, PlayerCraft, PlayerHoverAttitudeRequest,
+    ReaderSettings, VehicleModeToggleOutcome,
 };
 use v2k_game::player_active_contact::{entity_pair_to_world, PlayerActivePairPass};
+use v2k_game::retail_input::{wheel_weapon_step, JoystickMode, JoystickSample};
 
 use v2k_game::player_contact_style::PlayerContactStyleRequest;
 use v2k_game::player_fan_audio::PlayerFanAudio;
@@ -227,8 +228,8 @@ use v2k_render::sound::{
 use v2k_render::{
     mat3_mul, orientation_from_ypr, project_particle_center, AudioPlayer, Camera, CapturedFrame,
     ExternalFrameMode, FrameCaptureSource, GameConfig, GameEvent, GameWindow, ModelDepthFade,
-    ModelNearClip, ModelOverlayKind, MusicPlayer, ProjectionEffect, RenderScene, Renderer,
-    RendererChoice, SoundListener, SoundManager, SpriteFog, ViewPinMode, WorldSprite,
+    ModelNearClip, ModelOverlayKind, MusicPlayer, PointerMode, ProjectionEffect, RenderScene,
+    Renderer, RendererChoice, SoundListener, SoundManager, SpriteFog, ViewPinMode, WorldSprite,
     WorldSpriteBlend, HALF_ADDITIVE_ALPHA,
 };
 
@@ -279,6 +280,36 @@ fn replace_renderer(
     drop(std::mem::replace(renderer, replacement));
     renderer.set_world_model_fog(world_model_fog);
     Ok(backend)
+}
+
+/// Startup display search (`FUN_0044E2E0` -> `FUN_0042D340`). From the saved
+/// window mode and resolution, try every resolution of that mode, then of
+/// each following mode, and keep the first display that starts. The settings
+/// then hold it, unsaved: retail writes them only with its next settings
+/// write (`FUN_00448CF0`). Returns what the window's display offers.
+fn start_display(
+    game_window: &GameWindow,
+    renderer: &mut dyn Renderer,
+    config: &mut GameConfig,
+) -> v2k_render::DisplayModes {
+    let modes = game_window.display_modes(renderer.display_index().unwrap_or(0));
+    config.desktop = modes.desktop;
+    for request in modes.startup_order(config.display, config.size()) {
+        let (width, height) = request.size;
+        match renderer.set_display(request) {
+            Ok(()) => {
+                config.adopt(request.mode, request.size);
+                log!("Display: {} at {width}x{height}", request.mode.label());
+                return modes;
+            }
+            Err(error) => eprintln!(
+                "Display {} at {width}x{height} unavailable: {error}",
+                request.mode.label()
+            ),
+        }
+    }
+    eprintln!("No display mode started; keeping the window as created");
+    modes
 }
 
 /// Ordinary worlds run the conversion/intake walkers on authenticated owners.
@@ -1194,6 +1225,8 @@ fn append_port_vtol_trace(
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Before the launcher creates its first window.
+    v2k_render::declare_dpi_awareness();
     launcher::prepare_console();
     let cli = Cli::parse();
 
@@ -1542,9 +1575,7 @@ fn run_game(
     if overlay_depth_policy == v2k_render::OverlayDepthPolicy::OverlayAlways {
         log!("Overlay depth diagnosis policy active: {overlay_depth_policy:?} (presentation only)");
     }
-    if config.fullscreen {
-        renderer.set_fullscreen(true);
-    }
+    let mut display_modes = start_display(&game_window, renderer.as_mut(), &mut config);
 
     log!("Renderer: {}", renderer.backend_name());
 
@@ -1682,6 +1713,7 @@ fn run_game(
                 cache: &session.cache,
                 config: &config,
                 saves: Some(&save_manager),
+                display_modes: &display_modes,
             };
             // Cold entry (after the AVI) runs the original's 3.0 s
             // scene-only intro before the ring flies in.
@@ -1693,6 +1725,7 @@ fn run_game(
                 cache: &session.cache,
                 config: &config,
                 saves: Some(&save_manager),
+                display_modes: &display_modes,
             };
             MenuShell::new_frontend(&ctx, $intro)
         }};
@@ -1930,11 +1963,12 @@ fn run_game(
             match event {
                 // Backquote/tilde owns the text console in every state and
                 // must not skip the intro, activate a menu or move the camera.
-                GameEvent::KeyDown(Keycode::Backquote) => match diagnostic_console.toggle() {
-                    Ok(true) => game_window.release_mouse_capture(),
-                    Ok(false) => {}
-                    Err(error) => eprintln!("Console visibility error: {error}"),
-                },
+                // The pointer policy below frees the mouse while it is open.
+                GameEvent::KeyDown(Keycode::Backquote) => {
+                    if let Err(error) = diagnostic_console.toggle() {
+                        eprintln!("Console visibility error: {error}");
+                    }
+                }
                 GameEvent::KeyUp(Keycode::Backquote) => {}
                 // F12 belongs to the diagnostics layer in every game state;
                 // consuming it here prevents it from skipping the intro or
@@ -1942,9 +1976,6 @@ fn run_game(
                 GameEvent::KeyDown(Keycode::F12) => {
                     if let Err(error) = debug_panel.toggle(&game_window.video) {
                         eprintln!("Debug panel error: {error}");
-                    }
-                    if debug_panel.is_visible() {
-                        game_window.release_mouse_capture();
                     }
                 }
                 GameEvent::AuxiliaryWindowClick { window_id, x, y }
@@ -1961,6 +1992,23 @@ fn run_game(
                 other => events.push(other),
             }
         }
+
+        // V2000 reads the mouse only during play and hides the pointer over a
+        // full-screen game, menus included. The port also captures it in play
+        // so relative motion keeps arriving at the window's edge.
+        game_window.set_pointer_mode(PointerMode::for_frame(
+            matches!(state, GameState::Playing),
+            game_window.has_focus(),
+            debug_panel.is_visible() || diagnostic_console.is_visible(),
+            matches!(
+                renderer.window_placement(),
+                Some(v2k_render::WindowPlacement::FullScreenOn { .. })
+            ),
+        ));
+        // The first attached pad or joystick, as of this frame's poll.
+        let joystick = game_window
+            .controller_sample()
+            .map(JoystickSample::from_controller);
 
         let menu_is_paused = matches!(&state, GameState::Paused { .. });
         match &mut state {
@@ -2035,6 +2083,21 @@ fn run_game(
                     }
                 }
 
+                // The Resolution row follows the window's display, including
+                // after the window moves to another one.
+                let current_modes =
+                    game_window.display_modes(renderer.display_index().unwrap_or(0));
+                if current_modes != display_modes {
+                    display_modes = current_modes;
+                    config.desktop = display_modes.desktop;
+                    shell.refresh(&MenuCtx {
+                        cache: &session.cache,
+                        config: &config,
+                        saves: Some(&save_manager),
+                        display_modes: &display_modes,
+                    });
+                }
+
                 // Translate key events into engine inputs; collect side effects.
                 let mut shell_events: Vec<ShellEvent> = Vec::new();
                 for event in &events {
@@ -2057,16 +2120,13 @@ fn run_game(
                             match *kc {
                                 // Shift+Esc = instant quit to desktop (FUN_0042BAA0).
                                 Keycode::Escape if shift => break 'main_loop,
-                                // Alt+Enter = toggle fullscreen (FUN_0042D5D0).
+                                // Alt+Enter (FUN_0042D5D0) stores `Full Screen == 0`
+                                // and rebuilds the display, as the Display row does.
                                 Keycode::Return if alt => {
-                                    config.fullscreen = !config.fullscreen;
-                                    renderer.set_fullscreen(config.fullscreen);
-                                    world_projection
-                                        .apply_to(&mut camera, renderer.viewport_size());
-                                    redraw_paused_world |= menu_is_paused;
-                                    if let Err(error) = config.try_save(data_dir) {
-                                        eprintln!("Could not save settings: {error}");
-                                    }
+                                    shell_events.push(ShellEvent::SettingChanged(
+                                        SettingId::FullScreen,
+                                        config.display.alt_enter().index(),
+                                    ));
                                     continue;
                                 }
                                 _ => {}
@@ -2128,6 +2188,7 @@ fn run_game(
                                     cache: &session.cache,
                                     config: &config,
                                     saves: Some(&save_manager),
+                                    display_modes: &display_modes,
                                 };
                                 shell_events.extend(shell.input(input, &ctx));
                             }
@@ -2146,6 +2207,7 @@ fn run_game(
                             cache: &session.cache,
                             config: &config,
                             saves: Some(&save_manager),
+                            display_modes: &display_modes,
                         };
                         shell_events.extend(shell.input(MenuInput::Select, &ctx));
                     }
@@ -2166,7 +2228,7 @@ fn run_game(
                         ShellEvent::SettingChanged(id, v) => {
                             redraw_paused_world |=
                                 menu_is_paused && setting_requires_paused_redraw(id);
-                            apply_setting_to_config(&mut config, id, v);
+                            apply_setting_to_config(&mut config, id, v, &display_modes);
                             apply_live_audio_setting(
                                 id,
                                 &config,
@@ -2174,12 +2236,23 @@ fn run_game(
                                 &mut music_player,
                                 world_complete_results.is_progress_map_active(),
                             );
+                            // FUN_0043CC40 -> FUN_0044E0E0 rebuilds the display. One
+                            // that cannot start leaves the previous display and its
+                            // resources; the setting stays as chosen.
+                            let mut display_started = true;
                             match id {
-                                v2k_game::menu_data::SettingId::FullScreen => {
-                                    renderer.set_fullscreen(config.fullscreen);
-                                }
-                                v2k_game::menu_data::SettingId::Resolution => {
-                                    renderer.set_window_size(config.width, config.height);
+                                SettingId::FullScreen | SettingId::Resolution => {
+                                    if let Err(error) =
+                                        renderer.set_display(config.display_request())
+                                    {
+                                        eprintln!(
+                                            "Display change failed ({error}); keeping the previous display"
+                                        );
+                                        display_started = false;
+                                    }
+                                    display_modes = game_window
+                                        .display_modes(renderer.display_index().unwrap_or(0));
+                                    config.desktop = display_modes.desktop;
                                 }
                                 v2k_game::menu_data::SettingId::Rendering
                                     if config.resolve_backend(None) != actual_backend =>
@@ -2188,8 +2261,12 @@ fn run_game(
                                         Ok(backend) => {
                                             actual_backend = backend;
                                             renderer.set_overlay_depth_policy(overlay_depth_policy);
-                                            if config.fullscreen {
-                                                renderer.set_fullscreen(true);
+                                            if let Err(error) =
+                                                renderer.set_display(config.display_request())
+                                            {
+                                                eprintln!(
+                                                    "Display unavailable for the new renderer ({error})"
+                                                );
                                             }
                                             game_window.release_mouse_capture();
                                             // Texture ids belonged to the old renderer.
@@ -2217,10 +2294,15 @@ fn run_game(
                                 }
                                 _ => {}
                             }
-                            if matches!(
-                                id,
-                                SettingId::Resolution | SettingId::Scaling | SettingId::Rendering
-                            ) {
+                            if display_started
+                                && matches!(
+                                    id,
+                                    SettingId::FullScreen
+                                        | SettingId::Resolution
+                                        | SettingId::Scaling
+                                        | SettingId::Rendering
+                                )
+                            {
                                 if let Some(tier) =
                                     v2k_game::system_layout::HighSystemLayoutTier::from_variant(
                                         config.system_graphics_variant(),
@@ -2261,6 +2343,7 @@ fn run_game(
                                 cache: &session.cache,
                                 config: &config,
                                 saves: Some(&save_manager),
+                                display_modes: &display_modes,
                             };
                             shell.refresh(&ctx);
                         }
@@ -2356,6 +2439,7 @@ fn run_game(
                                 cache: &session.cache,
                                 config: &config,
                                 saves: Some(&save_manager),
+                                display_modes: &display_modes,
                             };
                             shell.complete_save(succeeded, &ctx);
                         }
@@ -3618,6 +3702,7 @@ fn run_game(
                         cache: &session.cache,
                         config: &config,
                         saves: Some(&save_manager),
+                        display_modes: &display_modes,
                     };
                     let shell = match stage.take_shell() {
                         Some(mut shell) => {
@@ -4239,6 +4324,7 @@ fn run_game(
                         cache: &session.cache,
                         config: &config,
                         saves: Some(&save_manager),
+                        display_modes: &display_modes,
                     };
                     let carried_shell = std::mem::replace(shell, MenuShell::new_post_intro(&ctx));
                     state = GameState::Loading {
@@ -4334,6 +4420,7 @@ fn run_game(
                                             cache: &session.cache,
                                             config: &config,
                                             saves: Some(&save_manager),
+                                            display_modes: &display_modes,
                                         };
                                         state = GameState::Paused { shell: MenuShell::new_single_player_menu(
                                             &ctx, v2k_game::game_state::SinglePlayerMenuKind::CampaignSave,
@@ -4518,6 +4605,7 @@ fn run_game(
                             cache: &session.cache,
                             config: &config,
                             saves: Some(&save_manager),
+                            display_modes: &display_modes,
                         };
                         keys_down.clear();
                         mouse_buttons_down.clear();
@@ -4601,6 +4689,10 @@ fn run_game(
                 em.advance_environment_frame(&mut world_fx, elapsed_micros);
                 let mut pending_hive_death_effects = None;
                 let mut static_damage_explosion_lights = Vec::new();
+                // Mouse motion and wheel notches since the previous reader
+                // call, which consumes them all at once.
+                let mut mouse_motion = (0i32, 0i32);
+                let mut wheel_away = 0i32;
 
                 for event in &events {
                     match event {
@@ -4673,7 +4765,10 @@ fn run_game(
                             mouse_buttons_down.clear();
                         }
                         GameEvent::MouseMotion { xrel, yrel } => {
-                            if !chase_mode {
+                            if chase_mode {
+                                mouse_motion.0 = mouse_motion.0.saturating_add(*xrel);
+                                mouse_motion.1 = mouse_motion.1.saturating_add(*yrel);
+                            } else {
                                 // Live-world free-fly keeps gameplay's left-
                                 // handed view, so mouse-right must increase
                                 // screen-right rather than world +X.
@@ -4686,6 +4781,9 @@ fn run_game(
                                 camera.pitch -= *yrel as f32 * mouse_sensitivity;
                                 camera.pitch = camera.pitch.clamp(-1.4, 1.4);
                             }
+                        }
+                        GameEvent::MouseWheel { y } => {
+                            wheel_away = wheel_away.saturating_add(*y);
                         }
                         _ => {}
                     }
@@ -4817,10 +4915,33 @@ fn run_game(
                     let channels = if player_hull.dying {
                         MotionChannels::default()
                     } else {
-                        MotionChannels::from_keys_with_sensitivity(
+                        // The reader steps the weapon once for any wheel
+                        // motion since its previous call.
+                        apply_gameplay_input_edges(
+                            GameplayInputEdges {
+                                weapon_cycle: wheel_weapon_step(wheel_away),
+                                ..GameplayInputEdges::default()
+                            },
+                            has_player,
+                            player_hull.dying,
+                            em,
+                            &mut weapon_inventory,
+                            &mut player_craft,
+                        );
+                        MotionChannels::from_input(
                             &keys_down,
+                            AnalogInput {
+                                mouse_dx: mouse_motion.0,
+                                mouse_dy: mouse_motion.1,
+                                mouse_thrust: mouse_buttons_down.contains(&MouseButton::Left),
+                                joystick,
+                            },
                             elapsed_micros,
-                            sensitivity,
+                            ReaderSettings {
+                                sensitivity,
+                                joystick_mode: JoystickMode::from_setting(config.joystick_mode),
+                                full_absolute: config.absolute_mode,
+                            },
                         )
                     };
                     let frame_forces = em.player_mut().map(|player| {
@@ -5511,8 +5632,11 @@ fn run_game(
                 let sea_level = session.cache.terrain().and_then(|terrain| {
                     terrain.water_enabled().then(|| terrain.sea_level_world_y())
                 });
+                // Enter and joystick button 1 share the fire descriptor.
                 let primary_trigger = PrimaryTriggerInput {
-                    source_a: !player_hull.dying && keys_down.contains(&Keycode::Return),
+                    source_a: !player_hull.dying
+                        && (keys_down.contains(&Keycode::Return)
+                            || joystick.is_some_and(JoystickSample::fire)),
                     source_b: !player_hull.dying
                         && mouse_buttons_down.contains(&MouseButton::Right),
                 };

@@ -497,6 +497,8 @@ pub struct MenuCtx<'a> {
     pub cache: &'a ResourceCache,
     pub config: &'a GameConfig,
     pub saves: Option<&'a SaveManager>,
+    /// What the game window's display offers, for the Resolution row.
+    pub display_modes: &'a v2k_render::DisplayModes,
 }
 
 impl<'a> MenuCtx<'a> {
@@ -736,10 +738,7 @@ impl MenuShell {
         phase: MenuPhase,
         from_gameplay: bool,
     ) -> Self {
-        // The resolution spinner indexes the port's preset list (the
-        // original indexed Section 5 display modes).
-        engine.resolution_count = v2k_render::RESOLUTIONS.len() as u32;
-        sync_settings_from_config(&mut engine, ctx.config);
+        sync_settings_from_config(&mut engine, ctx.config, ctx.display_modes);
         let mut shell = Self {
             engine,
             phase,
@@ -1244,6 +1243,8 @@ impl MenuShell {
 
     /// Rebuild the view model (after input or external changes).
     pub fn refresh(&mut self, ctx: &MenuCtx) {
+        // A Display change or another monitor changes the Resolution row.
+        sync_display_settings(&mut self.engine, ctx.config, ctx.display_modes);
         self.rebuild_view(ctx);
         self.commit_list_window();
     }
@@ -1880,10 +1881,11 @@ fn item_value(
                 "OpenGL".to_string()
             }
         }
-        SettingId::FullScreen => ctx.string_or(
-            6 + v as usize,
-            if v == 0 { "In a Window" } else { "Full Screen" },
-        ),
+        // Retail strings 6 and 7; Borderless is the port's third value.
+        SettingId::FullScreen => match v2k_render::WindowMode::from_index(v) {
+            mode @ v2k_render::WindowMode::Borderless => mode.label().to_string(),
+            mode => ctx.string_or(6 + mode.index() as usize, mode.label()),
+        },
         SettingId::Scaling => v2k_render::ScalingMode::from_index(v).label().to_string(),
         SettingId::Bilinear | SettingId::Targetter | SettingId::AbsoluteMode => {
             ctx.string_or(12 + v as usize, if v == 0 { "Disabled" } else { "Enabled" })
@@ -1961,8 +1963,28 @@ pub fn ambient_setting_value(config: &GameConfig) -> u32 {
     }
 }
 
+/// The Display and Resolution rows: the window mode, and the resolution's
+/// index in the row the display offers for it.
+pub fn sync_display_settings(
+    engine: &mut MenuEngine,
+    config: &GameConfig,
+    display_modes: &v2k_render::DisplayModes,
+) {
+    engine.resolution_count = display_modes.resolutions(config.display).len() as u32;
+    let s = &mut engine.settings;
+    s.set(SettingId::FullScreen, config.display.index());
+    if let Some(index) = display_modes.selection(config.display, config.size()) {
+        s.set(SettingId::Resolution, index as u32);
+    }
+}
+
 /// Seed the engine's settings struct from the persisted GameConfig.
-pub fn sync_settings_from_config(engine: &mut MenuEngine, config: &GameConfig) {
+pub fn sync_settings_from_config(
+    engine: &mut MenuEngine,
+    config: &GameConfig,
+    display_modes: &v2k_render::DisplayModes,
+) {
+    sync_display_settings(engine, config, display_modes);
     let s = &mut engine.settings;
     s.set(
         SettingId::SoundVolume,
@@ -1977,11 +1999,7 @@ pub fn sync_settings_from_config(engine: &mut MenuEngine, config: &GameConfig) {
         SettingId::Sensitivity,
         (config.sensitivity * 15.0).round() as u32,
     );
-    if let Some(idx) = config.resolution_index() {
-        s.set(SettingId::Resolution, idx as u32);
-    }
     s.set(SettingId::SelfRighting, config.self_righting.min(15) as u32);
-    s.set(SettingId::FullScreen, config.fullscreen as u32);
     s.set(SettingId::Scaling, config.scaling.index());
     s.set(SettingId::Bilinear, config.bilinear_filtering as u32);
     s.set(SettingId::Joystick, config.joystick_mode.min(1) as u32);
@@ -1997,8 +2015,14 @@ pub fn sync_settings_from_config(engine: &mut MenuEngine, config: &GameConfig) {
     );
 }
 
-/// Apply a changed setting back to the GameConfig.
-pub fn apply_setting_to_config(config: &mut GameConfig, id: SettingId, v: u32) {
+/// Apply a changed setting back to the GameConfig. The Display and
+/// Resolution rows choose from what `display_modes` offers.
+pub fn apply_setting_to_config(
+    config: &mut GameConfig,
+    id: SettingId,
+    v: u32,
+    display_modes: &v2k_render::DisplayModes,
+) {
     match id {
         SettingId::SoundVolume => {
             config.sound_enabled = v > 0;
@@ -2013,7 +2037,9 @@ pub fn apply_setting_to_config(config: &mut GameConfig, id: SettingId, v: u32) {
         }
         SettingId::Sensitivity => config.sensitivity = v as f32 / 15.0,
         SettingId::SelfRighting => config.self_righting = v.min(15) as u8,
-        SettingId::FullScreen => config.fullscreen = v == 1,
+        SettingId::FullScreen => {
+            config.select_window_mode(v2k_render::WindowMode::from_index(v), display_modes)
+        }
         SettingId::Scaling => config.scaling = v2k_render::ScalingMode::from_index(v),
         SettingId::Bilinear => config.bilinear_filtering = v != 0,
         SettingId::Joystick => config.joystick_mode = v.min(1) as u8,
@@ -2030,10 +2056,9 @@ pub fn apply_setting_to_config(config: &mut GameConfig, id: SettingId, v: u32) {
             };
         }
         SettingId::Resolution => {
-            // The port spinner selects output size, independently of Low's
-            // authored 320x240 artwork. NativeSettings' retail tier byte keeps
-            // its separate import semantics.
-            config.set_resolution_index(v as usize);
+            // The row indexes the display's offered sizes, independently of
+            // Low's authored 320x240 artwork; the retail word keeps the tier.
+            config.select_resolution(v as usize, display_modes);
         }
         // Vibration is hidden in the PC screen and unknown settings addresses
         // have no portable representation.
@@ -2046,10 +2071,10 @@ mod tests {
     use super::FrontendDepthFadeMode;
     use super::{
         apply_setting_to_config, fly_model_anim_raw, fly_offsets, item_bar, ring_step_delta,
-        sync_settings_from_config, window_top, Intro2PresentationStage, KlausBackdropAnimState,
-        KlausEffects, KlausSequenceState, MenuCtx, MenuItem, MenuLayout, MenuPhase, MenuShell,
-        MenuState, PauseSwitchAway, PostIntroStage, ShellEvent, SlotOverlayPage, FLY_LEG_SECS,
-        LIST_WINDOW_ROWS,
+        sync_display_settings, sync_settings_from_config, window_top, Intro2PresentationStage,
+        KlausBackdropAnimState, KlausEffects, KlausSequenceState, MenuCtx, MenuItem, MenuLayout,
+        MenuPhase, MenuShell, MenuState, PauseSwitchAway, PostIntroStage, ShellEvent,
+        SlotOverlayPage, FLY_LEG_SECS, LIST_WINDOW_ROWS,
     };
     use crate::hover::RETAIL_FRAME_DELTA_MAX_US;
     use crate::menu_data::{
@@ -2167,6 +2192,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
 
         let shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
@@ -2207,6 +2233,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell =
             MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::CampaignSave);
@@ -2247,6 +2274,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -2288,6 +2316,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -2307,6 +2336,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
         assert!(shell.engine.push(crate::menu_data::QUIT_CONFIRM));
@@ -2340,6 +2370,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_frontend(&ctx, false);
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -2506,6 +2537,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_frontend(&ctx, false);
 
@@ -2591,6 +2623,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_frontend(&ctx, false);
         enter_frontend_load_overlay(&mut shell, &ctx);
@@ -2620,6 +2653,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: Some(&saves),
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_frontend(&ctx, false);
         enter_frontend_load_overlay(&mut shell, &ctx);
@@ -2685,6 +2719,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: Some(&saves),
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_frontend(&ctx, false);
         enter_frontend_load_overlay(&mut shell, &ctx);
@@ -2706,6 +2741,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_frontend(&ctx, false);
         enter_frontend_load_overlay(&mut shell, &ctx);
@@ -2747,6 +2783,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -2782,6 +2819,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: Some(&saves),
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -2831,6 +2869,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: Some(&saves),
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -2920,6 +2959,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: Some(&saves),
+            display_modes: &v2k_render::DisplayModes::default(),
         };
         let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -3687,6 +3727,7 @@ mod tests {
             cache: &cache,
             config: &config,
             saves: None,
+            display_modes: &v2k_render::DisplayModes::default(),
         };
 
         let mut returned_frontend = MenuShell::new_frontend(&ctx, false);
@@ -3710,15 +3751,16 @@ mod tests {
 
     #[test]
     fn ambient_setting_round_trips_every_raw_retail_value() {
+        let modes = v2k_render::DisplayModes::default();
         for raw in 0..=15 {
             let mut config = GameConfig::default();
-            apply_setting_to_config(&mut config, SettingId::AmbientVolume, raw);
+            apply_setting_to_config(&mut config, SettingId::AmbientVolume, raw, &modes);
 
             assert_eq!(config.ambient_enabled, raw != 0);
             assert!((config.music_volume - raw as f32 / 15.0).abs() < f32::EPSILON);
 
             let mut engine = MenuEngine::main_menu();
-            sync_settings_from_config(&mut engine, &config);
+            sync_settings_from_config(&mut engine, &config, &modes);
             assert_eq!(engine.settings.get(SettingId::AmbientVolume), raw);
         }
 
@@ -3735,6 +3777,7 @@ mod tests {
 
     #[test]
     fn rendering_row_toggles_between_software_and_opengl() {
+        let modes = v2k_render::DisplayModes::default();
         for (renderer, row) in [
             (v2k_render::RendererChoice::Auto, 1),
             (v2k_render::RendererChoice::OpenGL, 1),
@@ -3746,17 +3789,21 @@ mod tests {
                 ..GameConfig::default()
             };
             let mut engine = MenuEngine::main_menu();
-            sync_settings_from_config(&mut engine, &config);
+            sync_settings_from_config(&mut engine, &config, &modes);
             assert_eq!(engine.settings.get(SettingId::Rendering), row);
-            apply_setting_to_config(&mut config, SettingId::Rendering, 0);
+            apply_setting_to_config(&mut config, SettingId::Rendering, 0, &modes);
             assert_eq!(config.renderer, v2k_render::RendererChoice::Software);
-            apply_setting_to_config(&mut config, SettingId::Rendering, 1);
+            apply_setting_to_config(&mut config, SettingId::Rendering, 1, &modes);
             assert_eq!(config.renderer, v2k_render::RendererChoice::OpenGL);
         }
     }
 
     #[test]
     fn output_resolution_keeps_the_explicit_artwork_tier() {
+        let modes = v2k_render::DisplayModes::new(
+            Some((1920, 1080)),
+            [(640, 480), (1280, 720), (1920, 1080)],
+        );
         for detail in [
             v2k_render::config::GraphicsDetail::Low,
             v2k_render::config::GraphicsDetail::High,
@@ -3765,11 +3812,51 @@ mod tests {
                 detail,
                 ..GameConfig::default()
             };
-            for (index, &(width, height)) in v2k_render::config::RESOLUTIONS.iter().enumerate() {
-                apply_setting_to_config(&mut config, SettingId::Resolution, index as u32);
-                assert_eq!((config.width, config.height), (width, height));
+            let row = modes.resolutions(config.display);
+            for (index, &size) in row.iter().enumerate() {
+                apply_setting_to_config(&mut config, SettingId::Resolution, index as u32, &modes);
+                assert_eq!(config.size(), size);
                 assert_eq!(config.detail, detail);
             }
         }
+    }
+
+    #[test]
+    fn display_rows_follow_the_window_mode_and_the_monitor() {
+        let modes = v2k_render::DisplayModes::new(
+            Some((1920, 1080)),
+            [(640, 480), (1024, 768), (1280, 720), (1920, 1080)],
+        );
+        let mut config = GameConfig {
+            desktop: modes.desktop,
+            ..GameConfig::default()
+        };
+        let mut engine = MenuEngine::main_menu();
+        sync_settings_from_config(&mut engine, &config, &modes);
+        // In a Window: 640x480, 800x600, 1024x768, 1280x720, 1920x1080.
+        assert_eq!(engine.settings.get(SettingId::FullScreen), 0);
+        assert_eq!(engine.resolution_count, 5);
+        assert_eq!(engine.settings.get(SettingId::Resolution), 1);
+
+        apply_setting_to_config(&mut config, SettingId::Resolution, 3, &modes);
+        assert_eq!(config.size(), (1280, 720));
+        // Full Screen lists reported modes; 1280x720 is one.
+        apply_setting_to_config(&mut config, SettingId::FullScreen, 1, &modes);
+        sync_display_settings(&mut engine, &config, &modes);
+        assert_eq!(config.display, v2k_render::WindowMode::FullScreen);
+        assert_eq!(engine.resolution_count, 4);
+        assert_eq!(engine.settings.get(SettingId::Resolution), 2);
+        // Borderless lists only the desktop, draws with its tier and keeps
+        // the saved size for the next mode.
+        apply_setting_to_config(&mut config, SettingId::FullScreen, 2, &modes);
+        sync_display_settings(&mut engine, &config, &modes);
+        assert_eq!(engine.settings.get(SettingId::FullScreen), 2);
+        assert_eq!(engine.resolution_count, 1);
+        assert_eq!(engine.settings.get(SettingId::Resolution), 0);
+        assert_eq!(config.resolution_label(), "1920x1080");
+        assert_eq!(config.system_graphics_variant(), 3);
+        assert_eq!(config.size(), (1280, 720));
+        apply_setting_to_config(&mut config, SettingId::FullScreen, 0, &modes);
+        assert_eq!(config.size(), (1280, 720));
     }
 }

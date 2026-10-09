@@ -5,7 +5,8 @@ surface is a 16-bpp software surface, and how `v2k-render::software`
 reproduces it. This is the CPU path; the alternate/Direct3D `Graph2D` table
 (`FUN_00481240..FUN_00492A10`) is a different consumer and is not described
 here. See [RENDER_PIPELINE.md](RENDER_PIPELINE.md) for the queue, producers
-and the frame-level evidence.
+and the frame-level evidence. Infestation's retail software renderer descends
+from this rasterizer; see the [Infestation cross-reference](INFESTATION_CROSS_REFERENCE.md#shared-code).
 
 Status: every reachable fill slot and every span row a slot can bind is
 ported and matches retail byte for byte on the native receipts below, and

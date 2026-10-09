@@ -397,8 +397,11 @@ fn classify_select(it: &RawItem) -> SelectAction {
         0x43CCA0 => SelectAction::Toggle {
             setting: SettingId::Bilinear,
         },
-        0x43CCD0 => SelectAction::Toggle {
+        // FUN_0043CCD0 clamps the Full Screen word to 0..1; the port's
+        // Borderless is a third value.
+        0x43CCD0 => SelectAction::Spinner {
             setting: SettingId::FullScreen,
+            max: 2,
         },
         0x456170 => SelectAction::Continue,
         0x456340 => SelectAction::QuitConfirmed,
@@ -676,16 +679,17 @@ mod tests {
             .items
             .iter()
             .any(|i| i.select == SelectAction::ResolutionSpinner));
-        for s in [
-            SettingId::Rendering,
-            SettingId::Bilinear,
-            SettingId::FullScreen,
-        ] {
+        for s in [SettingId::Rendering, SettingId::Bilinear] {
             assert!(display
                 .items
                 .iter()
                 .any(|i| i.select == SelectAction::Toggle { setting: s }));
         }
+        assert!(display.items.iter().any(|i| i.select
+            == SelectAction::Spinner {
+                setting: SettingId::FullScreen,
+                max: 2
+            }));
         assert_eq!(
             display.items.len(),
             8,
