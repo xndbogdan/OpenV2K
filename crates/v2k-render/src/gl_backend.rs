@@ -5037,33 +5037,20 @@ impl Renderer for GlRenderer {
         )
     }
 
-    fn set_fullscreen(&mut self, on: bool) {
-        use sdl2::video::FullscreenType;
-        let mode = if on {
-            FullscreenType::Desktop
-        } else {
-            FullscreenType::Off
-        };
-        if let Err(e) = self.window.set_fullscreen(mode) {
-            eprintln!("set_fullscreen failed: {e}");
-            return;
-        }
-        // Adopt the new drawable size so the viewport/aspect stay correct.
+    fn set_display(&mut self, request: crate::config::DisplayRequest) -> Result<(), String> {
+        let result = crate::window::apply_display(&mut self.window, request);
+        // Adopt the drawable either way: a restored window may still differ.
         let (w, h) = self.window.drawable_size();
         self.resize(w, h);
+        result
+    }
+
+    fn display_index(&self) -> Option<i32> {
+        self.window.display_index().ok()
     }
 
     fn window_placement(&self) -> Option<crate::WindowPlacement> {
         crate::WindowPlacement::of(&self.window)
-    }
-
-    fn set_window_size(&mut self, width: u32, height: u32) {
-        if let Err(e) = self.window.set_size(width, height) {
-            eprintln!("set window size failed: {e}");
-            return;
-        }
-        let (w, h) = self.window.drawable_size();
-        self.resize(w, h);
     }
 
     fn set_scaling_mode(&mut self, mode: ScalingMode, reference_width: u32, reference_height: u32) {

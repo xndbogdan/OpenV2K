@@ -37,7 +37,7 @@ fn registry_table_retains_exact_names_offsets_and_defaults() {
 }
 
 #[test]
-fn legacy_upgrade_wins_over_retail_and_normalizes_unsupported_display() {
+fn legacy_upgrade_wins_over_retail_and_keeps_its_exact_resolution() {
     let dir = Directory::new();
     let legacy = br#"{"renderer":"wgpu","width":1920,"height":1080,"fullscreen":false,"sfx_volume":0.4,"music_volume":0.46666667,"self_righting":false,"scaling":"stretched","classic_framebuffer":true,"difficulty":"hard"}"#;
     fs::write(dir.0.join("config.json"), legacy).unwrap();
@@ -45,18 +45,20 @@ fn legacy_upgrade_wins_over_retail_and_normalizes_unsupported_display() {
     retail.set(3, 0x76543210);
     retail.set(4, 0);
     let config = load_from_sources(&dir.0, None, Some(retail));
-    assert_eq!((config.width, config.height), (1024, 768));
+    assert_eq!((config.width, config.height), (1920, 1080));
     assert_eq!(config.renderer, RendererChoice::Wgpu);
     // The retired `classic_framebuffer` key in this file is ignored.
     assert_eq!(config.scaling, ScalingMode::Stretched);
     assert_eq!(config.difficulty, Difficulty::Hard);
     assert_eq!(config.self_righting, 0);
-    assert!(!config.fullscreen);
+    assert_eq!(config.display, WindowMode::Window);
     let native = native_to_save(&config);
     assert_eq!(native.get(0), 6);
     assert_eq!(native.get(1), 7);
     assert_eq!(native.get(3), 0x76543210);
-    assert_eq!(native.get(4), 1);
+    // The word holds the retail tier of 1920x1080, the 1024x768 record.
+    assert_eq!(native.get(4), 3);
+    assert_eq!(native.get(7), 0);
     assert_eq!(fs::read(dir.0.join("config.json")).unwrap(), legacy);
     assert!(
         !dir.0.join("settings.json").exists(),
@@ -93,12 +95,12 @@ fn native_tier_is_not_modern_resolution_index_and_unrepresented_words_survive() 
     assert_eq!((config.width, config.height), (800, 600));
     assert_eq!(config.self_righting, 15);
     assert_eq!(native_to_save(&config), retail);
-    config.set_resolution_index(4); // clamped to 1024x768, not retail tier 4
-    assert_eq!((config.width, config.height), (1024, 768));
+    // A new resolution writes its own retail tier, never a row index.
+    config.adopt(WindowMode::Window, (1280, 1024));
     config.difficulty = Difficulty::Easy;
     config.music_volume = 7.0 / 15.0;
     let native = native_to_save(&config);
-    assert_eq!(native.get(4), 2);
+    assert_eq!(native.get(4), 3);
     assert_eq!(native.get(3), 0x12345678);
     assert_eq!(native.get(8), 0xfffffffe);
     assert_eq!(native.get(14), 0x1234);
@@ -140,10 +142,11 @@ fn persistence_separates_native_and_port_files_and_preserves_original_evidence()
     let native: NativeSettings = read_json(&dir.0.join("settings.json")).unwrap();
     assert_eq!(native, stored.unwrap());
     assert_eq!(native.get(1), 7);
-    assert_eq!(native.get(4), 1);
+    assert_eq!(native.get(4), 3);
     let port: serde_json::Value = read_json(&dir.0.join("port-config.json")).unwrap();
-    assert_eq!(port["width"], 1024);
-    assert_eq!(port["height"], 768);
+    assert_eq!(port["width"], 1920);
+    assert_eq!(port["height"], 1080);
+    assert_eq!(port["borderless"], false);
     assert!(port.get("music_volume").is_none());
     assert!(port.get("self_righting").is_none());
     assert!(port.get("classic_framebuffer").is_none());
@@ -153,8 +156,8 @@ fn persistence_separates_native_and_port_files_and_preserves_original_evidence()
         b"original native save evidence"
     );
     let restored = load_from_sources(&dir.0, None, None);
-    assert_eq!((config.width, config.height), (1024, 768));
-    assert_eq!((restored.width, restored.height), (1024, 768));
+    assert_eq!((config.width, config.height), (1920, 1080));
+    assert_eq!((restored.width, restored.height), (1920, 1080));
     assert_eq!(restored.scaling, ScalingMode::FourThree);
     assert_eq!(native_to_save(&restored).get(1), 7);
 }
@@ -204,17 +207,13 @@ fn corrupt_legacy_and_port_fallback_can_still_import_valid_retail_values() {
 }
 
 #[test]
-fn old_hd_preferences_normalize_on_load_and_save_without_coercing_native_words() {
-    for (input, expected) in [
-        ((1280, 720), (800, 600)),
-        ((1920, 1080), (1024, 768)),
-        ((3840, 2160), (1024, 768)),
-    ] {
+fn old_hd_preferences_load_as_exact_resolutions_without_coercing_native_words() {
+    for size in [(1280, 720), (1920, 1080), (3840, 2160)] {
         for filename in ["config.json", "port-config.json"] {
             let dir = Directory::new();
             let old_config = GameConfig {
-                width: input.0,
-                height: input.1,
+                width: size.0,
+                height: size.1,
                 ..GameConfig::default()
             };
             let imported = serde_json::to_vec(&old_config).unwrap();
@@ -224,30 +223,90 @@ fn old_hd_preferences_normalize_on_load_and_save_without_coercing_native_words()
             native.set(4, 0x87654321);
             native.0.insert("Unowned DWORD".into(), 0x89abcdef);
             let mut config = load_from_sources(&dir.0, Some(native.clone()), None);
-            assert_eq!((config.width, config.height), expected);
+            assert_eq!(config.size(), size);
             assert_eq!(fs::read(dir.0.join(filename)).unwrap(), imported);
             assert_eq!(native_to_save(&config), native);
 
-            // Save also repairs dimensions edited by an older caller, before
-            // writing port preferences or consulting the registry backend.
-            config.width = input.0;
-            config.height = input.1;
             save_with_registry(&mut config, &dir.0, |stored| {
                 assert_eq!(stored, &native);
                 Ok(())
             })
             .unwrap();
-            assert_eq!((config.width, config.height), expected);
             let stored: PortPreferences = read_json(&dir.0.join("port-config.json")).unwrap();
-            assert_eq!((stored.width, stored.height), expected);
+            assert_eq!((stored.width, stored.height), size);
             let restored = load_from_sources(&dir.0, None, None);
-            assert_eq!((restored.width, restored.height), expected);
+            assert_eq!(restored.size(), size);
             assert_eq!(native_to_save(&restored), native);
             if filename == "config.json" {
                 assert_eq!(fs::read(dir.0.join(filename)).unwrap(), imported);
             }
         }
     }
+}
+
+#[test]
+fn a_saved_full_screen_loads_as_exclusive_full_screen_at_its_resolution() {
+    // The port's former desktop-mode full screen: native word 1, a port
+    // file with no Borderless field.
+    let dir = Directory::new();
+    fs::write(
+        dir.0.join("port-config.json"),
+        br#"{"renderer":"opengl","width":1024,"height":768,"scaling":"native","detail":"high","difficulty":"medium"}"#,
+    )
+    .unwrap();
+    let mut native = NativeSettings::default();
+    native.set(4, 1);
+    native.set(7, 1);
+    let config = load_from_sources(&dir.0, Some(native.clone()), None);
+    assert_eq!(config.display, WindowMode::FullScreen);
+    assert_eq!(config.size(), (1024, 768));
+    assert_eq!(config.system_graphics_variant(), 3);
+    // Loading changes nothing the user saved.
+    assert_eq!(native_to_save(&config), native);
+}
+
+#[test]
+fn window_modes_keep_retail_full_screen_words_and_a_port_borderless_flag() {
+    for (display, word, borderless) in [
+        (WindowMode::Window, 0, false),
+        (WindowMode::FullScreen, 1, false),
+        (WindowMode::Borderless, 1, true),
+    ] {
+        let dir = Directory::new();
+        let mut config = GameConfig {
+            display,
+            width: 2560,
+            height: 1440,
+            ..GameConfig::default()
+        };
+        let mut written = None;
+        save_with_registry(&mut config, &dir.0, |native| {
+            written = Some(native.clone());
+            Ok(())
+        })
+        .unwrap();
+        let written = written.unwrap();
+        assert_eq!(written.get(7), word, "{display:?}");
+        assert_eq!(written.get(4), 3, "{display:?}");
+        let port: PortPreferences = read_json(&dir.0.join("port-config.json")).unwrap();
+        assert_eq!(port.borderless, borderless, "{display:?}");
+        assert_eq!((port.width, port.height), (2560, 1440));
+        let restored = load_from_sources(&dir.0, Some(written), None);
+        assert_eq!(restored.display, display);
+        assert_eq!(restored.size(), (2560, 1440));
+    }
+
+    // Borderless refines only a covering native word.
+    let dir = Directory::new();
+    fs::write(
+        dir.0.join("port-config.json"),
+        br#"{"renderer":"opengl","width":800,"height":600,"borderless":true}"#,
+    )
+    .unwrap();
+    let mut native = NativeSettings::default();
+    native.set(7, 0);
+    let config = load_from_sources(&dir.0, Some(native), None);
+    assert_eq!(config.display, WindowMode::Window);
 }
 
 #[test]

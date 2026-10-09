@@ -129,13 +129,16 @@ a worker so the window stays responsive while importing or verifying files.
 Launcher display and audio controls use `GameConfig::load` and `try_save`,
 including the same portable settings files and port-owned registry namespace
 used by the game menus. Retail registry settings remain import-only.
-Resolution offers only 640x480, 800x600 and 1024x768. Fullscreen uses the
-current desktop resolution without switching display modes; the selected
-preset determines the window size and authored layout tier. Older HD presets
-load as the largest original preset that fits their dimensions.
-Renderer offers Automatic and OpenGL; the unimplemented Software option is
-unavailable, and old Software preferences load as OpenGL. Normal startup does
-not fall back to the stub when OpenGL fails.
+Display offers In a Window, Full Screen and Borderless. Resolution lists what
+the game's Display menu lists for the primary display, where the game opens:
+640x480, 800x600 and 1024x768 plus the display's reported modes, in physical
+pixels ([colour depth and resolution](docs/re/RENDER_PIPELINE.md#colour-depth-and-resolution)).
+Changing Display lists its resolutions again. Full Screen changes the display
+mode when the game starts; Borderless covers the desktop.
+Renderer offers Automatic, OpenGL and Software; without a command-line choice,
+OpenGL that cannot start falls back to Software.
+The game is per-monitor DPI aware. The launcher's own windows keep their
+system-DPI layout.
 The launcher remembers its data directory, last image and automatic-launch
 preference separately under `%LOCALAPPDATA%/V2000 Port/launcher.json`.
 `--launcher-state <path>` selects another preference file for a portable or

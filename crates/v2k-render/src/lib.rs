@@ -24,7 +24,10 @@ pub mod window;
 
 pub use audio::AudioPlayer;
 pub use camera::Camera;
-pub use config::{Difficulty, GameConfig, RendererChoice, ScalingMode, RESOLUTIONS};
+pub use config::{
+    Difficulty, DisplayModes, DisplayRequest, GameConfig, RendererChoice, ScalingMode, WindowMode,
+    ORIGINAL_RESOLUTIONS,
+};
 pub use music::MusicPlayer;
 pub use projection::{
     project_particle_center, retail_underwater_projected_point, retail_underwater_projection,
@@ -48,8 +51,8 @@ pub use terrain_tiles::TerrainFrames;
 pub use ui_mapping::{UiAnchor, UiMapping, UiMappingRequest, UiSubmissionPolicy};
 pub use water::WaterFrames;
 pub use window::{
-    apply_app_window_icon, ControllerSample, GameEvent, GameWindow, PadSnapshot, PointerMode,
-    WindowPlacement,
+    apply_app_window_icon, declare_dpi_awareness, ControllerSample, GameEvent, GameWindow,
+    PadSnapshot, PointerMode, WindowPlacement,
 };
 
 pub use gl_backend::{authored_face_plane_visible, GlRenderer};

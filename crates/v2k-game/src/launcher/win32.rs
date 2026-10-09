@@ -24,6 +24,53 @@ pub struct Rect {
     pub bottom: i32,
 }
 
+/// `MONITORINFOEXW`.
+#[repr(C)]
+pub struct MonitorInfo {
+    pub size: u32,
+    pub monitor: Rect,
+    pub work: Rect,
+    pub flags: u32,
+    pub device: [u16; 32],
+}
+
+/// `DEVMODEW`, display fields.
+#[repr(C)]
+pub struct DevMode {
+    pub device_name: [u16; 32],
+    pub spec_version: u16,
+    pub driver_version: u16,
+    pub size: u16,
+    pub driver_extra: u16,
+    pub fields: u32,
+    pub position: Point,
+    pub display_orientation: u32,
+    pub display_fixed_output: u32,
+    pub color: i16,
+    pub duplex: i16,
+    pub y_resolution: i16,
+    pub tt_option: i16,
+    pub collate: i16,
+    pub form_name: [u16; 32],
+    pub log_pixels: u16,
+    pub bits_per_pel: u32,
+    pub pels_width: u32,
+    pub pels_height: u32,
+    pub display_flags: u32,
+    pub display_frequency: u32,
+    pub icm_method: u32,
+    pub icm_intent: u32,
+    pub media_type: u32,
+    pub dither_type: u32,
+    pub reserved_1: u32,
+    pub reserved_2: u32,
+    pub panning_width: u32,
+    pub panning_height: u32,
+}
+
+const _: () = assert!(std::mem::size_of::<DevMode>() == 220);
+const _: () = assert!(std::mem::size_of::<MonitorInfo>() == 104);
+
 #[repr(C)]
 pub struct WindowClass {
     pub size: u32,
@@ -196,7 +243,10 @@ unsafe extern "system" {
     pub fn AdjustWindowRectEx(rect: *mut Rect, style: u32, menu: i32, extended: u32) -> i32;
     pub fn GetSystemMetrics(index: i32) -> i32;
     pub fn GetDpiForSystem() -> u32;
-    pub fn SetProcessDPIAware() -> i32;
+    pub fn SetThreadDpiAwarenessContext(context: isize) -> isize;
+    pub fn MonitorFromPoint(point: Point, flags: u32) -> Handle;
+    pub fn GetMonitorInfoW(monitor: Handle, info: *mut MonitorInfo) -> i32;
+    pub fn EnumDisplaySettingsW(device: *const u16, mode: u32, settings: *mut DevMode) -> i32;
     pub fn BeginPaint(window: Handle, paint: *mut PaintStruct) -> Handle;
     pub fn EndPaint(window: Handle, paint: *const PaintStruct) -> i32;
     pub fn FillRect(dc: Handle, rect: *const Rect, brush: Handle) -> i32;
