@@ -240,6 +240,24 @@ impl MenuEngine {
         }
     }
 
+    /// Move the cursor to the screen's Continue row and select it, which is
+    /// how a Remastered pad resumes from a pause root. A screen without an
+    /// enabled Continue row is left alone.
+    pub fn select_continue(&mut self) -> Vec<MenuCommand> {
+        let mask = self.vis_mask;
+        let Some(index) = self.current().and_then(|screen| {
+            screen.items.iter().position(|item| {
+                item.select == SelectAction::Continue && item_is_enabled(item, mask)
+            })
+        }) else {
+            return Vec::new();
+        };
+        if let Some(slot) = self.stack.last_mut() {
+            slot.sel = index;
+        }
+        self.select()
+    }
+
     /// Escape/back: sound 3, pop one screen, and issue Klaus Intro Sequence
     /// command 1 when the resulting depth is shallower than 3
     /// (`FUN_0042BAD0`).
@@ -598,6 +616,26 @@ mod tests {
             );
             engine.handle(MenuInput::Down);
         }
+    }
+
+    #[test]
+    fn select_continue_takes_the_pause_roots_continue_row() {
+        let mut engine = MenuEngine::main_menu();
+        engine.reset(PAUSE_FULL, VIS_INGAME);
+        engine.handle(MenuInput::Down);
+        assert_eq!(
+            engine.select_continue(),
+            vec![MenuCommand::PlaySound(3), MenuCommand::ResumeGame]
+        );
+        assert_eq!(
+            engine.current().unwrap().items[engine.selected()].select,
+            SelectAction::Continue
+        );
+        // The frontend ring has no Continue row.
+        let mut frontend = MenuEngine::main_menu();
+        let before = frontend.selected();
+        assert!(frontend.select_continue().is_empty());
+        assert_eq!(frontend.selected(), before);
     }
 
     #[test]

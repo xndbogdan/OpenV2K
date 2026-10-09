@@ -11,17 +11,17 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,383 | |
 | Marked not needed (excluded below) | 1 | |
-| **Referenced by port code** | **890** | **37.4%** |
-| Referenced by code or RE notes | 1,149 | 48.2% |
+| **Referenced by port code** | **894** | **37.5%** |
+| Referenced by code or RE notes | 1,155 | 48.5% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 201 |
+| implemented | 202 |
 | approximated | 6 |
-| documented | 0 |
+| documented | 1 |
 | not-needed | 1 |
 
 82 `FUN_` citations don't match a retail function

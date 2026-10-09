@@ -46,8 +46,8 @@ integrator that interprets the same motion vector, not in the keys.
 | **S** 0x1F | held | gun depression, finer 0x900 scale | body nose-down; suppresses SPACE's separate powered-pitch coupling, not Self Righting |
 | **X** 0x2D | held | gun elevation, finer 0x900 scale | body nose-up; suppresses SPACE's separate powered-pitch coupling, not Self Righting |
 | **ENTER / right mouse / joystick button 1** | held\* | **fire primary weapon** | fire (**NOT locked**) |
-| **A** 0x1E | press | special-weapon deploy (cap 4; cb 0x00444400) | same |
-| **ENTER+LALT** | press | confirm / special-deploy | same |
+| **/** 0x35 (A up), **A** 0x1E (/ and LSHIFT up) | held | fire, as ENTER | same |
+| **A + /** together | press | special-weapon deploy (cap 4; cb 0x00444400) | same |
 | **E** 0x12 | press | next target / rotate selection list | same |
 | **B/PgDn/LShift/L** | press | next weapon | same |
 | **V/PgUp/CapsLock/K** | press | previous weapon | same |
@@ -58,7 +58,7 @@ integrator that interprets the same motion vector, not in the keys.
 | **Mouse Y / joystick Y** | analog | gun aim: pulling back elevates | body pitch: pushing forward drops the nose |
 | **Left mouse / joystick button 2** | held | same as SPACE | same as SPACE |
 | **Mouse wheel** | per frame | towards you: next weapon; away: previous | same |
-| (console pads only) | held | VTOL vertical ±0xA00; no PC device binds it | same |
+| (none) | held | VTOL vertical ±0xA00: descriptors `0x4CD8B0`/`0x4CD8B8`, which no table binds, the console ones included | same |
 
 SPACE and RSHIFT contribute `+0x10000` and `-0x10000` to one signed throttle
 channel, but fan speed uses that channel's magnitude. Either key therefore
@@ -78,6 +78,14 @@ reversed even though its raw key grouping was correct.
 \* A foreground retail capture observes Enter and right mouse feeding the same
 held trigger. This supersedes the earlier Ctrl inference from the isolated
 input-reader decompile; Ctrl does not fire in the captured retail configuration.
+The table's Ctrl records name descriptor `0x4FE6A0`, which nothing fills.
+
+Fire has three keyboard records, each excluding a chord: ENTER requires LALT
+up (LALT+ENTER is the Full Screen toggle, bound by the screen sets below), `/`
+requires A up, and A requires `/` and LSHIFT up. Record `0x004C2BB0` then binds
+A and `/` held together to the special-weapon callback `0x00444400`. The older
+table read A alone as the special deploy and LALT+ENTER as a confirm. These
+rows are static readings that no capture has exercised yet.
 
 The beam bindings deliberately **exclude** LShift. Their raw records require
 DIK D (`0x20`) or C (`0x2E`) at `+4` and place DIK LShift (`0x2A`) in the
@@ -118,9 +126,10 @@ and subtracts DOWN. Hover then performs `barrel -= channel/2`. Consequently
 UP/S depress the gun and DOWN/X elevate it. Positive barrel angles are world-up;
 the asymmetric clamp allows only 11.25° depression but 67.5° elevation.
 
-**NOT bound in the 29-row craft table (definitive):** weapon keys 1–6
-(menu-only, 0x4C05F0); zoom; HUD toggle; self-right keypress (it's an options
-auto-stabilize setting → `S+0x20C`); boost; horn; secondary-fire.
+**NOT bound in the 29-row craft table (definitive):** keys 1–6 (the menu set
+binds them to force a deathmatch world, below); zoom; HUD toggle; self-right
+keypress (it's an options auto-stabilize setting → `S+0x20C`); boost; horn;
+secondary-fire.
 
 **Fullscreen map is bound separately:** gameplay also registers UI descriptor
 `0x004C2AD8`, whose keyboard row at `0x004C26D0` binds DIK **M** (`0x32`) to
@@ -231,6 +240,196 @@ screen edge.
   instead of scaling by the 50 Hz tick. Keyboard aim speed follows the frame
   rate as it does in retail, and mouse aim is the same at any frame rate.
 
+## Every binding set
+
+Each screen installs one binding set; play installs the craft set together
+with the in-play set. A set is 24 dwords: slots 0, 1, 2, 6 and 7 hold digital
+tables for the keyboard, mouse buttons, joystick buttons, a digital console
+pad and an analog console pad, and slots 13, 14 and 19 hold the analog tables
+of the mouse, the joystick and the analog pad. A digital record names a
+descriptor, up to four inputs that must be down and up to four that must be
+up. The PC never creates a pad device, so the pad slots keep the console
+version's layouts unused; they are listed below as that version's controls.
+Pad inputs are PlayStation pad bit numbers plus one: Select, L3, R3, Start, Up,
+Right, Down, Left, L2, R2, L1, R1, Triangle, Circle, Cross, Square.
+
+The PlayStation release (PAL `SLES_005.45`) installs the same sets, so the
+console column below is that version's actual layout. It has four pad device
+types: 6 a digital pad, 7 a DualShock-class pad in digital mode, 8 an analog
+pad and 9 a DualShock-class pad in analog mode, with the analog tables in
+slots 20 and 21. Types 6 and 7 share one table and types 8 and 9 another; the
+two have the same rows, and both match the PC's slot-6 copy row for row. The
+PC keeps them as slot 6 (digital) and slot 7 (analog), with the analog table in
+slot 19. The one difference is the craft sets' fire descriptor: a plain held
+flag on the console, one with a callback on the PC.
+
+| Screen (set) | Keyboard | Original console pad |
+|---|---|---|
+| Frontend menus (`0x004C0818`) | arrows move; ENTER (LALT up) or SPACE select; ESCAPE (no SHIFT) back; SHIFT+ESCAPE quit to the desktop; LALT+ENTER Full Screen toggle; 1–6 force deathmatch world 1–6 (the host, entering a network game) | D-pad moves, Cross selects, Triangle goes back |
+| Intro movie (`0x004C0B28`, player `FUN_0042AAE0`) | ENTER or SPACE skip to the next mode (`FUN_0042ADA0`); ESCAPE runs the menu back handler | every button skips: Start, Select, D-pad, the four face buttons, L1, L2, R1, R2 |
+| Attract demo (`0x004BEC70`, `FUN_00426320`) | ENTER applies, ESCAPE leaves, LEFT/RIGHT step a 16.16 value by one, LALT+ENTER | Cross, Triangle, Left/Right |
+| In play (`0x004C2AD8`, beside the craft set) | SPACE or ENTER continue, and while session state `+0x296` is 4 or less skip the level opening; ESCAPE (no SHIFT) or P pause, also skipping the opening; SHIFT+ESCAPE abort the mission (`+0x28D`); M map (state above 4); T (LSHIFT up) toggles the Targetter (settings `+0x34`); LSHIFT+C/E/R/A/T/H/S/O/Q type cheat digits 1–9 (`FUN_00455BD0` compares eight digits with the table at `0x4D1330`); F8, F9, F11, F12 and LSHIFT+D run debug actions gated by player flags `+0x1C4`; LALT+ENTER | Cross, Square, Circle or Triangle continue; Start pauses; Select opens the map; Start+Select aborts; R1 with Left, Right, Triangle, Circle, Cross, Square, R2, L1 or L2 types digits 1–9; Cross+R1 is the debug spawn; the right stick moves the camera (below) |
+| Briefing (`0x004C2580`; "Press S to Save, Space to Continue") | S save; SPACE, ENTER, ESCAPE or N continue; SHIFT+ESCAPE abort | Triangle saves; Start or Cross continues; Start+Select aborts |
+| Results (`0x004C45B0`) | arrows; ENTER confirm; ESCAPE back; P pause; SHIFT+ESCAPE abort | D-pad; Cross; Triangle; Start; Start+Select |
+| Full-screen map (`0x004C4730`) | M, ESCAPE, SPACE, ENTER, A or `/` close | Cross or Select closes |
+| Craft (`0x004C4120`) | the keymap above; mouse and joystick in slots 1, 2, 13 and 14 | configuration 0 below |
+
+The screen text names only keyboard keys: the menu help line
+`<Enter> select, <Escape> back`, the briefing's
+`Press S to Save, Space to Continue`, and `Press Fire`.
+
+### Original console controller layouts
+
+Five more craft sets (`0x004C4180`, `0x004C41E0`, `0x004C4240`, `0x004C42A0`,
+`0x004C4300`) repeat the keyboard, mouse and joystick tables and differ only in
+the pad slots: the console version's six controller configurations. The
+console's Controls screen offers them as Controller Config (setting
+`0x800E3AF4`), named Relative 1, Relative 2, Relative 3, Absolute 1, Absolute 2
+and Absolute 3, and play installs the chosen set (`0x80087750`). The choice
+also sets the Joystick word (settings `+0x08`, the PC's Joystick
+Absolute/Relative option): Relative for 0–2 and Absolute for 3–5
+(`0x800694D4`), so the console screen has no separate Joystick row. The PC
+always uses configuration 0 (`FUN_004292A0` returns 0). In all six the D-pad
+pitches and turns like the arrow keys, and R1 also works as a shift.
+
+| Action | 0 Relative 1 | 1 Relative 2 | 2 Relative 3 | 3 Absolute 1 | 4 Absolute 2 | 5 Absolute 3 |
+|---|---|---|---|---|---|---|
+| Throttle (SPACE) | Square | Cross | Cross | Square | Cross | Cross |
+| Reverse throttle (RSHIFT) | Circle | Circle | R1+Cross | R1+Square | R1+Cross | R1+Cross |
+| Fire | Cross | Square | R2 | Cross | Square | R2 |
+| Special weapon | Cross+L1+L2 | Square+R1+R2 | R1+R2 | R1+Cross | R1+Square | R1+R2 |
+| Hover/VTOL (TAB) | Triangle | Triangle | Triangle | Triangle | R2 | Triangle |
+| Next weapon | L2 | R2 | L2 | R2; R1+Down; R1+L2 | Circle; R1+Down; R1+L2 | Square; R1+Down; R1+L2 |
+| Previous weapon | L1 | R1 | L1 | R1+R2; R1+Up; R1+L1 | R1+Circle; R1+Up; R1+L1 | R1+Square; R1+Up; R1+L1 |
+| Beam in / collect (C) | R1 | L1 | Square | Circle | Triangle | Circle |
+| Beam out / drop (D) | R2 | L2 | Circle | R1+Circle | R1+Triangle | R1+Circle |
+| Next target (E) | R1+R2 | L1+L2 | R1+Square; R1+Circle | R1+Triangle | R1+R2 | R1+Triangle |
+| Pitch fine (S/X) | | | | L2 / L1 | L2 / L1 | L2 / L1 |
+
+Most single-button entries require R1 up, and fire requires the special
+weapon's other buttons up, so a chord never also triggers its parts, as on
+the keyboard. The console driver drops L3 and R3 (`0x800D07B4` keeps inputs 1
+and 4–16), so neither stick click does anything.
+
+The console driver stores the left stick as axes 0 and 1 and the right stick
+as axes 2 and 3 (`0x800D07B4`, reordering libpad's right-stick-first buffer).
+The craft's analog table (PC `0x004C40D8`, console `0x800149E8`) sends the left
+stick's X and Y to the same turn and pitch channels as the PC joystick. Its
+adapter row (`0x004CA528`) subtracts `0x80` from each axis, as the joystick's
+subtracts `0x8000`, and the table scales by 32, so full deflection is about
+±4096, the joystick's range, before the reader's dead zone. The in-play set's
+analog table (PC `0x004C2A90`, console `0x80013748`) gives the right stick to
+the chase camera: X, scaled by −8, feeds the parameter-3 controller
+(`0x004F71C0`) and Y, scaled by +8, the parameter-4 controller (`0x004F71C8`).
+`FUN_0040ED10` moves the eye sideways by distance × parameter 3 / 2048 and
+adds parameter 4 to the `0x800` chase distance. Without a pad the PC keeps
+both at zero.
+
+### Controller detection
+
+Retail probes up to 16 WinMM joysticks once, when input starts
+(`FUN_004AC110`, through the device driver table at `0x004C5800`), and reads
+them every 20 ms (`FUN_004AC2A0`). A failed read keeps the device's last state
+and nothing probes again, so a joystick plugged in later is never seen and an
+unplugged one keeps its last position and buttons.
+
+The console follows pads continuously. libpad reads both ports, and a
+multitap's four slots, and FGDK's poller (`0x800CFCD8`) runs every 8 ms. A
+slot without a pad reads as input 31 alone (`0x800D0840`). A console-only set
+(`0x800104B0`) binds input 31 of every device type to an absent flag, and
+`0x8001A228` counts the open devices whose flag is clear. In play, past the
+level opening, a count of zero takes the same pause steps as Start
+(`0x8008B948`; Start's handler is `0x8008C334`), but the pause screen
+(`0x80015750`) holds the single line "Suspended" instead of the pause menu. The in-game text
+also has "Paused - please insert controller" (console text 108, PC 132); what
+shows it is not traced.
+
+The port opens every device SDL announces, at start-up and when one is
+plugged in, as an SDL game controller when SDL has a mapping and as a plain
+joystick otherwise, and drops it when it is removed. Each frame it reads the
+device used last, or the first attached one until any is used. A button, a
+trigger or a stick pushed past half deflection makes a device the active one,
+and the buttons still held on the previous pad are released.
+
+### Console vibration
+
+The console's Controls screen has a Vibration function row (0–15, settings
+`+0x38`). Its item flags (8) differ from the other rows' (3); the condition
+they select is not traced. The PC keeps the row hidden (flags 0), with the
+setting at `+0x40`, default 15. Five craft contact callbacks submit a strength
+scaled by the setting and clamped to `0xFF` (console `0x80077D50`,
+`0x80077EDC`, `0x800781E0`, `0x800786B8` and `0x80078884`; PC `0x00447B9F`,
+`0x00447D35`, `0x00447F4F`, `0x0044832B` and `0x00448513`). The Hover/VTOL
+terrain strike (`FUN_00448280`), for example, sends
+`min(0xFF, vibration × (inward − 0x200) / 15)`. Submission walks the output
+bindings (PC `FUN_00471460`, console `0x800D5B10`) to each bound device's
+output hook (PC `FUN_00494DE0`, console `0x800A6A10`). The PC's keyboard,
+mouse and WinMM joysticks have no motor, so its strengths go nowhere.
+
+On the console the pad's output routine (`0x800D090C`) stores the strength as
+that pad's level. The driver gives libpad a two-byte actuator buffer per pad
+(`PadSetAct`) and aligns the actuators on DualShock-class pads in libpad's
+stable state, resending every 25 polls. Each 8-ms poll turns the small motor
+on when the level is at least `0x20, 0x60, 0xC0, 0x40, 0xA0, 0x80, 0xE0`
+indexed by the video frame mod 7 (`0x800EE848`): a level of `0xE0` or more
+runs it every frame, and each `0x20` below that drops one frame in seven. The
+poll then multiplies the level by 15/16 (`(level × 15) >> 4`), so a
+full-strength hit buzzes for 30 polls, 240 ms, thinning out as it fades. The
+large-motor byte is never written.
+
+## Port controller layouts
+
+The launcher's Options (Controls, Controller) choose how a standard game
+controller plays. `port-config.json` keeps the choice as `controller_layout`,
+and `--controller-layout` overrides it for one run. SDL names a pad's buttons
+by position (the port sets `SDL_GAMECONTROLLER_USE_BUTTON_LABELS` to 0, so
+Nintendo pads, whose prints swap A/B and X/Y, follow position too), so one
+layout lands the same on PlayStation, Xbox, Switch and Steam Deck controls:
+Cross is the bottom face button (Xbox A), Circle the
+right one (B), Square the left one (X), Triangle the top one (Y), L1/R1 the
+bumpers, L2/R2 the triggers, Start the Menu button and Select the View
+button. A trigger counts as pressed past XInput's 30-of-255 threshold. Plain
+joysticks, which SDL has no game-controller mapping for, always take the PC
+path.
+
+- **PC original** is retail PC. A pad is a WinMM joystick that
+  only the craft reader consults: button 1 (A) fires, button 2 (B) thrusts
+  and the left stick steers. The menus, the intro and the other screens ignore
+  it, since no screen set has a joystick table.
+- **Console original** evaluates the console's own sets on every screen the
+  port has (`crates/v2k-game/src/pad_layout.rs`): the menus, the intro, the
+  level opening, play (the in-play set and craft configuration 0, Relative
+  1, the console's default), the full-screen map and the progress map (the
+  console briefing set). The left stick reaches the craft reader at the
+  console pad's 8-bit resolution, and the right stick drives `FUN_0040ED10`
+  parameters 3 and 4. The steering mode stays the Joystick option's, whose
+  default is the Relative that Relative 1 selects.
+- **Remastered**, the default, is the port's own layout, menus included:
+
+| Screen | Remastered (Xbox names) |
+|---|---|
+| Menus | D-pad or left stick move; A selects (Menu too on the frontend); B goes back; on a pause menu's root B or Menu resume, through its Continue row |
+| Intro movie | any button skips |
+| Level opening | A, B, X, Y or Menu skip |
+| Flight | left stick or D-pad steer and pitch; LT throttle; RT fire; B reverse thrust; A Hover/VTOL; X beam in; Y beam out; LB/RB previous/next weapon; LB+RB special weapon; R3 next target; right stick camera; Menu pause; View map |
+| Full-screen map | View, B or A close it |
+| Progress map | A or Menu continue; Y saves |
+
+Both index fingers hold the two continuous actions, as the PC mouse's buttons
+do (left thrusts, right fires), and the special weapon keeps the deliberate
+chord both retail versions use.
+
+Records follow FGDK's rule: a record is active while all of its "down"
+inputs are held and none of its "up" inputs are. A held action lasts while
+any of its records is active; any other action acts when a record becomes
+active. When the screen changes, a record already satisfied by held buttons
+starts active without acting, so a button held through a screen change does
+not act on the new screen, while held flight controls carry over. Actions
+the port has no owner for yet act on nothing: the console's continue after
+the opening, abort, the special weapon, next target, the debug spawn and the
+cheat digits. During the Intro2 opening the camera keeps zero parameters;
+whether the console pad moves it there is not traced.
+
 ## Mode toggle + fuel
 
 - Mode vars in the controller struct (`FUN_00443af0`): `+0x86` movement style
@@ -328,3 +527,12 @@ per-callback Hover barrel step are ported (see
 cycles, the shared RNG stream, alternate terrain-target attitude state,
 runtime turbo/session policy, S/X pitch render, and solid-ground
 impact/destruction remain follow-ups.
+
+Against [every binding set](#every-binding-set), the port does not yet bind
+`/` or A to fire, the A+`/` special weapon, E (next target), T (Targetter),
+the cheat digits, N on the briefing, or the debug keys (the port uses F11 and
+F12 for its own camera and debug window). With the PC original layout a pad
+works only in flight, through the PC joystick path. The Console original and
+[Remastered](#port-controller-layouts) layouts bind every screen the port
+has, the right-stick camera included. Not ported: the console's other five
+Controller Config layouts, the pause on removal and vibration.

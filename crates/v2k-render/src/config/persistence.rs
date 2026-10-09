@@ -9,7 +9,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
-use super::{Difficulty, GameConfig, GraphicsDetail, RendererChoice, ScalingMode, WindowMode};
+use super::{
+    ControllerLayout, Difficulty, GameConfig, GraphicsDetail, RendererChoice, ScalingMode,
+    WindowMode,
+};
 
 #[cfg(windows)]
 mod registry;
@@ -177,6 +180,8 @@ struct PortPreferences {
     detail: GraphicsDetail,
     #[serde(default)]
     difficulty: Difficulty,
+    #[serde(default)]
+    controller_layout: ControllerLayout,
 }
 
 impl PortPreferences {
@@ -189,6 +194,7 @@ impl PortPreferences {
             scaling: config.scaling,
             detail: config.detail,
             difficulty: config.difficulty,
+            controller_layout: config.controller_layout,
         }
     }
     fn apply(self, config: &mut GameConfig) {
@@ -201,6 +207,7 @@ impl PortPreferences {
         config.scaling = self.scaling;
         config.detail = self.detail;
         config.difficulty = self.difficulty;
+        config.controller_layout = self.controller_layout;
     }
 }
 

@@ -51,7 +51,7 @@ use v2k_game::campaign_transition::{
     CampaignArrivalCatalog, CampaignTransition, CampaignWarpRuntime, FailedWorldRetry,
 };
 use v2k_game::chase_camera::{
-    ChaseBodyBasis, ChaseCameraState, ChaseCameraTarget, ChaseTerrainContext,
+    ChaseBodyBasis, ChaseCameraParameters, ChaseCameraState, ChaseCameraTarget, ChaseTerrainContext,
 };
 use v2k_game::common_mover::type9_attitude::Type9BodyBasis;
 use v2k_game::damage::EntityHitEntry;
@@ -131,6 +131,7 @@ use v2k_game::opening::{
     INTRO2_LEVEL_ID, POST_INTRO_SOUND_ID,
 };
 use v2k_game::overlay_51_backdrop::Overlay51Backdrop;
+use v2k_game::pad_layout::{PadAction, PadBindings, PadContext};
 use v2k_game::particle_descriptors::particle_descriptor;
 use v2k_game::player::{
     AnalogInput, FuelWarningCadence, MotionChannels, PlayerCraft, PlayerHoverAttitudeRequest,
@@ -227,10 +228,10 @@ use v2k_render::sound::{
 };
 use v2k_render::{
     mat3_mul, orientation_from_ypr, project_particle_center, AudioPlayer, Camera, CapturedFrame,
-    ExternalFrameMode, FrameCaptureSource, GameConfig, GameEvent, GameWindow, ModelDepthFade,
-    ModelNearClip, ModelOverlayKind, MusicPlayer, PointerMode, ProjectionEffect, RenderScene,
-    Renderer, RendererChoice, SoundListener, SoundManager, SpriteFog, ViewPinMode, WorldSprite,
-    WorldSpriteBlend, HALF_ADDITIVE_ALPHA,
+    ControllerLayout, ExternalFrameMode, FrameCaptureSource, GameConfig, GameEvent, GameWindow,
+    ModelDepthFade, ModelNearClip, ModelOverlayKind, MusicPlayer, PointerMode, ProjectionEffect,
+    RenderScene, Renderer, RendererChoice, SoundListener, SoundManager, SpriteFog, ViewPinMode,
+    WorldSprite, WorldSpriteBlend, HALF_ADDITIVE_ALPHA,
 };
 
 /// Sea-plane tint for the translucent water pass. A flat sea blue stands in
@@ -961,6 +962,32 @@ fn apply_gameplay_input_edges(
     }
 }
 
+/// TAB's Hover/VTOL request, from the key or a pad. Retail briefly installs
+/// VTOL even with an empty tank, then `FUN_00445310` immediately queues
+/// event 0x0B/sound 0x31 and requests Hover again. The port collapses that
+/// short-lived mode round trip into the explicit `RefusedNoFuel` outcome.
+fn request_vehicle_mode_toggle(
+    craft: &mut PlayerCraft,
+    notifications: &mut GameplayNotifications,
+    world_fx: &mut WorldFx,
+    player_position_raw: Option<[i16; 3]>,
+    retail_tick: i32,
+) {
+    match craft.toggle_mode() {
+        VehicleModeToggleOutcome::Changed(mode) => {
+            log!("Vehicle mode: {}", mode.label());
+        }
+        VehicleModeToggleOutcome::RefusedNoFuel => {
+            notifications.queue_fuel_empty(retail_tick);
+            if let Some(position_raw) = player_position_raw {
+                // FUN_00445310 presents global sound 49 from the craft origin.
+                world_fx.queue_fixed_positional_sound_raw(FUEL_EXHAUSTED_SOUND_ID, position_raw);
+            }
+            log!("Vehicle mode: Hover (no fuel)");
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GameplayInterruption {
     QuitApplication,
@@ -969,11 +996,13 @@ enum GameplayInterruption {
 }
 
 /// Decide the only three transitions that may pre-empt a live gameplay tick.
-/// Escape is deliberately a pause request; only the completed death lifecycle
-/// or the pause menu's confirmed Quit reaches `ReturningToFrontend`.
+/// Escape and a pad's pause are deliberately pause requests; only the
+/// completed death lifecycle or the pause menu's confirmed Quit reaches
+/// `ReturningToFrontend`.
 fn gameplay_interruption(
     return_to_frontend_pending: bool,
     events: &[GameEvent],
+    pad_actions: &[PadAction],
 ) -> Option<GameplayInterruption> {
     if events.iter().any(|event| matches!(event, GameEvent::Quit)) {
         Some(GameplayInterruption::QuitApplication)
@@ -982,10 +1011,33 @@ fn gameplay_interruption(
     } else if events
         .iter()
         .any(|event| matches!(event, GameEvent::KeyDown(Keycode::Escape)))
+        || pad_actions.contains(&PadAction::Pause)
     {
         Some(GameplayInterruption::Pause)
     } else {
         None
+    }
+}
+
+/// The progress map's two inputs: S or a pad's save, Space or its continue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProgressMapInput {
+    Save,
+    Continue,
+}
+
+/// The screen whose binding sets a pad uses this frame. In play the
+/// progress map and the full-screen map are modal sets of their own.
+fn pad_context(state: &GameState, progress_map: bool, fullscreen_map: bool) -> PadContext {
+    match state {
+        GameState::Intro => PadContext::IntroMovie,
+        GameState::Menu(_) => PadContext::FrontendMenu,
+        GameState::Paused { .. } => PadContext::PauseMenu,
+        GameState::OpeningCinematic { .. } => PadContext::Opening,
+        GameState::Playing if progress_map => PadContext::Progress,
+        GameState::Playing if fullscreen_map => PadContext::Map,
+        GameState::Playing => PadContext::Play,
+        _ => PadContext::Inactive,
     }
 }
 
@@ -1046,6 +1098,32 @@ struct Cli {
     /// Presentation-only. Omitted uses retail painter analogue (`terrain-recede`).
     #[arg(long, value_enum)]
     overlay_depth_policy: Option<OverlayDepthPolicyArg>,
+
+    /// Game-controller layout for this run, overriding the saved one
+    /// (`controller_layout` in port-config.json).
+    #[arg(long, value_enum)]
+    controller_layout: Option<ControllerLayoutArg>,
+}
+
+/// CLI spelling of [`v2k_render::ControllerLayout`].
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum ControllerLayoutArg {
+    /// Retail PC: the pad is a joystick that only flies the craft.
+    PcOriginal,
+    /// The PlayStation release's bindings on every screen.
+    ConsoleOriginal,
+    /// The port's modern layout, menus included.
+    Remastered,
+}
+
+impl ControllerLayoutArg {
+    const fn to_layout(self) -> ControllerLayout {
+        match self {
+            Self::PcOriginal => ControllerLayout::PcOriginal,
+            Self::ConsoleOriginal => ControllerLayout::ConsoleOriginal,
+            Self::Remastered => ControllerLayout::Remastered,
+        }
+    }
 }
 
 /// CLI spelling of [`v2k_render::OverlayDepthPolicy`].
@@ -1410,6 +1488,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cli.overlay_depth_policy
                     .unwrap_or(OverlayDepthPolicyArg::TerrainRecede)
                     .to_policy(),
+                cli.controller_layout.map(ControllerLayoutArg::to_layout),
             );
             if let Err(error) = outcome {
                 if cli.launcher
@@ -1512,6 +1591,7 @@ fn run_game(
     enter_world_immediately: bool,
     vtol_trace_path: Option<&Path>,
     overlay_depth_policy: v2k_render::OverlayDepthPolicy,
+    controller_layout: Option<ControllerLayout>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
@@ -1529,6 +1609,9 @@ fn run_game(
         (config.sensitivity * 15.0).round().clamp(0.0, 15.0) as u8,
         config.self_righting
     );
+    // A game controller's bindings follow the screen; see pad_layout.
+    let mut pad_bindings = PadBindings::new(controller_layout.unwrap_or(config.controller_layout));
+    log!("Controller layout: {}", pad_bindings.layout().label());
 
     // Determine backend
     let cli_override = match renderer_choice {
@@ -2005,10 +2088,24 @@ fn run_game(
                 Some(v2k_render::WindowPlacement::FullScreenOn { .. })
             ),
         ));
-        // The first attached pad or joystick, as of this frame's poll.
-        let joystick = game_window
-            .controller_sample()
-            .map(JoystickSample::from_controller);
+        // A pad's binding sets follow the screen, as each retail mode installs
+        // its own; its button changes arrive as events, in order.
+        pad_bindings.set_context(pad_context(
+            &state,
+            world_complete_results.is_progress_map_active(),
+            gameplay_radar
+                .as_ref()
+                .is_some_and(GameplayRadar::is_fullscreen_open),
+        ));
+        let mut pad_actions = Vec::new();
+        for event in &events {
+            if let GameEvent::PadButton { button, pressed } = event {
+                pad_bindings.button(*button, *pressed, &mut pad_actions);
+            }
+        }
+        // The active pad or joystick, as of this frame's poll.
+        let controller = game_window.controller_sample();
+        let joystick = controller.map(|sample| pad_bindings.joystick_sample(sample));
 
         let menu_is_paused = matches!(&state, GameState::Paused { .. });
         match &mut state {
@@ -2027,6 +2124,7 @@ fn run_game(
                         _ => {}
                     }
                 }
+                skip |= pad_actions.contains(&PadAction::SkipMovie);
 
                 if let Some(ref mut player) = avi_player {
                     let elapsed = intro_start_time
@@ -2197,6 +2295,46 @@ fn run_game(
                             keys_down.remove(kc);
                         }
                         _ => {}
+                    }
+                }
+
+                // A pad's menu set. Back is Escape's: inert at a root, which
+                // retail cannot pop, and otherwise it saves the settings.
+                for &action in &pad_actions {
+                    if shell.is_transitioning() {
+                        break;
+                    }
+                    let input = match action {
+                        // Remastered: B or Menu on the pause root resumes, as
+                        // its Continue item does.
+                        PadAction::PauseResumeOrBack if shell.back_is_inert() => {
+                            let ctx = MenuCtx {
+                                cache: &session.cache,
+                                config: &config,
+                                saves: Some(&save_manager),
+                                display_modes: &display_modes,
+                            };
+                            shell_events.extend(shell.select_continue(&ctx));
+                            None
+                        }
+                        PadAction::Menu(MenuInput::Back) if shell.back_is_inert() => None,
+                        PadAction::Menu(MenuInput::Back) | PadAction::PauseResumeOrBack => {
+                            if let Err(error) = config.try_save(data_dir) {
+                                eprintln!("Could not save settings: {error}");
+                            }
+                            Some(MenuInput::Back)
+                        }
+                        PadAction::Menu(input) => Some(input),
+                        _ => None,
+                    };
+                    if let Some(input) = input {
+                        let ctx = MenuCtx {
+                            cache: &session.cache,
+                            config: &config,
+                            saves: Some(&save_manager),
+                            display_modes: &display_modes,
+                        };
+                        shell_events.extend(shell.input(input, &ctx));
                     }
                 }
 
@@ -3363,6 +3501,9 @@ fn run_game(
                                 player_craft.retail_body_basis_q31(player.heading),
                             ),
                             active_camera: config.active_camera,
+                            // Both channels read zero before the first pad
+                            // binding writes them.
+                            parameters: ChaseCameraParameters::default(),
                         },
                         gameplay_chase_terrain(&session.cache),
                         0,
@@ -3689,6 +3830,10 @@ fn run_game(
                         _ => {}
                     }
                 }
+                // The in-play set's continue and pause both skip the opening.
+                skip |= pad_actions
+                    .iter()
+                    .any(|action| matches!(action, PadAction::Continue | PadAction::Pause));
 
                 if *exit_pending {
                     if let Some(ref mut sm) = sound_manager {
@@ -4355,10 +4500,32 @@ fn run_game(
                 // Descriptor 004D0AA0 owns a modal progress map after the
                 // exit. Gameplay no longer runs while its input table waits.
                 if world_complete_results.is_progress_map_active() {
+                    // S and Space in event order, then the pad's progress set.
+                    let mut progress_inputs = Vec::new();
                     for event in &events {
                         match event {
                             GameEvent::Quit => break 'main_loop,
                             GameEvent::KeyDown(Keycode::S) => {
+                                progress_inputs.push(ProgressMapInput::Save);
+                            }
+                            GameEvent::KeyDown(Keycode::Space) => {
+                                progress_inputs.push(ProgressMapInput::Continue);
+                            }
+                            GameEvent::FocusLost => {
+                                keys_down.clear();
+                                mouse_buttons_down.clear();
+                            }
+                            _ => {}
+                        }
+                    }
+                    progress_inputs.extend(pad_actions.iter().filter_map(|action| match action {
+                        PadAction::Save => Some(ProgressMapInput::Save),
+                        PadAction::Continue => Some(ProgressMapInput::Continue),
+                        _ => None,
+                    }));
+                    for input in progress_inputs {
+                        match input {
+                            ProgressMapInput::Save => {
                                 let checkpoint = (|| -> Result<_, String> {
                                     let route = world_complete_results
                                         .progress_map_route()
@@ -4436,7 +4603,7 @@ fn run_game(
                                     Err(error) => eprintln!("Campaign save blocked: {error}"),
                                 }
                             }
-                            GameEvent::KeyDown(Keycode::Space) => {
+                            ProgressMapInput::Continue => {
                                 if let Some(route) = world_complete_results.continue_progress_map()
                                 {
                                     GlobalSoundRuntime::new(
@@ -4458,11 +4625,6 @@ fn run_game(
                                     continue 'main_loop;
                                 }
                             }
-                            GameEvent::FocusLost => {
-                                keys_down.clear();
-                                mouse_buttons_down.clear();
-                            }
-                            _ => {}
                         }
                     }
                     world_complete_results.advance(elapsed_micros);
@@ -4520,6 +4682,7 @@ fn run_game(
                             _ => {}
                         }
                     }
+                    close_map |= pad_actions.contains(&PadAction::CloseMap);
                     let radar = gameplay_radar.as_mut().expect("checked above");
                     if close_map {
                         radar.leave_fullscreen();
@@ -4550,10 +4713,11 @@ fn run_game(
                     continue 'main_loop;
                 }
 
-                let open_map = events
+                let open_map_key = events
                     .iter()
                     .any(|event| matches!(event, GameEvent::KeyDown(Keycode::M)))
                     && !keys_down.contains(&Keycode::M);
+                let open_map = open_map_key || pad_actions.contains(&PadAction::OpenMap);
                 if open_map && !events.iter().any(|event| matches!(event, GameEvent::Quit)) {
                     if let (Some(radar), Some(entities), Some(terrain)) = (
                         gameplay_radar.as_mut(),
@@ -4561,7 +4725,11 @@ fn run_game(
                         session.cache.level_terrain_radar(),
                     ) {
                         keys_down.clear();
-                        keys_down.insert(Keycode::M);
+                        // M stays held until its release, so the press that
+                        // opened the map does not also close it.
+                        if open_map_key {
+                            keys_down.insert(Keycode::M);
+                        }
                         mouse_buttons_down.clear();
                         radar.enter_fullscreen();
                         radar.advance_fullscreen(elapsed_micros);
@@ -4588,6 +4756,7 @@ fn run_game(
                 match gameplay_interruption(
                     std::mem::take(&mut return_to_frontend_pending),
                     &events,
+                    &pad_actions,
                 ) {
                     Some(GameplayInterruption::QuitApplication) => break 'main_loop,
                     Some(GameplayInterruption::ReturnToFrontend) => {
@@ -4702,31 +4871,14 @@ fn run_game(
                             // TAB = hovercraft <-> VTOL mode toggle (V2000).
                             // SDL repeat events are filtered by GameWindow, so
                             // this is one request per physical key-down edge.
-                            // Retail briefly installs VTOL even with an empty
-                            // tank, then FUN_00445310 immediately queues event
-                            // 0x0B/sound 0x31 and requests Hover again. The port
-                            // collapses that short-lived mode round trip into the
-                            // explicit RefusedNoFuel outcome below.
                             if *kc == Keycode::Tab && has_player && !player_hull.dying {
-                                match player_craft.toggle_mode() {
-                                    VehicleModeToggleOutcome::Changed(mode) => {
-                                        log!("Vehicle mode: {}", mode.label());
-                                    }
-                                    VehicleModeToggleOutcome::RefusedNoFuel => {
-                                        gameplay_notifications.queue_fuel_empty(retail_tick as i32);
-                                        if let Some(position_raw) =
-                                            em.player().map(|player| player.position_raw())
-                                        {
-                                            // FUN_00445310 presents global
-                                            // sound 49 from the craft origin.
-                                            world_fx.queue_fixed_positional_sound_raw(
-                                                FUEL_EXHAUSTED_SOUND_ID,
-                                                position_raw,
-                                            );
-                                        }
-                                        log!("Vehicle mode: Hover (no fuel)");
-                                    }
-                                }
+                                request_vehicle_mode_toggle(
+                                    &mut player_craft,
+                                    &mut gameplay_notifications,
+                                    &mut world_fx,
+                                    em.player().map(|player| player.position_raw()),
+                                    retail_tick as i32,
+                                );
                             }
                             // F11 = dev free-fly camera toggle.
                             if *kc == Keycode::F11 && has_player && !player_hull.dying {
@@ -4787,6 +4939,49 @@ fn run_game(
                         }
                         _ => {}
                     }
+                }
+                // The pad's craft callbacks, after the keyboard's: the same
+                // requests as TAB, C, D and the weapon keys.
+                for &action in &pad_actions {
+                    let edges = match action {
+                        PadAction::ToggleMode => {
+                            if has_player && !player_hull.dying {
+                                request_vehicle_mode_toggle(
+                                    &mut player_craft,
+                                    &mut gameplay_notifications,
+                                    &mut world_fx,
+                                    em.player().map(|player| player.position_raw()),
+                                    retail_tick as i32,
+                                );
+                            }
+                            continue;
+                        }
+                        PadAction::Collect => GameplayInputEdges {
+                            collect: true,
+                            ..GameplayInputEdges::default()
+                        },
+                        PadAction::Drop => GameplayInputEdges {
+                            drop: true,
+                            ..GameplayInputEdges::default()
+                        },
+                        PadAction::NextWeapon => GameplayInputEdges {
+                            weapon_cycle: Some(WeaponCycleDirection::Forward),
+                            ..GameplayInputEdges::default()
+                        },
+                        PadAction::PreviousWeapon => GameplayInputEdges {
+                            weapon_cycle: Some(WeaponCycleDirection::Backward),
+                            ..GameplayInputEdges::default()
+                        },
+                        _ => continue,
+                    };
+                    apply_gameplay_input_edges(
+                        edges,
+                        has_player,
+                        player_hull.dying,
+                        em,
+                        &mut weapon_inventory,
+                        &mut player_craft,
+                    );
                 }
 
                 gameplay_hud_elapsed_micros =
@@ -4902,6 +5097,13 @@ fn run_game(
                     }
                 }
 
+                // The keys and the pad's held craft descriptors, each as the
+                // key bound to the same descriptor (a pad's throttle as Space).
+                let craft_keys: HashSet<Keycode> = keys_down
+                    .iter()
+                    .copied()
+                    .chain(pad_bindings.held_keys())
+                    .collect();
                 if chase_mode {
                     // FUN_00446640 snapshots entity +0x30 at callback entry;
                     // the later solid-contact pass cannot affect its warning
@@ -4929,7 +5131,7 @@ fn run_game(
                             &mut player_craft,
                         );
                         MotionChannels::from_input(
-                            &keys_down,
+                            &craft_keys,
                             AnalogInput {
                                 mouse_dx: mouse_motion.0,
                                 mouse_dy: mouse_motion.1,
@@ -5155,7 +5357,7 @@ fn run_game(
                                     level_id: current_level_id,
                                     sensitivity,
                                     self_righting: config.self_righting,
-                                    keys: &keys_down,
+                                    keys: &craft_keys,
                                     channels,
                                     craft: &player_craft,
                                     player,
@@ -5589,6 +5791,9 @@ fn run_game(
                                         basis.forward,
                                     ]),
                                     active_camera: config.active_camera,
+                                    // The console's in-play set gives the
+                                    // right stick to these parameters.
+                                    parameters: pad_bindings.camera_parameters(controller),
                                 },
                                 gameplay_chase_terrain(&session.cache),
                                 elapsed_micros,
@@ -5632,10 +5837,11 @@ fn run_game(
                 let sea_level = session.cache.terrain().and_then(|terrain| {
                     terrain.water_enabled().then(|| terrain.sea_level_world_y())
                 });
-                // Enter and joystick button 1 share the fire descriptor.
+                // Enter, joystick button 1 and a pad's fire share the fire
+                // descriptor.
                 let primary_trigger = PrimaryTriggerInput {
                     source_a: !player_hull.dying
-                        && (keys_down.contains(&Keycode::Return)
+                        && (craft_keys.contains(&Keycode::Return)
                             || joystick.is_some_and(JoystickSample::fire)),
                     source_b: !player_hull.dying
                         && mouse_buttons_down.contains(&MouseButton::Right),
@@ -15550,19 +15756,51 @@ mod menu_visual_tests {
         let events = [GameEvent::KeyDown(Keycode::Escape)];
 
         assert_eq!(
-            gameplay_interruption(false, &events),
+            gameplay_interruption(false, &events, &[]),
             Some(GameplayInterruption::Pause)
         );
         assert_eq!(
-            gameplay_interruption(true, &events),
+            gameplay_interruption(true, &events, &[]),
             Some(GameplayInterruption::ReturnToFrontend),
             "a completed death lifecycle must retain priority over pause"
         );
-        assert_eq!(gameplay_interruption(false, &[]), None);
+        assert_eq!(gameplay_interruption(false, &[], &[]), None);
         assert_eq!(
-            gameplay_interruption(false, &[GameEvent::KeyDown(Keycode::P)]),
+            gameplay_interruption(false, &[GameEvent::KeyDown(Keycode::P)], &[]),
             None,
             "P belongs to the separate retail results-screen table"
+        );
+        assert_eq!(
+            gameplay_interruption(false, &[], &[PadAction::Pause]),
+            Some(GameplayInterruption::Pause)
+        );
+        assert_eq!(
+            gameplay_interruption(true, &[], &[PadAction::Pause]),
+            Some(GameplayInterruption::ReturnToFrontend)
+        );
+    }
+
+    #[test]
+    fn pad_binding_sets_follow_the_game_state() {
+        assert_eq!(
+            pad_context(&GameState::Intro, false, false),
+            PadContext::IntroMovie
+        );
+        assert_eq!(
+            pad_context(&GameState::Playing, false, false),
+            PadContext::Play
+        );
+        assert_eq!(
+            pad_context(&GameState::Playing, false, true),
+            PadContext::Map
+        );
+        assert_eq!(
+            pad_context(&GameState::Playing, true, true),
+            PadContext::Progress
+        );
+        assert_eq!(
+            pad_context(&GameState::ReturningToFrontend, false, false),
+            PadContext::Inactive
         );
     }
 

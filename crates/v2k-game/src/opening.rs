@@ -7,8 +7,8 @@
 //! an older RE note claimed.
 
 use crate::chase_camera::{
-    terrain_height_raw, ChaseBodyBasis, ChaseCameraPose, ChaseCameraState, ChaseCameraTarget,
-    ChaseTerrainContext,
+    terrain_height_raw, ChaseBodyBasis, ChaseCameraParameters, ChaseCameraPose, ChaseCameraState,
+    ChaseCameraTarget, ChaseTerrainContext,
 };
 use crate::{
     actor_task_dispatcher::ActorTaskRuntime,
@@ -149,6 +149,9 @@ impl IntroCameraController {
                 position_raw: self.position_raw,
                 body_basis: ChaseBodyBasis::RETAIL_IDENTITY,
                 active_camera: request.active_camera,
+                // The opening's pad camera parameters are not traced; this
+                // keeps the PC's zero values.
+                parameters: ChaseCameraParameters::default(),
             },
             request.terrain,
             request.elapsed_micros,
