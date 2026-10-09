@@ -163,11 +163,14 @@ absent from the committed bulk decompile).
 
 | Channel | Written by | Notes |
 |---|---|---|
-| `+0` turn | LEFT(−)/RIGHT(+) | default Joystick **Relative** mode writes the duty-cycle-scaled keys directly; `FUN_00444B90` is only the Joystick Absolute-mode target-bearing helper |
-| `+2` pitch | UP(+)/DOWN(−) authored amplitude **0xD80**, passed through the default Relative sensitivity/duty quantizer; S(+)/X(−) scale **0x900**, clamp ±0x900; S/X suppress only SPACE's separate powered coupling | one shared channel — in Hover positive depresses the gun; in VTOL it pitches nose-down. At default sensitivity 10 and 20 ms, a held arrow is ±2303 (`0x08FF`), confirmed live on 2026-07-16 |
-| `+4` vertical | joystick only, ±0xA00 | |
-| `+8` throttle | SPACE(+)/RSHIFT(−), clamp 0x10000 | |
-| `+C` fire | Enter / right mouse | foreground retail capture; both feed one held trigger |
+| `+0` turn | LEFT(−)/RIGHT(+), joystick X, mouse X (`+200` per mickey) | default Joystick **Relative** mode writes the duty-cycle-scaled keys and the joystick term directly; `FUN_00444B90` is only the Joystick Absolute-mode target-bearing helper. Mouse X is added in both modes |
+| `+2` pitch | UP(+)/DOWN(−) authored amplitude **0xD80**, passed through the default Relative sensitivity/duty quantizer; S(+)/X(−) scale **0x900**, clamp ±0x900; S/X suppress only SPACE's separate powered coupling; joystick Y (forward +); mouse Y (`-200` per mickey towards the player) | one shared channel — in Hover positive depresses the gun; in VTOL it pitches nose-down. At default sensitivity 10 and 20 ms, a held arrow is ±2303 (`0x08FF`), confirmed live on 2026-07-16 |
+| `+4` vertical | console pads only, ±0xA00 | no PC device binds it |
+| `+8` throttle | SPACE / left mouse / joystick button 2 (+), RSHIFT(−), clamp 0x10000 | the three positive sources share both SPACE descriptors |
+| `+C` fire | Enter / right mouse / joystick button 1 | foreground retail capture; all feed one held trigger |
+
+[CONTROLS.md](CONTROLS.md#mouse-joystick-and-pointer) records the mouse and
+joystick bindings, the reader's order and the Absolute-mode arithmetic.
 
 The powered pitch coupling lives in the fly integrator: it is gated on the
 dedicated positive-thrust binding, no manual S/X this frame, and the
@@ -203,6 +206,10 @@ Angles are 16-bit, full circle = 0x10000.
 
 - **pitch channel → GUN BARREL joint only** (`gunpitch_decomp.c:481-489`):
   `*barrel -= channel/2`, clamp **[−0x800, +0x3000]** (−11.25°..+67.5°).
+  The step is applied once per callback and is not scaled by the frame delta
+  (`0x00444D73`: truncating division, signed word addition, then the clamp),
+  so a mouse aims by the same angle at any frame rate. The port used to scale
+  it by the 50 Hz tick and now matches retail.
   UP/S are positive channel inputs and therefore **depress** the gun; DOWN/X
   are negative and **elevate** it. `FUN_00424650` reduces to
   `projectile_y = sin(barrel)` at level attitude, so this is projectile aim as
@@ -242,7 +249,8 @@ heading   = wrapping_i16(heading - yaw_step)
 At 20 ms, RIGHT changes heading by -652 and LEFT by +653 raw angle units. The
 one-unit asymmetry is the x86 arithmetic right shift. `FUN_00444B90` instead
 builds a target bearing from two analogue axes and is not entered by the
-default Relative keyboard path.
+default Relative keyboard path. The port implements it for the Joystick
+Absolute setting, where it also takes the arrow keys.
 
 **Renderer-basis correction (2026-07-14):** `FUN_00413F70` stores contiguous
 lateral/up/forward vectors. Transposing that legacy layout into the port's
@@ -368,9 +376,10 @@ terrain-attitude planner before the next force frame. VTOL remains unrestricted
 by this Hover-only effective flag.
 
 The port implements the fully-held Relative keyboard path for turn and pitch,
-including live sensitivity, and the exact local `Random_Next` recurrence.
-Event-timestamped partial-frame key duty cycles,
-and Joystick Absolute-mode mapping remain bounded input fidelity gaps.
+including live sensitivity, the mouse and joystick terms, the Joystick
+Absolute-mode mapping, and the exact local `Random_Next` recurrence.
+Event-timestamped partial-frame key duty cycles remain a bounded input
+fidelity gap.
 
 Player SubA allocation now consumes `20450` from the same process RNG as actor
 construction, after the player's SubD allocation and before33BD0 terrain gate

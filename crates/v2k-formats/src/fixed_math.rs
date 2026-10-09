@@ -1,4 +1,5 @@
-//! Retail fixed-point sine lookup shared by physics/render-derived paths.
+//! Retail fixed-point sine lookup shared by physics/render-derived paths,
+//! plus the executable's integer square root and inverse sine.
 //!
 //! `V2000.EXE` stores 4,096 little-endian signed words at VA
 //! `0x004D14D0`. Callers mask byte-offset bits `0x3FFC`, mirror the
@@ -354,9 +355,81 @@ pub fn retail_integer_sqrt(value: i32) -> u32 {
     result
 }
 
+/// Exact retail inverse sine returned by `FUN_00457F70`.
+///
+/// The operand is a signed Q31 ratio and the result a signed angle in the
+/// engine's 16-bit domain (`0x4000` = 90 degrees). The executable indexes the
+/// 1,024-word table at VA `0x004D34D0` with the magnitude shifted right by 21
+/// and restores the sign afterwards. Callers never pass `i32::MIN`; its index
+/// is clamped to the last entry instead of reading before the table.
+pub fn retail_arcsine_q31(ratio_q31: i32) -> i32 {
+    let index = ((ratio_q31.unsigned_abs() >> 21) as usize).min(RETAIL_ARCSINE_ENTRIES - 1);
+    let angle = i32::from(retail_arcsine_table()[index]);
+    if ratio_q31 < 0 {
+        -angle
+    } else {
+        angle
+    }
+}
+
+const RETAIL_ARCSINE_ENTRIES: usize = 1024;
+
+/// Frontier's table generator divided by five-digit pi, not `PI`.
+#[allow(clippy::approx_constant)]
+const RETAIL_ARCSINE_GENERATOR_PI: f64 = 3.14159;
+
+/// The retail table is `floor(asin(i / 1024) / 3.14159 * 32768)`: Frontier's
+/// generator used five-digit pi, which leaves two entries one above the
+/// exact-pi floor. The closest entry is 5.2e-4 from an integer boundary, so
+/// every libm generates the same words.
+fn retail_arcsine_table() -> &'static [i16; RETAIL_ARCSINE_ENTRIES] {
+    static TABLE: std::sync::OnceLock<[i16; RETAIL_ARCSINE_ENTRIES]> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        let mut table = [0; RETAIL_ARCSINE_ENTRIES];
+        for (index, entry) in table.iter_mut().enumerate() {
+            let ratio = index as f64 / RETAIL_ARCSINE_ENTRIES as f64;
+            *entry = (ratio.asin() / RETAIL_ARCSINE_GENERATOR_PI * 32768.0).floor() as i16;
+        }
+        table
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generated_arcsine_table_matches_the_retail_words() {
+        let table = retail_arcsine_table();
+        // Sum and spot entries of the 1,024 retail words at VA 0x004D34D0,
+        // including the two that exact-pi generation would place one lower.
+        assert_eq!(table.iter().map(|&v| i64::from(v)).sum::<i64>(), 6_087_904);
+        for (index, word) in [
+            (0, 0),
+            (1, 10),
+            (6, 61),
+            (512, 5461),
+            (534, 5722),
+            (798, 9319),
+            (1022, 15_732),
+            (1023, 15_923),
+        ] {
+            assert_eq!(table[index], word, "entry {index}");
+        }
+    }
+
+    #[test]
+    fn arcsine_indexes_the_magnitude_and_restores_the_sign() {
+        assert_eq!(retail_arcsine_q31(0), 0);
+        assert_eq!(retail_arcsine_q31(0x4000_0000), 5461);
+        assert_eq!(retail_arcsine_q31(-0x4000_0000), -5461);
+        assert_eq!(retail_arcsine_q31(i32::MAX), 15_923);
+        // FUN_00444B90 passes -1 for a saturated negative ratio: index zero.
+        assert_eq!(retail_arcsine_q31(-1), 0);
+        // Bits below 21 never change the selected entry.
+        assert_eq!(retail_arcsine_q31((1 << 21) - 1), 0);
+        assert_eq!(retail_arcsine_q31(1 << 21), 10);
+    }
 
     #[test]
     fn retail_table_corpus_and_key_entries_are_stable() {
