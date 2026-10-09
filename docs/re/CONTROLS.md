@@ -392,7 +392,7 @@ button. A trigger counts as pressed past XInput's 30-of-255 threshold. Plain
 joysticks, which SDL has no game-controller mapping for, always take the PC
 path.
 
-- **PC original**, the default, is retail PC. A pad is a WinMM joystick that
+- **PC original** is retail PC. A pad is a WinMM joystick that
   only the craft reader consults: button 1 (A) fires, button 2 (B) thrusts
   and the left stick steers. The menus, the intro and the other screens ignore
   it, since no screen set has a joystick table.
@@ -404,7 +404,7 @@ path.
   console pad's 8-bit resolution, and the right stick drives `FUN_0040ED10`
   parameters 3 and 4. The steering mode stays the Joystick option's, whose
   default is the Relative that Relative 1 selects.
-- **Remastered** is the port's own layout, menus included:
+- **Remastered**, the default, is the port's own layout, menus included:
 
 | Screen | Remastered (Xbox names) |
 |---|---|

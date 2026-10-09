@@ -73,11 +73,11 @@ impl ScalingMode {
 #[serde(rename_all = "snake_case")]
 pub enum ControllerLayout {
     /// Retail PC: a pad is a WinMM joystick that only flies the craft.
-    #[default]
     PcOriginal,
     /// The PlayStation release's own bindings on every screen.
     ConsoleOriginal,
-    /// The port's modern layout, menus included.
+    /// The port's modern layout, menus included; the default.
+    #[default]
     Remastered,
 }
 
@@ -94,9 +94,9 @@ impl ControllerLayout {
 
     pub const fn from_index(index: u32) -> Self {
         match index {
+            0 => Self::PcOriginal,
             1 => Self::ConsoleOriginal,
-            2 => Self::Remastered,
-            _ => Self::PcOriginal,
+            _ => Self::Remastered,
         }
     }
 
@@ -337,7 +337,7 @@ impl Default for GameConfig {
             targetter: true,
             hud: true,
             language: 0,
-            controller_layout: ControllerLayout::PcOriginal,
+            controller_layout: ControllerLayout::Remastered,
             difficulty: Difficulty::Medium,
             detail: GraphicsDetail::High,
         }

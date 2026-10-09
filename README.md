@@ -65,11 +65,10 @@ are newer and less tested.
 Plug in a game controller at any time; the game follows the one used last.
 The launcher's Options choose its layout:
 
-- **PC original** (the default): as on the 1998 PC release, a pad only flies
-  the craft.
-- **Console original**: the PlayStation release's bindings on every screen,
-  with the right stick moving the camera.
-- **Remastered**: a modern layout, menus included.
+- **Remastered** (the default): a modern layout, menus included, with the
+  right stick moving the camera.
+- **Console original**: the PlayStation release's bindings on every screen.
+- **PC original**: as on the 1998 PC release, a pad only flies the craft.
 
 Without the launcher, pass `--controller-layout pc-original`,
 `console-original` or `remastered`, or set `controller_layout` in

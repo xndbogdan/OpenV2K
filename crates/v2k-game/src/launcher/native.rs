@@ -1352,7 +1352,7 @@ impl WindowState {
         );
         self.label(
             window,
-            "For game controllers; other joysticks keep the PC original.",
+            "Gamepads only. Flight sticks always use the PC original.",
             346,
             332,
             186,

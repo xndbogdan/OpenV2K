@@ -332,7 +332,8 @@ fn controller_layout_is_a_port_preference_beside_the_native_words() {
         assert_eq!(restored.controller_layout, layout);
     }
 
-    // Port files written before the choice existed load the PC original.
+    // Port files written before the choice existed load the default,
+    // Remastered, like a fresh configuration.
     let dir = Directory::new();
     fs::write(
         dir.0.join("port-config.json"),
@@ -340,12 +341,21 @@ fn controller_layout_is_a_port_preference_beside_the_native_words() {
     )
     .unwrap();
     let config = load_from_sources(&dir.0, None, None);
-    assert_eq!(config.controller_layout, ControllerLayout::PcOriginal);
-    let named: PortPreferences = serde_json::from_slice(
-        br#"{"renderer":"auto","width":800,"height":600,"controller_layout":"console_original"}"#,
-    )
-    .unwrap();
-    assert_eq!(named.controller_layout, ControllerLayout::ConsoleOriginal);
+    assert_eq!(config.controller_layout, ControllerLayout::Remastered);
+    assert_eq!(
+        GameConfig::default().controller_layout,
+        ControllerLayout::Remastered
+    );
+    for (name, layout) in [
+        ("pc_original", ControllerLayout::PcOriginal),
+        ("console_original", ControllerLayout::ConsoleOriginal),
+    ] {
+        let named: PortPreferences = serde_json::from_str(&format!(
+            r#"{{"renderer":"auto","width":800,"height":600,"controller_layout":"{name}"}}"#
+        ))
+        .unwrap();
+        assert_eq!(named.controller_layout, layout);
+    }
 }
 
 #[test]
