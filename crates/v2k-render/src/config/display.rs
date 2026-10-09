@@ -23,7 +23,8 @@ pub enum WindowMode {
     /// `SetDisplayMode(width, height, 16, 0, 0)`).
     FullScreen,
     /// Port: a borderless window covering the desktop without a mode change.
-    /// The resolution only picks the original layout.
+    /// Its resolution is the desktop's, which draws with the largest original
+    /// layout inside it; the Resolution row has nothing else to offer.
     Borderless,
 }
 
@@ -75,18 +76,6 @@ impl WindowMode {
     }
 }
 
-/// The largest original resolution that fits `size`. The originals are 4:3,
-/// so this is also the largest that fits the size's 4:3 area. A size that
-/// holds none of them takes the smallest.
-pub fn original_layout(size: (u32, u32)) -> (u32, u32) {
-    ORIGINAL_RESOLUTIONS
-        .iter()
-        .rev()
-        .copied()
-        .find(|&(width, height)| width <= size.0 && height <= size.1)
-        .unwrap_or(ORIGINAL_RESOLUTIONS[0])
-}
-
 /// Whether an original High tier fits `size`.
 pub fn holds_an_original(size: (u32, u32)) -> bool {
     let (width, height) = ORIGINAL_RESOLUTIONS[0];
@@ -128,10 +117,10 @@ impl DisplayModes {
 
     /// The Resolution row's entries for `mode`, ascending by width, then
     /// height. Sizes that hold no original tier are left out: the tier rule
-    /// has nothing to draw them with.
+    /// has nothing to draw them with. Borderless lists only the desktop.
     pub fn resolutions(&self, mode: WindowMode) -> Vec<(u32, u32)> {
         let mut sizes: Vec<_> = match mode {
-            WindowMode::Borderless => return ORIGINAL_RESOLUTIONS.to_vec(),
+            WindowMode::Borderless => return self.desktop.into_iter().collect(),
             WindowMode::FullScreen => self.reported.clone(),
             WindowMode::Window => ORIGINAL_RESOLUTIONS
                 .iter()
@@ -152,12 +141,12 @@ impl DisplayModes {
     }
 
     /// The entry `size` selects in `mode`'s row: itself when listed, the
-    /// original layout in Borderless, else the next listed size, wrapping
-    /// to the first, as the startup search's index does. `None` when the
-    /// row is empty.
+    /// desktop in Borderless, else the next listed size, wrapping to the
+    /// first, as the startup search's index does. `None` when the row is
+    /// empty.
     pub fn resolve(&self, mode: WindowMode, size: (u32, u32)) -> Option<(u32, u32)> {
         if mode == WindowMode::Borderless {
-            return Some(original_layout(size));
+            return self.desktop;
         }
         let sizes = self.resolutions(mode);
         sizes
@@ -177,9 +166,10 @@ impl DisplayModes {
 
     /// `FUN_0042D340`'s startup order from the saved choice: every resolution
     /// of the saved window mode, starting at the saved one and wrapping, then
-    /// the same for each following window mode. Retail then tries the other
-    /// renderer and Bilinear value; the port's renderer falls back before
-    /// its display is chosen, and Bilinear never affects the display.
+    /// the same for each following window mode; Borderless has only the
+    /// desktop. Retail then tries the other renderer and Bilinear value; the
+    /// port's renderer falls back before its display is chosen, and Bilinear
+    /// never affects the display.
     pub fn startup_order(&self, mode: WindowMode, size: (u32, u32)) -> Vec<DisplayRequest> {
         let mut order = Vec::new();
         let mut current = mode;
@@ -237,24 +227,6 @@ mod tests {
     }
 
     #[test]
-    fn original_layout_is_the_largest_original_inside_the_four_three_area() {
-        for (size, layout) in [
-            ((640, 480), (640, 480)),
-            ((800, 600), (800, 600)),
-            ((1024, 768), (1024, 768)),
-            ((720, 480), (640, 480)),
-            ((1280, 720), (800, 600)),
-            ((1280, 1024), (1024, 768)),
-            ((1920, 1080), (1024, 768)),
-            ((3840, 2160), (1024, 768)),
-            ((768, 1024), (640, 480)),
-            ((320, 240), (640, 480)),
-        ] {
-            assert_eq!(original_layout(size), layout, "{size:?}");
-        }
-    }
-
-    #[test]
     fn rows_follow_the_window_mode() {
         let modes = monitor();
         assert_eq!(
@@ -274,10 +246,11 @@ mod tests {
             modes.resolutions(WindowMode::FullScreen),
             modes.resolutions(WindowMode::Window)
         );
-        assert_eq!(
-            modes.resolutions(WindowMode::Borderless),
-            ORIGINAL_RESOLUTIONS
-        );
+        // Borderless covers the desktop: its only entry.
+        assert_eq!(modes.resolutions(WindowMode::Borderless), [(3840, 2160)]);
+        assert!(DisplayModes::default()
+            .resolutions(WindowMode::Borderless)
+            .is_empty());
 
         // A window must fit the desktop; full screen offers reported modes
         // only, so an original the monitor lacks is not listed there.
@@ -322,14 +295,12 @@ mod tests {
         assert_eq!(modes.selection(full, (1600, 900)), Some(1));
         let window = WindowMode::Window;
         assert_eq!(modes.resolve(window, (2560, 1440)), Some((640, 480)));
+        // Borderless selects the desktop whatever the saved size.
         assert_eq!(
-            modes.resolve(WindowMode::Borderless, (1920, 1080)),
-            Some((1024, 768))
+            modes.resolve(WindowMode::Borderless, (800, 600)),
+            Some((1920, 1080))
         );
-        assert_eq!(
-            modes.selection(WindowMode::Borderless, (1280, 720)),
-            Some(1)
-        );
+        assert_eq!(modes.selection(WindowMode::Borderless, (800, 600)), Some(0));
     }
 
     #[test]
@@ -346,9 +317,7 @@ mod tests {
             [
                 (FullScreen, (1280, 720)),
                 (FullScreen, (640, 480)),
-                (Borderless, (800, 600)),
-                (Borderless, (1024, 768)),
-                (Borderless, (640, 480)),
+                (Borderless, (1280, 720)),
                 (Window, (1280, 720)),
                 (Window, (640, 480)),
                 (Window, (800, 600)),

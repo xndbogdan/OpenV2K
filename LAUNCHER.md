@@ -134,7 +134,8 @@ the game's Display menu lists for the primary display, where the game opens:
 640x480, 800x600 and 1024x768 plus the display's reported modes, in physical
 pixels ([colour depth and resolution](docs/re/RENDER_PIPELINE.md#colour-depth-and-resolution)).
 Changing Display lists its resolutions again. Full Screen changes the display
-mode when the game starts; Borderless covers the desktop.
+mode when the game starts; Borderless covers the desktop, so Resolution shows
+the desktop's size and is disabled.
 Renderer offers Automatic, OpenGL and Software; without a command-line choice,
 OpenGL that cannot start falls back to Software.
 The game is per-monitor DPI aware. The launcher's own windows keep their

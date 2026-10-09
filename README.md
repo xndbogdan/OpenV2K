@@ -172,11 +172,15 @@ OpenV2K V-only glow icon, rendered from the same authored artwork as the
 animated launcher header. The ICO supplies 16–256-pixel images;
 SDL uses a matching transparent PNG.
 
-Display Resolution offers the original **640x480**, **800x600** and **1024x768**
-presets. Fullscreen is borderless at the desktop resolution; the preset selects
-the window size and authored layout, while Image scaling controls presentation.
-Native and non-Classic 4:3/Stretched render at the full output resolution.
-Classic renders the authored frame before enlarging it to the output.
+Display offers **In a Window**, **Full Screen** (a real mode change, undone
+on exit or alt-tab) and **Borderless** (the desktop, without a mode change).
+Resolution offers the original **640x480**, **800x600** and **1024x768** plus
+every mode the display reports, in physical pixels; in Borderless it is the
+desktop's size and can't be changed. Each size draws with the largest
+original layout inside it, while Image scaling controls presentation. OpenGL
+renders at the full output resolution; the software renderer draws the
+layout's frame before enlarging it to the output
+([colour depth and resolution](docs/re/RENDER_PIPELINE.md#colour-depth-and-resolution)).
 High Native gameplay preserves the original HUD sizing through 1024x768, then
 gradually reaches the 800x600 HUD proportion (1.8x at 1080p, 3.6x at 4K).
 The weapon/cargo group and radar follow the screen's bottom corners; the

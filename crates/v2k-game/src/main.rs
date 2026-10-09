@@ -293,6 +293,7 @@ fn start_display(
     config: &mut GameConfig,
 ) -> v2k_render::DisplayModes {
     let modes = game_window.display_modes(renderer.display_index().unwrap_or(0));
+    config.desktop = modes.desktop;
     for request in modes.startup_order(config.display, config.size()) {
         let (width, height) = request.size;
         match renderer.set_display(request) {
@@ -2088,6 +2089,7 @@ fn run_game(
                     game_window.display_modes(renderer.display_index().unwrap_or(0));
                 if current_modes != display_modes {
                     display_modes = current_modes;
+                    config.desktop = display_modes.desktop;
                     shell.refresh(&MenuCtx {
                         cache: &session.cache,
                         config: &config,
@@ -2250,6 +2252,7 @@ fn run_game(
                                     }
                                     display_modes = game_window
                                         .display_modes(renderer.display_index().unwrap_or(0));
+                                    config.desktop = display_modes.desktop;
                                 }
                                 v2k_game::menu_data::SettingId::Rendering
                                     if config.resolve_backend(None) != actual_backend =>

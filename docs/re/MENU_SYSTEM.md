@@ -1068,7 +1068,9 @@ pixels: the process is per-monitor DPI aware.
   rejected. SDL restores the desktop mode when the game leaves Full Screen,
   exits, or loses focus; it minimizes the window then and sets the mode again
   when the window is restored.
-- Borderless covers the window's desktop without changing its mode.
+- Borderless covers the window's desktop without changing its mode. Its
+  Resolution row has the desktop's size as its only entry, so Left and Right
+  only sound the limit; the saved resolution waits for the next mode.
 - A change that cannot start restores the previous window, display mode and
   tier resources, and the setting stays as chosen, as in `FUN_0044E0E0`.
   Alt+Enter goes from In a Window to Full Screen and from either covering
@@ -1078,7 +1080,8 @@ At startup the port follows `FUN_0042D340` from the saved choice. It tries
 every Resolution entry of the saved Display value, beginning at the saved
 size or the next listed one and wrapping, then does the same for the other
 Display values in row order, wrapping as the incremented word does (after
-Full Screen come Borderless, then In a Window). It keeps the first display
+Full Screen come Borderless, whose only entry is the desktop, then In a
+Window). It keeps the first display
 that starts. The settings hold it without being written: retail writes its
 registry only from `FUN_00448CF0` (`FUN_00449140`, when a game is saved), and
 the port's next settings save writes it. The renderer has already fallen back

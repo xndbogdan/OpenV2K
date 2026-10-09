@@ -1245,8 +1245,9 @@ impl WindowState {
             }
         };
         self.options_window = window;
-        let config = GameConfig::load(&self.root);
+        let mut config = GameConfig::load(&self.root);
         self.display_modes = primary_display_modes();
+        config.desktop = self.display_modes.desktop;
         self.group(window, " Display ", 12, 12, 536, 250);
         self.label(window, "&Display:", 24, 38, 106, 20);
         let display = self.combo(
@@ -1487,6 +1488,7 @@ impl WindowState {
 }
 
 /// The Resolution row for `config`'s display, with its entry selected.
+/// Borderless shows the desktop it covers and can't be changed.
 unsafe fn fill_resolutions(control: Handle, modes: &DisplayModes, config: &GameConfig) {
     SendMessageW(control, CB_RESETCONTENT, 0, 0);
     for (width, height) in modes.resolutions(config.display) {
@@ -1500,6 +1502,7 @@ unsafe fn fill_resolutions(control: Handle, modes: &DisplayModes, config: &GameC
     if let Some(index) = modes.selection(config.display, config.size()) {
         SendMessageW(control, 0x014e, index, 0);
     }
+    EnableWindow(control, i32::from(config.display != WindowMode::Borderless));
 }
 
 /// What the primary display offers; the game opens there. The same list as
