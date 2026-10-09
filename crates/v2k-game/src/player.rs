@@ -32,6 +32,10 @@ use crate::hover::{
     keyboard_pitch_raw, keyboard_turn_raw, steer_heading_raw, steering_step_raw, HoverBasis,
     HoverFrameForces, HoverPhysicsConfig, RETAIL_DEFAULT_SENSITIVITY, RETAIL_FRAME_DELTA_MAX_US,
 };
+use crate::retail_input::{
+    absolute_steering, joystick_pitch_raw, joystick_turn_raw, mouse_pitch_raw, mouse_turn_raw,
+    AbsoluteSteeringRequest, JoystickMode, JoystickSample, SteeringStyle,
+};
 use crate::vtol::{VehicleFrameForces, VtolControlFrame};
 
 // ── Tick / angle conversion ─────────────────────────────────────────────────
@@ -39,6 +43,7 @@ use crate::vtol::{VehicleFrameForces, VtolControlFrame};
 /// Tick rate of `DAT_004FED60`. The engine advances this clock once per
 /// 20,000 microseconds, so authored per-tick control deltas are 50 Hz, not the
 /// port's former assumed 60 Hz.
+#[cfg(test)]
 const TICK_HZ: f32 = 50.0;
 /// Full 16-bit angle circle.
 const ANGLE_FULL: f32 = 0x10000 as f32;
@@ -61,9 +66,9 @@ const PITCH_SX_CLAMP: f32 = 0x900 as f32;
 // ── Gun barrel joint (hover) — gunpitch_decomp.c:481-489 ─────────────────────
 
 /// Barrel elevation clamp low end (−0x800 = −11.25°).
-const GUN_BARREL_MIN: f32 = -(0x800 as f32);
+const GUN_BARREL_MIN: i16 = -0x800;
 /// Barrel elevation clamp high end (+0x3000 = +67.5°).
-const GUN_BARREL_MAX: f32 = 0x3000 as f32;
+const GUN_BARREL_MAX: i16 = 0x3000;
 
 // ── VTOL propulsion feel (Hover uses authored fixed-point Section-12 data) ───
 
@@ -200,28 +205,30 @@ impl VehicleMode {
     }
 }
 
-/// Per-frame input channels collapsed from the held keys, mirroring the reader
-/// `FUN_004445E0` motion vector `S+0x280`. `pitch` is in the engine's 16-bit
-/// angle domain (arrow scale 0xD80 + S/X scale 0x900); `turn` remains a
-/// normalized held magnitude while throttle retains its native signed-Q16
-/// channel value.
+/// Per-frame input channels collapsed from the held keys, mouse and joystick,
+/// mirroring the reader `FUN_004445E0` motion vector `S+0x280`. `pitch` is in
+/// the engine's 16-bit angle domain (arrow scale 0xD80 + S/X scale 0x900);
+/// `turn` remains a normalized held magnitude while throttle retains its
+/// native signed-Q16 channel value.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MotionChannels {
     /// `+0x00` turn: LEFT(−1) / RIGHT(+1).
     pub turn: f32,
-    /// `+0x02` pitch: UP(+0xD80)/DOWN(−0xD80) + S(+0x900)/X(−0x900). One shared
-    /// channel — the integrator decides whether it depresses/elevates the barrel
-    /// or tilts the body. Retail's hover convention is intentionally inverted
-    /// from a menu cursor: positive (UP/S) depresses the gun.
+    /// `+0x02` pitch: UP(+0xD80)/DOWN(−0xD80) + S(+0x900)/X(−0x900), plus the
+    /// mouse and Relative joystick terms, wrapped to one signed word. One
+    /// shared channel — the integrator decides whether it depresses/elevates
+    /// the barrel or tilts the body. Retail's hover convention is
+    /// intentionally inverted from a menu cursor: positive (UP/S) depresses
+    /// the gun.
     pub pitch: f32,
-    /// `+0x04` vertical (joystick only in the original — always 0 here).
+    /// `+0x04` vertical. Only console pads bind it, so it stays 0 on the PC.
     pub vertical: f32,
     /// `+0x08` throttle: SPACE(+0x10000) / RSHIFT(−0x10000), retained in the
     /// executable's signed-Q16 domain so transition values need not round-trip
     /// through normalized floats.
     pub throttle_q16: i32,
-    /// `+0x0C` keyboard fire: Enter (mode-independent). Right mouse joins this
-    /// held channel at the window/gameplay layer.
+    /// `+0x0C` fire: Enter or joystick button 1 (mode-independent). Right
+    /// mouse joins this held channel at the window/gameplay layer.
     pub fire: bool,
     /// Whether the separately clamped S/X fine-pitch term participated in this
     /// input sample. VTOL's powered attitude coupling is suppressed by either
@@ -232,6 +239,57 @@ pub struct MotionChannels {
     /// correction, so SPACE+RSHIFT can have zero net lift while retaining the
     /// SPACE-side correction.
     pub positive_thrust_binding_active: bool,
+    /// Turn words added after the keyboard term: mouse X and, in Relative
+    /// mode, joystick X.
+    pub analog_turn_raw: i16,
+    /// Joystick Absolute mode: the keyboard and joystick sums that
+    /// `FUN_00444B90` steers by. The keyboard turn, arrow pitch and joystick
+    /// terms are then absent from the other channels.
+    pub absolute: Option<AbsoluteSteeringRequest>,
+}
+
+/// Mouse and joystick state for one reader call.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct AnalogInput {
+    /// Mouse motion since the previous reader call, in mickeys (positive
+    /// right and towards the player).
+    pub mouse_dx: i32,
+    pub mouse_dy: i32,
+    /// Mouse button 1 (left), which shares Space's bindings.
+    pub mouse_thrust: bool,
+    /// The first attached controller, if any.
+    pub joystick: Option<JoystickSample>,
+}
+
+/// The control settings the reader consults.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ReaderSettings {
+    /// Settings `+0x2C`, 0..=15.
+    pub sensitivity: u8,
+    /// Settings `+0x08`.
+    pub joystick_mode: JoystickMode,
+    /// Settings `+0x28` ("Absolute Mode" enabled, called Full here).
+    pub full_absolute: bool,
+}
+
+impl ReaderSettings {
+    /// The executable's static defaults: Relative, Half, sensitivity 10.
+    pub const DEFAULT: Self = Self::relative(RETAIL_DEFAULT_SENSITIVITY);
+
+    pub const fn relative(sensitivity: u8) -> Self {
+        Self {
+            sensitivity,
+            joystick_mode: JoystickMode::Relative,
+            full_absolute: false,
+        }
+    }
+}
+
+/// Turn and pitch words as the reader leaves them for one integrator call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct ReaderWords {
+    turn: i16,
+    pitch: i16,
 }
 
 impl MotionChannels {
@@ -248,7 +306,26 @@ impl MotionChannels {
         elapsed_micros: u32,
         sensitivity: u8,
     ) -> Self {
+        Self::from_input(
+            keys,
+            AnalogInput::default(),
+            elapsed_micros,
+            ReaderSettings::relative(sensitivity),
+        )
+    }
+
+    /// Build the channel vector from the keys, mouse and joystick, in the
+    /// reader's order: joystick and keyboard terms (directly in Relative
+    /// mode, through `FUN_00444B90` in Absolute mode), then mouse Y, S/X and
+    /// mouse X. Every addition wraps as a signed word, as in retail.
+    pub fn from_input(
+        keys: &HashSet<Keycode>,
+        analog: AnalogInput,
+        elapsed_micros: u32,
+        settings: ReaderSettings,
+    ) -> Self {
         let held = |k: Keycode| keys.contains(&k);
+        let sensitivity = settings.sensitivity;
 
         // Pitch: sensitivity/duty-cycle-scaled arrow term (authored full scale
         // 0xD80) plus the separately clamped fine S/X term (±0x900).
@@ -259,7 +336,8 @@ impl MotionChannels {
         if held(Keycode::Down) {
             arrow_pitch -= 1.0;
         }
-        let mut pitch = f32::from(keyboard_pitch_raw(arrow_pitch, elapsed_micros, sensitivity));
+        let arrow_pitch_raw =
+            i32::from(keyboard_pitch_raw(arrow_pitch, elapsed_micros, sensitivity));
         let mut sx = 0.0;
         if held(Keycode::S) {
             sx += PITCH_SCALE_SX;
@@ -267,7 +345,7 @@ impl MotionChannels {
         if held(Keycode::X) {
             sx -= PITCH_SCALE_SX;
         }
-        pitch += sx.clamp(-PITCH_SX_CLAMP, PITCH_SX_CLAMP);
+        let sx_raw = sx.clamp(-PITCH_SX_CLAMP, PITCH_SX_CLAMP) as i32;
 
         let mut turn = 0.0;
         if held(Keycode::Left) || held(Keycode::Comma) {
@@ -277,24 +355,84 @@ impl MotionChannels {
             turn += 1.0;
         }
 
+        let joystick = analog.joystick;
+        let joystick_turn = joystick.map_or(0, joystick_turn_raw);
+        let joystick_pitch = joystick.map_or(0, joystick_pitch_raw);
+        let mouse_turn = i32::from(mouse_turn_raw(analog.mouse_dx));
+        let mouse_pitch = i32::from(mouse_pitch_raw(analog.mouse_dy));
+
+        let (pitch_raw, analog_turn_raw, absolute) = match settings.joystick_mode {
+            JoystickMode::Relative => (
+                arrow_pitch_raw + joystick_pitch + mouse_pitch + sx_raw,
+                joystick_turn + mouse_turn,
+                None,
+            ),
+            JoystickMode::Absolute => (
+                mouse_pitch + sx_raw,
+                mouse_turn,
+                Some(AbsoluteSteeringRequest {
+                    pitch_sum: arrow_pitch_raw + joystick_pitch,
+                    turn_sum: i32::from(keyboard_turn_raw(turn, elapsed_micros, sensitivity))
+                        + joystick_turn,
+                    full: settings.full_absolute,
+                }),
+            ),
+        };
+
+        // Space, mouse button 1 and joystick button 2 share both thrust
+        // descriptors; any of them holds the channel.
+        let thrust = held(Keycode::Space)
+            || analog.mouse_thrust
+            || joystick.is_some_and(JoystickSample::thrust);
         let mut throttle_q16 = 0i32;
-        if held(Keycode::Space) {
+        if thrust {
             throttle_q16 += 0x1_0000;
         }
         if held(Keycode::RShift) {
             throttle_q16 -= 0x1_0000;
         }
 
-        let fire = held(Keycode::Return);
+        let fire = held(Keycode::Return) || joystick.is_some_and(JoystickSample::fire);
 
         Self {
             turn,
-            pitch,
+            pitch: f32::from(pitch_raw as i16),
             vertical: 0.0,
             throttle_q16,
             fire,
             fine_pitch_active: held(Keycode::S) || held(Keycode::X),
-            positive_thrust_binding_active: held(Keycode::Space),
+            positive_thrust_binding_active: thrust,
+            analog_turn_raw: analog_turn_raw as i16,
+            absolute,
+        }
+    }
+
+    /// The reader's turn and pitch words for a craft with this heading and
+    /// body pitch. Relative mode adds the keyboard turn term; Absolute mode
+    /// replaces it with `FUN_00444B90`, which also sets pitch for a Full
+    /// flying craft.
+    fn reader_words(
+        &self,
+        elapsed_micros: u32,
+        sensitivity: u8,
+        heading_raw: i16,
+        body_pitch_raw: i16,
+        style: SteeringStyle,
+    ) -> ReaderWords {
+        let pitch = self.pitch as i16;
+        match self.absolute {
+            None => ReaderWords {
+                turn: keyboard_turn_raw(self.turn, elapsed_micros, sensitivity)
+                    .wrapping_add(self.analog_turn_raw),
+                pitch,
+            },
+            Some(request) => {
+                let steering = absolute_steering(request, heading_raw, body_pitch_raw, style);
+                ReaderWords {
+                    turn: self.analog_turn_raw.wrapping_sub(steering.turn_subtrahend),
+                    pitch: steering.pitch.wrapping_add(pitch),
+                }
+            }
         }
     }
 
@@ -310,7 +448,8 @@ pub struct PlayerCraft {
     /// Movement style (TAB swaps hover ↔ fly).
     pub mode: VehicleMode,
     /// Gun barrel joint elevation (16-bit angle domain; clamp per §3 hover).
-    /// Kept as f32 for smooth integration but confined to the barrel clamp.
+    /// Both integrators keep it a whole signed word; it is stored as f32 for
+    /// the renderer and diagnostics.
     pub gun_barrel: f32,
     /// Body pitch (radians) — nose-down positive; drives forward flight in fly.
     pub body_pitch: f32,
@@ -504,10 +643,8 @@ impl PlayerCraft {
         sensitivity: u8,
     ) -> VehicleFrameForces {
         let elapsed_micros = elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
-        let tick = elapsed_micros as f32 * TICK_HZ / 1_000_000.0;
         let frame_forces = match self.mode {
             VehicleMode::Hover => VehicleFrameForces::Hover(self.integrate_hover(
-                tick,
                 elapsed_micros,
                 ch,
                 player,
@@ -597,7 +734,6 @@ impl PlayerCraft {
     /// does not pitch); throttle propels forward along the heading; direct yaw.
     fn integrate_hover(
         &mut self,
-        tick: f32,
         elapsed_micros: u32,
         ch: &MotionChannels,
         player: &mut Entity,
@@ -606,18 +742,30 @@ impl PlayerCraft {
         // Retail rebuilds the entity matrix only after FUN_00444CF0 returns.
         // Preserve that one-tick lag by capturing the force basis before yaw.
         let previous_basis = self.previous_force_basis(player);
-
-        // pitch channel → gun barrel: `*barrel -= channel/2`, clamped.
-        self.gun_barrel =
-            (self.gun_barrel - (ch.pitch * 0.5) * tick).clamp(GUN_BARREL_MIN, GUN_BARREL_MAX);
-
-        // Default Relative keyboard steering: input duty-cycle channel ->
-        // Sub-D rate -> wrapping 16-bit heading. Positive/right turns subtract.
-        let turn_raw = keyboard_turn_raw(ch.turn, elapsed_micros, sensitivity);
         let heading_raw = radians_to_angle_word(player.heading);
+        let words = ch.reader_words(
+            elapsed_micros,
+            sensitivity,
+            heading_raw,
+            radians_to_angle_word(self.body_pitch),
+            SteeringStyle::Ground,
+        );
+
+        // pitch channel → gun barrel, once per callback and not scaled by the
+        // frame delta: `*barrel += -(channel / 2)` as a signed word, clamped.
+        // Mouse motion therefore aims by the same angle at any frame rate.
+        let barrel_step = -(i32::from(words.pitch) / 2) as i16;
+        self.gun_barrel = f32::from(
+            (self.gun_barrel as i16)
+                .wrapping_add(barrel_step)
+                .clamp(GUN_BARREL_MIN, GUN_BARREL_MAX),
+        );
+
+        // Steering: reader turn word -> Sub-D rate -> wrapping 16-bit heading.
+        // Positive/right turns subtract.
         player.heading = angle_word_to_rad(steer_heading_raw(
             heading_raw,
-            turn_raw,
+            words.turn,
             elapsed_micros,
             self.hover_physics.steering_divisor_raw,
         ));
@@ -700,15 +848,21 @@ impl PlayerCraft {
         let previous_basis = self.previous_force_basis(player);
         let pitch_before_raw = radians_to_angle_word(self.body_pitch);
         let roll_before_raw = radians_to_angle_word(self.body_roll);
+        let words = ch.reader_words(
+            elapsed_micros,
+            sensitivity,
+            radians_to_angle_word(player.heading),
+            pitch_before_raw,
+            SteeringStyle::Flying,
+        );
 
         // Type-46 Sub-D byte 4 constructs the shared yaw/roll steering channel.
         // FUN_00445310 enables its roll output for VTOL, so FUN_00420360
         // subtracts the same wrapping step from heading and roll before the
         // near-surface force correction. FUN_0041A690 later applies one
         // signed-word roll damping pass.
-        let turn_raw = keyboard_turn_raw(ch.turn, elapsed_micros, sensitivity);
         let steering_step = steering_step_raw(
-            turn_raw,
+            words.turn,
             elapsed_micros,
             self.hover_physics.steering_divisor_raw,
         );
@@ -748,7 +902,7 @@ impl PlayerCraft {
         let throttle_q16 = ch.throttle_q16;
         if has_fuel {
             let effective_pitch_raw = vtol_effective_pitch_raw(
-                ch.pitch as i16,
+                words.pitch,
                 pitch_before_raw,
                 ch.positive_thrust_binding_active,
                 ch.fine_pitch_active,
@@ -1388,6 +1542,7 @@ mod tests {
         let mut up_player = dummy_entity();
         let up = MotionChannels::from_keys(&keys(&[Keycode::Up]));
         up_craft.integrate(1.0 / TICK_HZ, &up, &mut up_player);
+        assert_eq!(up_craft.gun_barrel, -1151.0);
         assert!(up_craft.gun_barrel < 0.0);
         assert!(up_craft.primary_fire_direction(0.0)[1] < 0.0);
 
@@ -1413,18 +1568,208 @@ mod tests {
         }
         // Barrel moved (per `-= channel/2`), body pitch stayed level.
         assert!(craft.gun_barrel < 0.0);
-        assert!(craft.gun_barrel >= GUN_BARREL_MIN);
+        assert_eq!(craft.gun_barrel, f32::from(GUN_BARREL_MIN));
         assert!(craft.body_pitch.abs() < 1e-4);
     }
 
     #[test]
     fn barrel_clamps_to_range() {
         let mut craft = PlayerCraft::new();
-        craft.gun_barrel = GUN_BARREL_MAX + 5000.0;
+        craft.gun_barrel = f32::from(GUN_BARREL_MAX) + 5000.0;
         let mut player = dummy_entity();
         let ch = MotionChannels::default();
         craft.integrate(1.0 / 60.0, &ch, &mut player);
-        assert!(craft.gun_barrel <= GUN_BARREL_MAX);
+        assert_eq!(craft.gun_barrel, f32::from(GUN_BARREL_MAX));
+    }
+
+    #[test]
+    fn hover_barrel_moves_half_the_pitch_word_per_callback_at_any_delta() {
+        let up = MotionChannels::from_keys(&keys(&[Keycode::Up]));
+        for elapsed_micros in [4_000, 8_000, 20_000] {
+            let mut craft = PlayerCraft::new();
+            let mut player = dummy_entity();
+            craft.integrate_configured_micros(elapsed_micros, &up, &mut player, 1);
+            // 2303 / 2 truncates to 1151 whatever the frame length.
+            assert_eq!(craft.gun_barrel, -1151.0);
+        }
+
+        // Truncation is toward zero for negative words too.
+        let mut craft = PlayerCraft::new();
+        let mut player = dummy_entity();
+        let down = MotionChannels::from_keys(&keys(&[Keycode::Down]));
+        craft.integrate_configured_micros(20_000, &down, &mut player, 1);
+        assert_eq!(craft.gun_barrel, 1151.0);
+    }
+
+    fn analog(mouse_dx: i32, mouse_dy: i32) -> AnalogInput {
+        AnalogInput {
+            mouse_dx,
+            mouse_dy,
+            ..AnalogInput::default()
+        }
+    }
+
+    #[test]
+    fn mouse_y_aims_the_hover_gun_and_mouse_x_steers() {
+        let none = HashSet::new();
+        // Pulling the mouse 10 mickeys back gives pitch -2000: +1000 barrel.
+        let back =
+            MotionChannels::from_input(&none, analog(0, 10), 20_000, ReaderSettings::DEFAULT);
+        assert_eq!(back.pitch, -2000.0);
+        let mut craft = PlayerCraft::new();
+        let mut player = dummy_entity();
+        player.heading = std::f32::consts::FRAC_PI_2;
+        craft.integrate_configured_micros(20_000, &back, &mut player, 1);
+        assert_eq!(craft.gun_barrel, 1000.0);
+        assert_eq!(radians_to_angle_word(player.heading), 0x4000);
+
+        // Five mickeys right is turn word 1000, steered like any other word.
+        let right =
+            MotionChannels::from_input(&none, analog(5, 0), 20_000, ReaderSettings::DEFAULT);
+        assert_eq!(right.analog_turn_raw, 1000);
+        let mut craft = PlayerCraft::new();
+        let mut player = dummy_entity();
+        player.heading = std::f32::consts::FRAC_PI_2;
+        craft.integrate_configured_micros(20_000, &right, &mut player, 1);
+        let expected = steer_heading_raw(
+            0x4000,
+            1000,
+            20_000,
+            craft.hover_physics().steering_divisor_raw,
+        );
+        assert!(expected < 0x4000);
+        assert_eq!(radians_to_angle_word(player.heading), expected);
+    }
+
+    #[test]
+    fn mouse_and_keys_share_one_wrapping_pitch_word() {
+        let up = keys(&[Keycode::Up, Keycode::S]);
+        // 2303 + 2304 - 200 * -150 = 34607 wraps to -30929, as retail's word
+        // additions do.
+        let wrapped =
+            MotionChannels::from_input(&up, analog(0, -150), 20_000, ReaderSettings::DEFAULT);
+        assert_eq!(wrapped.pitch, f32::from((2303 + 2304 + 30_000) as i16));
+        assert!(wrapped.pitch < 0.0);
+        assert!(wrapped.fine_pitch_active);
+    }
+
+    #[test]
+    fn mouse_pitch_drives_vtol_body_pitch_like_the_keys() {
+        let none = HashSet::new();
+        let mut from_mouse = fueled_craft();
+        from_mouse.toggle_mode();
+        let mut from_keys = from_mouse.clone();
+        let mut mouse_player = dummy_entity();
+        let mut key_player = dummy_entity();
+
+        // Eleven mickeys forward is pitch word +2200, which VTOL consumes
+        // exactly as it would the same word from the keys.
+        let pushed =
+            MotionChannels::from_input(&none, analog(0, -11), 20_000, ReaderSettings::DEFAULT);
+        assert_eq!(pushed.pitch, 2200.0);
+        from_mouse.integrate_configured_micros(20_000, &pushed, &mut mouse_player, 1);
+        let keyed = MotionChannels {
+            pitch: 2200.0,
+            ..Default::default()
+        };
+        from_keys.integrate_configured_micros(20_000, &keyed, &mut key_player, 1);
+        assert_eq!(from_mouse.body_angle_words(), from_keys.body_angle_words());
+        assert!(
+            from_mouse.body_angle_words()[0] > 0,
+            "pushing forward drops the nose"
+        );
+    }
+
+    #[test]
+    fn joystick_terms_join_the_relative_channels() {
+        let none = HashSet::new();
+        let stick = JoystickSample {
+            axes: [0xFFFF, 0, 0x8000, 0x8000, 0x8000, 0x8000],
+            buttons: 0b11,
+        };
+        let input = AnalogInput {
+            joystick: Some(stick),
+            ..AnalogInput::default()
+        };
+        let channels = MotionChannels::from_input(&none, input, 20_000, ReaderSettings::DEFAULT);
+        assert_eq!(channels.analog_turn_raw, 2095);
+        assert_eq!(channels.pitch, 2096.0);
+        assert!(channels.fire);
+        assert_eq!(channels.throttle_q16, 0x1_0000);
+        assert!(channels.positive_thrust_binding_active);
+        assert!(channels.absolute.is_none());
+    }
+
+    #[test]
+    fn mouse_button_one_and_space_hold_one_thrust_channel() {
+        let space = keys(&[Keycode::Space]);
+        let held = AnalogInput {
+            mouse_thrust: true,
+            ..AnalogInput::default()
+        };
+        let both = MotionChannels::from_input(&space, held, 20_000, ReaderSettings::DEFAULT);
+        assert_eq!(both.throttle_q16, 0x1_0000);
+        let mouse_only =
+            MotionChannels::from_input(&HashSet::new(), held, 20_000, ReaderSettings::DEFAULT);
+        assert_eq!(mouse_only.throttle_q16, 0x1_0000);
+        assert!(mouse_only.positive_thrust_binding_active);
+        let braking = MotionChannels::from_input(
+            &keys(&[Keycode::RShift]),
+            held,
+            20_000,
+            ReaderSettings::DEFAULT,
+        );
+        assert_eq!(braking.throttle_q16, 0);
+    }
+
+    #[test]
+    fn absolute_mode_routes_arrows_through_the_bearing_helper() {
+        let settings = ReaderSettings {
+            joystick_mode: JoystickMode::Absolute,
+            ..ReaderSettings::DEFAULT
+        };
+        let right = MotionChannels::from_input(
+            &keys(&[Keycode::Right]),
+            AnalogInput::default(),
+            20_000,
+            settings,
+        );
+        assert_eq!(
+            right.absolute,
+            Some(AbsoluteSteeringRequest {
+                pitch_sum: 0,
+                turn_sum: 2303,
+                full: false,
+            })
+        );
+        // The arrows no longer aim the gun directly.
+        let up = MotionChannels::from_input(
+            &keys(&[Keycode::Up]),
+            AnalogInput::default(),
+            20_000,
+            settings,
+        );
+        assert_eq!(up.pitch, 0.0);
+
+        // Facing forward (0x4000), Right steers towards bearing 0: the turn
+        // word is the full magnitude and the craft turns right.
+        let mut craft = PlayerCraft::new();
+        let mut player = dummy_entity();
+        player.heading = std::f32::consts::FRAC_PI_2;
+        craft.integrate_configured_micros(20_000, &right, &mut player, 1);
+        let expected = steer_heading_raw(
+            0x4000,
+            2303,
+            20_000,
+            craft.hover_physics().steering_divisor_raw,
+        );
+        assert_eq!(radians_to_angle_word(player.heading), expected);
+
+        // Once the heading matches the bearing, the same input holds course.
+        let mut aligned = dummy_entity();
+        aligned.heading = 0.0;
+        craft.integrate_configured_micros(20_000, &right, &mut aligned, 1);
+        assert_eq!(radians_to_angle_word(aligned.heading), 0);
     }
 
     #[test]

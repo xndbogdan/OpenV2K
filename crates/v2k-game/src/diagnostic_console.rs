@@ -72,6 +72,13 @@ mod windows {
             }
             Ok(!visible)
         }
+
+        /// Whether the console this process created is showing. An inherited
+        /// terminal belongs to the invoking shell and never counts.
+        pub(crate) fn is_visible(&self) -> bool {
+            // SAFETY: An owned console window stays attached to this process.
+            self.owned && unsafe { IsWindowVisible(self.window) } != 0
+        }
     }
 }
 
@@ -87,5 +94,9 @@ impl DiagnosticConsole {
     pub(super) fn toggle(&mut self) -> std::io::Result<bool> {
         // The invoking terminal owns stdout/stderr on other platforms.
         Ok(false)
+    }
+
+    pub(super) fn is_visible(&self) -> bool {
+        false
     }
 }

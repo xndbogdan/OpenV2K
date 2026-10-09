@@ -47,7 +47,10 @@ pub use terrain_light::TerrainLightWindow;
 pub use terrain_tiles::TerrainFrames;
 pub use ui_mapping::{UiAnchor, UiMapping, UiMappingRequest, UiSubmissionPolicy};
 pub use water::WaterFrames;
-pub use window::{apply_app_window_icon, GameEvent, GameWindow, WindowPlacement};
+pub use window::{
+    apply_app_window_icon, ControllerSample, GameEvent, GameWindow, PadSnapshot, PointerMode,
+    WindowPlacement,
+};
 
 pub use gl_backend::{authored_face_plane_visible, GlRenderer};
 pub use sw_backend::SoftwareRenderer;
