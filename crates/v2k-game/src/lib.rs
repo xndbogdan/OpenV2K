@@ -158,6 +158,7 @@ pub mod native_type122;
 pub mod native_type123;
 pub mod native_type30;
 pub mod native_type40;
+pub mod native_type43;
 pub mod native_type56;
 pub(crate) mod native_type61;
 pub mod native_type86;

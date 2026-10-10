@@ -31,6 +31,7 @@ pub enum Intro2ShotDrainError {
     Type56(crate::native_type56::aim::Type56ShotDrainError),
     Type30(crate::native_type30::aim::Type30ShotDrainError),
     Type40(crate::native_type40::aim::Type40ShotDrainError),
+    Type43(crate::native_type43::aim::Type43ShotDrainError),
     Type94(crate::intro2_type94::aim::Intro2Type94ShotDrainError),
 }
 
@@ -48,6 +49,7 @@ enum EmitterFamily {
     Type56,
     Type30,
     Type40,
+    Type43,
     Type94,
 }
 
@@ -180,6 +182,12 @@ fn emitter_family(entity: &crate::entity::Entity) -> Option<EmitterFamily> {
     {
         EmitterFamily::Type40
     } else if entity
+        .native_type43_aim_runtime
+        .as_ref()
+        .is_some_and(|runtime| runtime.queued_shot_count() > 0)
+    {
+        EmitterFamily::Type43
+    } else if entity
         .intro2_type94_aim_runtime
         .as_ref()
         .is_some_and(|runtime| runtime.queued_shot_count() > 0)
@@ -297,6 +305,15 @@ fn drain_emitter_family(
         )
         .map(|outcome| outcome.consumed_requests)
         .map_err(Intro2ShotDrainError::Type40),
+        EmitterFamily::Type43 => crate::native_type43::aim::drain_type43_shots(
+            entities,
+            world_fx,
+            id,
+            environment,
+            retail_tick,
+        )
+        .map(|outcome| outcome.consumed_requests)
+        .map_err(Intro2ShotDrainError::Type43),
         EmitterFamily::Type94 => crate::intro2_type94::aim::drain_intro2_type94_shots(
             entities,
             world_fx,

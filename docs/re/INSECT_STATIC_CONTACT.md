@@ -61,6 +61,7 @@ an emitter or rebuilds the incoming body matrix.
 | Type122 |439| Generic crush; retains its own Capture relation and death owner |
 | Living Type13/10/57 |8| No generic crush; Search/Move/fallback style+1C is null |
 | Living Type15/87 | Authored initializer word | Own Search hook and null style+1C; actual alternate2 C470 death |
+| Ordinary Type43 |2003B| No generic crush; Search/Pursuit style+1C is null; class1 death |
 
 Type10's common-axis descriptor contains0xC85; that descriptor word is not
 its collision policy. Constructor C8 is8, as for Type57/13. The adapter reads
@@ -84,7 +85,12 @@ shared terminal receipt. Its nonnull G allocation chooses ten class37
 scatter particles and BAC0 has no BD20 ring suffix. Surface, static and
 pair damage supply the full synchronous terminal frame; a genuine completed
 receipt can authenticate the retained same-walk null-hook suffix. Class1
-style4C7150 has zero solid/water/static/task hooks. Immediate static burn invokes shared427760's
+style4C7150 has zero solid/water/static/task hooks. The emitter-only
+[Type43](TYPE43_SHOOTER.md#contacts) takes the same class1 terminal: its Search
+style reverses `+C0`'s fixed-body 0x20000, so the living shooter enters the
+scan. With no A or G, its 02CA0 only reverses, times and retargets. Playing's
+walk lends its player to these terminal deaths
+(`resolve_insect_static_contact_with_playing`), including Type128's BC90. Immediate static burn invokes shared427760's
 effect callback rather than only setting the burned bit.
 
 ## Surface policy and validation boundary

@@ -203,6 +203,8 @@ impl EntityManager {
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
+            native_type43_runtime: None,
+            native_type43_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,

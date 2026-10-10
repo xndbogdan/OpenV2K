@@ -34,6 +34,7 @@ fn adopt_authored_tasks(manager: &mut EntityManager) -> SpecializedActorTaskSche
     tasks.adopt_intro2_flyers(manager);
     tasks.adopt_intro2_type53(manager);
     tasks.adopt_type122(manager);
+    tasks.adopt_type43(manager);
     tasks.adopt_shared_fish(manager);
     tasks.adopt_cleansing_vehicle(manager);
     tasks.adopt_intro2_type16(manager);
@@ -120,10 +121,10 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (42, 108),
     (43, 103),
     (45, 40),
-    // Ordinary Type13 takes its native class1 abort death and Type5 its
-    // class11 Tumble publication.
-    (46, 43),
-    (47, 43),
+    // Ordinary Type13 and the emitter-only Type43 take their native class1
+    // abort deaths and Type5 its class11 Tumble publication.
+    (46, 35),
+    (47, 110),
     (48, 99),
 ];
 

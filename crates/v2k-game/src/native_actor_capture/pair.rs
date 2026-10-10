@@ -104,8 +104,9 @@ pub enum NativeCaptorPairBlock {
             (),
         >,
     ),
-    /// A class63 carrier's lethal pair runs BAF0/BC90 through the lent player.
-    AutoPilotPairDamage(
+    /// A class63 carrier's or Type43's lethal pair runs BAF0, then BC90 or
+    /// BAC0, through the lent player.
+    TerminalPairDamage(
         crate::live_actor_checked_damage::LiveActorDamageError<
             crate::class49_terminal::Class49TerminalBlock,
             (),
@@ -1199,6 +1200,7 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || entity.intro2_type57_runtime.is_some()
         || entity.intro2_type17_runtime.is_some()
         || entity.intro2_gun_turret_runtime.is_some()
+        || entity.native_type43_runtime.is_some()
         || crate::intro2_type16::intro2_type16_allocation_authenticates(entity)
         || entity.shared_fish_runtime.is_some()
         || entity.cleansing_vehicle_runtime.is_some()
@@ -1414,14 +1416,18 @@ fn apply_pair_checked_damage(
         }
         return Ok(());
     }
+    // Type128's alternate is class63 (BC90) and Type43's class1 (BAC0); both
+    // are shared BAF0 terminals with no living replacement owner.
     if frame.entities.iter_all().any(|entity| {
         entity.id == target
-            && entity.entity_type == 128
-            && crate::class49_death::source_profile(entity).is_some_and(|profile| {
-                profile.policy() == crate::class49_death::NativeExplosionPolicy::Class63
-            })
+            && ((entity.entity_type == 128
+                && crate::class49_death::source_profile(entity).is_some_and(|profile| {
+                    profile.policy() == crate::class49_death::NativeExplosionPolicy::Class63
+                }))
+                || (entity.entity_type == crate::native_type43::ENTITY_TYPE
+                    && crate::native_type43::allocation_authenticates(entity)))
     }) {
-        return apply_auto_pilot_pair_checked_damage(
+        return apply_terminal_pair_checked_damage(
             frame,
             target,
             delivery,
@@ -1652,7 +1658,7 @@ fn apply_type97_pair_checked_damage(
 /// Type128's lethal pair: 15040's death is AC60's direct class63, so BAF0's
 /// radial and BC90's Type61 drop finish inside this pair callback. Its
 /// finished corpse stays pairable until 14990 without replaying the terminal.
-fn apply_auto_pilot_pair_checked_damage(
+fn apply_terminal_pair_checked_damage(
     frame: &mut Intro2ContactFrame<'_>,
     target: u32,
     delivery: crate::damage::DamageDeliveryRecord,
@@ -1668,7 +1674,7 @@ fn apply_auto_pilot_pair_checked_damage(
             .prepare_native_actor_mutation(frame.entities, target)
     {
         return Err(NativeCaptorPairBlock::Runtime(
-            "completed carrier damage owner",
+            "completed terminal damage owner",
         ));
     }
     let crate::intro2_contacts::Intro2ContactFrame {
@@ -1723,7 +1729,7 @@ fn apply_auto_pilot_pair_checked_damage(
     .map(|_| ())
     .map_err(|error| {
         *committed |= error.committed_prefix;
-        NativeCaptorPairBlock::AutoPilotPairDamage(error)
+        NativeCaptorPairBlock::TerminalPairDamage(error)
     })
 }
 

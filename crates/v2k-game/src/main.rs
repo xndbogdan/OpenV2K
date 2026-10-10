@@ -3647,6 +3647,7 @@ fn run_game(
                 specialized_actor_tasks.adopt_type30(&em);
                 specialized_actor_tasks.adopt_type40(&em);
                 specialized_actor_tasks.adopt_type56(&em);
+                specialized_actor_tasks.adopt_type43(&em);
                 specialized_actor_tasks.adopt_shared_fish(&em);
                 specialized_actor_tasks.adopt_cleansing_vehicle(&em);
                 specialized_actor_tasks.adopt_intro2_type16(&em);
@@ -3986,6 +3987,9 @@ fn run_game(
                             )
                             | SpecializedActorTaskProductionOutcome::NativeType56(
                                 v2k_game::native_type56::Type56Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType43(
+                                v2k_game::native_type43::Type43Outcome::Blocked { .. },
                             )
                             | SpecializedActorTaskProductionOutcome::SharedFish(
                                 v2k_game::shared_fish::SharedFishOutcome::Blocked { .. },
@@ -7045,10 +7049,19 @@ fn run_game(
                         }
                         {
                             use v2k_game::native_ground_actor::contact::{
-                                resolve_insect_static_contact, NativeGroundContactOutcome,
+                                resolve_insect_static_contact_with_playing,
+                                NativeGroundContactOutcome,
                             };
-                            let insect_static =
-                                resolve_insect_static_contact(&mut contact_frame, id);
+                            let insect_static = resolve_insect_static_contact_with_playing(
+                                &mut contact_frame,
+                                id,
+                                Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                    hull: &mut player_hull,
+                                    extra_lives: RetailRuntimeValue::Known(
+                                        player_campaign_progress.extra_lives(),
+                                    ),
+                                }),
+                            );
                             if !matches!(
                                 insect_static,
                                 NativeGroundContactOutcome::Ineligible

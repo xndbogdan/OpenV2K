@@ -54,6 +54,8 @@ pub enum NativeStaticActorDeathBlock {
     Flying(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
     /// A class63 carrier's BAF0/BC90 terminal blocked after its prefix.
     AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
+    /// An alternate-class1 actor's BAF0/BAC0 terminal blocked after its prefix.
+    Class1(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,6 +141,16 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
 pub fn resolve_insect_static_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
+) -> NativeGroundContactOutcome {
+    resolve_insect_static_contact_with_playing(frame, id, None)
+}
+
+/// Playing's walk lends its player to a terminal static death's radial: the
+/// class63 carriers' BC90 and Type43's class1 BAC0 both run BAF0's 4566E0.
+pub fn resolve_insect_static_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
 ) -> NativeGroundContactOutcome {
     let Some(entity) = frame.entities.iter_all().find(|entity| entity.id == id) else {
         return NativeGroundContactOutcome::Ineligible;
@@ -270,9 +282,47 @@ pub fn resolve_insect_static_contact(
                 .map_err(NativeStaticActorDeathBlock::Common)
             },
         },
+        // The Search styles reverse +C0's 0x20000, so the living shooter
+        // keeps 0x8000 and a clear 0x08000000: 11AD0 scans it. Its lethal
+        // collision damage publishes class1 through the shared terminal.
+        43 => StaticActorProfile {
+            entity_type: crate::native_type43::ENTITY_TYPE,
+            default_flags: crate::native_type43::DEFAULT_FLAGS,
+            retained_entry_model_id: None,
+            manager_authenticates: crate::native_type43::manager_allocation_authenticates,
+            metadata_authenticates: |metadata| {
+                crate::native_type43::authenticate_metadata(metadata).is_ok()
+            },
+            completed_owner: |tasks, manager, id| {
+                crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                    || tasks.prepare_native_actor_mutation(manager, id)
+            },
+            publish_standard_death: |manager, id, context| {
+                crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: context.resources,
+                        world_fx: context.world_fx,
+                        static_damage: context.static_damage,
+                        notifications: context.notifications,
+                        retail_tick: context.retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            context.tasks,
+                            context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| NativeStaticActorDeathBlock::Class1(Box::new(error)))
+            },
+        },
         _ => return NativeGroundContactOutcome::Ineligible,
     };
-    resolve_profile_static_contact(frame, id, profile, None)
+    resolve_profile_static_contact(frame, id, profile, playing)
 }
 
 #[derive(Clone, Copy)]
@@ -627,9 +677,10 @@ fn resolve(
         || (matches!(profile.entity_type, 15 | 87)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
-        || (profile.entity_type == 13
+        || (matches!(profile.entity_type, 13 | 43)
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
+        || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
         || (matches!(profile.entity_type, 80 | 126 | 128)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
@@ -980,7 +1031,9 @@ fn contact_task_hook(
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
-        (0x4c7150, None, None) if entity.entity_type == 13 => Ok(NativeGroundStaticTaskHook::Null),
+        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 43) => {
+            Ok(NativeGroundStaticTaskHook::Null)
+        }
         // BC90 keeps a carrier's living tasks and A8B0 calls each task's +20
         // without a style or dying test. Only the retained Primary's 02CA0
         // writes; acquisition Secondaries keep 05FF0's null hook.

@@ -28,6 +28,7 @@ impl SpecializedActorTaskOwner {
             Self::Intro2Type47Scheduler(owner) => Some(owner.actor_lease()),
             Self::Intro2Type53(owner) => Some(owner.actor_lease()),
             Self::NativeType122(owner) => Some(owner.actor_lease()),
+            Self::NativeType43(owner) => Some(owner.actor_lease()),
             Self::Intro2Type58(owner) => Some(owner.actor_lease()),
             Self::SharedFish(owner) => Some(owner.actor_lease()),
             Self::CleansingVehicle(owner) => Some(owner.actor_lease()),

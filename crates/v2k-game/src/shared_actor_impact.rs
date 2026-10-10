@@ -65,6 +65,7 @@ pub enum SharedActorImpactOutcome {
     Type94(crate::intro2_type94::impact::Intro2Type94ImpactOutcome),
     Type13(crate::intro2_type13_live::impact::Intro2Type13ImpactOutcome),
     Type10(crate::intro2_type10::impact::Intro2Type10ImpactOutcome),
+    Type43(crate::native_type43::impact::Type43ImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -153,6 +154,14 @@ pub fn apply_playing_actor_particle_hit(
     {
         return Some(SharedActorImpactOutcome::Type10(
             crate::intro2_type10::impact::apply_playing_type10_family_particle_hit(frame, impact),
+        ));
+    }
+    // Type43's lethal class1 blast needs Playing's static world and player.
+    if entity.entity_type == crate::native_type43::ENTITY_TYPE
+        && entity.native_type43_runtime.is_some()
+    {
+        return Some(SharedActorImpactOutcome::Type43(
+            crate::native_type43::impact::apply_playing_type43_particle_hit(frame, impact),
         ));
     }
     if entity.intro2_gun_turret_runtime.is_some() {

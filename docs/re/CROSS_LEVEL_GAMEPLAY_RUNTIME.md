@@ -144,6 +144,13 @@ entries, dropping its authored Type61; physical static contact remains an
 explicit boundary. The production impact dispatcher selects fish before its other
 family switch, making this path reachable through ordinary Playing delivery.
 
+The twelve ordinary [Type43 shooters](TYPE43_SHOOTER.md) (worlds42/46/47)
+carry Sub-E alone. Their native owner runs class7 Search, Chase and method10
+Aim over a prelude-only01430, then E640/E100/DF70 grounding. Lethal hits,
+radials, static and pair contacts and the abort take alternate class1 through
+the shared terminal. Type35, the same shape firing Type34 meteor births, is
+the next boundary.
+
 The [shared Type47 gunner](TYPE47_RUNTIME.md) extends that construction policy
 to all eight ordinary actors (three in13, one in14, two each in15/31) and the
 three native Intro2 births. Each retains its real Sub-D allocation, authored

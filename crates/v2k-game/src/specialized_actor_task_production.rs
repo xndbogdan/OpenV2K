@@ -29,6 +29,7 @@ mod capture_radial_tests;
 mod contact_prefix;
 mod delivered_type9_contact;
 mod native_ground;
+mod native_type43;
 mod native_weapons;
 pub use native_weapons::{
     NativeWeaponProductionBlock, NativeWeaponProductionOutcome, NativeWeaponRegistrationBlock,
@@ -197,6 +198,7 @@ pub enum SpecializedActorTaskFamily {
     NativeType30,
     NativeType40,
     NativeType56,
+    NativeType43,
     NativeType123,
     NativeType86,
     SharedFish,
@@ -260,6 +262,7 @@ enum SpecializedActorTaskOwner {
     NativeType30(crate::native_type30::Type30Owner),
     NativeType40(crate::native_type40::Type40Owner),
     NativeType56(crate::native_type56::Type56Owner),
+    NativeType43(crate::native_type43::Type43Owner),
     NativeType123(crate::native_type123::Type123Owner),
     NativeType86(crate::native_type86::Type86Owner),
     SharedFish(crate::shared_fish::SharedFishOwner),
@@ -406,6 +409,7 @@ impl SpecializedActorTaskOwner {
             Self::NativeType30(owner) => owner.entity_id(),
             Self::NativeType40(owner) => owner.entity_id(),
             Self::NativeType56(owner) => owner.entity_id(),
+            Self::NativeType43(owner) => owner.entity_id(),
             Self::NativeType123(owner) => owner.entity_id(),
             Self::NativeType86(owner) => owner.entity_id(),
             Self::SharedFish(owner) => owner.entity_id(),
@@ -465,6 +469,7 @@ impl SpecializedActorTaskOwner {
             Self::NativeType30(_) => SpecializedActorTaskFamily::NativeType30,
             Self::NativeType40(_) => SpecializedActorTaskFamily::NativeType40,
             Self::NativeType56(_) => SpecializedActorTaskFamily::NativeType56,
+            Self::NativeType43(_) => SpecializedActorTaskFamily::NativeType43,
             Self::NativeType123(_) => SpecializedActorTaskFamily::NativeType123,
             Self::NativeType86(_) => SpecializedActorTaskFamily::NativeType86,
             Self::SharedFish(_) => SpecializedActorTaskFamily::SharedFish,
@@ -577,6 +582,9 @@ impl SpecializedActorTaskOwner {
             }
             Self::NativeType56(owner) => {
                 Self::NativeType56(owner.fork_for_main_base_abort_transaction())
+            }
+            Self::NativeType43(owner) => {
+                Self::NativeType43(owner.fork_for_main_base_abort_transaction())
             }
             Self::NativeType123(owner) => {
                 Self::NativeType123(owner.fork_for_main_base_abort_transaction())
@@ -922,6 +930,7 @@ pub enum SpecializedActorTaskProductionOutcome {
     NativeType30(crate::native_type30::Type30Outcome),
     NativeType40(crate::native_type40::Type40Outcome),
     NativeType56(crate::native_type56::Type56Outcome),
+    NativeType43(crate::native_type43::Type43Outcome),
     NativeType123(crate::native_type123::Type123Outcome),
     NativeType86(crate::native_type86::Type86Outcome),
     SharedFish(crate::shared_fish::SharedFishOutcome),
@@ -984,6 +993,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::NativeType30(_) => SpecializedActorTaskFamily::NativeType30,
             Self::NativeType40(_) => SpecializedActorTaskFamily::NativeType40,
             Self::NativeType56(_) => SpecializedActorTaskFamily::NativeType56,
+            Self::NativeType43(_) => SpecializedActorTaskFamily::NativeType43,
             Self::NativeType123(_) => SpecializedActorTaskFamily::NativeType123,
             Self::NativeType86(_) => SpecializedActorTaskFamily::NativeType86,
             Self::SharedFish(_) => SpecializedActorTaskFamily::SharedFish,
@@ -1078,6 +1088,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::NativeType30(outcome) => outcome.entity_id(),
             Self::NativeType40(outcome) => outcome.entity_id(),
             Self::NativeType56(outcome) => outcome.entity_id(),
+            Self::NativeType43(outcome) => outcome.entity_id(),
             Self::NativeType123(outcome) => outcome.entity_id(),
             Self::NativeType86(outcome) => outcome.entity_id(),
             Self::SharedFish(outcome) => outcome.entity_id(),
@@ -5103,6 +5114,24 @@ impl SpecializedActorTaskScheduler {
                         tick.outcome,
                     ));
                 }
+                SpecializedActorTaskOwner::NativeType43(owner) => {
+                    let tick = crate::native_type43::tick_type43(
+                        manager,
+                        owner,
+                        crate::native_type43::Type43Frame {
+                            resources,
+                            world_fx,
+                            elapsed_micros,
+                            retail_tick,
+                        },
+                    );
+                    if let Some(owner) = tick.retained_owner {
+                        retained.push(SpecializedActorTaskOwner::NativeType43(owner));
+                    }
+                    outcomes.push(SpecializedActorTaskProductionOutcome::NativeType43(
+                        tick.outcome,
+                    ));
+                }
                 SpecializedActorTaskOwner::NativeType123(owner) => {
                     let tick = crate::native_type123::tick_type123(
                         manager,
@@ -5858,6 +5887,13 @@ impl SpecializedActorTaskScheduler {
                     },
                 )
             }
+            SpecializedActorTaskOwner::NativeType43(owner) => {
+                SpecializedActorTaskProductionOutcome::NativeType43(
+                    crate::native_type43::Type43Outcome::Dropped {
+                        entity_id: owner.entity_id(),
+                    },
+                )
+            }
             SpecializedActorTaskOwner::NativeType123(owner) => {
                 SpecializedActorTaskProductionOutcome::NativeType123(
                     crate::native_type123::Type123Outcome::Dropped {
@@ -6182,6 +6218,11 @@ impl crate::intro2_radial::Intro2RadialTaskCustody for SpecializedActorTaskSched
                         {
                             owner.park_external_prefix();
                         }
+                        SpecializedActorTaskOwner::NativeType43(owner)
+                            if owner.entity_id() == block.target_id =>
+                        {
+                            owner.park_external_prefix();
+                        }
                         _ => {}
                     }
                 }
@@ -6347,6 +6388,11 @@ impl crate::intro2_radial::Intro2RadialTaskCustody for Intro2RadialCursorCustody
                         {
                             owner.park_external_prefix();
                         }
+                        SpecializedActorTaskOwner::NativeType43(owner)
+                            if owner.entity_id() == block.target_id =>
+                        {
+                            owner.park_external_prefix();
+                        }
                         SpecializedActorTaskOwner::Intro2CommonDying(owner)
                             if owner.entity_id() == block.target_id =>
                         {
@@ -6477,6 +6523,26 @@ fn prepare_intro2_radial_actor_mutation(
             matches!(owner,
             SpecializedActorTaskOwner::NativeType56(owner)
                 if owner.entity_id() == entity_id && owner.completed_mutation_boundary(manager))
+        });
+    }
+    if entity.native_type43_runtime.is_some() {
+        // A matching graph alone must not steal an executing or retired wrapper.
+        if crate::actor_task_owner::ActorTaskSlot::IN_RETAIL_TICK_ORDER
+            .into_iter()
+            .filter_map(|slot| entity.actor_tasks.task_in_slot(slot))
+            .any(|task| {
+                entity
+                    .actor_tasks
+                    .wrapper_flags(task)
+                    .is_none_or(|flags| !flags.alive || flags.in_callback)
+            })
+        {
+            return false;
+        }
+        return owners.iter().any(|owner| {
+            matches!(owner, SpecializedActorTaskOwner::NativeType43(owner)
+                if !owner.has_pending_prefix()
+                    && crate::native_type43::Type43Owner::adopt(manager, entity_id) == Ok(*owner))
         });
     }
     if entity.intro2_type58_runtime.is_some() {
@@ -6714,6 +6780,7 @@ fn park_class49_terminal_owner(
                 || entity.shared_fish_runtime.is_some()
                 || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
                 || crate::intro2_type16::type16_auto_pilot_row(entity).is_some()
+                || crate::native_type43::allocation_authenticates(entity)
                 || crate::class49_death::intro2_type13_explosion_source_authenticates(entity))
     }) {
         contact_prefix::park_native_contact_prefix(owners, manager, id);
