@@ -52,6 +52,8 @@ pub(super) fn dispatch_native_class49(
     if !(matches!(entity.entity_type, 97 | 104 | 115) && entity.intro2_gun_turret_runtime.is_some())
         && !(entity.entity_type == 49 && entity.cleansing_vehicle_runtime.is_some())
         && !(entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
+        // Ordinary Type13's 10C10 -> DB80 enters alternate class1, BAC0.
+        && !(entity.entity_type == 13 && entity.native_type13_allocation.is_some())
     {
         return None;
     }
@@ -539,6 +541,8 @@ mod type26_tests;
 
 #[cfg(test)]
 mod ring_custody_tests;
+#[cfg(test)]
+mod type13_tests;
 #[cfg(test)]
 mod type61_tests;
 #[cfg(test)]

@@ -391,6 +391,29 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type16: {error:?}"))?;
             }
+            13 => {
+                let sub_d = sub_d.ok_or("missing Type13 Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type13 constructor surface")?;
+                crate::intro2_type13_live::publish_authored_type13(
+                    crate::intro2_type13_live::Type13AuthoredConstruction {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        constructor_surface_bits,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type13: {error:?}"))?;
+            }
             94 => {
                 let sub_d = sub_d.ok_or("missing Type94 Sub-D allocation")?;
                 let constructor_surface_bits =

@@ -419,7 +419,7 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         30 => crate::native_type30::manager_allocation_authenticates(manager, id),
         40 => crate::native_type40::manager_allocation_authenticates(manager, id),
         56 => crate::native_type56::manager_allocation_authenticates(manager, id),
-        13 => crate::intro2_type13_live::authenticate_intro2_type13(entity).is_ok(),
+        13 => crate::intro2_type13_live::type13_manager_allocation_authenticates(manager, id),
         15 | 87 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
         10 => crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
         57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),

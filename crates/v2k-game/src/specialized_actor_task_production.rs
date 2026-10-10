@@ -1729,18 +1729,28 @@ impl SpecializedActorTaskScheduler {
         })
     }
 
-    /// Adopt the captured Intro2 spawn-0 type-13 graph if published.
-    /// Birth is class-7 B6C0; a later C690 class-5 ACD0 graph stays in the
-    /// same owner. Direct `--level 50` and Level-1 type 13 stay out of custody.
+    /// Adopt Intro2 spawn0 and every ordinary Type13 receipt once.
+    /// Birth is class-7 B6C0 or class-5 ACD0; a later C690 graph stays in the
+    /// same owner. Direct `--level 50` and unpublished type 13 stay out.
     pub fn adopt_intro2_type13_search_attack(&mut self, manager: &EntityManager) -> usize {
-        match Intro2Type13WorldOwner::adopt(manager) {
-            Ok(owner) => {
-                self.owners
-                    .push(SpecializedActorTaskOwner::Intro2Type13SearchAttack(owner));
-                1
-            }
-            Err(_) => 0,
-        }
+        let owners = manager
+            .iter_all()
+            .filter(|entity| {
+                entity.entity_type == crate::intro2_type13_live::TYPE13_ENTITY_TYPE
+                    && !self
+                        .owners
+                        .iter()
+                        .any(|owner| owner.entity_id() == entity.id)
+            })
+            .filter_map(|entity| Intro2Type13WorldOwner::adopt_entity(manager, entity.id).ok())
+            .collect::<Vec<_>>();
+        let adopted = owners.len();
+        self.owners.extend(
+            owners
+                .into_iter()
+                .map(SpecializedActorTaskOwner::Intro2Type13SearchAttack),
+        );
+        adopted
     }
 
     /// Adopt the actual native Intro2 Type26 class4/26/33 graphs once.

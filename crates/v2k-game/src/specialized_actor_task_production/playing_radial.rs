@@ -129,6 +129,11 @@ impl SpecializedActorTaskScheduler {
                     entity.native_type86_runtime.is_some()
                 }
                 16 => entity.intro2_type16_runtime.is_some(),
+                // A receipt selects the owner; its adapter authenticates it.
+                13 => {
+                    entity.native_type13_allocation.is_some()
+                        || crate::class49_death::source_profile(entity).is_some()
+                }
                 17 => entity.intro2_type17_runtime.is_some(),
                 47 => entity.native_type47_construction.is_some(),
                 94 => entity.intro2_type94_runtime.is_some(),
@@ -183,6 +188,7 @@ impl SpecializedActorTaskScheduler {
                             if entities.iter_all().any(|entity| {
                                 entity.id == id
                                     && (entity.intro2_type16_runtime.is_some()
+                                        || entity.native_type13_allocation.is_some()
                                         || entity.intro2_type94_runtime.is_some()
                                         || entity.intro2_type53_runtime.is_some()
                                         || entity.intro2_type58_runtime.is_some()

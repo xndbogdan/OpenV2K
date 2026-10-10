@@ -1434,6 +1434,9 @@ pub struct Entity {
     /// common mover. It survives B6C0 acquisition and future task replacement;
     /// other Type-13 histories remain `None` until separately authenticated.
     pub intro2_type13_common_mover_runtime: Option<GklCommonMoverRuntime>,
+    /// Ordinary-world 104B0 receipt for a native Type13 birth. Intro2 spawn0
+    /// carries none; its identity is the captured spawn0 allocation.
+    pub(crate) native_type13_allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
     /// Entity-owned Type-13 Sub-E cadence and queued method-10 transients.
     pub intro2_type13_aim_runtime: Option<crate::intro2_type13_aim::Type13AimRuntime>,
     /// Type16 source FIFO, independent of its current behavior graph.
@@ -1658,6 +1661,7 @@ impl Entity {
             sub_a_propulsion_runtime: self.sub_a_propulsion_runtime,
             sub_g_06070_runtime: self.sub_g_06070_runtime,
             intro2_type13_common_mover_runtime: self.intro2_type13_common_mover_runtime,
+            native_type13_allocation: self.native_type13_allocation,
             intro2_type13_aim_runtime: self.intro2_type13_aim_runtime.clone(),
             intro2_type16_aim_runtime: self.intro2_type16_aim_runtime.clone(),
             intro2_type58_aim_runtime: self.intro2_type58_aim_runtime.clone(),
@@ -1763,6 +1767,7 @@ impl Entity {
             sub_a_propulsion_runtime: RetailRuntimeValue::Unresolved,
             sub_g_06070_runtime: RetailRuntimeValue::Unresolved,
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -3022,6 +3027,7 @@ fn build_type93_materialiser_entity(
         sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(Some(metadata)),
         sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(Some(metadata)),
         intro2_type13_common_mover_runtime: None,
+        native_type13_allocation: None,
         intro2_type13_aim_runtime: None,
         intro2_type16_aim_runtime: None,
         intro2_type58_aim_runtime: None,
@@ -4872,6 +4878,7 @@ impl EntityManager {
                     || matches!(
                         spawn.entity_type,
                         6 | 9
+                            | 13
                             | 16
                             | 17
                             | 22
@@ -5249,6 +5256,7 @@ impl EntityManager {
                 sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(metadata),
                 sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(metadata),
                 intro2_type13_common_mover_runtime: None,
+                native_type13_allocation: None,
                 intro2_type13_aim_runtime: None,
                 intro2_type16_aim_runtime: None,
                 intro2_type58_aim_runtime: None,
@@ -5729,6 +5737,7 @@ impl EntityManager {
             sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(metadata),
             sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(metadata),
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -6517,6 +6526,7 @@ impl EntityManager {
             sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(Some(&metadata)),
             sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(Some(&metadata)),
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -7978,6 +7988,7 @@ impl EntityManager {
             sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(Some(&metadata)),
             sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(Some(&metadata)),
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,

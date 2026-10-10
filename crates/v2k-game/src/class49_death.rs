@@ -204,7 +204,7 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
             crate::native_type61::allocation_authenticates(manager, id)
         }
         Some(NativeExplosionSourceProfile::Intro2Type13) => {
-            manager.main_base_abort_actor_observation(id).is_some()
+            crate::intro2_type13_live::type13_manager_allocation_authenticates(manager, id)
         }
         Some(NativeExplosionSourceProfile::EntityWeapon(_)) => manager
             .main_base_abort_actor_observation(id)

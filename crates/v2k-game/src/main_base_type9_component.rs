@@ -302,6 +302,7 @@ mod tests {
             )),
             sub_g_06070_runtime: RetailRuntimeValue::Unresolved,
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,

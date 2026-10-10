@@ -63,6 +63,7 @@ pub enum SharedActorImpactOutcome {
     Flyer(crate::intro2_flyer_impact::NativeFlyerImpactOutcome),
     Type16(crate::intro2_type16::impact::Intro2Type16ImpactOutcome),
     Type94(crate::intro2_type94::impact::Intro2Type94ImpactOutcome),
+    Type13(crate::intro2_type13_live::impact::Intro2Type13ImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -105,6 +106,28 @@ pub fn apply_playing_actor_particle_hit(
     }
     // Presence selects the owner before authentication, so a foreign receipt
     // cannot silently fall through to generic damage on the same public type.
+    if entity.entity_type == crate::intro2_type13_live::TYPE13_ENTITY_TYPE
+        && entity.native_type13_allocation.is_some()
+    {
+        return Some(SharedActorImpactOutcome::Type13(
+            crate::intro2_type13_live::impact::apply_playing_type13_particle_hit(
+                crate::intro2_type13_live::impact::Intro2Type13ImpactFrame {
+                    entities: frame.entities,
+                    resources: frame.resources,
+                    world_fx: frame.world_fx,
+                    scheduler: frame.scheduler,
+                    static_damage: frame.static_damage,
+                    notifications: frame.notifications,
+                    retail_tick: frame.retail_tick,
+                },
+                crate::intro2_type13_live::impact::Type13PlayingDeathWorld {
+                    player_hull: frame.player_hull,
+                    extra_lives: frame.extra_lives,
+                },
+                impact,
+            ),
+        ));
+    }
     if entity.intro2_gun_turret_runtime.is_some() {
         return Some(SharedActorImpactOutcome::GunTurret(
             crate::intro2_gun_turret::impact::apply_intro2_gun_turret_particle_hit(

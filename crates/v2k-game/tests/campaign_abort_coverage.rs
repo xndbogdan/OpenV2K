@@ -120,9 +120,10 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (42, 108),
     (43, 103),
     (45, 40),
-    (46, 13),
-    (47, 13),
-    (48, 13),
+    // Ordinary Type13 now takes its native class1 abort death.
+    (46, 5),
+    (47, 5),
+    (48, 99),
 ];
 
 fn actor_snapshot(manager: &EntityManager) -> Vec<String> {

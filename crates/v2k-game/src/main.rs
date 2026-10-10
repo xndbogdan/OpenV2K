@@ -3617,9 +3617,10 @@ fn run_game(
                 }
                 match specialized_actor_tasks.adopt_intro2_type13_search_attack(&em) {
                     0 => {}
-                    adopted => {
-                        log!("Intro2 type-13: adopted {adopted} B6C0 Search And Attack owner")
-                    }
+                    adopted => log!(
+                        "Type-13: adopted {adopted} Search And Attack/Aimless owner{}",
+                        if adopted == 1 { "" } else { "s" }
+                    ),
                 }
                 match specialized_actor_tasks.adopt_intro2_type26(&em) {
                     0 => {}
@@ -6963,7 +6964,7 @@ fn run_game(
                         .entities
                         .iter_all()
                         .find(|entity| entity.id == id)
-                        .is_some_and(|entity| matches!(entity.entity_type, 15 | 87));
+                        .is_some_and(|entity| matches!(entity.entity_type, 13 | 15 | 87));
                     if native_flyer {
                         use v2k_game::{
                             intro2_flyer_contacts::{

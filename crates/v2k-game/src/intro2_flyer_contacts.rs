@@ -38,10 +38,12 @@ impl NativeFlyerContactOutcome {
     }
 }
 
-/// Share the existing Intro2 decision matrix with ordinary native Hive children:
-/// retain the entry model before surface callbacks; a blocked surface skips
-/// static/pairs, an ineligible surface uses static's own admission, and an
-/// admitted surface uses its retained-model suffix. A blocked static skips pairs.
+/// Share the existing Intro2 decision matrix with ordinary native Hive children
+/// and receipt-bearing ordinary Type13: retain the entry model before surface
+/// callbacks; a blocked surface skips static/pairs, an ineligible surface uses
+/// static's own admission, and an admitted surface uses its retained-model
+/// suffix. A blocked static skips pairs. Type13 keeps its own 13/10/57 surface
+/// kernel; Intro2's spawn0 keeps the cinematic walk's own sequence.
 pub fn resolve_native_flyer_contacts(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
@@ -52,7 +54,8 @@ pub fn resolve_native_flyer_contacts(
             static_contact: Some(NativeGroundContactOutcome::Ineligible),
         };
     };
-    if !matches!(entity.entity_type, 15 | 87) {
+    let ordinary_type13 = entity.entity_type == 13 && entity.native_type13_allocation.is_some();
+    if !matches!(entity.entity_type, 15 | 87) && !ordinary_type13 {
         return NativeFlyerContactOutcome {
             surface: Intro2FlyerContactOutcome::Ineligible,
             static_contact: Some(NativeGroundContactOutcome::Ineligible),
@@ -64,7 +67,11 @@ pub fn resolve_native_flyer_contacts(
         }
         RetailRuntimeValue::Unresolved => None,
     };
-    let surface = resolve_intro2_flyer_surface_contact(frame, id);
+    let surface = if ordinary_type13 {
+        crate::native_flying_surface_contact::resolve_native_flying_surface_contact(frame, id)
+    } else {
+        resolve_intro2_flyer_surface_contact(frame, id)
+    };
     let static_contact = match &surface {
         Intro2FlyerContactOutcome::Blocked { .. } => None,
         Intro2FlyerContactOutcome::Ineligible => {
