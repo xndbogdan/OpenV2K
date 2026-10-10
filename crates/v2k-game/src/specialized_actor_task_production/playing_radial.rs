@@ -129,7 +129,7 @@ impl SpecializedActorTaskScheduler {
                     entity.native_type86_runtime.is_some()
                 }
                 16 => entity.intro2_type16_runtime.is_some(),
-                10 | 5 => entity.intro2_type10_runtime.is_some(),
+                10 | 5 | 80 | 126 => entity.intro2_type10_runtime.is_some(),
                 // A receipt selects the owner; its adapter authenticates it.
                 13 => {
                     entity.native_type13_allocation.is_some()

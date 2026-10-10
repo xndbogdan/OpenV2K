@@ -56,8 +56,10 @@ pub(super) fn dispatch_native_class49(
         || (entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
         // Ordinary Type13's 10C10 -> DB80 enters alternate class1, BAC0.
         || (entity.entity_type == 13 && entity.native_type13_allocation.is_some())
-        // Type124 enters class63, BC90: BAF0 then a tail-appended Type61.
-        || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some());
+        // Type124 and the Type80/126 carriers enter class63, BC90: BAF0 then a
+        // tail-appended Type61.
+        || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some())
+        || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some();
     if !admitted {
         return None;
     }
@@ -187,7 +189,8 @@ pub(super) fn dispatch_native_actor(
         6 if entity.main_base_runtime.is_some() => NativeActor::MainBase,
         66 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
         type_id
-            if crate::intro2_type10::Type10Profile::from_entity_type(type_id).is_some()
+            if crate::intro2_type10::Type10Profile::from_entity_type(type_id)
+                .is_some_and(|profile| profile.alternate_behavior_class() == 11)
                 && entity
                     .intro2_type10_runtime
                     .is_some_and(|runtime| runtime.ordinary_allocation.is_some()) =>
@@ -573,6 +576,8 @@ mod main_base_tests;
 #[cfg(test)]
 mod type26_tests;
 
+#[cfg(test)]
+mod carrier_tests;
 #[cfg(test)]
 mod ring_custody_tests;
 #[cfg(test)]

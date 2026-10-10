@@ -329,6 +329,25 @@ fn a_lethal_playing_crash_finishes_class1_with_the_player_hull() {
                 &manager, id
             ));
             assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
+            // 11AD0 has no dying test: until 14990 the class1 corpse keeps
+            // BAC0's null solid/water hooks and a later walk still admits it.
+            let again = resolve_native_flyer_contacts_with_playing(
+                &mut Intro2ContactFrame {
+                    entities: &mut manager,
+                    resources: &mut session.cache,
+                    world_fx: &mut fx,
+                    static_damage: &mut static_damage,
+                    notifications: &mut notifications,
+                    retail_tick: 601,
+                    actor_tasks: &mut tasks,
+                },
+                id,
+                Some(PlayingPlayerContact {
+                    hull: &mut hull,
+                    extra_lives: RetailRuntimeValue::Known(3),
+                }),
+            );
+            assert!(!again.blocks_later_contacts(), "{again:?}");
         } else {
             // The cinematic radial cannot visit the live player.
             assert!(

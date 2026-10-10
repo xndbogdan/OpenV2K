@@ -72,7 +72,7 @@ pub(crate) fn authenticate_metadata(
         || initializer.common_axis_descriptor != profile.axis()
         || initializer.behavior_choices.as_ref() != INITIAL_CHOICES
         || initializer.behavior_rule_ref != 1
-        || initializer.alternate_behavior_class_ref != 11
+        || initializer.alternate_behavior_class_ref != profile.alternate_behavior_class()
     {
         return Err(Intro2Type10Error::Metadata);
     }

@@ -4911,9 +4911,11 @@ impl EntityManager {
                             | 97
                             | 104
                             | 115
+                            | 80
                             | 122
                             | 123
                             | 124
+                            | 126
                     ));
             let construction_stamp_at_0xb4 = manager.begin_common_body_attempt();
             let native_sub_d = if native_ordinary {

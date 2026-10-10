@@ -391,8 +391,9 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type16: {error:?}"))?;
             }
-            5 => {
-                let sub_d = sub_d.ok_or("missing Type5 Sub-D allocation")?;
+            // Type5 and the power-up carriers 80/126 share the Type10 owner.
+            5 | 80 | 126 => {
+                let sub_d = sub_d.ok_or("missing Type10-family Sub-D allocation")?;
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(
                         spawn.position_raw(),
@@ -400,7 +401,7 @@ impl EntityManager {
                         retail_tick,
                         waves_enabled,
                     )
-                    .ok_or("Type5 constructor surface")?;
+                    .ok_or("Type10-family constructor surface")?;
                 crate::intro2_type10::publish_authored_type10_family(
                     crate::intro2_type10::Type10AuthoredConstruction {
                         entity: &mut entity,
@@ -412,7 +413,7 @@ impl EntityManager {
                     },
                     &mut || u32::from(world_fx.next_shared_retail_random_u16()),
                 )
-                .map_err(|error| format!("Type5: {error:?}"))?;
+                .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
             }
             13 => {
                 let sub_d = sub_d.ok_or("missing Type13 Sub-D allocation")?;

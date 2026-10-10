@@ -144,14 +144,7 @@ pub fn apply_playing_actor_particle_hit(
             .is_some_and(|runtime| runtime.ordinary_allocation.is_some())
     {
         return Some(SharedActorImpactOutcome::Type10(
-            crate::intro2_type10::impact::apply_intro2_type10_particle_hit(
-                frame.entities,
-                frame.resources,
-                frame.world_fx,
-                frame.scheduler,
-                impact,
-                frame.retail_tick,
-            ),
+            crate::intro2_type10::impact::apply_playing_type10_family_particle_hit(frame, impact),
         ));
     }
     if entity.intro2_gun_turret_runtime.is_some() {

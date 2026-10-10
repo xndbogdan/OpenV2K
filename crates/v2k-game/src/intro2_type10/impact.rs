@@ -64,6 +64,7 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
         (0x004C_7F60, 0, 0, 0),                               // tumble class11
         (0x004C_7FA8, 0, 0, 0),                               // tumble terminal
         (0x004C_74F8, 0, 0, 0),                               // initializer fallback
+        (0x004C_7198, 0, 0, 0),                               // class63 Auto Pilot
     ]
     .into_iter()
     .find(|(address, _, _, _)| *address == style.style_address())?;
@@ -78,9 +79,73 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
     }
 }
 
+/// Playing lends class63 rows BAF0's mutable static world and its player.
+/// The shared hit frame lends neither, so it holds their lethal hit.
+pub(crate) struct Type10AutoPilotWorld<'a> {
+    pub resources: &'a mut ResourceCache,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    pub player: Option<crate::native_actor_capture::pair::PlayingPlayerContact<'a>>,
+}
+
+enum HitResources<'a> {
+    Shared(&'a ResourceCache),
+    AutoPilot(Type10AutoPilotWorld<'a>),
+}
+
+impl HitResources<'_> {
+    fn cache(&self) -> &ResourceCache {
+        match self {
+            Self::Shared(resources) => resources,
+            Self::AutoPilot(world) => world.resources,
+        }
+    }
+}
+
 pub(crate) fn apply_intro2_type10_particle_hit(
     manager: &mut EntityManager,
     resources: &ResourceCache,
+    world_fx: &mut WorldFx,
+    scheduler: &mut SpecializedActorTaskScheduler,
+    impact: ParticleEntityImpact,
+    retail_tick: u32,
+) -> Intro2Type10ImpactOutcome {
+    apply(
+        manager,
+        HitResources::Shared(resources),
+        world_fx,
+        scheduler,
+        impact,
+        retail_tick,
+    )
+}
+
+/// Playing's particle visit, which also owns a class63 row's terminal blast.
+pub(crate) fn apply_playing_type10_family_particle_hit(
+    frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> Intro2Type10ImpactOutcome {
+    apply(
+        frame.entities,
+        HitResources::AutoPilot(Type10AutoPilotWorld {
+            resources: frame.resources,
+            static_damage: frame.static_damage,
+            notifications: frame.notifications,
+            player: Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                hull: frame.player_hull,
+                extra_lives: frame.extra_lives,
+            }),
+        }),
+        frame.world_fx,
+        frame.scheduler,
+        impact,
+        frame.retail_tick,
+    )
+}
+
+fn apply(
+    manager: &mut EntityManager,
+    resources: HitResources<'_>,
     world_fx: &mut WorldFx,
     scheduler: &mut SpecializedActorTaskScheduler,
     impact: ParticleEntityImpact,
@@ -134,7 +199,7 @@ fn state_bits(entity: &Entity, mask: u32) -> Result<u32, Intro2Type10ImpactBlock
 
 fn run(
     manager: &mut EntityManager,
-    resources: &ResourceCache,
+    mut resources: HitResources<'_>,
     world_fx: &mut WorldFx,
     scheduler: &mut SpecializedActorTaskScheduler,
     impact: ParticleEntityImpact,
@@ -166,7 +231,11 @@ fn run(
     if scheduler.intro2_type10_has_pending_prefix(id) || super::death::terminal_is_pending(entity) {
         return Err(Block::Runtime("pending actor prefix"));
     }
-    if !scheduler.intro2_type10_completed_owner(manager, id) {
+    // BC90 retired a class63 row's owner but its allocation stays hittable
+    // until 14990; only the finished receipt replaces task custody.
+    if !crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+        && !scheduler.intro2_type10_completed_owner(manager, id)
+    {
         return Err(Block::Runtime("completed actor custody"));
     }
     let hit_entry = impact.entity_hit_entry();
@@ -270,6 +339,33 @@ fn run(
             entry: LiveActorDamageEntry::Checked,
         },
         |manager, world_fx, _feedback| {
+            if profile.alternate_behavior_class() == 63 {
+                let HitResources::AutoPilot(world) = &mut resources else {
+                    return Err(Intro2Type10DeathBlock::AutoPilotCarrier);
+                };
+                return crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: &mut *world.resources,
+                        world_fx,
+                        static_damage: &mut *world.static_damage,
+                        notifications: &mut *world.notifications,
+                        retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            &mut *scheduler,
+                            world.player.as_mut().map(
+                                crate::native_actor_capture::pair::PlayingPlayerContact::reborrow,
+                            ),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| Intro2Type10DeathBlock::AutoPilot(Box::new(error)));
+            }
             publish_intro2_type10_standard_death(manager, id, world_fx).map(|owner| {
                 LiveActorDeathResult {
                     returned_nonzero: owner.is_some(),
@@ -308,6 +404,7 @@ fn run(
             let slot = active_model_slot_from_state_flags(flags);
             let model = entity.model_slots[slot].ok_or(Block::Runtime("accepted-hit model"))?;
             let extent = resources
+                .cache()
                 .global_model(model)
                 .ok_or(Block::Runtime("accepted-hit model extent"))?
                 .radius;

@@ -30,6 +30,11 @@ pub enum Intro2Type10DeathBlock {
     Runtime(&'static str),
     World(Intro2Type10Block),
     SubG(crate::sub_g_runtime::Type13SubGFrameBlock),
+    /// A class63 row's death is the shared BAF0/BC90 terminal, which needs the
+    /// caller's radial owner; it never publishes this row's class11 Tumble.
+    AutoPilotCarrier,
+    /// The class63 terminal blocked after its committed prefix.
+    AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -154,6 +159,9 @@ pub fn publish_intro2_type10_standard_death(
         return Ok(None);
     }
     let profile = super::type10_profile(entity).ok_or(Block::Allocation)?;
+    if profile.alternate_behavior_class() != 11 {
+        return Err(Block::AutoPilotCarrier);
+    }
     let metadata = manager
         .type_runtime_metadata(profile.entity_type())
         .ok_or(Block::Metadata)?;

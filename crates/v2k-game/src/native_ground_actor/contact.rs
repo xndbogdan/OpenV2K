@@ -313,7 +313,7 @@ fn resolve_flying_static_contact_entry(
         return NativeGroundContactOutcome::Ineligible;
     };
     let kind = entity.entity_type;
-    if !matches!(kind, 13 | 15 | 87 | 10 | 5 | 57) {
+    if !matches!(kind, 13 | 15 | 87 | 10 | 5 | 80 | 126 | 57) {
         return NativeGroundContactOutcome::Ineligible;
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -348,7 +348,9 @@ fn resolve_flying_static_contact_entry(
                 .find(|entity| entity.id == id)
                 .is_some_and(|entity| match entity.entity_type {
                     13 => crate::intro2_type13_live::authenticate_intro2_type13(entity).is_ok(),
-                    10 | 5 => crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
+                    10 | 5 | 80 | 126 => {
+                        crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
+                    }
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
                     15 | 87 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
                     _ => false,
@@ -374,6 +376,12 @@ fn resolve_flying_static_contact_entry(
                 10 | 5 => {
                     !tasks.intro2_type10_has_pending_prefix(id)
                         && tasks.intro2_type10_completed_owner(manager, id)
+                }
+                // A finished class63 corpse keeps its tasks until 14990.
+                80 | 126 => {
+                    crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                        || (!tasks.intro2_type10_has_pending_prefix(id)
+                            && tasks.intro2_type10_completed_owner(manager, id))
                 }
                 57 => {
                     !tasks.intro2_type57_has_pending_prefix(id)
@@ -556,16 +564,21 @@ fn resolve(
             | 0x4c8158
     ) || (matches!(profile.entity_type, 16 | 26 | 56)
         && context.active_style().style_address() == 0x4c7e88)
-        || (matches!(profile.entity_type, 13 | 10 | 5 | 57 | 16 | 15 | 87 | 94)
-            && matches!(
-                context.active_style().style_address(),
-                0x4c7930 | 0x4c7978 | 0x4c74f8
-            ))
+        || (matches!(
+            profile.entity_type,
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 15 | 87 | 94
+        ) && matches!(
+            context.active_style().style_address(),
+            0x4c7930 | 0x4c7978 | 0x4c74f8
+        ))
         || (matches!(profile.entity_type, 15 | 87)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
         || (profile.entity_type == 13
             && context.active_style().style_address() == 0x4c7150
+            && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
+        || (matches!(profile.entity_type, 80 | 126)
+            && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 26 && context.active_style().style_address() == 0x4c7738)
         || (crate::native_type30::allocation_authenticates(entity)
@@ -730,7 +743,7 @@ fn apply_contact(
         0x4c7ed0 => profile.default_flags & !0x2015,
         0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c7ff0 | 0x4c8038 | 0x4c7b28 | 0x4c7b70 | 0x4c8080
         | 0x4c80c8 | 0x4c8110 | 0x4c8158 | 0x4c7e88 | 0x4c7930 | 0x4c7738 | 0x4c74f8 | 0x4c7420
-        | 0x4c7150 | 0x4c7618 | 0x4c7660 => profile.default_flags,
+        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 => profile.default_flags,
         0x4c7978 => (profile.default_flags | 0x80) & !2,
         address => return Err(Block::UnsupportedStyle(address)),
     };
@@ -915,6 +928,17 @@ fn contact_task_hook(
             Ok(NativeGroundStaticTaskHook::Null)
         }
         (0x4c7150, None, None) if entity.entity_type == 13 => Ok(NativeGroundStaticTaskHook::Null),
+        // BC90 keeps a carrier's Search tasks and A8B0 calls each task's +20
+        // without a style or dying test, so the retained Primary decides.
+        (0x4c7198, Some(Task::SharedRetarget(task)), None | Some(Task::TargetAcquisition(_))) => {
+            Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            ))
+        }
+        (0x4c7198, Some(Task::ChaseTarget(task)), None) => Ok(
+            NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
+        ),
+        (0x4c7198, None, None) => Ok(NativeGroundStaticTaskHook::Null),
         (0x4c7b28, Some(Task::SharedRetarget(task)), Some(Task::FollowBeaconAcquisition(_))) => Ok(
             NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
         ),

@@ -47,6 +47,9 @@ pub(crate) enum NativeBallisticProfileId {
     Type10,
     /// Ordinary Type5 rows on the Type10 owner: method 10 at table speed.
     Type5,
+    /// Ordinary Type80/126 carriers on the Type10 owner: Type10's override.
+    Type80,
+    Type126,
     Type16,
     Type58,
     Type94,
@@ -60,7 +63,7 @@ pub(crate) enum NativeBallisticProfileId {
 impl NativeBallisticProfileId {
     const fn method(self) -> u32 {
         match self {
-            Self::Type10 | Self::Type5 => 10,
+            Self::Type10 | Self::Type5 | Self::Type80 | Self::Type126 => 10,
             Self::Type16 | Self::Type58 | Self::Type94 | Self::Type30 => 20,
             Self::Type57 | Self::Type122 => 24,
             Self::Type56 => 30,
@@ -69,7 +72,7 @@ impl NativeBallisticProfileId {
     }
     const fn speed_override(self) -> i16 {
         match self {
-            Self::Type10 => 1500,
+            Self::Type10 | Self::Type80 | Self::Type126 => 1500,
             Self::Type5
             | Self::Type16
             | Self::Type58
@@ -100,7 +103,8 @@ impl NativeBallisticProfileId {
     const fn sound(self) -> u16 {
         match self {
             Self::Type40 => 0,
-            Self::Type10 | Self::Type5 => 81,
+            Self::Type10 | Self::Type5 | Self::Type80 => 81,
+            Self::Type126 => 82,
             Self::Type16 => 81,
             Self::Type58 => 70,
             Self::Type94 => 69,
@@ -113,6 +117,8 @@ impl NativeBallisticProfileId {
         match self {
             Self::Type10 => 0x5459_5031_3053_5243,
             Self::Type5 => 0x5459_5030_3553_5243,
+            Self::Type80 => 0x5459_5038_3053_5243,
+            Self::Type126 => 0x5459_3132_3653_5243,
             Self::Type16 => 0x5459_5031_3653_5243,
             Self::Type58 => 0x5459_5035_3853_5243,
             Self::Type94 => 0x5459_5039_3453_5243,
@@ -127,6 +133,8 @@ impl NativeBallisticProfileId {
         match self {
             Self::Type10 => 0x5459_5031_3054_4754,
             Self::Type5 => 0x5459_5030_3554_4754,
+            Self::Type80 => 0x5459_5038_3054_4754,
+            Self::Type126 => 0x5459_3132_3654_4754,
             Self::Type16 => 0x5459_5031_3654_4754,
             Self::Type58 => 0x5459_5035_3854_4754,
             Self::Type94 => 0x5459_5039_3454_4754,
@@ -141,6 +149,7 @@ impl NativeBallisticProfileId {
         let (interval, spread, raw_word, threshold, axis) = match self {
             Self::Type10 => (300_000, 128, 44, 12_000, 3840),
             Self::Type5 => (300_000, 512, 48, 40_000, 5120),
+            Self::Type80 | Self::Type126 => (300_000, 128, 44, 24_000, 5120),
             Self::Type16 => (300_000, 100, 158, 16_000, 2560),
             Self::Type58 => (400_000, 256, 150, 16_000, 2560),
             Self::Type94 => (700_000, 256, 102, 12_000, 2304),
@@ -539,13 +548,14 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
                 match P::ID {
                     // Method 10's leading dword is 1: 4E770 applies only
                     // positive closing-speed boost, without adding source velocity.
-                    NativeBallisticProfileId::Type10 | NativeBallisticProfileId::Type5 => {
-                        drain_type13_transient_request(
-                            request,
-                            entity.position_raw(),
-                            entity.velocity_raw(),
-                        )
-                    }
+                    NativeBallisticProfileId::Type10
+                    | NativeBallisticProfileId::Type5
+                    | NativeBallisticProfileId::Type80
+                    | NativeBallisticProfileId::Type126 => drain_type13_transient_request(
+                        request,
+                        entity.position_raw(),
+                        entity.velocity_raw(),
+                    ),
                     NativeBallisticProfileId::Type16
                     | NativeBallisticProfileId::Type58
                     | NativeBallisticProfileId::Type94
@@ -582,7 +592,10 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
             // 410B0 precedes 40A60 for method 10. At/below the sea plane
             // it substitutes class 46 and subtracts 100 from the 40A60
             // input; class46's +0x28 bias restores those units.
-            NativeBallisticProfileId::Type10 | NativeBallisticProfileId::Type5 => world_fx
+            NativeBallisticProfileId::Type10
+            | NativeBallisticProfileId::Type5
+            | NativeBallisticProfileId::Type80
+            | NativeBallisticProfileId::Type126 => world_fx
                 .materialize_class_38_request(
                     Class38ParticleRequest {
                         position_raw: solution.position_raw,
