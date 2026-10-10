@@ -640,8 +640,52 @@ Used by particle emitters:
   common explosion, ordinary surface, whole-body water-entry, submerged
   downwash, E4F0 water, and E8A0 terrain/water consumers are implemented.
   The separate `DAT_004CB500 = 5000000 - DAT_004F72CC * 64` trail-cadence
-  consumer and `FUN_00413500` adaptive presentation-tier output remain
-  distinct open boundaries rather than particle-count policies.
+  consumer remains a distinct open boundary rather than a particle-count
+  policy. The actor visit tier below is recovered but not implemented.
+
+### Actor visit tier (`FUN_00413500` / `FUN_00412DA0`) — RECOVERED, not ported
+
+The same scale also thins actor updates. After computing it, `FUN_0044FFA0`
+chooses a mask and passes it, with its post-increment frame counter
+(`world+0x304`), to `FUN_00413500`. That stores `DAT_004DB09C = mask` and
+`DAT_004DB0A0 = counter & mask`:
+
+| `DAT_004F72CC` | Average frame | Mask | Each actor skips |
+|---|---|---|---|
+| `>= 0xD144` | below 71.4 ms | 0 | never |
+| `0xA2C3..0xD143` | 71.4..83.3 ms | 7 | one frame in eight |
+| `25001..0xA2C2` | 83.3..100 ms | 3 | one frame in four |
+| `<= 25000` | 100 ms or more | 1 | every other frame |
+
+`FUN_00412DA0` tests this before anything else: with a nonzero mask and
+state bit `0x02000000` clear, an actor whose handle satisfies
+`((handle >> 16) & 0x3FF & mask) == DAT_004DB0A0` sets `+0x70` to one if it
+was zero and returns. Its callbacks, movement and both scheduler RNG draws
+are skipped, and that frame's time is not carried to its next visit. The
+handle's high word is the actor's resource-cache index (`0x04DB` for an
+Intro2 meteor), not the `+0xB4` construction stamp. The other `FUN_00413500`
+callers pass mask zero.
+
+Runtime evidence: in `V2000-nocd-faststart04.run`, Intro2 frames arrive about
+120 ms apart (`FUN_004503C0` receives `0x1CCF0..0x1E848`). Meteor33
+(handle `0x04DB0001`) reaches `FUN_00412DA0` only on alternate frames
+(`EB1F6`, `EC239`, `ED4AA`, `EE6C0`); its `+0x6C` accumulator goes
+`0xF230 + 0x1D4C0 - 125000 = 0xDEA8`, and its position is written once per
+visit (`41328D`). So the recording's actors cover about half the distance
+the 50-Hz clock implies: at tick129 Meteor33 is at `[-29042,3788,-26474]`,
+where the full-rate port was by about tick 82. This explains the dark disc
+the port drew in the tick-129 sky (Meteor33 and its class40 trail at about
+22 cells, while retail's was beyond the 24-cell far plane) and the
+walking-actor offsets in those frame comparisons. At ordinary frame rates the
+mask is zero, and the port's every-frame visits are correct.
+
+The port does not implement the tier. Which actors skip a given frame
+depends on each actor's process-wide resource index, and the port does not
+model those indices except for a few traced Intro2 constants. The history
+starts cold (scale zero, so mask 1 then 3) at process start and after any
+frame longer than 125 ms. Until the indices are modelled, RNG-exact
+comparisons must avoid those frames, and comparisons with slow recordings
+must expect this lag.
 
 ### Sine Table (CONFIRMED — `g_state_table` / `DAT_004d14d0`)
 
