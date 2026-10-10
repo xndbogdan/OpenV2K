@@ -99,6 +99,14 @@ Restricted owner wrongly blocked the independent late11AD0 phase. The custody
 check now compares allocation, graph and completion while preserving11AD0's
 own subject+70 and state gates.
 
+Ordinary Type13 births reach the same phases in Playing. The late contact walk
+sends type13 through the shared flyer helper. That helper keeps this 13/10/57
+surface kernel for Type13, then the retained-model static suffix (or static's
+own admission when the surface is ineligible). A lethal contact still runs the
+Class1 radial with the cinematic context. With a player present, that radial
+blocks and parks the allocation. The contact frame does not yet carry the
+Playing player hull.
+
 Native15/87 instead author alternate2, `Die Quietly`, whose zero-policy style
 is4C7420 and initializer isC470. Their actual Section12 rows in1X3XX retain
 mass100, sound11 and B/D/E/G with A/H absent. `10C10` writes health0/dying,

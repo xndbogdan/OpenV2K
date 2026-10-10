@@ -1157,7 +1157,7 @@ The live relation-owner bit `0x1000`
 must be known clear: 12DA0 tests its original state snapshot before the type
 callback and exempts only type 111. A missing `+0x80` owner invokes `180F0`,
 which can construct type 93; `attached_to == None` does not make that path a
-no-op. Remote ownership, dying behavior, alternate effective flags, wind, and
+no-op. Remote ownership, dying behavior, alternate effective flags, and
 unresolved required inputs remain outside this owner.
 
 The accepted `20260722-022303-intro2-actor-ai.jsonl` gives spawn 0's birth
@@ -1193,7 +1193,8 @@ E100 then rereads current live C8 and style masks; the supported class-5 and
 class-7 profiles still yield `0x8`. DCA0's effective `0x2000` master-bit priming,
 E640 `0x10`, ground-snap bit `0x2`, and tile-contact bit `0x800` branches are
 absent in this profile. Authored low-health `+0x94/+0x96/+0xA0 = 0` contributes
-no effect. E100 applies gravity and mode-0 drag, with no Sub-C buoyancy. Intro2
+no effect. E100 applies gravity and mode-0 drag, with no Sub-C buoyancy; ordinary
+worlds with nonzero wind use EC60's wind branch (see the next section). Intro2
 Section-13 raw `+0x90/+0x94/+0x9C/+0xA0/+0xA4 = 0/3/0/0/0` selects wind mode
 zero and drag strength three. The E370 surface selectors `+0x72/+0x73` and
 lifetime dword `+0x74` are zero, but its entity `+0x48` timer still saturating-decays by
@@ -1209,6 +1210,73 @@ live pose. `Entity::presentation_anim_vars` publishes the Sub-G and Sub-K/L
 outputs from the same retained runtime; drawing does not advance another
 component clock. The remaining complete-scene acceptance is tracked in
 Intro2 acceptance.
+
+### Ordinary-world Type-13 births (STATIC + PORT CONFIRMED)
+
+All 20 authored Type13 records match spawn 0's record apart from position:
+model 291 with no override, param 1, zero angles, no animation or config, and a
+zero damage buffer. They are in worlds 24, 26, 31, 40, 42, 46, 47 and 48.
+Type 13's D4A0 flags (8) have no bit `0x20`, so the authored Y (-2048..2816) is
+kept. Ordinary `104B0` publication runs spawn 0's own birth: `1B8C0` (one
+word), then `425680` and ACD0 (class 5) or B6C0 (class 7). Both behavior
+choices use rule 1 (Always) with multipliers 1 and 3, so the selector reads no
+live list. Two inputs differ from Intro2:
+
+- Sub-D is the process allocation at the constructor position. Type13's
+  classifier flags are zero, so no first query ever reads its cache.
+- K `FUN_00424450` and L `FUN_0041BB80` allocate 0x10 and 0x14 bytes and clear
+  them with `FUN_00457370` (Ghidra 12.1.4). The zeroed K/L image is a
+  constructor invariant, not a capture.
+
+An ordinary birth carries a receipt with the manager's allocation lease.
+Identity is either spawn 0 without a receipt, or a receipt whose lease names
+the entity. A receipt never falls back to the spawn-0 identity, and
+manager-level checks compare its generation. Scheduler adoption, C690
+re-adoption after a hit, completed contact custody, Aim, the shot drain, hits
+and Class1 custody all authenticate the allocation itself instead of looking
+up spawn 0. Intro2-only paths, such as view-detail publication and spawn-0
+adoption, still require the absence of a receipt.
+
+Effective flags 8 keep drag bit 8, and E100 (`FUN_0040E100`) passes the callback
+delta to EC60 (`FUN_0044EC60`) unchanged. Wind mode 0 takes the plain drag
+fallback above. Worlds 46 (mode 1) and 47 (mode 2) take EC60's current-wind
+branch:
+
+- it samples terrain at the half and full wind offsets, and returns early when
+  sheltered;
+- it moves the pitch and roll words using the post-F70 basis, which it does not
+  rebuild;
+- it applies the relative-velocity drag.
+
+World 46 authors Section-13 `+0x80 = 0`, which limits its wind to actors below
+the sea, so its flyers above the sea take the fallback.
+
+In Playing:
+
+- the late contact walk sends Type13 through the same flying surface kernel and
+  retained-model static suffix as Intro2;
+- particle hits enter the Type13 hit wrapper with the Playing death world
+  (player hull and lives) for the Class1 blast and radial;
+- the Playing radial routes a receipt to its native owner and parks it after a
+  committed block;
+- the Main Base abort's 170A0 walk sends `10C10` through DB80 to the same
+  alternate class1 `BAC0`, via the shared native Class49 abort dispatcher with
+  its nested radial and the Playing hull. Worlds 46, 47 and 48 now get past
+  Type13 in the abort matrix and stop next at Type5, Type5 and Type99.
+
+Remaining boundaries:
+
+- A lethal collision in the contact walk still runs the Class1 radial in the
+  cinematic context, which blocks when a player exists. Collision channel 1
+  has a 10,000 threshold against 20,000 health, so only a hard crash reaches it.
+- Player pair identity stays unresolved, so the player pass skips Type13 as
+  before.
+
+[Tests](../../crates/v2k-game/src/intro2_type13_live/ordinary_tests.rs) cover
+the 20 births and receipts, five-second cohorts in all eight worlds under the
+real scheduler with late contacts, the world-46/47 wind behavior, receipt
+identity, and a Playing primary hit. [Abort tests](../../crates/v2k-game/src/main_base_abort_production/native/type13_tests.rs)
+cover the class1 abort death in worlds 46-48 and its receipt admission.
 
 ### Native Type-26 construction, hit and surface ownership (STATIC + RUNTIME CONFIRMED)
 
