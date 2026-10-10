@@ -1506,6 +1506,8 @@ pub struct Entity {
     pub native_type122_runtime: Option<crate::native_type122::Type122Runtime>,
     /// Authenticated dynamic Type56 allocation and its own component history.
     pub native_type30_runtime: Option<crate::native_type30::Type30Runtime>,
+    /// Native Rolling Boulder class20 allocation receipt (Type3/Type27).
+    pub rolling_boulder_runtime: Option<crate::rolling_boulder::RollingBoulderRuntime>,
     pub native_type30_aim_runtime: Option<crate::native_type30::aim::Type30AimRuntime>,
     pub native_type40_runtime: Option<crate::native_type40::Type40Runtime>,
     pub native_type40_aim_runtime: Option<crate::native_type40::aim::Type40AimRuntime>,
@@ -1683,6 +1685,7 @@ impl Entity {
             intro2_type53_runtime: self.intro2_type53_runtime,
             native_type122_runtime: self.native_type122_runtime,
             native_type30_runtime: self.native_type30_runtime.clone(),
+            rolling_boulder_runtime: self.rolling_boulder_runtime,
             native_type30_aim_runtime: self.native_type30_aim_runtime.clone(),
             native_type40_runtime: self.native_type40_runtime,
             native_type40_aim_runtime: self.native_type40_aim_runtime.clone(),
@@ -1787,6 +1790,7 @@ impl Entity {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -3050,6 +3054,7 @@ fn build_type93_materialiser_entity(
         intro2_type53_runtime: None,
         native_type122_runtime: None,
         native_type30_runtime: None,
+        rolling_boulder_runtime: None,
         native_type30_aim_runtime: None,
         native_type40_runtime: None,
         native_type40_aim_runtime: None,
@@ -4871,12 +4876,14 @@ impl EntityManager {
                     .is_some()
                     || matches!(
                         spawn.entity_type,
-                        6 | 9
+                        3 | 6
+                            | 9
                             | 17
                             | 22
                             | 23
                             | 24
                             | 26
+                            | 27
                             | 30
                             | 40
                             | 47
@@ -5292,6 +5299,7 @@ impl EntityManager {
                 intro2_type53_runtime: None,
                 native_type122_runtime: None,
                 native_type30_runtime: None,
+                rolling_boulder_runtime: None,
                 native_type30_aim_runtime: None,
                 native_type40_runtime: None,
                 native_type40_aim_runtime: None,
@@ -5755,6 +5763,7 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -6547,6 +6556,7 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -8008,6 +8018,7 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,

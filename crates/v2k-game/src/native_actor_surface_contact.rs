@@ -1,7 +1,10 @@
 //! Native Type16/17/26/58/122 `11AD0 -> D7F0/D860 -> 141D0` terrain/water contact.
 //!
 //! Living C8=39/439 clears10000; Class12's reverse mask2015 restores it and yields
-//! effective policy28 (428 for Type122), with null solid/water style hooks. The outer walk retains
+//! effective policy28 (428 for Type122), with null solid/water style hooks.
+//! Rolling Boulder Type3/27 style0 reverses 1005 into the same admission and
+//! also carries null `+10`/`+14` hooks, so its contact is the bare 141D0 pair;
+//! resting style1 clears the bit and never reaches this walk. The outer walk retains
 //! its entry model across solid response, then classifies the current pose.
 //! A late failure parks the actual scheduler owner: committed effects cannot
 //! be replayed by another contact visit or overwritten by the next task tick.
@@ -44,6 +47,7 @@ enum NativeSurfaceProfile {
     Type58,
     Type30,
     Type122,
+    RollingBoulder(crate::rolling_boulder::RollingBoulderProfile),
 }
 
 impl NativeSurfaceProfile {
@@ -55,6 +59,8 @@ impl NativeSurfaceProfile {
             58 => Some(Self::Type58),
             30 => Some(Self::Type30),
             122 => Some(Self::Type122),
+            3 | 27 => crate::rolling_boulder::RollingBoulderProfile::for_entity_type(entity_type)
+                .map(Self::RollingBoulder),
             _ => None,
         }
     }
@@ -67,6 +73,7 @@ impl NativeSurfaceProfile {
             Self::Type58 => 58,
             Self::Type30 => 30,
             Self::Type122 => 122,
+            Self::RollingBoulder(profile) => profile.entity_type(),
         }
     }
 
@@ -96,6 +103,11 @@ impl NativeSurfaceProfile {
             Self::Type58 => {
                 crate::intro2_type58::type58_manager_allocation_authenticates(manager, id)
             }
+            Self::RollingBoulder(_) => {
+                crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                    manager, id,
+                )
+            }
         };
         if !native_allocation {
             return Err(Block::Runtime("native surface allocation"));
@@ -112,6 +124,9 @@ impl NativeSurfaceProfile {
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
             Self::Type17 => crate::intro2_type17::authenticate_metadata(metadata).is_ok(),
             Self::Type58 => crate::intro2_type58::authenticate_metadata(metadata).is_ok(),
+            Self::RollingBoulder(profile) => {
+                crate::rolling_boulder::authenticate_metadata(profile, metadata).is_ok()
+            }
         };
         if !metadata_matches {
             return Err(Block::Runtime("native surface metadata"));
@@ -217,18 +232,30 @@ fn resolve(
     {
         return Err(Block::Runtime("current completed contact owner"));
     }
-    let RetailRuntimeValue::Known(Some(style)) = entity.current_behavior_context else {
-        return Err(Block::Runtime("current style"));
-    };
-    // No admitted living style enables this gate. Do not promote an externally
-    // altered living body into a guessed terrain callback.
-    if style.active_style().style_address() != 0x004c7ed0
-        || entity.collision.state_flags_at_0x08.masked(0x4000) != RetailRuntimeValue::Known(0x4000)
-    {
-        return Err(Block::Runtime("Class12 null solid/water hooks"));
+    if let NativeSurfaceProfile::RollingBoulder(_) = profile {
+        // Only style0 sets 10000; any other current style is not a source state.
+        if crate::rolling_boulder::current_style(entity)
+            != Ok(crate::rolling_boulder::RollingBoulderStyle::Rolling)
+        {
+            return Err(Block::Runtime("Rolling Boulder null solid/water hooks"));
+        }
+        crate::rolling_boulder::RollingBoulderOwner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Rolling Boulder current graph"))?;
+    } else {
+        let RetailRuntimeValue::Known(Some(style)) = entity.current_behavior_context else {
+            return Err(Block::Runtime("current style"));
+        };
+        // No admitted living style enables this gate. Do not promote an externally
+        // altered living body into a guessed terrain callback.
+        if style.active_style().style_address() != 0x004c7ed0
+            || entity.collision.state_flags_at_0x08.masked(0x4000)
+                != RetailRuntimeValue::Known(0x4000)
+        {
+            return Err(Block::Runtime("Class12 null solid/water hooks"));
+        }
+        Intro2CommonDyingOwner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Class12 current graph"))?;
     }
-    Intro2CommonDyingOwner::adopt(frame.entities, id)
-        .map_err(|_| Block::Runtime("Class12 current graph"))?;
     let record = frame
         .resources
         .global_entity_type(profile.entity_type() as usize)
@@ -348,6 +375,13 @@ fn resolve(
                             crate::intro2_common_dying::publish_intro2_common_standard_death(
                                 manager, id, fx,
                             )?
+                        }
+                        // Type3's class1 BAC0 and Type27's class18 split are
+                        // not owned yet; hold the lethal hit at the boundary.
+                        NativeSurfaceProfile::RollingBoulder(_) => {
+                            return Err(Intro2CommonDyingBlock::Runtime(
+                                "Rolling Boulder death program",
+                            ));
                         }
                     };
                     Ok(LiveActorDeathResult {

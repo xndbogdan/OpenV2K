@@ -178,6 +178,7 @@ mod ordinary_type9_current_task;
 pub mod ordinary_type9_go_to_job_initializer;
 pub mod ordinary_type9_go_to_job_production;
 pub mod ordinary_type9_impact;
+pub mod rolling_boulder;
 pub mod trash_furniture;
 // This pre-link owner is intentionally detached until the process-RNG
 // construction composer can issue exactly one selector receipt.

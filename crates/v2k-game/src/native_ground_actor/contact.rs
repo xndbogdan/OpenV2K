@@ -215,9 +215,49 @@ pub fn resolve_insect_static_contact(
                 .map_err(NativeStaticActorDeathBlock::Common)
             },
         },
+        3 => rolling_boulder_static_profile(3, |metadata| {
+            crate::rolling_boulder::authenticate_metadata(
+                crate::rolling_boulder::RollingBoulderProfile::Small,
+                metadata,
+            )
+            .is_ok()
+        }),
+        27 => rolling_boulder_static_profile(27, |metadata| {
+            crate::rolling_boulder::authenticate_metadata(
+                crate::rolling_boulder::RollingBoulderProfile::Large,
+                metadata,
+            )
+            .is_ok()
+        }),
         _ => return NativeGroundContactOutcome::Ineligible,
     };
     resolve_profile_static_contact(frame, id, profile)
+}
+
+/// Rolling Boulder Type3/27 in either class20 style. Both styles and both
+/// Primary constructors leave every hook null: `05FF0` clears task+20 and
+/// `04580`/`04B40` install only the wrapper and destructor, while style
+/// +1C is zero in both `4C78A0` and `4C78E8`. Neither effective policy has
+/// bit400, so D920 reaches 11760 directly. Lethal static damage needs the
+/// actor's class1/class18 death program, which is not owned yet.
+fn rolling_boulder_static_profile(
+    entity_type: u32,
+    metadata_authenticates: fn(&EntityTypeRuntimeMetadata) -> bool,
+) -> StaticActorProfile {
+    StaticActorProfile {
+        entity_type,
+        default_flags: crate::rolling_boulder::DEFAULT_STATE_POLICY,
+        retained_entry_model_id: None,
+        manager_authenticates:
+            crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates,
+        metadata_authenticates,
+        completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
+        publish_standard_death: |_, _, _| {
+            Err(NativeStaticActorDeathBlock::Common(
+                Intro2CommonDyingBlock::Runtime("Rolling Boulder death program"),
+            ))
+        },
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -549,7 +589,9 @@ fn resolve(
             && matches!(
                 context.active_style().style_address(),
                 0x4c7618 | 0x4c7660 | 0x4c74f8
-            )))
+            ))
+        || (matches!(profile.entity_type, 3 | 27)
+            && crate::rolling_boulder::current_style(entity).is_ok()))
     {
         return Err(Block::UnsupportedStyle(
             context.active_style().style_address(),
@@ -597,7 +639,13 @@ fn apply_contact(
         .entities
         .entity_mut(id)
         .ok_or(Block::Runtime("allocation"))?;
-    if entity.capability_flags != 8
+    // Boulders carry capability2000; 11760 and the null hooks never read it.
+    let capability = if matches!(profile.entity_type, 3 | 27) {
+        0x2000
+    } else {
+        8
+    };
+    if entity.capability_flags != capability
         || entity.collision.default_state_flags_at_0xc8
             != RetailRuntimeValue::Known(profile.default_flags)
     {
@@ -705,6 +753,11 @@ fn apply_contact(
         | 0x4c80c8 | 0x4c8110 | 0x4c8158 | 0x4c7e88 | 0x4c7930 | 0x4c7738 | 0x4c74f8 | 0x4c7420
         | 0x4c7150 | 0x4c7618 | 0x4c7660 => profile.default_flags,
         0x4c7978 => (profile.default_flags | 0x80) & !2,
+        0x4c78a0 | 0x4c78e8 if matches!(profile.entity_type, 3 | 27) => {
+            crate::rolling_boulder::current_style(entity)
+                .map_err(|_| Block::Runtime("Rolling Boulder style"))?
+                .effective_policy()
+        }
         address => return Err(Block::UnsupportedStyle(address)),
     };
     let crushing_damage = if effective_flags & 0x400 != 0 {
@@ -883,6 +936,12 @@ fn contact_task_hook(
             Ok(NativeGroundStaticTaskHook::Furniture)
         }
         (0x4c74f8, None, None) => Ok(NativeGroundStaticTaskHook::Null),
+        (0x4c78a0, Some(Task::BoulderRolling(_)), None)
+        | (0x4c78e8, Some(Task::BoulderResting(_)), None)
+            if crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity) =>
+        {
+            Ok(NativeGroundStaticTaskHook::Null)
+        }
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }

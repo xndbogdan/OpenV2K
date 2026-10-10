@@ -539,6 +539,7 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         || entity.intro2_type10_runtime.is_some()
         || entity.intro2_gun_turret_runtime.is_some()
         || entity.cleansing_vehicle_runtime.is_some()
+        || entity.rolling_boulder_runtime.is_some()
         || crate::native_type61::has_native_allocation(entity)
         || matches!(
             entity.actor_task_state(crate::actor_task_owner::ActorTaskSlot::Primary),
@@ -594,6 +595,8 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         native_cleansing_valid
     } else if entity.intro2_gun_turret_runtime.is_some() {
         native_gun_turret_valid
+    } else if entity.rolling_boulder_runtime.is_some() {
+        crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
     } else if crate::native_type61::has_native_allocation(entity) {
         native_power_up_valid
     } else {

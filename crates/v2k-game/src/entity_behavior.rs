@@ -1217,6 +1217,17 @@ pub static AUDITED_NON_INITIAL_BEHAVIOR_STYLES: &[BehaviorStyle] = &[
         death_callback_address: None,
     },
     EXPLODING_PERSON_COMPLETION_STYLE,
+    // Rolling Boulder style1 (faststart04 runtime words): +18 pair and +28
+    // impact both select style0 through 40C730; +0C and +2C are null.
+    BehaviorStyle {
+        class_id: 20,
+        variant: 1,
+        frame_address: 0x004C_78E8,
+        release_callback_address: None,
+        pair_contact_callback_address: Some(0x0040_C730),
+        impact_callback_address: Some(0x0040_C730),
+        death_callback_address: None,
+    },
     BehaviorStyle {
         class_id: 32,
         variant: 1,

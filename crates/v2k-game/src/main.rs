@@ -3644,6 +3644,7 @@ fn run_game(
                 specialized_actor_tasks.adopt_intro2_type53(&em);
                 specialized_actor_tasks.adopt_type122(&em);
                 specialized_actor_tasks.adopt_type30(&em);
+                specialized_actor_tasks.adopt_rolling_boulders(&em);
                 specialized_actor_tasks.adopt_type40(&em);
                 specialized_actor_tasks.adopt_type56(&em);
                 specialized_actor_tasks.adopt_shared_fish(&em);
