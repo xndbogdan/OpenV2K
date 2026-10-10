@@ -564,17 +564,33 @@ The port has no class63 program yet; Type124 fish stop at it explicitly
 owner for each family plus a dynamic Type61 birth from a packed payload, which
 factory production already performs for its own pickups.
 
-One evidence gap blocks a faithful terminal. Because `40BC90` never calls
-`A860`, the dying carrier keeps its task slots until removal. `413500` walks
+The dying carrier's last visit is settled statically. Because `40BC90` never
+calls `A860`, the carrier keeps its task slots until removal. `413500` walks
 the whole live list (`414920` returns `DAT_004DB090` unfiltered) and sweeps
 deferred removals only at the end of its walk (`414990`). So a carrier killed
 outside the walk (by a particle in `440120` or a contact in `411A80`) is visited
-once more by the next frame's walk. `412DA0` has no dying test; its type
-callbacks still run while state bit `0x20000` is set. Whether installing
-class63 clears that bit, and so whether that last visit moves or acts, is not
-settled statically. A recording of a carrier's death (any world with Type71,
-124 or 127..129) would close it; the port's finished-terminal rule (empty task
-slots) must not be assumed for class63 until then.
+once more by the next frame's walk, and `412DA0` has no dying test.
+
+Neither the death chain nor the class63 install touches scheduler state:
+
+- `10C10` sets dying `0x4000` and zeroes health before calling the type's
+  `+08` hook;
+- `DB80` only calls style `+2C` and the type's alternate installer at entity
+  `+BC`;
+- the class63 style at `0x004C7198` is zero apart from its `+40`
+  initializer, so its `+34`/`+38` policy words change no state bit.
+
+But `40BC90` ends in `410B70`, whose write is
+`state = (state & 0xFFF9FFFF) | 0x100000`. It clears callback-enabled
+`0x20000` and master-motion `0x40000`, raises pending-removal `0x100000`, then
+counts the deferral. The last visit's `412DA0` therefore runs only its
+scheduler prefix and random waits. It skips the type callback, its uncleared
+tasks, the environment suffix and master motion.
+
+The port's shared deferred-destroy write (`DEFERRED_DESTROY_STATE_WRITE_MASK`,
+`0x0016_0000`) already performs this masked write, so no capture is needed. A
+class63 owner keeps only that scheduler prefix until the sweep, and must not
+require empty task slots to recognize its finished terminal.
 
 ## Flip Over And Die class-12 task shell (STATICALLY CONFIRMED, RUNTIME VALIDATED)
 
