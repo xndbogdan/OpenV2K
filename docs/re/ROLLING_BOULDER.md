@@ -2,9 +2,9 @@
 
 `v2k-game::rolling_boulder` owns the authored Type3 and Type27 boulders:
 native construction, both class20 styles and their tasks, the late terrain,
-water and static contacts, hits, and both deaths, including Type27's split
-into two Type3 boulders. Pair contacts and the Main Base abort are still
-explicit boundaries (see [Port status](#port-status)).
+water and static contacts, hits, player pairs, and both deaths, including
+Type27's split into two Type3 boulders. Other pairs and the Main Base abort
+are still explicit boundaries (see [Port status](#port-status)).
 
 ## Identity
 
@@ -116,6 +116,10 @@ Implemented:
 - construction, both tasks and the 9C00 style switches;
 - terrain, water and static contacts;
 - primary, infected and cured hits;
+- player pairs: the pass admits boulders through their D720/13F70 body basis
+  (the rolling task turns it, so no authored pitch/roll applies). The response
+  pushes them, and a resting boulder's style1 `+18` (`40C730`) reinstalls
+  rolling style0 inside the walk, before 411760's damage;
 - both deaths from hits and from Playing or cinematic blasts;
 - a Type27 split from a lethal collision;
 - corpse contacts and hits.
@@ -129,8 +133,11 @@ Remaining boundaries, each held rather than approximated:
   class1 radial needs the player hull", because the late contact frame does
   not carry the Playing hull. That needs over 13000 raw collision damage,
   which has not been observed.
-- Pairs. The player pass leaves boulders out because their pair orientation
-  is unresolved. A Hive ram returns `UnsupportedHiveImpactCounterpart`
-  ([Hive wreck](HIVE_WRECK.md)).
+- Lethal player pairs. A lethal pair packet holds at `DeathDispatchRequired`.
+  Type3's class1 radial needs mutable resources this pass does not carry, and a
+  Type27 split appends children that retail's continuing pair walk would visit
+  in the same frame.
+- Other pairs. Boulder pairs with actors other than the player, and the Hive
+  ram (`UnsupportedHiveImpactCounterpart`, [Hive wreck](HIVE_WRECK.md)).
 - The Main Base abort transaction, which still stops at Type27 in worlds
   27 and 35.

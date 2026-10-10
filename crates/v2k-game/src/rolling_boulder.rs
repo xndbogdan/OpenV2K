@@ -988,4 +988,6 @@ pub mod death;
 pub mod impact;
 
 #[cfg(test)]
+mod pair_tests;
+#[cfg(test)]
 mod tests;
