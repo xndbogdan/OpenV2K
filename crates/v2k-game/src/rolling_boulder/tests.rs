@@ -567,3 +567,122 @@ fn radial_blasts_reach_a_boulder_only_through_its_completed_owner() {
         }
     }
 }
+
+#[v2k_test_support::retail_test]
+fn playing_blasts_take_the_native_path_through_the_completed_owner() {
+    use crate::{
+        damage::DamagePacket,
+        entity::{DynamicRadialLiveBlockReason, DynamicRadialLivePhase},
+        player_hull::PlayerHull,
+        radial_damage::RadialDamageTemplate,
+        specialized_actor_task_production::{PlayingRadialBlock, PlayingRadialFrame},
+    };
+    // Channel2 (threshold 4000): 5000 delivers 1000; a 1-health body dies.
+    for (parked, lethal) in [(false, false), (true, false), (false, true)] {
+        let mut world = BoulderWorld::new(27);
+        let id = world.first(27);
+        let others: Vec<_> = world
+            .manager
+            .iter_all()
+            .map(|entity| entity.id)
+            .filter(|&other| other != id)
+            .collect();
+        for other in others {
+            world
+                .manager
+                .entity_mut(other)
+                .unwrap()
+                .collision
+                .state_flags_at_0x08
+                .overwrite(!0x2000, 0);
+        }
+        world.activate(id);
+        if parked {
+            assert!(world.tasks.park_native_contact_prefix(&world.manager, id));
+        }
+        if lethal {
+            world.manager.entity_mut(id).unwrap().collision.health_raw =
+                RetailRuntimeValue::Known(1);
+        }
+        let entity = world.entity(id);
+        let center = entity.position_raw();
+        let (collision, velocity) = (entity.collision.clone(), entity.velocity_raw());
+        let mut player_hull = PlayerHull::default();
+        let BoulderWorld {
+            session,
+            manager,
+            fx,
+            tasks,
+            static_damage,
+            notifications,
+            ..
+        } = &mut world;
+        let outcome = tasks.apply_playing_radial_damage(PlayingRadialFrame {
+            entities: manager,
+            player_hull: &mut player_hull,
+            extra_lives: RetailRuntimeValue::Unresolved,
+            origin_raw: [center[0].wrapping_add(64), center[1], center[2]],
+            template: RadialDamageTemplate {
+                inner_radius_raw: 128,
+                outer_radius_raw: 512,
+                impulse_raw: 256,
+                packet: DamagePacket {
+                    channels: [2, 0],
+                    amounts_raw: [5000, 0],
+                },
+                trailing_raw: [17, 0],
+            },
+            world_fx: fx,
+            notifications,
+            retail_tick: 100,
+            resources: &mut session.cache,
+            static_damage,
+            active_terminal_calls: Vec::new(),
+        });
+        let entity = world.entity(id);
+        match (parked, lethal) {
+            (true, _) => {
+                let Some(PlayingRadialBlock::Native(block)) = outcome.blocked else {
+                    panic!("{outcome:?}")
+                };
+                assert_eq!(block.phase, DynamicRadialLivePhase::MutationCustody);
+                assert_eq!(
+                    block.reason,
+                    DynamicRadialLiveBlockReason::NativeActorMutationCustody
+                );
+                assert_eq!(entity.collision, collision);
+                assert_eq!(entity.velocity_raw(), velocity);
+            }
+            (false, false) => {
+                assert!(outcome.blocked.is_none(), "{outcome:?}");
+                assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(9000));
+                assert!(
+                    entity.velocity_raw()[0] < velocity[0],
+                    "the blast pushes the boulder away from its origin"
+                );
+            }
+            (false, true) => {
+                // The class18 split is not owned yet; the lethal blast holds.
+                let Some(PlayingRadialBlock::Native(block)) = outcome.blocked else {
+                    panic!("{outcome:?}")
+                };
+                assert!(
+                    matches!(
+                        &block.reason,
+                        DynamicRadialLiveBlockReason::Checked(error)
+                            if matches!(
+                                error.reason,
+                                crate::live_actor_checked_damage::LiveActorDamageBlock::Death(
+                                    DynamicRadialLiveBlockReason::UnsupportedDeath {
+                                        entity_type: 27,
+                                        alternate_class: Some(18),
+                                    }
+                                )
+                            )
+                    ),
+                    "{block:?}"
+                );
+            }
+        }
+    }
+}

@@ -352,6 +352,16 @@ fn rolling_boulder_program() -> Result<&'static BehaviorProgram, RollingBoulderB
     audited_behavior_program(u32::from(ROLLING_BOULDER_CLASS)).ok_or(RollingBoulderBlock::Metadata)
 }
 
+/// Both rows keep the shared type vtable `4C8A30`, whose `+30` generic-hit
+/// slot is null; `05FF0` leaves each Primary's `+18` component hook null and
+/// 104B0 the instance `+44` modifier. The pair orientation is not owned yet.
+fn class20_pair_callbacks() -> crate::entity_collision_state::EntityPairCallbackRuntimeState {
+    crate::entity_collision_state::EntityPairCallbackRuntimeState::audited_local(
+        None,
+        RetailRuntimeValue::Unresolved,
+    )
+}
+
 /// Ordinary 104B0 construction of one authored boulder.
 pub(crate) struct RollingBoulderAuthoredConstruction<'a> {
     pub entity: &'a mut Entity,
@@ -448,6 +458,7 @@ pub(crate) fn publish_authored_rolling_boulder(
     }
     entity.set_position_raw(grounded);
     entity.collision.state_flags_at_0x08 = state;
+    entity.collision.pair_callbacks = class20_pair_callbacks();
     // Explicit native policy for 104B0's unwritten transient mass word.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     entity.apply_d720_euler_body_basis();

@@ -138,6 +138,7 @@ impl SpecializedActorTaskScheduler {
                 56 => entity.native_type56_runtime.is_some(),
                 66 => entity.intro2_type66_runtime.is_some(),
                 22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_some(),
+                3 | 27 => entity.rolling_boulder_runtime.is_some(),
                 _ => crate::class49_death::source_profile(entity).is_some(),
             };
             if native {
@@ -186,6 +187,7 @@ impl SpecializedActorTaskScheduler {
                                         || entity.native_type30_runtime.is_some()
                                         || entity.native_type40_runtime.is_some()
                                         || entity.native_type56_runtime.is_some()
+                                        || entity.rolling_boulder_runtime.is_some()
                                         || entity.shared_fish_runtime.is_some())
                             }) {
                                 callbacks.scheduler.park_native_contact_prefix(entities, id);
