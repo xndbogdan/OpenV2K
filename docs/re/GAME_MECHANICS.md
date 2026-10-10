@@ -639,9 +639,10 @@ Used by particle emitters:
 - **Port status:** the Intro2/gameplay writer and the recovered meteor/wreck,
   common explosion, ordinary surface, whole-body water-entry, submerged
   downwash, E4F0 water, and E8A0 terrain/water consumers are implemented.
-  The separate `DAT_004CB500 = 5000000 - DAT_004F72CC * 64` trail-cadence
-  consumer remains a distinct open boundary rather than a particle-count
-  policy. The actor visit tier below is recovered but not implemented.
+  `DAT_004CB500 = 5000000 - DAT_004F72CC * 64` is written once per particle
+  pass by `40120` and read only by `43F350`, the class38 fireball trail, which
+  the port implements; it is a step budget, not a count policy. The actor
+  visit tier below is recovered but not implemented.
 
 ### Actor visit tier (`FUN_00413500` / `FUN_00412DA0`) — RECOVERED, not ported
 
