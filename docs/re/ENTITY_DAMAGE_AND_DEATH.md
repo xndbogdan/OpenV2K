@@ -576,6 +576,25 @@ settled statically. A recording of a carrier's death (any world with Type71,
 124 or 127..129) would close it; the port's finished-terminal rule (empty task
 slots) must not be assumed for class63 until then.
 
+## Rolling Boulder class20 (STATICALLY CONFIRMED, not ported)
+
+Class20 (table entry `0x004C8B44`, descriptor `0x004C8908`, style table
+`0x004C78A0`) is the behaviour of Type3 (5 births) and Type27 (25 births),
+which have no components. Its two style entries were read at runtime:
+
+| Style | Callbacks | Initializer | Primary task |
+|---|---|---|---|
+| 0 (`4C78A0`) | `+04`: `40C750` | `40B950` | `404580(slot0, 0)`, the rolling body task the Intro2 meteors build with 5000 |
+| 1 (`4C78E8`) | `+04`, `+18`, `+28`: `40C730` | `40B9B0` | `404B40(slot0, 0)` |
+
+Both initializers first clear Tertiary and Secondary through `40A7A0`.
+`40C750` and `40C730` call `40C6B0` with style index 1 and 0, so the boulder
+switches between the two. `404B40` builds a single-callback task (`404B60`):
+while `sqrt(vx²+vy²+vz²) > 100` it keeps running, otherwise it zeroes the
+velocity and settles. The port implements `404580` for meteors but not
+`404B60` or the switches; Type3 dies through class1 and Type27 through
+class18 (Split And Explode).
+
 ## Flip Over And Die class-12 task shell (STATICALLY CONFIRMED, RUNTIME VALIDATED)
 
 Canonical type records for 17 and 47 both author alternate behavior class 12,
