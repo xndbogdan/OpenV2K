@@ -176,6 +176,22 @@ Intro2's 92/102 identities keep their cinematic owners and campaign
 reconstruction stays separate. Type100's method19 (class54, two variable
 bindings) has no live aim owner, so it still constructs without a context.
 
+### Ordinary Type112 and Type113 flowers
+
+Type112 (models337/339, world39, 4 births) and Type113 (models693/695,
+world18, 2 births) share Type115's flower row: E/L, Mutated-weighted class29
+or the class0 wait, method16 with gravity lead, health1000, initializer
+`0x25025`. They differ in capability (`0x44`/`0x40` instead of zero),
+damage multiplier slot5 (256), muzzle slot (36/30), Sub-L
+(`208,7`/`232,3`) and alternate49 instead of1, so they die through class49
+rather than Type115's class1. BAF0 (`40BB3E..40BBB5`) chooses the death
+scatter in this order: any A/B/N/G component gives class37; otherwise live
+capability `0x40` gives sixteen class94/95; otherwise Type49 gives class6
+and types112..115 class37. Type115 (capability zero) therefore reaches the
+type range, while Type112/113 take the capability branch like the other E/L
+turrets. Their class0 idle style `4C7468` is accepted for hits and
+null-death cleanup as for Type115.
+
 ## Ordinary native Type104 and Type115
 
 Castle (global world15) authors anti-air Type104 at spawns1/49/50 and virus

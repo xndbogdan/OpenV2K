@@ -233,7 +233,8 @@ fn publish_gun_turret_at(
         program: behavior_program(29).ok_or(Intro2GunTurretError::Selection)?,
     };
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
-    if (profile != Intro2GunTurretProfile::Type115
+    // Flower rows weight class29 by Mutated and otherwise select class0.
+    if (!profile.is_flower()
         && entity.initial_behavior != RetailRuntimeValue::Known(Some(expected)))
         || entity.actor_common_axis_descriptor != RetailRuntimeValue::Known(profile.axis())
         || entity.physical_body_basis_q31
@@ -300,7 +301,7 @@ fn publish_gun_turret_at(
     // Explicit deterministic native policy for104B0's unwritten B2 residue.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     let publication = select(entity, profile, next_random)?;
-    if profile == Intro2GunTurretProfile::Type115 {
+    if profile.is_flower() {
         //The passive weighted-domain projection merged D190 success with
         //C490. Fresh104B0 starts these setup bits clear; the selected
         //initializer below owns their exact publication.

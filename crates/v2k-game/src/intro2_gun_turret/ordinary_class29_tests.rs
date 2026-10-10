@@ -187,3 +187,33 @@ fn ordinary_class29_turrets_fire_their_own_emitter_method_and_drain_once() {
         assert_eq!(again.consumed_requests, 0);
     }
 }
+
+/// Type112/113 share Type115's flower row (Mutated-weighted class29 or the
+/// class0 wait) apart from models, capability, muzzle slot, Sub-L and their
+/// alternate49 death.
+#[v2k_test_support::retail_test]
+fn ordinary_type112_113_flowers_publish_their_own_native_owner() {
+    let mut births = 0;
+    for (level, entity_type) in [(39, 112), (18, 113)] {
+        let (_, manager, _) = fixture(level);
+        let profile = Intro2GunTurretProfile::for_native_authored(entity_type).unwrap();
+        for entity in manager.iter_all().filter(|e| e.entity_type == entity_type) {
+            births += 1;
+            let runtime = entity.intro2_gun_turret_runtime.unwrap();
+            assert_eq!(runtime.profile, profile);
+            assert!(is_native_ordinary_gun_turret(entity));
+            assert!(
+                Intro2GunTurretOwner::adopt(&manager, entity.id).is_ok(),
+                "world{level} Type{entity_type}"
+            );
+            assert_eq!(
+                entity.model_slots,
+                profile.model_slots().map(|model| Some(usize::from(model)))
+            );
+            assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(1000));
+            assert_eq!(profile.alternate_behavior_class(), 49);
+            assert!(profile.gravity_lead());
+        }
+    }
+    assert_eq!(births, 4 + 2);
+}
