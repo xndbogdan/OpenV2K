@@ -1139,7 +1139,7 @@ fn base_factory_runtime_from_constructor(
     metadata: Option<&EntityTypeRuntimeMetadata>,
     config: Option<&[u8; 0x58]>,
 ) -> RetailRuntimeValue<Option<BaseFactoryRuntimeState>> {
-    let production = if entity_type == FACTORY_ENTITY_TYPE {
+    let production = if crate::intro2_type66::is_working_factory_type(entity_type) {
         config
             .zip(metadata.and_then(|metadata| metadata.initial_health_raw))
             .map(|(config, health_raw)| {
@@ -3117,10 +3117,9 @@ fn audited_projectile_survivor_policy(target: &Entity) -> Option<AuditedProjecti
     if target.collision.pair_callbacks.damage_modifier_address != RetailRuntimeValue::Known(None) {
         return None;
     }
-    if matches!(
-        target.entity_type,
-        MAIN_BASE_ENTITY_TYPE | FACTORY_ENTITY_TYPE
-    ) {
+    if target.entity_type == MAIN_BASE_ENTITY_TYPE
+        || crate::intro2_type66::is_working_factory_type(target.entity_type)
+    {
         return Some(AuditedProjectileSurvivorPolicy::BaseFactory);
     }
     if target.entity_type != crate::hive_controller::HIVE_ENTITY_TYPE {
@@ -4888,6 +4887,7 @@ impl EntityManager {
                             | 61
                             | 62
                             | 66
+                            | 125
                             | 68
                             | 97
                             | 104
@@ -7217,7 +7217,7 @@ impl EntityManager {
         match (factories.next(), factories.next()) {
             (Some(factory), None) => {
                 factory.active
-                    && factory.entity_type == FACTORY_ENTITY_TYPE
+                    && crate::intro2_type66::is_working_factory_type(factory.entity_type)
                     && matches!(
                         factory.base_factory_runtime,
                         RetailRuntimeValue::Known(Some(BaseFactoryRuntimeState {
@@ -9545,7 +9545,7 @@ impl EntityManager {
             if let Some(death_sound_id) = death_sound_id {
                 // FUN_00419010 stage 32 queues the tracked type-61 through the
                 // deferred helper before FUN_00419750. A zero handle is a no-op.
-                if entity.entity_type == FACTORY_ENTITY_TYPE {
+                if crate::intro2_type66::is_working_factory_type(entity.entity_type) {
                     if let Some(production) = runtime.production {
                         if production.spawned_pickup_handle != 0 {
                             progressive_pickup_destroys.push(production.spawned_pickup_handle);
@@ -9587,7 +9587,9 @@ impl EntityManager {
                     target_id: entity.id,
                     target_position_raw: model_origin_raw,
                     death_sound_id,
-                    full_frame_sequence_requested: entity.entity_type == FACTORY_ENTITY_TYPE,
+                    full_frame_sequence_requested: crate::intro2_type66::is_working_factory_type(
+                        entity.entity_type,
+                    ),
                 });
                 if entity.entity_type == MAIN_BASE_ENTITY_TYPE {
                     events.push(BaseFactoryProgressionEvent::MainBaseLevelAbort {
@@ -9632,7 +9634,7 @@ impl EntityManager {
     ) -> Vec<FactoryAbortProgressionStarted> {
         let mut started = Vec::new();
         for entity in &mut self.entities {
-            if entity.entity_type != FACTORY_ENTITY_TYPE {
+            if !crate::intro2_type66::is_working_factory_type(entity.entity_type) {
                 continue;
             }
             if classify_main_base_abort_actor(MainBaseAbortActorFacts {

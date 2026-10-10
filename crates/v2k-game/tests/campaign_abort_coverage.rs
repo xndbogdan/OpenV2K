@@ -115,7 +115,8 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (37, 102),
     (38, 82),
     (39, 77),
-    (40, 125),
+    // Type125 factories share Type66's class39 owner.
+    (40, 50),
     (41, 35),
     (42, 108),
     (43, 103),

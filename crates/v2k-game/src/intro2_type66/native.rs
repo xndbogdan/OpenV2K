@@ -20,12 +20,13 @@ use crate::{
 use v2k_formats::{levels::EntitySpawn, terrain::TerrainGrid};
 
 pub(crate) fn authenticate_metadata(
+    entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> Result<(), Intro2Type66Error> {
     let Some(initializer) = metadata.initializer.as_ref() else {
         return Err(Intro2Type66Error::Metadata);
     };
-    if metadata.model_slots != [210, 225, 210, 225]
+    if Some(metadata.model_slots) != working_factory_model_slots(entity_type)
         || metadata.mass_raw != 1000
         || metadata.capability_flags != 0x84
         || metadata.initial_health_raw != Some(INITIAL_HEALTH_RAW)
@@ -86,11 +87,11 @@ pub(crate) fn publish_working_factory(
         (model != 0).then_some(model)
     });
     if !entity.active
-        || entity.entity_type != 66
+        || !is_working_factory_type(entity.entity_type)
         || allocation.entity_id != entity.id
         || allocation.allocation_identity == 0
         || entity.authored_spawn_index != Some(spawn.index)
-        || spawn.entity_type != 66
+        || u32::from(spawn.entity_type) != entity.entity_type
         || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|angle| angle as i16)
         || spawn.has_animation
         || spawn.animation.is_some()
@@ -100,7 +101,7 @@ pub(crate) fn publish_working_factory(
     {
         return Err(Intro2Type66Error::Identity);
     }
-    authenticate_metadata(metadata)?;
+    authenticate_metadata(entity.entity_type, metadata)?;
     let config = spawn.config.as_ref().ok_or(Intro2Type66Error::Config)?;
     let config = FactorySection13Config::decode(config);
     if entity.intro2_type66_runtime.is_some()

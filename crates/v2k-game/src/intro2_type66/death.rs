@@ -142,10 +142,12 @@ pub fn publish_intro2_type66_standard_death(
         return Err(block("death sound/attachment", false));
     }
     // DB80 uses the same authenticated immutable type row as the native birth.
+    let factory_type = entity.entity_type;
     let metadata = manager
-        .type_runtime_metadata(66)
+        .type_runtime_metadata(factory_type)
         .ok_or(block("type metadata", false))?;
-    super::authenticate_metadata(metadata).map_err(|_| block("type metadata", false))?;
+    super::authenticate_metadata(factory_type, metadata)
+        .map_err(|_| block("type metadata", false))?;
     let entity = manager
         .entity_mut(entity_id)
         .expect("allocation retained during admission");
@@ -289,10 +291,12 @@ fn finish_with_effects(
         position_raw: entity.position_raw(),
         template_words,
     };
+    let factory_type = entity.entity_type;
     let metadata = manager
-        .type_runtime_metadata(66)
+        .type_runtime_metadata(factory_type)
         .ok_or(block("type metadata", false))?;
-    super::authenticate_metadata(metadata).map_err(|_| block("type metadata", false))?;
+    super::authenticate_metadata(factory_type, metadata)
+        .map_err(|_| block("type metadata", false))?;
 
     let entity = manager
         .entity_mut(entity_id)

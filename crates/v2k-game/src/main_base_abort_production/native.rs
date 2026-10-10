@@ -178,7 +178,7 @@ pub(super) fn dispatch_native_actor(
         58 if entity.intro2_type58_runtime.is_some() => NativeActor::Type58,
         122 if entity.native_type122_runtime.is_some() => NativeActor::Type122,
         6 if entity.main_base_runtime.is_some() => NativeActor::MainBase,
-        66 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
+        66 | 125 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
         22 | 23 | 24 | 62 if entity.shared_fish_runtime.is_some() => NativeActor::SharedFish,
         _ => return None,
     };

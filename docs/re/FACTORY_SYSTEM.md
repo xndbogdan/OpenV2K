@@ -35,6 +35,23 @@ Type7 is a capability400 worker, never a capability800 Base input.
 | 0x3D | 61 | Level-1 Power Up/contact-inventory callback family |
 | 0x5D | 93 | Cargo-drop Materialiser proxy, not a factory timeout effect |
 
+Two more Section-12 rows carry the same class-39 Working Factory shape (M
+component, Always1/class39, alternate0, capability `0x84`, health99999):
+
+| Type | Model slots | Initializer state | Ordinary births | Port |
+|---|---|---|---|---|
+| 66 | `210,225,210,225` | `0x25027` | 81, 28 worlds | native |
+| 125 | `231,225,231,225` | `0x25027` | 4, worlds 37 and 40 | native, same owner |
+| 82 | `210,210,210,210` | `0x21005` | 4, 4 worlds | no owner yet |
+
+Type125 differs from Type66 only in its models (its authored spawns also
+override slots 1/3 with model144), so it takes the same construction, task,
+production, damage, progressive-death and Main Base abort paths; the port's
+`is_working_factory_type` replaces the former type-66 checks. Type82's
+initializer state lacks `0x4000`, `0x20` (the D4A0 type-default terrain snap)
+and `0x2`, while the factory owner's live tick assumes `0x25027`; it stays an
+explicit unsupported type until those bits' effects are recovered.
+
 Factory appears in 29 levels. Section 8 models include `factory2`–`factory9`,
 `factory2lift`, `factory3engine`, and `factory4door`. The older type-67 base
 classification was disproven by the retained Level-1 entity list and pair

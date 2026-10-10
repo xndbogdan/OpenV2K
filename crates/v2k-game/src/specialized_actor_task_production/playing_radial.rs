@@ -136,7 +136,7 @@ impl SpecializedActorTaskScheduler {
                 30 => entity.native_type30_runtime.is_some(),
                 40 => entity.native_type40_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
-                66 => entity.intro2_type66_runtime.is_some(),
+                66 | 125 => entity.intro2_type66_runtime.is_some(),
                 22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_some(),
                 _ => crate::class49_death::source_profile(entity).is_some(),
             };
