@@ -134,6 +134,8 @@ pub struct MainBaseAbortPublicationCounts {
     pub type66_production: usize,
     pub main_base_production: usize,
     pub appended_type60_actors: usize,
+    /// Class63 Type61 drops appended behind the live-list cursor.
+    pub appended_type61_actors: usize,
     /// Deliberate same-family replacement of a stale pre-callback owner. In
     /// particular, the normal spawn-23 Type-66 owner is replaced when its
     /// Primary task is republished by the abort callback.

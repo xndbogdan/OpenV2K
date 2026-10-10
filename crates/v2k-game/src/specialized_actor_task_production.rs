@@ -6711,6 +6711,7 @@ fn park_class49_terminal_owner(
         entity.id == id
             && (entity.cleansing_vehicle_runtime.is_some()
                 || entity.native_entity_weapon_runtime.is_some()
+                || entity.shared_fish_runtime.is_some()
                 || crate::class49_death::intro2_type13_explosion_source_authenticates(entity))
     }) {
         contact_prefix::park_native_contact_prefix(owners, manager, id);

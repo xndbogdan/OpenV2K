@@ -456,6 +456,10 @@ pub(crate) fn prepare_native_actor_damage_mutation(
 ) -> bool {
     if crate::native_type40::death::finished_terminal_authenticates(manager, id)
         || crate::native_type56::death::finished_terminal_authenticates(manager, id)
+        // 4566E0 has no dying test: a finished BAC0/BD20/BC90 corpse stays a
+        // radial target until 14990, and only its Finished receipt stands in
+        // for the retired task custody.
+        || crate::class49_death::finished_terminal_hit_authenticates(manager, id)
     {
         return true;
     }

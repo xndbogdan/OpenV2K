@@ -1,6 +1,8 @@
-//! Native 10C10 -> class1/BAC0 or class49/BD20. Both run BAF0's static/dynamic
-//! radial before A860; only BD20 then constructs a ring. Historical class49
-//! custody names cover this shared prefix with an explicit terminal policy.
+//! Native 10C10 -> class1/BAC0, class49/BD20 or class63/BC90. All three run
+//! BAF0's static/dynamic radial; BAC0 and BD20 then call A860 and only BD20
+//! constructs a ring, while BC90 keeps the tasks and drops the carrier's
+//! Type61. Historical class49 custody names cover this shared prefix with an
+//! explicit terminal policy.
 
 use crate::{
     actor_task_owner::ActorTaskSlot,
@@ -33,6 +35,9 @@ pub enum NativeExplosionPolicy {
     Class1,
     /// BD20 attempts a Type60 ring before staging removal.
     Class49,
+    /// BC90 never calls A860; it constructs a Type61 from the carrier's `+88`
+    /// payload at its position, then stages removal.
+    Class63,
 }
 
 impl NativeExplosionPolicy {
@@ -40,6 +45,7 @@ impl NativeExplosionPolicy {
         match self {
             Self::Class1 => 1,
             Self::Class49 => 49,
+            Self::Class63 => 63,
         }
     }
 
@@ -47,6 +53,7 @@ impl NativeExplosionPolicy {
         match self {
             Self::Class1 => 0x004c_7150,
             Self::Class49 => 0x004c_71e0,
+            Self::Class63 => 0x004c_7198,
         }
     }
 }
@@ -60,6 +67,8 @@ pub enum NativeExplosionSourceProfile {
     PowerUp61,
     Intro2Type13,
     EntityWeapon(crate::native_entity_weapons::EntityWeaponKind),
+    /// Type124's fish owner with alternate class63.
+    Fish124,
 }
 
 impl NativeExplosionSourceProfile {
@@ -70,6 +79,7 @@ impl NativeExplosionSourceProfile {
             Self::PowerUp61 => 61,
             Self::Intro2Type13 => 13,
             Self::EntityWeapon(kind) => kind.entity_type() as u32,
+            Self::Fish124 => 124,
         }
     }
 
@@ -99,6 +109,14 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(kind) => {
                 crate::native_entity_weapons::authenticate_weapon_metadata(kind, metadata).is_ok()
             }
+            Self::Fish124 => {
+                crate::shared_fish::authenticate_metadata(metadata).is_ok()
+                    && metadata.initializer.as_ref().is_some_and(|initializer| {
+                        initializer.behavior_rule_ref == 1
+                            && initializer.alternate_behavior_class_ref
+                                == self.policy().behavior_class()
+                    })
+            }
         }
     }
 
@@ -124,6 +142,8 @@ impl NativeExplosionSourceProfile {
                             _ => 0x004c_8350,
                         }
             }
+            // Aimless, Wander and both Flocking variants: all four +2C are null.
+            Self::Fish124 => matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40),
         }
     }
 
@@ -141,6 +161,8 @@ impl NativeExplosionSourceProfile {
                 (10, [37, 37])
             }
             Self::EntityWeapon(_) => (16, [94, 95]),
+            // Nonnull B takes 40BBB3.
+            Self::Fish124 => (10, [37, 37]),
         }
     }
 
@@ -151,6 +173,7 @@ impl NativeExplosionSourceProfile {
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
                 NativeExplosionPolicy::Class1
             }
+            Self::Fish124 => NativeExplosionPolicy::Class63,
             _ => NativeExplosionPolicy::Class49,
         }
     }
@@ -170,6 +193,8 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::GunTurret(profile))
     } else if intro2_type13_explosion_source_authenticates(entity) {
         Some(NativeExplosionSourceProfile::Intro2Type13)
+    } else if entity.entity_type == 124 && entity.shared_fish_runtime.is_some() {
+        Some(NativeExplosionSourceProfile::Fish124)
     } else {
         None
     }
@@ -211,6 +236,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
             .is_some_and(|observation| {
                 observation.lease == entity.native_entity_weapon_runtime.unwrap().allocation
             }),
+        Some(NativeExplosionSourceProfile::Fish124) => {
+            crate::shared_fish::allocation_authenticates(manager, id)
+        }
         None => false,
     }
 }
@@ -232,6 +260,8 @@ pub struct Class49TerminalReceipt {
     pub position_raw: [i16; 3],
     pub radial_damage: RadialDamageTemplate,
     profile: NativeExplosionSourceProfile,
+    /// BC90's synchronous Type61 birth compares against this tick's surface.
+    retail_tick: u32,
     allocation: MainBaseAbortActorLease,
     context: BehaviorContextRuntime,
     continuation_id: u64,
@@ -257,6 +287,8 @@ pub struct Class49DeathRuntime {
 pub struct Class49TerminalCompletion {
     pub ring: Option<Type60ConstructionOutcome>,
     pub ring_owner: Option<Type60ExplodingRingProductionOwner>,
+    /// BC90's appended Type61 allocation.
+    pub power_up: Option<u32>,
 }
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
@@ -283,9 +315,11 @@ pub(crate) fn finished_terminal_hit_authenticates(manager: &EntityManager, id: u
         && receipt_current(manager, &runtime.receipt)
         && runtime.receipt.context.active_style().style_address()
             == runtime.receipt.profile.policy().style_address()
-        && ActorTaskSlot::IN_RETAIL_TICK_ORDER
-            .into_iter()
-            .all(|slot| entity.actor_tasks.task_in_slot(slot).is_none())
+        // BC90 never calls A860: a carrier keeps its tasks until the sweep.
+        && (runtime.receipt.profile.policy() == NativeExplosionPolicy::Class63
+            || ActorTaskSlot::IN_RETAIL_TICK_ORDER
+                .into_iter()
+                .all(|slot| entity.actor_tasks.task_in_slot(slot).is_none()))
         && entity
             .collision
             .state_flags_at_0x08
@@ -328,7 +362,7 @@ pub fn begin_class49_standard_death(
     id: u32,
     resources: &ResourceCache,
     fx: &mut WorldFx,
-    _retail_tick: u32,
+    retail_tick: u32,
 ) -> Result<Option<Class49TerminalReceipt>, Class49DeathBlock> {
     use Class49DeathBlock as Block;
     let entity = manager
@@ -393,6 +427,19 @@ pub fn begin_class49_standard_death(
             return Err(Block::Metadata);
         }
     }
+    if profile.policy() == NativeExplosionPolicy::Class63 {
+        // BC90 reads +88 and constructs after BAF0's radial; close every
+        // constructor input now so no data failure can follow the burst.
+        let terrain = resources
+            .level_terrain()
+            .ok_or(Block::Runtime("power-up terrain"))?;
+        if entity.auto_pilot_payload_packed.is_none() {
+            return Err(Block::Runtime("carrier +88 payload"));
+        }
+        if !manager.auto_pilot_power_up_constructor_ready(entity.position_raw(), terrain) {
+            return Err(Block::Runtime("power-up constructor"));
+        }
+    }
     let program =
         audited_behavior_program(profile.policy().behavior_class()).ok_or(Block::Metadata)?;
     let selected = context
@@ -416,6 +463,7 @@ pub fn begin_class49_standard_death(
     let receipt = Class49TerminalReceipt {
         entity_id: id,
         profile,
+        retail_tick,
         position_raw: entity.position_raw(),
         allocation: manager
             .main_base_abort_actor_observation(id)
@@ -550,11 +598,37 @@ fn finish_with_allocator(
     entity.class49_death_runtime.as_mut().unwrap().phase = TerminalPhase::Finishing;
     // BAC0 and BD20 clear all slots only after BAF0's radial pass. Only
     // BD20 rereads cached source +08/+96 and attempts the ring allocation.
-    for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
-        entity.actor_tasks.clear_slot(slot);
+    let policy = receipt.profile.policy();
+    if policy != NativeExplosionPolicy::Class63 {
+        for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
+            entity.actor_tasks.clear_slot(slot);
+        }
     }
     let position = entity.position_raw();
-    let ring = if receipt.profile.policy() == NativeExplosionPolicy::Class1
+    let power_up = if policy == NativeExplosionPolicy::Class63 {
+        // BC90 rereads +96..+9A and +88 after BAF0, ignores the remote bit,
+        // and lets 4575A0 dispose the constructor's result either way.
+        let birth = crate::native_type61::AutoPilotPowerUpBirth {
+            carrier: receipt.allocation,
+            carrier_type: receipt.profile.entity_type(),
+            position_raw: position,
+            payload_packed: entity
+                .auto_pilot_payload_packed
+                .ok_or(Block::Runtime("carrier +88 payload"))?,
+        };
+        let terrain = resources
+            .level_terrain()
+            .ok_or(Block::Runtime("power-up terrain"))?;
+        Some(
+            manager
+                .append_auto_pilot_power_up(birth, terrain, receipt.retail_tick, fx)
+                .map_err(Block::Runtime)?,
+        )
+    } else {
+        None
+    };
+    let entity = manager.entity_mut(receipt.entity_id).unwrap();
+    let ring = if policy != NativeExplosionPolicy::Class49
         || state_bits(entity, REMOTE_OWNED_STATE_BIT)? != 0
     {
         None
@@ -586,7 +660,11 @@ fn finish_with_allocator(
     // 10B70 is idempotent across the retail shared pending bit/count. A
     // same-frame Type61 pickup keeps its earlier deferred-splice owner.
     manager.commit_main_base_deferred_destroy(receipt.entity_id, receipt.deferred_destroy_entry);
-    Ok(Class49TerminalCompletion { ring, ring_owner })
+    Ok(Class49TerminalCompletion {
+        ring,
+        ring_owner,
+        power_up,
+    })
 }
 
 #[cfg(test)]

@@ -139,8 +139,9 @@ particle hits across worlds13/14/18/22/23/30/34/36. Their direct C690 reselectio
 checked damage. Types22/23/24/62 complete class2 quiet death and deferred removal;
 Type62's live abort uses that same allocation/task owner. Zebra fish retain
 environment2004 and their own surface policy;22/24/124 retain200C.
-Type124's class63, physical static contact, radial and other abort entries remain explicit
-boundaries. The production impact dispatcher selects fish before its other
+Type124 takes class63 through particle, radial, attached-particle and abort
+entries, dropping its authored Type61; physical static contact remains an
+explicit boundary. The production impact dispatcher selects fish before its other
 family switch, making this path reachable through ordinary Playing delivery.
 
 The [shared Type47 gunner](TYPE47_RUNTIME.md) extends that construction policy

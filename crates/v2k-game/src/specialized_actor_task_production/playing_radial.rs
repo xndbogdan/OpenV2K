@@ -343,6 +343,37 @@ impl DynamicRadialLiveCallbacks for PlayingNativeCallbacks<'_> {
     > {
         if entities
             .iter_all()
+            .any(|entity| entity.id == id && entity.shared_fish_runtime.is_some() && kind == 124)
+        {
+            return Some(
+                crate::shared_fish::death::run_type124_auto_pilot_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities,
+                        resources: self.resources,
+                        world_fx,
+                        static_damage: self.static_damage,
+                        notifications,
+                        retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::Playing {
+                            scheduler: self.scheduler,
+                            player_hull: self.player_hull,
+                            extra_lives: self.extra_lives,
+                            active_terminal_calls: self.active_terminal_calls.to_vec(),
+                        },
+                    },
+                    id,
+                )
+                .map(
+                    |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: result.returned_nonzero,
+                        publication: None,
+                    },
+                )
+                .map_err(crate::entity::DynamicRadialLiveBlockReason::Fish),
+            );
+        }
+        if entities
+            .iter_all()
             .any(|entity| entity.id == id && entity.shared_fish_runtime.is_some())
         {
             return Some(

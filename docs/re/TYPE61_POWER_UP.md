@@ -1,4 +1,4 @@
-# Authored Type61 Power Ups
+# Type61 Power Ups
 
 Ordinary campaign construction publishes Type61 through the shared
 `104B0 -> AC60 -> 257F0` path (demo initializer `256C0`). Class23's singleton weighted choice still
@@ -36,3 +36,65 @@ does not couple a physical pickup's removal to countdown expiry.
 Level1, Castle, Alpine, OVL18 and OVL37, plus foreign-allocation rejection.
 The complete Castle casualty-abort regression composes the two authored
 pickups with the native actor and static-world callbacks.
+
+## Class63 carrier drops
+
+Alternate class63 ("Auto Pilot", descriptor `0x004C8828`, style `0x004C7198`)
+is the death program of every power-up carrier: Types 71, 80, 81, 117, 124 and
+126..129. The style is zero apart from its `+40` initializer `40BC90`, which
+retail runs once:
+
+1. `43A580` resolves the actor and `40BAF0` emits the shared burst and the
+   static/live radial walks.
+2. A zeroed `0x4C`-byte request takes `DAT_004DCA00` at `+00`. That word lies
+   past `.data`'s raw bytes and no instruction writes it, so it is zero and the
+   constructor allocates a handle. Type 61 goes at `+08`, the carrier's
+   `+96..+9A` position words at `+0C`, and its `+88` dword at `+20`. `438080`
+   constructs it and `4575A0` disposes the result object, whether or not a
+   body linked.
+3. `410B70` stages the carrier's removal.
+
+It never calls `A860`, so the carrier keeps its task slots until the sweep;
+`410B70`'s `(state & 0xFFF9FFFF) | 0x100000` write stops them from running.
+It does not test the remote bit or bind the newborn's `+60` relation.
+Carrier `+88` is the Section-13 spawn's `+1C` dword, the same packed
+selector/amount that authored Type61 rows carry. Solo play never rewrites it;
+only network sync `417680` (flag `0x400`) does, so the port retains it at
+construction as `auto_pilot_payload_packed` for alternate-63 rows only.
+
+The port runs class63 through the shared BAF0 terminal in
+[class49_death](../../crates/v2k-game/src/class49_death.rs) with a third
+policy beside BAC0 and BD20. Before `10C10` commits anything, the source
+closes every constructor input: the carrier payload, Type61 metadata, the
+common body stamp lineage and the terrain cell under the carrier. The finish
+then skips the task clear and calls
+[append_auto_pilot_power_up](../../crates/v2k-game/src/entity/auto_pilot_power_up.rs).
+That is the shared zero-record `104B0` body: a current-tick surface comparison
+at the carrier position, the singleton class23 selector's single RNG word
+after the whole radial transaction, the row's own model slots, zero rotation
+and damage buffer, null modifier/type-hit callbacks, and a tail append. Its
+native allocation records the carrier lease, type, position and payload, so
+the drop is a native class23 allocation in every later respect: player pickup,
+its own class49 ring death, and Main Base abort admission.
+
+A finished class63 receipt does not require empty task slots. Like finished
+class1/49 receipts, it stays radial-addressable until `14990`: `4566E0` has no
+dying test, so the drop's own ring blast at the same position reaches the
+dying carrier. Type124 fish are the first carrier family on this terminal
+([FISH_RUNTIME](FISH_RUNTIME.md#particle-hits-and-quiet-death)); the other
+eight carrier types still need their living owners.
+
+Controls in
+[auto_pilot_tests](../../crates/v2k-game/src/shared_fish/auto_pilot_tests.rs)
+check, in worlds 23, 30 and 34:
+
+- the kept tasks;
+- the single constructor word;
+- the drop's payload, position, surface bits and receipt;
+- the finished carrier state;
+- a Playing kill followed by a re-hit before the sweep;
+- an attached-particle kill in its own Playing world.
+
+The [abort control](../../crates/v2k-game/src/main_base_abort_production/native/type124_tests.rs)
+runs the fish's class63 and then the appended drop's class49 ring under the
+same abort cursor.

@@ -18,6 +18,7 @@ use type8_construction::{
     NativeWorkerBodyRequest, NativeWorkerConstructionRequest, Type8BodyConstruction,
 };
 mod authored_world;
+mod auto_pilot_power_up;
 mod completed_world;
 #[cfg(test)]
 mod dynamic_body_stamp_tests;
@@ -1339,6 +1340,11 @@ pub struct Entity {
     /// so only type-61 allocations retain it here instead of exposing a
     /// misleading generic field.
     pub power_up_payload_packed: Option<u32>,
+    /// Power-up carriers (alternate class63) copy the same authored Section-13
+    /// dword +0x1C into +0x88. Solo play never rewrites it; only network sync
+    /// (`417680`, flag 0x400) does. `40BC90` copies it into the dropped
+    /// Type-61 request's +0x20, so only alternate-63 rows retain it here.
+    pub auto_pilot_payload_packed: Option<u32>,
     /// Exact Working-Factory constructor receipt for one dynamic Type-61
     /// product. Authored pickups and every other allocation retain `None`.
     pub(crate) factory_type61_birth_provenance: Option<FactoryType61BirthProvenance>,
@@ -1637,6 +1643,7 @@ impl Entity {
             entity_type: self.entity_type,
             authored_follow_beacon_priority_raw: self.authored_follow_beacon_priority_raw,
             power_up_payload_packed: self.power_up_payload_packed,
+            auto_pilot_payload_packed: self.auto_pilot_payload_packed,
             factory_type61_birth_provenance: self.factory_type61_birth_provenance,
             type60_construction_provenance: self.type60_construction_provenance,
             main_base_type54_sea_delta_source: self.main_base_type54_sea_delta_source,
@@ -1743,6 +1750,7 @@ impl Entity {
             entity_type,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: None,
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: None,
             type60_construction_provenance: None,
             main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -2992,6 +3000,7 @@ fn build_type93_materialiser_entity(
         entity_type: CARGO_DROP_PROXY_ENTITY_TYPE,
         authored_follow_beacon_priority_raw: None,
         power_up_payload_packed: None,
+        auto_pilot_payload_packed: None,
         factory_type61_birth_provenance: None,
         type60_construction_provenance: None,
         main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -5214,6 +5223,15 @@ impl EntityManager {
                     .then(|| i32::from_le_bytes(entity_word_at_0x88_bytes)),
                 power_up_payload_packed: (spawn.entity_type == 61)
                     .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
+                auto_pilot_payload_packed: metadata
+                    .and_then(|metadata| metadata.initializer.as_ref())
+                    .is_some_and(|initializer| {
+                        initializer.alternate_behavior_class_ref
+                            == u32::from(
+                                crate::entity_behavior::AUTO_PILOT_BEHAVIOR_PROGRAM.class_id,
+                            )
+                    })
+                    .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
                 factory_type61_birth_provenance: None,
                 type60_construction_provenance: None,
                 main_base_type54_sea_delta_source: captured_fresh_type54_publication
@@ -5705,6 +5723,7 @@ impl EntityManager {
             entity_type: PLAYER_ENTITY_TYPE,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: None,
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: None,
             type60_construction_provenance: None,
             main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -6486,6 +6505,7 @@ impl EntityManager {
             entity_type: LEVEL_ONE_TYPE61_ENTITY_TYPE,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: Some(request.spawn_parameter_6),
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: Some(FactoryType61BirthProvenance::new(
                 source_factory,
                 request,
@@ -7947,6 +7967,7 @@ impl EntityManager {
             entity_type,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: None,
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: None,
             type60_construction_provenance: None,
             main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,

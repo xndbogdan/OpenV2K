@@ -48,14 +48,17 @@ pub(super) fn dispatch_native_class49(
         .entities
         .iter_all()
         .find(|entity| entity.id == actor.lease.entity_id)?;
-    // Native BAC0/BD20 terminal families share BAF0's nested radial owner,
-    // with explicit class1/class49 suffix policies and distinct allocations.
-    if !(matches!(entity.entity_type, 97 | 104 | 115) && entity.intro2_gun_turret_runtime.is_some())
-        && !(entity.entity_type == 49 && entity.cleansing_vehicle_runtime.is_some())
-        && !(entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
+    // Native BAC0/BD20/BC90 terminal families share BAF0's nested radial owner,
+    // with explicit class1/class49/class63 suffix policies and distinct allocations.
+    let admitted = (matches!(entity.entity_type, 97 | 104 | 115)
+        && entity.intro2_gun_turret_runtime.is_some())
+        || (entity.entity_type == 49 && entity.cleansing_vehicle_runtime.is_some())
+        || (entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
         // Ordinary Type13's 10C10 -> DB80 enters alternate class1, BAC0.
-        && !(entity.entity_type == 13 && entity.native_type13_allocation.is_some())
-    {
+        || (entity.entity_type == 13 && entity.native_type13_allocation.is_some())
+        // Type124 enters class63, BC90: BAF0 then a tail-appended Type61.
+        || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some());
+    if !admitted {
         return None;
     }
     Some((|| {
@@ -90,11 +93,14 @@ pub(super) fn dispatch_native_class49(
         if !completed {
             return Err(block(NativeMainBaseAbortDeathBlock::TaskCustodyUnavailable));
         }
-        let rings_before = frame
-            .entities
-            .iter_all()
-            .filter(|entity| entity.entity_type == 60)
-            .count();
+        let count = |entities: &crate::entity::EntityManager, entity_type| {
+            entities
+                .iter_all()
+                .filter(|entity| entity.entity_type == entity_type)
+                .count()
+        };
+        let rings_before = count(frame.entities, 60);
+        let power_ups_before = count(frame.entities, 61);
         let entities = &mut *frame.entities;
         effects
             .run_class49_standard_death(
@@ -110,11 +116,8 @@ pub(super) fn dispatch_native_class49(
                 },
             )
             .map_err(|error| block(NativeMainBaseAbortDeathBlock::GunTurret(error)))?;
-        publications.appended_type60_actors += entities
-            .iter_all()
-            .filter(|entity| entity.entity_type == 60)
-            .count()
-            .saturating_sub(rings_before);
+        publications.appended_type60_actors += count(entities, 60).saturating_sub(rings_before);
+        publications.appended_type61_actors += count(entities, 61).saturating_sub(power_ups_before);
         let (successor, successor_available) =
             match entities.main_base_abort_successor_after_callback(id) {
                 Ok(next) => (next, true),
@@ -572,6 +575,8 @@ mod type26_tests;
 
 #[cfg(test)]
 mod ring_custody_tests;
+#[cfg(test)]
+mod type124_tests;
 #[cfg(test)]
 mod type13_tests;
 #[cfg(test)]

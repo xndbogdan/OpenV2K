@@ -57,6 +57,7 @@ pub(crate) fn native_instance_body(
         entity_type,
         authored_follow_beacon_priority_raw: None,
         power_up_payload_packed: None,
+        auto_pilot_payload_packed: None,
         factory_type61_birth_provenance: None,
         type60_construction_provenance: None,
         main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
