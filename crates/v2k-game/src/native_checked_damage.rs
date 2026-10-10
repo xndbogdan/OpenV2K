@@ -136,11 +136,7 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::MainBase)
         }
-        10 if manager
-            .iter_all()
-            .find(|entity| entity.id == id)
-            .is_some_and(crate::intro2_type10::intro2_type10_allocation_authenticates) =>
-        {
+        10 | 5 if crate::intro2_type10::type10_manager_allocation_authenticates(manager, id) => {
             crate::intro2_type10::death::publish_intro2_type10_standard_death(manager, id, world_fx)
                 .map(|owner| LiveActorDeathResult {
                     returned_nonzero: owner.is_some(),
@@ -589,7 +585,7 @@ pub(crate) fn prepare_native_actor_damage_mutation(
     } else if entity.intro2_type66_runtime.is_some() {
         crate::intro2_type66::intro2_type66_allocation_authenticates(entity)
     } else if entity.intro2_type10_runtime.is_some() {
-        crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
+        crate::intro2_type10::type10_manager_allocation_authenticates(manager, id)
     } else if entity.cleansing_vehicle_runtime.is_some() {
         native_cleansing_valid
     } else if entity.intro2_gun_turret_runtime.is_some() {

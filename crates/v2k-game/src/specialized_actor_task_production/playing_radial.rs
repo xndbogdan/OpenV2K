@@ -129,6 +129,7 @@ impl SpecializedActorTaskScheduler {
                     entity.native_type86_runtime.is_some()
                 }
                 16 => entity.intro2_type16_runtime.is_some(),
+                10 | 5 => entity.intro2_type10_runtime.is_some(),
                 // A receipt selects the owner; its adapter authenticates it.
                 13 => {
                     entity.native_type13_allocation.is_some()
@@ -178,6 +179,7 @@ impl SpecializedActorTaskScheduler {
                         // graph. A later visit must not replay that prefix.
                         if block.target_prefix_committed {
                             callbacks.scheduler.park_intro2_type8_external_prefix(id);
+                            callbacks.scheduler.park_intro2_type10_external_prefix(id);
                             callbacks.scheduler.park_native_type123_external_prefix(id);
                             callbacks.scheduler.park_native_type86_external_prefix(id);
                             callbacks.scheduler.park_intro2_type17_external_prefix(id);

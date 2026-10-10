@@ -120,9 +120,10 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (42, 108),
     (43, 103),
     (45, 40),
-    // Ordinary Type13 now takes its native class1 abort death.
-    (46, 5),
-    (47, 5),
+    // Ordinary Type13 takes its native class1 abort death and Type5 its
+    // class11 Tumble publication.
+    (46, 43),
+    (47, 43),
     (48, 99),
 ];
 

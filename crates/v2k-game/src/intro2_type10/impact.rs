@@ -86,10 +86,10 @@ pub(crate) fn apply_intro2_type10_particle_hit(
     impact: ParticleEntityImpact,
     retail_tick: u32,
 ) -> Intro2Type10ImpactOutcome {
-    if !manager
-        .iter_all()
-        .any(|entity| entity.id == impact.target_entity_id && entity.entity_type == 10)
-    {
+    if !manager.iter_all().any(|entity| {
+        entity.id == impact.target_entity_id
+            && super::Type10Profile::from_entity_type(entity.entity_type).is_some()
+    }) {
         return Intro2Type10ImpactOutcome::NotApplicable;
     }
     let mut committed = false;
@@ -146,11 +146,17 @@ fn run(
     let delivery = impact
         .damage_delivery_record()
         .ok_or(Block::Runtime("particle provenance"))?;
+    let profile = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(super::type10_profile)
+        .ok_or(Block::Runtime("native allocation"))?;
     let metadata = manager
-        .type_runtime_metadata(10)
+        .type_runtime_metadata(profile.entity_type())
         .cloned()
         .ok_or(Block::Runtime("metadata"))?;
-    super::native::authenticate_metadata(&metadata).map_err(|_| Block::Runtime("metadata"))?;
+    super::native::authenticate_metadata(profile, &metadata)
+        .map_err(|_| Block::Runtime("metadata"))?;
     let entity = manager.entity_mut(id).unwrap();
     if !intro2_type10_allocation_authenticates(entity) {
         return Err(Block::Runtime("native allocation"));

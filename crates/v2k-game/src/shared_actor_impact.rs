@@ -64,6 +64,7 @@ pub enum SharedActorImpactOutcome {
     Type16(crate::intro2_type16::impact::Intro2Type16ImpactOutcome),
     Type94(crate::intro2_type94::impact::Intro2Type94ImpactOutcome),
     Type13(crate::intro2_type13_live::impact::Intro2Type13ImpactOutcome),
+    Type10(crate::intro2_type10::impact::Intro2Type10ImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -125,6 +126,24 @@ pub fn apply_playing_actor_particle_hit(
                     extra_lives: frame.extra_lives,
                 },
                 impact,
+            ),
+        ));
+    }
+    // Ordinary Type10-family rows: a lethal hit publishes class11 Tumble; its
+    // later C750 radial runs in the contact walk with the lent player.
+    if crate::intro2_type10::Type10Profile::from_entity_type(entity.entity_type).is_some()
+        && entity
+            .intro2_type10_runtime
+            .is_some_and(|runtime| runtime.ordinary_allocation.is_some())
+    {
+        return Some(SharedActorImpactOutcome::Type10(
+            crate::intro2_type10::impact::apply_intro2_type10_particle_hit(
+                frame.entities,
+                frame.resources,
+                frame.world_fx,
+                frame.scheduler,
+                impact,
+                frame.retail_tick,
             ),
         ));
     }

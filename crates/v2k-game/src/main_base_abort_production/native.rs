@@ -35,6 +35,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     MainBase(crate::main_base_runtime::MainBaseDeathBlock),
     Fish(crate::shared_fish::death::SharedFishDeathBlock),
     GunTurret(crate::class49_terminal::Class49TerminalBlock),
+    Type10(crate::intro2_type10::death::Intro2Type10DeathBlock),
 }
 
 pub(super) fn dispatch_native_class49(
@@ -130,6 +131,7 @@ pub(super) fn dispatch_native_class49(
 #[derive(Clone, Copy)]
 enum NativeActor {
     MainBase,
+    Type10Family,
     Worker,
     Type123Person,
     FourChoice,
@@ -181,6 +183,14 @@ pub(super) fn dispatch_native_actor(
         122 if entity.native_type122_runtime.is_some() => NativeActor::Type122,
         6 if entity.main_base_runtime.is_some() => NativeActor::MainBase,
         66 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
+        type_id
+            if crate::intro2_type10::Type10Profile::from_entity_type(type_id).is_some()
+                && entity
+                    .intro2_type10_runtime
+                    .is_some_and(|runtime| runtime.ordinary_allocation.is_some()) =>
+        {
+            NativeActor::Type10Family
+        }
         22 | 23 | 24 | 62 if entity.shared_fish_runtime.is_some() => NativeActor::SharedFish,
         _ => return None,
     };
@@ -232,6 +242,13 @@ fn dispatch(
     {
         return Err(block(Block::Type53(
             crate::intro2_common_dying::Intro2CommonDyingBlock::UnauthenticatedAllocation,
+        )));
+    }
+    if matches!(kind, NativeActor::Type10Family)
+        && !crate::intro2_type10::type10_manager_allocation_authenticates(entities, id)
+    {
+        return Err(block(Block::Type10(
+            crate::intro2_type10::death::Intro2Type10DeathBlock::Allocation,
         )));
     }
     if matches!(kind, NativeActor::Type58)
@@ -294,6 +311,7 @@ fn dispatch(
             | NativeActor::Type53
             | NativeActor::Type58
             | NativeActor::Type122
+            | NativeActor::Type10Family
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
         if !ready {
@@ -301,6 +319,19 @@ fn dispatch(
         }
     }
     let disposition = match kind {
+        NativeActor::Type10Family => {
+            // 10C10 -> DB80's null living hook -> AC60's alternate class11:
+            // C660 publishes the falling Tumble; C750 later owns its blast.
+            let owner = crate::intro2_type10::death::publish_intro2_type10_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type10(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_type10_tumble(owner);
+                publications.type10_tumble += 1;
+            }
+            MainBaseAbortActorDisposition::Type10Death
+        }
         NativeActor::Type26 => {
             // DB80's null living death hook enters C620/class12, exactly as
             // Type26's existing checked damage and E370 expiry publisher.
@@ -543,6 +574,8 @@ mod type26_tests;
 mod ring_custody_tests;
 #[cfg(test)]
 mod type13_tests;
+#[cfg(test)]
+mod type5_tests;
 #[cfg(test)]
 mod type61_tests;
 #[cfg(test)]

@@ -4877,7 +4877,8 @@ impl EntityManager {
                     .is_some()
                     || matches!(
                         spawn.entity_type,
-                        6 | 9
+                        5 | 6
+                            | 9
                             | 13
                             | 16
                             | 17
@@ -13967,9 +13968,67 @@ pub(crate) fn apply_type9_carried_environment_raw(
 /// Type-17 Section-12 mass at `+0x04`, consumed by `FUN_0040E100`.
 pub(crate) const LEVEL_ONE_TYPE17_SELF_MASS_RAW: u16 = 100;
 
+/// E100 for an effective-8 flyer with no Sub-C and no water response:
+/// gravity, then EC60. Mode zero keeps the established drag fallback. A
+/// nonzero mode (E100 passes the callback delta through unchanged) reads the
+/// terrain and the post-F70 basis and moves pitch/roll without a rebuild.
+/// Every input is checked before any write.
+pub(crate) fn apply_effective8_flyer_environment(
+    entity: &mut Entity,
+    physics: CommonEnvironmentPhysics,
+    terrain: Option<&TerrainGrid>,
+    elapsed_micros: u32,
+) -> Result<(), &'static str> {
+    let mut velocity = entity.velocity_raw();
+    if physics.runtime_wind_mode == 0 {
+        apply_type13_common_environment_raw(
+            &mut velocity,
+            elapsed_micros,
+            entity.mass_raw,
+            physics.runtime_wind_mode,
+            physics.drag_strength,
+        );
+    } else {
+        let (Some(terrain), RetailRuntimeValue::Known(basis), Some(mass)) = (
+            terrain,
+            entity.physical_body_basis_q31,
+            std::num::NonZeroU16::new(entity.mass_raw),
+        ) else {
+            return Err("wind frame");
+        };
+        apply_common_gravity_and_underwater_raw(
+            &mut velocity,
+            elapsed_micros,
+            CommonUnderwaterFrame {
+                effective_environment_flags: 8,
+                water_response_enabled: false,
+                position_y_raw: 0,
+                solid_or_sea_y_raw: 0,
+                self_mass_raw: entity.mass_raw,
+                attached_cargo_mass: 0,
+            },
+        );
+        let mut angles = entity.rotation_heading_pitch_roll_raw();
+        crate::common_mover::environment::apply_common_wind_drag_raw(
+            &mut velocity,
+            &mut angles,
+            crate::common_mover::environment::CommonWindDrag::from_environment(physics),
+            crate::common_mover::environment::CommonWindDragFrame {
+                terrain,
+                position_raw: entity.position_raw(),
+                basis,
+                callback_mass_raw: mass,
+                elapsed_micros,
+            },
+        );
+        entity.set_rotation_heading_pitch_roll_raw(angles);
+    }
+    entity.set_velocity_raw(velocity);
+    Ok(())
+}
+
 /// Type-13's admitted Intro2 E100 profile: live effective flags 8, no Sub-C,
-/// then mode-zero 4EC60 drag from the current level. The world owner checks
-/// the post-task flags and wind mode before entering this suffix.
+/// then mode-zero 4EC60 drag from the current level.
 pub(crate) fn apply_type13_common_environment_raw(
     velocity_raw: &mut [i16; 3],
     elapsed_micros: u32,

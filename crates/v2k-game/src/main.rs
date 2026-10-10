@@ -6964,7 +6964,7 @@ fn run_game(
                         .entities
                         .iter_all()
                         .find(|entity| entity.id == id)
-                        .is_some_and(|entity| matches!(entity.entity_type, 13 | 15 | 87));
+                        .is_some_and(|entity| matches!(entity.entity_type, 5 | 10 | 13 | 15 | 87));
                     if native_flyer {
                         use v2k_game::{
                             intro2_flyer_contacts::{
@@ -7006,6 +7006,14 @@ fn run_game(
                                     | NativeGroundContactOutcome::Miss
                             ) {
                                 log!("Native flyer {id} static contact: {result:?}");
+                            }
+                        }
+                        if let Some(result) = &outcome.tumble {
+                            if !matches!(
+                                result,
+                                v2k_game::intro2_type10::contact::Intro2Type10ContactOutcome::Ineligible
+                            ) {
+                                log!("Native flyer {id} Tumble contact: {result:?}");
                             }
                         }
                         if outcome.blocks_later_contacts() {

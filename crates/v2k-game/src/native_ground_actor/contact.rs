@@ -313,7 +313,7 @@ fn resolve_flying_static_contact_entry(
         return NativeGroundContactOutcome::Ineligible;
     };
     let kind = entity.entity_type;
-    if !matches!(kind, 13 | 15 | 87 | 10 | 57) {
+    if !matches!(kind, 13 | 15 | 87 | 10 | 5 | 57) {
         return NativeGroundContactOutcome::Ineligible;
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -348,7 +348,7 @@ fn resolve_flying_static_contact_entry(
                 .find(|entity| entity.id == id)
                 .is_some_and(|entity| match entity.entity_type {
                     13 => crate::intro2_type13_live::authenticate_intro2_type13(entity).is_ok(),
-                    10 => crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
+                    10 | 5 => crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
                     15 | 87 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
                     _ => false,
@@ -371,7 +371,7 @@ fn resolve_flying_static_contact_entry(
                         || (!tasks.intro2_type13_has_pending_prefix(id)
                             && tasks.intro2_type13_completed_owner(manager, id))
                 }
-                10 => {
+                10 | 5 => {
                     !tasks.intro2_type10_has_pending_prefix(id)
                         && tasks.intro2_type10_completed_owner(manager, id)
                 }
@@ -556,7 +556,7 @@ fn resolve(
             | 0x4c8158
     ) || (matches!(profile.entity_type, 16 | 26 | 56)
         && context.active_style().style_address() == 0x4c7e88)
-        || (matches!(profile.entity_type, 13 | 10 | 57 | 16 | 15 | 87 | 94)
+        || (matches!(profile.entity_type, 13 | 10 | 5 | 57 | 16 | 15 | 87 | 94)
             && matches!(
                 context.active_style().style_address(),
                 0x4c7930 | 0x4c7978 | 0x4c74f8

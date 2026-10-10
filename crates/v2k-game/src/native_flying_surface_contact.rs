@@ -54,7 +54,7 @@ pub(crate) fn publish_native_flying_standard_death(
         .ok_or(NativeFlyingSurfaceDeathBlock::Runtime("death allocation"))?
         .entity_type;
     let publication = match entity_type {
-        10 => {
+        10 | 5 => {
             crate::intro2_type10::death::publish_intro2_type10_standard_death(manager, id, world_fx)
                 .map(|owner| owner.map(NativeFlyingSurfaceDeathPublication::Type10))
                 .map_err(NativeFlyingSurfaceDeathBlock::Type10)?
@@ -267,7 +267,7 @@ fn resolve(
         .iter_all()
         .find(|e| e.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if !entity.active || !matches!(entity.entity_type, 13 | 10 | 57) {
+    if !entity.active || !matches!(entity.entity_type, 13 | 10 | 5 | 57) {
         return Ok(FlyingSurfaceContactOutcome::Ineligible);
     }
     let entity_type = entity.entity_type;
@@ -314,8 +314,10 @@ fn resolve(
         .type_runtime_metadata(entity_type)
         .ok_or(Block::Runtime("metadata"))?;
     let (allocation, pending, completed) = match entity_type {
-        10 => {
-            crate::intro2_type10::authenticate_metadata(metadata)
+        10 | 5 => {
+            let profile = crate::intro2_type10::Type10Profile::from_entity_type(entity_type)
+                .expect("matched Type10-family row");
+            crate::intro2_type10::authenticate_metadata(profile, metadata)
                 .map_err(|_| Block::Runtime("Type10 metadata"))?;
             (
                 crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
@@ -379,14 +381,9 @@ fn resolve(
             if context.active_style().style_address() != 0x004c7f60 {
                 return Ok(());
             }
-            // The Tumble C750 radial still owns only its cinematic walk.
-            if playing.is_some() {
-                return Err(NativeFlyingSurfaceDeathBlock::Runtime(
-                    "Playing Tumble water radial",
-                ));
-            }
+            let mut playing = playing;
             match entity_type {
-                10 => {
+                10 | 5 => {
                     let owner = Intro2Type10TumbleOwner::adopt(frame.entities, id)
                         .map_err(NativeFlyingSurfaceDeathBlock::Type10)?;
                     crate::intro2_type10::contact::terminal_callback(
@@ -395,10 +392,15 @@ fn resolve(
                         owner,
                         Intro2Type10TumbleContact::Water,
                         &mut Default::default(),
+                        &mut playing,
                         committed,
                     )
                     .map_err(NativeFlyingSurfaceDeathBlock::Type10Water)
                 }
+                // Intro2-only Type57's C750 radial owns only its cinematic walk.
+                57 if playing.is_some() => Err(NativeFlyingSurfaceDeathBlock::Runtime(
+                    "Playing Type57 Tumble water radial",
+                )),
                 57 => {
                     let owner = Intro2Type57TumbleOwner::adopt(frame.entities, id)
                         .map_err(NativeFlyingSurfaceDeathBlock::Type57)?;
