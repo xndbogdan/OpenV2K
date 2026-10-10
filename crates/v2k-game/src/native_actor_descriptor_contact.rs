@@ -436,6 +436,16 @@ pub(crate) fn completed_contact_owner(
     let Some(entity) = manager.iter_all().find(|entity| entity.id == id) else {
         return false;
     };
+    // 11AD0 has no dying test, and BC90 never calls A860: until 14990 a class63
+    // carrier's retained tasks still take their contact hooks. Only its Finished
+    // receipt stands in for the owner the terminal retired.
+    if crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+        && crate::class49_death::source_profile(entity).is_some_and(|profile| {
+            profile.policy() == crate::class49_death::NativeExplosionPolicy::Class63
+        })
+    {
+        return true;
+    }
     match entity.entity_type {
         42 | 59 if entity.native_entity_weapon_runtime.is_some() => {
             native_weapon_contact_owner_authenticates(manager, tasks, id)

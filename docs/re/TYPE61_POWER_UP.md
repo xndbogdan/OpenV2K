@@ -80,7 +80,10 @@ its own class49 ring death, and Main Base abort admission.
 A finished class63 receipt does not require empty task slots. Like finished
 class1/49 receipts, it stays radial-addressable until `14990`: `4566E0` has no
 dying test, so the drop's own ring blast at the same position reaches the
-dying carrier. Type124 fish are the first carrier family on this terminal
+dying carrier. `11AD0` has no dying test either, so until the sweep the
+carrier's retained tasks still take their contact hooks; in the actor
+descriptor contact the finished class63 receipt stands in for the owner the
+terminal retired. Type124 fish are the first carrier family on this terminal
 ([FISH_RUNTIME](FISH_RUNTIME.md#particle-hits-and-quiet-death)); the other
 eight carrier types still need their living owners.
 
@@ -94,6 +97,10 @@ check, in worlds 23, 30 and 34:
 - the finished carrier state;
 - a Playing kill followed by a re-hit before the sweep;
 - an attached-particle kill in its own Playing world.
+
+A [descriptor-contact control](../../crates/v2k-game/src/native_actor_descriptor_contact/fish_tests.rs)
+pairs a finished Type124 corpse with a living fish: its retained Primary task
+takes the same two-draw descriptor write as a living fish's.
 
 The [abort control](../../crates/v2k-game/src/main_base_abort_production/native/type124_tests.rs)
 runs the fish's class63 and then the appended drop's class49 ring under the
