@@ -197,8 +197,10 @@ only the fixed post-dispatch images expose the supported separation.
 This fixture proves the connected path; it does not
 establish matched retail trajectories for the whole Intro.
 
-Type16 ordinary construction, attached Capture16/94 transport, ordinary G native
-construction and ordinary Type94 construction remain outside this admission. Pairs with unrelated building/actor families
+Ordinary-world Type16 births now share this owner through their own 104B0
+receipt ([Intro2 Type16](INTRO2_TYPE16.md)). Attached Capture16/94 transport,
+ordinary G native construction and ordinary Type94 construction remain outside
+this admission. Pairs with unrelated building/actor families
 are outside the bounded Type66 extension; captor/58/gunner-hive pairs retain
 their existing owners. Unknown graphs, parked/executing prefixes, unowned
 static damage kinds and missing geometry fail closed. Existing Type10/57
@@ -206,10 +208,12 @@ Tumble callbacks retain their own Class11 terminal/radial behavior. These
 boundaries must not be called retail acceptance solely because another family
 passes.
 
-The preliminary broad visual-fixture search encountered unrelated
-model556's legacy collision program opcode144 at cell144/126. That catalog
-boundary remains explicit; it is not silently converted to a miss or used
-for the supported windmill fixture. The narrowed fixture was independently
+The preliminary broad visual-fixture search encountered model556's collision
+opcode `0x90` (144) at cell144/126. The sphere-query interpreter now owns it
+as `FUN_00469C20`'s upright cylinder
+([format](FORMAT_DOCUMENTATION.md)); world35's model658 uses the same
+primitive. It was never silently converted to a miss or used for the supported
+windmill fixture. The narrowed fixture was independently
 selected through the real model410 geometry and production dispatcher.
 
 The final natural Intro2 replay exposed a separate Type17/Type9 Capture

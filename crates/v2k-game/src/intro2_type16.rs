@@ -14,6 +14,8 @@ mod world;
 mod contact_tests;
 #[cfg(test)]
 mod live_tests;
+#[cfg(test)]
+mod ordinary_tests;
 
 pub use live::{
     tick_intro2_type16, Intro2Type16Block, Intro2Type16Frame, Intro2Type16Outcome,
@@ -21,6 +23,7 @@ pub use live::{
 };
 pub(crate) use native::authenticate_metadata;
 pub(crate) use native::publish_intro2_type16;
+pub(crate) use native::{publish_authored_type16, Type16AuthoredConstruction};
 
 use crate::{
     common_mover::sub_d::{Type9SubDFrameOwner, Type9SubDRuntime},
@@ -94,6 +97,9 @@ pub struct Intro2Type16Runtime {
     pub(crate) sub_d_runtime: Type9SubDRuntime,
     sub_d_owner: Type9SubDFrameOwner,
     sub_e_runtime: crate::generic_projectile_emitter::GenericEmitterRuntime,
+    /// Ordinary-world 104B0 receipt; Intro2 spawns5/42 carry none and own
+    /// their recorded first-query Sub-D seeds instead.
+    ordinary_allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,7 +128,31 @@ pub(crate) fn intro2_type16_allocation_authenticates(entity: &Entity) -> bool {
             && entity.id == runtime.entity_id
             && entity.entity_type == 16
             && entity.authored_spawn_index == Some(runtime.spawn_index)
-            && INTRO2_TYPE16_SPAWN_INDICES.contains(&runtime.spawn_index)
+            && match runtime.ordinary_allocation {
+                Some(lease) => lease.entity_id == entity.id,
+                None => INTRO2_TYPE16_SPAWN_INDICES.contains(&runtime.spawn_index),
+            }
             && entity.model_slots == [Some(MODEL); 4]
     })
+}
+
+/// An ordinary receipt must also match its issuing manager generation.
+pub(crate) fn type16_manager_allocation_authenticates(
+    manager: &crate::entity::EntityManager,
+    id: u32,
+) -> bool {
+    manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .is_some_and(|entity| {
+            intro2_type16_allocation_authenticates(entity)
+                && entity
+                    .intro2_type16_runtime
+                    .and_then(|runtime| runtime.ordinary_allocation)
+                    .is_none_or(|lease| {
+                        manager
+                            .main_base_abort_actor_observation(id)
+                            .is_some_and(|observation| observation.lease == lease)
+                    })
+        })
 }

@@ -4872,6 +4872,7 @@ impl EntityManager {
                     || matches!(
                         spawn.entity_type,
                         6 | 9
+                            | 16
                             | 17
                             | 22
                             | 23

@@ -91,7 +91,7 @@ impl Intro2Type16Owner {
             .iter_all()
             .find(|entity| entity.id == entity_id)
             .ok_or(Intro2Type16Block::Allocation)?;
-        if !intro2_type16_allocation_authenticates(entity) {
+        if !super::type16_manager_allocation_authenticates(manager, entity_id) {
             return Err(Intro2Type16Block::Allocation);
         }
         let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {

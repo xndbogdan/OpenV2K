@@ -149,6 +149,111 @@ pub(crate) fn publish_intro2_type16(
         return Err(Intro2Type16Error::Identity);
     }
     authenticate_metadata(metadata)?;
+    authenticate_birth_storage(entity)?;
+    if preceding.iter().any(|candidate| {
+        candidate
+            .authored_spawn_index
+            .is_none_or(|index| index >= spawn)
+    }) {
+        return Err(Intro2Type16Error::Prefix);
+    }
+    // Each receipt joins this own allocation to its first41F7A8 full reset
+    // in V200001. No Type17 or other cohort's origin is substituted.
+    let sub_d_owner = intro2_type16_first_query_owner_for_birth(spawn, sub_d_seed)
+        .expect("authenticated Type16 spawn/seed owns its first-query receipt");
+    publish_birth(
+        entity,
+        metadata,
+        preceding,
+        terrain,
+        Type9SubDRuntime::from_constructor(),
+        sub_d_owner,
+        None,
+        next_random,
+    )
+}
+
+/// Ordinary 104B0 publication of one authored Type16.
+pub(crate) struct Type16AuthoredConstruction<'a> {
+    pub entity: &'a mut Entity,
+    pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    pub metadata: &'a EntityTypeRuntimeMetadata,
+    pub spawn: &'a v2k_formats::levels::EntitySpawn,
+    /// The already-linked live list, read by AC60's nearby predicates.
+    pub preceding: &'a [Entity],
+    pub terrain: &'a TerrainGrid,
+    pub constructor_surface_bits: u32,
+    pub sub_d: crate::common_mover::sub_d::NativeSubDConstruction,
+}
+
+/// Ordinary worlds build the same birth as Intro2 spawns5/42, except that
+/// the process owns the Sub-D seed and the manager the allocation identity.
+pub(crate) fn publish_authored_type16(
+    request: Type16AuthoredConstruction<'_>,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<Intro2Type16Publication, Intro2Type16Error> {
+    let Type16AuthoredConstruction {
+        entity,
+        allocation,
+        metadata,
+        spawn,
+        preceding,
+        terrain,
+        constructor_surface_bits,
+        sub_d,
+    } = request;
+    if !entity.active
+        || entity.entity_type != 16
+        || spawn.entity_type != 16
+        || entity.id != allocation.entity_id
+        || entity.authored_spawn_index != Some(spawn.index)
+        || entity.model_slots != [Some(MODEL); 4]
+        || spawn
+            .model_overrides
+            .iter()
+            .any(|&model| model != 0 && model as usize != MODEL)
+        || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
+        || spawn.has_animation
+        || spawn.animation.is_some()
+        || spawn.has_config
+        || spawn.config.is_some()
+    {
+        return Err(Intro2Type16Error::Identity);
+    }
+    authenticate_metadata(metadata)?;
+    authenticate_birth_storage(entity)?;
+    if sub_d.descriptor != INTRO2_TYPE16_SUB_D
+        || sub_d.runtime != Type9SubDRuntime::from_constructor()
+        || sub_d.frame_owner.classifier_cache().stagger_counter() != sub_d.seed
+        || constructor_surface_bits & !crate::entity_collision_state::SURFACE_STATE_MASK != 0
+    {
+        return Err(Intro2Type16Error::ComponentStorage);
+    }
+    // 104B0 classifies the surface at this tick; D4A0 has already run.
+    entity.collision.state_flags_at_0x08.overwrite(
+        crate::entity_initializer::CONSTRUCTOR_SURFACE_STATE_MASK,
+        constructor_surface_bits,
+    );
+    // Common type-vtable+30 and 104B0's initial +44 modifier are null.
+    entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
+    entity
+        .collision
+        .pair_callbacks
+        .damage_modifier_identity_context_empty = RetailRuntimeValue::Known(true);
+    entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
+    publish_birth(
+        entity,
+        metadata,
+        preceding,
+        terrain,
+        sub_d.runtime,
+        sub_d.frame_owner,
+        Some(allocation),
+        next_random,
+    )
+}
+
+fn authenticate_birth_storage(entity: &Entity) -> Result<(), Intro2Type16Error> {
     if entity.intro2_type16_runtime.is_some()
         || entity.initial_behavior != RetailRuntimeValue::Unresolved
         || entity.current_behavior_context != RetailRuntimeValue::Unresolved
@@ -167,13 +272,23 @@ pub(crate) fn publish_intro2_type16(
     {
         return Err(Intro2Type16Error::ComponentStorage);
     }
-    if preceding.iter().any(|candidate| {
-        candidate
-            .authored_spawn_index
-            .is_none_or(|index| index >= spawn)
-    }) {
-        return Err(Intro2Type16Error::Prefix);
-    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn publish_birth(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    preceding: &[Entity],
+    terrain: &TerrainGrid,
+    sub_d_runtime: Type9SubDRuntime,
+    sub_d_owner: Type9SubDFrameOwner,
+    ordinary_allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<Intro2Type16Publication, Intro2Type16Error> {
+    let spawn = entity
+        .authored_spawn_index
+        .ok_or(Intro2Type16Error::Identity)?;
     let mut selector_owner = behavior::candidate(entity);
     // D4A0's type-default bit0x20 terrain snap precedes the AC60 range reads.
     let RetailRuntimeValue::Known(position) = crate::entity_initializer::constructor_position_raw(
@@ -220,12 +335,10 @@ pub(crate) fn publish_intro2_type16(
     entity.intro2_type16_runtime = Some(Intro2Type16Runtime {
         entity_id: entity.id,
         spawn_index: spawn,
-        sub_d_runtime: Type9SubDRuntime::from_constructor(),
-        // Each receipt joins this own allocation to its first41F7A8 full reset
-        // in V200001. No Type17 or other cohort's origin is substituted.
-        sub_d_owner: intro2_type16_first_query_owner_for_birth(spawn, sub_d_seed)
-            .expect("authenticated Type16 spawn/seed owns its first-query receipt"),
+        sub_d_runtime,
+        sub_d_owner,
         sub_e_runtime,
+        ordinary_allocation,
     });
     // Native deterministic policy for the allocator's unwritten transient B2;
     // later animation/mass contributions must never be reset by reselection.
