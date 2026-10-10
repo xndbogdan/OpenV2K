@@ -49,7 +49,8 @@ pub(super) fn dispatch_native_class49(
         .find(|entity| entity.id == actor.lease.entity_id)?;
     // Native BAC0/BD20 terminal families share BAF0's nested radial owner,
     // with explicit class1/class49 suffix policies and distinct allocations.
-    if !(matches!(entity.entity_type, 97 | 104 | 115) && entity.intro2_gun_turret_runtime.is_some())
+    if !(matches!(entity.entity_type, 92 | 97 | 99 | 102 | 104 | 115)
+        && entity.intro2_gun_turret_runtime.is_some())
         && !(entity.entity_type == 49 && entity.cleansing_vehicle_runtime.is_some())
         && !(entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
     {

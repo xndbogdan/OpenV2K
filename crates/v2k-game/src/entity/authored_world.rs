@@ -159,7 +159,7 @@ impl EntityManager {
                     world_fx,
                 )?;
             }
-            97 | 104 | 115 => {
+            92 | 97 | 99 | 102 | 104 | 115 => {
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(
                         spawn.position_raw(),

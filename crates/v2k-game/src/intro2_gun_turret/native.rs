@@ -23,12 +23,8 @@ pub(crate) fn authenticate_metadata(
         return Err(Intro2GunTurretError::Metadata);
     };
     if metadata.model_slots != profile.model_slots()
-        || (matches!(
-            profile,
-            Intro2GunTurretProfile::Type97
-                | Intro2GunTurretProfile::Type104
-                | Intro2GunTurretProfile::Type115
-        ) && metadata.model_variable_count_raw != RetailRuntimeValue::Known(2))
+        || metadata.model_variable_count_raw
+            != RetailRuntimeValue::Known(profile.model_variable_count())
         || metadata.mass_raw != 100
         || metadata.capability_flags != profile.capability()
         || metadata.initial_health_raw != Some(profile.health())
