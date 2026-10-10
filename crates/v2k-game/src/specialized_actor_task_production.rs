@@ -3059,6 +3059,16 @@ impl SpecializedActorTaskScheduler {
         self.owners
             .push(SpecializedActorTaskOwner::Intro2GunTurret(owner));
     }
+    /// Replace a boulder's owner after an external callback changed its style.
+    pub(crate) fn register_rolling_boulder(
+        &mut self,
+        owner: crate::rolling_boulder::RollingBoulderOwner,
+    ) {
+        self.owners
+            .retain(|present| present.entity_id() != owner.entity_id());
+        self.owners
+            .push(SpecializedActorTaskOwner::RollingBoulder(owner));
+    }
     pub(crate) fn register_intro2_type10_tumble(
         &mut self,
         owner: crate::intro2_type10::Intro2Type10TumbleOwner,
@@ -6526,6 +6536,13 @@ fn prepare_intro2_radial_actor_mutation(
         });
     }
     if entity.rolling_boulder_runtime.is_some() {
+        // A completed class1 or class18 corpse stays linked, task-less and
+        // null-hooked until the sweep; its receipt replaces the living owner.
+        if crate::class49_death::finished_terminal_hit_authenticates(manager, entity_id)
+            || crate::rolling_boulder::death::finished_split_authenticates(manager, entity_id)
+        {
+            return true;
+        }
         return owners.iter().any(|owner| {
             matches!(owner,
             SpecializedActorTaskOwner::RollingBoulder(owner)
@@ -6778,6 +6795,7 @@ fn park_class49_terminal_owner(
         entity.id == id
             && (entity.cleansing_vehicle_runtime.is_some()
                 || entity.native_entity_weapon_runtime.is_some()
+                || entity.rolling_boulder_runtime.is_some()
                 || crate::class49_death::intro2_type13_explosion_source_authenticates(entity))
     }) {
         contact_prefix::park_native_contact_prefix(owners, manager, id);

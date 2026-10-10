@@ -123,9 +123,9 @@ pub enum NativeCaptorPairBlock {
         style: u32,
     },
     HiveImpact(crate::hive_impact::HiveImpactBlock),
-    /// Native Type3/27 Rolling Boulders own construction, motion and surface
-    /// contact, but no pair callbacks or terminal custody. A Hive latch alone
-    /// cannot authorize that actor's remaining 11AD0 physical/damage suffix.
+    /// Native Type3/27 Rolling Boulders own construction, motion, contact,
+    /// hits and deaths, but no pair callbacks. A Hive latch alone cannot
+    /// authorize that actor's remaining 11AD0 physical/damage suffix.
     UnsupportedHiveImpactCounterpart {
         entity_id: u32,
         entity_type: u32,

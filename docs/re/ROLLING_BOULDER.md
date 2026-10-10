@@ -1,9 +1,10 @@
 # Rolling Boulder class20 (Type3/Type27)
 
 `v2k-game::rolling_boulder` owns the authored Type3 and Type27 boulders:
-native construction, both class20 styles and their tasks, and the late
-terrain, water and static contacts. Hits, pair contacts and both deaths are
-still explicit boundaries (see [Port status](#port-status)).
+native construction, both class20 styles and their tasks, the late terrain,
+water and static contacts, hits, and both deaths, including Type27's split
+into two Type3 boulders. Pair contacts and the Main Base abort are still
+explicit boundaries (see [Port status](#port-status)).
 
 ## Identity
 
@@ -76,25 +77,60 @@ In all 30 authored placements the first terrain contact lifts the boulder by
 within 13–20 visits, with collision damage of at most 1. No recording yet
 covers worlds 27/31/35.
 
+## Hits
+
+Both rows keep the shared type vtable `4C8A30`: `DAC0`/`DA00`/`DA60` at
+`+14..+1C` and a null `+30` generic-hit slot (runtime read). Rolling style0
+has null `+20/+24/+28`. Resting style1 has `+28` = `40C730`, so a primary hit
+wakes a resting boulder, while infected and cured hits reach null slots.
+`10EB0` stamps `+34` before the callback; the `11250`/`11320` model-switch
+prefix stands in for it on infected and cured hits. `11030` then pushes and
+jolts the body (the birth state sets enable bit `0x04000000`) with three RNG
+words, and `415040` filters the packet through the type's thresholds.
+
+## Deaths
+
+`10C10` zeroes health and sets the dying bit. Style `+2C` is null in both
+styles, so AC60 selects the alternate class directly, with no RNG word.
+
+- **Type3, class1 Explode** (`4C7150`, initializer `BAC0`). BAF0 finds no
+  A/B/N/G and no capability `0x40`, and the type is neither 49 nor 112..115.
+  So the `40BB9C` default scatters 10 class-16 particles. Its radial uses the
+  type's `+50..+67` template: inner 512, outer 1024, impulse 2000, and 4000 on
+  channels 1 and 3. All three task slots then clear and removal is deferred.
+  That radial needs the player hull, so a hit runs it in the Playing scene.
+- **Type27, class18 Split And Explode** (`4C73D8`, initializer `40C080`). The
+  `440950` burst tests A/B/N/G and picks class `0x10` with count 2
+  (`40C0B3..40C0F5`), drawing one RNG word. After the task clear, the
+  Type27->Type3/count2 row builds two children from the zeroed birth record.
+  Each child takes nine launch words (position offsets, velocity, Euler), then
+  AC60's choice word. D4A0 grounds it at its launch X/Z plus the model lift,
+  then D720 runs. Each child joins the scheduler before the next launch.
+
+Both terminal styles are all-zero apart from their `+40` initializer (runtime
+reads), so the linked corpse keeps null-hook contacts and hits until the sweep.
+
 ## Port status
 
-Implemented: native construction and receipt, scheduler adoption and both
-tasks with the 9C00 style switches, and the terrain, water and static contacts.
-Radial blasts and attached particles reach a boulder only through its completed
-owner. A nonlethal blast pushes and damages it as before; a parked owner holds
-the blast with `NativeActorMutationCustody`.
+Implemented:
+- construction, both tasks and the 9C00 style switches;
+- terrain, water and static contacts;
+- primary, infected and cured hits;
+- both deaths from hits and from Playing or cinematic blasts;
+- a Type27 split from a lethal collision;
+- corpse contacts and hits.
+
+Radial blasts and attached particles reach a boulder only through its
+completed owner or its finished terminal.
 
 Remaining boundaries, each held rather than approximated:
 
-- Hits. `10EB0` stamps `+34`, runs style `+28` (a resting boulder wakes),
-  applies the `11030` impulse, then `415040`. Boulder hits still end at the
-  unresolved survivor policy, so a shot does nothing yet.
-- Deaths. Type3 dies through class1 (`BAC0` scatter) and Type27 through
-  class18, which splits it into two Type3 births. Lethal surface or static
-  collision damage parks the owner at "Rolling Boulder death program", and a
-  lethal blast stops at `UnsupportedDeath`.
-- Pairs. The player pass leaves boulders out because their pair identity is
-  unresolved. A Hive ram returns `UnsupportedHiveImpactCounterpart`
+- A Type3 killed by a terrain or static collision holds at "Rolling Boulder
+  class1 radial needs the player hull", because the late contact frame does
+  not carry the Playing hull. That needs over 13000 raw collision damage,
+  which has not been observed.
+- Pairs. The player pass leaves boulders out because their pair orientation
+  is unresolved. A Hive ram returns `UnsupportedHiveImpactCounterpart`
   ([Hive wreck](HIVE_WRECK.md)).
 - The Main Base abort transaction, which still stops at Type27 in worlds
   27 and 35.

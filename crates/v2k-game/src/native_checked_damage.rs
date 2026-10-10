@@ -460,6 +460,7 @@ pub(crate) fn prepare_native_actor_damage_mutation(
 ) -> bool {
     if crate::native_type40::death::finished_terminal_authenticates(manager, id)
         || crate::native_type56::death::finished_terminal_authenticates(manager, id)
+        || crate::rolling_boulder::death::finished_split_authenticates(manager, id)
     {
         return true;
     }

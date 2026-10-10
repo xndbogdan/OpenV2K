@@ -308,6 +308,12 @@ impl shared::NativeGroundTaskCustody for RejectChildPublication {
     ) -> Result<(), &'static str> {
         Err("test rejects child publication after its genuine constructor")
     }
+    fn register_split_rolling_boulder_child(
+        &mut self,
+        _: crate::rolling_boulder::RollingBoulderOwner,
+    ) -> Result<(), &'static str> {
+        Err("test rejects child publication after its genuine constructor")
+    }
 }
 #[v2k_test_support::retail_test]
 fn blocked_child_publication_retains_completed_constructor_and_never_replays_prefix() {

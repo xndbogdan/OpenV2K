@@ -1,5 +1,7 @@
 use super::*;
 use crate::{
+    damage::{DamagePacket, FUN_0043F780_DAMAGE_PACKET},
+    entity_collision_state::DYING_STATE_BIT,
     gameplay_notifications::{GameplayNotificationPhase, GameplayNotifications},
     intro2_contacts::Intro2ContactFrame,
     intro2_gun_turret::authored_tests::fixture,
@@ -7,13 +9,18 @@ use crate::{
         resolve_native_actor_surface_contact, NativeActorSurfaceContactOutcome,
     },
     native_ground_actor::contact::{resolve_insect_static_contact, NativeGroundContactOutcome},
+    player_hull::PlayerHull,
     session::GameSession,
+    shared_actor_impact::{
+        apply_playing_actor_particle_hit, PlayingActorImpactFrame, SharedActorImpactOutcome,
+    },
     specialized_actor_task_production::{
         SpecializedActorTaskProductionFrame, SpecializedActorTaskProductionOutcome,
         SpecializedActorTaskScheduler, SpecializedActorTaskWorld,
     },
     static_contact::{scan_deepest_static_contact, StaticContactQuery, StaticModelContact},
     static_damage::StaticDamageScheduler,
+    world_fx::{BallisticDamageRequest, ParticleEntityImpact},
 };
 
 /// One authored world with only its boulders adopted by the scheduler.
@@ -24,6 +31,7 @@ struct BoulderWorld {
     tasks: SpecializedActorTaskScheduler,
     static_damage: StaticDamageScheduler,
     notifications: GameplayNotifications,
+    player_hull: PlayerHull,
     tick: u32,
 }
 
@@ -45,8 +53,70 @@ impl BoulderWorld {
             tasks,
             static_damage: StaticDamageScheduler::new(),
             notifications: GameplayNotifications::new(),
+            player_hull: PlayerHull::default(),
             tick: 0,
         }
+    }
+
+    /// Leave only `id` eligible for radials, contacts and pairs.
+    fn isolate(&mut self, id: u32) {
+        let others: Vec<_> = self
+            .manager
+            .iter_all()
+            .map(|entity| entity.id)
+            .filter(|&other| other != id)
+            .collect();
+        for other in others {
+            self.manager
+                .entity_mut(other)
+                .unwrap()
+                .collision
+                .state_flags_at_0x08
+                .overwrite(!0x2000, 0);
+        }
+    }
+
+    /// One particle impact through the Playing dispatch, as main.rs routes it.
+    fn hit(
+        &mut self,
+        id: u32,
+        class: u8,
+        packet: DamagePacket,
+    ) -> impact::RollingBoulderImpactOutcome {
+        self.tick += 1;
+        let outcome = apply_playing_actor_particle_hit(
+            PlayingActorImpactFrame {
+                extra_lives: RetailRuntimeValue::Unresolved,
+                resources: &mut self.session.cache,
+                entities: &mut self.manager,
+                world_fx: &mut self.fx,
+                scheduler: &mut self.tasks,
+                notifications: &mut self.notifications,
+                static_damage: &mut self.static_damage,
+                player_hull: &mut self.player_hull,
+                retail_tick: self.tick,
+            },
+            ParticleEntityImpact {
+                source_particle_class: class,
+                impact_position_argument_va: if class == 5 { 0x004d_cf48 } else { 0 },
+                target_entity_id: id,
+                position_world: [0.0; 3],
+                velocity_raw: [0, 0, 8192],
+                damage: Some(BallisticDamageRequest {
+                    packet,
+                    source_entity_type_at_birth: Some(34),
+                    source_owner_id: Some(35),
+                }),
+            },
+        );
+        let Some(SharedActorImpactOutcome::RollingBoulder(outcome)) = outcome else {
+            panic!("{outcome:?}")
+        };
+        outcome
+    }
+
+    fn ids(&self) -> Vec<u32> {
+        self.manager.iter_all().map(|entity| entity.id).collect()
     }
 
     fn first(&self, entity_type: u32) -> u32 {
@@ -87,8 +157,26 @@ impl BoulderWorld {
         }
     }
 
-    /// One task pass, then the subject's late 11AD0 surface and static phases.
-    fn frame(&mut self, id: u32) -> BoulderFrame {
+    /// One task pass, then each subject's late 11AD0 surface/static phases.
+    fn frame_all(&mut self, ids: &[u32]) -> Vec<BoulderFrame> {
+        let pass = self.tick_tasks();
+        ids.iter()
+            .map(|&id| {
+                let task = pass
+                    .iter()
+                    .find(|outcome| outcome.entity_id() == id)
+                    .cloned();
+                let (surface, static_contact) = self.contacts(id);
+                BoulderFrame {
+                    task,
+                    surface,
+                    static_contact,
+                }
+            })
+            .collect()
+    }
+
+    fn tick_tasks(&mut self) -> Vec<RollingBoulderOutcome> {
         self.tick += 1;
         let pass = self.tasks.tick(
             &mut self.manager,
@@ -107,14 +195,19 @@ impl BoulderWorld {
             &mut self.notifications,
         );
         assert!(pass.block.is_none(), "{:?}", pass.block);
-        let task = pass.outcomes.into_iter().find_map(|outcome| match outcome {
-            SpecializedActorTaskProductionOutcome::RollingBoulder(outcome)
-                if outcome.entity_id() == id =>
-            {
-                Some(outcome)
-            }
-            _ => None,
-        });
+        pass.outcomes
+            .into_iter()
+            .filter_map(|outcome| match outcome {
+                SpecializedActorTaskProductionOutcome::RollingBoulder(outcome) => Some(outcome),
+                _ => None,
+            })
+            .collect()
+    }
+
+    fn contacts(
+        &mut self,
+        id: u32,
+    ) -> (NativeActorSurfaceContactOutcome, NativeGroundContactOutcome) {
         let surface = resolve_native_actor_surface_contact(&mut self.contact_frame(), id);
         let static_contact = if matches!(surface, NativeActorSurfaceContactOutcome::Blocked { .. })
         {
@@ -122,11 +215,12 @@ impl BoulderWorld {
         } else {
             resolve_insect_static_contact(&mut self.contact_frame(), id)
         };
-        BoulderFrame {
-            task,
-            surface,
-            static_contact,
-        }
+        (surface, static_contact)
+    }
+
+    /// One task pass, then the subject's late 11AD0 surface and static phases.
+    fn frame(&mut self, id: u32) -> BoulderFrame {
+        self.frame_all(&[id]).pop().unwrap()
     }
 
     /// First static overlap in a deterministic sweep around the boulder.
@@ -662,27 +756,269 @@ fn playing_blasts_take_the_native_path_through_the_completed_owner() {
                 );
             }
             (false, true) => {
-                // The class18 split is not owned yet; the lethal blast holds.
-                let Some(PlayingRadialBlock::Native(block)) = outcome.blocked else {
-                    panic!("{outcome:?}")
-                };
-                assert!(
-                    matches!(
-                        &block.reason,
-                        DynamicRadialLiveBlockReason::Checked(error)
-                            if matches!(
-                                error.reason,
-                                crate::live_actor_checked_damage::LiveActorDamageBlock::Death(
-                                    DynamicRadialLiveBlockReason::UnsupportedDeath {
-                                        entity_type: 27,
-                                        alternate_class: Some(18),
-                                    }
-                                )
-                            )
-                    ),
-                    "{block:?}"
+                // The lethal blast runs class18 inside the native radial walk.
+                assert!(outcome.blocked.is_none(), "{outcome:?}");
+                assert!(death::finished_split_authenticates(&world.manager, id));
+                assert_eq!(
+                    world
+                        .manager
+                        .iter_all()
+                        .filter(|entity| entity.entity_type == 3)
+                        .count(),
+                    2,
+                    "world27 authors no Type3; both are split children"
                 );
             }
         }
     }
+}
+
+/// Channel2 (threshold 4000, multiplier 256): 5000 delivers 1000 damage.
+const SHOT: DamagePacket = DamagePacket {
+    channels: [2, 0],
+    amounts_raw: [5000, 0],
+};
+
+#[v2k_test_support::retail_test]
+fn a_primary_hit_wakes_a_resting_boulder_and_pushes_it() {
+    let mut world = BoulderWorld::new(27);
+    let id = world.first(27);
+    world.isolate(id);
+    world.activate(id);
+    switch_style(
+        world.manager.entity_mut(id).unwrap(),
+        RollingBoulderStyle::Resting,
+    )
+    .unwrap();
+    world.tasks = SpecializedActorTaskScheduler::new();
+    world.tasks.adopt_rolling_boulders(&world.manager);
+    let velocity = world.entity(id).velocity_raw();
+    let outcome = world.hit(id, 16, SHOT);
+    let impact::RollingBoulderImpactOutcome::Applied(applied) = outcome else {
+        panic!("{outcome:?}")
+    };
+    assert_eq!(applied.filtered_damage_raw, 1000);
+    let entity = world.entity(id);
+    assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(9000));
+    assert_eq!(
+        entity.collision.last_hit_presentation_tick_at_0x34,
+        RetailRuntimeValue::Known(world.tick)
+    );
+    assert_eq!(
+        current_style(entity),
+        Ok(RollingBoulderStyle::Rolling),
+        "style1 +28 is 40C730"
+    );
+    assert_ne!(entity.velocity_raw(), velocity, "11030 pushes the boulder");
+    // The scheduler now owns the replaced rolling Primary.
+    let frame = world.frame(id);
+    assert!(
+        matches!(
+            frame.task,
+            Some(RollingBoulderOutcome::Advanced { .. } | RollingBoulderOutcome::Waiting { .. })
+        ),
+        "{:?}",
+        frame.task
+    );
+}
+
+#[v2k_test_support::retail_test]
+fn an_infected_hit_reaches_null_slots_and_leaves_a_resting_boulder_at_rest() {
+    let mut world = BoulderWorld::new(27);
+    let id = world.first(27);
+    world.isolate(id);
+    world.activate(id);
+    switch_style(
+        world.manager.entity_mut(id).unwrap(),
+        RollingBoulderStyle::Resting,
+    )
+    .unwrap();
+    world.tasks = SpecializedActorTaskScheduler::new();
+    world.tasks.adopt_rolling_boulders(&world.manager);
+    let stamp = world
+        .entity(id)
+        .collision
+        .last_hit_presentation_tick_at_0x34;
+    let outcome = world.hit(id, 5, FUN_0043F780_DAMAGE_PACKET);
+    assert!(
+        matches!(outcome, impact::RollingBoulderImpactOutcome::Applied(_)),
+        "{outcome:?}"
+    );
+    let entity = world.entity(id);
+    assert_eq!(
+        current_style(entity),
+        Ok(RollingBoulderStyle::Resting),
+        "DA00 reads the null +20"
+    );
+    assert_eq!(entity.collision.last_hit_presentation_tick_at_0x34, stamp);
+    assert!(RollingBoulderOwner::adopt(&world.manager, id).is_ok());
+}
+
+#[v2k_test_support::retail_test]
+fn a_lethal_hit_explodes_a_small_boulder_through_class1() {
+    let mut world = BoulderWorld::new(31);
+    let id = world.first(3);
+    world.isolate(id);
+    world.activate(id);
+    world.manager.entity_mut(id).unwrap().collision.health_raw = RetailRuntimeValue::Known(1);
+    let particles = world.fx.particle_count();
+    let outcome = world.hit(id, 16, SHOT);
+    assert!(
+        matches!(outcome, impact::RollingBoulderImpactOutcome::Applied(_)),
+        "{outcome:?}"
+    );
+    assert!(crate::class49_death::finished_terminal_hit_authenticates(
+        &world.manager,
+        id
+    ));
+    let entity = world.entity(id);
+    assert_eq!(
+        entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT),
+        RetailRuntimeValue::Known(DYING_STATE_BIT)
+    );
+    assert!(ActorTaskSlot::IN_RETAIL_TICK_ORDER
+        .into_iter()
+        .all(|slot| entity.actor_tasks.task_in_slot(slot).is_none()));
+    assert!(world
+        .manager
+        .pending_actor_deferred_destroy_ids()
+        .contains(&id));
+    assert!(
+        world.fx.particle_count() > particles,
+        "BAF0 scatters class16"
+    );
+    // The completed corpse takes a second hit and its null-hook contacts.
+    let again = world.hit(id, 16, SHOT);
+    assert!(
+        matches!(again, impact::RollingBoulderImpactOutcome::Applied(_)),
+        "{again:?}"
+    );
+    let surface = resolve_native_actor_surface_contact(&mut world.contact_frame(), id);
+    assert!(
+        !matches!(surface, NativeActorSurfaceContactOutcome::Blocked { .. }),
+        "{surface:?}"
+    );
+    let static_contact = resolve_insect_static_contact(&mut world.contact_frame(), id);
+    assert!(
+        !matches!(static_contact, NativeGroundContactOutcome::Blocked { .. }),
+        "{static_contact:?}"
+    );
+}
+
+#[v2k_test_support::retail_test]
+fn a_lethal_hit_splits_a_large_boulder_into_two_grounded_small_boulders() {
+    let mut world = BoulderWorld::new(27);
+    let id = world.first(27);
+    world.isolate(id);
+    world.activate(id);
+    world.manager.entity_mut(id).unwrap().collision.health_raw = RetailRuntimeValue::Known(1);
+    let before = world.ids();
+    let position = world.entity(id).position_raw();
+    let mut rng = world.fx.fork_for_main_base_abort_transaction();
+    let outcome = world.hit(id, 16, SHOT);
+    assert!(
+        matches!(outcome, impact::RollingBoulderImpactOutcome::Applied(_)),
+        "{outcome:?}"
+    );
+    assert!(death::finished_split_authenticates(&world.manager, id));
+    let heading = world.entity(id).rotation_heading_pitch_roll_raw()[0] as u16;
+    let terrain = world.session.cache.terrain().unwrap();
+    let extent = world.session.cache.global_model(648).unwrap().radius as i16;
+    let children: Vec<_> = world
+        .manager
+        .iter_all()
+        .filter(|entity| !before.contains(&entity.id))
+        .collect();
+    assert_eq!(children.len(), 2, "Type27 -> Type3 count2");
+    // 11030's three samples, then 440950's one word.
+    for _ in 0..4 {
+        rng.next_shared_retail_random_u16();
+    }
+    for child in &children {
+        let w: [u16; 9] = std::array::from_fn(|_| rng.next_shared_retail_random_u16());
+        rng.next_shared_retail_random_u16(); // AC60's singleton class20 choice
+        let x = position[0].wrapping_add(((w[0] >> 6) as i16).wrapping_sub(512));
+        let z = position[2].wrapping_add(((w[2] >> 6) as i16).wrapping_sub(512));
+        assert_eq!(child.entity_type, 3);
+        assert_eq!(
+            child.position_raw(),
+            [x, terrain.bilinear_height_raw(x, z).wrapping_add(extent), z],
+            "D4A0 grounds the launch position"
+        );
+        assert_eq!(
+            child.velocity_raw(),
+            [
+                ((w[3] >> 5) as i16).wrapping_sub(1024),
+                (w[4] >> 6) as i16,
+                ((w[5] >> 5) as i16).wrapping_sub(1024),
+            ]
+        );
+        assert_eq!(
+            child.rotation_heading_pitch_roll_raw(),
+            [
+                heading.wrapping_add((w[6] >> 4).wrapping_sub(2048)) as i16,
+                (w[7] >> 4).wrapping_sub(2048) as i16,
+                (w[8] >> 4).wrapping_sub(2048) as i16,
+            ]
+        );
+        assert_eq!(current_style(child), Ok(RollingBoulderStyle::Rolling));
+        assert_eq!(
+            child.collision.state_flags_at_0x08.masked(0x50000 | 4),
+            RetailRuntimeValue::Known(0x50004),
+            "style0 motion bits and the D720 basis"
+        );
+        assert!(RollingBoulderOwner::adopt(&world.manager, child.id).is_ok());
+    }
+    assert_eq!(
+        world.fx.next_shared_retail_random_u16(),
+        rng.next_shared_retail_random_u16(),
+        "no other draws"
+    );
+}
+
+#[v2k_test_support::retail_test]
+fn split_children_join_the_scheduler_and_come_to_rest() {
+    let mut world = BoulderWorld::new(27);
+    let id = world.first(27);
+    world.isolate(id);
+    world.activate(id);
+    world.manager.entity_mut(id).unwrap().collision.health_raw = RetailRuntimeValue::Known(1);
+    let before = world.ids();
+    world.hit(id, 16, SHOT);
+    let children: Vec<_> = world
+        .ids()
+        .into_iter()
+        .filter(|id| !before.contains(id))
+        .collect();
+    for &child in &children {
+        world.activate(child);
+    }
+    let mut rested = Vec::new();
+    for _ in 0..3000 {
+        for (&child, frame) in children.iter().zip(world.frame_all(&children)) {
+            if rested.contains(&child) {
+                continue;
+            }
+            assert!(
+                !matches!(
+                    frame.surface,
+                    NativeActorSurfaceContactOutcome::Blocked { .. }
+                ),
+                "{:?}",
+                frame.surface
+            );
+            if let Some(RollingBoulderOutcome::Advanced {
+                switched: true,
+                style: RollingBoulderStyle::Resting,
+                ..
+            }) = frame.task
+            {
+                rested.push(child);
+            }
+        }
+        if rested.len() == children.len() {
+            break;
+        }
+    }
+    assert_eq!(rested.len(), 2, "both thrown children land and rest");
 }

@@ -36,6 +36,7 @@ mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
 mod native_type56_construction;
+mod rolling_boulder_construction;
 pub(crate) use hive_birth_host::{HiveBirthManagerContext, HiveBirthManagerHost};
 pub(crate) use hive_child::{HiveNativeBirthBlock, NativeHiveChildConstructionContext};
 mod instance_body;

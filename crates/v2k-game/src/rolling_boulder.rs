@@ -27,9 +27,10 @@
 //! Late 11AD0 contact is shared: [`crate::native_actor_surface_contact`] runs
 //! the bare 141D0 terrain/water response while rolling, and
 //! [`crate::native_ground_actor::contact`] the null-hook 11760 static response
-//! in either style. Hits, pairs and the class1/class18 deaths are not owned;
-//! lethal collision damage holds at the "Rolling Boulder death program".
-//! See `docs/re/ROLLING_BOULDER.md`.
+//! in either style. [`impact`] owns the `10EB0/11250/11320` hits; a lethal
+//! Type3 enters the shared class1 terminal and a lethal Type27 the class18
+//! split in [`death`]. Pair contacts are not owned. See
+//! `docs/re/ROLLING_BOULDER.md`.
 
 use crate::actor_task_dispatcher::ActorTaskRuntime;
 use crate::actor_task_owner::{ActorTaskId, ActorTaskSlot, ActorTaskVisit, PreparedActorTask};
@@ -285,6 +286,8 @@ pub struct RollingBoulderRuntime {
     pub(crate) profile: RollingBoulderProfile,
     /// D4A0's post-grounding `+90` copy.
     pub(crate) anchor_raw: [i16; 3],
+    /// Type27's retained class18 split, from `10C10` until the sweep.
+    pub(crate) split_terminal: Option<death::RollingBoulderSplitTerminal>,
 }
 
 impl RollingBoulderRuntime {
@@ -469,6 +472,76 @@ pub(crate) fn publish_authored_rolling_boulder(
         allocation,
         profile,
         anchor_raw: grounded,
+        split_terminal: None,
+    };
+    entity.rolling_boulder_runtime = Some(runtime);
+    Ok(runtime)
+}
+
+/// A class18 split child after `438080 -> 104B0 -> D4A0`: AC60's singleton
+/// choice, then `40EA10`/`40B950` install style0 as for an authored boulder.
+/// The caller links the allocation and runs D720 afterwards.
+pub(crate) fn publish_split_rolling_boulder(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    profile: RollingBoulderProfile,
+    allocation: MainBaseAbortActorLease,
+    anchor_raw: [i16; 3],
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<RollingBoulderRuntime, RollingBoulderBlock> {
+    authenticate_metadata(profile, metadata)?;
+    if entity.entity_type != profile.entity_type() || allocation.entity_id != entity.id {
+        return Err(RollingBoulderBlock::Identity);
+    }
+    if entity.rolling_boulder_runtime.is_some()
+        || entity.current_behavior_context != RetailRuntimeValue::Unresolved
+        || ActorTaskSlot::IN_RETAIL_TICK_ORDER
+            .into_iter()
+            .any(|slot| entity.actor_task_state(slot).is_some())
+    {
+        return Err(RollingBoulderBlock::AlreadyPublished);
+    }
+    let initializer = metadata
+        .initializer
+        .as_ref()
+        .ok_or(RollingBoulderBlock::Metadata)?;
+    let program = rolling_boulder_program()?;
+    let selection = crate::entity_behavior::BehaviorSelection {
+        choice_index: 0,
+        program,
+    };
+    let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
+        .ok_or(RollingBoulderBlock::Metadata)?;
+    let RetailRuntimeValue::Known(state) = entity.collision.state_flags_at_0x08.masked(u32::MAX)
+    else {
+        return Err(RollingBoulderBlock::Runtime("birth state"));
+    };
+    // Every fallible lookup precedes the singleton selector's one RNG word.
+    let selected = select_initial_behavior(
+        &initializer.behavior_choices,
+        |rule| i32::from(rule == BehaviorWeightRule::Always),
+        next_random,
+    )
+    .map_err(|_| RollingBoulderBlock::Metadata)?;
+    if selected != Some(selection) {
+        return Err(RollingBoulderBlock::Metadata);
+    }
+    entity.set_position_raw(anchor_raw);
+    entity.collision.state_flags_at_0x08.overwrite(
+        u32::MAX,
+        apply_style_install_state(state, RollingBoulderStyle::Rolling),
+    );
+    entity.collision.pair_callbacks = class20_pair_callbacks();
+    // Explicit native policy for 104B0's unwritten transient mass word.
+    entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
+    entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
+    install_style_tasks(entity, RollingBoulderStyle::Rolling);
+    let runtime = RollingBoulderRuntime {
+        allocation,
+        profile,
+        anchor_raw,
+        split_terminal: None,
     };
     entity.rolling_boulder_runtime = Some(runtime);
     Ok(runtime)
@@ -910,6 +983,9 @@ pub(crate) fn tick_with_random(
         retained_owner: Some(retained),
     }
 }
+
+pub mod death;
+pub mod impact;
 
 #[cfg(test)]
 mod tests;
