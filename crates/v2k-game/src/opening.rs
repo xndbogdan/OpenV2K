@@ -40,7 +40,8 @@ pub enum Intro2Backdrop {
 /// Select the retained world montage or its final black title card.
 ///
 /// The accepted full-frame trace resumes black `COLORFILL` for the final `#`
-/// page. Once selected, black remains active for any transition-overrun frame;
+/// page; the full-frame sprite sequence that `503C0` starts at the same tick
+/// fades over it from grey. Once selected, black remains active for any transition-overrun frame;
 /// the surrounding Intro2 state owns the subsequent exit-latch handoff.
 pub const fn intro2_backdrop(retail_tick: u32) -> Intro2Backdrop {
     if retail_tick >= INTRO2_BLACK_CARD_START_TICK {

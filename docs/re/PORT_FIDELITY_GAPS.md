@@ -90,7 +90,9 @@ Last observation pass: 2026-09-07 (first-world lighting/lens and peasant animati
     until a camera pan. A same-shot recapture is still required, and the port's
     floating centre projector is not yet the retail Q31 implementation. The
     Intro2 captions now use `FUN_00452790`'s authored integer 30-ms character
-    interval and trailing underscore cursor. Every narrative record selects
+    interval and its cursor: `DAT_004D145C`'s `" _"`, appended while the
+    50-Hz clock divided by 10 is odd, whether or not the line is still typing
+    (absent at tick 4003 in the faststart04 recording). Every narrative record selects
     placement style 2 (3 on the final page): x at 5%, baseline at 16% and wrap
     width at 80% of the display mode, so 1024x768 draws at `(51, 122)`; the
     caption band then matches DirectDraw trace frame `345026` exactly. Their type-on cue also uses
