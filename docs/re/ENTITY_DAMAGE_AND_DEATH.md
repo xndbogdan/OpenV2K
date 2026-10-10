@@ -590,8 +590,12 @@ which have no components. Its two style entries were read at runtime:
 Both initializers first clear Tertiary and Secondary through `40A7A0`.
 `40C750` and `40C730` call `40C6B0` with style index 1 and 0, so the boulder
 switches between the two. `404B40` builds a single-callback task (`404B60`):
-while `sqrt(vx²+vy²+vz²) > 100` it keeps running, otherwise it zeroes the
-velocity and settles. The port implements `404580` for meteors but not
+while `sqrt(vx²+vy²+vz²) > 100` it returns singleton `0x004BE198`, whose
+tag is `0x9C00`; otherwise it zeroes the velocity and settles. The generic
+owner maps `0x9C00` to style `+04` (see Run Away above), so the cycle is:
+rolling (style 0) until its task ends with `0x9C00`, then the resting check
+(style 1), which sends a still-fast boulder straight back to rolling. At rest,
+a pair contact (`+18`) or a hit (`+28`) also returns it to rolling. The port implements `404580` for meteors but not
 `404B60` or the switches; Type3 dies through class1 and Type27 through
 class18 (Split And Explode).
 
