@@ -1,4 +1,5 @@
-//! Ordinary Type92/99/102 births share Type97's 104B0 -> D4A0/D190 E/L owner.
+//! Ordinary Type92/96/99/102/103 births share Type97's 104B0 -> D4A0/D190
+//! E/L owner.
 
 use super::authored_tests::fixture;
 use super::*;
@@ -7,10 +8,19 @@ use crate::{
     entity_collision_state::RetailRuntimeValue, world_fx::ParticleEnvironment,
 };
 
-const WORLDS: [(u32, u32); 12] = [
+const WORLDS: [(u32, u32); 21] = [
     (26, 92),
     (38, 92),
     (39, 92),
+    (26, 96),
+    (36, 96),
+    (21, 103),
+    (25, 103),
+    (29, 103),
+    (31, 103),
+    (38, 103),
+    (40, 103),
+    (43, 103),
     (26, 99),
     (32, 99),
     (46, 99),
@@ -23,7 +33,7 @@ const WORLDS: [(u32, u32); 12] = [
 ];
 
 #[v2k_test_support::retail_test]
-fn ordinary_type92_99_102_births_publish_their_own_native_class29_owner() {
+fn ordinary_class29_births_publish_their_own_native_owner() {
     let mut births = 0;
     for (level, entity_type) in WORLDS {
         let (_, manager, _) = fixture(level);
@@ -62,11 +72,11 @@ fn ordinary_type92_99_102_births_publish_their_own_native_class29_owner() {
             );
         }
     }
-    assert_eq!(births, 3 + 10 + 9);
+    assert_eq!(births, 3 + 2 + 10 + 9 + 15);
 }
 
 #[v2k_test_support::retail_test]
-fn ordinary_type92_99_102_run_their_turret_owner_for_64_ticks() {
+fn ordinary_class29_turrets_run_their_owner_for_64_ticks() {
     for (level, entity_type) in WORLDS {
         let (mut session, mut manager, mut fx) = fixture(level);
         let ids: Vec<_> = manager
@@ -112,8 +122,8 @@ fn ordinary_type92_99_102_run_their_turret_owner_for_64_ticks() {
 }
 
 #[v2k_test_support::retail_test]
-fn ordinary_type92_99_102_fire_their_own_emitter_method_and_drain_once() {
-    for (level, entity_type) in [(26, 92), (26, 99), (19, 102)] {
+fn ordinary_class29_turrets_fire_their_own_emitter_method_and_drain_once() {
+    for (level, entity_type) in [(26, 92), (26, 96), (26, 99), (19, 102), (21, 103)] {
         let mut notifications = crate::gameplay_notifications::GameplayNotifications::default();
         let (session, mut manager, mut fx) = fixture(level);
         let profile = Intro2GunTurretProfile::for_native_authored(entity_type).unwrap();

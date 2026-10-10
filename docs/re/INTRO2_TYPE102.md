@@ -150,7 +150,7 @@ manager-generation and authored-infection/notification controls live in
 [`authored_tests.rs`](../../crates/v2k-game/src/intro2_gun_turret/authored_tests.rs).
 They complement the existing Intro2 turret and campaign-cargo controls.
 
-## Ordinary native Type92, Type99 and Type102
+## Ordinary native Type92, Type96, Type99, Type102 and Type103
 
 The class-29 E/L family shares Type97's Section-12 shape: E and L only,
 singleton Always1/Class29, alternate49, rule1, mass100, initializer state
@@ -162,17 +162,19 @@ singleton Always1/Class29, alternate49, rule1, mass100, initializer state
 | 97 | 173 | 5000 | `0x1044` | 2 | 12 / 76 | worlds 31, 42, 46, 47 (8) |
 | 99 | 165 | 5000 | `0x44` | 3 | 12 / 76 | worlds 26, 32, 46, 48 (10) |
 | 102 | 162 | 4000 | `0x44` | 3 | 14 / 78 | worlds 19, 25, 37, 39, 40 (9) |
-| 96 | 175 | 5000 | `0x1044` | 2 | 13 / 77 | worlds 26, 36 (2), not yet ported |
+| 96 | 175 | 5000 | `0x1044` | 2 | 13 / 77 | worlds 26, 36 (2) |
 | 100 | 152 | 32000 | `0x1044` | 3 | 19 / 7 | world 26 (1), not yet ported |
-| 103 | 168 | 5000 | `0x44` | 3 | 13 / 77 | worlds 21, 25, 29, 31, 38, 40, 43 (15), not yet ported |
+| 103 | 168 | 5000 | `0x44` | 3 | 13 / 77 | worlds 21, 25, 29, 31, 38, 40, 43 (15) |
 
-Ordinary 92/99/102 now take the same `104B0 -> D4A0/D190` birth, metadata
-authentication (including each row's own model-variable count), class-29
-owner, method-12/14 aim and FIFO drain, pair damage and class49 dispatch as
-Type97. Ownership is decided by construction origin, not type number: Intro2's
-92/102 identities keep their cinematic owners and campaign reconstruction stays
-separate. Methods 13 and 19 have no live aim owner, so 96, 100 and 103 still
-construct without a context.
+Ordinary 92/96/99/102/103 now take the same `104B0 -> D4A0/D190` birth,
+metadata authentication (including each row's own model-variable count),
+class-29 owner, aim and FIFO drain, pair damage and class49 dispatch as Type97.
+`425160` submits every method through `4147A0`. `44EA60` gives methods 12..15
+no gravity lead, so method 13 drains like 12 and 14, into class56 (class82
+underwater). Ownership is decided by construction origin, not type number:
+Intro2's 92/102 identities keep their cinematic owners and campaign
+reconstruction stays separate. Type100's method19 (class54, two variable
+bindings) has no live aim owner, so it still constructs without a context.
 
 ## Ordinary native Type104 and Type115
 

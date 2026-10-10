@@ -1,4 +1,4 @@
-//! E/L Gun Turret data. Live authored92/97/99/102/104/115 and Intro2
+//! E/L Gun Turret data. Live authored92/96/97/99/102/103/104/115 and Intro2
 //! authored92/102/115 retain distinct receipts; campaign reconstruction also
 //! uses96/100 metadata.
 //! Castle Type104's Section12 row uses common vtable4C8A30 and class29/4C8230:
@@ -16,6 +16,7 @@ pub enum Intro2GunTurretProfile {
     Type99,
     Type100,
     Type102,
+    Type103,
     Type104,
     Type115,
 }
@@ -23,14 +24,16 @@ pub enum Intro2GunTurretProfile {
 impl Intro2GunTurretProfile {
     /// Authored104B0 allocations with the common D4A0/D190 E/L constructor.
     /// Type115 retains alternate1; sharing this birth does not grant class49.
-    /// Types 96, 100 and 103 share the constructor, but their methods 13
-    /// and 19 have no live aim owner yet.
+    /// Type100 shares the constructor, but its method19 has no live aim
+    /// owner yet.
     pub const fn for_native_authored(entity_type: u32) -> Option<Self> {
         match entity_type {
             92 => Some(Self::Type92),
+            96 => Some(Self::Type96),
             97 => Some(Self::Type97),
             99 => Some(Self::Type99),
             102 => Some(Self::Type102),
+            103 => Some(Self::Type103),
             104 => Some(Self::Type104),
             115 => Some(Self::Type115),
             _ => None,
@@ -68,6 +71,7 @@ impl Intro2GunTurretProfile {
             Self::Type99 => 99,
             Self::Type100 => 100,
             Self::Type102 => 102,
+            Self::Type103 => 103,
             Self::Type104 => 104,
             Self::Type115 => 115,
         }
@@ -81,6 +85,7 @@ impl Intro2GunTurretProfile {
             Self::Type99 => 165,
             Self::Type100 => 152,
             Self::Type102 => MODEL,
+            Self::Type103 => 168,
             Self::Type104 => 156,
             Self::Type115 => 331,
         }
@@ -96,7 +101,7 @@ impl Intro2GunTurretProfile {
     /// Section-12 model-variable words; a third is bound by emitter slot 1.
     pub const fn model_variable_count(self) -> u32 {
         match self {
-            Self::Type99 | Self::Type100 | Self::Type102 => 3,
+            Self::Type99 | Self::Type100 | Self::Type102 | Self::Type103 => 3,
             _ => 2,
         }
     }
@@ -129,7 +134,7 @@ impl Intro2GunTurretProfile {
 
     pub const fn health(self) -> i32 {
         match self {
-            Self::Type92 | Self::Type96 | Self::Type97 | Self::Type99 => 5000,
+            Self::Type92 | Self::Type96 | Self::Type97 | Self::Type99 | Self::Type103 => 5000,
             Self::Type100 => 32000,
             Self::Type102 => 4000,
             Self::Type104 => 6000,
@@ -139,7 +144,7 @@ impl Intro2GunTurretProfile {
 
     pub const fn capability(self) -> u32 {
         match self {
-            Self::Type99 | Self::Type102 | Self::Type104 => 0x44,
+            Self::Type99 | Self::Type102 | Self::Type103 | Self::Type104 => 0x44,
             Self::Type115 => 0,
             _ => 0x1044,
         }
@@ -157,7 +162,7 @@ impl Intro2GunTurretProfile {
                 strict_axis_limit_raw: 3840,
                 raw_word_at_0x04: 0x000b,
             },
-            Self::Type99 | Self::Type102 => AXIS,
+            Self::Type99 | Self::Type102 | Self::Type103 => AXIS,
         }
     }
 
@@ -165,7 +170,7 @@ impl Intro2GunTurretProfile {
         DamageProfile {
             thresholds_raw: match self {
                 Self::Type92 | Self::Type100 => [0, 2000, 1800, 200, 200, 200, 0],
-                Self::Type96 => [0, 2000, 2100, 200, 200, 200, 0],
+                Self::Type96 | Self::Type103 => [0, 2000, 2100, 200, 200, 200, 0],
                 Self::Type97 | Self::Type99 | Self::Type102 => [0, 8000, 2100, 200, 200, 200, 0],
                 Self::Type104 => [0, 6000, 2100, 200, 2000, 200, 0],
                 Self::Type115 => [0, 500, 500, 200, 2000, 200, 0],
@@ -231,6 +236,11 @@ impl Intro2GunTurretProfile {
                 ..EMITTER
             },
             Self::Type102 => EMITTER,
+            Self::Type103 => ProjectileEmitterDescriptor {
+                projectile_method: 13,
+                sound_id: 77,
+                ..EMITTER
+            },
             Self::Type104 => ProjectileEmitterDescriptor {
                 projectile_method: 18,
                 random_interval_us: 400_000,
