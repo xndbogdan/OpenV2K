@@ -2629,6 +2629,38 @@ impl<P: CollisionModelPool + ?Sized> CollisionInterpreter<'_, P> {
                     pc = next;
                 }
 
+                // Vertical cylinder: align4(pc+4), [u32 radius][u32 height]
+                // [i16 base slot]. 46AF20 passes both dwords to the sphere
+                // table's +4 callback, FUN_00469C20.
+                0x90 => {
+                    let payload = collision_align4(pc);
+                    let radius = collision_u32(program, payload);
+                    let height = collision_u32(program, payload + 4);
+                    let slot = collision_u16(program, payload + 8);
+                    let (Some(radius), Some(height), Some(slot)) = (radius, height, slot) else {
+                        return Err(ModelCollisionError::Truncated { pc, opcode });
+                    };
+                    let next = payload + 10;
+                    if next > program.len() {
+                        return Err(ModelCollisionError::Truncated { pc, opcode });
+                    }
+                    scratch = resolve_collision_slot(model, slot, vars, linked).and_then(|base| {
+                        collision_cylinder_hit(
+                            query_center,
+                            query_radius,
+                            transform_collision_point(model_to_query_basis, model_origin, base),
+                            radius,
+                            height,
+                        )
+                    });
+                    scratch_hit = scratch.is_some();
+                    if scratch_hit {
+                        previous_hit = scratch;
+                    }
+                    promote_collision_hit(program, next, scratch, &mut best);
+                    pc = next;
+                }
+
                 // Conditional gate: continue after the signed offset word if
                 // the previous primitive hit; otherwise branch from the
                 // aligned payload base. Broad gate primitives are deliberately
@@ -3165,6 +3197,50 @@ fn collision_aabb_hit(
     Some(ModelCollisionHit {
         normal,
         penetration_raw: overlap[axis],
+    })
+}
+
+/// `FUN_00469C20`: an upright cylinder rising `height` from its base slot.
+/// Retail tests the vertical span against the cylinder radius rather than
+/// the query radius, then separates only horizontally. All arithmetic is
+/// 32-bit integer, with `457730`'s root narrowed to a signed word.
+fn collision_cylinder_hit(
+    query_center: [f64; 3],
+    query_radius: f64,
+    base: [f64; 3],
+    radius_raw: u32,
+    height_raw: u32,
+) -> Option<ModelCollisionHit> {
+    // Materialize as the sphere callback does: the query is a word-sized
+    // relative position, the base an independently shifted Q31 product.
+    let query = query_center.map(|component| component.trunc() as i32);
+    let base = base.map(|component| component.floor() as i32);
+    let radius = radius_raw as i32;
+    let height = height_raw as i32;
+    if !(base[1] < radius.wrapping_add(query[1])
+        && query[1].wrapping_sub(radius) < height.wrapping_add(base[1]))
+    {
+        return None;
+    }
+    let dx = query[0].wrapping_sub(base[0]);
+    let dz = query[2].wrapping_sub(base[2]);
+    let reach = radius.wrapping_add(query_radius as i32);
+    let distance_sq = dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz));
+    if distance_sq >= reach.wrapping_mul(reach) {
+        return None;
+    }
+    let distance = i32::from(collision_integer_sqrt(distance_sq as u32) as i16);
+    if distance == 0 {
+        return Some(ModelCollisionHit {
+            normal: [1.0, 0.0, 0.0],
+            penetration_raw: f64::from(reach),
+        });
+    }
+    let q12 =
+        |component: i32| f64::from((component.wrapping_mul(0x1000) / distance) as i16) / 4096.0;
+    Some(ModelCollisionHit {
+        normal: [q12(dx), 0.0, q12(dz)],
+        penetration_raw: f64::from(reach.wrapping_sub(distance)),
     })
 }
 
@@ -4233,6 +4309,69 @@ mod tests {
     }
 
     #[test]
+    fn collision_program_cylinder_tests_vertical_span_with_its_own_radius() {
+        // 0x90: radius100, height200, base slot0 (FUN_00469C20).
+        let model = collision_entry(
+            vec![[0, 0, 0, 0]],
+            vec![0x90, 0, 0, 0, 100, 0, 0, 0, 200, 0, 0, 0, 0, 0, 0x88, 0],
+        );
+        let vars = AnimVars::default();
+        let hit = model
+            .collide_sphere_raw([150.0, 50.0, 0.0], 60, &vars, &())
+            .unwrap()
+            .expect("side contact");
+        assert_eq!(hit.normal, [1.0, 0.0, 0.0]);
+        assert_eq!(hit.penetration_raw, 10.0);
+        // Strict spans: query.y - radius < base + height, base < query.y + radius.
+        for (y, contact) in [
+            (299.0, true),
+            (300.0, false),
+            (-99.0, true),
+            (-100.0, false),
+        ] {
+            assert_eq!(
+                model
+                    .collide_sphere_raw([150.0, y, 0.0], 60, &vars, &())
+                    .unwrap()
+                    .is_some(),
+                contact,
+                "query y {y}"
+            );
+        }
+        // Retail's vertical margin is the cylinder radius, not the query's.
+        assert!(model
+            .collide_sphere_raw([0.0, 300.0, 0.0], 1000, &vars, &())
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn collision_program_cylinder_separates_horizontally_with_integer_normals() {
+        let model = collision_entry(
+            vec![[0, 0, 0, 0]],
+            vec![0x90, 0, 0, 0, 100, 0, 0, 0, 200, 0, 0, 0, 0, 0, 0x88, 0],
+        );
+        let vars = AnimVars::default();
+        // reach110, length isqrt(10000)=100; Q12 quotients truncate.
+        let hit = model
+            .collide_sphere_raw([60.0, 10.0, 80.0], 10, &vars, &())
+            .unwrap()
+            .expect("diagonal contact");
+        assert_eq!(hit.normal, [2457.0 / 4096.0, 0.0, 3276.0 / 4096.0]);
+        assert_eq!(hit.penetration_raw, 10.0);
+        let axis = model
+            .collide_sphere_raw([0.0, 10.0, 0.0], 10, &vars, &())
+            .unwrap()
+            .expect("on the axis");
+        assert_eq!(axis.normal, [1.0, 0.0, 0.0]);
+        assert_eq!(axis.penetration_raw, 110.0);
+        assert!(model
+            .collide_sphere_raw([110.0, 10.0, 0.0], 0, &vars, &())
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
     fn model_pair_uses_detailed_query_spheres_and_target_axis_normal() {
         let query = collision_entry(
             vec![[0, 0, 0, 0], [0, 14, 0, 0]],
@@ -4851,26 +4990,26 @@ mod tests {
 
     #[test]
     fn collision_program_reports_unsupported_and_truncated_streams() {
-        let unsupported = collision_entry(Vec::new(), vec![0x90, 0, 0, 0]);
+        // 46AF20's default case hangs; 0x91 is no recovered command.
+        let unsupported = collision_entry(Vec::new(), vec![0x91, 0, 0, 0]);
         assert_eq!(
             unsupported
                 .collide_sphere_raw([0.0; 3], 1, &AnimVars::default(), &())
                 .unwrap_err(),
             ModelCollisionError::UnsupportedOpcode {
                 pc: 0,
-                opcode: 0x90
+                opcode: 0x91
             }
         );
-        let truncated = collision_entry(Vec::new(), vec![0x8E, 0, 0, 0]);
-        assert_eq!(
-            truncated
-                .collide_sphere_raw([0.0; 3], 1, &AnimVars::default(), &())
-                .unwrap_err(),
-            ModelCollisionError::Truncated {
-                pc: 0,
-                opcode: 0x8E
-            }
-        );
+        for opcode in [0x8E, 0x90] {
+            let truncated = collision_entry(Vec::new(), vec![opcode, 0, 0, 0]);
+            assert_eq!(
+                truncated
+                    .collide_sphere_raw([0.0; 3], 1, &AnimVars::default(), &())
+                    .unwrap_err(),
+                ModelCollisionError::Truncated { pc: 0, opcode }
+            );
+        }
     }
 
     /// Interpret a bare stream with no records and default anim vars — the
