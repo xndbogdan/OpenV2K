@@ -126,9 +126,9 @@ use v2k_game::native_entity_weapons::{
 };
 use v2k_game::opening::{
     active_captions, intro2_backdrop, intro2_finished, intro2_uses_live_actor_pose,
-    intro_actor_heading, intro_actor_pose, intro_actor_visible, Intro2Backdrop,
-    IntroCameraController, IntroCameraEyeUpdate, FIRST_WORLD_LEVEL_ID, INTRO2_DURATION_SECS,
-    INTRO2_LEVEL_ID, POST_INTRO_SOUND_ID,
+    intro_actor_heading, intro_actor_pose, intro_actor_visible, story_caption_cursor_visible,
+    Intro2Backdrop, IntroCameraController, IntroCameraEyeUpdate, FIRST_WORLD_LEVEL_ID,
+    INTRO2_DURATION_SECS, INTRO2_LEVEL_ID, POST_INTRO_SOUND_ID, STORY_CAPTION_CURSOR,
 };
 use v2k_game::overlay_51_backdrop::Overlay51Backdrop;
 use v2k_game::pad_layout::{PadAction, PadBindings, PadContext};
@@ -1951,6 +1951,10 @@ fn run_game(
     world_projection.apply_to(&mut camera, (render_w, render_h));
     let mut chase_camera = ChaseCameraState::default();
     let mut intro_camera = IntroCameraController::default();
+    // 503C0's final-card latch (world+28A) together with the 44F3E0(0x20)
+    // positional-audio mask it sets. Only 453E00's 44F400(0x20) at the next
+    // world's entry clears the mask, so it outlives Intro2 into PostIntro.
+    let mut intro2_final_card = false;
     let mut post_intro_world_cover: Option<MenuShell> = None;
     let mut intro_commands = v2k_game::intro2_commands::Intro2Commands::default();
     // DAT_004F72E8 belongs to the common authored-text renderer. Intro2 and
@@ -3748,6 +3752,7 @@ fn run_game(
                             }
                         }
                         log!("Intro2: advancing behind Klaus's opening morph");
+                        intro2_final_card = false;
                         GameState::OpeningCinematic {
                             exit_pending: false,
                             elapsed: 0.0,
@@ -3755,6 +3760,8 @@ fn run_game(
                         }
                     }
                     LoadingPurpose::ResumePostIntro { mut shell } => {
+                        // 453E00 clears 44F3E0's mask bit 0x20 at this entry.
+                        intro2_final_card = false;
                         // Retail starts global id 50 only once the first-world
                         // load/HUD setup has completed. Global 50 is physical
                         // sec11_3XX_043, verified as a 62,700-byte PCM blob.
@@ -3788,6 +3795,7 @@ fn run_game(
                         );
                         // Direct --level 50 remains a development entry and
                         // has no frontend presentation to carry across load.
+                        intro2_final_card = false;
                         GameState::OpeningCinematic {
                             exit_pending: false,
                             elapsed: 0.0,
@@ -4240,6 +4248,15 @@ fn run_game(
                     intro_commands.camera_subject(em),
                     gameplay_chase_terrain(&session.cache),
                 );
+                // 503C0's first visit past tick 4000 masks positional audio
+                // (44F3E0(0x20) -> 44CE70 releases the physical voices) and
+                // starts 56750's full-frame sequence: the card opens on
+                // sprite 0x227's grey before the additive frames.
+                if !intro2_final_card && intro2_backdrop(retail_tick) == Intro2Backdrop::BlackCard {
+                    intro2_final_card = true;
+                    entity_positional_audio.suspend_physical_voices(sound_manager.as_mut());
+                    main_base_level_abort.outer_frame_sequence.request();
+                }
                 // 493FA0 simulation precedes 493F50 presentation. The latter
                 // reaches 53410 before 53760's actor detail/FIFO traversal,
                 // so a terminal 56750 request is visible in this same frame.
@@ -4352,6 +4369,7 @@ fn run_game(
                         entities: em,
                         camera: &camera,
                         elapsed_micros,
+                        positional_masked: intro2_final_card,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -4449,6 +4467,7 @@ fn run_game(
                             .expect("retained Intro2 entity manager"),
                         camera: &camera,
                         elapsed_micros,
+                        positional_masked: intro2_final_card,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -7868,6 +7887,7 @@ fn run_game(
                         entities: em,
                         camera: &camera,
                         elapsed_micros,
+                        positional_masked: false,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -9485,10 +9505,10 @@ fn finish_opening_cinematic_frame(
     }
     if let Some(fonts) = fonts {
         for caption in active_captions(retail_tick) {
-            let (visible, revealing) = caption.revealed_text(retail_tick);
+            let (visible, _) = caption.revealed_text(retail_tick);
             let mut text = visible.to_owned();
-            if revealing {
-                text.push('_');
+            if story_caption_cursor_visible(retail_tick) {
+                text.push_str(STORY_CAPTION_CURSOR);
             }
             draw_story_caption(renderer, fonts, &text);
         }
@@ -10117,6 +10137,8 @@ struct WorldAudioFrame<'a> {
     entities: &'a mut EntityManager,
     camera: &'a Camera,
     elapsed_micros: u32,
+    /// `DAT_004F716C` is nonzero: 4C970 skips positional mixing.
+    positional_masked: bool,
 }
 
 /// Map454EE0 and pause4513E0 enter44F3E0's mask8. Stop retained physical
@@ -10161,6 +10183,12 @@ fn play_world_audio(
     frame
         .entities
         .publish_remaining_constructor_sound_follow_positions();
+    if frame.positional_masked {
+        // 4C970 skips mixing, sound-11 warble and alias draws under the
+        // mask, but 4C940 still discards the disposable one-shots.
+        world_fx.garbage_collect_disposable_positional_sounds();
+        return;
+    }
     // Intro2's attached loops are created during construction, before these
     // later one-shots. Device absence must not suppress audible warble/alias
     // draws. General interleaved world births need one logical creation list.
