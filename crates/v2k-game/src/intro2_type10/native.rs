@@ -250,11 +250,12 @@ fn publish_birth(
         ordinary_allocation,
         sub_d_runtime,
         sub_d_frame_owner,
+        // 24E30 copies the row descriptor's method and sound (Type126: 82).
         sub_e_runtime: GenericEmitterRuntime {
             joint_bindings: [None; 2],
-            projectile_method: 10,
+            projectile_method: profile.emitter().projectile_method,
             emitter_selector: 0,
-            sound_id: 81,
+            sound_id: u32::from(profile.emitter().sound_id),
             direct_mode: 0,
             remaining_time_raw: 0,
             manual_step_raw: 0,

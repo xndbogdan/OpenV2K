@@ -49,7 +49,7 @@ fn activate(manager: &mut EntityManager, ids: &[u32]) {
 #[v2k_test_support::retail_test]
 fn carriers_publish_their_rows_on_the_type10_owner() {
     for (level, entity_type, profile, count) in BIRTHS {
-        let (session, manager, _) = fixture(level);
+        let (session, mut manager, _) = fixture(level);
         let ids = carrier_ids(&manager, entity_type);
         assert_eq!(ids.len(), count, "world{level}");
         let level_desc = session.cache.level_desc().unwrap();
@@ -79,6 +79,27 @@ fn carriers_publish_their_rows_on_the_type10_owner() {
                 Some(crate::class49_death::NativeExplosionSourceProfile::Type10Carrier(row))
                     if row == profile
             ));
+            // 24E30 copies the row's method and sound into Sub-E (Type126: 82),
+            // so the row's own ballistic-aim profile admits the allocation.
+            assert_eq!(
+                manager
+                    .iter_all()
+                    .find(|entity| entity.id == id)
+                    .unwrap()
+                    .intro2_type10_runtime
+                    .unwrap()
+                    .sub_e_runtime
+                    .sound_id,
+                u32::from(profile.emitter().sound_id)
+            );
+            let metadata = manager.type_runtime_metadata(entity_type).cloned();
+            assert_eq!(
+                aim::ensure_intro2_type10_aim_runtime(
+                    manager.entity_mut(id).unwrap(),
+                    metadata.as_ref()
+                ),
+                Ok(())
+            );
         }
         let mut tasks = SpecializedActorTaskScheduler::new();
         assert_eq!(tasks.adopt_intro2_type10(&manager), count, "world{level}");
