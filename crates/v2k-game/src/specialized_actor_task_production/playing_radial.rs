@@ -131,6 +131,7 @@ impl SpecializedActorTaskScheduler {
                 16 => entity.intro2_type16_runtime.is_some(),
                 17 => entity.intro2_type17_runtime.is_some(),
                 47 => entity.native_type47_construction.is_some(),
+                94 => entity.intro2_type94_runtime.is_some(),
                 53 => entity.intro2_type53_runtime.is_some(),
                 58 => entity.intro2_type58_runtime.is_some(),
                 122 => entity.native_type122_runtime.is_some(),
@@ -182,6 +183,7 @@ impl SpecializedActorTaskScheduler {
                             if entities.iter_all().any(|entity| {
                                 entity.id == id
                                     && (entity.intro2_type16_runtime.is_some()
+                                        || entity.intro2_type94_runtime.is_some()
                                         || entity.intro2_type53_runtime.is_some()
                                         || entity.intro2_type58_runtime.is_some()
                                         || entity.native_type122_runtime.is_some()
