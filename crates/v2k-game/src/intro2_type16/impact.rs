@@ -5,7 +5,7 @@
 //! Capture's attached variants deliberately differ between the
 //! primary and infected slots. An unaudited hook retains the committed prefix.
 
-use super::{intro2_type16_allocation_authenticates, Intro2Type16Block, Intro2Type16Owner};
+use super::{Intro2Type16Block, Intro2Type16Owner};
 use crate::{
     entity::{Entity, EntityManager},
     entity_behavior::{ActiveBehaviorStyle, ImpactCallbackPolicy},
@@ -74,6 +74,7 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
         (0x004C_7ED0, 0, 0, 0), // common class12
         (0x004C_7F18, 0, 0, 0), // deferred class12 completion
         (0x004C_74F8, 0, 0, 0), // initializer failure
+        (0x004C_7198, 0, 0, 0), // class63 Auto Pilot
     ]
     .into_iter()
     .find(|(address, _, _, _)| *address == style.style_address())?;
@@ -89,6 +90,29 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
     }
 }
 
+/// Playing lends class63 rows BAF0's mutable static world and its player.
+/// The shared hit frame lends neither, so it holds their lethal hit.
+pub(crate) struct Type16AutoPilotWorld<'a> {
+    pub resources: &'a mut ResourceCache,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    pub player: Option<crate::native_actor_capture::pair::PlayingPlayerContact<'a>>,
+}
+
+enum HitResources<'a> {
+    Shared(&'a ResourceCache),
+    AutoPilot(Type16AutoPilotWorld<'a>),
+}
+
+impl HitResources<'_> {
+    fn cache(&self) -> &ResourceCache {
+        match self {
+            Self::Shared(resources) => resources,
+            Self::AutoPilot(world) => world.resources,
+        }
+    }
+}
+
 pub(crate) fn apply_intro2_type16_particle_hit(
     manager: &mut EntityManager,
     resources: &ResourceCache,
@@ -97,10 +121,51 @@ pub(crate) fn apply_intro2_type16_particle_hit(
     impact: ParticleEntityImpact,
     retail_tick: u32,
 ) -> Intro2Type16ImpactOutcome {
-    if !manager
-        .iter_all()
-        .any(|entity| entity.id == impact.target_entity_id && entity.entity_type == 16)
-    {
+    apply(
+        manager,
+        HitResources::Shared(resources),
+        world_fx,
+        scheduler,
+        impact,
+        retail_tick,
+    )
+}
+
+/// Playing's particle visit, which also owns a class63 row's terminal blast.
+pub(crate) fn apply_playing_type16_family_particle_hit(
+    frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> Intro2Type16ImpactOutcome {
+    apply(
+        frame.entities,
+        HitResources::AutoPilot(Type16AutoPilotWorld {
+            resources: frame.resources,
+            static_damage: frame.static_damage,
+            notifications: frame.notifications,
+            player: Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                hull: frame.player_hull,
+                extra_lives: frame.extra_lives,
+            }),
+        }),
+        frame.world_fx,
+        frame.scheduler,
+        impact,
+        frame.retail_tick,
+    )
+}
+
+fn apply(
+    manager: &mut EntityManager,
+    resources: HitResources<'_>,
+    world_fx: &mut WorldFx,
+    scheduler: &mut SpecializedActorTaskScheduler,
+    impact: ParticleEntityImpact,
+    retail_tick: u32,
+) -> Intro2Type16ImpactOutcome {
+    if !manager.iter_all().any(|entity| {
+        entity.id == impact.target_entity_id
+            && super::Type16Row::from_entity_type(entity.entity_type).is_some()
+    }) {
         return Intro2Type16ImpactOutcome::NotApplicable;
     }
     let mut committed = false;
@@ -130,7 +195,7 @@ fn state_bits(entity: &Entity, mask: u32) -> Result<u32, Intro2Type16ImpactBlock
 
 fn run(
     manager: &mut EntityManager,
-    resources: &ResourceCache,
+    mut resources: HitResources<'_>,
     world_fx: &mut WorldFx,
     scheduler: &mut SpecializedActorTaskScheduler,
     impact: ParticleEntityImpact,
@@ -142,15 +207,17 @@ fn run(
     let delivery = impact
         .damage_delivery_record()
         .ok_or(Block::Runtime("particle provenance"))?;
+    let row = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(super::type16_row)
+        .ok_or(Block::Runtime("native allocation"))?;
     let metadata = manager
-        .type_runtime_metadata(16)
+        .type_runtime_metadata(row.entity_type())
         .cloned()
         .ok_or(Block::Runtime("metadata"))?;
-    super::native::authenticate_metadata(&metadata).map_err(|_| Block::Runtime("metadata"))?;
+    super::native::authenticate_metadata(row, &metadata).map_err(|_| Block::Runtime("metadata"))?;
     let entity = manager.entity_mut(id).unwrap();
-    if !intro2_type16_allocation_authenticates(entity) {
-        return Err(Block::Runtime("native allocation"));
-    }
     // An unresolved actor callback already owns its committed task/body prefix.
     // No hit entry may replace that custody or commit its own prefix.
     if scheduler.intro2_type16_has_pending_prefix(id) {
@@ -248,6 +315,33 @@ fn run(
             entry: LiveActorDamageEntry::Checked,
         },
         |manager, world_fx, _feedback| {
+            if row.alternate_behavior_class() == 63 {
+                let HitResources::AutoPilot(world) = &mut resources else {
+                    return Err(Intro2CommonDyingBlock::Runtime("class63 radial owner"));
+                };
+                return crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: &mut *world.resources,
+                        world_fx,
+                        static_damage: &mut *world.static_damage,
+                        notifications: &mut *world.notifications,
+                        retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            &mut *scheduler,
+                            world.player.as_mut().map(
+                                crate::native_actor_capture::pair::PlayingPlayerContact::reborrow,
+                            ),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| Intro2CommonDyingBlock::AutoPilot(Box::new(error)));
+            }
             publish_intro2_common_standard_death(manager, id, world_fx).map(|owner| {
                 LiveActorDeathResult {
                     returned_nonzero: owner.is_some(),
@@ -286,6 +380,7 @@ fn run(
             let slot = active_model_slot_from_state_flags(flags);
             let model = entity.model_slots[slot].ok_or(Block::Runtime("accepted-hit model"))?;
             let extent = resources
+                .cache()
                 .global_model(model)
                 .ok_or(Block::Runtime("accepted-hit model extent"))?
                 .radius;

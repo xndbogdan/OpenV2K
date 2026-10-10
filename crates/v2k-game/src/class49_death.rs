@@ -71,6 +71,8 @@ pub enum NativeExplosionSourceProfile {
     Fish124,
     /// Ordinary Type80/126 carriers on the Type10 owner, alternate class63.
     Type10Carrier(crate::intro2_type10::Type10Profile),
+    /// Ordinary Type128 carriers on the Type16 owner, alternate class63.
+    Type16Carrier(crate::intro2_type16::Type16Row),
 }
 
 impl NativeExplosionSourceProfile {
@@ -83,6 +85,7 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(kind) => kind.entity_type() as u32,
             Self::Fish124 => 124,
             Self::Type10Carrier(profile) => profile.entity_type(),
+            Self::Type16Carrier(row) => row.entity_type(),
         }
     }
 
@@ -124,6 +127,9 @@ impl NativeExplosionSourceProfile {
             Self::Type10Carrier(profile) => {
                 crate::intro2_type10::authenticate_metadata(profile, metadata).is_ok()
             }
+            Self::Type16Carrier(row) => {
+                crate::intro2_type16::authenticate_metadata(row, metadata).is_ok()
+            }
         }
     }
 
@@ -155,6 +161,20 @@ impl NativeExplosionSourceProfile {
             Self::Type10Carrier(_) => {
                 matches!(style, 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8)
             }
+            // Aimless, Defecate Virus, Search and people pursuit: +2C null. The
+            // four carrying Capture variants own D040's release instead.
+            Self::Type16Carrier(_) => matches!(
+                style,
+                0x004c_7930
+                    | 0x004c_7978
+                    | 0x004c_7e88
+                    | 0x004c_7a50
+                    | 0x004c_7a98
+                    | 0x004c_7ae0
+                    | 0x004c_7ff0
+                    | 0x004c_8038
+                    | 0x004c_74f8
+            ),
         }
     }
 
@@ -176,6 +196,8 @@ impl NativeExplosionSourceProfile {
             Self::Fish124 => (10, [37, 37]),
             // Nonnull G takes 40BBB3.
             Self::Type10Carrier(_) => (10, [37, 37]),
+            // Nonnull A takes 40BBB3.
+            Self::Type16Carrier(_) => (10, [37, 37]),
         }
     }
 
@@ -186,7 +208,9 @@ impl NativeExplosionSourceProfile {
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
                 NativeExplosionPolicy::Class1
             }
-            Self::Fish124 | Self::Type10Carrier(_) => NativeExplosionPolicy::Class63,
+            Self::Fish124 | Self::Type10Carrier(_) | Self::Type16Carrier(_) => {
+                NativeExplosionPolicy::Class63
+            }
             _ => NativeExplosionPolicy::Class49,
         }
     }
@@ -208,9 +232,11 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::Intro2Type13)
     } else if entity.entity_type == 124 && entity.shared_fish_runtime.is_some() {
         Some(NativeExplosionSourceProfile::Fish124)
+    } else if let Some(profile) = crate::intro2_type10::type10_auto_pilot_profile(entity) {
+        Some(NativeExplosionSourceProfile::Type10Carrier(profile))
     } else {
-        crate::intro2_type10::type10_auto_pilot_profile(entity)
-            .map(NativeExplosionSourceProfile::Type10Carrier)
+        crate::intro2_type16::type16_auto_pilot_row(entity)
+            .map(NativeExplosionSourceProfile::Type16Carrier)
     }
 }
 
@@ -255,6 +281,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         }
         Some(NativeExplosionSourceProfile::Type10Carrier(_)) => {
             crate::intro2_type10::type10_manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::Type16Carrier(_)) => {
+            crate::intro2_type16::type16_manager_allocation_authenticates(manager, id)
         }
         None => false,
     }

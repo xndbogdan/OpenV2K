@@ -128,7 +128,7 @@ impl SpecializedActorTaskScheduler {
                 type_id if NativeFourChoiceProfile::from_entity_type(type_id).is_some() => {
                     entity.native_type86_runtime.is_some()
                 }
-                16 => entity.intro2_type16_runtime.is_some(),
+                16 | 128 => entity.intro2_type16_runtime.is_some(),
                 10 | 5 | 80 | 126 => entity.intro2_type10_runtime.is_some(),
                 // A receipt selects the owner; its adapter authenticates it.
                 13 => {

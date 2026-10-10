@@ -136,6 +136,14 @@ pub fn apply_playing_actor_particle_hit(
             ),
         ));
     }
+    // Type16-family rows: Type128's class63 blast needs the lent Playing world.
+    if crate::intro2_type16::Type16Row::from_entity_type(entity.entity_type).is_some()
+        && entity.intro2_type16_runtime.is_some()
+    {
+        return Some(SharedActorImpactOutcome::Type16(
+            crate::intro2_type16::impact::apply_playing_type16_family_particle_hit(frame, impact),
+        ));
+    }
     // Ordinary Type10-family rows: a lethal hit publishes class11 Tumble; its
     // later C750 radial runs in the contact walk with the lent player.
     if crate::intro2_type10::Type10Profile::from_entity_type(entity.entity_type).is_some()
@@ -205,7 +213,9 @@ pub fn apply_shared_actor_particle_hit(
             crate::intro2_flyer_impact::apply_native_flyer_particle_hit(frame, impact),
         ));
     }
-    if entity.entity_type == 16 && entity.intro2_type16_runtime.is_some() {
+    if crate::intro2_type16::Type16Row::from_entity_type(entity.entity_type).is_some()
+        && entity.intro2_type16_runtime.is_some()
+    {
         return Some(SharedActorImpactOutcome::Type16(
             crate::intro2_type16::impact::apply_intro2_type16_particle_hit(
                 frame.entities,

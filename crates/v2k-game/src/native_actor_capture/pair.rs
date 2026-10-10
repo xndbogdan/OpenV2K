@@ -104,6 +104,13 @@ pub enum NativeCaptorPairBlock {
             (),
         >,
     ),
+    /// A class63 carrier's lethal pair runs BAF0/BC90 through the lent player.
+    AutoPilotPairDamage(
+        crate::live_actor_checked_damage::LiveActorDamageError<
+            crate::class49_terminal::Class49TerminalBlock,
+            (),
+        >,
+    ),
     /// Lethal Type97 pair without the explicit Playing player-hull context.
     /// The checked health prefix is already committed; this preserves the
     /// cinematic fail-closed boundary instead of inventing a hull.
@@ -1407,6 +1414,21 @@ fn apply_pair_checked_damage(
         }
         return Ok(());
     }
+    if frame.entities.iter_all().any(|entity| {
+        entity.id == target
+            && entity.entity_type == 128
+            && crate::class49_death::source_profile(entity).is_some_and(|profile| {
+                profile.policy() == crate::class49_death::NativeExplosionPolicy::Class63
+            })
+    }) {
+        return apply_auto_pilot_pair_checked_damage(
+            frame,
+            target,
+            delivery,
+            playing_player,
+            committed,
+        );
+    }
     if kind == 97
         && frame
             .entities
@@ -1625,6 +1647,84 @@ fn apply_type97_pair_checked_damage(
             Err(NativeCaptorPairBlock::TurretPairDamage(error))
         }
     }
+}
+
+/// Type128's lethal pair: 15040's death is AC60's direct class63, so BAF0's
+/// radial and BC90's Type61 drop finish inside this pair callback. Its
+/// finished corpse stays pairable until 14990 without replaying the terminal.
+fn apply_auto_pilot_pair_checked_damage(
+    frame: &mut Intro2ContactFrame<'_>,
+    target: u32,
+    delivery: crate::damage::DamageDeliveryRecord,
+    mut playing_player: Option<PlayingPlayerContact<'_>>,
+    committed: &mut bool,
+) -> Result<(), NativeCaptorPairBlock> {
+    use crate::live_actor_checked_damage::{
+        apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageRequest,
+    };
+    if !crate::class49_death::finished_terminal_hit_authenticates(frame.entities, target)
+        && !frame
+            .actor_tasks
+            .prepare_native_actor_mutation(frame.entities, target)
+    {
+        return Err(NativeCaptorPairBlock::Runtime(
+            "completed carrier damage owner",
+        ));
+    }
+    let crate::intro2_contacts::Intro2ContactFrame {
+        entities,
+        resources,
+        world_fx,
+        static_damage,
+        notifications,
+        retail_tick,
+        actor_tasks,
+    } = &mut *frame;
+    let retail_tick = *retail_tick;
+    apply_live_actor_checked_damage(
+        entities,
+        world_fx,
+        LiveActorDamageRequest {
+            ratio_numerator: 0,
+            ratio_denominator: 0,
+            entity_id: target,
+            delivery,
+            entry: LiveActorDamageEntry::Checked,
+            feedback: Some(crate::live_actor_checked_damage::LiveActorDamageFeedback {
+                notifications,
+                retail_tick,
+            }),
+        },
+        |manager, world_fx, feedback| {
+            let feedback = feedback.expect("pair request retains its notification context");
+            crate::class49_terminal::run_class49_standard_death(
+                crate::class49_terminal::Class49TerminalFrame {
+                    entities: manager,
+                    resources,
+                    world_fx,
+                    static_damage,
+                    notifications: feedback.notifications,
+                    retail_tick: feedback.retail_tick,
+                    world: crate::class49_terminal::Class49WorldContext::for_contact(
+                        actor_tasks,
+                        playing_player.as_mut().map(PlayingPlayerContact::reborrow),
+                    ),
+                },
+                target,
+            )
+            .map(
+                |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                },
+            )
+        },
+    )
+    .map(|_| ())
+    .map_err(|error| {
+        *committed |= error.committed_prefix;
+        NativeCaptorPairBlock::AutoPilotPairDamage(error)
+    })
 }
 
 #[cfg(test)]

@@ -212,7 +212,7 @@ pub fn resolve_native_actor_descriptor_contact(
     entity.sub_a_propulsion_runtime = RetailRuntimeValue::Known(plan.effect.sub_a_runtime);
     if let Some(write) = plan.effect.sub_d_reversal_write {
         let runtime = match kind {
-            16 => &mut entity.intro2_type16_runtime.as_mut().unwrap().sub_d_runtime,
+            16 | 128 => &mut entity.intro2_type16_runtime.as_mut().unwrap().sub_d_runtime,
             26 => entity.intro2_type26_sub_d_runtime.as_mut().unwrap(),
             30 => &mut entity.native_type30_runtime.as_mut().unwrap().sub_d_runtime,
             40 => &mut entity.native_type40_runtime.as_mut().unwrap().sub_d_runtime,
@@ -360,7 +360,7 @@ fn contact_topology(
     };
     if !topology.sub_i
         && match entity.entity_type {
-            16 => entity.intro2_type16_runtime.is_none(),
+            16 | 128 => entity.intro2_type16_runtime.is_none(),
             26 => entity.intro2_type26_sub_d_runtime.is_none(),
             30 => entity.native_type30_runtime.is_none(),
             40 => entity.native_type40_runtime.is_none(),
@@ -412,7 +412,7 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         return false;
     };
     match entity.entity_type {
-        16 => crate::intro2_type16::intro2_type16_allocation_authenticates(entity),
+        16 | 128 => crate::intro2_type16::intro2_type16_allocation_authenticates(entity),
         26 => crate::intro2_type26_defecate_virus::type26_manager_allocation_authenticates(
             manager, id,
         ),
@@ -511,7 +511,7 @@ fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool
                 crate::intro2_type9::intro2_type9_allocation_authenticates(entity)
             }
         }
-        16 => manager
+        16 | 128 => manager
             .iter_all()
             .find(|entity| entity.id == id)
             .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates),

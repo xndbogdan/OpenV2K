@@ -44,6 +44,8 @@ use crate::world_fx::WorldFx;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Intro2CommonDyingBlock {
+    /// A class63 carrier's BAF0/BC90 terminal blocked after its prefix.
+    AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
     AllocationUnavailable,
     UnauthenticatedAllocation,
     Metadata(&'static str),

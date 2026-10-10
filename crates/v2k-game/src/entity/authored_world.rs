@@ -366,7 +366,7 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type122: {error:?}"))?;
             }
-            16 => {
+            16 | 128 => {
                 let sub_d = sub_d.ok_or("missing Type16 Sub-D allocation")?;
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(

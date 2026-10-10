@@ -6713,6 +6713,7 @@ fn park_class49_terminal_owner(
                 || entity.native_entity_weapon_runtime.is_some()
                 || entity.shared_fish_runtime.is_some()
                 || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
+                || crate::intro2_type16::type16_auto_pilot_row(entity).is_some()
                 || crate::class49_death::intro2_type13_explosion_source_authenticates(entity))
     }) {
         contact_prefix::park_native_contact_prefix(owners, manager, id);

@@ -84,13 +84,15 @@ dying carrier. `11AD0` has no dying test either, so until the sweep the
 carrier's retained tasks still take their contact hooks; in the actor
 descriptor contact the finished class63 receipt stands in for the owner the
 terminal retired. In static contact, `A8B0` likewise calls each retained
-task's `+20` hook. Two carrier families run this terminal:
+task's `+20` hook. Three carrier families run this terminal:
 
 - the Type124 fish ([FISH_RUNTIME](FISH_RUNTIME.md#particle-hits-and-quiet-death));
 - the Type80/126 rows on the Type10 owner
-  ([INTRO2_TYPE10](INTRO2_TYPE10.md#ordinary-type80126-power-up-carriers)).
+  ([INTRO2_TYPE10](INTRO2_TYPE10.md#ordinary-type80126-power-up-carriers));
+- the Type128 rows on the Type16 owner
+  ([INTRO2_TYPE16](INTRO2_TYPE16.md#ordinary-type128-power-up-carriers)).
 
-The other six carrier types (71, 81, 117, 127, 128 and 129) still need their
+The other five carrier types (71, 81, 117, 127 and 129) still need their
 living owners.
 
 Controls in

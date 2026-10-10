@@ -52,6 +52,8 @@ use crate::{
 pub enum NativeStaticActorDeathBlock {
     Common(Intro2CommonDyingBlock),
     Flying(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
+    /// A class63 carrier's BAF0/BC90 terminal blocked after its prefix.
+    AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,7 +162,11 @@ pub fn resolve_insect_static_contact(
                     .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates)
             },
             metadata_authenticates: |metadata| {
-                crate::intro2_type16::authenticate_metadata(metadata).is_ok()
+                crate::intro2_type16::authenticate_metadata(
+                    crate::intro2_type16::Type16Row::Type16,
+                    metadata,
+                )
+                .is_ok()
             },
             completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
             publish_standard_death: |manager, id, context| {
@@ -171,6 +177,53 @@ pub fn resolve_insect_static_contact(
                 )
                 .map(common_death_result)
                 .map_err(NativeStaticActorDeathBlock::Common)
+            },
+        },
+        // Type128 is Type16's row with alternate class63: its death is the
+        // shared BAF0/BC90 terminal through this walk's lent radial owner, and
+        // a finished corpse keeps its tasks until 14990.
+        128 => StaticActorProfile {
+            entity_type: 128,
+            default_flags: 0x439,
+            retained_entry_model_id: None,
+            manager_authenticates: |manager, id| {
+                manager
+                    .iter_all()
+                    .find(|entity| entity.id == id)
+                    .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates)
+            },
+            metadata_authenticates: |metadata| {
+                crate::intro2_type16::authenticate_metadata(
+                    crate::intro2_type16::Type16Row::Type128,
+                    metadata,
+                )
+                .is_ok()
+            },
+            completed_owner: |tasks, manager, id| {
+                crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                    || tasks.prepare_native_actor_mutation(manager, id)
+            },
+            publish_standard_death: |manager, id, context| {
+                crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: context.resources,
+                        world_fx: context.world_fx,
+                        static_damage: context.static_damage,
+                        notifications: context.notifications,
+                        retail_tick: context.retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            context.tasks,
+                            context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| NativeStaticActorDeathBlock::AutoPilot(Box::new(error)))
             },
         },
         26 => StaticActorProfile {
@@ -562,11 +615,11 @@ fn resolve(
             | 0x4c80c8
             | 0x4c8110
             | 0x4c8158
-    ) || (matches!(profile.entity_type, 16 | 26 | 56)
+    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56)
         && context.active_style().style_address() == 0x4c7e88)
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 57 | 16 | 15 | 87 | 94
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 94
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -577,7 +630,7 @@ fn resolve(
         || (profile.entity_type == 13
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
-        || (matches!(profile.entity_type, 80 | 126)
+        || (matches!(profile.entity_type, 80 | 126 | 128)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 26 && context.active_style().style_address() == 0x4c7738)
@@ -928,17 +981,25 @@ fn contact_task_hook(
             Ok(NativeGroundStaticTaskHook::Null)
         }
         (0x4c7150, None, None) if entity.entity_type == 13 => Ok(NativeGroundStaticTaskHook::Null),
-        // BC90 keeps a carrier's Search tasks and A8B0 calls each task's +20
-        // without a style or dying test, so the retained Primary decides.
-        (0x4c7198, Some(Task::SharedRetarget(task)), None | Some(Task::TargetAcquisition(_))) => {
-            Ok(NativeGroundStaticTaskHook::WanderPrivate(
+        // BC90 keeps a carrier's living tasks and A8B0 calls each task's +20
+        // without a style or dying test. Only the retained Primary's 02CA0
+        // writes; acquisition Secondaries keep 05FF0's null hook.
+        (0x4c7198, primary, _) => match primary {
+            None => Ok(NativeGroundStaticTaskHook::Null),
+            Some(Task::SharedRetarget(task)) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
                 task.private_state(),
-            ))
-        }
-        (0x4c7198, Some(Task::ChaseTarget(task)), None) => Ok(
-            NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
-        ),
-        (0x4c7198, None, None) => Ok(NativeGroundStaticTaskHook::Null),
+            )),
+            Some(Task::ChaseTarget(task)) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            )),
+            Some(Task::DefecateVirusWander(task)) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            )),
+            Some(Task::CapturePeoplePursuit(task)) => Ok(
+                NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
+            ),
+            _ => Err(Block::Runtime("contact task graph")),
+        },
         (0x4c7b28, Some(Task::SharedRetarget(task)), Some(Task::FollowBeaconAcquisition(_))) => Ok(
             NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
         ),

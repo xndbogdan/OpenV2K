@@ -104,7 +104,11 @@ impl NativeSurfaceProfile {
             .type_runtime_metadata(self.entity_type())
             .ok_or(Block::Runtime("native surface metadata"))?;
         let metadata_matches = match self {
-            Self::Type16 => crate::intro2_type16::authenticate_metadata(metadata).is_ok(),
+            Self::Type16 => crate::intro2_type16::authenticate_metadata(
+                crate::intro2_type16::Type16Row::Type16,
+                metadata,
+            )
+            .is_ok(),
             Self::Type26 => {
                 crate::intro2_type26_defecate_virus::authenticate_metadata(metadata).is_ok()
             }

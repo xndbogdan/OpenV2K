@@ -59,7 +59,8 @@ pub(super) fn dispatch_native_class49(
         // Type124 and the Type80/126 carriers enter class63, BC90: BAF0 then a
         // tail-appended Type61.
         || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some())
-        || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some();
+        || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
+        || crate::intro2_type16::type16_auto_pilot_row(entity).is_some();
     if !admitted {
         return None;
     }
@@ -582,6 +583,8 @@ mod carrier_tests;
 mod ring_custody_tests;
 #[cfg(test)]
 mod type124_tests;
+#[cfg(test)]
+mod type128_tests;
 #[cfg(test)]
 mod type13_tests;
 #[cfg(test)]
