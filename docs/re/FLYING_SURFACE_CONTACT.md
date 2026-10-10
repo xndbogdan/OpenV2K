@@ -106,8 +106,11 @@ own admission when the surface is ineligible). Playing's walk lends these
 phases its player hull and lives (the `_with_playing` entries), so a lethal
 surface or static contact finishes Class1 through Playing's static and dynamic
 radial. Intro2's walk lends none and keeps the cinematic radial, which cannot
-visit a live player. The Type10/57 Tumble water terminal still owns only its
-cinematic radial and fails closed if a Playing player reaches it.
+visit a live player. Ordinary Type5 rows on the Type10 owner take the same
+walk, and their Tumble's C750 terminal (terrain, water or static) runs
+Playing's radial with the lent player. Intro2-only Type57's Tumble water
+terminal still owns only its cinematic radial and fails closed if a Playing
+player reaches it.
 
 Native15/87 instead author alternate2, `Die Quietly`, whose zero-policy style
 is4C7420 and initializer isC470. Their actual Section12 rows in1X3XX retain

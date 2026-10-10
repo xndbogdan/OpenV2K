@@ -1,7 +1,8 @@
 # Native Intro2 dragons
 
 This document owns the Type10 actors at authored spawns 55 and 56: native
-construction, Search and Attack, fire emission, and Tumble To Death. Shared
+construction, Search and Attack, fire emission, and Tumble To Death. Ordinary
+Type5 rows share the same owner through a row profile (see the last section). Shared
 task dispatch and component arithmetic remain in [ACTOR_RUNTIME.md](ACTOR_RUNTIME.md);
 damage ownership remains in [ENTITY_DAMAGE_AND_DEATH.md](ENTITY_DAMAGE_AND_DEATH.md).
 The factory's native damage and lifecycle are described in
@@ -177,3 +178,53 @@ deferred removal, with one sound62 per impact. This validates the terminal
 lifecycle independently of natural combat and exact explosion particle counts.
 Reentrant turret blasts admit only sealed terminal receipts on the active
 call stack; matching an old blast's origin/template cannot replay its prefix.
+
+## Ordinary Type5 on the Type10 owner
+
+The six authored Type5 records (worlds 42, 46 and 47) have Type10's
+Section-12 shape: D/E/G/K/L, one Always class-7 choice, alternate class11,
+method-10 fire with sound81, mass100, health32000, capability8, default flags
+8, and the same K/L bindings and damage multipliers. They differ per row, so
+`Type10Profile` carries each value and every reader authenticates the
+allocation's own row:
+
+| Field | Type10 | Type5 |
+|---|---|---|
+| Model | 351 | 1122 |
+| Damage thresholds (channels 1/2) | 9000/2200 | 2000/1800 |
+| Sub-D steering divisor | 48 | 64 (`FLYER_SUB_D`) |
+| Sub-G +0E / +20 | 63 / 750 | 69 / 1500 |
+| Emitter spread / aim threshold / speed override / axis tolerance / +12 | 128 / 12000 / 1500 / 3840 / 44 | 512 / 40000 / 0 / 5120 / 48 |
+| Common axis | `[7680, 0xC85]` | `[6400, 7]` |
+
+B6C0's 06070 randomized-target base is G+0C (700 for both rows), now read
+from the row's payload. Each row's emitter is its own ballistic-aim source
+profile; Type5 fires method 10 at the table speed.
+
+An ordinary birth runs the same 09A80/AC60/B6C0 transaction at its authored
+pose: G `1B8C0` (one word), the process Sub-D allocation (flags 0, so its
+cache is never read), K/L zeroed by their constructors, E, the 425680 word,
+and B6C0's two 06070 words. The receipt carries the manager's allocation
+lease; Intro2's spawns 55/56 still use their own seeds and carry none. The
+generic death, contact, hit and C750 terminal paths read the dying row's own
+type record and attribute its blast and self-collision damage to that row.
+
+E100 keeps drag bit 8, so worlds 46 (mode 1) and 47 (mode 2) take EC60's
+current-wind branch through the shared effective-8 flyer environment (gravity,
+then EC60 with the post-F70 basis); world 46's wind acts only below its sea.
+
+In Playing, the late contact walk runs Intro2's own order for these rows: the
+13/10/57 surface kernel, then the retained-model static suffix for a living
+body, or the Tumble's own terrain/water/static walk once class11 is published.
+The walk lends its player hull and lives, so C750's terminal finishes through
+Playing's static and dynamic radial. Playing particle hits enter the Type10
+hit wrapper, the radial routes the receipt natively, and the Main Base
+abort's 10C10 publishes the Tumble (worlds 46/47 now stop at Type43 in the
+abort matrix). Player pair identity stays unresolved, as for the other
+ordinary flyers.
+
+[Tests](../../crates/v2k-game/src/intro2_type10/ordinary_tests.rs) cover the six
+births, five-second cohorts in all three worlds, world 47's wind, and a lethal
+Playing hit whose Tumble lands and explodes through Playing's radial.
+[Abort tests](../../crates/v2k-game/src/main_base_abort_production/native/type5_tests.rs)
+cover the class11 publication once per body.
