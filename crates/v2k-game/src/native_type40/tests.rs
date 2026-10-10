@@ -420,11 +420,12 @@ fn real_c690_hit_reselection_installs_own_class7_method1_then_fifo_survives_spli
         RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(0x4000, 0, 0));
     e.collision.state_flags_at_0x08.overwrite(u32::MAX, 4);
     e.collision.last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(4794);
-    // At tick4794 the actual UnderAttack rule weights both branches1. Find an
-    // even word in the live process stream; do not install a captured RNG state.
+    // At tick4794 the actual UnderAttack rule weights both branches1, so
+    // 425680's `(word * 2) >> 16` selects class7 for a word below 0x8000.
+    // Find one in the live process stream; do not install a captured RNG state.
     for _ in 0..65536 {
         let mut peek = fx.fork_for_main_base_abort_transaction();
-        if peek.next_shared_retail_random_u16() % 2 == 0 {
+        if peek.next_shared_retail_random_u16() < 0x8000 {
             break;
         }
         fx.next_shared_retail_random_u16();
