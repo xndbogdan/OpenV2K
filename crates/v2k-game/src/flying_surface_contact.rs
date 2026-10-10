@@ -11,6 +11,7 @@ use crate::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
         LiveActorDamageRequest, LiveActorDeathResult,
     },
+    native_actor_capture::pair::PlayingPlayerContact,
     specialized_actor_task_production::SpecializedActorTaskScheduler,
     terrain_contact::TerrainModelContact,
     type60_exploding_ring::{
@@ -59,18 +60,25 @@ pub(crate) fn surface_bits<E, D>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn resolve_null_hook_flying_surface<E, D: Copy>(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     model_id: usize,
     solid_sound: u16,
     water_sound: u16,
+    mut playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
     mut standard_death: impl FnMut(
         crate::class49_terminal::Class49TerminalFrame<'_>,
     ) -> Result<LiveActorDeathResult<D>, E>,
     mut register_death: impl FnMut(&mut SpecializedActorTaskScheduler, D),
-    mut water_style_callback: impl FnMut(&mut Intro2ContactFrame<'_>, u32, &mut bool) -> Result<(), E>,
+    mut water_style_callback: impl FnMut(
+        &mut Intro2ContactFrame<'_>,
+        u32,
+        Option<PlayingPlayerContact<'_>>,
+        &mut bool,
+    ) -> Result<(), E>,
 ) -> Result<FlyingSurfaceContactOutcome<E, D>, FlyingSurfaceContactBlock<E, D>> {
     use FlyingSurfaceContactBlock as Block;
     let model = frame
@@ -174,10 +182,10 @@ pub(crate) fn resolve_null_hook_flying_surface<E, D: Copy>(
                         static_damage: frame.static_damage,
                         notifications: frame.notifications,
                         retail_tick: frame.retail_tick,
-                        world: crate::class49_terminal::Class49WorldContext::Cinematic {
-                            actor_tasks: frame.actor_tasks,
-                            active_terminal_calls: Vec::new(),
-                        },
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            frame.actor_tasks,
+                            playing.as_mut().map(PlayingPlayerContact::reborrow),
+                        ),
                     })
                 },
             );
@@ -253,7 +261,13 @@ pub(crate) fn resolve_null_hook_flying_surface<E, D: Copy>(
             .world_fx
             .queue_fixed_positional_sound_raw(water_sound, contact.position_raw);
     }
-    water_style_callback(frame, id, committed).map_err(Block::SurfaceCallback)?;
+    water_style_callback(
+        frame,
+        id,
+        playing.as_mut().map(PlayingPlayerContact::reborrow),
+        committed,
+    )
+    .map_err(Block::SurfaceCallback)?;
     // A solid hit can publish another style before this water callback. Both
     // D860 and141D0 reread the surviving body after the synchronous hook.
     let context = TerrainCollisionContext::from_current_level_cache(frame.resources)

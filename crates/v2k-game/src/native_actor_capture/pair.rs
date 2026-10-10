@@ -52,7 +52,7 @@ pub struct PlayingPlayerContact<'a> {
 }
 
 impl PlayingPlayerContact<'_> {
-    fn reborrow(&mut self) -> PlayingPlayerContact<'_> {
+    pub(crate) fn reborrow(&mut self) -> PlayingPlayerContact<'_> {
         PlayingPlayerContact {
             hull: self.hull,
             extra_lives: self.extra_lives,

@@ -3,6 +3,7 @@
 //! A ground-induced Type10/57 death can change the subsequent water hook to
 //! Tumble C750; that synchronous terminal callback retains its own adapter.
 
+use crate::native_actor_capture::pair::PlayingPlayerContact;
 use crate::{
     entity_collision_state::{active_model_slot_from_state_flags, RetailRuntimeValue},
     flying_surface_contact::{
@@ -228,8 +229,17 @@ pub fn resolve_native_flying_surface_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeFlyingSurfaceContactOutcome {
+    resolve_native_flying_surface_contact_with_playing(frame, id, None)
+}
+
+/// Playing's late walk lends its player to a Class1 contact death's radial.
+pub fn resolve_native_flying_surface_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeFlyingSurfaceContactOutcome {
     let mut committed = false;
-    match resolve(frame, id, &mut committed) {
+    match resolve(frame, id, playing, &mut committed) {
         Ok(outcome) => outcome,
         Err(reason) => {
             if committed {
@@ -248,6 +258,7 @@ pub fn resolve_native_flying_surface_contact(
 fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<NativeFlyingSurfaceContactOutcome, NativeFlyingSurfaceContactBlock> {
     use FlyingSurfaceContactBlock as Block;
@@ -352,10 +363,11 @@ fn resolve(
         model_id,
         solid_sound,
         water_sound,
+        playing,
         committed,
         |death_frame| run_native_flying_standard_death(death_frame, id),
         register_native_flying_death,
-        |frame, id, committed| {
+        |frame, id, playing, committed| {
             let entity = frame.entities.iter_all().find(|e| e.id == id).ok_or(
                 NativeFlyingSurfaceDeathBlock::Runtime("water callback allocation"),
             )?;
@@ -366,6 +378,12 @@ fn resolve(
             };
             if context.active_style().style_address() != 0x004c7f60 {
                 return Ok(());
+            }
+            // The Tumble C750 radial still owns only its cinematic walk.
+            if playing.is_some() {
+                return Err(NativeFlyingSurfaceDeathBlock::Runtime(
+                    "Playing Tumble water radial",
+                ));
             }
             match entity_type {
                 10 => {

@@ -102,10 +102,12 @@ own subject+70 and state gates.
 Ordinary Type13 births reach the same phases in Playing. The late contact walk
 sends type13 through the shared flyer helper. That helper keeps this 13/10/57
 surface kernel for Type13, then the retained-model static suffix (or static's
-own admission when the surface is ineligible). A lethal contact still runs the
-Class1 radial with the cinematic context. With a player present, that radial
-blocks and parks the allocation. The contact frame does not yet carry the
-Playing player hull.
+own admission when the surface is ineligible). Playing's walk lends these
+phases its player hull and lives (the `_with_playing` entries), so a lethal
+surface or static contact finishes Class1 through Playing's static and dynamic
+radial. Intro2's walk lends none and keeps the cinematic radial, which cannot
+visit a live player. The Type10/57 Tumble water terminal still owns only its
+cinematic radial and fails closed if a Playing player reaches it.
 
 Native15/87 instead author alternate2, `Die Quietly`, whose zero-policy style
 is4C7420 and initializer isC470. Their actual Section12 rows in1X3XX retain

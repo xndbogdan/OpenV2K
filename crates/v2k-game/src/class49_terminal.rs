@@ -31,6 +31,27 @@ pub enum Class49WorldContext<'a> {
         active_terminal_calls: Vec<Intro2RadialTerminalCall>,
     },
 }
+impl<'a> Class49WorldContext<'a> {
+    /// A late contact walk lends Playing's player only when it owns one;
+    /// otherwise the terminal keeps the cinematic radial owner.
+    pub(crate) fn for_contact(
+        scheduler: &'a mut SpecializedActorTaskScheduler,
+        player: Option<crate::native_actor_capture::pair::PlayingPlayerContact<'a>>,
+    ) -> Self {
+        match player {
+            Some(player) => Self::Playing {
+                scheduler,
+                player_hull: player.hull,
+                extra_lives: player.extra_lives,
+                active_terminal_calls: Vec::new(),
+            },
+            None => Self::Cinematic {
+                actor_tasks: scheduler,
+                active_terminal_calls: Vec::new(),
+            },
+        }
+    }
+}
 pub struct Class49TerminalFrame<'a> {
     pub entities: &'a mut EntityManager,
     pub resources: &'a mut ResourceCache,
@@ -66,7 +87,7 @@ pub enum Class49RadialReport {
     },
 }
 impl Class49RadialReport {
-    fn completed(&self) -> bool {
+    pub(crate) fn completed(&self) -> bool {
         match self {
             Self::Cinematic(Intro2RadialReport::Applied { dynamic, .. }) => dynamic.completed(),
             Self::Cinematic(_) => false,

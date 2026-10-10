@@ -39,6 +39,7 @@ use crate::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
         LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathResult,
     },
+    native_actor_capture::pair::PlayingPlayerContact,
     static_contact::{
         apply_contact_response_raw, scan_deepest_static_contact, static_contact_subject_eligible,
         StaticContactError, StaticContactQuery, StaticModelContact,
@@ -125,6 +126,7 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
                 .map_err(NativeStaticActorDeathBlock::Common)
             },
         },
+        None,
     )
 }
 
@@ -217,7 +219,7 @@ pub fn resolve_insect_static_contact(
         },
         _ => return NativeGroundContactOutcome::Ineligible,
     };
-    resolve_profile_static_contact(frame, id, profile)
+    resolve_profile_static_contact(frame, id, profile, None)
 }
 
 #[derive(Clone, Copy)]
@@ -251,6 +253,8 @@ struct StaticDeathContext<'a> {
     world_fx: &'a mut crate::world_fx::WorldFx,
     notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
     retail_tick: u32,
+    /// Playing's player, lent only by a walk that owns it.
+    player: Option<PlayingPlayerContact<'a>>,
 }
 
 fn common_death_result(
@@ -268,7 +272,16 @@ pub fn resolve_flying_static_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeGroundContactOutcome {
-    resolve_flying_static_contact_entry(frame, id, None)
+    resolve_flying_static_contact_entry(frame, id, None, None)
+}
+
+/// Playing's walk lends its player to a Class1 static death's radial.
+pub fn resolve_flying_static_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeGroundContactOutcome {
+    resolve_flying_static_contact_entry(frame, id, None, playing)
 }
 
 /// Suffix of the same admitted living11AD0 surface visit. The source model
@@ -278,13 +291,23 @@ pub(crate) fn resolve_flying_static_contact_continuation(
     id: u32,
     entry_model_id: usize,
 ) -> NativeGroundContactOutcome {
-    resolve_flying_static_contact_entry(frame, id, Some(entry_model_id))
+    resolve_flying_static_contact_entry(frame, id, Some(entry_model_id), None)
+}
+
+pub(crate) fn resolve_flying_static_contact_continuation_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    entry_model_id: usize,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeGroundContactOutcome {
+    resolve_flying_static_contact_entry(frame, id, Some(entry_model_id), playing)
 }
 
 fn resolve_flying_static_contact_entry(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     retained_entry_model_id: Option<usize>,
+    playing: Option<PlayingPlayerContact<'_>>,
 ) -> NativeGroundContactOutcome {
     let Some(entity) = frame.entities.iter_all().find(|entity| entity.id == id) else {
         return NativeGroundContactOutcome::Ineligible;
@@ -376,10 +399,10 @@ fn resolve_flying_static_contact_entry(
                     static_damage: context.static_damage,
                     notifications: context.notifications,
                     retail_tick: context.retail_tick,
-                    world: crate::class49_terminal::Class49WorldContext::Cinematic {
-                        actor_tasks: context.tasks,
-                        active_terminal_calls: Vec::new(),
-                    },
+                    world: crate::class49_terminal::Class49WorldContext::for_contact(
+                        context.tasks,
+                        context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                    ),
                 },
                 id,
             )
@@ -395,16 +418,17 @@ fn resolve_flying_static_contact_entry(
             })
         },
     };
-    resolve_profile_static_contact(frame, id, profile)
+    resolve_profile_static_contact(frame, id, profile, playing)
 }
 
 fn resolve_profile_static_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     profile: StaticActorProfile,
+    playing: Option<PlayingPlayerContact<'_>>,
 ) -> NativeGroundContactOutcome {
     let mut committed = false;
-    match resolve(frame, id, profile, &mut committed) {
+    match resolve(frame, id, profile, playing, &mut committed) {
         Ok(outcome) => outcome,
         Err(reason) => {
             if committed {
@@ -435,6 +459,7 @@ fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     profile: StaticActorProfile,
+    playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<NativeGroundContactOutcome, NativeGroundContactBlock> {
     use NativeGroundContactBlock as Block;
@@ -570,7 +595,8 @@ fn resolve(
     if !(profile.completed_owner)(frame.actor_tasks, frame.entities, id) {
         return Err(Block::Runtime("completed contact owner"));
     }
-    apply_contact(frame, id, profile, contact, committed).map(NativeGroundContactOutcome::Applied)
+    apply_contact(frame, id, profile, contact, playing, committed)
+        .map(NativeGroundContactOutcome::Applied)
 }
 
 fn apply_contact(
@@ -578,6 +604,7 @@ fn apply_contact(
     id: u32,
     profile: StaticActorProfile,
     contact: StaticModelContact,
+    mut playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<NativeGroundContactApplied, NativeGroundContactBlock> {
     use NativeGroundContactBlock as Block;
@@ -801,6 +828,7 @@ fn apply_contact(
                         world_fx,
                         notifications: frame.notifications,
                         retail_tick: frame.retail_tick,
+                        player: playing.as_mut().map(PlayingPlayerContact::reborrow),
                     },
                 )
             },

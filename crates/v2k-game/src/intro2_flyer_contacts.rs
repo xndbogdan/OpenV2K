@@ -7,6 +7,7 @@ use crate::{
     flying_surface_contact::resolve_null_hook_flying_surface,
     intro2_contacts::Intro2ContactFrame,
     intro2_flyers_live::Intro2FlyerSchedulerOwner,
+    native_actor_capture::pair::PlayingPlayerContact,
     native_ground_actor::contact::NativeGroundContactOutcome,
 };
 #[cfg(test)]
@@ -48,6 +49,15 @@ pub fn resolve_native_flyer_contacts(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeFlyerContactOutcome {
+    resolve_native_flyer_contacts_with_playing(frame, id, None)
+}
+
+/// Playing's late walk lends its player to the same phases' Class1 deaths.
+pub fn resolve_native_flyer_contacts_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    mut playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeFlyerContactOutcome {
     let Some(entity) = frame.entities.iter_all().find(|entity| entity.id == id) else {
         return NativeFlyerContactOutcome {
             surface: Intro2FlyerContactOutcome::Ineligible,
@@ -68,20 +78,31 @@ pub fn resolve_native_flyer_contacts(
         RetailRuntimeValue::Unresolved => None,
     };
     let surface = if ordinary_type13 {
-        crate::native_flying_surface_contact::resolve_native_flying_surface_contact(frame, id)
+        crate::native_flying_surface_contact::resolve_native_flying_surface_contact_with_playing(
+            frame,
+            id,
+            playing.as_mut().map(PlayingPlayerContact::reborrow),
+        )
     } else {
-        resolve_intro2_flyer_surface_contact(frame, id)
+        resolve_flyer_surface_contact(
+            frame,
+            id,
+            playing.as_mut().map(PlayingPlayerContact::reborrow),
+        )
     };
     let static_contact = match &surface {
         Intro2FlyerContactOutcome::Blocked { .. } => None,
-        Intro2FlyerContactOutcome::Ineligible => {
-            Some(crate::native_ground_actor::contact::resolve_flying_static_contact(frame, id))
-        }
+        Intro2FlyerContactOutcome::Ineligible => Some(
+            crate::native_ground_actor::contact::resolve_flying_static_contact_with_playing(
+                frame, id, playing,
+            ),
+        ),
         Intro2FlyerContactOutcome::Applied { .. } => Some(
-            crate::native_ground_actor::contact::resolve_flying_static_contact_continuation(
+            crate::native_ground_actor::contact::resolve_flying_static_contact_continuation_with_playing(
                 frame,
                 id,
                 entry_model_id.expect("admitted flyer entry model"),
+                playing,
             ),
         ),
     };
@@ -95,8 +116,16 @@ pub fn resolve_intro2_flyer_surface_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> Intro2FlyerContactOutcome {
+    resolve_flyer_surface_contact(frame, id, None)
+}
+
+fn resolve_flyer_surface_contact(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> Intro2FlyerContactOutcome {
     let mut committed = false;
-    match resolve(frame, id, &mut committed) {
+    match resolve(frame, id, playing, &mut committed) {
         Ok(outcome) => outcome,
         Err(reason) => {
             if committed {
@@ -125,6 +154,7 @@ fn bits(entity: &Entity, mask: u32) -> Result<u32, Intro2FlyerContactBlock> {
 fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<Intro2FlyerContactOutcome, Intro2FlyerContactBlock> {
     use Intro2FlyerContactBlock as Block;
@@ -196,12 +226,13 @@ fn resolve(
         model_id,
         0,
         0,
+        playing,
         committed,
         |death_frame| {
             crate::native_flying_surface_contact::run_native_flying_standard_death(death_frame, id)
         },
         crate::native_flying_surface_contact::register_native_flying_death,
-        |_, _, _| Ok(()),
+        |_, _, _, _| Ok(()),
     )
 }
 

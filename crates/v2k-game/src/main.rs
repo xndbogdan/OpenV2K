@@ -6968,13 +6968,23 @@ fn run_game(
                     if native_flyer {
                         use v2k_game::{
                             intro2_flyer_contacts::{
-                                resolve_native_flyer_contacts, Intro2FlyerContactOutcome,
+                                resolve_native_flyer_contacts_with_playing,
+                                Intro2FlyerContactOutcome,
                             },
                             native_ground_actor::contact::NativeGroundContactOutcome,
                         };
                         // The same11AD0 prefix owns Intro2 and native Hive children:
                         // solid/water, then static using the retained entry model.
-                        let outcome = resolve_native_flyer_contacts(&mut contact_frame, id);
+                        let outcome = resolve_native_flyer_contacts_with_playing(
+                            &mut contact_frame,
+                            id,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
                         if matches!(
                             &outcome.surface,
                             Intro2FlyerContactOutcome::Blocked { .. }
