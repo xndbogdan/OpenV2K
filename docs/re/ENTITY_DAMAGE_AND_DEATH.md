@@ -564,6 +564,18 @@ The port has no class63 program yet; Type124 fish stop at it explicitly
 owner for each family plus a dynamic Type61 birth from a packed payload, which
 factory production already performs for its own pickups.
 
+One evidence gap blocks a faithful terminal. Because `40BC90` never calls
+`A860`, the dying carrier keeps its task slots until removal. `413500` walks
+the whole live list (`414920` returns `DAT_004DB090` unfiltered) and sweeps
+deferred removals only at the end of its walk (`414990`). So a carrier killed
+outside the walk (by a particle in `440120` or a contact in `411A80`) is visited
+once more by the next frame's walk. `412DA0` has no dying test; its type
+callbacks still run while state bit `0x20000` is set. Whether installing
+class63 clears that bit, and so whether that last visit moves or acts, is not
+settled statically. A recording of a carrier's death (any world with Type71,
+124 or 127..129) would close it; the port's finished-terminal rule (empty task
+slots) must not be assumed for class63 until then.
+
 ## Flip Over And Die class-12 task shell (STATICALLY CONFIRMED, RUNTIME VALIDATED)
 
 Canonical type records for 17 and 47 both author alternate behavior class 12,
