@@ -533,6 +533,37 @@ cover sea equality, signed X wrap, a saturated pool, cue order and the single
 rate RNG draw. This shared helper also precedes Alpine's class18 split births;
 the recorded above-sea Alpine death does not establish underwater acceptance.
 
+## Auto Pilot class63: explode and drop the authored power-up (STATICALLY CONFIRMED)
+
+The class table at `0x004C8AA4` holds 8-byte `{descriptor, name}` pairs; class63's
+entry `0x004C8C9C` names **"Auto Pilot"** with descriptor `0x004C8828`
+`{style table 0x004C7198, style index 0}`. `40ABB0 -> 40C6B0` installs that style
+and calls the `0x48`-byte style entry's `+40` initializer with its `+44` argument.
+At runtime (faststart04 recording) entry `0x004C7198` has every callback slot null
+and initializer `0x0040BC90`, argument zero. Neither Ghidra's default analysis nor
+the bulk decompilation defines that function; WinDbg disassembly gives:
+
+1. `43A580` resolves the actor, then `40BAF0` runs the shared scatter/radial death
+   (the same BAF0 that class1 and class49 use).
+2. A zeroed `0x4C`-byte construction record receives `DAT_004DCA00` at `+00`,
+   type `0x3D` (61, Power Up) at `+08`, the actor's position words `+96/+98/+9A`
+   at `+0C..+11`, and the actor's own word `+88` at `+20`; `438080` builds it and
+   `4575A0` dispatches the result.
+3. `410B70` requests the actor's deferred removal.
+
+Unlike class49's `40BD20` it neither calls `A860` nor tests the remote bit, and it
+leaves a Type61 rather than a Type60 ring. Entity `+88` is the Section-13 spawn's
+extra word, which Type61 itself reads as its packed power-up payload. Every
+alternate-63 type authors such payloads (`0x3F`, `0xC35035`, `0x43A`, `0x1F40C`
+and so on): Type71 (25 births), 80 (3), 81 (3), 117 (2), 124 (3), 126 (4), 127 (25),
+128 (22) and 129 (25). Destroying one of these carriers therefore explodes it
+and drops the power-up it was authored with.
+
+The port has no class63 program yet; Type124 fish stop at it explicitly
+([FISH_RUNTIME](FISH_RUNTIME.md)). Implementing it needs the BAF0 terminal
+owner for each family plus a dynamic Type61 birth from a packed payload, which
+factory production already performs for its own pickups.
+
 ## Flip Over And Die class-12 task shell (STATICALLY CONFIRMED, RUNTIME VALIDATED)
 
 Canonical type records for 17 and 47 both author alternate behavior class 12,

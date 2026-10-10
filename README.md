@@ -25,7 +25,7 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 
 Of the **2,382** game functions in retail `V2000.EXE`,
 **894 (37.5%)** are referenced by the port's code and
-**1,155 (48.5%)** by its code or RE notes.
+**1,156 (48.5%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
 
