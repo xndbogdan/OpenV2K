@@ -463,6 +463,12 @@ pub(crate) fn prepare_native_actor_damage_mutation(
     {
         return true;
     }
+    // 14AE0 and 43FA3D share the 8000/800/1000 gate without a deferred-removal
+    // exclusion, so a later radial reaches a finished class49 allocation just
+    // as a particle does. Only its completed receipt replaces task custody.
+    if crate::class49_death::finished_terminal_hit_authenticates(manager, id) {
+        return true;
+    }
     if crate::shared_fish::death::completed_shared_fish_death(manager, id) {
         // Both entries can consume an existing corpse buffer before reading
         // dying. Its completed terminal receipt replaces the retired task.

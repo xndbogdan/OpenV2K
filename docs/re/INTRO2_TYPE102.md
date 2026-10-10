@@ -390,7 +390,11 @@ because the source is dying. Neither entry reruns the former class29 selector.
 Both retain `11030 -> 415040`; filtering and buffer consumption precede the
 dying-health no-op, and the primary capability8 presentation suffix remains
 independent. No second blast, radial pass, ring or removal request is issued.
-The port admits this path only with the finished terminal receipt's actual
+The dynamic radial walker `414AE0` applies the same `8000/800/1000` gate,
+again without a deferred-removal exclusion, so a later blast (for example a
+power-up destroyed on top of the turret during a Main Base abort) also
+reaches the finished allocation through `415040` or `414E10`.
+The port admits both paths only with the finished terminal receipt's actual
 manager allocation, class49 context, empty task slots and exact deferred state.
 Issued, claimed, partially finished, foreign and parked receipts remain blocked.
 Focused repeat-hit controls cover both Type92 and Type102; validation of this
