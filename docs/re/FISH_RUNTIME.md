@@ -193,8 +193,11 @@ later. A class2 terminal does not create a timed corpse or explosion.
 Type124 selects class63 ("Auto Pilot": explode, then drop the authored
 power-up payload as a Type61; see
 [ENTITY_DAMAGE_AND_DEATH](ENTITY_DAMAGE_AND_DEATH.md#auto-pilot-class63-explode-and-drop-the-authored-power-up-statically-confirmed))
-and still stops at `UnsupportedDeathProgram` after
-the committed lethal health prefix. It cannot borrow22/24's alternate.
+and cannot borrow22/24's alternate. Its own `10C10` no-op tests and completed
+task custody precede the shared BAF0 terminal; `40BC90` then keeps the fish
+tasks, appends the Type61 authored in its `+88` and stages removal
+([class63 drops](TYPE61_POWER_UP.md#class63-carrier-drops)).
+The class2 entry still rejects Type124 as `UnsupportedDeathProgram`.
 Section12 loader410090 installs vtable4C8A30, whose+08 word is40DB80;
 the later438080 overrides affect67 and46/51, not fish. C470 calls A860's
 slot0/1/2 retirement and10B70 marking before the later14990 sweep.
@@ -214,7 +217,9 @@ exercises both particle entries across every authored22/23/24/62 in
 live task visits, checks filtered infection followed by lethal primary hits,
 verifies class2 custody and deferred removal, and continues
 the surviving Type124 scheduler. Focused controls cover wrapper RNG/reaction,
-allocation/pending-prefix rejection and the distinct class63 boundary.
+allocation/pending-prefix rejection and Type124's class63 drop. Playing's
+particle entry lends Type124 the static world and player; the shared frame
+lends neither and holds a lethal Type124 hit after its committed prefix.
 Full combat and physical static contact remain separate from this particle
 entry. An unsupported lifecycle entry
 must remain an explicit development diagnostic. The accepted trace supplies
@@ -236,8 +241,8 @@ Surviving fish keep their current graph and accept the velocity change without
 task reselection. Authentic completed class2 allocations remain buffer
 addressable until `14990`; a retired living owner cannot authenticate a forged
 corpse. A later callback block retains and parks its committed prefix.
-Type124 reaches the explicit class63 blocker after lethal health, without
-quiet deletion. The
+Type124 completes class63 inside the walk: its nested radial finishes,
+the owner retires and the drop is appended. The
 [radial controls](../../crates/v2k-game/src/specialized_actor_task_production/playing_radial/fish_tests.rs)
 exercise every aquatic cohort in overlays13/14/18/22/23/30/34/36 after actual
 live task visits, plus falloff impulse, custody rejection and class63.

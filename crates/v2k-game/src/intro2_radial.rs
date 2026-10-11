@@ -267,6 +267,42 @@ impl crate::entity::DynamicRadialLiveCallbacks for Intro2RadialCallbacks<'_> {
             crate::entity::DynamicRadialLiveBlockReason,
         >,
     > {
+        if kind == 27
+            && crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                entities, id,
+            )
+        {
+            return Some(
+                crate::rolling_boulder::death::begin_rolling_boulder_split(
+                    entities,
+                    id,
+                    crate::rolling_boulder::death::RollingBoulderSplitFrame {
+                        resources: self.resources,
+                        world_fx,
+                        retail_tick,
+                        tasks: self.actor_tasks,
+                    },
+                )
+                .map(
+                    |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: result.returned_nonzero,
+                        publication: result.publication.map(|terminal| {
+                            match terminal {
+                        crate::native_ground_actor::NativeGroundTerminalPublication::CommonDying(
+                            owner,
+                        ) => crate::entity::DynamicRadialDeathPublication::Intro2Class12(owner),
+                        crate::native_ground_actor::NativeGroundTerminalPublication::Deferred(
+                            receipt,
+                        ) => crate::entity::DynamicRadialDeathPublication::NativeGroundDeferred(
+                            receipt,
+                        ),
+                    }
+                        }),
+                    },
+                )
+                .map_err(crate::entity::DynamicRadialLiveBlockReason::RollingBoulder),
+            );
+        }
         if kind == 40 && crate::native_type40::manager_allocation_authenticates(entities, id) {
             return Some(crate::native_type40::death::begin_type40_standard_death(
                 entities, id, crate::native_type40::death::Type40Class18Frame {
@@ -288,6 +324,32 @@ impl crate::entity::DynamicRadialLiveCallbacks for Intro2RadialCallbacks<'_> {
             })
         {
             return None;
+        }
+        if kind == 124 {
+            return Some(
+                crate::shared_fish::death::run_type124_auto_pilot_death(
+                    crate::class49_terminal::Class49TerminalFrame::from_cinematic(
+                        Intro2RadialFrame {
+                            active_terminal_calls: self.active_terminal_calls.to_vec(),
+                            entities,
+                            resources: self.resources,
+                            world_fx,
+                            static_damage: self.static_damage,
+                            notifications,
+                            retail_tick,
+                            actor_tasks: self.actor_tasks,
+                        },
+                    ),
+                    id,
+                )
+                .map(
+                    |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: result.returned_nonzero,
+                        publication: None,
+                    },
+                )
+                .map_err(crate::entity::DynamicRadialLiveBlockReason::Fish),
+            );
         }
         Some(
             crate::class49_terminal::run_class49_standard_death(

@@ -559,10 +559,12 @@ and so on): Type71 (25 births), 80 (3), 81 (3), 117 (2), 124 (3), 126 (4), 127 (
 128 (22) and 129 (25). Destroying one of these carriers therefore explodes it
 and drops the power-up it was authored with.
 
-The port has no class63 program yet; Type124 fish stop at it explicitly
-([FISH_RUNTIME](FISH_RUNTIME.md)). Implementing it needs the BAF0 terminal
-owner for each family plus a dynamic Type61 birth from a packed payload, which
-factory production already performs for its own pickups.
+The port implements class63 as a third BAF0 terminal policy: it keeps the
+carrier's tasks, builds the Type61 from the carrier's `+88` at its position and
+stages removal ([class63 drops](TYPE61_POWER_UP.md#class63-carrier-drops)).
+Type124 fish ([FISH_RUNTIME](FISH_RUNTIME.md)), the Type80/126 and Type128
+carriers and the Type129 ground shooters take it. Types 71, 81, 117 and 127
+have no native owner yet.
 
 The dying carrier's last visit is settled statically. Because `40BC90` never
 calls `A860`, the carrier keeps its task slots until removal. `413500` walks

@@ -117,7 +117,7 @@ pub(crate) fn graph_authenticates(entity: &Entity) -> bool {
 ///allocation retains E/L while the firing wrapper is absent.
 pub(crate) fn idle_graph_authenticates(entity: &Entity) -> bool {
     intro2_gun_turret_allocation_authenticates(entity)
-        && entity.entity_type == 115
+        && matches!(entity.entity_type, 112 | 113 | 115)
         && matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(context))
             if context.active_style().style_address() == 0x004c7468)
         && matches!(
