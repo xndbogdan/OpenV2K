@@ -181,8 +181,7 @@ fn run(
                 .policy()
                 .style_address()
     } else {
-        style == 0x004c_8230
-            || (profile == super::Intro2GunTurretProfile::Type115 && style == 0x004c_7468)
+        style == 0x004c_8230 || (profile.is_flower() && style == 0x004c_7468)
     };
     if !style_authenticated {
         return Err(Block::Runtime("unaudited style hit slot"));

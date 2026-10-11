@@ -4,6 +4,8 @@
 //! Their native allocation retains process Sub-D history and Sub-F RNG before
 //! selection. Authored coordinates and model selectors remain instance data.
 
+#[cfg(test)]
+mod auto_pilot_tests;
 pub(crate) mod death;
 pub mod impact;
 mod live;

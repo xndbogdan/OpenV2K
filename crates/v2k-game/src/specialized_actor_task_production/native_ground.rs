@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     native_ground_actor::NativeGroundTerminalPublication, native_type30::Type30Owner,
-    native_type40::Type40Owner, native_type56::Type56Owner,
+    native_type40::Type40Owner, native_type56::Type56Owner, rolling_boulder::RollingBoulderOwner,
 };
 
 impl crate::native_ground_actor::NativeGroundTaskCustody for SpecializedActorTaskScheduler {
@@ -23,6 +23,22 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for SpecializedActorTas
         }
         self.owners
             .push(SpecializedActorTaskOwner::NativeType56(owner));
+        Ok(())
+    }
+
+    fn register_split_rolling_boulder_child(
+        &mut self,
+        owner: RollingBoulderOwner,
+    ) -> Result<(), &'static str> {
+        if self
+            .owners
+            .iter()
+            .any(|present| present.entity_id() == owner.entity_id())
+        {
+            return Err("split child already owns a task");
+        }
+        self.owners
+            .push(SpecializedActorTaskOwner::RollingBoulder(owner));
         Ok(())
     }
 }
@@ -43,6 +59,25 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for Intro2RadialCursorC
         // not contain it. Keep its owner in the actual unvisited storage.
         self.pending
             .push(SpecializedActorTaskOwner::NativeType56(owner));
+        Ok(())
+    }
+
+    fn register_split_rolling_boulder_child(
+        &mut self,
+        owner: RollingBoulderOwner,
+    ) -> Result<(), &'static str> {
+        if self
+            .pending
+            .iter()
+            .chain(self.retained.iter())
+            .any(|present| present.entity_id() == owner.entity_id())
+        {
+            return Err("split child already owns a cursor task");
+        }
+        // As for Type56: the appended child receives its first visit in this
+        // pass, so its owner belongs to the unvisited storage.
+        self.pending
+            .push(SpecializedActorTaskOwner::RollingBoulder(owner));
         Ok(())
     }
 }

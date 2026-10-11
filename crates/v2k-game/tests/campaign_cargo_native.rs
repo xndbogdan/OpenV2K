@@ -884,7 +884,9 @@ fn first_type(world: &World, entity_type: u32) -> u32 {
 
 #[v2k_test_support::retail_test]
 fn type96_match_attaches_destination_authored_identity() {
-    let mut world = World::new(26);
+    // World26's Type96 is authored infected: its native D190 birth runs
+    // 408EA0, clearing collectible 0x1000. World36's is a plain tulaz.
+    let mut world = World::new(36);
     let tulaz = first_type(&world, 96);
     let word = packed(&world, tulaz);
     let before = world.entities.iter_all().count();

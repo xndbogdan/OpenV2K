@@ -37,8 +37,8 @@ pub(super) fn run(
     if !intro2_type10_allocation_authenticates(entity) {
         return Err(Block::Allocation);
     }
-    authenticate_metadata(frame.metadata).map_err(|_| Block::Metadata)?;
     let runtime = entity.intro2_type10_runtime.ok_or(Block::Allocation)?;
+    authenticate_metadata(runtime.profile, frame.metadata).map_err(|_| Block::Metadata)?;
     let RetailRuntimeValue::Known(Some(sub_g)) = entity.sub_g_06070_runtime else {
         return Err(Block::Runtime("Sub-G allocation"));
     };
@@ -78,9 +78,9 @@ pub(super) fn run(
         },
         GklCommonMoverProfile {
             topology: TOPOLOGY,
-            sub_d: SUB_D,
+            sub_d: runtime.profile.sub_d(),
             gkl: CommonMoverGklPayloads {
-                sub_g: Some(SUB_G),
+                sub_g: Some(*runtime.profile.sub_g()),
                 sub_k: Some(SUB_K),
                 sub_l: Some(SUB_L),
             },
