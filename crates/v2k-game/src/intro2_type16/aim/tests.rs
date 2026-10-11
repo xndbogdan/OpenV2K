@@ -34,7 +34,7 @@ fn prepare(
     let metadata =
         EntityTypeRuntimeMetadata::from_section12(session.cache.global_entity_type(16).unwrap());
     let entity = manager.entity_mut(id).unwrap();
-    assert!(intro2_type16_allocation_authenticates(entity));
+    assert!(crate::intro2_type16::intro2_type16_allocation_authenticates(entity));
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(
         BehaviorContextRuntime::named_audited(
             behavior_program(7).unwrap(),

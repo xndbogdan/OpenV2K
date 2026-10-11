@@ -102,6 +102,26 @@ impl GklCommonMoverRuntime {
             sub_l_output_raw: [0; 2],
         }
     }
+
+    /// Ordinary 09A80 image around the process's own Sub-D allocation.
+    ///
+    /// K `FUN_00424450` and L `FUN_0041BB80` allocate 0x10/0x14 bytes and
+    /// clear them with FUN_00457370 (Ghidra 12.1.4), so their state begins
+    /// zeroed without any capture; the bound bank words are cleared as above.
+    pub(crate) const fn from_native_constructor(
+        sub_d_runtime: Type9SubDRuntime,
+        sub_d_frame_owner: Type9SubDFrameOwner,
+    ) -> Self {
+        Self {
+            sub_d_runtime,
+            sub_d_frame_owner,
+            sub_k_smoothed_raw: 0,
+            sub_k_output_raw: [0; 2],
+            sub_l_target_raw: [0; 3],
+            sub_l_exact_raw: 0,
+            sub_l_output_raw: [0; 2],
+        }
+    }
 }
 
 /// Complete detached result of one admitted DEGKL `FUN_00401430` invocation.

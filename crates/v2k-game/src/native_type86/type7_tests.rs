@@ -532,12 +532,15 @@ fn type7_world22_arrival_handoff_retains_the_new_graph_through_the_next_schedule
             .collision
             .state_flags_at_0x08
             .overwrite(0x800, 0x800);
-        assert_eq!(
+        // Each birth draws its root from the shared RNG, after every earlier
+        // native constructor (world 22's Type18 and Type28 included): any
+        // published living graph is a valid birth.
+        assert!(matches!(
             Type86Owner::adopt_published(actor(&manager, id))
                 .unwrap()
                 .kind,
-            TaskKind::AttractAcquiring
-        );
+            TaskKind::AttractAcquiring | TaskKind::Wander
+        ));
     }
     let id = ids[0];
     let mut scheduler = SpecializedActorTaskScheduler::default();

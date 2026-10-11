@@ -159,6 +159,7 @@ fn radial_capture_death_releases_child_and_replaces_parent_in_each_live_custody(
             &mut expected_manager,
             f.parent,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut expected_scheduler,
                 world_fx: &mut expected_fx,
                 notifications: &mut GameplayNotifications::new(),
