@@ -148,6 +148,7 @@ pub(super) fn finish(
                 manager,
                 id,
                 &mut super::capture::CaptureContext {
+                    resources: None,
                     tasks: &mut *frame.capture_tasks,
                     world_fx,
                     notifications: &mut *frame.notifications,

@@ -176,6 +176,7 @@ fn method24_class68_fifo_and_sound70_survive_c690_and_class12_then_drain_in_mana
         ids[0],
         4794,
         &mut fx,
+        None,
         behavior::ReselectionEntry::Impact,
     )
     .unwrap();

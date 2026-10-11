@@ -41,8 +41,6 @@ use crate::type13_initial_behavior::{
 };
 use crate::world_fx::{Class38ParticleRequest, ParticleEnvironment, WorldFx};
 
-const INTRO2_TYPE13_SPAWN_INDEX: usize = 0;
-const INTRO2_TYPE13_MODEL_ID: usize = 291;
 const TYPE13_PROJECTILE_SOUND_ID: u16 = 75;
 const TYPE13_PROJECTILE_METHOD: u32 = 10;
 const IMPACT_SUPPRESSION_STATE_BIT: u32 = 0x8000_0000;
@@ -378,10 +376,7 @@ pub fn drain_intro2_type13_shots(
             .iter_all()
             .find(|entity| entity.id == source_entity_id)
             .ok_or(Type13ShotDrainError::EntityUnavailable)?;
-        if entity.entity_type != TYPE13_ENTITY_TYPE
-            || entity.authored_spawn_index != Some(INTRO2_TYPE13_SPAWN_INDEX)
-            || entity.model_index != Some(INTRO2_TYPE13_MODEL_ID)
-        {
+        if crate::intro2_type13_live::authenticate_intro2_type13(entity).is_err() {
             return Err(Type13ShotDrainError::RuntimeContractMismatch);
         }
         let runtime = entity
@@ -789,11 +784,7 @@ fn authenticate_intro2_type13_aim_owner(
     entity: &Entity,
     expected_in_callback: bool,
 ) -> Result<(), Type13AimError> {
-    if !entity.active
-        || entity.entity_type != TYPE13_ENTITY_TYPE
-        || entity.authored_spawn_index != Some(INTRO2_TYPE13_SPAWN_INDEX)
-        || entity.model_index != Some(INTRO2_TYPE13_MODEL_ID)
-    {
+    if crate::intro2_type13_live::authenticate_intro2_type13(entity).is_err() {
         return Err(Type13AimError::GraphMismatch);
     }
     authenticate_published_type13_class7_pursuing_graph(entity)

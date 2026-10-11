@@ -622,3 +622,47 @@ fn native_type66_hut_crater_updates_real_terrain_and_grounded_pose_without_euler
         RetailRuntimeValue::Known(0x28)
     );
 }
+
+/// Type125's Section-12 row differs from Type66 only in its model slots, so
+/// its ordinary births take the same class-39 Working Factory construction.
+#[v2k_test_support::retail_test]
+fn ordinary_type125_births_publish_the_working_factory_owner() {
+    let mut births = 0;
+    for level in [37, 40] {
+        let (session, manager, _) = crate::intro2_gun_turret::authored_tests::fixture(level);
+        let row = EntityTypeRuntimeMetadata::from_section12(
+            session.cache.global_entity_type(125).unwrap(),
+        );
+        authenticate_metadata(125, &row).unwrap();
+        for entity in manager
+            .iter_all()
+            .filter(|entity| entity.entity_type == 125)
+        {
+            births += 1;
+            assert!(entity.intro2_type66_runtime.is_some(), "world{level}");
+            assert!(crate::intro2_type66::intro2_type66_allocation_authenticates(entity));
+            assert!(super::super::Intro2Type66Owner::adopt(&manager, entity.id).is_ok());
+            let spawn =
+                &session.cache.level_desc().unwrap().entities[entity.authored_spawn_index.unwrap()];
+            let expected: [Option<usize>; 4] = std::array::from_fn(|slot| {
+                Some(if spawn.model_overrides[slot] != 0 {
+                    spawn.model_overrides[slot] as usize
+                } else {
+                    usize::from([231u16, 225, 231, 225][slot])
+                })
+            });
+            assert_eq!(entity.model_slots, expected);
+            assert_eq!(entity.model_slots[0], Some(231));
+            assert_eq!(
+                entity.collision.health_raw,
+                RetailRuntimeValue::Known(INITIAL_HEALTH_RAW)
+            );
+            assert!(matches!(
+                entity.base_factory_runtime,
+                RetailRuntimeValue::Known(Some(factory)) if factory.production.is_some()
+                    && factory.live_owner.is_some()
+            ));
+        }
+    }
+    assert_eq!(births, 4);
+}

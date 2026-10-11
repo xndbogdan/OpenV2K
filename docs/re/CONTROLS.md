@@ -92,7 +92,10 @@ DIK D (`0x20`) or C (`0x2E`) at `+4` and place DIK LShift (`0x2A`) in the
 must-be-up field at `+0x0C`. A discrete edge therefore occurs when C/D is
 pressed while LShift is up, or when LShift is released while C/D remains held;
 holding LShift suppresses the binding. The older `C+LShift` / `D+LShift`
-reading inverted this field's meaning.
+reading inverted this field's meaning. Each edge starts an 80-ms countdown
+that retail loses at its 125-fps cap; the port's default
+[`beam_commands` fix](PLAYER_CRAFT.md#beam-attachment-and-weight-interaction-resolved-2026-07-13)
+keeps it.
 
 **Motion vector `S+0x280`:** +0x00 turn/heading; +0x02 pitch channel (UP/DOWN
 scale 0xD80 and S/X scale 0x900 sum here) — routed per mode:

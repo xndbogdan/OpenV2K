@@ -627,6 +627,7 @@ fn reconstructed_weight_drops_settles_and_can_be_collected_again() {
     for tick in 1..=100 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 terrain: world.session.cache.terrain().unwrap(),
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
@@ -687,6 +688,7 @@ fn reconstructed_weight_drops_settles_and_can_be_collected_again() {
     for tick in 101..=130 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: None,
             retail_tick: 4793 + tick,
             scheduler: &mut world.scheduler,
@@ -884,7 +886,9 @@ fn first_type(world: &World, entity_type: u32) -> u32 {
 
 #[v2k_test_support::retail_test]
 fn type96_match_attaches_destination_authored_identity() {
-    let mut world = World::new(26);
+    // World26's Type96 is authored infected: its native D190 birth runs
+    // 408EA0, clearing collectible 0x1000. World36's is a plain tulaz.
+    let mut world = World::new(36);
     let tulaz = first_type(&world, 96);
     let word = packed(&world, tulaz);
     let before = world.entities.iter_all().count();
@@ -1040,6 +1044,7 @@ fn drop_123_cargo(world: &mut World, newborn: u32) {
     for tick in 1..=100 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 terrain: world.session.cache.terrain().unwrap(),
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],

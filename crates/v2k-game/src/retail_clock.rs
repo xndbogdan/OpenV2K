@@ -14,6 +14,73 @@ pub const RETAIL_TICK_MICROS: u64 = 20_000;
 /// consume this one policy so their defensive clamps cannot drift apart.
 pub const RETAIL_FRAME_DELTA_MAX_US: u32 = 125_000;
 
+/// `FUN_00494070`'s minimum frame period (task `+0x20`): a frame runs only
+/// once this much has passed, so retail tops out at 125 frames a second.
+pub const RETAIL_MIN_FRAME_PERIOD_MICROS: u64 = 8_000;
+
+/// `FUN_00494070`'s gate on `FUN_00495FF0`'s clock (`timeGetTime() * 1000`):
+/// the whole-millisecond delta since the last frame, once it reaches the
+/// minimum period. Earlier polls run no frame.
+pub const fn retail_frame_delta_micros(last_ms: u64, now_ms: u64) -> Option<u64> {
+    let delta_micros = now_ms.saturating_sub(last_ms) * 1_000;
+    if delta_micros >= RETAIL_MIN_FRAME_PERIOD_MICROS {
+        Some(delta_micros)
+    } else {
+        None
+    }
+}
+
+/// Retail's frame pump on a whole-millisecond clock. Every delta is a whole
+/// number of milliseconds and at least the 8-ms minimum period, as
+/// `FUN_00494070` produces from `timeGetTime`. The port sleeps until the
+/// next frame is due instead of polling.
+#[derive(Debug)]
+pub struct RetailFramePump {
+    origin: std::time::Instant,
+    last_ms: u64,
+}
+
+impl RetailFramePump {
+    pub fn new() -> Self {
+        Self {
+            origin: std::time::Instant::now(),
+            last_ms: 0,
+        }
+    }
+
+    fn now_ms(&self) -> u64 {
+        self.origin.elapsed().as_millis() as u64
+    }
+
+    /// Wait until the next frame is due, start it and return its delta.
+    pub fn wait_for_frame(&mut self) -> u64 {
+        loop {
+            let now_ms = self.now_ms();
+            if let Some(delta_micros) = retail_frame_delta_micros(self.last_ms, now_ms) {
+                self.last_ms = now_ms;
+                return delta_micros;
+            }
+            let due = self.origin
+                + std::time::Duration::from_micros(
+                    self.last_ms * 1_000 + RETAIL_MIN_FRAME_PERIOD_MICROS,
+                );
+            std::thread::sleep(due.saturating_duration_since(std::time::Instant::now()));
+        }
+    }
+
+    /// Restart the period after a blocking load, so the load's duration
+    /// never becomes a frame's delta.
+    pub fn restart(&mut self) {
+        self.last_ms = self.now_ms();
+    }
+}
+
+impl Default for RetailFramePump {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Integer clock matching `DAT_004FED60` and its 64-bit microsecond source.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct RetailTickClock {
@@ -57,7 +124,23 @@ impl RetailTickClock {
 
 #[cfg(test)]
 mod tests {
-    use super::{RetailTickClock, RETAIL_FRAME_DELTA_MAX_US, RETAIL_TICK_MICROS};
+    use super::{
+        retail_frame_delta_micros, RetailTickClock, RETAIL_FRAME_DELTA_MAX_US,
+        RETAIL_MIN_FRAME_PERIOD_MICROS, RETAIL_TICK_MICROS,
+    };
+
+    #[test]
+    fn the_retail_pump_runs_whole_millisecond_frames_of_at_least_8_ms() {
+        // 494115..49411F: a delta below task +0x20 runs no frame.
+        assert_eq!(retail_frame_delta_micros(100, 107), None);
+        assert_eq!(
+            retail_frame_delta_micros(100, 108),
+            Some(RETAIL_MIN_FRAME_PERIOD_MICROS)
+        );
+        assert_eq!(retail_frame_delta_micros(100, 117), Some(17_000));
+        // A clock behind the last frame never runs a negative frame.
+        assert_eq!(retail_frame_delta_micros(100, 90), None);
+    }
 
     #[test]
     fn tick_boundary_carries_19_999_plus_one_microsecond() {

@@ -18,6 +18,7 @@ use type8_construction::{
     NativeWorkerBodyRequest, NativeWorkerConstructionRequest, Type8BodyConstruction,
 };
 mod authored_world;
+mod auto_pilot_power_up;
 mod completed_world;
 #[cfg(test)]
 mod dynamic_body_stamp_tests;
@@ -36,6 +37,7 @@ mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
 mod native_type56_construction;
+mod rolling_boulder_construction;
 pub(crate) use hive_birth_host::{HiveBirthManagerContext, HiveBirthManagerHost};
 pub(crate) use hive_child::{HiveNativeBirthBlock, NativeHiveChildConstructionContext};
 mod instance_body;
@@ -427,6 +429,30 @@ const TYPE93_MATERIALISER_TOPOLOGY: crate::entity_collision_state::CommonMoverCo
 pub enum BeamCommand {
     Collect,
     Drop,
+}
+
+/// When the signed beam countdown dispatches its command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BeamExpiry {
+    /// `FUN_00446640`: only a whole-millisecond step strictly greater than
+    /// the remaining magnitude fires. A step landing exactly on zero clears
+    /// the command unfired, which every 8-ms frame at retail's 125-fps cap
+    /// does.
+    Retail,
+    /// The port fix (`PortFixes::beam_commands`): landing on zero fires too.
+    #[default]
+    AtZero,
+}
+
+impl BeamExpiry {
+    /// The countdown `PortFixes::beam_commands` selects.
+    pub const fn from_port_fix(enabled: bool) -> Self {
+        if enabled {
+            Self::AtZero
+        } else {
+            Self::Retail
+        }
+    }
 }
 
 /// Observable result produced when a queued beam timer reaches its endpoint.
@@ -1139,7 +1165,7 @@ fn base_factory_runtime_from_constructor(
     metadata: Option<&EntityTypeRuntimeMetadata>,
     config: Option<&[u8; 0x58]>,
 ) -> RetailRuntimeValue<Option<BaseFactoryRuntimeState>> {
-    let production = if entity_type == FACTORY_ENTITY_TYPE {
+    let production = if crate::intro2_type66::is_working_factory_type(entity_type) {
         config
             .zip(metadata.and_then(|metadata| metadata.initial_health_raw))
             .map(|(config, health_raw)| {
@@ -1339,6 +1365,11 @@ pub struct Entity {
     /// so only type-61 allocations retain it here instead of exposing a
     /// misleading generic field.
     pub power_up_payload_packed: Option<u32>,
+    /// Power-up carriers (alternate class63) copy the same authored Section-13
+    /// dword +0x1C into +0x88. Solo play never rewrites it; only network sync
+    /// (`417680`, flag 0x400) does. `40BC90` copies it into the dropped
+    /// Type-61 request's +0x20, so only alternate-63 rows retain it here.
+    pub auto_pilot_payload_packed: Option<u32>,
     /// Exact Working-Factory constructor receipt for one dynamic Type-61
     /// product. Authored pickups and every other allocation retain `None`.
     pub(crate) factory_type61_birth_provenance: Option<FactoryType61BirthProvenance>,
@@ -1434,6 +1465,9 @@ pub struct Entity {
     /// common mover. It survives B6C0 acquisition and future task replacement;
     /// other Type-13 histories remain `None` until separately authenticated.
     pub intro2_type13_common_mover_runtime: Option<GklCommonMoverRuntime>,
+    /// Ordinary-world 104B0 receipt for a native Type13 birth. Intro2 spawn0
+    /// carries none; its identity is the captured spawn0 allocation.
+    pub(crate) native_type13_allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
     /// Entity-owned Type-13 Sub-E cadence and queued method-10 transients.
     pub intro2_type13_aim_runtime: Option<crate::intro2_type13_aim::Type13AimRuntime>,
     /// Type16 source FIFO, independent of its current behavior graph.
@@ -1506,9 +1540,25 @@ pub struct Entity {
     pub native_type122_runtime: Option<crate::native_type122::Type122Runtime>,
     /// Authenticated dynamic Type56 allocation and its own component history.
     pub native_type30_runtime: Option<crate::native_type30::Type30Runtime>,
+    /// Native Rolling Boulder class20 allocation receipt (Type3/Type27).
+    pub rolling_boulder_runtime: Option<crate::rolling_boulder::RollingBoulderRuntime>,
     pub native_type30_aim_runtime: Option<crate::native_type30::aim::Type30AimRuntime>,
     pub native_type40_runtime: Option<crate::native_type40::Type40Runtime>,
     pub native_type40_aim_runtime: Option<crate::native_type40::aim::Type40AimRuntime>,
+    /// Native ordinary Type43 E allocation and its queued Aim transactions.
+    pub native_type43_runtime: Option<crate::native_type43::Type43Runtime>,
+    pub native_type43_aim_runtime: Option<crate::native_type43::aim::Type43AimRuntime>,
+    /// Native ordinary Type38/Type129 components and queued Aim transactions.
+    pub native_type38_runtime: Option<crate::native_type38::Type38Runtime>,
+    pub native_type38_aim_runtime: Option<crate::native_type38::aim::Type38AimRuntime>,
+    /// Ordinary Type18's authored allocation and its method20 shot FIFO.
+    pub native_type18_runtime: Option<crate::native_type18::Type18Runtime>,
+    pub native_type18_aim_runtime: Option<crate::native_type18::aim::Type18AimRuntime>,
+    /// Ordinary Type28's authored allocation (no emitter).
+    pub native_type28_runtime: Option<crate::native_type28::Type28Runtime>,
+    /// Ordinary Type76/Type77's authored allocation and its shot FIFO.
+    pub native_type76_runtime: Option<crate::native_type76::Type76Runtime>,
+    pub native_type76_aim_runtime: Option<crate::native_type76::aim::Type76AimRuntime>,
     pub native_type56_runtime: Option<crate::native_type56::Type56Runtime>,
     pub native_type56_aim_runtime:
         Option<crate::intro2_native_ballistic_aim::NativeBallisticAimRuntime>,
@@ -1634,6 +1684,7 @@ impl Entity {
             entity_type: self.entity_type,
             authored_follow_beacon_priority_raw: self.authored_follow_beacon_priority_raw,
             power_up_payload_packed: self.power_up_payload_packed,
+            auto_pilot_payload_packed: self.auto_pilot_payload_packed,
             factory_type61_birth_provenance: self.factory_type61_birth_provenance,
             type60_construction_provenance: self.type60_construction_provenance,
             main_base_type54_sea_delta_source: self.main_base_type54_sea_delta_source,
@@ -1658,6 +1709,7 @@ impl Entity {
             sub_a_propulsion_runtime: self.sub_a_propulsion_runtime,
             sub_g_06070_runtime: self.sub_g_06070_runtime,
             intro2_type13_common_mover_runtime: self.intro2_type13_common_mover_runtime,
+            native_type13_allocation: self.native_type13_allocation,
             intro2_type13_aim_runtime: self.intro2_type13_aim_runtime.clone(),
             intro2_type16_aim_runtime: self.intro2_type16_aim_runtime.clone(),
             intro2_type58_aim_runtime: self.intro2_type58_aim_runtime.clone(),
@@ -1683,9 +1735,19 @@ impl Entity {
             intro2_type53_runtime: self.intro2_type53_runtime,
             native_type122_runtime: self.native_type122_runtime,
             native_type30_runtime: self.native_type30_runtime.clone(),
+            rolling_boulder_runtime: self.rolling_boulder_runtime,
             native_type30_aim_runtime: self.native_type30_aim_runtime.clone(),
             native_type40_runtime: self.native_type40_runtime,
             native_type40_aim_runtime: self.native_type40_aim_runtime.clone(),
+            native_type43_runtime: self.native_type43_runtime,
+            native_type43_aim_runtime: self.native_type43_aim_runtime.clone(),
+            native_type38_runtime: self.native_type38_runtime.clone(),
+            native_type38_aim_runtime: self.native_type38_aim_runtime.clone(),
+            native_type18_runtime: self.native_type18_runtime,
+            native_type18_aim_runtime: self.native_type18_aim_runtime.clone(),
+            native_type28_runtime: self.native_type28_runtime,
+            native_type76_runtime: self.native_type76_runtime,
+            native_type76_aim_runtime: self.native_type76_aim_runtime.clone(),
             native_type56_runtime: self.native_type56_runtime,
             native_type56_aim_runtime: self.native_type56_aim_runtime.clone(),
             native_type122_aim_runtime: self.native_type122_aim_runtime.clone(),
@@ -1739,6 +1801,7 @@ impl Entity {
             entity_type,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: None,
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: None,
             type60_construction_provenance: None,
             main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -1763,6 +1826,7 @@ impl Entity {
             sub_a_propulsion_runtime: RetailRuntimeValue::Unresolved,
             sub_g_06070_runtime: RetailRuntimeValue::Unresolved,
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -1787,9 +1851,19 @@ impl Entity {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
+            native_type43_runtime: None,
+            native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
+            native_type18_runtime: None,
+            native_type18_aim_runtime: None,
+            native_type28_runtime: None,
+            native_type76_runtime: None,
+            native_type76_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
@@ -2987,6 +3061,7 @@ fn build_type93_materialiser_entity(
         entity_type: CARGO_DROP_PROXY_ENTITY_TYPE,
         authored_follow_beacon_priority_raw: None,
         power_up_payload_packed: None,
+        auto_pilot_payload_packed: None,
         factory_type61_birth_provenance: None,
         type60_construction_provenance: None,
         main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -3022,6 +3097,7 @@ fn build_type93_materialiser_entity(
         sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(Some(metadata)),
         sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(Some(metadata)),
         intro2_type13_common_mover_runtime: None,
+        native_type13_allocation: None,
         intro2_type13_aim_runtime: None,
         intro2_type16_aim_runtime: None,
         intro2_type58_aim_runtime: None,
@@ -3050,9 +3126,19 @@ fn build_type93_materialiser_entity(
         intro2_type53_runtime: None,
         native_type122_runtime: None,
         native_type30_runtime: None,
+        rolling_boulder_runtime: None,
         native_type30_aim_runtime: None,
         native_type40_runtime: None,
         native_type40_aim_runtime: None,
+        native_type43_runtime: None,
+        native_type43_aim_runtime: None,
+        native_type38_runtime: None,
+        native_type38_aim_runtime: None,
+        native_type18_runtime: None,
+        native_type18_aim_runtime: None,
+        native_type28_runtime: None,
+        native_type76_runtime: None,
+        native_type76_aim_runtime: None,
         native_type56_runtime: None,
         native_type56_aim_runtime: None,
         native_type122_aim_runtime: None,
@@ -3117,10 +3203,9 @@ fn audited_projectile_survivor_policy(target: &Entity) -> Option<AuditedProjecti
     if target.collision.pair_callbacks.damage_modifier_address != RetailRuntimeValue::Known(None) {
         return None;
     }
-    if matches!(
-        target.entity_type,
-        MAIN_BASE_ENTITY_TYPE | FACTORY_ENTITY_TYPE
-    ) {
+    if target.entity_type == MAIN_BASE_ENTITY_TYPE
+        || crate::intro2_type66::is_working_factory_type(target.entity_type)
+    {
         return Some(AuditedProjectileSurvivorPolicy::BaseFactory);
     }
     if target.entity_type != crate::hive_controller::HIVE_ENTITY_TYPE {
@@ -4871,14 +4956,23 @@ impl EntityManager {
                     .is_some()
                     || matches!(
                         spawn.entity_type,
-                        6 | 9
+                        3 | 5
+                            | 6
+                            | 9
+                            | 13
+                            | 16
                             | 17
+                            | 18
                             | 22
                             | 23
                             | 24
                             | 26
+                            | 27
+                            | 28
                             | 30
+                            | 38
                             | 40
+                            | 43
                             | 47
                             | 49
                             | 52
@@ -4888,13 +4982,28 @@ impl EntityManager {
                             | 61
                             | 62
                             | 66
+                            | 125
                             | 68
+                            | 76
+                            | 77
+                            | 92
+                            | 94
+                            | 96
                             | 97
+                            | 99
+                            | 102
+                            | 103
                             | 104
+                            | 112
+                            | 113
                             | 115
+                            | 80
                             | 122
                             | 123
                             | 124
+                            | 126
+                            | 128
+                            | 129
                     ));
             let construction_stamp_at_0xb4 = manager.begin_common_body_attempt();
             let native_sub_d = if native_ordinary {
@@ -5204,6 +5313,15 @@ impl EntityManager {
                     .then(|| i32::from_le_bytes(entity_word_at_0x88_bytes)),
                 power_up_payload_packed: (spawn.entity_type == 61)
                     .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
+                auto_pilot_payload_packed: metadata
+                    .and_then(|metadata| metadata.initializer.as_ref())
+                    .is_some_and(|initializer| {
+                        initializer.alternate_behavior_class_ref
+                            == u32::from(
+                                crate::entity_behavior::AUTO_PILOT_BEHAVIOR_PROGRAM.class_id,
+                            )
+                    })
+                    .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
                 factory_type61_birth_provenance: None,
                 type60_construction_provenance: None,
                 main_base_type54_sea_delta_source: captured_fresh_type54_publication
@@ -5247,6 +5365,7 @@ impl EntityManager {
                 sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(metadata),
                 sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(metadata),
                 intro2_type13_common_mover_runtime: None,
+                native_type13_allocation: None,
                 intro2_type13_aim_runtime: None,
                 intro2_type16_aim_runtime: None,
                 intro2_type58_aim_runtime: None,
@@ -5292,9 +5411,19 @@ impl EntityManager {
                 intro2_type53_runtime: None,
                 native_type122_runtime: None,
                 native_type30_runtime: None,
+                rolling_boulder_runtime: None,
                 native_type30_aim_runtime: None,
                 native_type40_runtime: None,
                 native_type40_aim_runtime: None,
+                native_type43_runtime: None,
+                native_type43_aim_runtime: None,
+                native_type38_runtime: None,
+                native_type38_aim_runtime: None,
+                native_type18_runtime: None,
+                native_type18_aim_runtime: None,
+                native_type28_runtime: None,
+                native_type76_runtime: None,
+                native_type76_aim_runtime: None,
                 native_type56_runtime: None,
                 native_type56_aim_runtime: None,
                 native_type122_aim_runtime: None,
@@ -5694,6 +5823,7 @@ impl EntityManager {
             entity_type: PLAYER_ENTITY_TYPE,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: None,
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: None,
             type60_construction_provenance: None,
             main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -5727,6 +5857,7 @@ impl EntityManager {
             sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(metadata),
             sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(metadata),
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -5755,9 +5886,19 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
+            native_type43_runtime: None,
+            native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
+            native_type18_runtime: None,
+            native_type18_aim_runtime: None,
+            native_type28_runtime: None,
+            native_type76_runtime: None,
+            native_type76_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
@@ -6474,6 +6615,7 @@ impl EntityManager {
             entity_type: LEVEL_ONE_TYPE61_ENTITY_TYPE,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: Some(request.spawn_parameter_6),
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: Some(FactoryType61BirthProvenance::new(
                 source_factory,
                 request,
@@ -6515,6 +6657,7 @@ impl EntityManager {
             sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(Some(&metadata)),
             sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(Some(&metadata)),
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -6547,9 +6690,19 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
+            native_type43_runtime: None,
+            native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
+            native_type18_runtime: None,
+            native_type18_aim_runtime: None,
+            native_type28_runtime: None,
+            native_type76_runtime: None,
+            native_type76_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
@@ -7217,7 +7370,7 @@ impl EntityManager {
         match (factories.next(), factories.next()) {
             (Some(factory), None) => {
                 factory.active
-                    && factory.entity_type == FACTORY_ENTITY_TYPE
+                    && crate::intro2_type66::is_working_factory_type(factory.entity_type)
                     && matches!(
                         factory.base_factory_runtime,
                         RetailRuntimeValue::Known(Some(BaseFactoryRuntimeState {
@@ -7934,6 +8087,7 @@ impl EntityManager {
             entity_type,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: None,
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: None,
             type60_construction_provenance: None,
             main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -7976,6 +8130,7 @@ impl EntityManager {
             sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(Some(&metadata)),
             sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(Some(&metadata)),
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -8008,9 +8163,19 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
+            native_type43_runtime: None,
+            native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
+            native_type18_runtime: None,
+            native_type18_aim_runtime: None,
+            native_type28_runtime: None,
+            native_type76_runtime: None,
+            native_type76_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
@@ -8389,6 +8554,7 @@ impl EntityManager {
         player_hull: &mut crate::player_hull::PlayerHull,
         subject_death_dispatch: Option<(u32, i32, GenericEntityDamageTransition)>,
         candidate_death_dispatches: &[(u32, i32, GenericEntityDamageTransition)],
+        rolling_boulder_wakes: &[u32],
     ) -> Result<
         Vec<Type9DescriptorContactCommitOutcome>,
         crate::player_active_contact::PlayerActivePairError,
@@ -8465,6 +8631,41 @@ impl EntityManager {
             }
             descriptor_ids.push(entity_id);
         }
+        // A boulder this pass moves, damages or wakes needs its completed
+        // owner (or finished terminal); a woken one is still resting style1.
+        for (original, resolved) in original_candidates.iter().zip(resolved_candidates) {
+            let Some(entity) = self.entities.iter().find(|entity| entity.id == original.id) else {
+                continue;
+            };
+            if entity.rolling_boulder_runtime.is_none() {
+                continue;
+            }
+            let woken = rolling_boulder_wakes.contains(&original.id);
+            if (woken
+                || original.position_raw != resolved.position_raw
+                || original.velocity_raw != resolved.velocity_raw
+                || original.collision != resolved.collision)
+                && !scheduler.prepare_native_actor_mutation(&*self, original.id)
+            {
+                return Err(PlayerActivePairError::TaskCustodyUnavailable {
+                    entity_id: original.id,
+                });
+            }
+            if woken
+                && crate::rolling_boulder::current_style(entity)
+                    != Ok(crate::rolling_boulder::RollingBoulderStyle::Resting)
+            {
+                return Err(PlayerActivePairError::RollingBoulderPair {
+                    entity_id: original.id,
+                });
+            }
+        }
+        if rolling_boulder_wakes
+            .iter()
+            .any(|id| !snapshot_ids.contains(id))
+        {
+            return Err(PlayerActivePairError::TopologyChangedBeforeCommit);
+        }
 
         // Lethal packets staged by the planner run here, after every
         // fallible body/descriptor check and before any scheduler, descriptor
@@ -8537,6 +8738,19 @@ impl EntityManager {
         // capture path performs checked damage and death without moving them.
         // Only native Type17 owns such a dispatch; every other lethal family
         // preserves the previous fail-closed Core boundary exactly.
+        //
+        // 40C730 ran inside the pair walk, before 411760's damage: install
+        // rolling style0 on each woken live boulder first. The planned
+        // collision copied below already carries the same 40EA10 bits.
+        for &id in rolling_boulder_wakes {
+            let entity = self
+                .entities
+                .iter_mut()
+                .find(|entity| entity.id == id)
+                .expect("validated woken boulder disappeared before commit");
+            crate::rolling_boulder::wake_resting_boulder(entity)
+                .map_err(|_| PlayerActivePairError::RollingBoulderPair { entity_id: id })?;
+        }
         let mut death_dispatched_ids = Vec::with_capacity(candidate_death_dispatches.len());
         for &(entity_id, capped_pair_damage_raw, transition) in candidate_death_dispatches {
             let native_spider = self
@@ -8568,6 +8782,7 @@ impl EntityManager {
                     owner_handle: original_subject.id,
                 },
                 &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
                     tasks: &mut *scheduler,
                     world_fx: &mut *world_fx,
                     notifications: &mut *notifications,
@@ -9545,7 +9760,7 @@ impl EntityManager {
             if let Some(death_sound_id) = death_sound_id {
                 // FUN_00419010 stage 32 queues the tracked type-61 through the
                 // deferred helper before FUN_00419750. A zero handle is a no-op.
-                if entity.entity_type == FACTORY_ENTITY_TYPE {
+                if crate::intro2_type66::is_working_factory_type(entity.entity_type) {
                     if let Some(production) = runtime.production {
                         if production.spawned_pickup_handle != 0 {
                             progressive_pickup_destroys.push(production.spawned_pickup_handle);
@@ -9587,7 +9802,9 @@ impl EntityManager {
                     target_id: entity.id,
                     target_position_raw: model_origin_raw,
                     death_sound_id,
-                    full_frame_sequence_requested: entity.entity_type == FACTORY_ENTITY_TYPE,
+                    full_frame_sequence_requested: crate::intro2_type66::is_working_factory_type(
+                        entity.entity_type,
+                    ),
                 });
                 if entity.entity_type == MAIN_BASE_ENTITY_TYPE {
                     events.push(BaseFactoryProgressionEvent::MainBaseLevelAbort {
@@ -9632,7 +9849,7 @@ impl EntityManager {
     ) -> Vec<FactoryAbortProgressionStarted> {
         let mut started = Vec::new();
         for entity in &mut self.entities {
-            if entity.entity_type != FACTORY_ENTITY_TYPE {
+            if !crate::intro2_type66::is_working_factory_type(entity.entity_type) {
                 continue;
             }
             if classify_main_base_abort_actor(MainBaseAbortActorFacts {
@@ -12427,16 +12644,18 @@ impl EntityManager {
         self.beam_timer_ms
     }
 
-    /// Advance the signed beam delay using `FUN_00446640`'s exact arithmetic.
-    ///
-    /// The timestep truncates from microseconds to whole milliseconds for the
-    /// expiry comparison. Retail uses a strict crossing, but its variable
-    /// callback cadence does not normally land exactly on the 80-ms endpoint.
-    /// The port's 16-ms frame limiter does (80, 64, 48, 32, 16, 0), which would
-    /// deterministically swallow the command. Treat equality as expiry here so
-    /// the recovered delay remains usable independently of display cadence.
+    /// Advance the signed beam delay with the port's default fix
+    /// ([`BeamExpiry::AtZero`]).
     pub fn tick_beam(&mut self, dt_us: u32) -> Option<BeamOutcome> {
-        self.tick_beam_with_drop_context(dt_us, None)
+        self.tick_beam_with_expiry(dt_us, BeamExpiry::AtZero)
+    }
+
+    /// Advance the signed beam delay using `FUN_00446640`'s arithmetic. The
+    /// timestep truncates from microseconds to whole milliseconds for the
+    /// expiry comparison; `expiry` decides whether landing exactly on zero
+    /// fires, as the port fix does, or clears the command, as retail does.
+    pub fn tick_beam_with_expiry(&mut self, dt_us: u32, expiry: BeamExpiry) -> Option<BeamOutcome> {
+        self.tick_beam_with_callbacks(dt_us, None, expiry, &mut AttachmentProjectionCallbacks)
     }
 
     /// Advance the beam timer with the carrier basis and terrain required by
@@ -12448,13 +12667,19 @@ impl EntityManager {
         dt_us: u32,
         drop_context: Option<CargoDropContext<'_>>,
     ) -> Option<BeamOutcome> {
-        self.tick_beam_with_callbacks(dt_us, drop_context, &mut AttachmentProjectionCallbacks)
+        self.tick_beam_with_callbacks(
+            dt_us,
+            drop_context,
+            BeamExpiry::AtZero,
+            &mut AttachmentProjectionCallbacks,
+        )
     }
 
     fn tick_beam_with_callbacks<C: CargoRelationCallbacks>(
         &mut self,
         dt_us: u32,
         drop_context: Option<CargoDropContext<'_>>,
+        expiry: BeamExpiry,
         callbacks: &mut C,
     ) -> Option<BeamOutcome> {
         let timer = self.beam_timer_ms;
@@ -12464,16 +12689,22 @@ impl EntityManager {
 
         let step_ms = dt_us / 1_000;
         let narrowed_step = step_ms as u8 as i8;
+        // 4466EE/446720 `cmp remaining, step; jle` keeps counting down unless
+        // the step overshoots; at zero the countdown write clears the byte.
+        let expires = |remaining: u32| match expiry {
+            BeamExpiry::Retail => step_ms > remaining,
+            BeamExpiry::AtZero => step_ms >= remaining,
+        };
         if timer < 0 {
             let remaining = u32::from((-i16::from(timer)) as u16);
-            if remaining <= step_ms {
+            if expires(remaining) {
                 self.beam_timer_ms = 0;
                 Some(self.start_drop_proxy(drop_context, callbacks))
             } else {
                 self.beam_timer_ms = timer.wrapping_add(narrowed_step);
                 None
             }
-        } else if u32::from(timer as u8) <= step_ms {
+        } else if expires(u32::from(timer as u8)) {
             self.beam_timer_ms = 0;
             Some(self.collect_nearest_cargo(callbacks))
         } else {
@@ -13954,9 +14185,67 @@ pub(crate) fn apply_type9_carried_environment_raw(
 /// Type-17 Section-12 mass at `+0x04`, consumed by `FUN_0040E100`.
 pub(crate) const LEVEL_ONE_TYPE17_SELF_MASS_RAW: u16 = 100;
 
+/// E100 for an effective-8 flyer with no Sub-C and no water response:
+/// gravity, then EC60. Mode zero keeps the established drag fallback. A
+/// nonzero mode (E100 passes the callback delta through unchanged) reads the
+/// terrain and the post-F70 basis and moves pitch/roll without a rebuild.
+/// Every input is checked before any write.
+pub(crate) fn apply_effective8_flyer_environment(
+    entity: &mut Entity,
+    physics: CommonEnvironmentPhysics,
+    terrain: Option<&TerrainGrid>,
+    elapsed_micros: u32,
+) -> Result<(), &'static str> {
+    let mut velocity = entity.velocity_raw();
+    if physics.runtime_wind_mode == 0 {
+        apply_type13_common_environment_raw(
+            &mut velocity,
+            elapsed_micros,
+            entity.mass_raw,
+            physics.runtime_wind_mode,
+            physics.drag_strength,
+        );
+    } else {
+        let (Some(terrain), RetailRuntimeValue::Known(basis), Some(mass)) = (
+            terrain,
+            entity.physical_body_basis_q31,
+            std::num::NonZeroU16::new(entity.mass_raw),
+        ) else {
+            return Err("wind frame");
+        };
+        apply_common_gravity_and_underwater_raw(
+            &mut velocity,
+            elapsed_micros,
+            CommonUnderwaterFrame {
+                effective_environment_flags: 8,
+                water_response_enabled: false,
+                position_y_raw: 0,
+                solid_or_sea_y_raw: 0,
+                self_mass_raw: entity.mass_raw,
+                attached_cargo_mass: 0,
+            },
+        );
+        let mut angles = entity.rotation_heading_pitch_roll_raw();
+        crate::common_mover::environment::apply_common_wind_drag_raw(
+            &mut velocity,
+            &mut angles,
+            crate::common_mover::environment::CommonWindDrag::from_environment(physics),
+            crate::common_mover::environment::CommonWindDragFrame {
+                terrain,
+                position_raw: entity.position_raw(),
+                basis,
+                callback_mass_raw: mass,
+                elapsed_micros,
+            },
+        );
+        entity.set_rotation_heading_pitch_roll_raw(angles);
+    }
+    entity.set_velocity_raw(velocity);
+    Ok(())
+}
+
 /// Type-13's admitted Intro2 E100 profile: live effective flags 8, no Sub-C,
-/// then mode-zero 4EC60 drag from the current level. The world owner checks
-/// the post-task flags and wind mode before entering this suffix.
+/// then mode-zero 4EC60 drag from the current level.
 pub(crate) fn apply_type13_common_environment_raw(
     velocity_raw: &mut [i16; 3],
     elapsed_micros: u32,
@@ -25981,6 +26270,35 @@ mod tests {
     }
 
     #[test]
+    fn retail_beam_timer_loses_commands_that_land_on_zero() {
+        let mut manager = make_cargo_manager(1);
+        set_entity_position(&mut manager, 1, [10.0, 0.0, 10.0]);
+        set_entity_position(&mut manager, 2, [11.0, 0.0, 10.0]);
+
+        // Retail's 125-fps cap gives 8-ms frames: 80, 72, ..., 8, then a step
+        // that lands on zero clears the command unfired.
+        manager.queue_beam(BeamCommand::Collect);
+        for _ in 0..10 {
+            assert_eq!(
+                manager.tick_beam_with_expiry(8_999, BeamExpiry::Retail),
+                None
+            );
+        }
+        assert_eq!(manager.beam_timer_ms(), 0);
+        assert_eq!(manager.attached_cargo_mass(), 0);
+        // A step that overshoots still fires.
+        manager.queue_beam(BeamCommand::Collect);
+        assert_eq!(
+            manager.tick_beam_with_expiry(72_000, BeamExpiry::Retail),
+            None
+        );
+        assert_eq!(
+            manager.tick_beam_with_expiry(9_000, BeamExpiry::Retail),
+            Some(BeamOutcome::Collected { entity_id: 2 })
+        );
+    }
+
+    #[test]
     fn beam_timer_expires_on_equality_so_frame_cadence_cannot_swallow_commands() {
         let mut manager = make_cargo_manager(1);
         let terrain = flat_terrain(0);
@@ -25988,13 +26306,13 @@ mod tests {
         set_entity_position(&mut manager, 2, [11.0, 0.0, 10.0]);
 
         manager.queue_beam(BeamCommand::Collect);
-        // The port targets 16-ms frames, an exact divisor of the authored
-        // 80-ms delay. Five ordinary frames must still dispatch the command.
-        for _ in 0..4 {
-            assert_eq!(manager.tick_beam(16_000), None);
+        // Retail's 8-ms frames divide the authored 80-ms delay exactly. With
+        // the port fix the tenth frame still dispatches the command.
+        for _ in 0..9 {
+            assert_eq!(manager.tick_beam(8_000), None);
         }
         assert_eq!(
-            manager.tick_beam(16_000),
+            manager.tick_beam(8_000),
             Some(BeamOutcome::Collected { entity_id: 2 })
         );
         assert_eq!(manager.beam_timer_ms(), 0);

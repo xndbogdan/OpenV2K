@@ -332,6 +332,7 @@ fn type30_reselection_does_not_read_unused_people_predicate_or_last_hit_word() {
         id,
         1234,
         &mut WorldFx::new(),
+        None,
         shared::behavior::ReselectionEntry::TaskResult,
     )
     .unwrap();

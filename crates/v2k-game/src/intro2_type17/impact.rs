@@ -202,6 +202,7 @@ fn run(
                 id,
                 super::capture::CaptureRootCallback::Cleanup,
                 &mut super::capture::CaptureContext {
+                    resources: None,
                     tasks: scheduler,
                     world_fx,
                     notifications,
@@ -270,6 +271,7 @@ fn run(
                 manager,
                 id,
                 &mut super::capture::CaptureContext {
+                    resources: None,
                     tasks: scheduler,
                     world_fx,
                     notifications: feedback.notifications,

@@ -321,6 +321,7 @@ fn native_aim_invalid_target_precedes_expiry_and_uses_the_1000_owner_gate() {
             id,
             300,
             &mut fx,
+            None,
             behavior::ReselectionEntry::TaskResult,
         )
         .unwrap();

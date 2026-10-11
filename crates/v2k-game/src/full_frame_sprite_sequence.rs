@@ -103,6 +103,48 @@ pub fn decode_full_frame_sprite(
 mod tests {
     use super::*;
 
+    /// The faststart04 recording's Intro2 card frames (ticks 4003..4026):
+    /// each entry fills the 640x480 surface with one RGB565 colour, ending
+    /// on black. 0x227 is masked and copies its texels. The rest add over the
+    /// card's black clear through the additive rows, which keep the top four
+    /// bits of each field (`0xF79E`).
+    #[v2k_test_support::retail_test]
+    fn intro2_card_frames_match_the_recorded_fade() {
+        let data_root = v2k_test_support::retail_dir();
+        let mut session = crate::session::GameSession::init(&data_root).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        session.load_level_by_id(50, 1).unwrap();
+        let recorded: [u16; 8] = [
+            0xB596, 0xB596, 0xB596, 0xB596, 0x8410, 0x738E, 0x528A, 0x2104,
+        ];
+        let mut sequence = FullFrameSpriteSequence::default();
+        sequence.request();
+        for expected in recorded {
+            let frame = sequence.current_frame().unwrap();
+            let sprite = decode_full_frame_sprite(&session.cache, frame).unwrap();
+            let colours = sprite
+                .rgba
+                .chunks_exact(4)
+                .map(|px| {
+                    (u16::from(px[0] >> 3) << 11)
+                        | (u16::from(px[1] >> 2) << 5)
+                        | u16::from(px[2] >> 3)
+                })
+                .collect::<Vec<_>>();
+            let composite = |colour: u16| match sprite.blend {
+                WorldSpriteBlend::Masked => colour,
+                _ => colour & 0xF79E,
+            };
+            assert!(
+                colours.iter().all(|&colour| composite(colour) == expected),
+                "sprite {:#x}: {colours:04X?}, recorded {expected:04X}",
+                frame.global_sprite_id,
+            );
+            assert!(sequence.acknowledge_submitted(frame));
+        }
+        assert!(!sequence.is_active());
+    }
+
     #[test]
     fn request_walks_the_exact_eight_frame_table_then_clears() {
         let mut sequence = FullFrameSpriteSequence::default();

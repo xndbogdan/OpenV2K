@@ -160,6 +160,7 @@ pub enum ActorTaskRuntimeFamily {
     ExplodingRing,
     HiveRadial,
     BoulderRolling,
+    BoulderResting,
     TrailingFire,
     RocketFlight,
     RocketTrail,
@@ -210,6 +211,8 @@ pub enum ActorTaskRuntime {
     ExplodingRing(crate::type60_exploding_ring::Type60ExplodingRingTaskState),
     HiveRadial(HiveRadialTaskState),
     BoulderRolling(crate::intro2_meteors::BoulderRollingTaskState),
+    /// Class20 style1 `404B40 -> 404B60` stop-when-slow task.
+    BoulderResting(crate::rolling_boulder::BoulderRestingTaskState),
     TrailingFire(crate::intro2_meteors::TrailingFireTaskState),
     RocketFlight(crate::native_entity_weapons::rocket::RocketFlightTaskState),
     /// 4069E0's class31 private payload; no timer or component reset.
@@ -267,6 +270,7 @@ impl ActorTaskRuntime {
             Self::ExplodingRing(_) => ActorTaskRuntimeFamily::ExplodingRing,
             Self::HiveRadial(_) => ActorTaskRuntimeFamily::HiveRadial,
             Self::BoulderRolling(_) => ActorTaskRuntimeFamily::BoulderRolling,
+            Self::BoulderResting(_) => ActorTaskRuntimeFamily::BoulderResting,
             Self::TrailingFire(_) => ActorTaskRuntimeFamily::TrailingFire,
             Self::RocketFlight(_) => ActorTaskRuntimeFamily::RocketFlight,
             Self::RocketTrail => ActorTaskRuntimeFamily::RocketTrail,
@@ -1800,6 +1804,9 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::BoulderRolling(_)) => {
                 Some(ActorTaskRuntimeFamily::BoulderRolling)
             }
+            Some(ActorTaskRuntime::BoulderResting(_)) => {
+                Some(ActorTaskRuntimeFamily::BoulderResting)
+            }
             Some(ActorTaskRuntime::TrailingFire(_)) => Some(ActorTaskRuntimeFamily::TrailingFire),
             Some(ActorTaskRuntime::RocketFlight(_)) => Some(ActorTaskRuntimeFamily::RocketFlight),
             Some(ActorTaskRuntime::RocketTrail) => Some(ActorTaskRuntimeFamily::RocketTrail),
@@ -1913,6 +1920,9 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             }
             ActorTaskRuntime::BoulderRolling(_) | ActorTaskRuntime::TrailingFire(_) => {
                 unreachable!("Boulder tasks require the exact Intro2 meteor visit")
+            }
+            ActorTaskRuntime::BoulderResting(_) => {
+                unreachable!("Resting boulders require their native class20 visit")
             }
             ActorTaskRuntime::RocketFlight(_) | ActorTaskRuntime::RocketTrail => {
                 unreachable!("Entity weapons require their native body visit")
@@ -2175,6 +2185,9 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             }
             ActorTaskRuntimeFamily::BoulderRolling | ActorTaskRuntimeFamily::TrailingFire => {
                 unreachable!("Boulder tasks require the exact Intro2 meteor visit")
+            }
+            ActorTaskRuntimeFamily::BoulderResting => {
+                unreachable!("Resting boulders require their native class20 visit")
             }
             ActorTaskRuntimeFamily::RocketFlight | ActorTaskRuntimeFamily::RocketTrail => {
                 unreachable!("Entity weapons require their native body visit")

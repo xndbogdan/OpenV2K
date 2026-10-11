@@ -39,8 +39,13 @@
 
 mod callback_failure;
 pub mod impact;
+mod ordinary;
 mod post_task_basis;
 mod world;
+
+pub(crate) use ordinary::{
+    publish_authored_type13, type13_manager_allocation_authenticates, Type13AuthoredConstruction,
+};
 
 pub use world::{
     tick_intro2_type13_world_owner_with_random, Intro2Type13WorldBlock, Intro2Type13WorldDrop,
@@ -131,6 +136,8 @@ pub enum Intro2Type13BirthSelection {
 pub enum Intro2Type13PublicationError {
     EntityIdentityMismatch,
     UnexpectedModel,
+    AlreadyPublished,
+    ComponentStorage,
     BehaviorContextUnavailable,
     SubGRuntimeUnavailable,
     Selection(Type13InitialBehaviorError),
@@ -198,23 +205,28 @@ pub struct Intro2Type13PrimaryFrame<'a> {
     pub retail_tick: u32,
 }
 
+/// Intro2's captured spawn0, or an ordinary 104B0 birth carrying its own
+/// allocation receipt. A receipt never falls back to the spawn0 identity.
 pub fn authenticate_intro2_type13(
     entity: &Entity,
 ) -> Result<Intro2Type13Admission, Intro2Type13PublicationError> {
-    if !entity.active
-        || entity.entity_type != TYPE13_ENTITY_TYPE
-        || entity.authored_spawn_index != Some(INTRO2_TYPE13_SPAWN_INDEX)
-    {
+    if !entity.active || entity.entity_type != TYPE13_ENTITY_TYPE {
         return Err(Intro2Type13PublicationError::EntityIdentityMismatch);
     }
+    let spawn_index = match entity.native_type13_allocation {
+        Some(lease) if lease.entity_id == entity.id => entity.authored_spawn_index,
+        Some(_) => None,
+        None => entity
+            .authored_spawn_index
+            .filter(|&index| index == INTRO2_TYPE13_SPAWN_INDEX),
+    }
+    .ok_or(Intro2Type13PublicationError::EntityIdentityMismatch)?;
     if entity.model_slots != [Some(INTRO2_TYPE13_MODEL_ID); 4]
         || entity.model_index != Some(INTRO2_TYPE13_MODEL_ID)
     {
         return Err(Intro2Type13PublicationError::UnexpectedModel);
     }
-    Ok(Intro2Type13Admission {
-        spawn_index: INTRO2_TYPE13_SPAWN_INDEX,
-    })
+    Ok(Intro2Type13Admission { spawn_index })
 }
 
 fn captured_intro2_type13_class7_plan(
@@ -243,7 +255,8 @@ pub fn publish_intro2_type13_view_detail(
     let entity_id = manager
         .iter_all()
         .find(|entity| {
-            authenticate_intro2_type13(entity).is_ok()
+            entity.native_type13_allocation.is_none()
+                && authenticate_intro2_type13(entity).is_ok()
                 && entity.intro2_type13_common_mover_runtime.is_some()
         })
         .map(|entity| entity.id)
@@ -280,9 +293,29 @@ pub fn publish_intro2_type13(
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<Intro2Type13Admission, Intro2Type13PublicationError> {
     let admission = authenticate_intro2_type13(entity)?;
-    if entity.position_raw() != INTRO2_TYPE13_POSITION_RAW {
+    if entity.native_type13_allocation.is_some()
+        || entity.position_raw() != INTRO2_TYPE13_POSITION_RAW
+    {
         return Err(Intro2Type13PublicationError::EntityIdentityMismatch);
     }
+    publish_birth(
+        entity,
+        metadata,
+        birth_selection,
+        GklCommonMoverRuntime::from_intro2_constructor_capture(),
+        next_random,
+    )?;
+    Ok(admission)
+}
+
+/// 09A80's G/D/K/L birth after identity: 1B8C0, then 425680 and ACD0/B6C0.
+fn publish_birth(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    birth_selection: Intro2Type13BirthSelection,
+    common_mover: GklCommonMoverRuntime,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<(), Intro2Type13PublicationError> {
     apply_intro2_type13_1b8c0(entity, next_random)?;
     let planned = match birth_selection {
         Intro2Type13BirthSelection::Weighted => {
@@ -294,13 +327,12 @@ pub fn publish_intro2_type13(
     publish_type13_initial_behavior(entity, metadata, planned, &mut *next_random)
         .map_err(Intro2Type13PublicationError::Constructor)?;
     entity.initial_behavior = RetailRuntimeValue::Known(Some(planned.selection));
-    entity.intro2_type13_common_mover_runtime =
-        Some(GklCommonMoverRuntime::from_intro2_constructor_capture());
+    entity.intro2_type13_common_mover_runtime = Some(common_mover);
     // Native birth policy for retail's unwritten allocator word +B2. Choose
     // deterministic zero once, as for the other native Intro2 actors; neither
     // task reselection nor world admission may replace a later contribution.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
-    Ok(admission)
+    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -738,9 +770,26 @@ impl Intro2Type13SchedulerOwner {
             entity.active
                 && entity.entity_type == TYPE13_ENTITY_TYPE
                 && entity.authored_spawn_index == Some(INTRO2_TYPE13_SPAWN_INDEX)
+                && entity.native_type13_allocation.is_none()
         }) else {
             return Err(Intro2Type13SchedulerAdoptionError::EntityUnavailable);
         };
+        Self::adopt_published(entity)
+    }
+
+    /// Adopt one allocation by identity: Intro2 spawn0, or an ordinary
+    /// receipt issued by this manager generation.
+    pub fn adopt_entity(
+        manager: &crate::entity::EntityManager,
+        entity_id: u32,
+    ) -> Result<Self, Intro2Type13SchedulerAdoptionError> {
+        let entity = manager
+            .iter_all()
+            .find(|entity| entity.id == entity_id)
+            .ok_or(Intro2Type13SchedulerAdoptionError::EntityUnavailable)?;
+        if !type13_manager_allocation_authenticates(manager, entity_id) {
+            return Err(Intro2Type13SchedulerAdoptionError::GraphUnavailable { entity_id });
+        }
         Self::adopt_published(entity)
     }
 

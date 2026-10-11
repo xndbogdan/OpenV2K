@@ -25,6 +25,20 @@ use crate::{
 use v2k_formats::collision::{BehaviorChoice, StatusComponentDescriptor};
 
 pub const INTRO2_TYPE66_SPAWN_INDICES: [usize; 2] = [36, 51];
+/// Section-12 rows sharing the class-39 Working Factory constructor. Type125
+/// differs from Type66 only in its model slots.
+pub const fn is_working_factory_type(entity_type: u32) -> bool {
+    matches!(entity_type, 66 | 125)
+}
+
+pub const fn working_factory_model_slots(entity_type: u32) -> Option<[u16; 4]> {
+    match entity_type {
+        66 => Some([210, 225, 210, 225]),
+        125 => Some([231, 225, 231, 225]),
+        _ => None,
+    }
+}
+
 pub const INITIAL_HEALTH_RAW: i32 = 99_999;
 pub const INITIALIZER_STATE_RAW: u32 = 0x0002_5027;
 pub const STATUS_DESCRIPTOR: StatusComponentDescriptor = StatusComponentDescriptor {
@@ -107,7 +121,7 @@ pub(crate) fn intro2_type66_allocation_authenticates(entity: &Entity) -> bool {
     entity.active
         && entity.id == runtime.entity_id
         && runtime.allocation.entity_id == entity.id
-        && entity.entity_type == 66
+        && is_working_factory_type(entity.entity_type)
         && entity.authored_spawn_index == Some(runtime.spawn_index)
         && entity.model_slots == runtime.model_slots
         && matches!(entity.base_factory_runtime, RetailRuntimeValue::Known(Some(factory))

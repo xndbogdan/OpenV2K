@@ -73,7 +73,7 @@ impl AttachedParticleDamageRequest {
 /// The mutable world includes nested class49 radial calls and their terrain
 /// writes. This function enters15040 directly without a primary/style hit.
 pub fn apply_attached_particle_damage(
-    frame: AttachedParticleDamageFrame<'_>,
+    mut frame: AttachedParticleDamageFrame<'_>,
     request: AttachedParticleDamageRequest,
 ) -> Result<i32, AttachedParticleDamageBlock> {
     let id = request.target_handle;
@@ -174,16 +174,52 @@ pub fn apply_attached_particle_damage(
         feedback: None,
     };
     if fish {
+        let auto_pilot = frame
+            .entities
+            .iter_all()
+            .any(|entity| entity.id == id && entity.entity_type == 124);
         let result = apply_live_actor_checked_damage(
             frame.entities,
             frame.world_fx,
             live_request,
             |entities, world_fx, _| {
-                crate::shared_fish::death::begin_shared_fish_standard_death(
-                    entities,
+                if !auto_pilot {
+                    return crate::shared_fish::death::begin_shared_fish_standard_death(
+                        entities,
+                        id,
+                        world_fx,
+                        frame.scheduler,
+                    );
+                }
+                // Type124's class63 takes BAF0's radial with this frame's world.
+                use crate::class49_terminal::Class49WorldContext;
+                crate::shared_fish::death::run_type124_auto_pilot_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities,
+                        resources: &mut *frame.resources,
+                        world_fx,
+                        static_damage: &mut *frame.static_damage,
+                        notifications: &mut *frame.notifications,
+                        retail_tick: frame.retail_tick,
+                        world: match &mut frame.world {
+                            AttachedParticleDamageWorld::Cinematic => {
+                                Class49WorldContext::Cinematic {
+                                    actor_tasks: &mut *frame.scheduler,
+                                    active_terminal_calls: Vec::new(),
+                                }
+                            }
+                            AttachedParticleDamageWorld::Playing {
+                                player_hull,
+                                extra_lives,
+                            } => Class49WorldContext::Playing {
+                                scheduler: &mut *frame.scheduler,
+                                player_hull,
+                                extra_lives: *extra_lives,
+                                active_terminal_calls: Vec::new(),
+                            },
+                        },
+                    },
                     id,
-                    world_fx,
-                    frame.scheduler,
                 )
             },
         );

@@ -126,9 +126,9 @@ use v2k_game::native_entity_weapons::{
 };
 use v2k_game::opening::{
     active_captions, intro2_backdrop, intro2_finished, intro2_uses_live_actor_pose,
-    intro_actor_heading, intro_actor_pose, intro_actor_visible, Intro2Backdrop,
-    IntroCameraController, IntroCameraEyeUpdate, FIRST_WORLD_LEVEL_ID, INTRO2_DURATION_SECS,
-    INTRO2_LEVEL_ID, POST_INTRO_SOUND_ID,
+    intro_actor_heading, intro_actor_pose, intro_actor_visible, story_caption_cursor_visible,
+    Intro2Backdrop, IntroCameraController, IntroCameraEyeUpdate, FIRST_WORLD_LEVEL_ID,
+    INTRO2_DURATION_SECS, INTRO2_LEVEL_ID, POST_INTRO_SOUND_ID, STORY_CAPTION_CURSOR,
 };
 use v2k_game::overlay_51_backdrop::Overlay51Backdrop;
 use v2k_game::pad_layout::{PadAction, PadBindings, PadContext};
@@ -162,7 +162,7 @@ use v2k_game::primary_weapon::{
 };
 use v2k_game::projectile_emitter::projectile_class_row;
 use v2k_game::radial_damage::radial_distance_raw;
-use v2k_game::retail_clock::RetailTickClock;
+use v2k_game::retail_clock::{RetailFramePump, RetailTickClock};
 use v2k_game::save::{SaveManager, SavePathContext, SaveSource, SavedPlayerState};
 use v2k_game::specialized_actor_task_production::{
     SpecializedActorTaskProductionFrame, SpecializedActorTaskProductionOutcome,
@@ -1103,6 +1103,21 @@ struct Cli {
     /// (`controller_layout` in port-config.json).
     #[arg(long, value_enum)]
     controller_layout: Option<ControllerLayoutArg>,
+
+    /// Port fix for a retail bug, on unless saved off: fire a beam command
+    /// (C collects, D drops) when its 80-ms countdown lands exactly on zero,
+    /// which every frame does at retail's 125-fps cap. `false` restores
+    /// retail's countdown for this run (`fixes.beam_commands` in
+    /// port-config.json).
+    #[arg(long, value_name = "BOOL", action = clap::ArgAction::Set)]
+    beam_commands: Option<bool>,
+}
+
+/// Single-run overrides of saved port preferences; none is written back.
+#[derive(Clone, Copy, Debug, Default)]
+struct RunOverrides {
+    controller_layout: Option<ControllerLayout>,
+    beam_commands: Option<bool>,
 }
 
 /// CLI spelling of [`v2k_render::ControllerLayout`].
@@ -1488,7 +1503,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cli.overlay_depth_policy
                     .unwrap_or(OverlayDepthPolicyArg::TerrainRecede)
                     .to_policy(),
-                cli.controller_layout.map(ControllerLayoutArg::to_layout),
+                RunOverrides {
+                    controller_layout: cli.controller_layout.map(ControllerLayoutArg::to_layout),
+                    beam_commands: cli.beam_commands,
+                },
             );
             if let Err(error) = outcome {
                 if cli.launcher
@@ -1591,7 +1609,7 @@ fn run_game(
     enter_world_immediately: bool,
     vtol_trace_path: Option<&Path>,
     overlay_depth_policy: v2k_render::OverlayDepthPolicy,
-    controller_layout: Option<ControllerLayout>,
+    overrides: RunOverrides,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
@@ -1610,8 +1628,19 @@ fn run_game(
         config.self_righting
     );
     // A game controller's bindings follow the screen; see pad_layout.
-    let mut pad_bindings = PadBindings::new(controller_layout.unwrap_or(config.controller_layout));
+    let mut pad_bindings = PadBindings::new(
+        overrides
+            .controller_layout
+            .unwrap_or(config.controller_layout),
+    );
     log!("Controller layout: {}", pad_bindings.layout().label());
+    // The port's fixes for retail bugs: saved, or overridden for this run.
+    let mut port_fixes = config.fixes;
+    if let Some(enabled) = overrides.beam_commands {
+        port_fixes.beam_commands = enabled;
+    }
+    log!("Port fixes: {port_fixes:?}");
+    let beam_expiry = v2k_game::entity::BeamExpiry::from_port_fix(port_fixes.beam_commands);
 
     // Determine backend
     let cli_override = match renderer_choice {
@@ -1951,6 +1980,10 @@ fn run_game(
     world_projection.apply_to(&mut camera, (render_w, render_h));
     let mut chase_camera = ChaseCameraState::default();
     let mut intro_camera = IntroCameraController::default();
+    // 503C0's final-card latch (world+28A) together with the 44F3E0(0x20)
+    // positional-audio mask it sets. Only 453E00's 44F400(0x20) at the next
+    // world's entry clears the mask, so it outlives Intro2 into PostIntro.
+    let mut intro2_final_card = false;
     let mut post_intro_world_cover: Option<MenuShell> = None;
     let mut intro_commands = v2k_game::intro2_commands::Intro2Commands::default();
     // DAT_004F72E8 belongs to the common authored-text renderer. Intro2 and
@@ -2019,8 +2052,9 @@ fn run_game(
     let mouse_sensitivity = 0.003_f32;
     let fly_speed = 50.0_f32;
 
-    let target_frame_time = Duration::from_millis(16);
-    let mut last_frame = Instant::now();
+    // FUN_00494070 runs a frame only once FUN_00495FF0's whole-millisecond
+    // clock has advanced 8 ms, so frames top out at 125 a second.
+    let mut frame_pump = RetailFramePump::new();
     // Exact process-global 50-Hz clock (`DAT_004FED60`). Active engine states
     // advance it once per frame; loading, the AVI and gameplay pause freeze it.
     let mut retail_clock = RetailTickClock::new();
@@ -2032,13 +2066,11 @@ fn run_game(
     let mut gameplay_overlay_frame = GameplayOverlayFrame::default();
 
     'main_loop: loop {
-        let now = Instant::now();
-        let frame_delta = now.duration_since(last_frame);
-        let uncapped_elapsed_micros = frame_delta.as_micros().min(u128::from(u32::MAX)) as u32;
+        let frame_delta_micros = frame_pump.wait_for_frame();
+        let uncapped_elapsed_micros = frame_delta_micros.min(u64::from(u32::MAX)) as u32;
         let elapsed_micros = uncapped_elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
         let dt = elapsed_micros as f32 / 1_000_000.0;
         let mut retail_tick = retail_clock.current();
-        last_frame = now;
 
         // Process events — behavior depends on game state
         let mut events = Vec::new();
@@ -2818,7 +2850,7 @@ fn run_game(
                 state = GameState::Menu(shell);
                 // Teardown is synchronous and must not become the first
                 // frontend clock advance.
-                reset_frame_clock_after_blocking_load(&mut last_frame);
+                frame_pump.restart();
                 continue;
             }
 
@@ -3617,9 +3649,10 @@ fn run_game(
                 }
                 match specialized_actor_tasks.adopt_intro2_type13_search_attack(&em) {
                     0 => {}
-                    adopted => {
-                        log!("Intro2 type-13: adopted {adopted} B6C0 Search And Attack owner")
-                    }
+                    adopted => log!(
+                        "Type-13: adopted {adopted} Search And Attack/Aimless owner{}",
+                        if adopted == 1 { "" } else { "s" }
+                    ),
                 }
                 match specialized_actor_tasks.adopt_intro2_type26(&em) {
                     0 => {}
@@ -3643,9 +3676,15 @@ fn run_game(
                 }
                 specialized_actor_tasks.adopt_intro2_type53(&em);
                 specialized_actor_tasks.adopt_type122(&em);
+                specialized_actor_tasks.adopt_type18(&em);
+                specialized_actor_tasks.adopt_type28(&em);
+                specialized_actor_tasks.adopt_type76_family(&em);
                 specialized_actor_tasks.adopt_type30(&em);
+                specialized_actor_tasks.adopt_rolling_boulders(&em);
                 specialized_actor_tasks.adopt_type40(&em);
                 specialized_actor_tasks.adopt_type56(&em);
+                specialized_actor_tasks.adopt_type43(&em);
+                specialized_actor_tasks.adopt_type38_family(&em);
                 specialized_actor_tasks.adopt_shared_fish(&em);
                 specialized_actor_tasks.adopt_cleansing_vehicle(&em);
                 specialized_actor_tasks.adopt_intro2_type16(&em);
@@ -3748,6 +3787,7 @@ fn run_game(
                             }
                         }
                         log!("Intro2: advancing behind Klaus's opening morph");
+                        intro2_final_card = false;
                         GameState::OpeningCinematic {
                             exit_pending: false,
                             elapsed: 0.0,
@@ -3755,6 +3795,8 @@ fn run_game(
                         }
                     }
                     LoadingPurpose::ResumePostIntro { mut shell } => {
+                        // 453E00 clears 44F3E0's mask bit 0x20 at this entry.
+                        intro2_final_card = false;
                         // Retail starts global id 50 only once the first-world
                         // load/HUD setup has completed. Global 50 is physical
                         // sec11_3XX_043, verified as a 62,700-byte PCM blob.
@@ -3788,6 +3830,7 @@ fn run_game(
                         );
                         // Direct --level 50 remains a development entry and
                         // has no frontend presentation to carry across load.
+                        intro2_final_card = false;
                         GameState::OpeningCinematic {
                             exit_pending: false,
                             elapsed: 0.0,
@@ -3801,7 +3844,7 @@ fn run_game(
                 // Loading is synchronous. Its wall time is neither a retail
                 // simulation tick nor part of Klaus's opening callback, so
                 // the next frame must begin from this boundary.
-                reset_frame_clock_after_blocking_load(&mut last_frame);
+                frame_pump.restart();
             }
 
             GameState::OpeningCinematic {
@@ -3977,6 +4020,15 @@ fn run_game(
                             | SpecializedActorTaskProductionOutcome::NativeType122(
                                 v2k_game::native_type122::Type122Outcome::Blocked { .. },
                             )
+                            | SpecializedActorTaskProductionOutcome::NativeType18(
+                                v2k_game::native_type18::Type18Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType28(
+                                v2k_game::native_type28::Type28Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType76Family(
+                                v2k_game::native_type76::Type76Outcome::Blocked { .. },
+                            )
                             | SpecializedActorTaskProductionOutcome::NativeType30(
                                 v2k_game::native_type30::Type30Outcome::Blocked { .. },
                             )
@@ -3985,6 +4037,12 @@ fn run_game(
                             )
                             | SpecializedActorTaskProductionOutcome::NativeType56(
                                 v2k_game::native_type56::Type56Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType43(
+                                v2k_game::native_type43::Type43Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType38Family(
+                                v2k_game::native_type38::Type38Outcome::Blocked { .. },
                             )
                             | SpecializedActorTaskProductionOutcome::SharedFish(
                                 v2k_game::shared_fish::SharedFishOutcome::Blocked { .. },
@@ -4240,6 +4298,15 @@ fn run_game(
                     intro_commands.camera_subject(em),
                     gameplay_chase_terrain(&session.cache),
                 );
+                // 503C0's first visit past tick 4000 masks positional audio
+                // (44F3E0(0x20) -> 44CE70 releases the physical voices) and
+                // starts 56750's full-frame sequence: the card opens on
+                // sprite 0x227's grey before the additive frames.
+                if !intro2_final_card && intro2_backdrop(retail_tick) == Intro2Backdrop::BlackCard {
+                    intro2_final_card = true;
+                    entity_positional_audio.suspend_physical_voices(sound_manager.as_mut());
+                    main_base_level_abort.outer_frame_sequence.request();
+                }
                 // 493FA0 simulation precedes 493F50 presentation. The latter
                 // reaches 53410 before 53760's actor detail/FIFO traversal,
                 // so a terminal 56750 request is visible in this same frame.
@@ -4352,6 +4419,7 @@ fn run_game(
                         entities: em,
                         camera: &camera,
                         elapsed_micros,
+                        positional_masked: intro2_final_card,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -4449,6 +4517,7 @@ fn run_game(
                             .expect("retained Intro2 entity manager"),
                         camera: &camera,
                         elapsed_micros,
+                        positional_masked: intro2_final_card,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -4996,6 +5065,7 @@ fn run_game(
                 let mut cargo_full_fx = None;
                 let cargo_frame = em.update_player_cargo(PlayerCargoFrame {
                     elapsed_micros,
+                    beam_expiry,
                     drop_context,
                     retail_tick,
                     scheduler: &mut specialized_actor_tasks,
@@ -6963,17 +7033,29 @@ fn run_game(
                         .entities
                         .iter_all()
                         .find(|entity| entity.id == id)
-                        .is_some_and(|entity| matches!(entity.entity_type, 15 | 87));
+                        .is_some_and(|entity| {
+                            matches!(entity.entity_type, 5 | 10 | 13 | 15 | 80 | 87 | 126)
+                        });
                     if native_flyer {
                         use v2k_game::{
                             intro2_flyer_contacts::{
-                                resolve_native_flyer_contacts, Intro2FlyerContactOutcome,
+                                resolve_native_flyer_contacts_with_playing,
+                                Intro2FlyerContactOutcome,
                             },
                             native_ground_actor::contact::NativeGroundContactOutcome,
                         };
                         // The same11AD0 prefix owns Intro2 and native Hive children:
                         // solid/water, then static using the retained entry model.
-                        let outcome = resolve_native_flyer_contacts(&mut contact_frame, id);
+                        let outcome = resolve_native_flyer_contacts_with_playing(
+                            &mut contact_frame,
+                            id,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
                         if matches!(
                             &outcome.surface,
                             Intro2FlyerContactOutcome::Blocked { .. }
@@ -6995,6 +7077,14 @@ fn run_game(
                                     | NativeGroundContactOutcome::Miss
                             ) {
                                 log!("Native flyer {id} static contact: {result:?}");
+                            }
+                        }
+                        if let Some(result) = &outcome.tumble {
+                            if !matches!(
+                                result,
+                                v2k_game::intro2_type10::contact::Intro2Type10ContactOutcome::Ineligible
+                            ) {
+                                log!("Native flyer {id} Tumble contact: {result:?}");
                             }
                         }
                         if outcome.blocks_later_contacts() {
@@ -7024,10 +7114,19 @@ fn run_game(
                         }
                         {
                             use v2k_game::native_ground_actor::contact::{
-                                resolve_insect_static_contact, NativeGroundContactOutcome,
+                                resolve_insect_static_contact_with_playing,
+                                NativeGroundContactOutcome,
                             };
-                            let insect_static =
-                                resolve_insect_static_contact(&mut contact_frame, id);
+                            let insect_static = resolve_insect_static_contact_with_playing(
+                                &mut contact_frame,
+                                id,
+                                Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                    hull: &mut player_hull,
+                                    extra_lives: RetailRuntimeValue::Known(
+                                        player_campaign_progress.extra_lives(),
+                                    ),
+                                }),
+                            );
                             if !matches!(
                                 insect_static,
                                 NativeGroundContactOutcome::Ineligible
@@ -7098,6 +7197,54 @@ fn run_game(
                     }
                     // D920 static callbacks precede this subject's pair walk.
                     {
+                        use v2k_game::native_type18::contact::{
+                            resolve_type18_static_contact, Type18ContactOutcome,
+                        };
+                        let result = resolve_type18_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type18ContactOutcome::Ineligible | Type18ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type18 {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type18ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type28::contact::{
+                            resolve_type28_static_contact, Type28ContactOutcome,
+                        };
+                        let result = resolve_type28_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type28ContactOutcome::Ineligible | Type28ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type28 {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type28ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type76::contact::{
+                            resolve_type76_family_static_contact, Type76ContactOutcome,
+                        };
+                        let result = resolve_type76_family_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type76ContactOutcome::Ineligible | Type76ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type76-family {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type76ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
                         use v2k_game::native_type30::contact::{
                             resolve_type30_static_contact, Type30ContactOutcome,
                         };
@@ -7125,6 +7272,31 @@ fn run_game(
                             log!("Ordinary Type40 {id} static contact: {result:?}");
                         }
                         if matches!(result, Type40ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type38::contact::{
+                            resolve_type38_family_static_contact, Type38ContactOutcome,
+                        };
+                        let result = resolve_type38_family_static_contact(
+                            &mut contact_frame,
+                            id,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        if !matches!(
+                            result,
+                            Type38ContactOutcome::Ineligible | Type38ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type38-family {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type38ContactOutcome::Blocked { .. }) {
                             continue;
                         }
                     }
@@ -7293,7 +7465,9 @@ fn run_game(
                     }
                     let factory_ids: Vec<_> = em
                         .iter()
-                        .filter(|entity| entity.entity_type == 66)
+                        .filter(|entity| {
+                            v2k_game::intro2_type66::is_working_factory_type(entity.entity_type)
+                        })
                         .map(|entity| entity.id)
                         .collect();
                     for factory_id in factory_ids {
@@ -7868,6 +8042,7 @@ fn run_game(
                         entities: em,
                         camera: &camera,
                         elapsed_micros,
+                        positional_masked: false,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -8045,12 +8220,6 @@ fn run_game(
                 retail_tick,
             );
             debug_panel.render(&lines);
-        }
-
-        // Frame rate limiter
-        let frame_time = now.elapsed();
-        if frame_time < target_frame_time {
-            std::thread::sleep(target_frame_time - frame_time);
         }
     }
 
@@ -9485,10 +9654,10 @@ fn finish_opening_cinematic_frame(
     }
     if let Some(fonts) = fonts {
         for caption in active_captions(retail_tick) {
-            let (visible, revealing) = caption.revealed_text(retail_tick);
+            let (visible, _) = caption.revealed_text(retail_tick);
             let mut text = visible.to_owned();
-            if revealing {
-                text.push('_');
+            if story_caption_cursor_visible(retail_tick) {
+                text.push_str(STORY_CAPTION_CURSOR);
             }
             draw_story_caption(renderer, fonts, &text);
         }
@@ -10117,6 +10286,8 @@ struct WorldAudioFrame<'a> {
     entities: &'a mut EntityManager,
     camera: &'a Camera,
     elapsed_micros: u32,
+    /// `DAT_004F716C` is nonzero: 4C970 skips positional mixing.
+    positional_masked: bool,
 }
 
 /// Map454EE0 and pause4513E0 enter44F3E0's mask8. Stop retained physical
@@ -10161,6 +10332,12 @@ fn play_world_audio(
     frame
         .entities
         .publish_remaining_constructor_sound_follow_positions();
+    if frame.positional_masked {
+        // 4C970 skips mixing, sound-11 warble and alias draws under the
+        // mask, but 4C940 still discards the disposable one-shots.
+        world_fx.garbage_collect_disposable_positional_sounds();
+        return;
+    }
     // Intro2's attached loops are created during construction, before these
     // later one-shots. Device absence must not suppress audible warble/alias
     // draws. General interleaved world births need one logical creation list.
@@ -14036,10 +14213,6 @@ fn menu_depth_scale(base_depth_raw: f32, offset_raw: f32) -> f32 {
     base_depth_raw / (base_depth_raw + offset_raw).max(1.0)
 }
 
-fn reset_frame_clock_after_blocking_load(last_frame: &mut Instant) {
-    *last_frame = Instant::now();
-}
-
 /// Render a vertical list menu (submenus), with the screen's decorative
 /// 3D prop (from the screen record) turning behind the text.
 #[allow(clippy::too_many_arguments)]
@@ -15715,9 +15888,13 @@ mod menu_visual_tests {
 
     #[test]
     fn blocking_load_time_is_not_charged_to_the_next_simulation_frame() {
-        let mut last_frame = Instant::now() - Duration::from_secs(5);
-        reset_frame_clock_after_blocking_load(&mut last_frame);
-        assert!(last_frame.elapsed() < Duration::from_millis(50));
+        let mut pump = RetailFramePump::new();
+        // A blocking load longer than any frame.
+        std::thread::sleep(Duration::from_millis(60));
+        pump.restart();
+        let delta = pump.wait_for_frame();
+        assert!((8_000..50_000).contains(&delta), "{delta}");
+        assert_eq!(delta % 1_000, 0, "whole milliseconds, as timeGetTime gives");
     }
 
     #[test]

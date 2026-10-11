@@ -53,6 +53,7 @@ impl Fixture {
                 parent,
                 4793,
                 &mut fx,
+                None,
                 ReselectionEntry::Impact,
             )
             .unwrap();
@@ -86,6 +87,7 @@ impl Fixture {
             self.parent,
             self.child,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut self.tasks,
                 world_fx: &mut self.fx,
                 notifications: &mut self.notifications,
@@ -118,6 +120,7 @@ impl Fixture {
             self.parent,
             callback,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut self.tasks,
                 world_fx: &mut self.fx,
                 notifications: &mut self.notifications,
@@ -412,6 +415,7 @@ fn ordinary_children_without_native_tasks_block_before_capture_row_or_rng_mutati
                 parent,
                 child,
                 &mut CaptureContext {
+                    resources: None,
                     tasks: &mut tasks,
                     world_fx: &mut fx,
                     notifications: &mut notifications,
@@ -574,6 +578,7 @@ fn type122_destination_delivery_runs_actual_child_release_and_retirement() {
             f.parent,
             destination,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut f.tasks,
                 world_fx: &mut f.fx,
                 notifications: &mut f.notifications,
@@ -621,6 +626,7 @@ fn occupied_type122_direct_death_releases_then_runs_two_c620_constructors() {
         f.parent,
         CaptureRootCallback::Cleanup,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut expected_tasks,
             world_fx: &mut expected_fx,
             notifications: &mut expected_notifications,
@@ -651,6 +657,7 @@ fn occupied_type122_direct_death_releases_then_runs_two_c620_constructors() {
         &mut f.manager,
         f.parent,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut f.tasks,
             world_fx: &mut f.fx,
             notifications: &mut f.notifications,
@@ -710,6 +717,7 @@ fn ordinary_type116_capture_attach_and_release_uses_native_worker_receipt() {
         parent,
         child,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut tasks,
             world_fx: &mut fx,
             notifications: &mut notifications,
@@ -758,6 +766,7 @@ fn ordinary_type90_capture_attach_uses_native_desert_worker_receipt() {
         parent,
         child,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut tasks,
             world_fx: &mut fx,
             notifications: &mut notifications,
@@ -807,6 +816,7 @@ fn ordinary_type123_capture_attach_uses_native_person_receipt() {
         parent,
         child,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut tasks,
             world_fx: &mut fx,
             notifications: &mut notifications,
@@ -853,6 +863,7 @@ fn ordinary_type86_capture_attach_uses_native_person_receipt() {
         parent,
         child,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut tasks,
             world_fx: &mut fx,
             notifications: &mut notifications,

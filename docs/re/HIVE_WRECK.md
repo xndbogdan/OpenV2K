@@ -93,9 +93,11 @@ word deltas, signed low-word integer length, asymmetric `0x7FFF` saturation,
 the wrapping dot product and both strict thresholds. The native pair adapter
 keeps `0x0C00` consumption explicitly unsupported and admits no unowned
 physical suffix. In the ordinary authored overlays13–48, the `0x2000`
-counterparts are Type3/27 rolling boulders in overlays27/31/35; their class20
-constructor/live/contact/death owner remains missing, so real pair attempts
-return `UnsupportedHiveImpactCounterpart` before callback writes. Corpus
+counterparts are Type3/27 rolling boulders in overlays27/31/35. Their class20
+construction, tasks, contacts, hits, deaths and player pairs are native
+([Rolling Boulder](ROLLING_BOULDER.md)), but their pairs with other actors are
+not, so real pair attempts return `UnsupportedHiveImpactCounterpart` before
+callback writes. Corpus
 controls retain both boulder types, the consume boundary and a null native
 gunner callback. This is a guarded source foundation, not accepted ram play.
 

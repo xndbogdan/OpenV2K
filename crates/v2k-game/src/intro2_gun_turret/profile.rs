@@ -1,5 +1,6 @@
-//! E/L Gun Turret data. Live authored97/104/115 and Intro2 authored92/102/115
-//! retain distinct receipts; campaign reconstruction also uses96/100 metadata.
+//! E/L Gun Turret data. Live authored92/96/97/99/102/103/104/115 and Intro2
+//! authored92/102/115 retain distinct receipts; campaign reconstruction also
+//! uses96/100 metadata.
 //! Castle Type104's Section12 row uses common vtable4C8A30 and class29/4C8230:
 //! D4A0 birth, D190 initializer, null style death cleanup, alternate49/BD20.
 
@@ -12,18 +13,31 @@ pub enum Intro2GunTurretProfile {
     Type92,
     Type96,
     Type97,
+    Type99,
     Type100,
     Type102,
+    Type103,
     Type104,
+    Type112,
+    Type113,
     Type115,
 }
 
 impl Intro2GunTurretProfile {
     /// Authored104B0 allocations with the common D4A0/D190 E/L constructor.
     /// Type115 retains alternate1; sharing this birth does not grant class49.
+    /// Type100 shares the constructor, but its method19 has no live aim
+    /// owner yet.
     pub const fn for_native_authored(entity_type: u32) -> Option<Self> {
         match entity_type {
+            92 => Some(Self::Type92),
+            96 => Some(Self::Type96),
             97 => Some(Self::Type97),
+            99 => Some(Self::Type99),
+            102 => Some(Self::Type102),
+            103 => Some(Self::Type103),
+            112 => Some(Self::Type112),
+            113 => Some(Self::Type113),
             104 => Some(Self::Type104),
             115 => Some(Self::Type115),
             _ => None,
@@ -58,9 +72,13 @@ impl Intro2GunTurretProfile {
             Self::Type92 => 92,
             Self::Type96 => 96,
             Self::Type97 => 97,
+            Self::Type99 => 99,
             Self::Type100 => 100,
             Self::Type102 => 102,
+            Self::Type103 => 103,
             Self::Type104 => 104,
+            Self::Type112 => 112,
+            Self::Type113 => 113,
             Self::Type115 => 115,
         }
     }
@@ -70,17 +88,31 @@ impl Intro2GunTurretProfile {
             Self::Type92 => 171,
             Self::Type96 => 175,
             Self::Type97 => 173,
+            Self::Type99 => 165,
             Self::Type100 => 152,
             Self::Type102 => MODEL,
+            Self::Type103 => 168,
             Self::Type104 => 156,
+            Self::Type112 => 337,
+            Self::Type113 => 693,
             Self::Type115 => 331,
         }
     }
 
     pub const fn model_slots(self) -> [u16; 4] {
         match self {
+            Self::Type112 => [337, 337, 339, 339],
+            Self::Type113 => [693, 693, 695, 695],
             Self::Type115 => [331, 144, 332, 144],
             _ => [self.model() as u16; 4],
+        }
+    }
+
+    /// Section-12 model-variable words; a third is bound by emitter slot 1.
+    pub const fn model_variable_count(self) -> u32 {
+        match self {
+            Self::Type99 | Self::Type100 | Self::Type102 | Self::Type103 => 3,
+            _ => 2,
         }
     }
 
@@ -93,6 +125,8 @@ impl Intro2GunTurretProfile {
 
     pub const fn sub_l(self) -> [u8; 6] {
         match self {
+            Self::Type112 => [1, 2, 0x40, 0x1f, 0xd0, 0x07],
+            Self::Type113 => [1, 2, 0x40, 0x1f, 0xe8, 0x03],
             Self::Type115 => [1, 2, 0x40, 0x1f, 0xa0, 0x0f],
             _ => super::SUB_L,
         }
@@ -100,29 +134,36 @@ impl Intro2GunTurretProfile {
 
     pub const fn choices(self) -> &'static [v2k_formats::collision::BehaviorChoice] {
         match self {
-            Self::Type115 => &super::FLOWER_CHOICES,
+            Self::Type112 | Self::Type113 | Self::Type115 => &super::FLOWER_CHOICES,
             _ => &super::INITIAL_CHOICES,
         }
     }
 
+    /// Flower rows weight class29 by Mutated and otherwise wait in class0.
+    pub const fn is_flower(self) -> bool {
+        matches!(self, Self::Type112 | Self::Type113 | Self::Type115)
+    }
+
     pub const fn gravity_lead(self) -> bool {
         //44EA60 method16 uses jump index4 ->44EA7B (one).
-        matches!(self, Self::Type115)
+        matches!(self, Self::Type112 | Self::Type113 | Self::Type115)
     }
 
     pub const fn health(self) -> i32 {
         match self {
-            Self::Type92 | Self::Type96 | Self::Type97 => 5000,
+            Self::Type92 | Self::Type96 | Self::Type97 | Self::Type99 | Self::Type103 => 5000,
             Self::Type100 => 32000,
             Self::Type102 => 4000,
             Self::Type104 => 6000,
-            Self::Type115 => 1000,
+            Self::Type112 | Self::Type113 | Self::Type115 => 1000,
         }
     }
 
     pub const fn capability(self) -> u32 {
         match self {
-            Self::Type102 | Self::Type104 => 0x44,
+            Self::Type99 | Self::Type102 | Self::Type103 | Self::Type104 => 0x44,
+            Self::Type112 => 0x44,
+            Self::Type113 => 0x40,
             Self::Type115 => 0,
             _ => 0x1044,
         }
@@ -130,17 +171,21 @@ impl Intro2GunTurretProfile {
 
     pub const fn axis(self) -> CommonAxisDescriptor {
         match self {
-            Self::Type92 | Self::Type96 | Self::Type97 | Self::Type104 | Self::Type115 => {
-                CommonAxisDescriptor {
-                    raw_word_at_0x04: 0x100b,
-                    ..AXIS
-                }
-            }
+            Self::Type92
+            | Self::Type96
+            | Self::Type97
+            | Self::Type104
+            | Self::Type112
+            | Self::Type113
+            | Self::Type115 => CommonAxisDescriptor {
+                raw_word_at_0x04: 0x100b,
+                ..AXIS
+            },
             Self::Type100 => CommonAxisDescriptor {
                 strict_axis_limit_raw: 3840,
                 raw_word_at_0x04: 0x000b,
             },
-            Self::Type102 => AXIS,
+            Self::Type99 | Self::Type102 | Self::Type103 => AXIS,
         }
     }
 
@@ -148,12 +193,13 @@ impl Intro2GunTurretProfile {
         DamageProfile {
             thresholds_raw: match self {
                 Self::Type92 | Self::Type100 => [0, 2000, 1800, 200, 200, 200, 0],
-                Self::Type96 => [0, 2000, 2100, 200, 200, 200, 0],
-                Self::Type97 | Self::Type102 => [0, 8000, 2100, 200, 200, 200, 0],
+                Self::Type96 | Self::Type103 => [0, 2000, 2100, 200, 200, 200, 0],
+                Self::Type97 | Self::Type99 | Self::Type102 => [0, 8000, 2100, 200, 200, 200, 0],
                 Self::Type104 => [0, 6000, 2100, 200, 2000, 200, 0],
-                Self::Type115 => [0, 500, 500, 200, 2000, 200, 0],
+                Self::Type112 | Self::Type113 | Self::Type115 => [0, 500, 500, 200, 2000, 200, 0],
             },
             multipliers_q8: match self {
+                Self::Type112 | Self::Type113 => [0, 256, 256, 128, 256, 256, 0],
                 Self::Type115 => [0, 256, 256, 128, 256, 0, 0],
                 Self::Type104 => [0, 256, 256, 128, 256, 256, 256],
                 _ => [0, 256, 256, 256, 256, 256, 0],
@@ -195,6 +241,11 @@ impl Intro2GunTurretProfile {
                 variable_bindings: [0; 4],
                 ..EMITTER
             },
+            Self::Type99 => ProjectileEmitterDescriptor {
+                projectile_method: 12,
+                sound_id: 76,
+                ..EMITTER
+            },
             Self::Type100 => ProjectileEmitterDescriptor {
                 projectile_method: 19,
                 random_interval_us: 2_500_000,
@@ -209,6 +260,11 @@ impl Intro2GunTurretProfile {
                 ..EMITTER
             },
             Self::Type102 => EMITTER,
+            Self::Type103 => ProjectileEmitterDescriptor {
+                projectile_method: 13,
+                sound_id: 77,
+                ..EMITTER
+            },
             Self::Type104 => ProjectileEmitterDescriptor {
                 projectile_method: 18,
                 random_interval_us: 400_000,
@@ -220,6 +276,14 @@ impl Intro2GunTurretProfile {
                 auxiliary_command: 1,
                 variable_bindings: [0; 4],
                 ..EMITTER
+            },
+            Self::Type112 => ProjectileEmitterDescriptor {
+                raw_word_at_0x12: 36,
+                ..Self::Type115.emitter()
+            },
+            Self::Type113 => ProjectileEmitterDescriptor {
+                raw_word_at_0x12: 30,
+                ..Self::Type115.emitter()
             },
             Self::Type115 => ProjectileEmitterDescriptor {
                 projectile_method: 16,

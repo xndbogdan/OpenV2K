@@ -6,16 +6,22 @@
 
 use super::{death::*, intro2_type10_allocation_authenticates};
 use crate::{
+    class49_terminal::Class49RadialReport,
     damage::{velocity_delta_impact_raw, DamageDeliveryRecord, DamagePacket},
     entity::Entity,
     entity_collision_state::{active_model_slot_from_state_flags, RetailRuntimeValue},
     intro2_contacts::Intro2ContactFrame,
     intro2_meteors::plan_meteor_terrain_response,
-    intro2_radial::{apply_intro2_radial_damage, Intro2RadialFrame, Intro2RadialReport},
+    intro2_radial::{
+        apply_intro2_radial_damage, apply_static_radial_damage, Intro2RadialFrame,
+        Intro2RadialTerminalCall,
+    },
     live_actor_checked_damage::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
         LiveActorDamageRequest,
     },
+    native_actor_capture::pair::PlayingPlayerContact,
+    specialized_actor_task_production::playing_radial::PlayingRadialFrame,
     static_contact::{
         apply_contact_response_raw, scan_deepest_static_contact, StaticContactError,
         StaticContactQuery, StaticModelContact,
@@ -48,7 +54,8 @@ pub enum Intro2Type10ContactBlock {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Intro2Type10TerminalContactReport {
     pub contact: Intro2Type10TumbleContact,
-    pub radial: Intro2RadialReport,
+    /// Cinematic for Intro2's walk; Playing when the walk lends its player.
+    pub radial: Class49RadialReport,
     pub finalized: bool,
 }
 
@@ -77,9 +84,18 @@ pub fn resolve_intro2_type10_tumble_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> Intro2Type10ContactOutcome {
+    resolve_intro2_type10_tumble_contact_with_playing(frame, id, None)
+}
+
+/// Playing's walk lends its player to C750's terminal radial.
+pub fn resolve_intro2_type10_tumble_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    mut playing: Option<PlayingPlayerContact<'_>>,
+) -> Intro2Type10ContactOutcome {
     let mut report = Intro2Type10ContactReport::default();
     let mut committed = false;
-    match resolve(frame, id, &mut report, &mut committed) {
+    match resolve(frame, id, &mut playing, &mut report, &mut committed) {
         Ok(false) => Intro2Type10ContactOutcome::Ineligible,
         Ok(true) => Intro2Type10ContactOutcome::Applied(report),
         Err(reason) => {
@@ -112,6 +128,7 @@ fn bits(entity: &Entity, mask: u32) -> Result<u32, Intro2Type10ContactBlock> {
 fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
+    playing: &mut Option<PlayingPlayerContact<'_>>,
     report: &mut Intro2Type10ContactReport,
     committed: &mut bool,
 ) -> Result<bool, Intro2Type10ContactBlock> {
@@ -195,13 +212,14 @@ fn resolve(
                 owner,
                 Intro2Type10TumbleContact::Terrain,
                 report,
+                playing,
                 committed,
             )?;
             apply_terrain_tail(frame, id, contact, material, report, committed)?;
         }
-        classify_and_respond_water(frame, id, owner, radius, report, committed)?;
+        classify_and_respond_water(frame, id, owner, radius, report, playing, committed)?;
     }
-    resolve_static_phase(frame, id, Some(owner), model_id, report, committed)?;
+    resolve_static_phase(frame, id, Some(owner), model_id, report, playing, committed)?;
     Ok(true)
 }
 
@@ -212,6 +230,15 @@ pub(crate) fn resolve_intro2_type10_tumble_static_continuation(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     entry_model_id: usize,
+) -> Intro2Type10ContactOutcome {
+    resolve_intro2_type10_tumble_static_continuation_with_playing(frame, id, entry_model_id, None)
+}
+
+pub(crate) fn resolve_intro2_type10_tumble_static_continuation_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    entry_model_id: usize,
+    mut playing: Option<PlayingPlayerContact<'_>>,
 ) -> Intro2Type10ContactOutcome {
     let mut report = Intro2Type10ContactReport::default();
     let mut committed = false;
@@ -246,6 +273,7 @@ pub(crate) fn resolve_intro2_type10_tumble_static_continuation(
             owner,
             entry_model_id,
             &mut report,
+            &mut playing,
             &mut committed,
         )?;
         Ok(true)
@@ -279,6 +307,7 @@ fn resolve_static_phase(
     owner: Option<Intro2Type10TumbleOwner>,
     model_id: usize,
     report: &mut Intro2Type10ContactReport,
+    playing: &mut Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<(), Intro2Type10ContactBlock> {
     use Intro2Type10ContactBlock as Block;
@@ -336,6 +365,7 @@ fn resolve_static_phase(
                 owner.expect("falling Tumble completed owner"),
                 Intro2Type10TumbleContact::Static,
                 report,
+                playing,
                 committed,
             )?;
         }
@@ -357,6 +387,7 @@ pub(crate) fn terminal_callback(
     owner: Intro2Type10TumbleOwner,
     contact: Intro2Type10TumbleContact,
     report: &mut Intro2Type10ContactReport,
+    playing: &mut Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<(), Intro2Type10ContactBlock> {
     use Intro2Type10ContactBlock as Block;
@@ -383,24 +414,53 @@ pub(crate) fn terminal_callback(
     if !claim_intro2_type10_terminal(frame.entities, &receipt) {
         return Err(Block::Runtime("terminal claim"));
     }
-    let radial = apply_intro2_radial_damage(
-        &mut Intro2RadialFrame {
-            active_terminal_calls: vec![crate::intro2_radial::Intro2RadialTerminalCall::Type10(
-                receipt,
-            )],
-            entities: frame.entities,
-            resources: frame.resources,
-            world_fx: frame.world_fx,
-            static_damage: frame.static_damage,
-            notifications: frame.notifications,
-            retail_tick: frame.retail_tick,
-            actor_tasks: frame.actor_tasks,
-        },
-        receipt.position_raw,
-        receipt.radial_damage,
-    );
-    let completed =
-        matches!(&radial, Intro2RadialReport::Applied {dynamic, ..} if dynamic.completed());
+    let radial = match playing.as_mut() {
+        None => Class49RadialReport::Cinematic(apply_intro2_radial_damage(
+            &mut Intro2RadialFrame {
+                active_terminal_calls: vec![Intro2RadialTerminalCall::Type10(receipt)],
+                entities: frame.entities,
+                resources: frame.resources,
+                world_fx: frame.world_fx,
+                static_damage: frame.static_damage,
+                notifications: frame.notifications,
+                retail_tick: frame.retail_tick,
+                actor_tasks: frame.actor_tasks,
+            },
+            receipt.position_raw,
+            receipt.radial_damage,
+        )),
+        // Playing's same static prefix, then its dynamic owner with the hull.
+        Some(player) => {
+            let static_deliveries = apply_static_radial_damage(
+                frame.resources,
+                frame.static_damage,
+                frame.world_fx,
+                receipt.position_raw,
+                receipt.radial_damage,
+            )
+            .map_err(Block::StaticLookup)?;
+            let dynamic = frame
+                .actor_tasks
+                .apply_playing_radial_damage(PlayingRadialFrame {
+                    entities: frame.entities,
+                    player_hull: player.hull,
+                    extra_lives: player.extra_lives,
+                    origin_raw: receipt.position_raw,
+                    template: receipt.radial_damage,
+                    world_fx: frame.world_fx,
+                    notifications: frame.notifications,
+                    retail_tick: frame.retail_tick,
+                    resources: frame.resources,
+                    static_damage: frame.static_damage,
+                    active_terminal_calls: vec![Intro2RadialTerminalCall::Type10(receipt)],
+                });
+            Class49RadialReport::Playing {
+                static_deliveries,
+                dynamic,
+            }
+        }
+    };
+    let completed = radial.completed();
     let finalized = completed && finish_intro2_type10_terminal(frame.entities, receipt);
     report.terminal = Some(Intro2Type10TerminalContactReport {
         contact,
@@ -420,9 +480,15 @@ fn queue_type_cue(
     offset: usize,
 ) -> Result<(), Intro2Type10ContactBlock> {
     use Intro2Type10ContactBlock as Block;
+    let row = frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .map(|entity| entity.entity_type as usize)
+        .ok_or(Block::Runtime("type record"))?;
     let header = &frame
         .resources
-        .global_entity_type(10)
+        .global_entity_type(row)
         .ok_or(Block::Runtime("type record"))?
         .raw_header;
     let cue = u16::from_le_bytes(
@@ -452,6 +518,12 @@ fn checked_tail_damage(
     if amount == 0 {
         return Ok(());
     }
+    let own_type = frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .map(|entity| entity.entity_type)
+        .ok_or(Intro2Type10ContactBlock::Runtime("tail damage survivor"))?;
     apply_live_actor_checked_damage::<(), &'static str>(
         frame.entities,
         frame.world_fx,
@@ -463,7 +535,7 @@ fn checked_tail_damage(
             delivery: DamageDeliveryRecord {
                 packet: DamagePacket::collision(amount),
                 source_entity_type_raw: source,
-                owner_handle: if source == 10 { id } else { 0 },
+                owner_handle: if source == own_type { id } else { 0 },
             },
             entry: LiveActorDamageEntry::Checked,
         },
@@ -488,6 +560,7 @@ fn apply_terrain_tail(
         .entities
         .entity_mut(id)
         .ok_or(Block::Runtime("terrain-tail survivor"))?;
+    let own_type = entity.entity_type;
     let response = plan_meteor_terrain_response(
         entity.position_raw(),
         entity.velocity_raw(),
@@ -505,7 +578,7 @@ fn apply_terrain_tail(
         // gain derived from inward velocity and is not a fixed full-gain call.
         if frame
             .resources
-            .global_entity_type(10)
+            .global_entity_type(own_type as usize)
             .ok_or(Block::Runtime("type record"))?
             .raw_header[0x86..0x88]
             != [0, 0]
@@ -524,7 +597,7 @@ fn apply_terrain_tail(
                 particle_class: class,
                 scale_raw: response.particle_scale_raw,
                 owner_id: id,
-                owner_entity_type: 10,
+                owner_entity_type: own_type as u8,
                 owner_state_sign: bits(entity, 0x8000_0000)? != 0,
                 environment: ParticleEnvironment::Terrain(context),
                 retail_tick: frame.retail_tick,
@@ -543,6 +616,7 @@ fn classify_and_respond_water(
     owner: Intro2Type10TumbleOwner,
     radius: u16,
     report: &mut Intro2Type10ContactReport,
+    playing: &mut Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<(), Intro2Type10ContactBlock> {
     use Intro2Type10ContactBlock as Block;
@@ -593,6 +667,7 @@ fn classify_and_respond_water(
         owner,
         Intro2Type10TumbleContact::Water,
         report,
+        playing,
         committed,
     )?;
     let context = TerrainCollisionContext::from_current_level_cache(frame.resources)
@@ -604,6 +679,7 @@ fn classify_and_respond_water(
         .entities
         .entity_mut(id)
         .ok_or(Block::Runtime("water-tail survivor"))?;
+    let own_type = entity.entity_type;
     // 141D0 samples again AFTER C750's radial/static mutations.
     let p = entity.position_raw();
     let ground = context
@@ -649,7 +725,7 @@ fn classify_and_respond_water(
                     particle_class: class,
                     scale_raw: 0x1000,
                     owner_id: id,
-                    owner_entity_type: 10,
+                    owner_entity_type: own_type as u8,
                     owner_state_sign: bits(entity, 0x8000_0000)? != 0,
                     environment: ParticleEnvironment::Terrain(context),
                     retail_tick: frame.retail_tick,
@@ -706,6 +782,7 @@ fn apply_static_tail(
         .entities
         .entity_mut(id)
         .ok_or(Block::Runtime("static-tail survivor"))?;
+    let own_type = entity.entity_type;
     let before = entity.velocity_raw();
     let mut velocity = before;
     let mut position = entity.position_raw();
@@ -721,7 +798,7 @@ fn apply_static_tail(
     if impact != 0 {
         if frame
             .resources
-            .global_entity_type(10)
+            .global_entity_type(own_type as usize)
             .ok_or(Block::Runtime("type record"))?
             .raw_header[0x8a..0x8c]
             != [0, 0]
@@ -761,7 +838,7 @@ fn apply_static_tail(
                 _ => {}
             }
         }
-        checked_tail_damage(frame, id, impact, 10)?;
+        checked_tail_damage(frame, id, impact, own_type)?;
     }
     Ok(())
 }

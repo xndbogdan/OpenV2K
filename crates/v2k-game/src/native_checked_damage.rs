@@ -136,11 +136,7 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::MainBase)
         }
-        10 if manager
-            .iter_all()
-            .find(|entity| entity.id == id)
-            .is_some_and(crate::intro2_type10::intro2_type10_allocation_authenticates) =>
-        {
+        10 | 5 if crate::intro2_type10::type10_manager_allocation_authenticates(manager, id) => {
             crate::intro2_type10::death::publish_intro2_type10_standard_death(manager, id, world_fx)
                 .map(|owner| LiveActorDeathResult {
                     returned_nonzero: owner.is_some(),
@@ -159,6 +155,14 @@ fn dispatch_standard_death(
                     publication: owner.map(DynamicRadialDeathPublication::Intro2Type57Tumble),
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Type57)
+        }
+        76 | 77 if crate::native_type76::manager_allocation_authenticates(manager, id) => {
+            crate::intro2_common_dying::publish_intro2_common_standard_death(manager, id, world_fx)
+                .map(|owner| LiveActorDeathResult {
+                    returned_nonzero: owner.is_some(),
+                    publication: owner.map(DynamicRadialDeathPublication::Intro2Class12),
+                })
+                .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
         30 if crate::native_type30::manager_allocation_authenticates(manager, id) => {
             crate::intro2_common_dying::publish_intro2_common_standard_death(manager, id, world_fx)
@@ -200,15 +204,18 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
-        17 | 122
+        17 | 122 | 18 | 28
             if crate::intro2_type17::type17_manager_allocation_authenticates(manager, id)
-                || crate::native_type122::type122_manager_allocation_authenticates(manager, id) =>
+                || crate::native_type122::type122_manager_allocation_authenticates(manager, id)
+                || crate::native_type18::manager_allocation_authenticates(manager, id)
+                || crate::native_type28::manager_allocation_authenticates(manager, id) =>
         {
             if let Some(tasks) = callbacks.capture_task_custody() {
                 return crate::native_actor_capture::publish_native_captor_standard_death(
                     manager,
                     id,
                     &mut crate::intro2_type17::capture::CaptureContext {
+                        resources: None,
                         tasks,
                         world_fx,
                         notifications,
@@ -263,7 +270,7 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
-        66 if manager
+        66 | 125 if manager
             .iter_all()
             .find(|entity| entity.id == id)
             .is_some_and(crate::intro2_type66::intro2_type66_allocation_authenticates) =>
@@ -460,7 +467,18 @@ pub(crate) fn prepare_native_actor_damage_mutation(
 ) -> bool {
     if crate::native_type40::death::finished_terminal_authenticates(manager, id)
         || crate::native_type56::death::finished_terminal_authenticates(manager, id)
+        // 4566E0 has no dying test: a finished BAC0/BD20/BC90 corpse stays a
+        // radial target until 14990, and only its Finished receipt stands in
+        // for the retired task custody.
+        || crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+        || crate::rolling_boulder::death::finished_split_authenticates(manager, id)
     {
+        return true;
+    }
+    // 14AE0 and 43FA3D share the 8000/800/1000 gate without a deferred-removal
+    // exclusion, so a later radial reaches a finished class49 allocation just
+    // as a particle does. Only its completed receipt replaces task custody.
+    if crate::class49_death::finished_terminal_hit_authenticates(manager, id) {
         return true;
     }
     if crate::shared_fish::death::completed_shared_fish_death(manager, id) {
@@ -486,9 +504,14 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         crate::intro2_type58::type58_manager_allocation_authenticates(manager, id);
     let native_type122_valid =
         crate::native_type122::type122_manager_allocation_authenticates(manager, id);
+    let native_type18_valid = crate::native_type18::manager_allocation_authenticates(manager, id);
+    let native_type28_valid = crate::native_type28::manager_allocation_authenticates(manager, id);
+    let native_type76_valid = crate::native_type76::manager_allocation_authenticates(manager, id);
     let native_type30_valid = crate::native_type30::manager_allocation_authenticates(manager, id);
     let native_type40_valid = crate::native_type40::manager_allocation_authenticates(manager, id);
     let native_type56_valid = crate::native_type56::manager_allocation_authenticates(manager, id);
+    let native_type43_valid = crate::native_type43::manager_allocation_authenticates(manager, id);
+    let native_type38_valid = crate::native_type38::manager_allocation_authenticates(manager, id);
     let native_cleansing_valid = crate::cleansing_vehicle::allocation_authenticates(manager, id);
     let native_gun_turret_valid =
         crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(manager, id);
@@ -531,14 +554,20 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         || entity.intro2_type53_runtime.is_some()
         || entity.intro2_type58_runtime.is_some()
         || entity.native_type122_runtime.is_some()
+        || entity.native_type18_runtime.is_some()
+        || entity.native_type28_runtime.is_some()
+        || entity.native_type76_runtime.is_some()
         || entity.native_type30_runtime.is_some()
         || entity.native_type40_runtime.is_some()
         || entity.native_type56_runtime.is_some()
+        || entity.native_type43_runtime.is_some()
+        || entity.native_type38_runtime.is_some()
         || entity.intro2_type94_runtime.is_some()
         || entity.native_type47_construction.is_some()
         || entity.intro2_type10_runtime.is_some()
         || entity.intro2_gun_turret_runtime.is_some()
         || entity.cleansing_vehicle_runtime.is_some()
+        || entity.rolling_boulder_runtime.is_some()
         || crate::native_type61::has_native_allocation(entity)
         || matches!(
             entity.actor_task_state(crate::actor_task_owner::ActorTaskSlot::Primary),
@@ -570,12 +599,22 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         native_type58_valid
     } else if entity.native_type122_runtime.is_some() {
         native_type122_valid
+    } else if entity.native_type18_runtime.is_some() {
+        native_type18_valid
+    } else if entity.native_type28_runtime.is_some() {
+        native_type28_valid
+    } else if entity.native_type76_runtime.is_some() {
+        native_type76_valid
     } else if entity.native_type30_runtime.is_some() {
         native_type30_valid
     } else if entity.native_type40_runtime.is_some() {
         native_type40_valid
     } else if entity.native_type56_runtime.is_some() {
         native_type56_valid
+    } else if entity.native_type43_runtime.is_some() {
+        native_type43_valid
+    } else if entity.native_type38_runtime.is_some() {
+        native_type38_valid
     } else if entity.intro2_type94_runtime.is_some() {
         crate::intro2_type94::intro2_type94_allocation_authenticates(entity)
     } else if entity.intro2_type8_runtime.is_some() {
@@ -589,11 +628,13 @@ pub(crate) fn prepare_native_actor_damage_mutation(
     } else if entity.intro2_type66_runtime.is_some() {
         crate::intro2_type66::intro2_type66_allocation_authenticates(entity)
     } else if entity.intro2_type10_runtime.is_some() {
-        crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
+        crate::intro2_type10::type10_manager_allocation_authenticates(manager, id)
     } else if entity.cleansing_vehicle_runtime.is_some() {
         native_cleansing_valid
     } else if entity.intro2_gun_turret_runtime.is_some() {
         native_gun_turret_valid
+    } else if entity.rolling_boulder_runtime.is_some() {
+        crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
     } else if crate::native_type61::has_native_allocation(entity) {
         native_power_up_valid
     } else {

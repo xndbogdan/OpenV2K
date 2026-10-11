@@ -9,8 +9,8 @@
 //! deferred removal. A blocked radial retains its actual terminal receipt.
 
 use super::{
-    authenticate_intro2_type13, Intro2Type13SchedulerAdoptionError, Intro2Type13WorldOwner,
-    INTRO2_TYPE13_SPAWN_INDEX, TYPE13_ENTITY_TYPE,
+    type13_manager_allocation_authenticates, Intro2Type13SchedulerAdoptionError,
+    Intro2Type13WorldOwner, TYPE13_ENTITY_TYPE,
 };
 use crate::{
     entity::{Entity, EntityManager},
@@ -114,8 +114,31 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
     }
 }
 
+/// Playing's Class1 blast/radial also reaches the player hull and lives.
+pub struct Type13PlayingDeathWorld<'a> {
+    pub player_hull: &'a mut crate::player_hull::PlayerHull,
+    pub extra_lives: RetailRuntimeValue<u8>,
+}
+
 pub fn apply_intro2_type13_particle_hit(
+    frame: Intro2Type13ImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> Intro2Type13ImpactOutcome {
+    apply_particle_hit(frame, None, impact)
+}
+
+/// Ordinary Playing entry: the same hit wrapper, with the Playing death world.
+pub fn apply_playing_type13_particle_hit(
+    frame: Intro2Type13ImpactFrame<'_>,
+    playing: Type13PlayingDeathWorld<'_>,
+    impact: ParticleEntityImpact,
+) -> Intro2Type13ImpactOutcome {
+    apply_particle_hit(frame, Some(playing), impact)
+}
+
+fn apply_particle_hit(
     mut frame: Intro2Type13ImpactFrame<'_>,
+    mut playing: Option<Type13PlayingDeathWorld<'_>>,
     impact: ParticleEntityImpact,
 ) -> Intro2Type13ImpactOutcome {
     let manager = &mut *frame.entities;
@@ -125,7 +148,7 @@ pub fn apply_intro2_type13_particle_hit(
         return Intro2Type13ImpactOutcome::NotApplicable;
     }
     let mut committed = false;
-    match run(&mut frame, impact, &mut committed) {
+    match run(&mut frame, playing.as_mut(), impact, &mut committed) {
         Ok(result) => Intro2Type13ImpactOutcome::Applied(result),
         Err(reason) => {
             if committed {
@@ -135,7 +158,10 @@ pub fn apply_intro2_type13_particle_hit(
                     .scheduler
                     .park_native_contact_prefix(frame.entities, impact.target_entity_id)
                 {
-                    if let Ok(owner) = Intro2Type13WorldOwner::adopt(frame.entities) {
+                    if let Ok(owner) = Intro2Type13WorldOwner::adopt_entity(
+                        frame.entities,
+                        impact.target_entity_id,
+                    ) {
                         frame.scheduler.register_intro2_type13_search_attack(owner);
                     }
                 }
@@ -157,6 +183,7 @@ fn state_bits(entity: &Entity, mask: u32) -> Result<u32, Intro2Type13ImpactBlock
 
 fn run(
     frame: &mut Intro2Type13ImpactFrame<'_>,
+    playing: Option<&mut Type13PlayingDeathWorld<'_>>,
     impact: ParticleEntityImpact,
     committed: &mut bool,
 ) -> Result<LiveActorDamageOutcome<Intro2Type13DeathOwner>, Intro2Type13ImpactBlock> {
@@ -182,12 +209,8 @@ fn run(
 
     // --- authentication prefix ---
     {
-        let entity = manager.entity_mut(id).unwrap();
-        if authenticate_intro2_type13(entity).is_err() {
+        if !type13_manager_allocation_authenticates(manager, id) {
             return Err(Block::Runtime("native allocation"));
-        }
-        if entity.authored_spawn_index != Some(INTRO2_TYPE13_SPAWN_INDEX) {
-            return Err(Block::Runtime("not intro2 spawn 0"));
         }
     }
     if !crate::class49_death::finished_terminal_hit_authenticates(manager, id) {
@@ -279,7 +302,8 @@ fn run(
                         )
                         .map_err(Block::C690Publication)?;
                     }
-                    let owner = Intro2Type13WorldOwner::adopt(manager).map_err(Block::Adoption)?;
+                    let owner = Intro2Type13WorldOwner::adopt_entity(manager, id)
+                        .map_err(Block::Adoption)?;
                     scheduler.register_intro2_type13_search_attack(owner);
                 }
             }
@@ -340,9 +364,17 @@ fn run(
                     static_damage,
                     notifications,
                     retail_tick,
-                    world: crate::class49_terminal::Class49WorldContext::Cinematic {
-                        actor_tasks: *scheduler,
-                        active_terminal_calls: Vec::new(),
+                    world: match playing {
+                        None => crate::class49_terminal::Class49WorldContext::Cinematic {
+                            actor_tasks: *scheduler,
+                            active_terminal_calls: Vec::new(),
+                        },
+                        Some(playing) => crate::class49_terminal::Class49WorldContext::Playing {
+                            scheduler,
+                            player_hull: playing.player_hull,
+                            extra_lives: playing.extra_lives,
+                            active_terminal_calls: Vec::new(),
+                        },
                     },
                 },
                 id,
@@ -479,7 +511,10 @@ pub fn apply_intro2_type13_static_hit(
                     .scheduler
                     .park_native_contact_prefix(frame.entities, impact.target_entity_id)
                 {
-                    if let Ok(owner) = Intro2Type13WorldOwner::adopt(frame.entities) {
+                    if let Ok(owner) = Intro2Type13WorldOwner::adopt_entity(
+                        frame.entities,
+                        impact.target_entity_id,
+                    ) {
                         frame.scheduler.register_intro2_type13_search_attack(owner);
                     }
                 }
@@ -518,12 +553,8 @@ fn run_static(
 
     // --- authentication prefix (shared with the primary entry) ---
     {
-        let entity = manager.entity_mut(id).unwrap();
-        if authenticate_intro2_type13(entity).is_err() {
+        if !type13_manager_allocation_authenticates(manager, id) {
             return Err(Block::Runtime("native allocation"));
-        }
-        if entity.authored_spawn_index != Some(INTRO2_TYPE13_SPAWN_INDEX) {
-            return Err(Block::Runtime("not intro2 spawn 0"));
         }
     }
     if !crate::class49_death::finished_terminal_hit_authenticates(manager, id) {
@@ -609,7 +640,8 @@ fn run_static(
                         )
                         .map_err(Block::C690Publication)?;
                     }
-                    let owner = Intro2Type13WorldOwner::adopt(manager).map_err(Block::Adoption)?;
+                    let owner = Intro2Type13WorldOwner::adopt_entity(manager, id)
+                        .map_err(Block::Adoption)?;
                     scheduler.register_intro2_type13_search_attack(owner);
                 }
             }

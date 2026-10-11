@@ -8,7 +8,7 @@ use crate::{
     gameplay_notifications::GameplayNotificationPhase,
     native_type122::construction_tests::native_fixture_with_player,
     session::GameSession,
-    shared_fish::{death::SharedFishDeathBlock, SharedFishOutcome},
+    shared_fish::SharedFishOutcome,
     specialized_actor_task_production::{
         SpecializedActorTaskProductionFrame, SpecializedActorTaskProductionOutcome,
     },
@@ -357,8 +357,10 @@ fn playing_radial_completed_fish_uses_its_buffer_until_sweep_but_requires_termin
     );
 }
 
+/// A lethal Playing radial enters Type124's class63: its nested BAF0 radial
+/// completes, the fish keeps its tasks, and BC90 appends its authored Type61.
 #[v2k_test_support::retail_test]
-fn playing_radial_type124_keeps_the_lethal_prefix_and_named_class63_boundary() {
+fn playing_radial_type124_finishes_class63_and_drops_its_power_up() {
     let mut f = fixture(30);
     let id = f
         .manager
@@ -369,22 +371,32 @@ fn playing_radial_type124_keeps_the_lethal_prefix_and_named_class63_boundary() {
     isolate(&mut f, id);
     let entity = f.manager.entity_mut(id).unwrap();
     let position = entity.position_raw();
-    let context = entity.current_behavior_context;
+    let payload = entity.auto_pilot_payload_packed.expect("carrier +88");
+    let primary = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary);
     entity.collision.health_raw = RetailRuntimeValue::Known(1);
+    let before = f.manager.iter_all().map(|entity| entity.id).max().unwrap();
     let outcome = deliver(&mut f, position);
-    assert!(
-        matches!(outcome.blocked, Some(PlayingRadialBlock::Native(DynamicRadialLiveBlock {
-            target_prefix_committed: true,
-            reason: crate::entity::DynamicRadialLiveBlockReason::Checked(ref checked), ..
-        })) if matches!(checked.reason, crate::live_actor_checked_damage::LiveActorDamageBlock::Death(
-            crate::entity::DynamicRadialLiveBlockReason::Fish(SharedFishDeathBlock::UnsupportedDeathProgram {
-                entity_type:124, alternate_behavior_class:63
-            })))),
-        "{outcome:?}"
-    );
+    assert!(outcome.blocked.is_none(), "{outcome:?}");
+    assert!(outcome.completed_target_ids.contains(&id));
     let entity = f.manager.entity_mut(id).unwrap();
-    assert!(matches!(entity.collision.health_raw, RetailRuntimeValue::Known(health) if health < 0));
-    assert_eq!(entity.current_behavior_context, context);
-    assert!(f.manager.pending_actor_deferred_destroy_ids().is_empty());
-    assert!(f.scheduler.has_native_contact_prefix(id));
+    assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(0));
+    assert_eq!(
+        entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary),
+        primary
+    );
+    assert!(crate::class49_death::finished_terminal_hit_authenticates(
+        &f.manager, id
+    ));
+    assert!(f.manager.pending_actor_deferred_destroy_ids().contains(&id));
+    assert!(!f.scheduler.shared_fish_completed_owner(&f.manager, id));
+    let drop = f
+        .manager
+        .iter_all()
+        .find(|entity| entity.id > before && entity.entity_type == 61)
+        .expect("Type61 drop");
+    assert_eq!(drop.position_raw(), position);
+    assert_eq!(drop.power_up_payload_packed, Some(payload));
+    assert!(crate::native_type61::allocation_authenticates(
+        &f.manager, drop.id
+    ));
 }

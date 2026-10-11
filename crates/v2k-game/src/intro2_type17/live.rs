@@ -417,6 +417,7 @@ fn run_frame(
                 id,
                 super::capture::CaptureRootCallback::ReleaseOrKill,
                 &mut super::capture::CaptureContext {
+                    resources: None,
                     tasks: &mut *frame.capture_tasks,
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,

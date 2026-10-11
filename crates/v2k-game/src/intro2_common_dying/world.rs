@@ -212,9 +212,12 @@ fn run_frame(
         .initializer_state_flags_raw;
     // Type26 retains 0400. It does not participate in E640/DF70's gates;
     // class12 still has no attitude/ground-snap policy and does run E100/E370.
-    if default_flags != authored_default || default_flags & !0x2415 != 0x28 {
+    // Type18's 431 lacks drag bit8, so its class12 effective word is 420.
+    if default_flags != authored_default || !matches!(default_flags & !0x2415, 0x28 | 0x20) {
         return Err(Block::Runtime("class12 effective flags"));
     }
+    // Class12's style clears 2015 and sets nothing.
+    let effective_flags = default_flags & !0x2015;
     let state = bits(
         entity,
         REMOTE_OWNED_STATE_BIT
@@ -399,8 +402,8 @@ fn run_frame(
                 .queue_fixed_positional_sound_raw(sound, entity.position_raw());
         }
     }
-    // Entry effective28/0428 bypasses E640; both DCA0 and E870 still publish F70,
-    // then E100/E370 after a tagged/expired task's terminal callback.
+    // Entry effective 28/428/420 bypasses E640; DCA0 and E870 still publish
+    // F70, then E100/E370 after a tagged/expired task's terminal callback.
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     entity.physical_body_basis_q31 =
         RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(heading, pitch, roll));
@@ -413,7 +416,7 @@ fn run_frame(
         &mut velocity,
         dt,
         CommonUnderwaterFrame {
-            effective_environment_flags: 0x28,
+            effective_environment_flags: effective_flags,
             water_response_enabled: false,
             position_y_raw: entity.position_raw()[1],
             solid_or_sea_y_raw: 0,
@@ -422,19 +425,22 @@ fn run_frame(
         },
     );
     let mut angles = [heading, pitch, roll];
-    apply_common_wind_drag_raw(
-        &mut velocity,
-        &mut angles,
-        environment,
-        CommonWindDragFrame {
-            terrain,
-            position_raw: entity.position_raw(),
-            basis: Type9BodyBasis::from_angle_words(heading, pitch, roll),
-            callback_mass_raw: std::num::NonZeroU16::new(mass)
-                .ok_or(Block::Runtime("zero environment mass"))?,
-            elapsed_micros: dt,
-        },
-    );
+    // 40E354: 44EC60 runs only for effective bit8.
+    if effective_flags & 0x08 != 0 {
+        apply_common_wind_drag_raw(
+            &mut velocity,
+            &mut angles,
+            environment,
+            CommonWindDragFrame {
+                terrain,
+                position_raw: entity.position_raw(),
+                basis: Type9BodyBasis::from_angle_words(heading, pitch, roll),
+                callback_mass_raw: std::num::NonZeroU16::new(mass)
+                    .ok_or(Block::Runtime("zero environment mass"))?,
+                elapsed_micros: dt,
+            },
+        );
+    }
     entity.set_velocity_raw(velocity);
     entity.set_rotation_heading_pitch_roll_raw(angles);
     run_surface(

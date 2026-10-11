@@ -131,11 +131,12 @@ pub(super) fn reselect(
     else {
         return Err(Block::Behavior("last hit tick"));
     };
+    let row = super::type16_row(entity).ok_or(Block::Allocation)?;
     let metadata = manager
-        .type_runtime_metadata(16)
+        .type_runtime_metadata(row.entity_type())
         .cloned()
         .ok_or(Block::Metadata)?;
-    authenticate_metadata(&metadata).map_err(|_| Block::Metadata)?;
+    authenticate_metadata(row, &metadata).map_err(|_| Block::Metadata)?;
     if !native::initializer_storage_authenticates(entity) {
         return Err(Block::Behavior("initializer component storage"));
     }

@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    ControllerLayout, Difficulty, GameConfig, GraphicsDetail, RendererChoice, ScalingMode,
-    WindowMode,
+    ControllerLayout, Difficulty, GameConfig, GraphicsDetail, PortFixes, RendererChoice,
+    ScalingMode, WindowMode,
 };
 
 #[cfg(windows)]
@@ -182,6 +182,9 @@ struct PortPreferences {
     difficulty: Difficulty,
     #[serde(default)]
     controller_layout: ControllerLayout,
+    /// Missing fixes load on, as a fresh configuration has them.
+    #[serde(default)]
+    fixes: PortFixes,
 }
 
 impl PortPreferences {
@@ -195,6 +198,7 @@ impl PortPreferences {
             detail: config.detail,
             difficulty: config.difficulty,
             controller_layout: config.controller_layout,
+            fixes: config.fixes,
         }
     }
     fn apply(self, config: &mut GameConfig) {
@@ -208,6 +212,7 @@ impl PortPreferences {
         config.detail = self.detail;
         config.difficulty = self.difficulty;
         config.controller_layout = self.controller_layout;
+        config.fixes = self.fixes;
     }
 }
 

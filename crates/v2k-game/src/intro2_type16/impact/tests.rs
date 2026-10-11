@@ -45,7 +45,7 @@ fn spawn_id(manager: &EntityManager, spawn: usize) -> u32 {
 fn prepare_target(manager: &mut EntityManager, spawn: usize) -> u32 {
     let id = spawn_id(manager, spawn);
     let entity = manager.entity_mut(id).unwrap();
-    assert!(intro2_type16_allocation_authenticates(entity));
+    assert!(crate::intro2_type16::intro2_type16_allocation_authenticates(entity));
     // Controlled local reaction/admission flags; native tasks, metadata and
     // component receipts come from the actual authored birth.
     entity

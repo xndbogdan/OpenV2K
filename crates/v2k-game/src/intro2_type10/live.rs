@@ -63,7 +63,7 @@ impl Intro2Type10Owner {
             .iter_all()
             .find(|entity| entity.id == entity_id)
             .ok_or(Intro2Type10Block::Allocation)?;
-        if !intro2_type10_allocation_authenticates(entity) {
+        if !type10_manager_allocation_authenticates(manager, entity_id) {
             return Err(Intro2Type10Block::Allocation);
         }
         let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -259,11 +259,12 @@ fn run_frame(
         return Err(Block::Runtime("local living unattached owner"));
     }
     let callback_enabled = state & COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT != 0;
+    let profile = type10_profile(entity).ok_or(Block::Allocation)?;
     let metadata = manager
-        .type_runtime_metadata(10)
+        .type_runtime_metadata(profile.entity_type())
         .cloned()
         .ok_or(Block::Metadata)?;
-    authenticate_metadata(&metadata).map_err(|_| Block::Metadata)?;
+    authenticate_metadata(profile, &metadata).map_err(|_| Block::Metadata)?;
     if callback_enabled {
         // This type omits J. The later18640 phase must remain absent even
         // when the callback is enabled; a live attachment would change it.

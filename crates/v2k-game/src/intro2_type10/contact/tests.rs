@@ -1,4 +1,5 @@
 use super::*;
+use crate::intro2_radial::Intro2RadialReport;
 use crate::{
     common_mover::type9_attitude::Type9BodyBasis,
     entity::EntityManager,
@@ -136,7 +137,9 @@ fn native_type10_terrain_terminal_keeps_self_radial_and_post_bac0_physical_respo
     let terminal = report.terminal.unwrap();
     assert_eq!(terminal.contact, Intro2Type10TumbleContact::Terrain);
     assert!(terminal.finalized);
-    let Intro2RadialReport::Applied { dynamic, .. } = terminal.radial else {
+    let Class49RadialReport::Cinematic(Intro2RadialReport::Applied { dynamic, .. }) =
+        terminal.radial
+    else {
         panic!()
     };
     assert!(dynamic.completed());
@@ -310,7 +313,9 @@ fn native_type10_incomplete_radial_keeps_terminal_claim_and_never_replays_effect
     };
     let terminal = report.terminal.unwrap();
     assert!(!terminal.finalized);
-    let Intro2RadialReport::Applied { dynamic, .. } = terminal.radial else {
+    let Class49RadialReport::Cinematic(Intro2RadialReport::Applied { dynamic, .. }) =
+        terminal.radial
+    else {
         panic!()
     };
     assert_eq!(dynamic.blocked.unwrap().target_id, other);

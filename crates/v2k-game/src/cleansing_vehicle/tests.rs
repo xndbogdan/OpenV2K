@@ -277,6 +277,7 @@ fn cleansing_rover_collect_drop_and_settle_retains_identity_and_republishes_task
     for tick in 1002..1102 {
         let pass = manager.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20_000,
+            beam_expiry: crate::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                 terrain: session.cache.terrain().unwrap(),

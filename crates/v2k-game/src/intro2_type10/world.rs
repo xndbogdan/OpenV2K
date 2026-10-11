@@ -6,7 +6,7 @@ use crate::{
         type9_attitude::Type9BodyBasis,
         type9_surface::{decay_actor_surface_timer_ms, ACTOR_SURFACE_OWNER_DISABLED_STATE_BIT},
     },
-    entity::{apply_type13_common_environment_raw, EntityManager},
+    entity::{apply_effective8_flyer_environment, EntityManager},
     entity_collision_state::{
         CommonWorldEffectProfile, EntityTypeRuntimeMetadata, BODY_BASIS_REBUILT_STATE_BIT,
     },
@@ -39,10 +39,7 @@ pub(super) fn finish(
     entry_effective_flags: u32,
 ) -> Result<(), Intro2Type10Block> {
     use Intro2Type10Block as Block;
-    let environment = manager.intro2_type13_environment();
-    if environment.0 != 0 {
-        return Err(Block::Runtime("wind mode"));
-    }
+    let physics = manager.common_environment_physics();
     if metadata.common_world_effects
         != RetailRuntimeValue::Known(CommonWorldEffectProfile::default())
     {
@@ -52,7 +49,7 @@ pub(super) fn finish(
     if entry_state & crate::entity_scheduler::SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT != 0 {
         let record = frame
             .resources
-            .global_entity_type(10)
+            .global_entity_type(entity.entity_type as usize)
             .ok_or(Block::Metadata)?;
         let RetailRuntimeValue::Known(health) = entity.collision.health_raw else {
             return Err(Block::Runtime("detailed sound health"));
@@ -84,15 +81,10 @@ pub(super) fn finish(
         .state_flags_at_0x08
         .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
     effective_flags(entity)?;
-    let mut velocity = entity.velocity_raw();
-    apply_type13_common_environment_raw(
-        &mut velocity,
-        dt,
-        entity.mass_raw,
-        environment.0,
-        environment.1,
-    );
-    entity.set_velocity_raw(velocity);
+    // Effective 8 keeps drag bit8: a nonzero wind mode takes EC60's
+    // current-wind branch with the basis F70 just rebuilt above.
+    apply_effective8_flyer_environment(entity, physics, frame.resources.level_terrain(), dt)
+        .map_err(Block::Runtime)?;
     // Type10 has no surface selectors or lifetime: E370 only decays +48.
     if super::live::bits(entity, ACTOR_SURFACE_OWNER_DISABLED_STATE_BIT)? == 0 {
         let RetailRuntimeValue::Known(timer) = entity.surface_lifetime_timer_ms_at_0x48 else {

@@ -22,6 +22,8 @@ pub use attachment::{PlayerCargoAttachmentError, PlayerCargoAttachmentFrame};
 /// later through [`EntityManager::update_late_tail_materialisers`].
 pub struct PlayerCargoFrame<'a> {
     pub elapsed_micros: u32,
+    /// Whether the beam countdown fires when it lands on zero.
+    pub beam_expiry: BeamExpiry,
     pub drop_context: Option<CargoDropContext<'a>>,
     pub retail_tick: u32,
     pub scheduler: &'a mut SpecializedActorTaskScheduler,
@@ -59,8 +61,12 @@ impl EntityManager {
             terrain: frame.drop_context.map(|context| context.terrain),
             blocked: Vec::new(),
         };
-        let beam =
-            self.tick_beam_with_callbacks(frame.elapsed_micros, frame.drop_context, &mut callbacks);
+        let beam = self.tick_beam_with_callbacks(
+            frame.elapsed_micros,
+            frame.drop_context,
+            frame.beam_expiry,
+            &mut callbacks,
+        );
         PlayerCargoFrameOutcome {
             beam,
             blocked: callbacks.blocked,
@@ -169,6 +175,7 @@ impl CargoRelationCallbacks for AttachmentProjectionCallbacks {
             entity_type: CARGO_DROP_PROXY_ENTITY_TYPE,
             authored_follow_beacon_priority_raw: None,
             power_up_payload_packed: None,
+            auto_pilot_payload_packed: None,
             factory_type61_birth_provenance: None,
             type60_construction_provenance: None,
             main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,
@@ -194,6 +201,7 @@ impl CargoRelationCallbacks for AttachmentProjectionCallbacks {
             sub_a_propulsion_runtime: RetailRuntimeValue::Unresolved,
             sub_g_06070_runtime: RetailRuntimeValue::Unresolved,
             intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
             intro2_type13_aim_runtime: None,
             intro2_type16_aim_runtime: None,
             intro2_type58_aim_runtime: None,
@@ -222,9 +230,19 @@ impl CargoRelationCallbacks for AttachmentProjectionCallbacks {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
+            native_type43_runtime: None,
+            native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
+            native_type18_runtime: None,
+            native_type18_aim_runtime: None,
+            native_type28_runtime: None,
+            native_type76_runtime: None,
+            native_type76_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,

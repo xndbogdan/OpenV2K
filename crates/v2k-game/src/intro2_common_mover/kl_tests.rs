@@ -164,6 +164,34 @@ fn type30_kl_constructor_owns_four_zeroed_words_and_real_one_based_bindings() {
     );
 }
 
+/// Model 1131 (Type38/Type129) authors K [4,3] and L [1,2]: 09A80 binds the
+/// same callbacks to the other word of each pair.
+#[v2k_test_support::retail_test]
+fn model1131_kl_binds_each_pair_the_other_way_round() {
+    let dir = v2k_test_support::retail_dir();
+    let mut session = GameSession::init(&dir).unwrap();
+    session.load_auxiliary_ovl(3, 1).unwrap();
+    session.load_level_by_id(42, 1).unwrap();
+    let type30 =
+        EntityTypeRuntimeMetadata::from_section12(session.cache.global_entity_type(30).unwrap());
+    for entity_type in [38, 129] {
+        let metadata = EntityTypeRuntimeMetadata::from_section12(
+            session.cache.global_entity_type(entity_type).unwrap(),
+        );
+        let mut kl = Intro2KlComponents::from_native_constructor(&metadata).unwrap();
+        assert!(kl.authenticates(&metadata));
+        // A bank bound for model 1131 is not Type30's.
+        assert!(!kl.authenticates(&type30));
+        kl.commit_sub_d_writes(64, 128);
+        kl.advance_sub_k(80);
+        // K+0 points at selector4; K+4 points at selector3.
+        assert_eq!(kl.model_variables_raw(), &[0, 0, -160, -256]);
+        kl.advance_sub_l([0; 3], Type9BodyBasis::from_angle_words(0, 0, 0));
+        // L+0 points at selector1; L+4 points at selector2.
+        assert_eq!(kl.model_variables_raw(), &[768, 0, -160, -256]);
+    }
+}
+
 #[v2k_test_support::retail_test]
 fn type30_kl_restricted_keeps_sub_d_writes_but_skips_h_k_l_callbacks() {
     let Some(metadata) = canonical_metadata() else {

@@ -28,10 +28,8 @@ pub(super) fn run(
     tracked_target: RetailRuntimeValue<Option<CommonMoverTrackedTargetSnapshot>>,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<bool, Intro2Type16Block> {
-    authenticate_metadata(frame.metadata).map_err(|_| Intro2Type16Block::Metadata)?;
-    if !intro2_type16_allocation_authenticates(entity) {
-        return Err(Intro2Type16Block::Allocation);
-    }
+    let row = super::type16_row(entity).ok_or(Intro2Type16Block::Allocation)?;
+    authenticate_metadata(row, frame.metadata).map_err(|_| Intro2Type16Block::Metadata)?;
     let Some(mut runtime) = entity.intro2_type16_runtime else {
         return Err(Intro2Type16Block::Runtime("Sub-D custody"));
     };

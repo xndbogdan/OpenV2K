@@ -339,6 +339,7 @@ fn apply_contact(
                     manager,
                     id,
                     &mut super::capture::CaptureContext {
+                        resources: None,
                         tasks: frame.actor_tasks,
                         world_fx: fx,
                         notifications: feedback.notifications,

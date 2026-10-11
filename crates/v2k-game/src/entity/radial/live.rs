@@ -133,6 +133,7 @@ pub enum DynamicRadialLiveBlockReason {
     Fish(crate::shared_fish::death::SharedFishDeathBlock),
     NativeType56(crate::native_type56::death::Type56DeathBlock),
     NativeType40(crate::native_type40::death::Type40DeathBlock),
+    RollingBoulder(crate::rolling_boulder::death::RollingBoulderDeathBlock),
     UnsupportedDeath {
         entity_type: u32,
         alternate_class: Option<u32>,

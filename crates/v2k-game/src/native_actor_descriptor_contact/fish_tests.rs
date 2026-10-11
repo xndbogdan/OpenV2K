@@ -294,3 +294,68 @@ fn fish_contact_preserves_negative_gate_and_rejects_unresolved_or_parked_owner_b
     assert_eq!(actor(&f.entities, id).unwrap().shared_fish_runtime, runtime);
     assert_eq!(f.next_word(), rng);
 }
+
+/// BC90 keeps a Type124's tasks, and 11AD0 has no dying test, so a corpse
+/// still paired before 14990 runs its retained task's descriptor hook. Only
+/// the finished class63 receipt stands in for the retired owner; a living
+/// owner that loses custody still blocks before any RNG.
+#[v2k_test_support::retail_test]
+fn a_class63_fish_corpse_keeps_its_task_descriptor_hook_until_the_sweep() {
+    use crate::class49_death::{
+        begin_class49_standard_death, claim_class49_terminal, finish_class49_terminal,
+    };
+    let mut f = FishFixture::native(30);
+    f.scheduler.adopt_shared_fish(&f.entities);
+    let id = f
+        .entities
+        .iter_all()
+        .find(|e| e.entity_type == 124)
+        .unwrap()
+        .id;
+    let opposite = f
+        .entities
+        .iter_all()
+        .find(|e| e.entity_type == 22)
+        .unwrap()
+        .id;
+    let receipt =
+        begin_class49_standard_death(&mut f.entities, id, &f.session.cache, &mut f.fx, 321)
+            .unwrap()
+            .expect("live Type124");
+    assert!(claim_class49_terminal(&mut f.entities, &receipt));
+    finish_class49_terminal(&mut f.entities, receipt, &f.session.cache, &mut f.fx).unwrap();
+    // The terminal's scheduler finish retires the living owner.
+    f.scheduler.retire_shared_fish(id);
+    assert!(!f.scheduler.prepare_native_actor_mutation(&f.entities, id));
+    let task_id = actor(&f.entities, id)
+        .unwrap()
+        .actor_tasks
+        .task_in_slot(ActorTaskSlot::Primary)
+        .expect("BC90 keeps the Primary task");
+    let task = *actor(&f.entities, id)
+        .unwrap()
+        .actor_tasks
+        .task_state(task_id)
+        .unwrap();
+    let position = actor(&f.entities, id).unwrap().position_raw();
+    f.entities
+        .entity_mut(opposite)
+        .unwrap()
+        .set_position_raw(position);
+    let mut expected_fx = f.fx.fork_for_main_base_abort_transaction();
+    expected_fx.next_shared_retail_random_u16();
+    expected_fx.next_shared_retail_random_u16();
+    assert_eq!(
+        f.invoke(id, opposite),
+        Ok(NativeDescriptorContactOutcome::Applied { rng_draws: 2 })
+    );
+    assert_ne!(
+        actor(&f.entities, id)
+            .unwrap()
+            .actor_tasks
+            .task_state(task_id),
+        Some(&task),
+        "the retained task took its contact write"
+    );
+    assert_eq!(f.next_word(), expected_fx.next_shared_retail_random_u16());
+}

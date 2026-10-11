@@ -91,7 +91,7 @@ impl Intro2Type16Owner {
             .iter_all()
             .find(|entity| entity.id == entity_id)
             .ok_or(Intro2Type16Block::Allocation)?;
-        if !intro2_type16_allocation_authenticates(entity) {
+        if !super::type16_manager_allocation_authenticates(manager, entity_id) {
             return Err(Intro2Type16Block::Allocation);
         }
         let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -305,11 +305,12 @@ fn run_frame(
         return Err(Block::Runtime("local living unattached owner"));
     }
     let callback_enabled = state & COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT != 0;
+    let row = super::type16_row(entity).ok_or(Block::Allocation)?;
     let metadata = manager
-        .type_runtime_metadata(16)
+        .type_runtime_metadata(row.entity_type())
         .cloned()
         .ok_or(Block::Metadata)?;
-    authenticate_metadata(&metadata).map_err(|_| Block::Metadata)?;
+    authenticate_metadata(row, &metadata).map_err(|_| Block::Metadata)?;
     if callback_enabled {
         // 12DA0 follows its callback with18640 for authored Sub-J and later
         // updates the attached voice. These births have one empty J slot and

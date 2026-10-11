@@ -50,7 +50,7 @@ pub(crate) fn apply_intro2_type66_particle_hit(
     if !manager
         .iter_all()
         .find(|entity| entity.id == impact.target_entity_id)
-        .is_some_and(|entity| entity.entity_type == 66)
+        .is_some_and(|entity| super::is_working_factory_type(entity.entity_type))
     {
         return Intro2Type66ImpactOutcome::NotApplicable;
     }
@@ -94,11 +94,17 @@ fn run(
     let delivery = impact
         .damage_delivery_record()
         .ok_or(Block::Runtime("particle provenance"))?;
+    let factory_type = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .ok_or(Block::Runtime("allocation"))?
+        .entity_type;
     let metadata = manager
-        .type_runtime_metadata(66)
+        .type_runtime_metadata(factory_type)
         .cloned()
         .ok_or(Block::Runtime("metadata"))?;
-    super::authenticate_metadata(&metadata).map_err(|_| Block::Runtime("metadata"))?;
+    super::authenticate_metadata(factory_type, &metadata)
+        .map_err(|_| Block::Runtime("metadata"))?;
     let entity = manager.entity_mut(id).ok_or(Block::Runtime("allocation"))?;
     if !intro2_type66_allocation_authenticates(entity) {
         return Err(Block::Runtime("native allocation"));

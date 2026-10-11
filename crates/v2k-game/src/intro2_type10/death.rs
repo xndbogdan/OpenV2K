@@ -30,6 +30,11 @@ pub enum Intro2Type10DeathBlock {
     Runtime(&'static str),
     World(Intro2Type10Block),
     SubG(crate::sub_g_runtime::Type13SubGFrameBlock),
+    /// A class63 row's death is the shared BAF0/BC90 terminal, which needs the
+    /// caller's radial owner; it never publishes this row's class11 Tumble.
+    AutoPilotCarrier,
+    /// The class63 terminal blocked after its committed prefix.
+    AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,8 +158,14 @@ pub fn publish_intro2_type10_standard_death(
     if bits(entity, REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT)? != 0 {
         return Ok(None);
     }
-    let metadata = manager.type_runtime_metadata(10).ok_or(Block::Metadata)?;
-    authenticate_metadata(metadata).map_err(|_| Block::Metadata)?;
+    let profile = super::type10_profile(entity).ok_or(Block::Allocation)?;
+    if profile.alternate_behavior_class() != 11 {
+        return Err(Block::AutoPilotCarrier);
+    }
+    let metadata = manager
+        .type_runtime_metadata(profile.entity_type())
+        .ok_or(Block::Metadata)?;
+    authenticate_metadata(profile, metadata).map_err(|_| Block::Metadata)?;
     if entity.collision.constructor_sound_attachment_id_at_0x8c != RetailRuntimeValue::Known(None) {
         return Err(Block::Runtime("constructor sound attachment"));
     }
@@ -296,11 +307,16 @@ fn run_frame(
 ) -> Result<Intro2Type10TumbleOutcome, Intro2Type10DeathBlock> {
     use Intro2Type10DeathBlock as Block;
     let id = owner.entity_id();
+    let profile = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(super::type10_profile)
+        .ok_or(Block::Allocation)?;
     let metadata = manager
-        .type_runtime_metadata(10)
+        .type_runtime_metadata(profile.entity_type())
         .cloned()
         .ok_or(Block::Metadata)?;
-    authenticate_metadata(&metadata).map_err(|_| Block::Metadata)?;
+    authenticate_metadata(profile, &metadata).map_err(|_| Block::Metadata)?;
     let entity = manager.entity_mut(id).unwrap();
     let state = bits(
         entity,
@@ -481,7 +497,10 @@ pub fn begin_intro2_type10_tumble_contact(
         .and_then(|id| resources.global_model(id))
         .ok_or(Block::Metadata)?
         .radius;
-    let record = resources.global_entity_type(10).ok_or(Block::Metadata)?;
+    let own_type = entity.entity_type;
+    let record = resources
+        .global_entity_type(own_type as usize)
+        .ok_or(Block::Metadata)?;
     let header = &record.raw_header;
     let word = |at: usize| i16::from_le_bytes(header[at..at + 2].try_into().unwrap());
     let dword = |at: usize| i32::from_le_bytes(header[at..at + 4].try_into().unwrap());
@@ -505,7 +524,7 @@ pub fn begin_intro2_type10_tumble_contact(
                 channels: [dword(0x58), dword(0x5c)],
                 amounts_raw: [dword(0x60), dword(0x64)],
             },
-            trailing_raw: [10, id as i32],
+            trailing_raw: [own_type as i32, id as i32],
         },
     };
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));

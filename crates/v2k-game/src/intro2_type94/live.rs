@@ -89,7 +89,7 @@ impl Intro2Type94Owner {
             .iter_all()
             .find(|entity| entity.id == entity_id)
             .ok_or(Intro2Type94Block::Allocation)?;
-        if !intro2_type94_allocation_authenticates(entity) {
+        if !super::type94_manager_allocation_authenticates(manager, entity_id) {
             return Err(Intro2Type94Block::Allocation);
         }
         let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {

@@ -168,10 +168,11 @@ pub fn tick_intro2_gun_turret_aim(
     if emitter.projectile_method == 0 {
         return Ok(Intro2GunTurretAimTickOutcome::default());
     }
-    //425160 submits all three methods through4147A0. Type115's method16
-    //and native Type97's method12 retain their own descriptor rows.
+    //425160 submits every method through4147A0. Type115's method16 and the
+    //native turrets' methods 12, 13 and 14 retain their own descriptor rows;
+    //44EA60 gives 12..14 no gravity lead and 16 one.
     if emitter.projectile_method != u32::from(descriptor.projectile_method)
-        || !matches!(emitter.projectile_method, 12 | 14 | 16)
+        || !matches!(emitter.projectile_method, 12 | 13 | 14 | 16)
     {
         return Err(Intro2GunTurretAimError::Runtime("425160 projectile method"));
     }

@@ -100,6 +100,20 @@ six H records/cursor/enabled state and TerrainAndWater policy. An allocation
 whose own Type94 receipt is absent remains ineligible even with model272 and
 equal metadata. Ordinary Type94 constructor publication is not inferred.
 
+## Ordinary-world births
+
+The 15 authored Type94 spawns in ordinary worlds 20/21/24/26/27/40 (4/4/2/1/
+2/2) match spawn43 apart from pose: model272 with no override, param1, no
+animation or configuration, a zero damage buffer and Y0. They take the same
+birth: six TerrainAndWater H feet, D, A20450, E, and AC60's Follow/Search/
+Capture selector. The process allocates their Sub-D at the constructor
+position, the nearby predicates read the actually linked live list, and an
+ordinary receipt carries the manager's allocation lease. The constructor
+classifies the surface at the birth tick and records the null `4C8A30+30`
+type-hit slot. The existing Type94 adoption, tick, water tail, Class12 death
+and static contact apply unchanged. The Playing particle dispatch and radial
+route these allocations to the same native hit owner.
+
 ## Validation
 
 The combined Type53/94 and meteor-hit checkpoint passes the full V2000

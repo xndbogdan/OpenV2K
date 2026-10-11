@@ -45,18 +45,10 @@ pub(crate) enum Intro2CaptureProfile {
     Type94,
     Type122,
     Type40,
+    Type18,
+    Type28,
 }
 impl Intro2CaptureProfile {
-    fn entity_type(self) -> u32 {
-        match self {
-            Self::Type16 => 16,
-            Self::Type17 => 17,
-            Self::Type53 => 53,
-            Self::Type94 => 94,
-            Self::Type122 => 122,
-            Self::Type40 => 40,
-        }
-    }
     fn authenticates(self, entity: &Entity) -> bool {
         match self {
             Self::Type16 => crate::intro2_type16::intro2_type16_allocation_authenticates(entity),
@@ -65,6 +57,8 @@ impl Intro2CaptureProfile {
             Self::Type94 => crate::intro2_type94::intro2_type94_allocation_authenticates(entity),
             Self::Type122 => crate::native_type122::type122_allocation_authenticates(entity),
             Self::Type40 => crate::native_type40::allocation_authenticates(entity),
+            Self::Type18 => crate::native_type18::allocation_authenticates(entity),
+            Self::Type28 => crate::native_type28::allocation_authenticates(entity),
         }
     }
 }
@@ -253,8 +247,10 @@ pub(crate) fn publish_handoff(
     // C7D0 stores +8 and C6B0 publishes +4/+10 before invoking AEE0.
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
     warn_target(manager, target_id, retail_tick, world_fx)?;
+    // Each captor row reads its own Section-12 metadata (Type16 or Type128).
+    let entity_type = manager.entity_mut(id).ok_or(Block::Allocation)?.entity_type;
     let metadata = manager
-        .type_runtime_metadata(profile.entity_type())
+        .type_runtime_metadata(entity_type)
         .cloned()
         .ok_or(Block::Metadata)?;
     let entity = manager.entity_mut(id).unwrap();

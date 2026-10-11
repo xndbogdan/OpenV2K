@@ -72,6 +72,7 @@ const ID_EFFECTS: usize = 208;
 const ID_EFFECTS_VOLUME: usize = 209;
 const ID_SKIP: usize = 210;
 const ID_CONTROLLER: usize = 211;
+const ID_FIX_BEAM: usize = 212;
 const WORKER_TIMER: usize = 1;
 const HEADER_TIMER: usize = 2;
 
@@ -104,6 +105,7 @@ struct OptionControls {
     effects: Handle,
     effects_volume: Handle,
     controller: Handle,
+    fix_beam: Handle,
     skip: Handle,
     save: Handle,
     install: Handle,
@@ -1236,7 +1238,7 @@ impl WindowState {
             OPTIONS_CLASS,
             "V2K Options",
             560,
-            642,
+            704,
             self.window,
             self.host,
             self.scale,
@@ -1358,12 +1360,31 @@ impl WindowState {
             186,
             34,
         );
+        // Fixes for retail bugs: on by default; off restores retail.
+        self.group(window, " Fixes ", 12, 378, 536, 54);
+        let fix_beam = self.checkbox(
+            window,
+            "&Beam commands at any frame rate",
+            ID_FIX_BEAM,
+            24,
+            402,
+            310,
+            config.fixes.beam_commands,
+        );
+        self.label(
+            window,
+            "Off restores retail: C and D fail at 125 fps.",
+            346,
+            394,
+            186,
+            34,
+        );
         let skip = self.checkbox(
             window,
             "Skip the launcher when this installation is ready",
             ID_SKIP,
             16,
-            382,
+            444,
             528,
             self.request.preferences.skip_launcher,
         );
@@ -1371,25 +1392,25 @@ impl WindowState {
             window,
             "Use --launcher to open it again. Missing game files still open setup.",
             34,
-            408,
+            470,
             510,
             20,
         );
-        self.group(window, " Installation tools ", 12, 440, 536, 132);
-        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 464, 248, 30);
-        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 464, 252, 30);
+        self.group(window, " Installation tools ", 12, 502, 536, 132);
+        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 526, 248, 30);
+        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 526, 252, 30);
         let install = self.button(
             window,
             "&Install from disc image...",
             ID_INSTALL,
             24,
-            506,
+            568,
             512,
             30,
         );
-        let progress = self.label(window, "", 24, 545, 512, 22);
-        let save = self.button(window, "&Save", ID_SAVE, 308, 592, 112, 32);
-        self.button(window, "Cancel", ID_CANCEL, 436, 592, 112, 32);
+        let progress = self.label(window, "", 24, 607, 512, 22);
+        let save = self.button(window, "&Save", ID_SAVE, 308, 654, 112, 32);
+        self.button(window, "Cancel", ID_CANCEL, 436, 654, 112, 32);
         self.option_controls = OptionControls {
             resolution,
             renderer,
@@ -1401,6 +1422,7 @@ impl WindowState {
             effects,
             effects_volume,
             controller,
+            fix_beam,
             skip,
             save,
             install,
@@ -1488,6 +1510,7 @@ impl WindowState {
         config.sfx_volume = combo_selection(controls.effects_volume).min(15) as f32 / 15.0;
         config.controller_layout =
             ControllerLayout::from_index(combo_selection(controls.controller) as u32);
+        config.fixes.beam_commands = checked(controls.fix_beam);
         let skip = checked(controls.skip);
         if let Err(error) = config.try_save(&self.root) {
             notice(

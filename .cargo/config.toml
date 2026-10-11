@@ -7,3 +7,7 @@ CMAKE_POLICY_VERSION_MINIMUM = "3.5"
 # Keep MinGW's CRT and SDL2 search paths while using Rust's bundled LLD.
 # Cargo resolves this path from the repository root.
 linker = "scripts/windows-gnu-gcc.cmd"
+# Windows reserves only 1 MiB for the main thread; Linux and macOS give 8 MiB.
+# Unoptimized frames in the game loop and actor scheduler exceed 1 MiB on deep
+# actor paths, so reserve the same 8 MiB here. Pages are committed on demand.
+rustflags = ["-C", "link-arg=-Wl,--stack,8388608"]

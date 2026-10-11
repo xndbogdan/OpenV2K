@@ -156,10 +156,15 @@ pub mod native_ground_actor;
 pub mod native_model_frame;
 pub mod native_type122;
 pub mod native_type123;
+pub mod native_type18;
+pub mod native_type28;
 pub mod native_type30;
+pub mod native_type38;
 pub mod native_type40;
+pub mod native_type43;
 pub mod native_type56;
 pub(crate) mod native_type61;
+pub mod native_type76;
 pub mod native_type86;
 pub mod native_world_surface;
 pub mod opening;
@@ -178,6 +183,7 @@ mod ordinary_type9_current_task;
 pub mod ordinary_type9_go_to_job_initializer;
 pub mod ordinary_type9_go_to_job_production;
 pub mod ordinary_type9_impact;
+pub mod rolling_boulder;
 pub mod trash_furniture;
 // This pre-link owner is intentionally detached until the process-RNG
 // construction composer can issue exactly one selector receipt.

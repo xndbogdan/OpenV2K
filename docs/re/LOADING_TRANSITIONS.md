@@ -130,6 +130,12 @@ voice starts from the 2444-byte and 29012-byte global PCM families, with master
 volume `65535` throughout. Multiple global IDs share those PCM resources, so
 this passive evidence does not uniquely identify each call's sound ID.
 
+The same recording clears the bit at `453EF9` (`44F400(0x20)` inside
+`453E00`) when the first world starts; nothing clears it earlier, so the mask
+lasts through the post-Intro closing morph. The port latches the card once,
+releases the retained positional voices, and skips positional mixing until
+that world entry, while still discarding disposable one-shots.
+
 The source's world-emitter cutoff is established; matched port playback and
 voice ownership at the black card remain an acceptance task. It should not be
 implemented as a blanket stop of global sound or a master-volume change.
@@ -393,9 +399,17 @@ Its signed queue key zero sorts after positive-depth world geometry/effects
 and Klaus, while captions and gameplay HUD belong to later passes. Intro2
 preserves this boundary and composition. The legacy Playing adapter still
 prepares before simulation, delaying its producers by one frame; that host
-timing remains open. The software renderer's documented material-sprite
-fallback remains a no-op; the normal GL backend implements the recovered
-masked/additive operations.
+timing remains open. Both backends implement the masked/additive operations;
+the software renderer's additive rows keep the top four bits of each RGB565
+field, so an entry over black shows `texel & 0xF79E`.
+
+Intro2's final card is this sequence's first producer: `503C0` requests it on
+its first visit past tick 4000 (below). In the `V2000-nocd-faststart04.run`
+recording, the card's frames from tick 4003 fill the whole surface with
+`0xB596` four times (`0x227`, then `0x228` three times), then `0x8410`,
+`0x738E`, `0x528A`, `0x2104` and black: a fade from grey. A TTD write query
+on a mid-screen pixel of the tick-4003 frame stops at `0047838D`, reached from
+the queue drain `00494A50` through a 640x480 textured record.
 
 Kind 27's two distance-gated opcode-6 records are late producers of this same
 cursor; they do not own a separate flash or presentation sequence.
