@@ -30,6 +30,7 @@ impl SpecializedActorTaskOwner {
             Self::NativeType122(owner) => Some(owner.actor_lease()),
             Self::NativeType18(owner) => Some(owner.actor_lease()),
             Self::NativeType28(owner) => Some(owner.actor_lease()),
+            Self::NativeType76Family(owner) => Some(owner.actor_lease()),
             Self::NativeType43(owner) => Some(owner.actor_lease()),
             Self::NativeType38Family(owner) => Some(owner.actor_lease()),
             Self::Intro2Type58(owner) => Some(owner.actor_lease()),

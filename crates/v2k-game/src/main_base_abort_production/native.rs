@@ -33,6 +33,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     Type122(crate::native_actor_capture::CaptureBlock),
     Type18(crate::native_actor_capture::CaptureBlock),
     Type28(crate::native_actor_capture::CaptureBlock),
+    Type76(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type66(crate::intro2_type66::death::Intro2Type66DeathBlock),
     MainBase(crate::main_base_runtime::MainBaseDeathBlock),
     Fish(crate::shared_fish::death::SharedFishDeathBlock),
@@ -158,6 +159,7 @@ enum NativeActor {
     Type122,
     Type18,
     Type28,
+    Type76Family,
     Factory,
     SharedFish,
 }
@@ -199,6 +201,7 @@ pub(super) fn dispatch_native_actor(
         122 if entity.native_type122_runtime.is_some() => NativeActor::Type122,
         18 if entity.native_type18_runtime.is_some() => NativeActor::Type18,
         28 if entity.native_type28_runtime.is_some() => NativeActor::Type28,
+        76 | 77 if entity.native_type76_runtime.is_some() => NativeActor::Type76Family,
         6 if entity.main_base_runtime.is_some() => NativeActor::MainBase,
         66 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
         type_id
@@ -332,6 +335,7 @@ fn dispatch(
             | NativeActor::Type122
             | NativeActor::Type18
             | NativeActor::Type28
+            | NativeActor::Type76Family
             | NativeActor::Type10Family
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
@@ -455,6 +459,23 @@ fn dispatch(
                 publications.type28_common_dying += 1;
             }
             MainBaseAbortActorDisposition::Type28Death
+        }
+        // 10C10 -> DB80 -> class12, as for Type53.
+        NativeActor::Type76Family => {
+            if !crate::native_type76::manager_allocation_authenticates(entities, id) {
+                return Err(block(Block::Type76(
+                    crate::intro2_common_dying::Intro2CommonDyingBlock::UnauthenticatedAllocation,
+                )));
+            }
+            let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type76(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type76_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type76Death
         }
         NativeActor::Worker => {
             let death = crate::intro2_type8::impact::run_intro2_type8_standard_death(
@@ -634,6 +655,8 @@ mod type18_tests;
 mod type28_tests;
 #[cfg(test)]
 mod type62_tests;
+#[cfg(test)]
+mod type76_tests;
 
 #[cfg(test)]
 mod main_base_tests;

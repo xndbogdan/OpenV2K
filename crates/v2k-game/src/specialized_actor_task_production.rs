@@ -198,6 +198,7 @@ pub enum SpecializedActorTaskFamily {
     NativeType122,
     NativeType18,
     NativeType28,
+    NativeType76Family,
     NativeType30,
     NativeType40,
     NativeType56,
@@ -265,6 +266,7 @@ enum SpecializedActorTaskOwner {
     NativeType122(crate::native_type122::Type122Owner),
     NativeType18(crate::native_type18::Type18Owner),
     NativeType28(crate::native_type28::Type28Owner),
+    NativeType76Family(crate::native_type76::Type76FamilyOwner),
     NativeType30(crate::native_type30::Type30Owner),
     NativeType40(crate::native_type40::Type40Owner),
     NativeType56(crate::native_type56::Type56Owner),
@@ -415,6 +417,7 @@ impl SpecializedActorTaskOwner {
             Self::NativeType122(owner) => owner.entity_id(),
             Self::NativeType18(owner) => owner.entity_id(),
             Self::NativeType28(owner) => owner.entity_id(),
+            Self::NativeType76Family(owner) => owner.entity_id(),
             Self::NativeType30(owner) => owner.entity_id(),
             Self::NativeType40(owner) => owner.entity_id(),
             Self::NativeType56(owner) => owner.entity_id(),
@@ -478,6 +481,7 @@ impl SpecializedActorTaskOwner {
             Self::NativeType122(_) => SpecializedActorTaskFamily::NativeType122,
             Self::NativeType18(_) => SpecializedActorTaskFamily::NativeType18,
             Self::NativeType28(_) => SpecializedActorTaskFamily::NativeType28,
+            Self::NativeType76Family(_) => SpecializedActorTaskFamily::NativeType76Family,
             Self::NativeType30(_) => SpecializedActorTaskFamily::NativeType30,
             Self::NativeType40(_) => SpecializedActorTaskFamily::NativeType40,
             Self::NativeType56(_) => SpecializedActorTaskFamily::NativeType56,
@@ -592,6 +596,9 @@ impl SpecializedActorTaskOwner {
             }
             Self::NativeType28(owner) => {
                 Self::NativeType28(owner.fork_for_main_base_abort_transaction())
+            }
+            Self::NativeType76Family(owner) => {
+                Self::NativeType76Family(owner.fork_for_main_base_abort_transaction())
             }
             Self::NativeType30(owner) => {
                 Self::NativeType30(owner.fork_for_main_base_abort_transaction())
@@ -951,6 +958,7 @@ pub enum SpecializedActorTaskProductionOutcome {
     NativeType122(crate::native_type122::Type122Outcome),
     NativeType18(crate::native_type18::Type18Outcome),
     NativeType28(crate::native_type28::Type28Outcome),
+    NativeType76Family(crate::native_type76::Type76Outcome),
     NativeType30(crate::native_type30::Type30Outcome),
     NativeType40(crate::native_type40::Type40Outcome),
     NativeType56(crate::native_type56::Type56Outcome),
@@ -1017,6 +1025,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::NativeType122(_) => SpecializedActorTaskFamily::NativeType122,
             Self::NativeType18(_) => SpecializedActorTaskFamily::NativeType18,
             Self::NativeType28(_) => SpecializedActorTaskFamily::NativeType28,
+            Self::NativeType76Family(_) => SpecializedActorTaskFamily::NativeType76Family,
             Self::NativeType30(_) => SpecializedActorTaskFamily::NativeType30,
             Self::NativeType40(_) => SpecializedActorTaskFamily::NativeType40,
             Self::NativeType56(_) => SpecializedActorTaskFamily::NativeType56,
@@ -1115,6 +1124,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::NativeType122(outcome) => outcome.entity_id(),
             Self::NativeType18(outcome) => outcome.entity_id(),
             Self::NativeType28(outcome) => outcome.entity_id(),
+            Self::NativeType76Family(outcome) => outcome.entity_id(),
             Self::NativeType30(outcome) => outcome.entity_id(),
             Self::NativeType40(outcome) => outcome.entity_id(),
             Self::NativeType56(outcome) => outcome.entity_id(),
@@ -2013,6 +2023,27 @@ impl SpecializedActorTaskScheduler {
         );
         count
     }
+    pub fn adopt_type76_family(&mut self, manager: &EntityManager) -> usize {
+        let owners: Vec<_> = manager
+            .iter_all()
+            .filter_map(|entity| {
+                crate::native_type76::Type76FamilyOwner::adopt(manager, entity.id).ok()
+            })
+            .filter(|owner| {
+                !self
+                    .owners
+                    .iter()
+                    .any(|present| present.entity_id() == owner.entity_id())
+            })
+            .collect();
+        let count = owners.len();
+        self.owners.extend(
+            owners
+                .into_iter()
+                .map(SpecializedActorTaskOwner::NativeType76Family),
+        );
+        count
+    }
     pub fn adopt_native_type123(&mut self, manager: &mut EntityManager) -> usize {
         let ids: Vec<_> = manager
             .iter_all()
@@ -2527,6 +2558,24 @@ impl SpecializedActorTaskScheduler {
         self.owners
             .push(SpecializedActorTaskOwner::NativeType28(owner));
     }
+    pub(crate) fn register_type76_family(
+        &mut self,
+        owner: crate::native_type76::Type76FamilyOwner,
+    ) {
+        if self.has_native_contact_prefix(owner.entity_id())
+            || self.owners.iter().any(|present| {
+                matches!(present,
+                SpecializedActorTaskOwner::NativeType76Family(current)
+                    if current.entity_id() == owner.entity_id() && current.has_pending_prefix())
+            })
+        {
+            return;
+        }
+        self.owners
+            .retain(|present| present.entity_id() != owner.entity_id());
+        self.owners
+            .push(SpecializedActorTaskOwner::NativeType76Family(owner));
+    }
     pub(crate) fn intro2_type13_has_pending_prefix(&self, entity_id: u32) -> bool {
         self.has_native_contact_prefix(entity_id)
             || self.owners.iter().any(|owner| {
@@ -2547,6 +2596,9 @@ impl SpecializedActorTaskScheduler {
                     owner.entity_id() == entity_id && owner.has_pending_prefix()
                 }
                 SpecializedActorTaskOwner::NativeType28(owner) => {
+                    owner.entity_id() == entity_id && owner.has_pending_prefix()
+                }
+                SpecializedActorTaskOwner::NativeType76Family(owner) => {
                     owner.entity_id() == entity_id && owner.has_pending_prefix()
                 }
                 SpecializedActorTaskOwner::NativeType30(owner) => {
@@ -5208,6 +5260,26 @@ impl SpecializedActorTaskScheduler {
                         tick.outcome,
                     ));
                 }
+                SpecializedActorTaskOwner::NativeType76Family(owner) => {
+                    let tick = crate::native_type76::tick_type76_family(
+                        manager,
+                        owner,
+                        crate::native_type76::Type76Frame {
+                            resources,
+                            world_fx,
+                            elapsed_micros,
+                            retail_tick,
+                        },
+                    );
+                    if let Some(terminal) = tick.replacement_terminal {
+                        native_ground::retain_terminal(&mut retained, terminal);
+                    } else if let Some(owner) = tick.retained_owner {
+                        retained.push(SpecializedActorTaskOwner::NativeType76Family(owner));
+                    }
+                    outcomes.push(SpecializedActorTaskProductionOutcome::NativeType76Family(
+                        tick.outcome,
+                    ));
+                }
                 SpecializedActorTaskOwner::NativeType30(owner) => {
                     let tick = crate::native_type30::tick_type30(
                         manager,
@@ -6058,6 +6130,13 @@ impl SpecializedActorTaskScheduler {
                     },
                 )
             }
+            SpecializedActorTaskOwner::NativeType76Family(owner) => {
+                SpecializedActorTaskProductionOutcome::NativeType76Family(
+                    crate::native_type76::Type76Outcome::Dropped {
+                        entity_id: owner.entity_id(),
+                    },
+                )
+            }
             SpecializedActorTaskOwner::NativeType30(owner) => {
                 SpecializedActorTaskProductionOutcome::NativeType30(
                     crate::native_type30::Type30Outcome::Dropped {
@@ -6412,6 +6491,11 @@ impl crate::intro2_radial::Intro2RadialTaskCustody for SpecializedActorTaskSched
                         {
                             owner.park_external_prefix();
                         }
+                        SpecializedActorTaskOwner::NativeType76Family(owner)
+                            if owner.entity_id() == block.target_id =>
+                        {
+                            owner.park_external_prefix();
+                        }
                         SpecializedActorTaskOwner::NativeType30(owner)
                             if owner.entity_id() == block.target_id =>
                         {
@@ -6597,6 +6681,11 @@ impl crate::intro2_radial::Intro2RadialTaskCustody for Intro2RadialCursorCustody
                         {
                             owner.park_external_prefix();
                         }
+                        SpecializedActorTaskOwner::NativeType76Family(owner)
+                            if owner.entity_id() == block.target_id =>
+                        {
+                            owner.park_external_prefix();
+                        }
                         SpecializedActorTaskOwner::NativeType30(owner)
                             if owner.entity_id() == block.target_id =>
                         {
@@ -6744,6 +6833,13 @@ fn prepare_intro2_radial_actor_mutation(
         return owners.iter().any(|owner| {
             matches!(owner,
             SpecializedActorTaskOwner::NativeType28(owner)
+                if owner.entity_id() == entity_id && owner.completed_mutation_boundary(manager))
+        });
+    }
+    if entity.native_type76_runtime.is_some() {
+        return owners.iter().any(|owner| {
+            matches!(owner,
+            SpecializedActorTaskOwner::NativeType76Family(owner)
                 if owner.entity_id() == entity_id && owner.completed_mutation_boundary(manager))
         });
     }

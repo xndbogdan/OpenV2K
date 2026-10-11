@@ -696,11 +696,11 @@ fn resolve(
             | 0x4c80c8
             | 0x4c8110
             | 0x4c8158
-    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18)
+    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18 | 77)
         && context.active_style().style_address() == 0x4c7e88)
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 94 | 38 | 129
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 94 | 38 | 129 | 77
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -715,7 +715,7 @@ fn resolve(
         || (matches!(profile.entity_type, 80 | 126 | 128 | 129)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
-        || (matches!(profile.entity_type, 26 | 18 | 28)
+        || (matches!(profile.entity_type, 26 | 18 | 28 | 76 | 77)
             && context.active_style().style_address() == 0x4c7738)
         || (crate::native_type30::allocation_authenticates(entity)
             && matches!(context.active_style().style_address(), 0x4c7930 | 0x4c7738))
@@ -1060,7 +1060,8 @@ fn contact_task_hook(
             if entity.entity_type == 26
                 || crate::native_type30::allocation_authenticates(entity)
                 || crate::native_type18::allocation_authenticates(entity)
-                || crate::native_type28::allocation_authenticates(entity) =>
+                || crate::native_type28::allocation_authenticates(entity)
+                || crate::native_type76::allocation_authenticates(entity) =>
         {
             Ok(NativeGroundStaticTaskHook::Furniture)
         }
@@ -1195,6 +1196,47 @@ fn reselect_after_furniture_contact(
         let owner = crate::native_type18::Type18Owner::adopt(frame.entities, id)
             .map_err(|_| Block::Runtime("Type18 post-static owner"))?;
         frame.actor_tasks.register_type18(owner);
+        return Ok(());
+    }
+    let type76_row = frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(crate::native_type76::type76_row);
+    if let Some(row) = type76_row {
+        let result = match row {
+            crate::native_type76::Type76Row::Type76 => {
+                super::behavior::reselect::<crate::native_type76::profile::Type76Profile>(
+                    frame.entities,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(frame.resources),
+                    super::behavior::ReselectionEntry::Impact,
+                )
+            }
+            crate::native_type76::Type76Row::Type77 => {
+                super::behavior::reselect::<crate::native_type76::profile::Type77Profile>(
+                    frame.entities,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(frame.resources),
+                    super::behavior::ReselectionEntry::Impact,
+                )
+            }
+        };
+        if result.is_err() {
+            if let Ok(owner) =
+                crate::native_type76::Type76FamilyOwner::adopt_blocked_prefix(frame.entities, id)
+            {
+                frame.actor_tasks.register_type76_family(owner);
+            }
+            return Err(Block::Runtime("Type76-family static C690 suffix"));
+        }
+        let owner = crate::native_type76::Type76FamilyOwner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Type76-family post-static owner"))?;
+        frame.actor_tasks.register_type76_family(owner);
         return Ok(());
     }
     if crate::native_type28::manager_allocation_authenticates(frame.entities, id) {

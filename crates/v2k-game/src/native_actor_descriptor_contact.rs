@@ -254,6 +254,7 @@ pub fn resolve_native_actor_descriptor_contact(
             }
             18 => &mut entity.native_type18_runtime.as_mut().unwrap().sub_d_runtime,
             28 => &mut entity.native_type28_runtime.as_mut().unwrap().sub_d_runtime,
+            76 | 77 => &mut entity.native_type76_runtime.as_mut().unwrap().sub_d_runtime,
             94 => &mut entity.intro2_type94_runtime.as_mut().unwrap().sub_d_runtime,
             22 | 23 | 24 | 62 | 124 => {
                 &mut entity.shared_fish_runtime.as_mut().unwrap().sub_d_runtime
@@ -400,6 +401,7 @@ fn contact_topology(
             122 => entity.native_type122_runtime.is_none(),
             18 => entity.native_type18_runtime.is_none(),
             28 => entity.native_type28_runtime.is_none(),
+            76 | 77 => entity.native_type76_runtime.is_none(),
             94 => entity.intro2_type94_runtime.is_none(),
             22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_none(),
             _ => true,
@@ -563,6 +565,7 @@ fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool
         122 => crate::native_type122::type122_manager_allocation_authenticates(manager, id),
         18 => crate::native_type18::manager_allocation_authenticates(manager, id),
         28 => crate::native_type28::manager_allocation_authenticates(manager, id),
+        76 | 77 => crate::native_type76::manager_allocation_authenticates(manager, id),
         94 => manager
             .iter_all()
             .find(|entity| entity.id == id)

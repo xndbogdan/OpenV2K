@@ -2673,6 +2673,8 @@ mod tests {
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
+            native_type76_runtime: None,
+            native_type76_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
