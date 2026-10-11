@@ -97,6 +97,26 @@ The accepted ledger
 owns exact retained filenames and validation details; no new recording is
 needed for these allocations.
 
+## Ordinary-world births
+
+The 21 authored Type16 spawns in ordinary worlds 18/20/21/24/31/35/37 (5/1/1/2/
+2/7/3) match spawns5/42 apart from position and heading: model257 with no
+override, param1, no animation or configuration, a zero damage buffer and Y0.
+They take the same birth, with three differences:
+
+- The process allocates their Sub-D at its constructor position, rather than
+  a recorded first-query seed.
+- AC60's nearby predicates read the actually linked live list, which can
+  include gate helpers without an authored index.
+- An ordinary receipt carries the manager's allocation lease.
+
+The constructor classifies the surface at the birth tick. It keeps the
+generic `104B0` word (`0x06078801`, param objective bit, D720 bit4) and the
+null `4C8A30+30` type-hit slot. The scheduler's existing Type16 adoption,
+tick, Class12 death and static contact then apply unchanged. The Playing
+particle dispatch and Playing radial route these allocations to the same
+native hit owner. Their player pair identity stays unresolved.
+
 ## Validation and remaining acceptance
 
 The late Section10 static pass now admits these two allocations through the

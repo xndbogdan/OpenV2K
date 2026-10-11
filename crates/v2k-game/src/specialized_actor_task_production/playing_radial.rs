@@ -128,6 +128,7 @@ impl SpecializedActorTaskScheduler {
                 type_id if NativeFourChoiceProfile::from_entity_type(type_id).is_some() => {
                     entity.native_type86_runtime.is_some()
                 }
+                16 => entity.intro2_type16_runtime.is_some(),
                 17 => entity.intro2_type17_runtime.is_some(),
                 47 => entity.native_type47_construction.is_some(),
                 53 => entity.intro2_type53_runtime.is_some(),
@@ -180,7 +181,8 @@ impl SpecializedActorTaskScheduler {
                                 .park_cleansing_vehicle_external_prefix(id);
                             if entities.iter_all().any(|entity| {
                                 entity.id == id
-                                    && (entity.intro2_type53_runtime.is_some()
+                                    && (entity.intro2_type16_runtime.is_some()
+                                        || entity.intro2_type53_runtime.is_some()
                                         || entity.intro2_type58_runtime.is_some()
                                         || entity.native_type122_runtime.is_some()
                                         || entity.native_type30_runtime.is_some()

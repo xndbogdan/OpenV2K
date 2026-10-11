@@ -61,6 +61,7 @@ pub enum SharedActorImpactOutcome {
     Factory(crate::intro2_type66::impact::Intro2Type66ImpactOutcome),
     Type26(crate::intro2_type26_defecate_virus::Intro2Type26ImpactOutcome),
     Flyer(crate::intro2_flyer_impact::NativeFlyerImpactOutcome),
+    Type16(crate::intro2_type16::impact::Intro2Type16ImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -159,6 +160,18 @@ pub fn apply_shared_actor_particle_hit(
     if matches!(entity.entity_type, 15 | 87) && entity.intro2_flyer_frame_owner.is_some() {
         return Some(SharedActorImpactOutcome::Flyer(
             crate::intro2_flyer_impact::apply_native_flyer_particle_hit(frame, impact),
+        ));
+    }
+    if entity.entity_type == 16 && entity.intro2_type16_runtime.is_some() {
+        return Some(SharedActorImpactOutcome::Type16(
+            crate::intro2_type16::impact::apply_intro2_type16_particle_hit(
+                frame.entities,
+                frame.resources,
+                frame.world_fx,
+                frame.scheduler,
+                impact,
+                frame.retail_tick,
+            ),
         ));
     }
     if entity.entity_type == 26 && entity.intro2_type26_sub_d_runtime.is_some() {
