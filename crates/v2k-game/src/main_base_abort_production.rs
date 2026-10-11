@@ -107,6 +107,7 @@ pub enum MainBaseAbortActorDisposition {
     Type58Death,
     Type122Death,
     Type18Death,
+    Type28Death,
     /// Ordinary Type10-family rows: alternate class11 publishes Tumble.
     Type10Death,
     Class49Death,
@@ -131,6 +132,7 @@ pub struct MainBaseAbortPublicationCounts {
     pub type58_common_dying: usize,
     pub type122_common_dying: usize,
     pub type18_common_dying: usize,
+    pub type28_common_dying: usize,
     pub type10_tumble: usize,
     pub type54_sea_level: usize,
     pub type66_production: usize,
@@ -157,6 +159,7 @@ impl MainBaseAbortPublicationCounts {
             + self.type58_common_dying
             + self.type122_common_dying
             + self.type18_common_dying
+            + self.type28_common_dying
             + self.type10_tumble
             + self.type54_sea_level
             + self.type66_production

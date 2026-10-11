@@ -36,6 +36,7 @@ pub(crate) enum NativeCaptorProfile {
     Type17,
     Type122,
     Type18,
+    Type28,
 }
 
 impl NativeCaptorProfile {
@@ -51,6 +52,9 @@ impl NativeCaptorProfile {
             18 if crate::native_type18::manager_allocation_authenticates(manager, id) => {
                 Self::Type18
             }
+            28 if crate::native_type28::manager_allocation_authenticates(manager, id) => {
+                Self::Type28
+            }
             _ => return Err(CaptureBlock::new("capture native allocation")),
         };
         let metadata = manager
@@ -60,6 +64,7 @@ impl NativeCaptorProfile {
             Self::Type17 => crate::intro2_type17::authenticate_metadata(metadata).is_ok(),
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
             Self::Type18 => crate::native_type18::authenticate_metadata(metadata).is_ok(),
+            Self::Type28 => crate::native_type28::authenticate_metadata(metadata).is_ok(),
         };
         if !authentic {
             return Err(CaptureBlock::new("capture native metadata"));
@@ -72,6 +77,7 @@ impl NativeCaptorProfile {
             Self::Type17 => 17,
             Self::Type122 => 122,
             Self::Type18 => 18,
+            Self::Type28 => 28,
         }
     }
 
@@ -101,9 +107,20 @@ impl NativeCaptorProfile {
                 crate::native_ground_actor::behavior::ReselectionEntry::Impact,
             )
             .map_err(|_| ()),
-            // Type18's root weighs rule8: the entry must lend its world.
+            // Type18/28 roots weigh rule8: the entry must lend its world.
             Self::Type18 => crate::native_ground_actor::behavior::reselect::<
                 crate::native_type18::profile::Type18Profile,
+            >(
+                manager,
+                id,
+                context.retail_tick,
+                context.world_fx,
+                context.resources,
+                crate::native_ground_actor::behavior::ReselectionEntry::Impact,
+            )
+            .map_err(|_| ()),
+            Self::Type28 => crate::native_ground_actor::behavior::reselect::<
+                crate::native_type28::profile::Type28Profile,
             >(
                 manager,
                 id,
@@ -469,7 +486,7 @@ pub fn apply_capture_pair_checked_damage(
         LiveActorDamageRequest, LiveActorDeathResult,
     };
     let target_type = actor(manager, target)?.entity_type;
-    let is_captor = matches!(target_type, 17 | 122 | 18);
+    let is_captor = matches!(target_type, 17 | 122 | 18 | 28);
     let is_hive_destination = target_type == 67;
     if is_captor {
         captor(manager, target)?;

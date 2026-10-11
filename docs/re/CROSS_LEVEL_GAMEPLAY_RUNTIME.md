@@ -165,6 +165,11 @@ death. Their root mixes Defecate Virus4, Capture9, Search7, Follow Beacons33
 and Trash Furniture26, all existing programs. The host now evaluates rule8
 (FurnitureNearby) when it reselects, and both the living host and class12
 gate drag on effective bit8: Type18's `+C0` 0x431 has none (dying 0x420).
+The eleven [Type28 insects](TYPE28_RUNTIME.md) (worlds21-23, 30 and36) use the
+same machinery without an emitter: Capture9, Run Away10, Furniture26 and
+Follow Beacons33. A carried four-choice person that drowns still fails closed
+and parks (its `E370` admits no `CE90` release hook), then blocks its captor's
+release; that chain is held.
 
 The [shared Type47 gunner](TYPE47_RUNTIME.md) extends that construction policy
 to all eight ordinary actors (three in13, one in14, two each in15/31) and the

@@ -115,6 +115,13 @@ release, cleanup and delivery callbacks lend that world through
 - **Class12 corpse.** The corpse takes the terrain and water contact through
   `native_actor_surface_contact`.
 
+## Held boundary
+
+A carried four-choice person that drowns fails closed in its own `E370`,
+which admits no `CE90` release hook. It then blocks its captor's next
+release. [TYPE28_RUNTIME.md](TYPE28_RUNTIME.md#held-boundary-a-carried-person-drowning)
+owns that chain, which every captor shares.
+
 ## Validation
 
 [`native_type18/tests.rs`](../../crates/v2k-game/src/native_type18/tests.rs)

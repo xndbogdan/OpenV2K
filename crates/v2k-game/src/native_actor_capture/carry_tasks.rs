@@ -87,6 +87,22 @@ fn run_mover(
             )
             .map_err(|error| CaptureTaskBlock::Ground(Box::new(error)))
         }
+        28 => {
+            crate::native_ground_actor::mover::run::<crate::native_type28::profile::Type28Profile>(
+                entity,
+                crate::native_ground_actor::mover::MoverFrame {
+                    metadata: frame.metadata,
+                    terrain: frame.terrain,
+                    dispatch_mode: frame.dispatch_mode,
+                    elapsed_micros: frame.elapsed_micros,
+                    global_elapsed_micros: frame.global_elapsed_micros,
+                },
+                target,
+                tracked,
+                next_random,
+            )
+            .map_err(|error| CaptureTaskBlock::Ground(Box::new(error)))
+        }
         _ => Err(CaptureTaskBlock::Allocation),
     }
 }
@@ -121,6 +137,18 @@ fn tick_retarget(
         .map_err(|error| CaptureTaskBlock::Ground(Box::new(error))),
         18 => crate::native_ground_actor::live::tick_primary::<
             crate::native_type18::profile::Type18Profile,
+        >(
+            entity,
+            frame.metadata,
+            frame.terrain,
+            frame.elapsed_micros,
+            frame.global_elapsed_micros,
+            frame.dispatch_mode,
+            world_fx,
+        )
+        .map_err(|error| CaptureTaskBlock::Ground(Box::new(error))),
+        28 => crate::native_ground_actor::live::tick_primary::<
+            crate::native_type28::profile::Type28Profile,
         >(
             entity,
             frame.metadata,

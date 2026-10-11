@@ -157,6 +157,7 @@ pub mod native_model_frame;
 pub mod native_type122;
 pub mod native_type123;
 pub mod native_type18;
+pub mod native_type28;
 pub mod native_type30;
 pub mod native_type38;
 pub mod native_type40;

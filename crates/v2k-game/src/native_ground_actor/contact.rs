@@ -715,10 +715,13 @@ fn resolve(
         || (matches!(profile.entity_type, 80 | 126 | 128 | 129)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
-        || (matches!(profile.entity_type, 26 | 18)
+        || (matches!(profile.entity_type, 26 | 18 | 28)
             && context.active_style().style_address() == 0x4c7738)
         || (crate::native_type30::allocation_authenticates(entity)
             && matches!(context.active_style().style_address(), 0x4c7930 | 0x4c7738))
+        // Type28's class10 Run Away shares Type56's acquiring and fleeing styles.
+        || (profile.entity_type == 28
+            && matches!(context.active_style().style_address(), 0x4c7618 | 0x4c7660))
         || (profile.entity_type == 56
             && matches!(
                 context.active_style().style_address(),
@@ -1056,7 +1059,8 @@ fn contact_task_hook(
         (0x4c7738, Some(Task::TrashFurniture(_)), None)
             if entity.entity_type == 26
                 || crate::native_type30::allocation_authenticates(entity)
-                || crate::native_type18::allocation_authenticates(entity) =>
+                || crate::native_type18::allocation_authenticates(entity)
+                || crate::native_type28::allocation_authenticates(entity) =>
         {
             Ok(NativeGroundStaticTaskHook::Furniture)
         }
@@ -1191,6 +1195,29 @@ fn reselect_after_furniture_contact(
         let owner = crate::native_type18::Type18Owner::adopt(frame.entities, id)
             .map_err(|_| Block::Runtime("Type18 post-static owner"))?;
         frame.actor_tasks.register_type18(owner);
+        return Ok(());
+    }
+    if crate::native_type28::manager_allocation_authenticates(frame.entities, id) {
+        if super::behavior::reselect::<crate::native_type28::profile::Type28Profile>(
+            frame.entities,
+            id,
+            frame.retail_tick,
+            frame.world_fx,
+            Some(frame.resources),
+            super::behavior::ReselectionEntry::Impact,
+        )
+        .is_err()
+        {
+            if let Ok(owner) =
+                crate::native_type28::Type28Owner::adopt_blocked_prefix(frame.entities, id)
+            {
+                frame.actor_tasks.register_type28(owner);
+            }
+            return Err(Block::Runtime("Type28 static C690 suffix"));
+        }
+        let owner = crate::native_type28::Type28Owner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Type28 post-static owner"))?;
+        frame.actor_tasks.register_type28(owner);
         return Ok(());
     }
     if crate::native_type30::manager_allocation_authenticates(frame.entities, id) {
