@@ -164,6 +164,7 @@ pub mod native_type40;
 pub mod native_type43;
 pub mod native_type56;
 pub(crate) mod native_type61;
+pub mod native_type76;
 pub mod native_type86;
 pub mod native_world_surface;
 pub mod opening;

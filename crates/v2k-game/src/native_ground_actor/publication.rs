@@ -1,14 +1,16 @@
 //! AC60's class initializers for ground rows whose root is built only from
-//! the shared programs: Defecate Virus `B9E0`, Search/Capture/Run Away
-//! `B6C0`, Follow Beacons `B740` and Trash Furniture `B7C0`.
+//! the shared programs: Defecate Virus `B9E0`, Move About Aimlessly `ACD0`,
+//! Search/Capture/Run Away `B6C0`, Follow Beacons `B740` and Trash Furniture
+//! `B7C0`.
 
 use super::*;
 use crate::{
     actor_task_dispatcher::{
         prepare_defecate_virus_runtime_task, prepare_follow_beacons_acquiring_runtime_task,
         prepare_shared_acquiring_runtime_task, prepare_shared_generic_constructor_suffix,
-        SharedGenericConstructorEffect,
+        ActorTaskRuntime, SharedGenericConstructorEffect,
     },
+    actor_task_owner::PreparedActorTask,
     defecate_virus_owner::{
         apply_defecate_virus_setup_with_component_suffix, DefecateVirusSetupRequest,
         DefecateVirusSubATopology,
@@ -16,6 +18,7 @@ use crate::{
     entity_behavior::initial_behavior_state_policy,
     follow_beacons::apply_follow_beacons_acquiring_task_setup,
     run_away::{apply_run_away_task_setup, RunAwayTaskSetupRequest},
+    shared_retarget_mover::SharedRetargetTaskState,
     trash_furniture::TrashFurnitureTargetHeightPolicy,
 };
 
@@ -31,7 +34,7 @@ pub(crate) fn publish_shared_root_class(
     next_random: &mut impl FnMut() -> u32,
 ) -> bool {
     let class = selection.program.class_id;
-    if !matches!(class, 4 | 7 | 9 | 10 | 26 | 33) {
+    if !matches!(class, 4 | 5 | 7 | 9 | 10 | 26 | 33) {
         return false;
     }
     let RetailRuntimeValue::Known(lifetime) = metadata.terrain_contact_task_lifetime_ms else {
@@ -123,7 +126,26 @@ pub(crate) fn publish_shared_root_class(
                 target_speed_raw, ..
             } => sub_a.apply_shared_initializer_target_speed_write(target_speed_raw),
         };
-        if class == 33 {
+        if class == 5 {
+            // ACD0: clear2 -> clear1 -> 402B10(owner,0,5000), then 06070 once.
+            actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+            actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+            match prepare_shared_generic_constructor_suffix(
+                PreparedActorTask::new(ActorTaskRuntime::SharedRetarget(
+                    SharedRetargetTaskState::new(position_raw, 5000),
+                )),
+                metadata,
+            ) {
+                Ok(prepared) => {
+                    actor_tasks.replace_prepared(
+                        ActorTaskSlot::Primary,
+                        prepared.apply_suffix(&mut *next_random, &mut apply),
+                    );
+                    true
+                }
+                Err(_) => false,
+            }
+        } else if class == 33 {
             apply_follow_beacons_acquiring_task_setup(actor_tasks, |preparation| {
                 prepare_follow_beacons_acquiring_runtime_task(preparation, position_raw, metadata)
                     .map(|prepared| prepared.apply_suffix(&mut *next_random, &mut apply))

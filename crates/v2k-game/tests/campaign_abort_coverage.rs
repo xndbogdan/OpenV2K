@@ -36,6 +36,7 @@ fn adopt_authored_tasks(manager: &mut EntityManager) -> SpecializedActorTaskSche
     tasks.adopt_type122(manager);
     tasks.adopt_type18(manager);
     tasks.adopt_type28(manager);
+    tasks.adopt_type76_family(manager);
     tasks.adopt_type43(manager);
     tasks.adopt_type38_family(manager);
     tasks.adopt_shared_fish(manager);
@@ -106,7 +107,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (23, 25),
     (24, 16),
     (25, 82),
-    (26, 76),
+    (26, 96),
     (27, 27),
     (28, 71),
     (29, 103),
@@ -119,7 +120,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (36, 96),
     (37, 102),
     (38, 82),
-    (39, 77),
+    (39, 102),
     (40, 125),
     (41, 35),
     (42, 108),

@@ -1234,6 +1234,7 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || crate::native_type122::type122_allocation_authenticates(entity)
         || crate::native_type18::allocation_authenticates(entity)
         || crate::native_type28::allocation_authenticates(entity)
+        || crate::native_type76::allocation_authenticates(entity)
         || crate::native_type30::allocation_authenticates(entity)
         || crate::native_type40::allocation_authenticates(entity)
         || crate::native_type56::allocation_authenticates(entity)

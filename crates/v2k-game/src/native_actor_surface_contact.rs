@@ -46,6 +46,7 @@ enum NativeSurfaceProfile {
     Type122,
     Type18,
     Type28,
+    Type76Family(crate::native_type76::Type76Row),
 }
 
 impl NativeSurfaceProfile {
@@ -59,7 +60,8 @@ impl NativeSurfaceProfile {
             122 => Some(Self::Type122),
             18 => Some(Self::Type18),
             28 => Some(Self::Type28),
-            _ => None,
+            entity_type => crate::native_type76::Type76Row::from_entity_type(entity_type)
+                .map(Self::Type76Family),
         }
     }
 
@@ -73,6 +75,7 @@ impl NativeSurfaceProfile {
             Self::Type122 => 122,
             Self::Type18 => 18,
             Self::Type28 => 28,
+            Self::Type76Family(row) => row.entity_type(),
         }
     }
 
@@ -98,6 +101,9 @@ impl NativeSurfaceProfile {
             }
             Self::Type18 => crate::native_type18::manager_allocation_authenticates(manager, id),
             Self::Type28 => crate::native_type28::manager_allocation_authenticates(manager, id),
+            Self::Type76Family(_) => {
+                crate::native_type76::manager_allocation_authenticates(manager, id)
+            }
             Self::Type17 => {
                 crate::intro2_type17::type17_manager_allocation_authenticates(manager, id)
             }
@@ -124,6 +130,9 @@ impl NativeSurfaceProfile {
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
             Self::Type18 => crate::native_type18::authenticate_metadata(metadata).is_ok(),
             Self::Type28 => crate::native_type28::authenticate_metadata(metadata).is_ok(),
+            Self::Type76Family(row) => {
+                crate::native_type76::authenticate_metadata(row, metadata).is_ok()
+            }
             Self::Type17 => crate::intro2_type17::authenticate_metadata(metadata).is_ok(),
             Self::Type58 => crate::intro2_type58::authenticate_metadata(metadata).is_ok(),
         };
@@ -362,7 +371,8 @@ fn resolve(
                         NativeSurfaceProfile::Type16
                         | NativeSurfaceProfile::Type26
                         | NativeSurfaceProfile::Type58
-                        | NativeSurfaceProfile::Type30 => {
+                        | NativeSurfaceProfile::Type30
+                        | NativeSurfaceProfile::Type76Family(_) => {
                             crate::intro2_common_dying::publish_intro2_common_standard_death(
                                 manager, id, fx,
                             )?
