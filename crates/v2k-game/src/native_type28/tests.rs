@@ -413,10 +413,14 @@ fn type28_worlds_run_a_minute_with_pairs() {
                     ) => {
                         drowned.insert(*entity_id);
                     }
+                    // ...after which its captor's release fails closed. World
+                    // 36's Type18 captors carry the same people.
                     SpecializedActorTaskProductionOutcome::NativeType28(
                         Type28Outcome::Blocked { reason, .. },
+                    )
+                    | SpecializedActorTaskProductionOutcome::NativeType18(
+                        crate::native_type18::Type18Outcome::Blocked { reason, .. },
                     ) => {
-                        // ...after which its captor's release fails closed.
                         assert!(
                             !drowned.is_empty()
                                 && matches!(
@@ -428,9 +432,6 @@ fn type28_worlds_run_a_minute_with_pairs() {
                         );
                         held.insert(outcome.entity_id());
                     }
-                    SpecializedActorTaskProductionOutcome::NativeType18(
-                        crate::native_type18::Type18Outcome::Blocked { .. },
-                    ) => panic!("world{level} tick{t}: {outcome:?}"),
                     _ => {}
                 }
             }

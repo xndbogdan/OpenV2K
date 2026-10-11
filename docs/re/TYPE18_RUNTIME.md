@@ -132,8 +132,8 @@ covers:
   static walk;
 - a lethal hit's class12 death, then five seconds of the `0x420` class12 world;
 - method20 shots after a player comes near;
-- world 21's capture of a Type86 person within the first ten seconds, with a
-  minute of carrying and pair walks.
+- world 21's capture of a Type86 person during a minute of carrying and
+  pair walks.
 
 [The abort test](../../crates/v2k-game/src/main_base_abort_production/native/type18_tests.rs)
 checks class12 in every world, once per corpse.

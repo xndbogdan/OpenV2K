@@ -89,7 +89,8 @@ covers:
 - a capture: once Type28 pursues a person, a body contact runs `C910` and the
   person attaches to Type28's J row;
 - a minute of every world with the live-order pair walk. This asserts no block
-  except the held drowning chain above (world 36: person 20, captor 52).
+  except the held drowning chain above. In world 36, person 20 drowns and
+  its Type18 captor 50 holds; either captor family may carry it.
 
 [The abort test](../../crates/v2k-game/src/main_base_abort_production/native/type28_tests.rs)
 checks class12 in every world, once per corpse.
