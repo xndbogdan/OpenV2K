@@ -345,7 +345,7 @@ fn publish_birth(
         world.terrain,
         world.objects,
         entity.position_raw(),
-        i32::from(AXIS.strict_axis_limit_raw) / 4,
+        AXIS.strict_axis_limit_raw / 4,
         -1,
     )
     .is_some();

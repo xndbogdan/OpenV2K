@@ -47,7 +47,7 @@ pub(crate) fn publish_native_type18(
     });
     if !entity.active
         || entity.entity_type != ENTITY_TYPE
-        || u32::from(spawn.entity_type) != ENTITY_TYPE
+        || spawn.entity_type != ENTITY_TYPE
         || entity.id != allocation.entity_id
         || entity.authored_spawn_index != Some(spawn.index)
         || entity.capability_flags != metadata.capability_flags
