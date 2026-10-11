@@ -81,6 +81,7 @@ fn delivered_fixture(world: u32) -> Fixture {
         f.spider,
         destination,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut f.scheduler,
             world_fx: &mut f.fx,
             notifications: &mut f.notifications,
@@ -313,6 +314,7 @@ fn repeated_native_delivery_preserves_already_pending_state_and_one_receipt() {
             f.spider,
             f.child,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut f.scheduler,
                 world_fx: &mut f.fx,
                 notifications: &mut f.notifications,
@@ -351,6 +353,7 @@ fn repeated_native_delivery_preserves_already_pending_state_and_one_receipt() {
             f.spider,
             CaptureRootCallback::Cleanup,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut expected_scheduler,
                 world_fx: &mut expected_fx,
                 notifications: &mut expected_notifications,
@@ -371,6 +374,7 @@ fn repeated_native_delivery_preserves_already_pending_state_and_one_receipt() {
             f.spider,
             destination,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut f.scheduler,
                 world_fx: &mut f.fx,
                 notifications: &mut f.notifications,

@@ -117,6 +117,57 @@ tick, Class12 death and static contact then apply unchanged. The Playing
 particle dispatch and Playing radial route these allocations to the same
 native hit owner. Their player pair identity stays unresolved.
 
+## Ordinary Type128 power-up carriers
+
+The 22 authored Type128 rows (worlds 25 and 28) are Type16's Section-12 row
+with two exceptions. The emitter descriptor's sound is 0, so `24E30` copies a
+silent Sub-E. The alternate is class63 Auto Pilot instead of class12. The
+model, health, A/B/C/D/E/H/J descriptors, Sub-H frames, axis and five weighted
+choices (including class9 capture and class4 Defecate Virus) are Type16's.
+
+`Type16Row` carries the two rows. Metadata authentication, the ordinary birth,
+Sub-E, and each row's ballistic-aim source profile (Type128's is silent) all
+read the allocation's own row. Capture pursuit reads the captor's own
+metadata.
+
+Death never publishes class12 for these rows. The rows are a class63 source
+profile on the shared BAF0/BC90 terminal
+([class63 drops](TYPE61_POWER_UP.md#class63-carrier-drops)), entered from:
+
+- **Playing particle hits**, through an entry that lends the static world and
+  player;
+- **radial deaths**;
+- **static-contact deaths**, through the walk's lent player;
+- **player pairs**, through a new class63 pair branch;
+- **the Main Base abort.**
+
+The class12 publisher already rejects their alternate. The shared hit frame
+holds a lethal Type128 hit.
+
+BC90 keeps the carrier's tasks. Until `14990`, the corpse's retained Primary
+therefore still takes `A8B0`'s static `+20` hook: Search retarget, Chase,
+Defecate Virus wander or people pursuit. D920 then uses the row defaults.
+Particle re-hits find class63's null `+28`. The ground solid/water kernel
+admits only the class12 corpse, and finds the class63 corpse ineligible, as it
+does the living body.
+
+A Type128 killed while carrying a captive is held. The four carrying Capture
+variants (class9 variants 2..5) own `D040`'s death hook, which releases the
+child before AC60's alternate. The class63 terminal admits only styles whose
+`+2C` is null, so this death fails closed before its first write.
+
+[Carrier tests](../../crates/v2k-game/src/intro2_type16/carrier_tests.rs)
+cover:
+
+- the 22 births, their silent Sub-E and their aim profile;
+- five-second cohorts in both worlds under the scheduler and late static
+  contact;
+- a lethal Playing hit that drops the authored Type61, with the corpse then
+  passing a static walk and staying ineligible for the solid/water kernel.
+
+The [abort test](../../crates/v2k-game/src/main_base_abort_production/native/type128_tests.rs)
+checks class63 in place of class12.
+
 ## Validation and remaining acceptance
 
 The late Section10 static pass now admits these two allocations through the

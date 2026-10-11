@@ -3644,9 +3644,14 @@ fn run_game(
                 }
                 specialized_actor_tasks.adopt_intro2_type53(&em);
                 specialized_actor_tasks.adopt_type122(&em);
+                specialized_actor_tasks.adopt_type18(&em);
+                specialized_actor_tasks.adopt_type28(&em);
+                specialized_actor_tasks.adopt_type76_family(&em);
                 specialized_actor_tasks.adopt_type30(&em);
                 specialized_actor_tasks.adopt_type40(&em);
                 specialized_actor_tasks.adopt_type56(&em);
+                specialized_actor_tasks.adopt_type43(&em);
+                specialized_actor_tasks.adopt_type38_family(&em);
                 specialized_actor_tasks.adopt_shared_fish(&em);
                 specialized_actor_tasks.adopt_cleansing_vehicle(&em);
                 specialized_actor_tasks.adopt_intro2_type16(&em);
@@ -3978,6 +3983,15 @@ fn run_game(
                             | SpecializedActorTaskProductionOutcome::NativeType122(
                                 v2k_game::native_type122::Type122Outcome::Blocked { .. },
                             )
+                            | SpecializedActorTaskProductionOutcome::NativeType18(
+                                v2k_game::native_type18::Type18Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType28(
+                                v2k_game::native_type28::Type28Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType76Family(
+                                v2k_game::native_type76::Type76Outcome::Blocked { .. },
+                            )
                             | SpecializedActorTaskProductionOutcome::NativeType30(
                                 v2k_game::native_type30::Type30Outcome::Blocked { .. },
                             )
@@ -3986,6 +4000,12 @@ fn run_game(
                             )
                             | SpecializedActorTaskProductionOutcome::NativeType56(
                                 v2k_game::native_type56::Type56Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType43(
+                                v2k_game::native_type43::Type43Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType38Family(
+                                v2k_game::native_type38::Type38Outcome::Blocked { .. },
                             )
                             | SpecializedActorTaskProductionOutcome::SharedFish(
                                 v2k_game::shared_fish::SharedFishOutcome::Blocked { .. },
@@ -6964,7 +6984,9 @@ fn run_game(
                         .entities
                         .iter_all()
                         .find(|entity| entity.id == id)
-                        .is_some_and(|entity| matches!(entity.entity_type, 13 | 15 | 87));
+                        .is_some_and(|entity| {
+                            matches!(entity.entity_type, 5 | 10 | 13 | 15 | 80 | 87 | 126)
+                        });
                     if native_flyer {
                         use v2k_game::{
                             intro2_flyer_contacts::{
@@ -7008,6 +7030,14 @@ fn run_game(
                                 log!("Native flyer {id} static contact: {result:?}");
                             }
                         }
+                        if let Some(result) = &outcome.tumble {
+                            if !matches!(
+                                result,
+                                v2k_game::intro2_type10::contact::Intro2Type10ContactOutcome::Ineligible
+                            ) {
+                                log!("Native flyer {id} Tumble contact: {result:?}");
+                            }
+                        }
                         if outcome.blocks_later_contacts() {
                             continue;
                         }
@@ -7035,10 +7065,19 @@ fn run_game(
                         }
                         {
                             use v2k_game::native_ground_actor::contact::{
-                                resolve_insect_static_contact, NativeGroundContactOutcome,
+                                resolve_insect_static_contact_with_playing,
+                                NativeGroundContactOutcome,
                             };
-                            let insect_static =
-                                resolve_insect_static_contact(&mut contact_frame, id);
+                            let insect_static = resolve_insect_static_contact_with_playing(
+                                &mut contact_frame,
+                                id,
+                                Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                    hull: &mut player_hull,
+                                    extra_lives: RetailRuntimeValue::Known(
+                                        player_campaign_progress.extra_lives(),
+                                    ),
+                                }),
+                            );
                             if !matches!(
                                 insect_static,
                                 NativeGroundContactOutcome::Ineligible
@@ -7109,6 +7148,54 @@ fn run_game(
                     }
                     // D920 static callbacks precede this subject's pair walk.
                     {
+                        use v2k_game::native_type18::contact::{
+                            resolve_type18_static_contact, Type18ContactOutcome,
+                        };
+                        let result = resolve_type18_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type18ContactOutcome::Ineligible | Type18ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type18 {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type18ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type28::contact::{
+                            resolve_type28_static_contact, Type28ContactOutcome,
+                        };
+                        let result = resolve_type28_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type28ContactOutcome::Ineligible | Type28ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type28 {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type28ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type76::contact::{
+                            resolve_type76_family_static_contact, Type76ContactOutcome,
+                        };
+                        let result = resolve_type76_family_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type76ContactOutcome::Ineligible | Type76ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type76-family {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type76ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
                         use v2k_game::native_type30::contact::{
                             resolve_type30_static_contact, Type30ContactOutcome,
                         };
@@ -7136,6 +7223,31 @@ fn run_game(
                             log!("Ordinary Type40 {id} static contact: {result:?}");
                         }
                         if matches!(result, Type40ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type38::contact::{
+                            resolve_type38_family_static_contact, Type38ContactOutcome,
+                        };
+                        let result = resolve_type38_family_static_contact(
+                            &mut contact_frame,
+                            id,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        if !matches!(
+                            result,
+                            Type38ContactOutcome::Ineligible | Type38ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type38-family {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type38ContactOutcome::Blocked { .. }) {
                             continue;
                         }
                     }

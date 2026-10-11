@@ -289,6 +289,32 @@ impl crate::entity::DynamicRadialLiveCallbacks for Intro2RadialCallbacks<'_> {
         {
             return None;
         }
+        if kind == 124 {
+            return Some(
+                crate::shared_fish::death::run_type124_auto_pilot_death(
+                    crate::class49_terminal::Class49TerminalFrame::from_cinematic(
+                        Intro2RadialFrame {
+                            active_terminal_calls: self.active_terminal_calls.to_vec(),
+                            entities,
+                            resources: self.resources,
+                            world_fx,
+                            static_damage: self.static_damage,
+                            notifications,
+                            retail_tick,
+                            actor_tasks: self.actor_tasks,
+                        },
+                    ),
+                    id,
+                )
+                .map(
+                    |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: result.returned_nonzero,
+                        publication: None,
+                    },
+                )
+                .map_err(crate::entity::DynamicRadialLiveBlockReason::Fish),
+            );
+        }
         Some(
             crate::class49_terminal::run_class49_standard_death(
                 crate::class49_terminal::Class49TerminalFrame::from_cinematic(Intro2RadialFrame {

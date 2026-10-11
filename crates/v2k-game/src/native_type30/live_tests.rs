@@ -63,6 +63,7 @@ fn live_fixture(class: u8) -> (GameSession, EntityManager, WorldFx, u32, u32) {
         id,
         4794,
         &mut fx,
+        None,
         shared::behavior::ReselectionEntry::Impact,
     )
     .unwrap();

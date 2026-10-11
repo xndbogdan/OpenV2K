@@ -255,6 +255,7 @@ fn native_person_runaway_4c76a8_real_capture_attach_and_cleanup_release_keep_own
     );
     let mut notifications = GameplayNotifications::new();
     let mut context = CaptureContext {
+        resources: None,
         tasks: &mut tasks,
         world_fx: &mut fx,
         notifications: &mut notifications,
