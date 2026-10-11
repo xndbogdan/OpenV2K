@@ -41,8 +41,82 @@ pub enum NativeGroundImpactOutcome {
     },
 }
 
+/// Playing lends a terminal profile BAF0's mutable static world and player.
+/// The shared read-only frame keeps every other profile and fails closed on
+/// a lethal class1/49/63 hit.
+struct TerminalHitWorld<'a> {
+    resources: &'a mut crate::resource_cache::ResourceCache,
+    static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    player: crate::native_actor_capture::pair::PlayingPlayerContact<'a>,
+}
+
+enum HitResources<'a> {
+    Shared(&'a crate::resource_cache::ResourceCache),
+    Terminal(TerminalHitWorld<'a>),
+}
+
+impl HitResources<'_> {
+    fn cache(&self) -> &crate::resource_cache::ResourceCache {
+        match self {
+            Self::Shared(resources) => resources,
+            Self::Terminal(world) => world.resources,
+        }
+    }
+}
+
+struct HitFrame<'a> {
+    entities: &'a mut EntityManager,
+    world_fx: &'a mut WorldFx,
+    scheduler: &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    notifications: &'a mut GameplayNotifications,
+    retail_tick: u32,
+    resources: HitResources<'a>,
+}
+
 pub(crate) fn apply_native_ground_particle_hit<P: NativeGroundActorProfile>(
     frame: crate::shared_actor_impact::SharedActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> NativeGroundImpactOutcome {
+    apply::<P>(
+        HitFrame {
+            entities: frame.entities,
+            world_fx: frame.world_fx,
+            scheduler: frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            resources: HitResources::Shared(frame.resources),
+        },
+        impact,
+    )
+}
+
+/// The Playing particle visit for a terminal profile.
+pub(crate) fn apply_playing_native_ground_particle_hit<P: NativeGroundActorProfile>(
+    frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> NativeGroundImpactOutcome {
+    apply::<P>(
+        HitFrame {
+            entities: frame.entities,
+            world_fx: frame.world_fx,
+            scheduler: frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            resources: HitResources::Terminal(TerminalHitWorld {
+                resources: frame.resources,
+                static_damage: frame.static_damage,
+                player: crate::native_actor_capture::pair::PlayingPlayerContact {
+                    hull: frame.player_hull,
+                    extra_lives: frame.extra_lives,
+                },
+            }),
+        },
+        impact,
+    )
+}
+
+fn apply<P: NativeGroundActorProfile>(
+    frame: HitFrame<'_>,
     impact: ParticleEntityImpact,
 ) -> NativeGroundImpactOutcome {
     let Some(entity) = frame
@@ -66,18 +140,18 @@ pub(crate) fn apply_native_ground_particle_hit<P: NativeGroundActorProfile>(
 }
 
 fn run<P: NativeGroundActorProfile>(
-    frame: crate::shared_actor_impact::SharedActorImpactFrame<'_>,
+    frame: HitFrame<'_>,
     impact: ParticleEntityImpact,
     committed: &mut bool,
 ) -> Result<LiveActorDamageOutcome<NativeGroundTerminalPublication>, NativeGroundImpactBlock> {
     use NativeGroundImpactBlock as Block;
-    let crate::shared_actor_impact::SharedActorImpactFrame {
+    let HitFrame {
         entities: manager,
         world_fx,
         scheduler,
         notifications,
         retail_tick,
-        resources,
+        mut resources,
     } = frame;
     let id = impact.target_entity_id;
     // 442950 classes dispatch411180, which has different force/presentation
@@ -176,6 +250,7 @@ fn run<P: NativeGroundActorProfile>(
                 id,
                 retail_tick,
                 world_fx,
+                Some(resources.cache()),
                 super::behavior::ReselectionEntry::Impact,
             ) {
                 if let Ok(owner) = NativeGroundActorOwner::<P>::adopt_blocked_prefix(manager, id) {
@@ -194,6 +269,7 @@ fn run<P: NativeGroundActorProfile>(
                 id,
                 crate::native_actor_capture::CaptureRootCallback::Cleanup,
                 &mut crate::native_actor_capture::CaptureContext {
+                    resources: Some(resources.cache()),
                     tasks: scheduler,
                     world_fx,
                     notifications,
@@ -259,6 +335,27 @@ fn run<P: NativeGroundActorProfile>(
             let feedback = feedback.ok_or(Intro2CommonDyingBlock::Runtime(
                 "ground actor death feedback",
             ))?;
+            if P::TERMINAL_DEATH {
+                let HitResources::Terminal(world) = &mut resources else {
+                    return Err(Intro2CommonDyingBlock::Runtime(
+                        "class1/49/63 hit outside the Playing static world",
+                    ));
+                };
+                return P::publish_standard_death(
+                    manager,
+                    id,
+                    &mut NativeGroundDeathContext::Terminal {
+                        resources: &mut *world.resources,
+                        fx: world_fx,
+                        static_damage: &mut *world.static_damage,
+                        notifications: feedback.notifications,
+                        retail_tick: feedback.retail_tick,
+                        tasks: &mut *scheduler,
+                        player: Some(world.player.reborrow()),
+                    },
+                );
+            }
+            let resources = resources.cache();
             P::publish_standard_death(
                 manager,
                 id,
@@ -266,6 +363,7 @@ fn run<P: NativeGroundActorProfile>(
                     NativeGroundDeathContext::Split { resources, fx: world_fx, tick: feedback.retail_tick, tasks: scheduler }
                 } else {
                     NativeGroundDeathContext::Capture { resources, context: crate::intro2_type17::capture::CaptureContext {
+                        resources: Some(resources),
                         tasks: scheduler, world_fx, notifications: feedback.notifications,
                         retail_tick: feedback.retail_tick,
                         result_screen: crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
@@ -302,6 +400,7 @@ fn run<P: NativeGroundActorProfile>(
             let slot = active_model_slot_from_state_flags(flags);
             let model = entity.model_slots[slot].ok_or(Block::Runtime("accepted-hit model"))?;
             let extent = resources
+                .cache()
                 .global_model(model)
                 .ok_or(Block::Runtime("accepted-hit model extent"))?
                 .radius;

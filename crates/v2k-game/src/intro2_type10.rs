@@ -15,6 +15,8 @@ mod search;
 mod world;
 
 #[cfg(test)]
+mod carrier_tests;
+#[cfg(test)]
 mod live_tests;
 #[cfg(test)]
 mod ordinary_tests;
@@ -119,6 +121,29 @@ pub const TYPE5_EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescript
     ..EMITTER
 };
 
+/// Power-up carriers Type80 (world 39) and Type126 (world 25): Type10's row
+/// apart from G +20 = 1500, a wider emitter and alternate class63.
+pub const CARRIER_SUB_G: [u8; 104] = [
+    0, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0, 0, 188, 2, 63, 0, 50, 0, 0, 0, 130, 0, 0, 0, 44, 1, 0, 0, 0,
+    64, 0, 0, 220, 5, 0, 0, 1, 2, 3, 4, 5, 8, 9, 0, 0, 0, 0, 32, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 240, 0, 17, 230, 0, 0, 0, 1,
+    0, 0, 0, 0, 0, 0, 16, 210, 0, 0, 0, 1, 0, 0, 0,
+];
+pub const TYPE80_EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    aim_threshold_raw: 24_000,
+    target_axis_tolerance_raw: 5120,
+    ..EMITTER
+};
+/// Type126 also fires with sound 82.
+pub const TYPE126_EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    sound_id: 82,
+    ..TYPE80_EMITTER
+};
+pub const TYPE126_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 0x1e00,
+    raw_word_at_0x04: 1,
+};
+
 /// Section-12 rows sharing this D/E/G/K/L Search And Attack owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type10Profile {
@@ -126,6 +151,10 @@ pub enum Type10Profile {
     Type10,
     /// Ordinary-world Type5 births.
     Type5,
+    /// Ordinary-world Type80 power-up carriers.
+    Type80,
+    /// Ordinary-world Type126 power-up carriers.
+    Type126,
 }
 
 impl Type10Profile {
@@ -133,6 +162,8 @@ impl Type10Profile {
         match entity_type {
             10 => Some(Self::Type10),
             5 => Some(Self::Type5),
+            80 => Some(Self::Type80),
+            126 => Some(Self::Type126),
             _ => None,
         }
     }
@@ -140,23 +171,26 @@ impl Type10Profile {
         match self {
             Self::Type10 => 10,
             Self::Type5 => 5,
+            Self::Type80 => 80,
+            Self::Type126 => 126,
         }
     }
     pub const fn model(self) -> usize {
         match self {
-            Self::Type10 => MODEL,
+            Self::Type10 | Self::Type80 | Self::Type126 => MODEL,
             Self::Type5 => TYPE5_MODEL,
         }
     }
     pub const fn axis(self) -> CommonAxisDescriptor {
         match self {
-            Self::Type10 => AXIS,
+            Self::Type10 | Self::Type80 => AXIS,
             Self::Type5 => TYPE5_AXIS,
+            Self::Type126 => TYPE126_AXIS,
         }
     }
     pub const fn sub_d(self) -> SubDSteeringDescriptor {
         match self {
-            Self::Type10 => SUB_D,
+            Self::Type10 | Self::Type80 | Self::Type126 => SUB_D,
             Self::Type5 => crate::common_mover::sub_d::FLYER_SUB_D,
         }
     }
@@ -164,18 +198,28 @@ impl Type10Profile {
         match self {
             Self::Type10 => &SUB_G,
             Self::Type5 => &TYPE5_SUB_G,
+            Self::Type80 | Self::Type126 => &CARRIER_SUB_G,
         }
     }
     pub const fn emitter(self) -> ProjectileEmitterDescriptor {
         match self {
             Self::Type10 => EMITTER,
             Self::Type5 => TYPE5_EMITTER,
+            Self::Type80 => TYPE80_EMITTER,
+            Self::Type126 => TYPE126_EMITTER,
         }
     }
     pub const fn damage_thresholds_raw(self) -> [i32; 7] {
         match self {
-            Self::Type10 => [0, 9000, 2200, 0, 200, 0, 0],
+            Self::Type10 | Self::Type80 | Self::Type126 => [0, 9000, 2200, 0, 200, 0, 0],
             Self::Type5 => [0, 2000, 1800, 0, 200, 0, 0],
+        }
+    }
+    /// AC60's direct alternate: Tumble for 10/5, Auto Pilot for the carriers.
+    pub const fn alternate_behavior_class(self) -> u32 {
+        match self {
+            Self::Type10 | Self::Type5 => 11,
+            Self::Type80 | Self::Type126 => 63,
         }
     }
     /// G payload +0C: B6C0's 06070 randomized target base (700 for both).
@@ -268,4 +312,14 @@ pub(crate) fn type10_profile(entity: &Entity) -> Option<Type10Profile> {
     intro2_type10_allocation_authenticates(entity)
         .then(|| entity.intro2_type10_runtime.map(|runtime| runtime.profile))
         .flatten()
+}
+
+/// An ordinary Type10-family row whose death is class63's BAF0/BC90 terminal.
+pub(crate) fn type10_auto_pilot_profile(entity: &Entity) -> Option<Type10Profile> {
+    type10_profile(entity).filter(|profile| {
+        profile.alternate_behavior_class() == 63
+            && entity
+                .intro2_type10_runtime
+                .is_some_and(|runtime| runtime.ordinary_allocation.is_some())
+    })
 }

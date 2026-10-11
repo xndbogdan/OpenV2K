@@ -228,3 +228,59 @@ births, five-second cohorts in all three worlds, world 47's wind, and a lethal
 Playing hit whose Tumble lands and explodes through Playing's radial.
 [Abort tests](../../crates/v2k-game/src/main_base_abort_production/native/type5_tests.rs)
 cover the class11 publication once per body.
+
+## Ordinary Type80/126 power-up carriers
+
+The three Type80 rows (world 39) and four Type126 rows (world 25) are Type10's
+row with three exceptions: G `+20` is 1500 (as for Type5), the emitter is wider,
+and the alternate is class63 Auto Pilot instead of class11 Tumble. Model 351,
+health, damage thresholds, Sub-D, K/L, E's interval/spread/speed and the class-7
+choice are Type10's.
+
+| Field | Type10 | Type80 | Type126 |
+|---|---|---|---|
+| G `+20` | 750 | 1500 | 1500 |
+| Emitter aim threshold / axis tolerance | 12000 / 3840 | 24000 / 5120 | 24000 / 5120 |
+| Emitter sound | 81 | 81 | 82 |
+| Common axis `+04` | `0xC85` | `0xC85` | 1 |
+| Alternate | 11 | 63 | 63 |
+
+`Type10Profile` carries the two rows, each with its own ballistic-aim source
+profile (Type10's 1500 launch override). Births use the same ordinary
+09A80/AC60/B6C0 transaction and receipt as Type5. Their spawn `+1C` dword is
+retained as `auto_pilot_payload_packed`.
+
+Death never publishes Tumble for these rows. `10C10 -> DB80 -> AC60` selects
+class63 directly, so every lethal entry enters the shared BAF0/BC90 terminal
+([class63 drops](TYPE61_POWER_UP.md#class63-carrier-drops)). The Type10 death
+entry itself rejects them as `AutoPilotCarrier`.
+
+- **Playing particle hits** lend the static world and player through a
+  dedicated entry; the shared frame holds the lethal hit.
+- **Radial deaths** route through the class49 source profile.
+- **Contact deaths** run inside the late walk with the lent player.
+- **Main Base abort** takes the class49 dispatch; its Type10-family class11
+  route admits only alternate-11 rows.
+
+BC90 keeps the Search tasks. Until `14990`, `11AD0`'s phases therefore still
+reach the corpse:
+
+- **Solid/water:** class63's style hooks are null, like completed class1's.
+- **Static contact:** `A8B0` calls each retained task's `+20` with no style or
+  dying test, so the retained Primary (Search retarget or Chase) takes its
+  WanderPrivate write. D920 then uses the row defaults, because class63's
+  `+34/+38` policy words are zero.
+- **Particle re-hits:** class63's `+28` is null, and the finished receipt
+  replaces task custody.
+
+[Carrier tests](../../crates/v2k-game/src/intro2_type10/carrier_tests.rs) cover:
+
+- the seven births and their profiles, payloads and class63 source profiles;
+- five-second cohorts in both worlds under the scheduler and late contacts;
+- a lethal Playing hit that keeps the Primary, drops the authored Type61 and
+  takes a re-hit before the sweep;
+- the shared frame's hold;
+- a lethal crash inside the contact walk whose corpse passes a second walk.
+
+The [abort test](../../crates/v2k-game/src/main_base_abort_production/native/carrier_tests.rs)
+checks class63 in place of Tumble in both worlds.

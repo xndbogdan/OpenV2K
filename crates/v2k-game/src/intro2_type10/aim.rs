@@ -59,6 +59,8 @@ macro_rules! family_aim_profile {
 
 family_aim_profile!(Type10AimProfile, Type10, Type10Profile::Type10);
 family_aim_profile!(Type5AimProfile, Type5, Type10Profile::Type5);
+family_aim_profile!(Type80AimProfile, Type80, Type10Profile::Type80);
+family_aim_profile!(Type126AimProfile, Type126, Type10Profile::Type126);
 
 fn manager_profile(manager: &EntityManager, entity_id: u32) -> Option<Type10Profile> {
     manager
@@ -75,6 +77,12 @@ pub fn ensure_intro2_type10_aim_runtime(
         Some(Type10Profile::Type5) => {
             shared::ensure_native_aim_runtime::<Type5AimProfile>(entity, metadata)
         }
+        Some(Type10Profile::Type80) => {
+            shared::ensure_native_aim_runtime::<Type80AimProfile>(entity, metadata)
+        }
+        Some(Type10Profile::Type126) => {
+            shared::ensure_native_aim_runtime::<Type126AimProfile>(entity, metadata)
+        }
         _ => shared::ensure_native_aim_runtime::<Type10AimProfile>(entity, metadata),
     }
 }
@@ -88,6 +96,22 @@ pub fn tick_intro2_type10_aim(
 ) -> Result<Intro2Type10AimTickOutcome, Intro2Type10AimError> {
     match manager_profile(manager, entity_id) {
         Some(Type10Profile::Type5) => shared::tick_native_aim::<Type5AimProfile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
+        Some(Type10Profile::Type80) => shared::tick_native_aim::<Type80AimProfile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
+        Some(Type10Profile::Type126) => shared::tick_native_aim::<Type126AimProfile>(
             dispatch_mode,
             manager,
             world_fx,
@@ -114,6 +138,20 @@ pub fn drain_intro2_type10_shots(
 ) -> Result<Intro2Type10ShotDrainOutcome, Intro2Type10ShotDrainError> {
     match manager_profile(manager, source_entity_id) {
         Some(Type10Profile::Type5) => shared::drain_native_shots::<Type5AimProfile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
+        Some(Type10Profile::Type80) => shared::drain_native_shots::<Type80AimProfile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
+        Some(Type10Profile::Type126) => shared::drain_native_shots::<Type126AimProfile>(
             manager,
             world_fx,
             source_entity_id,
