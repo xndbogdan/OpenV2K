@@ -24,7 +24,7 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [![RE coverage](https://img.shields.io/badge/RE%20coverage-37.7%25%20code%20%2F%2048.6%25%20notes-orange)](docs/progress/README.md)
 
 Of the **2,382** game functions in retail `V2000.EXE`,
-**897 (37.7%)** are referenced by the port's code and
+**899 (37.7%)** are referenced by the port's code and
 **1,158 (48.6%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->
@@ -75,6 +75,17 @@ Without the launcher, pass `--controller-layout pc-original`,
 `port-config.json` beside the game data. Steam Input presents a Steam Deck's
 controls as a standard pad. The layouts are in
 [CONTROLS.md](docs/re/CONTROLS.md#port-controller-layouts).
+
+**Fixes for the original's bugs**
+
+The game runs the original's own code paths, including its frame rate cap of
+125 fps. Where the original breaks on a fast PC, the port adds a fix, on by
+default. The launcher's Options show each fix, and turning it off restores the
+original behavior:
+
+- **Beam commands at any frame rate:** on a fast PC the original ignores C
+  (collect) and D (drop). Pass `--beam-commands false` for one run, or set
+  `fixes.beam_commands` in `port-config.json`.
 
 ## Reverse-engineering notes
 

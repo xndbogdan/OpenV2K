@@ -359,6 +359,7 @@ fn production_beam_uses_the_same_transfer_owner_exactly_once() {
     for tick in 1..=30 {
         let result = world.manager.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20_000,
+            beam_expiry: crate::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                 terrain: world.session.cache.terrain().unwrap(),
@@ -412,6 +413,7 @@ fn real_type93_drop_attachment_does_not_reenter_the_player_collection_suffix() {
     for tick in 2..=31 {
         let result = world.manager.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20_000,
+            beam_expiry: crate::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                 terrain: world.session.cache.terrain().unwrap(),

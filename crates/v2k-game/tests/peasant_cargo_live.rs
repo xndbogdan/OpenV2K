@@ -184,6 +184,7 @@ impl World {
         let mut claims: Vec<_> = self.scheduler.actor_animation_claims().collect();
         let cargo = self.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                 terrain: self.session.cache.terrain().unwrap(),
@@ -979,6 +980,7 @@ fn nonlocal_or_unresolved_cargo_drop_keeps_relation_tasks_and_rng() {
         world.entities.queue_beam(BeamCommand::Collect);
         let collected = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 80_000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                 terrain: world.session.cache.terrain().unwrap(),
@@ -1031,6 +1033,7 @@ fn nonlocal_or_unresolved_cargo_drop_keeps_relation_tasks_and_rng() {
         world.entities.queue_beam(BeamCommand::Drop);
         let dropped = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 80_000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                 terrain: world.session.cache.terrain().unwrap(),

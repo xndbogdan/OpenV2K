@@ -439,6 +439,7 @@ fn native_worker_and_person_profiles_survive_player_collect_materialise_and_drop
         for tick in 2..=31 {
             let result = world.entities.update_player_cargo(PlayerCargoFrame {
                 elapsed_micros: 20_000,
+                beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
                 drop_context: None,
                 retail_tick: tick,
                 scheduler: &mut world.tasks,
@@ -474,6 +475,7 @@ fn native_worker_and_person_profiles_survive_player_collect_materialise_and_drop
         for tick in 32..=150 {
             let result = world.entities.update_player_cargo(PlayerCargoFrame {
                 elapsed_micros: 20_000,
+                beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
                 drop_context: Some(CargoDropContext {
                     carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                     terrain: world.session.cache.terrain().unwrap(),

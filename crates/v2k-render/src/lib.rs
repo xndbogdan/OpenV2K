@@ -25,8 +25,8 @@ pub mod window;
 pub use audio::AudioPlayer;
 pub use camera::Camera;
 pub use config::{
-    ControllerLayout, Difficulty, DisplayModes, DisplayRequest, GameConfig, RendererChoice,
-    ScalingMode, WindowMode, ORIGINAL_RESOLUTIONS,
+    ControllerLayout, Difficulty, DisplayModes, DisplayRequest, GameConfig, PortFixes,
+    RendererChoice, ScalingMode, WindowMode, ORIGINAL_RESOLUTIONS,
 };
 pub use music::MusicPlayer;
 pub use projection::{

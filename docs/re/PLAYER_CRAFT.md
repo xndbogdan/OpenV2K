@@ -459,12 +459,17 @@ polarity backwards. The callbacks operate on the player's signed byte `+0x20E`:
 an idle C edge stores +80 and an idle D edge stores -80, repeating the same
 direction does not refresh the timer, and the opposite direction cancels it.
 `FUN_00446640` consumes whole milliseconds (`dt_us / 1000`) and dispatches only
-when a step strictly crosses the remaining magnitude. Exact equality subtracts
-to zero without firing. The port retains the 80-ms signed timer and whole-ms
-countdown, but treats equality as expiry: its deliberate 16-ms frame limiter
-otherwise creates the pathological sequence `80,64,48,32,16,0` and loses every
-beam command, whereas retail's variable callback cadence ordinarily crosses the
-endpoint.
+when a step strictly crosses the remaining magnitude (`0x4466EE`/`0x446720`:
+`cmp remaining, step; jle` keeps counting down). Exact equality subtracts to
+zero without firing. This is retail's high-frame-rate C/D failure: its frame
+pump (`FUN_00494070`) runs whole-millisecond frames of at least 8 ms, so a fast
+machine runs exactly 8-ms frames, `80,72,...,8,0` lands on zero and every beam
+command is lost. Slower, irregular cadences ordinarily cross the endpoint.
+
+The port keeps the 80-ms signed timer and the whole-ms countdown. The port fix
+`beam_commands` ([launcher Options](../../LAUNCHER.md#options-and-command-line-operation),
+`--beam-commands`) is on by default and also fires when a step lands exactly on
+zero; turning it off restores retail's strict crossing.
 
 Collection first requires carrier capability bit 1. The player's Section-12
 `id_field` at `+0x08` is 5, and its Sub-J payload authors five attachment slots.

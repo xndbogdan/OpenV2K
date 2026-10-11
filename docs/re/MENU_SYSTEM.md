@@ -46,6 +46,15 @@ tick cursors rebase at those boundaries. Klaus's phases and random sampling
 follow its callbacks independently of this clock. The pause shell's authored
 fly/typewriter clocks also remain delta-driven.
 
+**Port frame pump:** the main loop runs `FUN_00494070`'s gate on a
+whole-millisecond clock (`RetailFramePump`): a frame starts only once 8000 µs
+have passed, every delta is whole milliseconds as `timeGetTime` gives, and the
+port sleeps until the next frame is due instead of polling. It replaced an
+early 16-ms sleep limiter that retail never had. OpenGL presentation keeps its
+vsync, so a 60-Hz display still paces frames at about 16.7 ms. Retail's
+high-frame-rate failures at the 125-fps cap belong to port fixes, such as
+[`beam_commands`](PLAYER_CRAFT.md#beam-attachment-and-weight-interaction-resolved-2026-07-13).
+
 ## Opening AVI playback
 
 `BANNERHI.AVI` and `BANNERLO.AVI` contain the complete Grolier, Frontier and
