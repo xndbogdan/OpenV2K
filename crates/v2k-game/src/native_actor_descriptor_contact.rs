@@ -217,6 +217,7 @@ pub fn resolve_native_actor_descriptor_contact(
             30 => &mut entity.native_type30_runtime.as_mut().unwrap().sub_d_runtime,
             40 => &mut entity.native_type40_runtime.as_mut().unwrap().sub_d_runtime,
             56 => &mut entity.native_type56_runtime.as_mut().unwrap().sub_d_runtime,
+            38 | 129 => &mut entity.native_type38_runtime.as_mut().unwrap().sub_d_runtime,
             13 => {
                 &mut entity
                     .intro2_type13_common_mover_runtime
@@ -251,6 +252,9 @@ pub fn resolve_native_actor_descriptor_contact(
                     .unwrap()
                     .sub_d_runtime
             }
+            18 => &mut entity.native_type18_runtime.as_mut().unwrap().sub_d_runtime,
+            28 => &mut entity.native_type28_runtime.as_mut().unwrap().sub_d_runtime,
+            76 | 77 => &mut entity.native_type76_runtime.as_mut().unwrap().sub_d_runtime,
             94 => &mut entity.intro2_type94_runtime.as_mut().unwrap().sub_d_runtime,
             22 | 23 | 24 | 62 | 124 => {
                 &mut entity.shared_fish_runtime.as_mut().unwrap().sub_d_runtime
@@ -309,6 +313,25 @@ fn contact_topology(
     let RetailRuntimeValue::Known(topology) = metadata.common_mover_topology else {
         return Err(Error::Runtime("descriptor topology"));
     };
+    // Type43 carries Sub-E alone: 01A20 skips its A and D branches, then
+    // still installs the 1500-ms timer, negates direction and retargets.
+    if entity.entity_type == crate::native_type43::ENTITY_TYPE {
+        if topology != crate::native_type43::TOPOLOGY
+            || entity.sub_a_propulsion_runtime != RetailRuntimeValue::Known(None)
+            || metadata.sub_a_propulsion_descriptor != RetailRuntimeValue::Known(None)
+            || metadata.sub_d_steering_descriptor != RetailRuntimeValue::Known(None)
+        {
+            return Err(Error::Runtime("native descriptor component shape"));
+        }
+        return Ok(CommonMoverTargetPreludeTopology {
+            sub_a: None,
+            sub_d: None,
+            sub_i: false,
+            sub_f: false,
+            sub_g: false,
+            sub_l: false,
+        });
+    }
     let fish = crate::shared_fish::is_shared_fish_type(entity.entity_type);
     let flying = matches!(entity.entity_type, 13 | 15 | 87 | 10 | 5 | 80 | 126 | 57);
     let person = matches!(entity.entity_type, 9 | 123)
@@ -322,7 +345,7 @@ fn contact_topology(
         || topology.sub_g != flying
         // Type30 retains its constructor-owned K/L alongside A/B/C/D/E/H.
         //01A20 uses its A/D branch without advancing or reinterpreting K/L.
-        || (topology.sub_l && !flying && entity.entity_type != 30)
+        || (topology.sub_l && !flying && !matches!(entity.entity_type, 30 | 38 | 129))
         || topology.sub_i != person
         || !animation_presence_matches
         || if fish {
@@ -365,6 +388,7 @@ fn contact_topology(
             30 => entity.native_type30_runtime.is_none(),
             40 => entity.native_type40_runtime.is_none(),
             56 => entity.native_type56_runtime.is_none(),
+            38 | 129 => entity.native_type38_runtime.is_none(),
             13 => entity.intro2_type13_common_mover_runtime.is_none(),
             15 | 87 => entity.intro2_flyer_frame_owner.is_none(),
             10 | 5 | 80 | 126 => entity.intro2_type10_runtime.is_none(),
@@ -375,6 +399,9 @@ fn contact_topology(
             53 => entity.intro2_type53_runtime.is_none(),
             58 => entity.intro2_type58_runtime.is_none(),
             122 => entity.native_type122_runtime.is_none(),
+            18 => entity.native_type18_runtime.is_none(),
+            28 => entity.native_type28_runtime.is_none(),
+            76 | 77 => entity.native_type76_runtime.is_none(),
             94 => entity.intro2_type94_runtime.is_none(),
             22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_none(),
             _ => true,
@@ -419,6 +446,8 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         30 => crate::native_type30::manager_allocation_authenticates(manager, id),
         40 => crate::native_type40::manager_allocation_authenticates(manager, id),
         56 => crate::native_type56::manager_allocation_authenticates(manager, id),
+        43 => crate::native_type43::manager_allocation_authenticates(manager, id),
+        38 | 129 => crate::native_type38::manager_allocation_authenticates(manager, id),
         13 => crate::intro2_type13_live::type13_manager_allocation_authenticates(manager, id),
         15 | 87 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
         10 | 5 | 80 | 126 => crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
@@ -455,6 +484,18 @@ pub(crate) fn completed_contact_owner(
                 || (!tasks.intro2_type13_has_pending_prefix(id)
                     && tasks.intro2_type13_completed_owner(manager, id))
         }
+        // BAC0 cleared the class1 corpse's tasks; until 14990 only its
+        // Finished receipt stands in for the retired living owner.
+        43 => {
+            crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                || (!tasks.type43_has_pending_prefix(id)
+                    && tasks.type43_completed_owner(manager, id))
+        }
+        // BAC0 cleared a Type38 corpse's tasks; only its receipt remains.
+        38 | 129 => {
+            crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                || tasks.prepare_native_actor_mutation(manager, id)
+        }
         15 | 87 => tasks.intro2_flyer_completed_owner(manager, id),
         10 | 5 | 80 | 126 => {
             !tasks.intro2_type10_has_pending_prefix(id)
@@ -486,7 +527,7 @@ pub(crate) fn native_weapon_contact_owner_authenticates(
 
 fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool {
     match kind {
-        26 | 30 | 40 | 56 | 13 | 15 | 87 | 10 | 5 | 80 | 126 | 57 => {
+        26 | 30 | 38 | 129 | 40 | 56 | 43 | 13 | 15 | 87 | 10 | 5 | 80 | 126 | 57 => {
             native_insect_allocation_authenticates(manager, id)
         }
         kind if NativeWorkerProfile::from_entity_type(kind).is_some() => {
@@ -522,6 +563,9 @@ fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool
         53 => crate::intro2_type53::type53_manager_allocation_authenticates(manager, id),
         58 => crate::intro2_type58::type58_manager_allocation_authenticates(manager, id),
         122 => crate::native_type122::type122_manager_allocation_authenticates(manager, id),
+        18 => crate::native_type18::manager_allocation_authenticates(manager, id),
+        28 => crate::native_type28::manager_allocation_authenticates(manager, id),
+        76 | 77 => crate::native_type76::manager_allocation_authenticates(manager, id),
         94 => manager
             .iter_all()
             .find(|entity| entity.id == id)

@@ -434,6 +434,7 @@ fn real_c690_hit_reselection_installs_own_class7_method1_then_fifo_survives_spli
         id,
         4794,
         &mut fx,
+        None,
         shared::behavior::ReselectionEntry::Impact,
     )
     .unwrap();
