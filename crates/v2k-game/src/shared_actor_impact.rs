@@ -292,7 +292,7 @@ pub fn apply_shared_actor_particle_hit(
         {
             9
         }
-        66 if entity.intro2_type66_runtime.is_some() => 66,
+        66 | 125 if entity.intro2_type66_runtime.is_some() => 66,
         17 if entity.intro2_type17_runtime.is_some() => 17,
         47 if entity.native_type47_construction.is_some() => 47,
         53 if entity.intro2_type53_runtime.is_some() => 53,

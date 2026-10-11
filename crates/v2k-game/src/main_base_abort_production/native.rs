@@ -206,7 +206,7 @@ pub(super) fn dispatch_native_actor(
         28 if entity.native_type28_runtime.is_some() => NativeActor::Type28,
         76 | 77 if entity.native_type76_runtime.is_some() => NativeActor::Type76Family,
         6 if entity.main_base_runtime.is_some() => NativeActor::MainBase,
-        66 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
+        66 | 125 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
         type_id
             if crate::intro2_type10::Type10Profile::from_entity_type(type_id)
                 .is_some_and(|profile| profile.alternate_behavior_class() == 11)

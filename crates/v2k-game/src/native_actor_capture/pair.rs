@@ -1266,7 +1266,7 @@ fn apply_pair_checked_damage(
             committed,
         );
     }
-    if kind == 66
+    if crate::intro2_type66::is_working_factory_type(kind)
         && crate::intro2_type66::intro2_type66_allocation_authenticates(actor(
             frame.entities,
             target,

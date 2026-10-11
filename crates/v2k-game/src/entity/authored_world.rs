@@ -805,7 +805,7 @@ impl EntityManager {
                 self.append_and_finalize_fresh_level1_type9(ready);
                 return Ok(());
             }
-            66 => {
+            66 | 125 => {
                 crate::intro2_type66::publish_working_factory(
                     &mut entity,
                     allocation,

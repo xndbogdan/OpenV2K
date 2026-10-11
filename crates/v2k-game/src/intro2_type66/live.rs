@@ -278,11 +278,12 @@ fn run_frame(
     if state & (REMOTE_OWNED_STATE_BIT | 0x1000) != 0 || entity.attached_to.is_some() {
         return Err(Block::Runtime("local unattached owner"));
     }
+    let factory_type = entity.entity_type;
     let metadata = manager
-        .type_runtime_metadata(66)
+        .type_runtime_metadata(factory_type)
         .cloned()
         .ok_or(Block::Metadata)?;
-    authenticate_metadata(&metadata).map_err(|_| Block::Metadata)?;
+    authenticate_metadata(factory_type, &metadata).map_err(|_| Block::Metadata)?;
     let callback_enabled = state & COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT != 0;
     if callback_enabled
         && (entity.sub_j_attachment_runtime != RetailRuntimeValue::Known(None)
@@ -683,7 +684,7 @@ fn finish_world(
     if detailed {
         let record = frame
             .resources
-            .global_entity_type(66)
+            .global_entity_type(entity.entity_type as usize)
             .ok_or(Block::Metadata)?;
         let RetailRuntimeValue::Known(health) = entity.collision.health_raw else {
             return Err(Block::Runtime("detailed sound health"));

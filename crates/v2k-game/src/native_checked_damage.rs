@@ -270,7 +270,7 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
-        66 if manager
+        66 | 125 if manager
             .iter_all()
             .find(|entity| entity.id == id)
             .is_some_and(crate::intro2_type66::intro2_type66_allocation_authenticates) =>

@@ -7416,7 +7416,9 @@ fn run_game(
                     }
                     let factory_ids: Vec<_> = em
                         .iter()
-                        .filter(|entity| entity.entity_type == 66)
+                        .filter(|entity| {
+                            v2k_game::intro2_type66::is_working_factory_type(entity.entity_type)
+                        })
                         .map(|entity| entity.id)
                         .collect();
                     for factory_id in factory_ids {
