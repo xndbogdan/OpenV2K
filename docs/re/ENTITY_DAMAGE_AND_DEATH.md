@@ -533,6 +533,67 @@ cover sea equality, signed X wrap, a saturated pool, cue order and the single
 rate RNG draw. This shared helper also precedes Alpine's class18 split births;
 the recorded above-sea Alpine death does not establish underwater acceptance.
 
+## Auto Pilot class63: explode and drop the authored power-up (STATICALLY CONFIRMED)
+
+The class table at `0x004C8AA4` holds 8-byte `{descriptor, name}` pairs; class63's
+entry `0x004C8C9C` names **"Auto Pilot"** with descriptor `0x004C8828`
+`{style table 0x004C7198, style index 0}`. `40ABB0 -> 40C6B0` installs that style
+and calls the `0x48`-byte style entry's `+40` initializer with its `+44` argument.
+At runtime (faststart04 recording) entry `0x004C7198` has every callback slot null
+and initializer `0x0040BC90`, argument zero. Neither Ghidra's default analysis nor
+the bulk decompilation defines that function; WinDbg disassembly gives:
+
+1. `43A580` resolves the actor, then `40BAF0` runs the shared scatter/radial death
+   (the same BAF0 that class1 and class49 use).
+2. A zeroed `0x4C`-byte construction record receives `DAT_004DCA00` at `+00`,
+   type `0x3D` (61, Power Up) at `+08`, the actor's position words `+96/+98/+9A`
+   at `+0C..+11`, and the actor's own word `+88` at `+20`; `438080` builds it and
+   `4575A0` dispatches the result.
+3. `410B70` requests the actor's deferred removal.
+
+Unlike class49's `40BD20` it neither calls `A860` nor tests the remote bit, and it
+leaves a Type61 rather than a Type60 ring. Entity `+88` is the Section-13 spawn's
+extra word, which Type61 itself reads as its packed power-up payload. Every
+alternate-63 type authors such payloads (`0x3F`, `0xC35035`, `0x43A`, `0x1F40C`
+and so on): Type71 (25 births), 80 (3), 81 (3), 117 (2), 124 (3), 126 (4), 127 (25),
+128 (22) and 129 (25). Destroying one of these carriers therefore explodes it
+and drops the power-up it was authored with.
+
+The port implements class63 as a third BAF0 terminal policy: it keeps the
+carrier's tasks, builds the Type61 from the carrier's `+88` at its position and
+stages removal ([class63 drops](TYPE61_POWER_UP.md#class63-carrier-drops)).
+Type124 fish ([FISH_RUNTIME](FISH_RUNTIME.md)), the Type80/126 and Type128
+carriers and the Type129 ground shooters take it. Types 71, 81, 117 and 127
+have no native owner yet.
+
+The dying carrier's last visit is settled statically. Because `40BC90` never
+calls `A860`, the carrier keeps its task slots until removal. `413500` walks
+the whole live list (`414920` returns `DAT_004DB090` unfiltered) and sweeps
+deferred removals only at the end of its walk (`414990`). So a carrier killed
+outside the walk (by a particle in `440120` or a contact in `411A80`) is visited
+once more by the next frame's walk, and `412DA0` has no dying test.
+
+Neither the death chain nor the class63 install touches scheduler state:
+
+- `10C10` sets dying `0x4000` and zeroes health before calling the type's
+  `+08` hook;
+- `DB80` only calls style `+2C` and the type's alternate installer at entity
+  `+BC`;
+- the class63 style at `0x004C7198` is zero apart from its `+40`
+  initializer, so its `+34`/`+38` policy words change no state bit.
+
+But `40BC90` ends in `410B70`, whose write is
+`state = (state & 0xFFF9FFFF) | 0x100000`. It clears callback-enabled
+`0x20000` and master-motion `0x40000`, raises pending-removal `0x100000`, then
+counts the deferral. The last visit's `412DA0` therefore runs only its
+scheduler prefix and random waits. It skips the type callback, its uncleared
+tasks, the environment suffix and master motion.
+
+The port's shared deferred-destroy write (`DEFERRED_DESTROY_STATE_WRITE_MASK`,
+`0x0016_0000`) already performs this masked write, so no capture is needed. A
+class63 owner keeps only that scheduler prefix until the sweep, and must not
+require empty task slots to recognize its finished terminal.
+
 ## Flip Over And Die class-12 task shell (STATICALLY CONFIRMED, RUNTIME VALIDATED)
 
 Canonical type records for 17 and 47 both author alternate behavior class 12,

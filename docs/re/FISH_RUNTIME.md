@@ -190,10 +190,13 @@ health/dying prefix and DB80/AC60 alternate selection to that quiet terminal,
 clears Primary/Secondary/Tertiary in source order, and stages deferred removal.
 Scheduler custody retires synchronously; the world splice removes the body
 later. A class2 terminal does not create a timed corpse or explosion.
-Type124 selects class63 instead and cannot borrow22/24's alternate. Its
-own `10C10` no-op tests and completed task custody precede the shared BAF0
-terminal; `40BC90` then keeps the fish tasks, appends the Type61 authored in
-its `+88` and stages removal ([class63 drops](TYPE61_POWER_UP.md#class63-carrier-drops)).
+Type124 selects class63 ("Auto Pilot": explode, then drop the authored
+power-up payload as a Type61; see
+[ENTITY_DAMAGE_AND_DEATH](ENTITY_DAMAGE_AND_DEATH.md#auto-pilot-class63-explode-and-drop-the-authored-power-up-statically-confirmed))
+and cannot borrow22/24's alternate. Its own `10C10` no-op tests and completed
+task custody precede the shared BAF0 terminal; `40BC90` then keeps the fish
+tasks, appends the Type61 authored in its `+88` and stages removal
+([class63 drops](TYPE61_POWER_UP.md#class63-carrier-drops)).
 The class2 entry still rejects Type124 as `UnsupportedDeathProgram`.
 Section12 loader410090 installs vtable4C8A30, whose+08 word is40DB80;
 the later438080 overrides affect67 and46/51, not fish. C470 calls A860's
