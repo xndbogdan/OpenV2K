@@ -1710,7 +1710,7 @@ impl Entity {
             native_type43_aim_runtime: self.native_type43_aim_runtime.clone(),
             native_type38_runtime: self.native_type38_runtime.clone(),
             native_type38_aim_runtime: self.native_type38_aim_runtime.clone(),
-            native_type18_runtime: self.native_type18_runtime.clone(),
+            native_type18_runtime: self.native_type18_runtime,
             native_type18_aim_runtime: self.native_type18_aim_runtime.clone(),
             native_type56_runtime: self.native_type56_runtime,
             native_type56_aim_runtime: self.native_type56_aim_runtime.clone(),

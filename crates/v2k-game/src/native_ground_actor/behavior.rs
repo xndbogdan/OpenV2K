@@ -153,7 +153,7 @@ pub(crate) fn furniture_nearby(
         terrain,
         resources.terrain_objects(),
         entity.position_raw(),
-        i32::from(axis.strict_axis_limit_raw) / 4,
+        axis.strict_axis_limit_raw / 4,
         -1,
     )
     .is_some())
