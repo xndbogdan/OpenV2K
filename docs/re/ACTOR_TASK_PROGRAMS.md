@@ -1254,7 +1254,8 @@ the sea, so its flyers above the sea take the fallback.
 In Playing:
 
 - the late contact walk sends Type13 through the same flying surface kernel and
-  retained-model static suffix as Intro2;
+  retained-model static suffix as Intro2, lending the player hull and lives so
+  a lethal crash finishes Class1 through Playing's radial;
 - particle hits enter the Type13 hit wrapper with the Playing death world
   (player hull and lives) for the Class1 blast and radial;
 - the Playing radial routes a receipt to its native owner and parks it after a
@@ -1264,13 +1265,8 @@ In Playing:
   its nested radial and the Playing hull. Worlds 46, 47 and 48 now get past
   Type13 in the abort matrix and stop next at Type5, Type5 and Type99.
 
-Remaining boundaries:
-
-- A lethal collision in the contact walk still runs the Class1 radial in the
-  cinematic context, which blocks when a player exists. Collision channel 1
-  has a 10,000 threshold against 20,000 health, so only a hard crash reaches it.
-- Player pair identity stays unresolved, so the player pass skips Type13 as
-  before.
+The remaining boundary is player pair identity, which stays unresolved, so
+the player pass skips Type13 as before.
 
 [Tests](../../crates/v2k-game/src/intro2_type13_live/ordinary_tests.rs) cover
 the 20 births and receipts, five-second cohorts in all eight worlds under the

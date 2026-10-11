@@ -266,3 +266,100 @@ fn a_playing_primary_hit_reaches_the_ordinary_type13_owner() {
         RetailRuntimeValue::Known(600)
     );
 }
+
+/// A lethal 11AD0 crash completes Class1 through Playing's radial once the
+/// walk lends its player; the cinematic owner still rejects a live player.
+#[v2k_test_support::retail_test]
+fn a_lethal_playing_crash_finishes_class1_with_the_player_hull() {
+    use crate::intro2_flyer_contacts::resolve_native_flyer_contacts_with_playing;
+    use crate::native_actor_capture::pair::PlayingPlayerContact;
+    for lend in [false, true] {
+        let (mut session, mut manager, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(26);
+        let id = type13_ids(&manager)[0];
+        for cell in &mut session.cache.level_terrain_mut().unwrap().cells {
+            cell.height = 0;
+        }
+        {
+            let entity = manager.entity_mut(id).unwrap();
+            entity
+                .collision
+                .state_flags_at_0x08
+                .overwrite(0x0202_8000, 0x0202_8000);
+            entity.collision.subject_scan_gate_at_0x70 = RetailRuntimeValue::Known(0);
+            let [x, _, z] = entity.position_raw();
+            entity.set_position_raw([x, -50, z]);
+            entity.set_velocity_raw([0, -12000, 0]);
+            entity.collision.health_raw = RetailRuntimeValue::Known(1);
+        }
+        let mut tasks = SpecializedActorTaskScheduler::new();
+        assert_eq!(tasks.adopt_intro2_type13_search_attack(&manager), 3);
+        let mut static_damage = StaticDamageScheduler::new();
+        let mut notifications = GameplayNotifications::new();
+        let mut hull = PlayerHull::default();
+        let outcome = resolve_native_flyer_contacts_with_playing(
+            &mut Intro2ContactFrame {
+                entities: &mut manager,
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                static_damage: &mut static_damage,
+                notifications: &mut notifications,
+                retail_tick: 600,
+                actor_tasks: &mut tasks,
+            },
+            id,
+            lend.then_some(PlayingPlayerContact {
+                hull: &mut hull,
+                extra_lives: RetailRuntimeValue::Known(3),
+            }),
+        );
+        if lend {
+            assert!(
+                matches!(
+                    outcome.surface,
+                    Intro2FlyerContactOutcome::Applied {
+                        solid_contact: true,
+                        collision_damage_raw,
+                        ..
+                    } if collision_damage_raw > 0
+                ),
+                "{outcome:?}"
+            );
+            assert!(crate::class49_death::finished_terminal_hit_authenticates(
+                &manager, id
+            ));
+            assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
+            // 11AD0 has no dying test: until 14990 the class1 corpse keeps
+            // BAC0's null solid/water hooks and a later walk still admits it.
+            let again = resolve_native_flyer_contacts_with_playing(
+                &mut Intro2ContactFrame {
+                    entities: &mut manager,
+                    resources: &mut session.cache,
+                    world_fx: &mut fx,
+                    static_damage: &mut static_damage,
+                    notifications: &mut notifications,
+                    retail_tick: 601,
+                    actor_tasks: &mut tasks,
+                },
+                id,
+                Some(PlayingPlayerContact {
+                    hull: &mut hull,
+                    extra_lives: RetailRuntimeValue::Known(3),
+                }),
+            );
+            assert!(!again.blocks_later_contacts(), "{again:?}");
+        } else {
+            // The cinematic radial cannot visit the live player.
+            assert!(
+                matches!(
+                    outcome.surface,
+                    Intro2FlyerContactOutcome::Blocked {
+                        committed_prefix: true,
+                        ..
+                    }
+                ),
+                "{outcome:?}"
+            );
+        }
+    }
+}

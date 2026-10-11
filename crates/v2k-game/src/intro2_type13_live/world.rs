@@ -15,9 +15,6 @@ use super::{
 use crate::actor_task_dispatcher::ActorTaskRuntime;
 use crate::actor_task_owner::{ActorTaskId, ActorTaskSlot, ActorTaskWrapperFlags};
 use crate::common_mover::component_dispatch::CommonMoverDispatchMode;
-use crate::common_mover::environment::{
-    apply_common_wind_drag_raw, CommonWindDrag, CommonWindDragFrame,
-};
 use crate::common_mover::type9_attitude::Type9BodyBasis;
 use crate::common_mover::type9_surface::{
     decay_actor_surface_timer_ms, ACTOR_SURFACE_OWNER_DISABLED_STATE_BIT,
@@ -26,8 +23,7 @@ use crate::common_mover::type9_tail::{
     plan_common_master_motion, COMMON_MASTER_MOTION_REQUIRED_STATE_MASK,
 };
 use crate::entity::{
-    apply_common_gravity_and_underwater_raw, apply_type13_common_environment_raw,
-    commit_common_master_motion, CommonUnderwaterFrame, Entity, EntityManager,
+    apply_effective8_flyer_environment, commit_common_master_motion, Entity, EntityManager,
 };
 use crate::entity_behavior::{BehaviorContextRuntime, BehaviorSelection};
 use crate::entity_collision_state::{
@@ -447,54 +443,10 @@ fn commit_suffix(
     // E100 rereads current style/C8 after A800. This is independent of the
     // basis policy that DCA0/E870 latched before entering the tasks.
     preflight_suffix(entity)?;
-    let mut velocity = entity.velocity_raw();
-    if physics.runtime_wind_mode == 0 {
-        apply_type13_common_environment_raw(
-            &mut velocity,
-            frame.elapsed_micros,
-            entity.mass_raw,
-            physics.runtime_wind_mode,
-            physics.drag_strength,
-        );
-    } else {
-        // Effective 8 keeps drag bit8, so E100 calls EC60 with the current
-        // wind after gravity. EC60 reads the basis F70 published after the
-        // tasks and moves pitch/roll words without rebuilding it.
-        let (Some(terrain), RetailRuntimeValue::Known(basis), Some(mass)) = (
-            terrain,
-            entity.physical_body_basis_q31,
-            std::num::NonZeroU16::new(entity.mass_raw),
-        ) else {
-            return Err(Intro2Type13WorldBlock::WindFrameUnavailable);
-        };
-        apply_common_gravity_and_underwater_raw(
-            &mut velocity,
-            frame.elapsed_micros,
-            CommonUnderwaterFrame {
-                effective_environment_flags: 8,
-                water_response_enabled: false,
-                position_y_raw: 0,
-                solid_or_sea_y_raw: 0,
-                self_mass_raw: entity.mass_raw,
-                attached_cargo_mass: 0,
-            },
-        );
-        let mut angles = entity.rotation_heading_pitch_roll_raw();
-        apply_common_wind_drag_raw(
-            &mut velocity,
-            &mut angles,
-            CommonWindDrag::from_environment(physics),
-            CommonWindDragFrame {
-                terrain,
-                position_raw: entity.position_raw(),
-                basis,
-                callback_mass_raw: mass,
-                elapsed_micros: frame.elapsed_micros,
-            },
-        );
-        entity.set_rotation_heading_pitch_roll_raw(angles);
-    }
-    entity.set_velocity_raw(velocity);
+    // Effective 8 keeps drag bit8: E100 calls EC60 with the current wind
+    // after gravity, reading the basis F70 published after the tasks.
+    apply_effective8_flyer_environment(entity, physics, terrain, frame.elapsed_micros)
+        .map_err(|_| Intro2Type13WorldBlock::WindFrameUnavailable)?;
     // Type 13 authors +72/+73/+74 = 0/0/0. E370 therefore takes its common
     // saturating timer decay without terrain, bubbles or lifecycle callbacks.
     if entity

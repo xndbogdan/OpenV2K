@@ -3,7 +3,8 @@
 //! Types22/23/24/62 select class2 directly after dying is set. C470 owns no timed
 //! task: it releases physical slots0/1/2 and marks10B70 deferred removal;
 //! the later14990 sweep unlinks the allocation.
-//! Type124's alternate class63 remains unsupported.
+//! Type124 selects class63 instead: BAF0's burst and radial, then BC90 drops
+//! the Type61 authored in its `+88` and stages removal without clearing tasks.
 
 use crate::{
     actor_task_owner::ActorTaskSlot,
@@ -31,6 +32,8 @@ pub enum SharedFishDeathBlock {
         entity_type: u32,
         alternate_behavior_class: u32,
     },
+    /// Type124's class63 terminal blocked after the fish prefix.
+    AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
 /// A completed callback remains damage-addressable until14990 removes it.
@@ -68,6 +71,65 @@ pub(crate) fn completed_shared_fish_death(manager: &EntityManager, id: u32) -> b
                         .into_iter()
                         .all(|slot| entity.actor_tasks.task_in_slot(slot).is_none())
             })
+}
+
+/// Type124's 10C10 -> DB80 -> AC60 selects alternate class63 directly. The
+/// fish's own remote/dying no-ops and completed task custody precede the shared
+/// BAF0/BC90 terminal, whose finish retires this scheduler owner.
+pub(crate) fn run_type124_auto_pilot_death(
+    mut frame: crate::class49_terminal::Class49TerminalFrame<'_>,
+    id: u32,
+) -> Result<LiveActorDeathResult<()>, SharedFishDeathBlock> {
+    use crate::class49_terminal::Class49WorldContext;
+    use SharedFishDeathBlock as Block;
+    if !super::allocation_authenticates(frame.entities, id) {
+        return Err(Block::Allocation);
+    }
+    let entity = frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .ok_or(Block::Allocation)?;
+    let bits = |mask| match entity.collision.state_flags_at_0x08.masked(mask) {
+        RetailRuntimeValue::Known(value) => Ok(value),
+        RetailRuntimeValue::Unresolved => Err(Block::Runtime("death entry state")),
+    };
+    if bits(REMOTE_OWNED_STATE_BIT)? != 0 {
+        return Ok(LiveActorDeathResult {
+            returned_nonzero: false,
+            publication: None,
+        });
+    }
+    if bits(DYING_STATE_BIT)? != 0 {
+        return Ok(LiveActorDeathResult {
+            returned_nonzero: true,
+            publication: None,
+        });
+    }
+    if entity.entity_type != 124 {
+        return Err(Block::Metadata);
+    }
+    if bits(DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0
+        || frame
+            .entities
+            .pending_actor_deferred_destroy_ids()
+            .contains(&id)
+    {
+        return Err(Block::Runtime("deferred destroy already pending"));
+    }
+    let custody = match &mut frame.world {
+        Class49WorldContext::Playing { scheduler, .. } => {
+            scheduler.shared_fish_completed_owner(frame.entities, id)
+        }
+        Class49WorldContext::Cinematic { actor_tasks, .. } => {
+            actor_tasks.prepare_native_actor_mutation(frame.entities, id)
+        }
+    };
+    if !custody {
+        return Err(Block::Runtime("completed native allocation/task custody"));
+    }
+    crate::class49_terminal::run_class49_standard_death(frame, id)
+        .map_err(|error| Block::AutoPilot(Box::new(error)))
 }
 
 pub(crate) fn begin_shared_fish_standard_death(

@@ -27,6 +27,7 @@ has these style words, corroborating the null-hook branch in the decompiled
 | Search acquiring4C7A50 / pursuing4C7A98 / completion4C7AE0 | null | null |
 | Move About Aimlessly4C7930 / completion4C7978 | null | null |
 | Initializer fallback4C74F8 / completed Class1 Explode4C7150 | null | null |
+| Completed class63 Auto Pilot4C7198 | null | null |
 | Falling Tumble4C7F60 | C750 | C750 |
 
 The native frontend constructor now binds104B0's authored-center surface bits
@@ -102,10 +103,15 @@ own subject+70 and state gates.
 Ordinary Type13 births reach the same phases in Playing. The late contact walk
 sends type13 through the shared flyer helper. That helper keeps this 13/10/57
 surface kernel for Type13, then the retained-model static suffix (or static's
-own admission when the surface is ineligible). A lethal contact still runs the
-Class1 radial with the cinematic context. With a player present, that radial
-blocks and parks the allocation. The contact frame does not yet carry the
-Playing player hull.
+own admission when the surface is ineligible). Playing's walk lends these
+phases its player hull and lives (the `_with_playing` entries), so a lethal
+surface or static contact finishes Class1 through Playing's static and dynamic
+radial. Intro2's walk lends none and keeps the cinematic radial, which cannot
+visit a live player. Ordinary Type5 rows on the Type10 owner take the same
+walk, and their Tumble's C750 terminal (terrain, water or static) runs
+Playing's radial with the lent player. Intro2-only Type57's Tumble water
+terminal still owns only its cinematic radial and fails closed if a Playing
+player reaches it.
 
 Native15/87 instead author alternate2, `Die Quietly`, whose zero-policy style
 is4C7420 and initializer isC470. Their actual Section12 rows in1X3XX retain
