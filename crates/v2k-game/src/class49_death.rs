@@ -60,6 +60,8 @@ pub enum NativeExplosionSourceProfile {
     PowerUp61,
     Intro2Type13,
     EntityWeapon(crate::native_entity_weapons::EntityWeaponKind),
+    /// Type3 Rolling Boulder; its alternate is class1. Type27 splits instead.
+    RollingBoulder,
 }
 
 impl NativeExplosionSourceProfile {
@@ -70,6 +72,7 @@ impl NativeExplosionSourceProfile {
             Self::PowerUp61 => 61,
             Self::Intro2Type13 => 13,
             Self::EntityWeapon(kind) => kind.entity_type() as u32,
+            Self::RollingBoulder => 3,
         }
     }
 
@@ -99,6 +102,11 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(kind) => {
                 crate::native_entity_weapons::authenticate_weapon_metadata(kind, metadata).is_ok()
             }
+            Self::RollingBoulder => crate::rolling_boulder::authenticate_metadata(
+                crate::rolling_boulder::RollingBoulderProfile::Small,
+                metadata,
+            )
+            .is_ok(),
         }
     }
 
@@ -124,6 +132,8 @@ impl NativeExplosionSourceProfile {
                             _ => 0x004c_8350,
                         }
             }
+            // Both class20 styles have a null +2C.
+            Self::RollingBoulder => matches!(style, 0x004c_78a0 | 0x004c_78e8),
         }
     }
 
@@ -141,6 +151,9 @@ impl NativeExplosionSourceProfile {
                 (10, [37, 37])
             }
             Self::EntityWeapon(_) => (16, [94, 95]),
+            // No A/B/N/G, no capability40, neither type49 nor 112..115:
+            // the 40BB9C default keeps count10 with class16.
+            Self::RollingBoulder => (10, [16, 16]),
         }
     }
 
@@ -148,6 +161,7 @@ impl NativeExplosionSourceProfile {
         match self {
             Self::GunTurret(Intro2GunTurretProfile::Type115)
             | Self::Intro2Type13
+            | Self::RollingBoulder
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
                 NativeExplosionPolicy::Class1
             }
@@ -170,6 +184,10 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::GunTurret(profile))
     } else if intro2_type13_explosion_source_authenticates(entity) {
         Some(NativeExplosionSourceProfile::Intro2Type13)
+    } else if entity.entity_type == 3
+        && crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
+    {
+        Some(NativeExplosionSourceProfile::RollingBoulder)
     } else {
         None
     }
@@ -211,6 +229,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
             .is_some_and(|observation| {
                 observation.lease == entity.native_entity_weapon_runtime.unwrap().allocation
             }),
+        Some(NativeExplosionSourceProfile::RollingBoulder) => {
+            crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
+        }
         None => false,
     }
 }
@@ -387,6 +408,17 @@ pub fn begin_class49_standard_death(
             return Err(Block::Graph);
         }
         let record = resources.global_entity_type(13).ok_or(Block::Metadata)?;
+        if *metadata
+            != crate::entity_collision_state::EntityTypeRuntimeMetadata::from_section12(record)
+        {
+            return Err(Block::Metadata);
+        }
+    }
+    if profile == NativeExplosionSourceProfile::RollingBoulder {
+        // The current style's own task graph, as the scheduler retains it.
+        crate::rolling_boulder::RollingBoulderOwner::adopt(manager, id)
+            .map_err(|_| Block::Graph)?;
+        let record = resources.global_entity_type(3).ok_or(Block::Metadata)?;
         if *metadata
             != crate::entity_collision_state::EntityTypeRuntimeMetadata::from_section12(record)
         {

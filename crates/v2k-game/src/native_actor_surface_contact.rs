@@ -233,14 +233,19 @@ fn resolve(
         return Err(Block::Runtime("current completed contact owner"));
     }
     if let NativeSurfaceProfile::RollingBoulder(_) = profile {
-        // Only style0 sets 10000; any other current style is not a source state.
-        if crate::rolling_boulder::current_style(entity)
-            != Ok(crate::rolling_boulder::RollingBoulderStyle::Rolling)
-        {
-            return Err(Block::Runtime("Rolling Boulder null solid/water hooks"));
+        // Style0 sets 10000. A completed class1/class18 corpse keeps the bit
+        // (both styles are all-zero) with null hooks until the sweep.
+        let corpse = crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id)
+            || crate::rolling_boulder::death::finished_split_authenticates(frame.entities, id);
+        if !corpse {
+            if crate::rolling_boulder::current_style(entity)
+                != Ok(crate::rolling_boulder::RollingBoulderStyle::Rolling)
+            {
+                return Err(Block::Runtime("Rolling Boulder null solid/water hooks"));
+            }
+            crate::rolling_boulder::RollingBoulderOwner::adopt(frame.entities, id)
+                .map_err(|_| Block::Runtime("Rolling Boulder current graph"))?;
         }
-        crate::rolling_boulder::RollingBoulderOwner::adopt(frame.entities, id)
-            .map_err(|_| Block::Runtime("Rolling Boulder current graph"))?;
     } else {
         let RetailRuntimeValue::Known(Some(style)) = entity.current_behavior_context else {
             return Err(Block::Runtime("current style"));
@@ -376,11 +381,36 @@ fn resolve(
                                 manager, id, fx,
                             )?
                         }
-                        // Type3's class1 BAC0 and Type27's class18 split are
-                        // not owned yet; hold the lethal hit at the boundary.
-                        NativeSurfaceProfile::RollingBoulder(_) => {
+                        // Type27's class18 split delivers no radial.
+                        NativeSurfaceProfile::RollingBoulder(
+                            crate::rolling_boulder::RollingBoulderProfile::Large,
+                        ) => {
+                            let result =
+                                crate::rolling_boulder::death::begin_rolling_boulder_split(
+                                    manager,
+                                    id,
+                                    crate::rolling_boulder::death::RollingBoulderSplitFrame {
+                                        resources: frame.resources,
+                                        world_fx: fx,
+                                        retail_tick: frame.retail_tick,
+                                        tasks: &mut *frame.actor_tasks,
+                                    },
+                                )
+                                .map_err(|_| {
+                                    Intro2CommonDyingBlock::Runtime("Rolling Boulder class18 split")
+                                })?;
+                            if let Some(terminal) = result.publication {
+                                frame.actor_tasks.register_native_ground_terminal(terminal);
+                            }
+                            None
+                        }
+                        // Type3's class1 BAF0 radial needs the Playing player
+                        // hull, which the late contact frame does not carry.
+                        NativeSurfaceProfile::RollingBoulder(
+                            crate::rolling_boulder::RollingBoulderProfile::Small,
+                        ) => {
                             return Err(Intro2CommonDyingBlock::Runtime(
-                                "Rolling Boulder death program",
+                                "Rolling Boulder class1 radial needs the player hull",
                             ));
                         }
                     };
