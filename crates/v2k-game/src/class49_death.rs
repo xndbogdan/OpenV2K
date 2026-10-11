@@ -147,7 +147,7 @@ impl NativeExplosionSourceProfile {
 
     fn null_death_cleanup(self, style: u32) -> bool {
         match self {
-            Self::GunTurret(Intro2GunTurretProfile::Type115) => {
+            Self::GunTurret(profile) if profile.is_flower() => {
                 matches!(style, 0x004c_7468 | 0x004c_8230 | 0x004c_74f8)
             }
             Self::GunTurret(_) => matches!(style, 0x004c_8230 | 0x004c_74f8),

@@ -1458,13 +1458,10 @@ fn apply_pair_checked_damage(
             committed,
         );
     }
-    if kind == 97
-        && frame
-            .entities
-            .iter_all()
-            .any(|entity| entity.id == target && entity.intro2_gun_turret_runtime.is_some())
-    {
-        return apply_type97_pair_checked_damage(
+    if frame.entities.iter_all().any(|entity| {
+        entity.id == target && crate::intro2_gun_turret::is_native_ordinary_gun_turret(entity)
+    }) {
+        return apply_native_turret_pair_checked_damage(
             frame,
             target,
             delivery,
@@ -1541,7 +1538,7 @@ mod people_tests;
 /// terminal (BAF0 -> static/dynamic radial -> A860 -> Type60 ring ->
 /// deferred removal) with the explicit world/player context. Campaign
 /// zero-record reconstruction never borrows this ordinary task admission.
-fn apply_type97_pair_checked_damage(
+fn apply_native_turret_pair_checked_damage(
     frame: &mut Intro2ContactFrame<'_>,
     target: u32,
     delivery: crate::damage::DamageDeliveryRecord,
@@ -1551,10 +1548,10 @@ fn apply_type97_pair_checked_damage(
     use crate::live_actor_checked_damage::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageRequest,
     };
-    // Ordinary Type97 only; Intro2 Type92/102 retain their cinematic owners
-    // and campaign E/L reconstruction is a distinct origin.
-    if actor(frame.entities, target)?.entity_type != 97 {
-        return Err(NativeCaptorPairBlock::Runtime("turret pair type"));
+    // Ordinary 104B0 turrets only; Intro2 Type92/102 retain their cinematic
+    // owners and campaign E/L reconstruction is a distinct origin.
+    if !crate::intro2_gun_turret::is_native_ordinary_gun_turret(actor(frame.entities, target)?) {
+        return Err(NativeCaptorPairBlock::Runtime("turret pair origin"));
     }
     if !crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(
         frame.entities,

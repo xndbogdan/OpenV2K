@@ -107,30 +107,31 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (23, 25),
     (24, 16),
     (25, 82),
-    (26, 96),
+    (26, 109),
     (27, 27),
     (28, 71),
-    (29, 103),
+    // Native class29 turrets now complete; their finished class49 terminals
+    // admit the later power-up radial, as 14AE0 does.
+    (29, 55),
     (30, 83),
     (31, 107),
     (32, 40),
     (33, 20),
     (34, 25),
     (35, 27),
-    (36, 96),
-    (37, 102),
+    (36, 74),
+    (37, 125),
     (38, 82),
-    (39, 102),
+    (39, 83),
     (40, 125),
     (41, 35),
     (42, 108),
-    (43, 103),
+    (43, 35),
     (45, 40),
     // Ordinary Type13 and the emitter-only Type43 take their native class1
     // abort deaths and Type5 its class11 Tumble publication.
     (46, 35),
     (47, 110),
-    (48, 99),
 ];
 
 fn actor_snapshot(manager: &EntityManager) -> Vec<String> {
@@ -358,7 +359,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
         );
         assert!(controller.abort_frame_submitted(), "world{world}");
     }
-    assert_eq!(exact_worlds, [13, 14, 15, 44]);
+    assert_eq!(exact_worlds, [13, 14, 15, 44, 48]);
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
         "first incomplete actor matrix changed"

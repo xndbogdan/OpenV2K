@@ -150,6 +150,48 @@ manager-generation and authored-infection/notification controls live in
 [`authored_tests.rs`](../../crates/v2k-game/src/intro2_gun_turret/authored_tests.rs).
 They complement the existing Intro2 turret and campaign-cargo controls.
 
+## Ordinary native Type92, Type96, Type99, Type102 and Type103
+
+The class-29 E/L family shares Type97's Section-12 shape: E and L only,
+singleton Always1/Class29, alternate49, rule1, mass100, initializer state
+`0x25025`, and no A..D, H, J, N or sound attachments. Rows differ only in data:
+
+| Type | Model | Health | Capability | Model variables | E method / sound | Ordinary births |
+|---|---|---|---|---|---|---|
+| 92 | 171 | 5000 | `0x1044` | 2 | 14 / 78 | worlds 26, 38, 39 (3) |
+| 97 | 173 | 5000 | `0x1044` | 2 | 12 / 76 | worlds 31, 42, 46, 47 (8) |
+| 99 | 165 | 5000 | `0x44` | 3 | 12 / 76 | worlds 26, 32, 46, 48 (10) |
+| 102 | 162 | 4000 | `0x44` | 3 | 14 / 78 | worlds 19, 25, 37, 39, 40 (9) |
+| 96 | 175 | 5000 | `0x1044` | 2 | 13 / 77 | worlds 26, 36 (2) |
+| 100 | 152 | 32000 | `0x1044` | 3 | 19 / 7 | world 26 (1), not yet ported |
+| 103 | 168 | 5000 | `0x44` | 3 | 13 / 77 | worlds 21, 25, 29, 31, 38, 40, 43 (15) |
+
+Ordinary 92/96/99/102/103 now take the same `104B0 -> D4A0/D190` birth,
+metadata authentication (including each row's own model-variable count),
+class-29 owner, aim and FIFO drain, pair damage and class49 dispatch as Type97.
+`425160` submits every method through `4147A0`. `44EA60` gives methods 12..15
+no gravity lead, so method 13 drains like 12 and 14, into class56 (class82
+underwater). Ownership is decided by construction origin, not type number:
+Intro2's 92/102 identities keep their cinematic owners and campaign
+reconstruction stays separate. Type100's method19 (class54, two variable
+bindings) has no live aim owner, so it still constructs without a context.
+
+### Ordinary Type112 and Type113 flowers
+
+Type112 (models337/339, world39, 4 births) and Type113 (models693/695,
+world18, 2 births) share Type115's flower row: E/L, Mutated-weighted class29
+or the class0 wait, method16 with gravity lead, health1000, initializer
+`0x25025`. They differ in capability (`0x44`/`0x40` instead of zero),
+damage multiplier slot5 (256), muzzle slot (36/30), Sub-L
+(`208,7`/`232,3`) and alternate49 instead of1, so they die through class49
+rather than Type115's class1. BAF0 (`40BB3E..40BBB5`) chooses the death
+scatter in this order: any A/B/N/G component gives class37; otherwise live
+capability `0x40` gives sixteen class94/95; otherwise Type49 gives class6
+and types112..115 class37. Type115 (capability zero) therefore reaches the
+type range, while Type112/113 take the capability branch like the other E/L
+turrets. Their class0 idle style `4C7468` is accepted for hits and
+null-death cleanup as for Type115.
+
 ## Ordinary native Type104 and Type115
 
 Castle (global world15) authors anti-air Type104 at spawns1/49/50 and virus
@@ -364,7 +406,11 @@ because the source is dying. Neither entry reruns the former class29 selector.
 Both retain `11030 -> 415040`; filtering and buffer consumption precede the
 dying-health no-op, and the primary capability8 presentation suffix remains
 independent. No second blast, radial pass, ring or removal request is issued.
-The port admits this path only with the finished terminal receipt's actual
+The dynamic radial walker `414AE0` applies the same `8000/800/1000` gate,
+again without a deferred-removal exclusion, so a later blast (for example a
+power-up destroyed on top of the turret during a Main Base abort) also
+reaches the finished allocation through `415040` or `414E10`.
+The port admits both paths only with the finished terminal receipt's actual
 manager allocation, class49 context, empty task slots and exact deferred state.
 Issued, claimed, partially finished, foreign and parked receipts remain blocked.
 Focused repeat-hit controls cover both Type92 and Type102; validation of this
