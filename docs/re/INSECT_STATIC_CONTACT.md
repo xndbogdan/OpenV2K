@@ -197,10 +197,10 @@ only the fixed post-dispatch images expose the supported separation.
 This fixture proves the connected path; it does not
 establish matched retail trajectories for the whole Intro.
 
-Ordinary-world Type16 births now share this owner through their own 104B0
-receipt ([Intro2 Type16](INTRO2_TYPE16.md)). Attached Capture16/94 transport,
-ordinary G native construction and ordinary Type94 construction remain outside
-this admission. Pairs with unrelated building/actor families
+Ordinary-world Type16 and Type94 births now share this owner through their
+own 104B0 receipts ([Intro2 Type16](INTRO2_TYPE16.md),
+[Intro2 Type94](INTRO2_TYPE94.md)). Attached Capture16/94 transport and
+ordinary G native construction remain outside this admission. Pairs with unrelated building/actor families
 are outside the bounded Type66 extension; captor/58/gunner-hive pairs retain
 their existing owners. Unknown graphs, parked/executing prefixes, unowned
 static damage kinds and missing geometry fail closed. Existing Type10/57
