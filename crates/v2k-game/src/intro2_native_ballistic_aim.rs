@@ -66,6 +66,8 @@ pub(crate) enum NativeBallisticProfileId {
     Type56,
     Type40,
     Type18,
+    Type76,
+    Type77,
 }
 
 impl NativeBallisticProfileId {
@@ -84,8 +86,8 @@ impl NativeBallisticProfileId {
             | Self::Type94
             | Self::Type30
             | Self::Type18 => 20,
-            Self::Type57 | Self::Type122 => 24,
-            Self::Type56 => 30,
+            Self::Type57 | Self::Type122 | Self::Type76 => 24,
+            Self::Type56 | Self::Type77 => 30,
             Self::Type40 => 1,
         }
     }
@@ -107,7 +109,9 @@ impl NativeBallisticProfileId {
             | Self::Type30
             | Self::Type56
             | Self::Type40
-            | Self::Type18 => 0,
+            | Self::Type18
+            | Self::Type76
+            | Self::Type77 => 0,
         }
     }
     fn table_speed(self) -> i16 {
@@ -141,6 +145,7 @@ impl NativeBallisticProfileId {
             Self::Type122 | Self::Type56 => 70,
             Self::Type30 => 75,
             Self::Type18 => 69,
+            Self::Type76 | Self::Type77 => 70,
         }
     }
     const fn source_magic(self) -> u64 {
@@ -162,6 +167,8 @@ impl NativeBallisticProfileId {
             Self::Type40 => 0x5459_5034_3053_5243,
             Self::Type30 => 0x5459_5033_3053_5243,
             Self::Type18 => 0x5459_5031_3853_5243,
+            Self::Type76 => 0x5459_5037_3653_5243,
+            Self::Type77 => 0x5459_5037_3753_5243,
         }
     }
     const fn target_magic(self) -> u64 {
@@ -183,6 +190,8 @@ impl NativeBallisticProfileId {
             Self::Type40 => 0x5459_5034_3054_4754,
             Self::Type30 => 0x5459_5033_3054_4754,
             Self::Type18 => 0x5459_5031_3854_4754,
+            Self::Type76 => 0x5459_5037_3654_4754,
+            Self::Type77 => 0x5459_5037_3754_4754,
         }
     }
     fn accepts(self, descriptor: ProjectileEmitterDescriptor) -> bool {
@@ -201,6 +210,8 @@ impl NativeBallisticProfileId {
             Self::Type40 => (600_000, 256, 0, 16_000, 5120),
             Self::Type30 => (500_000, 512, 50, 25_000, 3840),
             Self::Type18 => (500_000, 100, 156, 30_000, 3072),
+            Self::Type76 => (150_000, 256, 114, 8000, 5120),
+            Self::Type77 => (300_000, 256, 168, 8000, 2560),
         };
         descriptor.projectile_method == self.method()
             && descriptor.sound_id == self.sound()
@@ -611,7 +622,9 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
                     | NativeBallisticProfileId::Type30
                     | NativeBallisticProfileId::Type56
                     | NativeBallisticProfileId::Type40
-                    | NativeBallisticProfileId::Type18 => drain_intro2_flyer_transient_request(
+                    | NativeBallisticProfileId::Type18
+                    | NativeBallisticProfileId::Type76
+                    | NativeBallisticProfileId::Type77 => drain_intro2_flyer_transient_request(
                         request,
                         entity.position_raw(),
                         entity.velocity_raw(),
@@ -668,7 +681,9 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
             | NativeBallisticProfileId::Type30
             | NativeBallisticProfileId::Type56
             | NativeBallisticProfileId::Type40
-            | NativeBallisticProfileId::Type18 => world_fx
+            | NativeBallisticProfileId::Type18
+            | NativeBallisticProfileId::Type76
+            | NativeBallisticProfileId::Type77 => world_fx
                 .materialize_descriptor_particle_request(
                     DescriptorParticleRequest {
                         source_class: P::ID.particle_class(),

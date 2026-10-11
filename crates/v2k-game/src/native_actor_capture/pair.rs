@@ -305,6 +305,7 @@ fn owns_captor_contact(entity: &Entity) -> bool {
     (entity.entity_type == 17 && entity.intro2_type17_runtime.is_some())
         || (entity.entity_type == 122 && entity.native_type122_runtime.is_some())
         || (entity.entity_type == 18 && entity.native_type18_runtime.is_some())
+        || (entity.entity_type == 28 && entity.native_type28_runtime.is_some())
 }
 
 /// Independent Type58 side of an 11AD0 pair.
@@ -773,7 +774,9 @@ fn behavior(
             *committed = true;
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
-        PairContactCallbackPolicy::CapturePeople if matches!(entity.entity_type, 17 | 122 | 18) => {
+        PairContactCallbackPolicy::CapturePeople
+            if matches!(entity.entity_type, 17 | 122 | 18 | 28) =>
+        {
             let RetailRuntimeValue::Known(Some(rows)) = &entity.sub_j_attachment_runtime else {
                 return Err(NativeCaptorPairBlock::Runtime("capture capacity"));
             };
@@ -828,7 +831,7 @@ fn behavior(
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         PairContactCallbackPolicy::UnknownAddress(0x0040_d0b0)
-            if matches!(entity.entity_type, 17 | 122 | 18) =>
+            if matches!(entity.entity_type, 17 | 122 | 18 | 28) =>
         {
             let result = capture::execute_capture_delivery(
                 frame.entities,
@@ -983,6 +986,11 @@ fn adopt_captor(frame: &mut Intro2ContactFrame<'_>, id: u32) -> Result<(), Nativ
             let owner = crate::native_type18::Type18Owner::adopt(frame.entities, id)
                 .map_err(NativeCaptorPairBlock::GroundTask)?;
             frame.actor_tasks.register_type18(owner);
+        }
+        NativeCaptorProfile::Type28 => {
+            let owner = crate::native_type28::Type28Owner::adopt(frame.entities, id)
+                .map_err(NativeCaptorPairBlock::GroundTask)?;
+            frame.actor_tasks.register_type28(owner);
         }
     }
     Ok(())
@@ -1225,6 +1233,8 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || crate::intro2_type58::intro2_type58_allocation_authenticates(entity)
         || crate::native_type122::type122_allocation_authenticates(entity)
         || crate::native_type18::allocation_authenticates(entity)
+        || crate::native_type28::allocation_authenticates(entity)
+        || crate::native_type76::allocation_authenticates(entity)
         || crate::native_type30::allocation_authenticates(entity)
         || crate::native_type40::allocation_authenticates(entity)
         || crate::native_type56::allocation_authenticates(entity)
@@ -1403,7 +1413,7 @@ fn apply_pair_checked_damage(
         })?;
         return Ok(());
     }
-    if matches!(kind, 9 | 17 | 122 | 18 | 123)
+    if matches!(kind, 9 | 17 | 122 | 18 | 28 | 123)
         || NativeWorkerProfile::from_entity_type(kind).is_some()
         || NativeFourChoiceProfile::from_entity_type(kind).is_some()
     {

@@ -156,6 +156,14 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Type57)
         }
+        76 | 77 if crate::native_type76::manager_allocation_authenticates(manager, id) => {
+            crate::intro2_common_dying::publish_intro2_common_standard_death(manager, id, world_fx)
+                .map(|owner| LiveActorDeathResult {
+                    returned_nonzero: owner.is_some(),
+                    publication: owner.map(DynamicRadialDeathPublication::Intro2Class12),
+                })
+                .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
+        }
         30 if crate::native_type30::manager_allocation_authenticates(manager, id) => {
             crate::intro2_common_dying::publish_intro2_common_standard_death(manager, id, world_fx)
                 .map(|owner| LiveActorDeathResult {
@@ -196,10 +204,11 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
-        17 | 122 | 18
+        17 | 122 | 18 | 28
             if crate::intro2_type17::type17_manager_allocation_authenticates(manager, id)
                 || crate::native_type122::type122_manager_allocation_authenticates(manager, id)
-                || crate::native_type18::manager_allocation_authenticates(manager, id) =>
+                || crate::native_type18::manager_allocation_authenticates(manager, id)
+                || crate::native_type28::manager_allocation_authenticates(manager, id) =>
         {
             if let Some(tasks) = callbacks.capture_task_custody() {
                 return crate::native_actor_capture::publish_native_captor_standard_death(
@@ -489,6 +498,8 @@ pub(crate) fn prepare_native_actor_damage_mutation(
     let native_type122_valid =
         crate::native_type122::type122_manager_allocation_authenticates(manager, id);
     let native_type18_valid = crate::native_type18::manager_allocation_authenticates(manager, id);
+    let native_type28_valid = crate::native_type28::manager_allocation_authenticates(manager, id);
+    let native_type76_valid = crate::native_type76::manager_allocation_authenticates(manager, id);
     let native_type30_valid = crate::native_type30::manager_allocation_authenticates(manager, id);
     let native_type40_valid = crate::native_type40::manager_allocation_authenticates(manager, id);
     let native_type56_valid = crate::native_type56::manager_allocation_authenticates(manager, id);
@@ -537,6 +548,8 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         || entity.intro2_type58_runtime.is_some()
         || entity.native_type122_runtime.is_some()
         || entity.native_type18_runtime.is_some()
+        || entity.native_type28_runtime.is_some()
+        || entity.native_type76_runtime.is_some()
         || entity.native_type30_runtime.is_some()
         || entity.native_type40_runtime.is_some()
         || entity.native_type56_runtime.is_some()
@@ -580,6 +593,10 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         native_type122_valid
     } else if entity.native_type18_runtime.is_some() {
         native_type18_valid
+    } else if entity.native_type28_runtime.is_some() {
+        native_type28_valid
+    } else if entity.native_type76_runtime.is_some() {
+        native_type76_valid
     } else if entity.native_type30_runtime.is_some() {
         native_type30_valid
     } else if entity.native_type40_runtime.is_some() {

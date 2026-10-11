@@ -110,6 +110,8 @@ fn native_allocation(entity: &Entity) -> bool {
     crate::native_type30::allocation_authenticates(entity)
         || crate::native_type122::type122_allocation_authenticates(entity)
         || crate::native_type18::allocation_authenticates(entity)
+        || crate::native_type28::allocation_authenticates(entity)
+        || crate::native_type76::allocation_authenticates(entity)
         || crate::intro2_type16::intro2_type16_allocation_authenticates(entity)
         || crate::intro2_type58::intro2_type58_allocation_authenticates(entity)
         || crate::intro2_type94::intro2_type94_allocation_authenticates(entity)
@@ -146,6 +148,12 @@ fn native_manager_allocation(manager: &EntityManager, entity_id: u32) -> bool {
     }
     if entity.native_type18_runtime.is_some() {
         return crate::native_type18::manager_allocation_authenticates(manager, entity_id);
+    }
+    if entity.native_type28_runtime.is_some() {
+        return crate::native_type28::manager_allocation_authenticates(manager, entity_id);
+    }
+    if entity.native_type76_runtime.is_some() {
+        return crate::native_type76::manager_allocation_authenticates(manager, entity_id);
     }
     if entity.native_type26_allocation.is_some() {
         return crate::intro2_type26_defecate_virus::type26_manager_allocation_authenticates(
@@ -210,6 +218,14 @@ fn authenticate_components(
                 crate::native_type18::MODEL as u16,
                 crate::native_type18::TOPOLOGY,
             )
+        } else if crate::native_type28::allocation_authenticates(entity) {
+            (
+                100,
+                crate::native_type28::MODEL as u16,
+                crate::native_type28::TOPOLOGY,
+            )
+        } else if let Some(row) = crate::native_type76::type76_row(entity) {
+            (100, row.model() as u16, crate::native_type76::TOPOLOGY)
         } else if crate::intro2_type58::intro2_type58_allocation_authenticates(entity) {
             (100, 273, crate::intro2_type58::TOPOLOGY)
         } else if crate::intro2_type94::intro2_type94_allocation_authenticates(entity) {

@@ -35,6 +35,8 @@ fn adopt_authored_tasks(manager: &mut EntityManager) -> SpecializedActorTaskSche
     tasks.adopt_intro2_type53(manager);
     tasks.adopt_type122(manager);
     tasks.adopt_type18(manager);
+    tasks.adopt_type28(manager);
+    tasks.adopt_type76_family(manager);
     tasks.adopt_type43(manager);
     tasks.adopt_type38_family(manager);
     tasks.adopt_shared_fish(manager);
@@ -97,15 +99,15 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (18, 73),
     (19, 40),
     (20, 14),
-    // Native Type18 takes Type122's captor class12 abort death.
-    (21, 28),
+    // Native Type18/28 take Type122's captor class12 abort death.
+    (21, 89),
     (22, 41),
     // Native22/23/24 fish now execute the existing class2 quiet terminal;
     // Reef's next unsupported callback is its Type25 actor.
     (23, 25),
     (24, 16),
     (25, 82),
-    (26, 76),
+    (26, 96),
     (27, 27),
     (28, 71),
     (29, 103),
@@ -118,7 +120,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (36, 96),
     (37, 102),
     (38, 82),
-    (39, 77),
+    (39, 102),
     (40, 125),
     (41, 35),
     (42, 108),

@@ -391,6 +391,57 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type18: {error:?}"))?;
             }
+            28 => {
+                let sub_d = sub_d.ok_or("missing Type28 Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type28 constructor surface")?;
+                crate::native_type28::publish_native_type28(
+                    crate::native_type28::NativeType28ConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        preceding: &self.entities,
+                        resources,
+                        constructor_surface_bits,
+                        retail_tick,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type28: {error:?}"))?;
+            }
+            76 | 77 => {
+                let sub_d = sub_d.ok_or("missing Type76-family Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type76-family constructor surface")?;
+                crate::native_type76::publish_native_type76(
+                    crate::native_type76::NativeType76ConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        resources,
+                        constructor_surface_bits,
+                        retail_tick,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type76-family: {error:?}"))?;
+            }
             16 | 128 => {
                 let sub_d = sub_d.ok_or("missing Type16 Sub-D allocation")?;
                 let constructor_surface_bits =
