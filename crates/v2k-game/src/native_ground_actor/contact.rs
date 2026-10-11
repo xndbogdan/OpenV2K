@@ -56,6 +56,7 @@ pub enum NativeStaticActorDeathBlock {
     AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
     /// An alternate-class1 actor's BAF0/BAC0 terminal blocked after its prefix.
     Class1(Box<crate::class49_terminal::Class49TerminalBlock>),
+    RollingBoulder(crate::rolling_boulder::death::RollingBoulderDeathBlock),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -351,9 +352,81 @@ pub fn resolve_insect_static_contact_with_playing(
                 .map_err(|error| NativeStaticActorDeathBlock::Class1(Box::new(error)))
             },
         },
+        3 => rolling_boulder_static_profile(
+            3,
+            |metadata| {
+                crate::rolling_boulder::authenticate_metadata(
+                    crate::rolling_boulder::RollingBoulderProfile::Small,
+                    metadata,
+                )
+                .is_ok()
+            },
+            // Type3's class1 BAF0 radial needs the Playing player hull,
+            // which the late contact frame does not carry.
+            |_, _, _| {
+                Err(NativeStaticActorDeathBlock::Common(
+                    Intro2CommonDyingBlock::Runtime(
+                        "Rolling Boulder class1 radial needs the player hull",
+                    ),
+                ))
+            },
+        ),
+        27 => rolling_boulder_static_profile(
+            27,
+            |metadata| {
+                crate::rolling_boulder::authenticate_metadata(
+                    crate::rolling_boulder::RollingBoulderProfile::Large,
+                    metadata,
+                )
+                .is_ok()
+            },
+            |manager, id, context| {
+                crate::rolling_boulder::death::begin_rolling_boulder_split(
+                    manager,
+                    id,
+                    crate::rolling_boulder::death::RollingBoulderSplitFrame {
+                        resources: context.resources,
+                        world_fx: context.world_fx,
+                        retail_tick: context.retail_tick,
+                        tasks: context.tasks,
+                    },
+                )
+                .map_err(NativeStaticActorDeathBlock::RollingBoulder)
+            },
+        ),
         _ => return NativeGroundContactOutcome::Ineligible,
     };
     resolve_profile_static_contact(frame, id, profile, playing)
+}
+
+/// Rolling Boulder Type3/27 in either class20 style. Both styles and both
+/// Primary constructors leave every hook null: `05FF0` clears task+20 and
+/// `04580`/`04B40` install only the wrapper and destructor, while style
+/// +1C is zero in both `4C78A0` and `4C78E8`. Neither effective policy has
+/// bit400, so D920 reaches 11760 directly. The completed class1 (`4C7150`)
+/// and class18 (`4C73D8`) styles are all-zero, so a corpse keeps that path.
+fn rolling_boulder_static_profile(
+    entity_type: u32,
+    metadata_authenticates: fn(&EntityTypeRuntimeMetadata) -> bool,
+    publish_standard_death: fn(
+        &mut EntityManager,
+        u32,
+        &mut StaticDeathContext<'_>,
+    ) -> Result<
+        LiveActorDeathResult<NativeGroundTerminalPublication>,
+        NativeStaticActorDeathBlock,
+    >,
+) -> StaticActorProfile {
+    StaticActorProfile {
+        entity_type,
+        default_flags: crate::rolling_boulder::DEFAULT_STATE_POLICY,
+        retained_entry_model_id: None,
+        manager_authenticates:
+            crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates,
+        metadata_authenticates,
+        completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
+        publish_standard_death,
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -726,7 +799,14 @@ fn resolve(
             && matches!(
                 context.active_style().style_address(),
                 0x4c7618 | 0x4c7660 | 0x4c74f8
-            )))
+            ))
+        || (matches!(profile.entity_type, 3 | 27)
+            && (crate::rolling_boulder::current_style(entity).is_ok()
+                || crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id)
+                || crate::rolling_boulder::death::finished_split_authenticates(
+                    frame.entities,
+                    id,
+                ))))
     {
         return Err(Block::UnsupportedStyle(
             context.active_style().style_address(),
@@ -776,7 +856,13 @@ fn apply_contact(
         .entities
         .entity_mut(id)
         .ok_or(Block::Runtime("allocation"))?;
-    if entity.capability_flags != 8
+    // Boulders carry capability2000; 11760 and the null hooks never read it.
+    let capability = if matches!(profile.entity_type, 3 | 27) {
+        0x2000
+    } else {
+        8
+    };
+    if entity.capability_flags != capability
         || entity.collision.default_state_flags_at_0xc8
             != RetailRuntimeValue::Known(profile.default_flags)
     {
@@ -884,6 +970,13 @@ fn apply_contact(
         | 0x4c80c8 | 0x4c8110 | 0x4c8158 | 0x4c7e88 | 0x4c7930 | 0x4c7738 | 0x4c74f8 | 0x4c7420
         | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 => profile.default_flags,
         0x4c7978 => (profile.default_flags | 0x80) & !2,
+        0x4c78a0 | 0x4c78e8 if matches!(profile.entity_type, 3 | 27) => {
+            crate::rolling_boulder::current_style(entity)
+                .map_err(|_| Block::Runtime("Rolling Boulder style"))?
+                .effective_policy()
+        }
+        // The completed class18 style has zero +34/+38.
+        0x4c73d8 if profile.entity_type == 27 => profile.default_flags,
         address => return Err(Block::UnsupportedStyle(address)),
     };
     let crushing_damage = if effective_flags & 0x400 != 0 {
@@ -1066,6 +1159,13 @@ fn contact_task_hook(
             Ok(NativeGroundStaticTaskHook::Furniture)
         }
         (0x4c74f8, None, None) => Ok(NativeGroundStaticTaskHook::Null),
+        (0x4c78a0, Some(Task::BoulderRolling(_)), None)
+        | (0x4c78e8, Some(Task::BoulderResting(_)), None)
+        | (0x4c7150 | 0x4c73d8, None, None)
+            if crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity) =>
+        {
+            Ok(NativeGroundStaticTaskHook::Null)
+        }
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }

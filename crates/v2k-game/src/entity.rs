@@ -37,6 +37,7 @@ mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
 mod native_type56_construction;
+mod rolling_boulder_construction;
 pub(crate) use hive_birth_host::{HiveBirthManagerContext, HiveBirthManagerHost};
 pub(crate) use hive_child::{HiveNativeBirthBlock, NativeHiveChildConstructionContext};
 mod instance_body;
@@ -1515,6 +1516,8 @@ pub struct Entity {
     pub native_type122_runtime: Option<crate::native_type122::Type122Runtime>,
     /// Authenticated dynamic Type56 allocation and its own component history.
     pub native_type30_runtime: Option<crate::native_type30::Type30Runtime>,
+    /// Native Rolling Boulder class20 allocation receipt (Type3/Type27).
+    pub rolling_boulder_runtime: Option<crate::rolling_boulder::RollingBoulderRuntime>,
     pub native_type30_aim_runtime: Option<crate::native_type30::aim::Type30AimRuntime>,
     pub native_type40_runtime: Option<crate::native_type40::Type40Runtime>,
     pub native_type40_aim_runtime: Option<crate::native_type40::aim::Type40AimRuntime>,
@@ -1708,6 +1711,7 @@ impl Entity {
             intro2_type53_runtime: self.intro2_type53_runtime,
             native_type122_runtime: self.native_type122_runtime,
             native_type30_runtime: self.native_type30_runtime.clone(),
+            rolling_boulder_runtime: self.rolling_boulder_runtime,
             native_type30_aim_runtime: self.native_type30_aim_runtime.clone(),
             native_type40_runtime: self.native_type40_runtime,
             native_type40_aim_runtime: self.native_type40_aim_runtime.clone(),
@@ -1823,6 +1827,7 @@ impl Entity {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -3097,6 +3102,7 @@ fn build_type93_materialiser_entity(
         intro2_type53_runtime: None,
         native_type122_runtime: None,
         native_type30_runtime: None,
+        rolling_boulder_runtime: None,
         native_type30_aim_runtime: None,
         native_type40_runtime: None,
         native_type40_aim_runtime: None,
@@ -4926,7 +4932,8 @@ impl EntityManager {
                     .is_some()
                     || matches!(
                         spawn.entity_type,
-                        5 | 6
+                        3 | 5
+                            | 6
                             | 9
                             | 13
                             | 16
@@ -4936,6 +4943,7 @@ impl EntityManager {
                             | 23
                             | 24
                             | 26
+                            | 27
                             | 28
                             | 30
                             | 38
@@ -5379,6 +5387,7 @@ impl EntityManager {
                 intro2_type53_runtime: None,
                 native_type122_runtime: None,
                 native_type30_runtime: None,
+                rolling_boulder_runtime: None,
                 native_type30_aim_runtime: None,
                 native_type40_runtime: None,
                 native_type40_aim_runtime: None,
@@ -5853,6 +5862,7 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -6656,6 +6666,7 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -8128,6 +8139,7 @@ impl EntityManager {
             intro2_type53_runtime: None,
             native_type122_runtime: None,
             native_type30_runtime: None,
+            rolling_boulder_runtime: None,
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -8518,6 +8530,7 @@ impl EntityManager {
         player_hull: &mut crate::player_hull::PlayerHull,
         subject_death_dispatch: Option<(u32, i32, GenericEntityDamageTransition)>,
         candidate_death_dispatches: &[(u32, i32, GenericEntityDamageTransition)],
+        rolling_boulder_wakes: &[u32],
     ) -> Result<
         Vec<Type9DescriptorContactCommitOutcome>,
         crate::player_active_contact::PlayerActivePairError,
@@ -8594,6 +8607,41 @@ impl EntityManager {
             }
             descriptor_ids.push(entity_id);
         }
+        // A boulder this pass moves, damages or wakes needs its completed
+        // owner (or finished terminal); a woken one is still resting style1.
+        for (original, resolved) in original_candidates.iter().zip(resolved_candidates) {
+            let Some(entity) = self.entities.iter().find(|entity| entity.id == original.id) else {
+                continue;
+            };
+            if entity.rolling_boulder_runtime.is_none() {
+                continue;
+            }
+            let woken = rolling_boulder_wakes.contains(&original.id);
+            if (woken
+                || original.position_raw != resolved.position_raw
+                || original.velocity_raw != resolved.velocity_raw
+                || original.collision != resolved.collision)
+                && !scheduler.prepare_native_actor_mutation(&*self, original.id)
+            {
+                return Err(PlayerActivePairError::TaskCustodyUnavailable {
+                    entity_id: original.id,
+                });
+            }
+            if woken
+                && crate::rolling_boulder::current_style(entity)
+                    != Ok(crate::rolling_boulder::RollingBoulderStyle::Resting)
+            {
+                return Err(PlayerActivePairError::RollingBoulderPair {
+                    entity_id: original.id,
+                });
+            }
+        }
+        if rolling_boulder_wakes
+            .iter()
+            .any(|id| !snapshot_ids.contains(id))
+        {
+            return Err(PlayerActivePairError::TopologyChangedBeforeCommit);
+        }
 
         // Lethal packets staged by the planner run here, after every
         // fallible body/descriptor check and before any scheduler, descriptor
@@ -8666,6 +8714,19 @@ impl EntityManager {
         // capture path performs checked damage and death without moving them.
         // Only native Type17 owns such a dispatch; every other lethal family
         // preserves the previous fail-closed Core boundary exactly.
+        //
+        // 40C730 ran inside the pair walk, before 411760's damage: install
+        // rolling style0 on each woken live boulder first. The planned
+        // collision copied below already carries the same 40EA10 bits.
+        for &id in rolling_boulder_wakes {
+            let entity = self
+                .entities
+                .iter_mut()
+                .find(|entity| entity.id == id)
+                .expect("validated woken boulder disappeared before commit");
+            crate::rolling_boulder::wake_resting_boulder(entity)
+                .map_err(|_| PlayerActivePairError::RollingBoulderPair { entity_id: id })?;
+        }
         let mut death_dispatched_ids = Vec::with_capacity(candidate_death_dispatches.len());
         for &(entity_id, capped_pair_damage_raw, transition) in candidate_death_dispatches {
             let native_spider = self

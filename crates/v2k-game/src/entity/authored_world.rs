@@ -139,6 +139,39 @@ impl EntityManager {
         let terrain = resources.terrain.ok_or("missing constructor terrain")?;
         let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
         match entity.entity_type {
+            3 | 27 => {
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Rolling Boulder constructor surface")?;
+                // D4A0 bit40 lifts by the selected active model's header+08.
+                let RetailRuntimeValue::Known(slot) = entity.collision.active_model_slot() else {
+                    return Err("Rolling Boulder model slot".into());
+                };
+                let model_extent_raw = entity
+                    .model_slots
+                    .get(slot)
+                    .copied()
+                    .flatten()
+                    .and_then(|model| resources.model_extent_raw.and_then(|lookup| lookup(model)));
+                crate::rolling_boulder::publish_authored_rolling_boulder(
+                    crate::rolling_boulder::RollingBoulderAuthoredConstruction {
+                        entity: &mut entity,
+                        metadata,
+                        allocation,
+                        spawn,
+                        terrain,
+                        model_extent_raw,
+                        constructor_surface_bits,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Rolling Boulder: {error:?}"))?;
+            }
             61 => {
                 let surface = crate::entity_initializer::constructor_surface_bits_at_tick(
                     spawn.position_raw(),

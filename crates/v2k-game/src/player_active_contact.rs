@@ -123,6 +123,10 @@ pub enum PlayerActivePairError {
     Type17PairDamage {
         entity_id: u32,
     },
+    /// A rolling boulder's pair wake, custody or class18 split failed.
+    RollingBoulderPair {
+        entity_id: u32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -348,6 +352,8 @@ struct PlayerPairOracle<'a, P: CollisionModelPool + ?Sized> {
     descriptor_contact_plans: Vec<Type9DescriptorContactPlan>,
     type17_descriptor_plans: Vec<Type17DescriptorContactPlan>,
     type17_block: Option<PlayerActivePairError>,
+    /// Resting boulders whose style1 +18 (40C730) ran during the pass.
+    rolling_boulder_wakes: Vec<u32>,
     world_fx: &'a mut WorldFx,
 }
 
@@ -405,6 +411,45 @@ impl<P: CollisionModelPool + ?Sized> ActivePairOracle<()> for PlayerPairOracle<'
             return unresolved_behavior_callback();
         };
 
+        // Resting style1's +18 is 40C730: C6B0 reinstalls rolling style0 at
+        // once, so 40EA10's 50000 is visible to the response and damage.
+        if let RetailRuntimeValue::Known(Some(context)) = owner.behavior_context {
+            if matches!(owner.entity_type, 3 | 27)
+                && context.active_style().pair_contact_callback_policy()
+                    == PairContactCallbackPolicy::UnknownAddress(0x0040_C730)
+                && known_local(request.owner)
+                && known_local(request.opposite)
+            {
+                let mut body = request.owner.clone();
+                let RetailRuntimeValue::Known(state) =
+                    body.collision.state_flags_at_0x08.masked(u32::MAX)
+                else {
+                    return unresolved_behavior_callback();
+                };
+                body.collision.state_flags_at_0x08.overwrite(
+                    u32::MAX,
+                    crate::rolling_boulder::apply_style_install_state(
+                        state,
+                        crate::rolling_boulder::RollingBoulderStyle::Rolling,
+                    ),
+                );
+                self.rolling_boulder_wakes.push(owner.id);
+                let mut state_update = PairCallbackStateUpdate::default();
+                match request.side {
+                    crate::active_pair::PairCallbackSide::Subject => {
+                        state_update.subject = Some(body)
+                    }
+                    crate::active_pair::PairCallbackSide::Candidate => {
+                        state_update.candidate = Some(body)
+                    }
+                }
+                return PairBehaviorCallbackResult {
+                    outcome: PairBehaviorCallbackOutcome::Null,
+                    state_update,
+                    remaining_chain: PairRemainingChainOutcome::Preserved,
+                };
+            }
+        }
         // The local adapter does not own network transport or remote callback
         // state. Reject an actual authored hit before response or damage.
         let outcome = if !known_local(request.owner) || !known_local(request.opposite) {
@@ -688,7 +733,9 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         // adapter only visits candidates whose constructor/census pair fields
         // are closed. Retail still walks everyone; unknown actors stay out.
         .filter(|candidate| {
-            candidate_pair_identity_is_closed(candidate) || type17_player_pair_admitted(candidate)
+            candidate_pair_identity_is_closed(candidate)
+                || type17_player_pair_admitted(candidate)
+                || rolling_boulder_player_pair_admitted(candidate)
         })
     {
         candidates.push(active_pair_body_from_entity(candidate, model_pool));
@@ -716,6 +763,7 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         descriptor_contact_plans: Vec::new(),
         type17_descriptor_plans: Vec::new(),
         type17_block: None,
+        rolling_boulder_wakes: Vec::new(),
         world_fx,
     };
     let core = match resolve_active_pair_pass(subject, candidates, &mut oracle) {
@@ -803,7 +851,14 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         player_hull,
         subject_death_dispatch,
         &candidate_death_dispatches,
+        &oracle.rolling_boulder_wakes,
     )?;
+    // A woken boulder that survived the pass keeps its replaced rolling owner.
+    for &id in &oracle.rolling_boulder_wakes {
+        if let Ok(owner) = crate::rolling_boulder::RollingBoulderOwner::adopt(entities, id) {
+            scheduler.register_rolling_boulder(owner);
+        }
+    }
     if subject_death_dispatch.is_some() {
         // The hull terminal owns the player death state; the planned
         // pre-damage values must not resurrect it. Verify sync only.
@@ -1099,6 +1154,19 @@ fn constructor_pair_policy_for_unresolved_style(
         HIVE_ENTITY_TYPE => Some(PairContactCallbackPolicy::Hive),
         _ => None,
     }
+}
+
+/// Native class20 boulders pair through their D720/13F70 Q31 body basis: the
+/// rolling task turns that basis, so no authored pitch/roll policy applies.
+/// Their component, modifier and type-hit slots are the audited null words.
+fn rolling_boulder_player_pair_admitted(entity: &Entity) -> bool {
+    crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
+        && entity.collision.pair_callbacks
+            == crate::entity_collision_state::EntityPairCallbackRuntimeState::audited_local(
+                None,
+                RetailRuntimeValue::Unresolved,
+            )
+        && matches!(entity_pair_to_world(entity), RetailRuntimeValue::Known(_))
 }
 
 fn type17_player_pair_admitted(entity: &Entity) -> bool {

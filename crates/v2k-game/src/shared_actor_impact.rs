@@ -70,6 +70,7 @@ pub enum SharedActorImpactOutcome {
     Type10(crate::intro2_type10::impact::Intro2Type10ImpactOutcome),
     Type43(crate::native_type43::impact::Type43ImpactOutcome),
     Type38Family(crate::native_type38::impact::Type38ImpactOutcome),
+    RollingBoulder(crate::rolling_boulder::impact::RollingBoulderImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -191,6 +192,28 @@ pub fn apply_playing_actor_particle_hit(
                         player_hull: frame.player_hull,
                         extra_lives: frame.extra_lives,
                     },
+                },
+                impact,
+            ),
+        ));
+    }
+    // A lethal Type3 runs BAF0's radial, which needs the actual player hull.
+    if entity.rolling_boulder_runtime.is_some() {
+        use crate::rolling_boulder::impact::{
+            apply_rolling_boulder_particle_hit, RollingBoulderImpactFrame,
+        };
+        return Some(SharedActorImpactOutcome::RollingBoulder(
+            apply_rolling_boulder_particle_hit(
+                RollingBoulderImpactFrame {
+                    entities: frame.entities,
+                    resources: frame.resources,
+                    static_damage: frame.static_damage,
+                    notifications: frame.notifications,
+                    world_fx: frame.world_fx,
+                    scheduler: frame.scheduler,
+                    retail_tick: frame.retail_tick,
+                    player_hull: frame.player_hull,
+                    extra_lives: frame.extra_lives,
                 },
                 impact,
             ),

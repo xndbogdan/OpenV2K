@@ -77,6 +77,8 @@ pub enum NativeExplosionSourceProfile {
     Type43,
     /// Ordinary ground shooters: Type38 takes class1, Type129 class63.
     Type38Family(crate::native_type38::Type38Row),
+    /// Type3 Rolling Boulder; its alternate is class1. Type27 splits instead.
+    RollingBoulder,
 }
 
 impl NativeExplosionSourceProfile {
@@ -92,6 +94,7 @@ impl NativeExplosionSourceProfile {
             Self::Type16Carrier(row) => row.entity_type(),
             Self::Type43 => crate::native_type43::ENTITY_TYPE,
             Self::Type38Family(row) => row.entity_type(),
+            Self::RollingBoulder => 3,
         }
     }
 
@@ -142,6 +145,11 @@ impl NativeExplosionSourceProfile {
             Self::Type38Family(row) => {
                 crate::native_type38::authenticate_metadata(row, metadata).is_ok()
             }
+            Self::RollingBoulder => crate::rolling_boulder::authenticate_metadata(
+                crate::rolling_boulder::RollingBoulderProfile::Small,
+                metadata,
+            )
+            .is_ok(),
         }
     }
 
@@ -194,6 +202,8 @@ impl NativeExplosionSourceProfile {
                 style,
                 0x004c_7930 | 0x004c_7978 | 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8
             ),
+            // Both class20 styles have a null +2C.
+            Self::RollingBoulder => matches!(style, 0x004c_78a0 | 0x004c_78e8),
         }
     }
 
@@ -222,6 +232,9 @@ impl NativeExplosionSourceProfile {
             Self::Type43 => (10, [16, 16]),
             // Nonnull A takes 40BBB3.
             Self::Type38Family(_) => (10, [37, 37]),
+            // No A/B/N/G, no capability40, neither type49 nor 112..115:
+            // the 40BB9C default keeps count10 with class16.
+            Self::RollingBoulder => (10, [16, 16]),
         }
     }
 
@@ -231,6 +244,7 @@ impl NativeExplosionSourceProfile {
             | Self::Intro2Type13
             | Self::Type43
             | Self::Type38Family(crate::native_type38::Type38Row::Type38)
+            | Self::RollingBoulder
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
                 NativeExplosionPolicy::Class1
             }
@@ -267,6 +281,10 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::Type43)
     } else if let Some(row) = crate::native_type38::type38_row(entity) {
         Some(NativeExplosionSourceProfile::Type38Family(row))
+    } else if entity.entity_type == 3
+        && crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
+    {
+        Some(NativeExplosionSourceProfile::RollingBoulder)
     } else {
         crate::intro2_type16::type16_auto_pilot_row(entity)
             .map(NativeExplosionSourceProfile::Type16Carrier)
@@ -323,6 +341,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         }
         Some(NativeExplosionSourceProfile::Type38Family(_)) => {
             crate::native_type38::manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::RollingBoulder) => {
+            crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
         }
         None => false,
     }
@@ -523,6 +544,17 @@ pub fn begin_class49_standard_death(
         }
         if !manager.auto_pilot_power_up_constructor_ready(entity.position_raw(), terrain) {
             return Err(Block::Runtime("power-up constructor"));
+        }
+    }
+    if profile == NativeExplosionSourceProfile::RollingBoulder {
+        // The current style's own task graph, as the scheduler retains it.
+        crate::rolling_boulder::RollingBoulderOwner::adopt(manager, id)
+            .map_err(|_| Block::Graph)?;
+        let record = resources.global_entity_type(3).ok_or(Block::Metadata)?;
+        if *metadata
+            != crate::entity_collision_state::EntityTypeRuntimeMetadata::from_section12(record)
+        {
+            return Err(Block::Metadata);
         }
     }
     let program =

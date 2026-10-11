@@ -3648,6 +3648,7 @@ fn run_game(
                 specialized_actor_tasks.adopt_type28(&em);
                 specialized_actor_tasks.adopt_type76_family(&em);
                 specialized_actor_tasks.adopt_type30(&em);
+                specialized_actor_tasks.adopt_rolling_boulders(&em);
                 specialized_actor_tasks.adopt_type40(&em);
                 specialized_actor_tasks.adopt_type56(&em);
                 specialized_actor_tasks.adopt_type43(&em);

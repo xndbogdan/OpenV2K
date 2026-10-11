@@ -79,6 +79,11 @@ pub trait NativeGroundTaskCustody: crate::intro2_type17::capture::CaptureTaskCus
         &mut self,
         owner: crate::native_type56::Type56Owner,
     ) -> Result<(), &'static str>;
+    /// Type27's class18 Type3 child, published before the next launch draw.
+    fn register_split_rolling_boulder_child(
+        &mut self,
+        owner: crate::rolling_boulder::RollingBoulderOwner,
+    ) -> Result<(), &'static str>;
 }
 
 /// Concrete death dependencies for genuine native policies. Basic quiet/common
