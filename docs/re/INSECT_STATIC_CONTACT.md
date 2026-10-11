@@ -59,8 +59,14 @@ an emitter or rebuilds the incoming body matrix.
 | Intro2 Type94 |439| Generic crush; owned Follow/Search/Capture acquisition or pursuit has null style+1C |
 | Type53 |39| No generic crush; admitted style+1C is null |
 | Type122 |439| Generic crush; retains its own Capture relation and death owner |
+| Ordinary Type18 |431| Generic crush; Type122's capture and death; Furniture C890 reselects with rule8 |
+| Ordinary Type28 |439| As Type18; Run Away styles 4C7618/4C7660 admitted |
+| Ordinary Type76 |39| No generic crush; Furniture C890 reselects with rule8; class12 death |
+| Ordinary Type77 |439| Generic crush; as Type76, with Defecate 4C7E88 and class5 styles admitted |
 | Living Type13/10/57 |8| No generic crush; Search/Move/fallback style+1C is null |
 | Living Type15/87 | Authored initializer word | Own Search hook and null style+1C; actual alternate2 C470 death |
+| Ordinary Type43 |2003B| No generic crush; Search/Pursuit style+1C is null; class1 death |
+| Ordinary Type38/129 |39| No generic crush; Aimless/Search/Pursuit style+1C is null; class1/class63 death |
 
 Type10's common-axis descriptor contains0xC85; that descriptor word is not
 its collision policy. Constructor C8 is8, as for Type57/13. The adapter reads
@@ -84,7 +90,15 @@ shared terminal receipt. Its nonnull G allocation chooses ten class37
 scatter particles and BAC0 has no BD20 ring suffix. Surface, static and
 pair damage supply the full synchronous terminal frame; a genuine completed
 receipt can authenticate the retained same-walk null-hook suffix. Class1
-style4C7150 has zero solid/water/static/task hooks. Immediate static burn invokes shared427760's
+style4C7150 has zero solid/water/static/task hooks. The emitter-only
+[Type43](TYPE43_SHOOTER.md#contacts) takes the same class1 terminal: its Search
+style reverses `+C0`'s fixed-body 0x20000, so the living shooter enters the
+scan. With no A or G, its 02CA0 only reverses, times and retargets. The
+[Type38 and Type129](TYPE38_GROUND_SHOOTER.md#contacts) ground shooters run the
+ground host's walk (`resolve_type38_family_static_contact`) and take class1 or
+class63 there. Playing's walk lends its player to these terminal deaths
+(`resolve_insect_static_contact_with_playing` and the Type38-family walk),
+including Type128's BC90. Immediate static burn invokes shared427760's
 effect callback rather than only setting the burned bit.
 
 ## Surface policy and validation boundary
@@ -197,8 +211,10 @@ only the fixed post-dispatch images expose the supported separation.
 This fixture proves the connected path; it does not
 establish matched retail trajectories for the whole Intro.
 
-Type16 ordinary construction, attached Capture16/94 transport, ordinary G native
-construction and ordinary Type94 construction remain outside this admission. Pairs with unrelated building/actor families
+Ordinary-world Type16 and Type94 births now share this owner through their
+own 104B0 receipts ([Intro2 Type16](INTRO2_TYPE16.md),
+[Intro2 Type94](INTRO2_TYPE94.md)). Attached Capture16/94 transport and
+ordinary G native construction remain outside this admission. Pairs with unrelated building/actor families
 are outside the bounded Type66 extension; captor/58/gunner-hive pairs retain
 their existing owners. Unknown graphs, parked/executing prefixes, unowned
 static damage kinds and missing geometry fail closed. Existing Type10/57
@@ -206,10 +222,12 @@ Tumble callbacks retain their own Class11 terminal/radial behavior. These
 boundaries must not be called retail acceptance solely because another family
 passes.
 
-The preliminary broad visual-fixture search encountered unrelated
-model556's legacy collision program opcode144 at cell144/126. That catalog
-boundary remains explicit; it is not silently converted to a miss or used
-for the supported windmill fixture. The narrowed fixture was independently
+The preliminary broad visual-fixture search encountered model556's collision
+opcode `0x90` (144) at cell144/126. The sphere-query interpreter now owns it
+as `FUN_00469C20`'s upright cylinder
+([format](FORMAT_DOCUMENTATION.md)); world35's model658 uses the same
+primitive. It was never silently converted to a miss or used for the supported
+windmill fixture. The narrowed fixture was independently
 selected through the real model410 geometry and production dispatcher.
 
 The final natural Intro2 replay exposed a separate Type17/Type9 Capture

@@ -127,6 +127,7 @@ fn genuine_type40_null_j_kills_native_person_then_runs_both_components_and_separ
         &mut control_entities,
         child,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut control_tasks,
             world_fx: &mut control_fx,
             notifications: &mut control_notifications,

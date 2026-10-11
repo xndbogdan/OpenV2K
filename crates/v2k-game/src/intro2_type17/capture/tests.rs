@@ -103,6 +103,7 @@ pub(crate) fn fixture() -> Option<Fixture> {
         parent,
         child,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut scheduler,
             world_fx: &mut fx,
             notifications: &mut notifications,
@@ -156,6 +157,7 @@ fn direct_capture_death_runs_nested_and_current_outer_c620() {
         f.parent,
         CaptureRootCallback::Cleanup,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut expected_tasks,
             world_fx: &mut expected_fx,
             notifications: &mut expected_notifications,
@@ -189,6 +191,7 @@ fn direct_capture_death_runs_nested_and_current_outer_c620() {
         &mut f.manager,
         f.parent,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut f.scheduler,
             world_fx: &mut f.fx,
             notifications: &mut f.notifications,
@@ -228,6 +231,7 @@ fn release_of_captured_corpse_keeps_its_exact_class14_task() {
         &mut f.manager,
         f.child,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut f.scheduler,
             world_fx: &mut f.fx,
             notifications: &mut f.notifications,
@@ -246,6 +250,7 @@ fn release_of_captured_corpse_keeps_its_exact_class14_task() {
         &mut f.manager,
         f.parent,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut f.scheduler,
             world_fx: &mut f.fx,
             notifications: &mut f.notifications,
@@ -353,6 +358,7 @@ fn foreign_capture_row_lease_blocks_before_child_or_rng_mutation() {
         f.parent,
         CaptureRootCallback::Cleanup,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut f.scheduler,
             world_fx: &mut f.fx,
             notifications: &mut f.notifications,
@@ -406,6 +412,7 @@ fn cf90_releases_then_uses_its_own_rng_branch_for_child_standard_death() {
             f.parent,
             CaptureRootCallback::ReleaseOrKill,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut f.scheduler,
                 world_fx: &mut f.fx,
                 notifications: &mut f.notifications,
@@ -456,6 +463,7 @@ fn d0b0_releases_and_defers_without_child_standard_death() {
         f.parent,
         destination,
         &mut CaptureContext {
+            resources: None,
             tasks: &mut f.scheduler,
             world_fx: &mut f.fx,
             notifications: &mut f.notifications,
@@ -501,6 +509,7 @@ fn compacted_captured_corpse_releases_on_its_next_retained_class14_visit() {
             &mut f.manager,
             f.child,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut f.scheduler,
                 world_fx: &mut f.fx,
                 notifications: &mut f.notifications,

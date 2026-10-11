@@ -192,7 +192,7 @@ fn all_four_living_styles_enter_class2_but_fabricated_class2_has_no_terminal_rec
 }
 
 #[v2k_test_support::retail_test]
-fn type124_retains_its_unsupported_class63_without_death_mutation() {
+fn type124_never_enters_the_class2_quiet_terminal() {
     let (mut manager, mut fx, scheduler, _) = fixture_with_owner();
     let id = manager
         .iter_all()

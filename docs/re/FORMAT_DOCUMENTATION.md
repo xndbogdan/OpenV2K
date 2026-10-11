@@ -424,7 +424,7 @@ reconstructed from the visible `MaterializedModel` triangles.
 | `0x88` | none | terminate; a final hit needs at least one raw unit of penetration |
 | `0x8E` | align4: `u32 radius, i16 slot` | integer sphere centered on a resolved model slot; distance is `floor(sqrt(dx²+dy²+dz²))`, and tangent is sufficient for a gate |
 | `0x8F` | align4: `u32 hx,hy,hz, i16 slot` | strict expanded AABB; center is transformed, extents stay query-axis aligned |
-| `0x90` | align4: `u32 radius, u32 y_extent, i16 slot` | vertical axial primitive |
+| `0x90` | align4: `u32 radius, u32 height, i16 slot` | upright cylinder rising `height` from the slot (`FUN_00469C20`, sphere-table `+4`). Its vertical span is strict on both ends and uses the cylinder radius, not the query's: `slot.y < q.y + radius`, `q.y - radius < slot.y + height`. It separates only horizontally: the normal is the XZ Q12 unit from the `i16` integer root, the penetration `radius + r - length`, and a zero length gives `(1,0,0)` |
 | `0x8C` | align2: signed group span | begin convex plane group; span is relative to aligned payload |
 | `0x8A` | align2: three `i16` slots | sphere/plane half-space; rejection branches to group end |
 | `0x89` | align2: four `i16` words | same plane using first three slots; fourth word unused |

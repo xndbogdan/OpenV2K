@@ -3,6 +3,7 @@
 //! A ground-induced Type10/57 death can change the subsequent water hook to
 //! Tumble C750; that synchronous terminal callback retains its own adapter.
 
+use crate::native_actor_capture::pair::PlayingPlayerContact;
 use crate::{
     entity_collision_state::{active_model_slot_from_state_flags, RetailRuntimeValue},
     flying_surface_contact::{
@@ -22,6 +23,9 @@ use crate::{
 pub enum NativeFlyingSurfaceDeathBlock {
     Class1(Box<crate::class49_terminal::Class49TerminalBlock>),
     RuntimeClass1ContextUnavailable,
+    /// Class63 carriers finish BAF0/BC90 through the lent radial owner.
+    AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
+    RuntimeAutoPilotContextUnavailable,
     Type10(Intro2Type10DeathBlock),
     Type57(Intro2Type57DeathBlock),
     Type10Water(crate::intro2_type10::contact::Intro2Type10ContactBlock),
@@ -53,7 +57,7 @@ pub(crate) fn publish_native_flying_standard_death(
         .ok_or(NativeFlyingSurfaceDeathBlock::Runtime("death allocation"))?
         .entity_type;
     let publication = match entity_type {
-        10 => {
+        10 | 5 => {
             crate::intro2_type10::death::publish_intro2_type10_standard_death(manager, id, world_fx)
                 .map(|owner| owner.map(NativeFlyingSurfaceDeathPublication::Type10))
                 .map_err(NativeFlyingSurfaceDeathBlock::Type10)?
@@ -64,6 +68,7 @@ pub(crate) fn publish_native_flying_standard_death(
         15 | 87 => publish_native_flyer_quiet_death(manager, id, world_fx)?
             .map(NativeFlyingSurfaceDeathPublication::QuietDeath),
         13 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
+        80 | 126 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeAutoPilotContextUnavailable),
         _ => return Err(NativeFlyingSurfaceDeathBlock::Runtime("death type")),
     };
     Ok(LiveActorDeathResult {
@@ -80,17 +85,27 @@ pub(crate) fn run_native_flying_standard_death(
     id: u32,
 ) -> Result<LiveActorDeathResult<NativeFlyingSurfaceDeathPublication>, NativeFlyingSurfaceDeathBlock>
 {
-    if frame
-        .entities
-        .iter_all()
-        .any(|entity| entity.id == id && entity.entity_type == 13)
+    let auto_pilot = frame.entities.iter_all().any(|entity| {
+        entity.id == id && crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
+    });
+    if auto_pilot
+        || frame
+            .entities
+            .iter_all()
+            .any(|entity| entity.id == id && entity.entity_type == 13)
     {
         crate::class49_terminal::run_class49_standard_death(frame, id)
             .map(|result| LiveActorDeathResult {
                 returned_nonzero: result.returned_nonzero,
                 publication: None,
             })
-            .map_err(|error| NativeFlyingSurfaceDeathBlock::Class1(Box::new(error)))
+            .map_err(|error| {
+                if auto_pilot {
+                    NativeFlyingSurfaceDeathBlock::AutoPilot(Box::new(error))
+                } else {
+                    NativeFlyingSurfaceDeathBlock::Class1(Box::new(error))
+                }
+            })
     } else {
         publish_native_flying_standard_death(frame.entities, id, frame.world_fx)
     }
@@ -228,8 +243,17 @@ pub fn resolve_native_flying_surface_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeFlyingSurfaceContactOutcome {
+    resolve_native_flying_surface_contact_with_playing(frame, id, None)
+}
+
+/// Playing's late walk lends its player to a Class1 contact death's radial.
+pub fn resolve_native_flying_surface_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeFlyingSurfaceContactOutcome {
     let mut committed = false;
-    match resolve(frame, id, &mut committed) {
+    match resolve(frame, id, playing, &mut committed) {
         Ok(outcome) => outcome,
         Err(reason) => {
             if committed {
@@ -248,6 +272,7 @@ pub fn resolve_native_flying_surface_contact(
 fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<NativeFlyingSurfaceContactOutcome, NativeFlyingSurfaceContactBlock> {
     use FlyingSurfaceContactBlock as Block;
@@ -256,7 +281,7 @@ fn resolve(
         .iter_all()
         .find(|e| e.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if !entity.active || !matches!(entity.entity_type, 13 | 10 | 57) {
+    if !entity.active || !matches!(entity.entity_type, 13 | 10 | 5 | 80 | 126 | 57) {
         return Ok(FlyingSurfaceContactOutcome::Ineligible);
     }
     let entity_type = entity.entity_type;
@@ -292,10 +317,14 @@ fn resolve(
         // The existing Tumble resolver owns its C750 solid/water/static hooks.
         return Ok(FlyingSurfaceContactOutcome::Ineligible);
     }
-    if !matches!(
+    // 11AD0 has no dying test. A finished BAC0/BC90 corpse keeps class1's or
+    // class63's style, whose solid/water hooks are null, until 14990.
+    let finished = crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id);
+    let null_hooks = matches!(
         style,
         0x004c7a50 | 0x004c7a98 | 0x004c7ae0 | 0x004c7930 | 0x004c7978 | 0x004c74f8
-    ) {
+    ) || (finished && matches!(style, 0x004c7150 | 0x004c7198));
+    if !null_hooks {
         return Err(Block::Runtime("unaudited solid/water style hooks"));
     }
     let metadata = frame
@@ -303,8 +332,10 @@ fn resolve(
         .type_runtime_metadata(entity_type)
         .ok_or(Block::Runtime("metadata"))?;
     let (allocation, pending, completed) = match entity_type {
-        10 => {
-            crate::intro2_type10::authenticate_metadata(metadata)
+        10 | 5 | 80 | 126 => {
+            let profile = crate::intro2_type10::Type10Profile::from_entity_type(entity_type)
+                .expect("matched Type10-family row");
+            crate::intro2_type10::authenticate_metadata(profile, metadata)
                 .map_err(|_| Block::Runtime("Type10 metadata"))?;
             (
                 crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
@@ -337,7 +368,7 @@ fn resolve(
     if !allocation {
         return Err(Block::Runtime("native surface allocation"));
     }
-    if pending || !completed {
+    if pending || !(completed || finished) {
         return Err(Block::Runtime("current completed contact owner"));
     }
     let record = frame
@@ -352,10 +383,11 @@ fn resolve(
         model_id,
         solid_sound,
         water_sound,
+        playing,
         committed,
         |death_frame| run_native_flying_standard_death(death_frame, id),
         register_native_flying_death,
-        |frame, id, committed| {
+        |frame, id, playing, committed| {
             let entity = frame.entities.iter_all().find(|e| e.id == id).ok_or(
                 NativeFlyingSurfaceDeathBlock::Runtime("water callback allocation"),
             )?;
@@ -367,8 +399,9 @@ fn resolve(
             if context.active_style().style_address() != 0x004c7f60 {
                 return Ok(());
             }
+            let mut playing = playing;
             match entity_type {
-                10 => {
+                10 | 5 | 80 | 126 => {
                     let owner = Intro2Type10TumbleOwner::adopt(frame.entities, id)
                         .map_err(NativeFlyingSurfaceDeathBlock::Type10)?;
                     crate::intro2_type10::contact::terminal_callback(
@@ -377,10 +410,15 @@ fn resolve(
                         owner,
                         Intro2Type10TumbleContact::Water,
                         &mut Default::default(),
+                        &mut playing,
                         committed,
                     )
                     .map_err(NativeFlyingSurfaceDeathBlock::Type10Water)
                 }
+                // Intro2-only Type57's C750 radial owns only its cinematic walk.
+                57 if playing.is_some() => Err(NativeFlyingSurfaceDeathBlock::Runtime(
+                    "Playing Type57 Tumble water radial",
+                )),
                 57 => {
                     let owner = Intro2Type57TumbleOwner::adopt(frame.entities, id)
                         .map_err(NativeFlyingSurfaceDeathBlock::Type57)?;

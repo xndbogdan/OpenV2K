@@ -23,7 +23,7 @@ use crate::common_mover::type9_tail::{
     plan_common_master_motion, COMMON_MASTER_MOTION_REQUIRED_STATE_MASK,
 };
 use crate::entity::{
-    apply_type13_common_environment_raw, commit_common_master_motion, Entity, EntityManager,
+    apply_effective8_flyer_environment, commit_common_master_motion, Entity, EntityManager,
 };
 use crate::entity_behavior::{BehaviorContextRuntime, BehaviorSelection};
 use crate::entity_collision_state::{
@@ -40,6 +40,7 @@ use crate::sub_g_runtime::SubG06070RuntimeState;
 use crate::type13_common_mover::GklCommonMoverRuntime;
 use crate::world_fx::WorldFx;
 use v2k_formats::collision::CommonAxisDescriptor;
+use v2k_formats::terrain::TerrainGrid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Intro2Type13WorldBlock {
@@ -51,7 +52,8 @@ pub enum Intro2Type13WorldBlock {
     UnsupportedRelation,
     UnsupportedSoundAttachment,
     UnsupportedEffectiveFlags,
-    UnsupportedWindMode { actual: u32 },
+    /// A nonzero wind mode reads terrain heights and the post-F70 basis.
+    WindFrameUnavailable,
     AnimationOffsetUnavailable,
     SurfaceStateUnavailable,
     SurfaceTimerUnavailable,
@@ -129,7 +131,24 @@ impl Intro2Type13WorldOwner {
         self.allocation
     }
     pub fn adopt(manager: &EntityManager) -> Result<Self, Intro2Type13SchedulerAdoptionError> {
-        let task_owner = Intro2Type13SchedulerOwner::adopt(manager)?;
+        Self::with_task_owner(manager, Intro2Type13SchedulerOwner::adopt(manager)?)
+    }
+
+    /// Adopt an authenticated allocation by id (Intro2 spawn0 or ordinary).
+    pub fn adopt_entity(
+        manager: &EntityManager,
+        entity_id: u32,
+    ) -> Result<Self, Intro2Type13SchedulerAdoptionError> {
+        Self::with_task_owner(
+            manager,
+            Intro2Type13SchedulerOwner::adopt_entity(manager, entity_id)?,
+        )
+    }
+
+    fn with_task_owner(
+        manager: &EntityManager,
+        task_owner: Intro2Type13SchedulerOwner,
+    ) -> Result<Self, Intro2Type13SchedulerAdoptionError> {
         let allocation = manager
             .main_base_abort_actor_observation(task_owner.entity_id())
             .ok_or(Intro2Type13SchedulerAdoptionError::EntityUnavailable)?
@@ -163,7 +182,7 @@ impl Intro2Type13WorldOwner {
         {
             return false;
         }
-        Intro2Type13SchedulerOwner::adopt(manager).is_ok_and(|adopted| {
+        Intro2Type13SchedulerOwner::adopt_entity(manager, self.entity_id()).is_ok_and(|adopted| {
             adopted.entity_id() == self.entity_id() && adopted.stage == self.task_owner.stage
         })
     }
@@ -371,7 +390,7 @@ fn master_motion_bits(entity: &Entity) -> Result<u32, Intro2Type13WorldBlock> {
     }
 }
 
-fn preflight_suffix(entity: &Entity, wind_mode: u32) -> Result<(), Intro2Type13WorldBlock> {
+fn preflight_suffix(entity: &Entity) -> Result<(), Intro2Type13WorldBlock> {
     if entity.attached_to.is_some()
         || entity.collision.recent_relation_id_at_0x60 != RetailRuntimeValue::Known(None)
     {
@@ -389,9 +408,6 @@ fn preflight_suffix(entity: &Entity, wind_mode: u32) -> Result<(), Intro2Type13W
         .map_err(|_| Intro2Type13WorldBlock::UnsupportedEffectiveFlags)?;
     if policy.effective_flags != 8 {
         return Err(Intro2Type13WorldBlock::UnsupportedEffectiveFlags);
-    }
-    if wind_mode != 0 {
-        return Err(Intro2Type13WorldBlock::UnsupportedWindMode { actual: wind_mode });
     }
     let RetailRuntimeValue::Known(surface_disabled) = entity
         .collision
@@ -413,28 +429,24 @@ fn commit_suffix(
     manager: &mut EntityManager,
     entity_id: u32,
     frame: WorldCallbackFrame,
+    terrain: Option<&TerrainGrid>,
 ) -> Result<(), Intro2Type13WorldBlock> {
     preflight_metadata(
         manager
             .type_runtime_metadata(TYPE13_ENTITY_TYPE)
             .ok_or(Intro2Type13WorldBlock::MetadataUnavailable)?,
     )?;
-    let (wind_mode, drag_strength) = manager.intro2_type13_environment();
+    let physics = manager.common_environment_physics();
     let entity = manager
         .intro2_type13_entity_mut(entity_id)
         .expect("the retained task owner has an authenticated live entity");
     // E100 rereads current style/C8 after A800. This is independent of the
     // basis policy that DCA0/E870 latched before entering the tasks.
-    preflight_suffix(entity, wind_mode)?;
-    let mut velocity = entity.velocity_raw();
-    apply_type13_common_environment_raw(
-        &mut velocity,
-        frame.elapsed_micros,
-        entity.mass_raw,
-        wind_mode,
-        drag_strength,
-    );
-    entity.set_velocity_raw(velocity);
+    preflight_suffix(entity)?;
+    // Effective 8 keeps drag bit8: E100 calls EC60 with the current wind
+    // after gravity, reading the basis F70 published after the tasks.
+    apply_effective8_flyer_environment(entity, physics, terrain, frame.elapsed_micros)
+        .map_err(|_| Intro2Type13WorldBlock::WindFrameUnavailable)?;
     // Type 13 authors +72/+73/+74 = 0/0/0. E370 therefore takes its common
     // saturating timer decay without terrain, bubbles or lifecycle callbacks.
     if entity
@@ -522,7 +534,12 @@ pub fn tick_intro2_type13_world_owner_with_random(
                 };
             }
             PendingWorldPhase::Suffix => {
-                let result = commit_suffix(manager, entity_id, pending.frame);
+                let result = commit_suffix(
+                    manager,
+                    entity_id,
+                    pending.frame,
+                    frame.map(|frame| frame.terrain),
+                );
                 owner.pending = Some(pending);
                 return match result {
                     Ok(()) => {
@@ -596,7 +613,7 @@ pub fn tick_intro2_type13_world_owner_with_random(
             if let Err(reason) = preflight_metadata(metadata) {
                 return blocked(owner, reason);
             }
-            if let Err(reason) = preflight_suffix(entity, manager.intro2_type13_environment().0) {
+            if let Err(reason) = preflight_suffix(entity) {
                 return blocked(owner, reason);
             }
         }
@@ -685,7 +702,8 @@ pub fn tick_intro2_type13_world_owner_with_random(
     };
     owner.task_owner = task_owner;
     if completed {
-        if let Err(reason) = commit_suffix(manager, entity_id, callback_frame) {
+        let terrain = frame.map(|frame| frame.terrain);
+        if let Err(reason) = commit_suffix(manager, entity_id, callback_frame, terrain) {
             retain_visit(
                 manager,
                 &mut owner,

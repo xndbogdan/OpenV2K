@@ -1,4 +1,5 @@
 use super::*;
+use crate::intro2_type10::intro2_type10_allocation_authenticates;
 use crate::{
     actor_task_dispatcher::ActorTaskRuntime,
     actor_task_owner::ActorTaskSlot,

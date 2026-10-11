@@ -24,32 +24,34 @@ use crate::{
 };
 
 pub(crate) fn authenticate_metadata(
+    profile: Type10Profile,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> Result<(), Intro2Type10Error> {
     let Some(initializer) = &metadata.initializer else {
         return Err(Intro2Type10Error::Metadata);
     };
-    if metadata.model_slots != [MODEL as u16; 4]
+    if metadata.model_slots != [profile.model() as u16; 4]
         || metadata.mass_raw != 100
         || metadata.capability_flags != 8
         || metadata.initial_health_raw != Some(32_000)
         || metadata.damage_profile
             != Some(DamageProfile {
-                thresholds_raw: [0, 9000, 2200, 0, 200, 0, 0],
+                thresholds_raw: profile.damage_thresholds_raw(),
                 multipliers_q8: [0, 256, 256, 0, 750, 512, 0],
             })
         || metadata.common_mover_topology != RetailRuntimeValue::Known(TOPOLOGY)
         || metadata.common_mover_gkl_payloads
             != RetailRuntimeValue::Known(CommonMoverGklPayloads {
-                sub_g: Some(SUB_G),
+                sub_g: Some(*profile.sub_g()),
                 sub_k: Some(SUB_K),
                 sub_l: Some(SUB_L),
             })
         || metadata.sub_a_propulsion_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_b_lateral_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_c_lift_descriptor != RetailRuntimeValue::Known(None)
-        || metadata.sub_d_steering_descriptor != RetailRuntimeValue::Known(Some(SUB_D))
-        || metadata.projectile_emitter_descriptor != RetailRuntimeValue::Known(Some(EMITTER))
+        || metadata.sub_d_steering_descriptor != RetailRuntimeValue::Known(Some(profile.sub_d()))
+        || metadata.projectile_emitter_descriptor
+            != RetailRuntimeValue::Known(Some(profile.emitter()))
         || metadata.actor_animation_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_h_external_frame_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_j_attachment_descriptor != RetailRuntimeValue::Known(None)
@@ -67,10 +69,10 @@ pub(crate) fn authenticate_metadata(
                 && profile.surface_lifetime_ms == 0
                 && profile.low_health_effect_words == [0, 0, 0])
         || initializer.initializer_state_flags_raw != 8
-        || initializer.common_axis_descriptor != AXIS
+        || initializer.common_axis_descriptor != profile.axis()
         || initializer.behavior_choices.as_ref() != INITIAL_CHOICES
         || initializer.behavior_rule_ref != 1
-        || initializer.alternate_behavior_class_ref != 11
+        || initializer.alternate_behavior_class_ref != profile.alternate_behavior_class()
     {
         return Err(Intro2Type10Error::Metadata);
     }
@@ -96,7 +98,106 @@ pub(crate) fn publish_intro2_type10(
     {
         return Err(Intro2Type10Error::Identity);
     }
-    authenticate_metadata(metadata)?;
+    let profile = Type10Profile::Type10;
+    authenticate_metadata(profile, metadata)?;
+    authenticate_birth_storage(profile, entity)?;
+    publish_birth(
+        profile,
+        entity,
+        spawn_index,
+        Type9SubDRuntime::from_constructor(),
+        // Source203D0 increments once for each earlier successful D allocation:
+        // the normal Intro2 authored prefix supplies own seeds22/23. Flags0
+        // never read the allocator's unwritten origin, so no capture is borrowed.
+        Type9SubDFrameOwner::pending_constructor_origin(seed),
+        None,
+        next_random,
+    )
+}
+
+/// Ordinary 104B0 publication of one authored Type10-family row.
+pub(crate) struct Type10AuthoredConstruction<'a> {
+    pub entity: &'a mut Entity,
+    pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    pub metadata: &'a EntityTypeRuntimeMetadata,
+    pub spawn: &'a v2k_formats::levels::EntitySpawn,
+    pub constructor_surface_bits: u32,
+    pub sub_d: crate::common_mover::sub_d::NativeSubDConstruction,
+}
+
+/// Ordinary births run the same 09A80/AC60/B6C0 transaction as Intro2's
+/// dragons; the process owns the Sub-D seed and the manager the receipt.
+pub(crate) fn publish_authored_type10_family(
+    request: Type10AuthoredConstruction<'_>,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<Intro2Type10Publication, Intro2Type10Error> {
+    let Type10AuthoredConstruction {
+        entity,
+        allocation,
+        metadata,
+        spawn,
+        constructor_surface_bits,
+        sub_d,
+    } = request;
+    let profile =
+        Type10Profile::from_entity_type(spawn.entity_type).ok_or(Intro2Type10Error::Identity)?;
+    let model = profile.model();
+    if !entity.active
+        || entity.entity_type != profile.entity_type()
+        || entity.id != allocation.entity_id
+        || entity.authored_spawn_index != Some(spawn.index)
+        || entity.model_slots != [Some(model); 4]
+        || entity.model_index != Some(model)
+        || spawn
+            .model_overrides
+            .iter()
+            .any(|&slot| slot != 0 && slot as usize != model)
+        || entity.position_raw() != spawn.position_raw()
+        || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
+        || spawn.has_animation
+        || spawn.animation.is_some()
+        || spawn.has_config
+        || spawn.config.is_some()
+    {
+        return Err(Intro2Type10Error::Identity);
+    }
+    authenticate_metadata(profile, metadata)?;
+    authenticate_birth_storage(profile, entity)?;
+    // Flags-zero Sub-D never queries its cache; the process seed is retained.
+    if sub_d.descriptor != profile.sub_d()
+        || sub_d.runtime != Type9SubDRuntime::from_constructor()
+        || sub_d.frame_owner.classifier_cache().stagger_counter() != sub_d.seed
+        || constructor_surface_bits & !crate::entity_collision_state::SURFACE_STATE_MASK != 0
+    {
+        return Err(Intro2Type10Error::ComponentStorage);
+    }
+    // 104B0 classifies the authored surface at this tick; D4A0 has run.
+    entity.collision.state_flags_at_0x08.overwrite(
+        crate::entity_initializer::CONSTRUCTOR_SURFACE_STATE_MASK,
+        constructor_surface_bits,
+    );
+    // Common type-vtable+30 and 104B0's initial +44 modifier are null.
+    entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
+    entity
+        .collision
+        .pair_callbacks
+        .damage_modifier_identity_context_empty = RetailRuntimeValue::Known(true);
+    entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
+    publish_birth(
+        profile,
+        entity,
+        spawn.index,
+        sub_d.runtime,
+        sub_d.frame_owner,
+        Some(allocation),
+        next_random,
+    )
+}
+
+fn authenticate_birth_storage(
+    profile: Type10Profile,
+    entity: &Entity,
+) -> Result<(), Intro2Type10Error> {
     if entity.intro2_type10_runtime.is_some()
         || entity.current_behavior_context != RetailRuntimeValue::Unresolved
         || ActorTaskSlot::IN_RETAIL_TICK_ORDER
@@ -109,12 +210,13 @@ pub(crate) fn publish_intro2_type10(
         choice_index: 0,
         program: behavior_program(7).ok_or(Intro2Type10Error::Selection)?,
     };
+    let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     if entity.initial_behavior != RetailRuntimeValue::Known(Some(expected))
-        || entity.actor_common_axis_descriptor != RetailRuntimeValue::Known(AXIS)
+        || entity.actor_common_axis_descriptor != RetailRuntimeValue::Known(profile.axis())
         || entity.sub_g_06070_runtime
             != RetailRuntimeValue::Known(Some(SubG06070RuntimeState::pending()))
         || entity.physical_body_basis_q31
-            != RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(0xc000u16 as i16, 0, 0))
+            != RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(heading, pitch, roll))
         || entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(8)
         || entity.collision.health_raw != RetailRuntimeValue::Known(32_000)
         || entity.collision.pre_health_damage_buffer_raw != RetailRuntimeValue::Known(0)
@@ -122,25 +224,38 @@ pub(crate) fn publish_intro2_type10(
     {
         return Err(Intro2Type10Error::ComponentStorage);
     }
+    Ok(())
+}
 
+#[allow(clippy::too_many_arguments)]
+fn publish_birth(
+    profile: Type10Profile,
+    entity: &mut Entity,
+    spawn_index: usize,
+    sub_d_runtime: Type9SubDRuntime,
+    sub_d_frame_owner: Type9SubDFrameOwner,
+    ordinary_allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<Intro2Type10Publication, Intro2Type10Error> {
     // 09A80: zero animation bank, G1B8C0 (one word), D203D0, K24450,
-    // L1BB80, axis235A0, then E24E30 (zero allocation; no RNG).
+    // L1BB80 (both zero their allocations), axis235A0, then E24E30 (zero
+    // allocation; no RNG).
     entity.sub_g_06070_runtime = RetailRuntimeValue::Known(Some(
-        SubG06070RuntimeState::from_1b8c0_constructor(&SUB_G, next_random() as u16),
+        SubG06070RuntimeState::from_1b8c0_constructor(profile.sub_g(), next_random() as u16),
     ));
     entity.intro2_type10_runtime = Some(Intro2Type10Runtime {
         entity_id: entity.id,
         spawn_index,
-        sub_d_runtime: Type9SubDRuntime::from_constructor(),
-        // Source203D0 increments once for each earlier successful D allocation:
-        // the normal Intro2 authored prefix supplies own seeds22/23. Flags0
-        // never read the allocator's unwritten origin, so no capture is borrowed.
-        sub_d_frame_owner: Type9SubDFrameOwner::pending_constructor_origin(seed),
+        profile,
+        ordinary_allocation,
+        sub_d_runtime,
+        sub_d_frame_owner,
+        // 24E30 copies the row descriptor's method and sound (Type126: 82).
         sub_e_runtime: GenericEmitterRuntime {
             joint_bindings: [None; 2],
-            projectile_method: 10,
+            projectile_method: profile.emitter().projectile_method,
             emitter_selector: 0,
-            sound_id: 81,
+            sound_id: u32::from(profile.emitter().sound_id),
             direct_mode: 0,
             remaining_time_raw: 0,
             manual_step_raw: 0,
@@ -162,7 +277,7 @@ pub(crate) fn publish_intro2_type10(
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(Intro2Type10Error::Selection)?;
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
-    let initialized = publish_acquiring(entity, selection, context, next_random);
+    let initialized = publish_acquiring(profile, entity, selection, context, next_random);
     Ok(Intro2Type10Publication {
         selection,
         selector_word,
@@ -195,10 +310,8 @@ pub(super) fn reselect_acquiring(
     metadata: &EntityTypeRuntimeMetadata,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<Intro2Type10Publication, Intro2Type10Error> {
-    if !intro2_type10_allocation_authenticates(entity) {
-        return Err(Intro2Type10Error::Identity);
-    }
-    authenticate_metadata(metadata)?;
+    let profile = type10_profile(entity).ok_or(Intro2Type10Error::Identity)?;
+    authenticate_metadata(profile, metadata)?;
     if entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT) != RetailRuntimeValue::Known(0)
     {
         return Err(Intro2Type10Error::AlternateBehavior);
@@ -226,7 +339,7 @@ pub(super) fn reselect_acquiring(
         )
         .ok_or(Intro2Type10Error::Selection)?;
     let (selection, selector_word) = select(next_random)?;
-    let initialized = publish_acquiring(entity, selection, context, next_random);
+    let initialized = publish_acquiring(profile, entity, selection, context, next_random);
     Ok(Intro2Type10Publication {
         selection,
         selector_word,
@@ -235,6 +348,7 @@ pub(super) fn reselect_acquiring(
 }
 
 fn publish_acquiring(
+    profile: Type10Profile,
     entity: &mut Entity,
     selection: BehaviorSelection,
     context: BehaviorContextRuntime,
@@ -250,7 +364,7 @@ fn publish_acquiring(
         unreachable!("native Type10 initializer preflight retains its axis allocation")
     };
     // 40B707 copies only live axis+4. A changed strict radius survives C690.
-    axis.raw_word_at_0x04 = AXIS.raw_word_at_0x04;
+    axis.raw_word_at_0x04 = profile.axis().raw_word_at_0x04;
     entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(axis);
     let position = entity.position_raw();
     let Entity {
@@ -269,7 +383,10 @@ fn publish_acquiring(
             // Each successful6030 enters06070: G1B970(0), G1B940(0)
             // draws one word, G1B980(0), then24380(0). E/K/L untouched.
             let word = next_random() as u16;
-            sub_g.apply_shared_06070_sub_g_branch(700 + i32::from(word >> 8), 0);
+            sub_g.apply_shared_06070_sub_g_branch(
+                profile.sub_g_randomized_target_base() + i32::from(word >> 8),
+                0,
+            );
             Ok::<_, Intro2Type10Error>(prepared)
         },
     );
