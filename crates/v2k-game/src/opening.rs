@@ -40,7 +40,8 @@ pub enum Intro2Backdrop {
 /// Select the retained world montage or its final black title card.
 ///
 /// The accepted full-frame trace resumes black `COLORFILL` for the final `#`
-/// page. Once selected, black remains active for any transition-overrun frame;
+/// page; the full-frame sprite sequence that `503C0` starts at the same tick
+/// fades over it from grey. Once selected, black remains active for any transition-overrun frame;
 /// the surrounding Intro2 state owns the subsequent exit-latch handoff.
 pub const fn intro2_backdrop(retail_tick: u32) -> Intro2Backdrop {
     if retail_tick >= INTRO2_BLACK_CARD_START_TICK {
@@ -576,9 +577,34 @@ pub fn active_captions(retail_tick: u32) -> impl Iterator<Item = &'static StoryC
     })
 }
 
+/// `DAT_004D145C`, the cursor `FUN_00452790` appends to a caption.
+pub const STORY_CAPTION_CURSOR: &str = " _";
+
+/// Intro2's caller passes cursor flag 1 to `FUN_00452790`, which appends
+/// [`STORY_CAPTION_CURSOR`] while `g_default_param / 10` is odd. It blinks
+/// on the 50-Hz clock alone: a fully typed line keeps blinking until its
+/// record ends.
+pub const fn story_caption_cursor_visible(retail_tick: u32) -> bool {
+    (retail_tick / 10) & 1 != 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn caption_cursor_blinks_on_the_clock_alone() {
+        // The faststart04 recording's first final-card frame, tick 4003,
+        // shows "Yo" without a cursor.
+        assert!(!story_caption_cursor_visible(4_003));
+        assert!(story_caption_cursor_visible(10));
+        assert!(story_caption_cursor_visible(19));
+        assert!(!story_caption_cursor_visible(20));
+        // A finished line still blinks.
+        let caption = active_captions(4_290).last().unwrap();
+        assert_eq!(caption.revealed_text(4_290), (caption.text, false));
+        assert!(story_caption_cursor_visible(4_290));
+    }
 
     // Test driver for consecutive source callbacks without intervening world
     // contacts. Production resolves the subject between these two phases.
