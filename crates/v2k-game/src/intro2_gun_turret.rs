@@ -123,6 +123,17 @@ pub enum Intro2GunTurretError {
     AlternateBehavior,
 }
 
+/// An ordinary-world 104B0 birth, as opposed to Intro2's cinematic92/102/115
+/// identities or a campaign E/L reconstruction.
+pub(crate) fn is_native_ordinary_gun_turret(entity: &Entity) -> bool {
+    entity.intro2_gun_turret_runtime.is_some_and(|runtime| {
+        matches!(
+            runtime.origin,
+            GunTurretConstructionOrigin::NativeOrdinary(_)
+        )
+    }) && intro2_gun_turret_allocation_authenticates(entity)
+}
+
 pub(crate) fn intro2_gun_turret_allocation_authenticates(entity: &Entity) -> bool {
     entity.intro2_gun_turret_runtime.is_some_and(|runtime| {
         entity.active
@@ -175,6 +186,8 @@ mod flower_tests;
 
 #[cfg(test)]
 pub(crate) mod authored_tests;
+#[cfg(test)]
+mod ordinary_class29_tests;
 
 #[cfg(test)]
 mod castle_tests;

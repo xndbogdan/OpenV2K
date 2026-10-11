@@ -31,10 +31,14 @@ pub enum NativeMainBaseAbortDeathBlock {
     Type53(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type58(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type122(crate::native_actor_capture::CaptureBlock),
+    Type18(crate::native_actor_capture::CaptureBlock),
+    Type28(crate::native_actor_capture::CaptureBlock),
+    Type76(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type66(crate::intro2_type66::death::Intro2Type66DeathBlock),
     MainBase(crate::main_base_runtime::MainBaseDeathBlock),
     Fish(crate::shared_fish::death::SharedFishDeathBlock),
     GunTurret(crate::class49_terminal::Class49TerminalBlock),
+    Type10(crate::intro2_type10::death::Intro2Type10DeathBlock),
 }
 
 pub(super) fn dispatch_native_class49(
@@ -47,12 +51,29 @@ pub(super) fn dispatch_native_class49(
         .entities
         .iter_all()
         .find(|entity| entity.id == actor.lease.entity_id)?;
-    // Native BAC0/BD20 terminal families share BAF0's nested radial owner,
-    // with explicit class1/class49 suffix policies and distinct allocations.
-    if !(matches!(entity.entity_type, 97 | 104 | 115) && entity.intro2_gun_turret_runtime.is_some())
-        && !(entity.entity_type == 49 && entity.cleansing_vehicle_runtime.is_some())
-        && !(entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
-    {
+    // Native BAC0/BD20/BC90 terminal families share BAF0's nested radial owner,
+    // with explicit class1/class49/class63 suffix policies and distinct allocations.
+    let admitted = (matches!(
+        entity.entity_type,
+        92 | 96 | 97 | 99 | 102 | 103 | 104 | 112 | 113 | 115
+    )
+        && entity.intro2_gun_turret_runtime.is_some())
+        || (entity.entity_type == 49 && entity.cleansing_vehicle_runtime.is_some())
+        || (entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
+        // Ordinary Type13's 10C10 -> DB80 enters alternate class1, BAC0.
+        || (entity.entity_type == 13 && entity.native_type13_allocation.is_some())
+        // So does the emitter-only Type43's.
+        || (entity.entity_type == crate::native_type43::ENTITY_TYPE
+            && entity.native_type43_runtime.is_some())
+        // Type38 (class1) and the Type129 carriers (class63).
+        || (crate::native_type38::Type38Row::from_entity_type(entity.entity_type).is_some()
+            && entity.native_type38_runtime.is_some())
+        // Type124 and the Type80/126 carriers enter class63, BC90: BAF0 then a
+        // tail-appended Type61.
+        || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some())
+        || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
+        || crate::intro2_type16::type16_auto_pilot_row(entity).is_some();
+    if !admitted {
         return None;
     }
     Some((|| {
@@ -87,11 +108,14 @@ pub(super) fn dispatch_native_class49(
         if !completed {
             return Err(block(NativeMainBaseAbortDeathBlock::TaskCustodyUnavailable));
         }
-        let rings_before = frame
-            .entities
-            .iter_all()
-            .filter(|entity| entity.entity_type == 60)
-            .count();
+        let count = |entities: &crate::entity::EntityManager, entity_type| {
+            entities
+                .iter_all()
+                .filter(|entity| entity.entity_type == entity_type)
+                .count()
+        };
+        let rings_before = count(frame.entities, 60);
+        let power_ups_before = count(frame.entities, 61);
         let entities = &mut *frame.entities;
         effects
             .run_class49_standard_death(
@@ -107,11 +131,8 @@ pub(super) fn dispatch_native_class49(
                 },
             )
             .map_err(|error| block(NativeMainBaseAbortDeathBlock::GunTurret(error)))?;
-        publications.appended_type60_actors += entities
-            .iter_all()
-            .filter(|entity| entity.entity_type == 60)
-            .count()
-            .saturating_sub(rings_before);
+        publications.appended_type60_actors += count(entities, 60).saturating_sub(rings_before);
+        publications.appended_type61_actors += count(entities, 61).saturating_sub(power_ups_before);
         let (successor, successor_available) =
             match entities.main_base_abort_successor_after_callback(id) {
                 Ok(next) => (next, true),
@@ -128,6 +149,7 @@ pub(super) fn dispatch_native_class49(
 #[derive(Clone, Copy)]
 enum NativeActor {
     MainBase,
+    Type10Family,
     Worker,
     Type123Person,
     FourChoice,
@@ -138,6 +160,9 @@ enum NativeActor {
     Type53,
     Type58,
     Type122,
+    Type18,
+    Type28,
+    Type76Family,
     Factory,
     SharedFish,
 }
@@ -177,8 +202,20 @@ pub(super) fn dispatch_native_actor(
         53 if entity.intro2_type53_runtime.is_some() => NativeActor::Type53,
         58 if entity.intro2_type58_runtime.is_some() => NativeActor::Type58,
         122 if entity.native_type122_runtime.is_some() => NativeActor::Type122,
+        18 if entity.native_type18_runtime.is_some() => NativeActor::Type18,
+        28 if entity.native_type28_runtime.is_some() => NativeActor::Type28,
+        76 | 77 if entity.native_type76_runtime.is_some() => NativeActor::Type76Family,
         6 if entity.main_base_runtime.is_some() => NativeActor::MainBase,
         66 | 125 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
+        type_id
+            if crate::intro2_type10::Type10Profile::from_entity_type(type_id)
+                .is_some_and(|profile| profile.alternate_behavior_class() == 11)
+                && entity
+                    .intro2_type10_runtime
+                    .is_some_and(|runtime| runtime.ordinary_allocation.is_some()) =>
+        {
+            NativeActor::Type10Family
+        }
         22 | 23 | 24 | 62 if entity.shared_fish_runtime.is_some() => NativeActor::SharedFish,
         _ => return None,
     };
@@ -230,6 +267,13 @@ fn dispatch(
     {
         return Err(block(Block::Type53(
             crate::intro2_common_dying::Intro2CommonDyingBlock::UnauthenticatedAllocation,
+        )));
+    }
+    if matches!(kind, NativeActor::Type10Family)
+        && !crate::intro2_type10::type10_manager_allocation_authenticates(entities, id)
+    {
+        return Err(block(Block::Type10(
+            crate::intro2_type10::death::Intro2Type10DeathBlock::Allocation,
         )));
     }
     if matches!(kind, NativeActor::Type58)
@@ -292,6 +336,10 @@ fn dispatch(
             | NativeActor::Type53
             | NativeActor::Type58
             | NativeActor::Type122
+            | NativeActor::Type18
+            | NativeActor::Type28
+            | NativeActor::Type76Family
+            | NativeActor::Type10Family
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
         if !ready {
@@ -299,6 +347,19 @@ fn dispatch(
         }
     }
     let disposition = match kind {
+        NativeActor::Type10Family => {
+            // 10C10 -> DB80's null living hook -> AC60's alternate class11:
+            // C660 publishes the falling Tumble; C750 later owns its blast.
+            let owner = crate::intro2_type10::death::publish_intro2_type10_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type10(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_type10_tumble(owner);
+                publications.type10_tumble += 1;
+            }
+            MainBaseAbortActorDisposition::Type10Death
+        }
         NativeActor::Type26 => {
             // DB80's null living death hook enters C620/class12, exactly as
             // Type26's existing checked damage and E370 expiry publisher.
@@ -342,6 +403,7 @@ fn dispatch(
                 entities,
                 id,
                 &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
                     tasks: specialized_tasks,
                     world_fx,
                     notifications: gameplay.notifications,
@@ -356,6 +418,67 @@ fn dispatch(
                 publications.type122_common_dying += 1;
             }
             MainBaseAbortActorDisposition::Type122Death
+        }
+        // Type18's 10C10 is Type122's: the captor death releases or kills
+        // any captive, then class12.
+        NativeActor::Type18 => {
+            let owner = crate::native_actor_capture::publish_native_captor_standard_death(
+                entities,
+                id,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: specialized_tasks,
+                    world_fx,
+                    notifications: gameplay.notifications,
+                    retail_tick: gameplay.retail_tick,
+                    result_screen: MainBaseType9ResultScreenState::AlreadyShownByMainBaseAbort,
+                    hive_dying: Default::default(),
+                },
+            )
+            .map_err(|error| block(Block::Type18(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type18_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type18Death
+        }
+        NativeActor::Type28 => {
+            let owner = crate::native_actor_capture::publish_native_captor_standard_death(
+                entities,
+                id,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: specialized_tasks,
+                    world_fx,
+                    notifications: gameplay.notifications,
+                    retail_tick: gameplay.retail_tick,
+                    result_screen: MainBaseType9ResultScreenState::AlreadyShownByMainBaseAbort,
+                    hive_dying: Default::default(),
+                },
+            )
+            .map_err(|error| block(Block::Type28(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type28_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type28Death
+        }
+        // 10C10 -> DB80 -> class12, as for Type53.
+        NativeActor::Type76Family => {
+            if !crate::native_type76::manager_allocation_authenticates(entities, id) {
+                return Err(block(Block::Type76(
+                    crate::intro2_common_dying::Intro2CommonDyingBlock::UnauthenticatedAllocation,
+                )));
+            }
+            let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type76(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type76_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type76Death
         }
         NativeActor::Worker => {
             let death = crate::intro2_type8::impact::run_intro2_type8_standard_death(
@@ -440,6 +563,7 @@ fn dispatch(
                 entities,
                 id,
                 &mut crate::intro2_type17::capture::CaptureContext {
+                    resources: None,
                     tasks: specialized_tasks,
                     world_fx,
                     notifications: gameplay.notifications,
@@ -529,7 +653,13 @@ mod tests;
 #[cfg(test)]
 mod type122_tests;
 #[cfg(test)]
+mod type18_tests;
+#[cfg(test)]
+mod type28_tests;
+#[cfg(test)]
 mod type62_tests;
+#[cfg(test)]
+mod type76_tests;
 
 #[cfg(test)]
 mod main_base_tests;
@@ -538,7 +668,21 @@ mod main_base_tests;
 mod type26_tests;
 
 #[cfg(test)]
+mod carrier_tests;
+#[cfg(test)]
 mod ring_custody_tests;
+#[cfg(test)]
+mod type124_tests;
+#[cfg(test)]
+mod type128_tests;
+#[cfg(test)]
+mod type13_tests;
+#[cfg(test)]
+mod type38_tests;
+#[cfg(test)]
+mod type43_tests;
+#[cfg(test)]
+mod type5_tests;
 #[cfg(test)]
 mod type61_tests;
 #[cfg(test)]
