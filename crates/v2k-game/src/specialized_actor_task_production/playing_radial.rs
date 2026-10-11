@@ -128,15 +128,26 @@ impl SpecializedActorTaskScheduler {
                 type_id if NativeFourChoiceProfile::from_entity_type(type_id).is_some() => {
                     entity.native_type86_runtime.is_some()
                 }
+                16 | 128 => entity.intro2_type16_runtime.is_some(),
+                10 | 5 | 80 | 126 => entity.intro2_type10_runtime.is_some(),
+                // A receipt selects the owner; its adapter authenticates it.
+                13 => {
+                    entity.native_type13_allocation.is_some()
+                        || crate::class49_death::source_profile(entity).is_some()
+                }
                 17 => entity.intro2_type17_runtime.is_some(),
                 47 => entity.native_type47_construction.is_some(),
+                94 => entity.intro2_type94_runtime.is_some(),
                 53 => entity.intro2_type53_runtime.is_some(),
                 58 => entity.intro2_type58_runtime.is_some(),
                 122 => entity.native_type122_runtime.is_some(),
+                18 => entity.native_type18_runtime.is_some(),
+                28 => entity.native_type28_runtime.is_some(),
+                76 | 77 => entity.native_type76_runtime.is_some(),
                 30 => entity.native_type30_runtime.is_some(),
                 40 => entity.native_type40_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
-                66 => entity.intro2_type66_runtime.is_some(),
+                66 | 125 => entity.intro2_type66_runtime.is_some(),
                 22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_some(),
                 3 | 27 => entity.rolling_boulder_runtime.is_some(),
                 _ => crate::class49_death::source_profile(entity).is_some(),
@@ -172,6 +183,7 @@ impl SpecializedActorTaskScheduler {
                         // graph. A later visit must not replay that prefix.
                         if block.target_prefix_committed {
                             callbacks.scheduler.park_intro2_type8_external_prefix(id);
+                            callbacks.scheduler.park_intro2_type10_external_prefix(id);
                             callbacks.scheduler.park_native_type123_external_prefix(id);
                             callbacks.scheduler.park_native_type86_external_prefix(id);
                             callbacks.scheduler.park_intro2_type17_external_prefix(id);
@@ -181,12 +193,20 @@ impl SpecializedActorTaskScheduler {
                                 .park_cleansing_vehicle_external_prefix(id);
                             if entities.iter_all().any(|entity| {
                                 entity.id == id
-                                    && (entity.intro2_type53_runtime.is_some()
+                                    && (entity.intro2_type16_runtime.is_some()
+                                        || entity.native_type13_allocation.is_some()
+                                        || entity.intro2_type94_runtime.is_some()
+                                        || entity.intro2_type53_runtime.is_some()
                                         || entity.intro2_type58_runtime.is_some()
                                         || entity.native_type122_runtime.is_some()
+                                        || entity.native_type18_runtime.is_some()
+                                        || entity.native_type28_runtime.is_some()
+                                        || entity.native_type76_runtime.is_some()
                                         || entity.native_type30_runtime.is_some()
                                         || entity.native_type40_runtime.is_some()
                                         || entity.native_type56_runtime.is_some()
+                                        || entity.native_type43_runtime.is_some()
+                                        || entity.native_type38_runtime.is_some()
                                         || entity.rolling_boulder_runtime.is_some()
                                         || entity.shared_fish_runtime.is_some())
                             }) {
@@ -331,6 +351,37 @@ impl DynamicRadialLiveCallbacks for PlayingNativeCallbacks<'_> {
             crate::entity::DynamicRadialLiveBlockReason,
         >,
     > {
+        if entities
+            .iter_all()
+            .any(|entity| entity.id == id && entity.shared_fish_runtime.is_some() && kind == 124)
+        {
+            return Some(
+                crate::shared_fish::death::run_type124_auto_pilot_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities,
+                        resources: self.resources,
+                        world_fx,
+                        static_damage: self.static_damage,
+                        notifications,
+                        retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::Playing {
+                            scheduler: self.scheduler,
+                            player_hull: self.player_hull,
+                            extra_lives: self.extra_lives,
+                            active_terminal_calls: self.active_terminal_calls.to_vec(),
+                        },
+                    },
+                    id,
+                )
+                .map(
+                    |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: result.returned_nonzero,
+                        publication: None,
+                    },
+                )
+                .map_err(crate::entity::DynamicRadialLiveBlockReason::Fish),
+            );
+        }
         if entities
             .iter_all()
             .any(|entity| entity.id == id && entity.shared_fish_runtime.is_some())

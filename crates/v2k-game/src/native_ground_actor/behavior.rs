@@ -28,6 +28,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     id: u32,
     tick: u32,
     world_fx: &mut WorldFx,
+    resources: Option<&crate::resource_cache::ResourceCache>,
     entry: ReselectionEntry,
 ) -> Result<(), NativeGroundActorBlock> {
     use NativeGroundActorBlock as Block;
@@ -95,6 +96,15 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     } else {
         false
     };
+    // Rule8 scans terrain objects within a quarter of the current axis.
+    let furniture = if needs(BehaviorWeightRule::FurnitureNearby) {
+        furniture_nearby(
+            entity,
+            resources.ok_or(Block::Runtime("furniture selector resources"))?,
+        )?
+    } else {
+        false
+    };
     let selection = select_initial_behavior(
         P::CHOICES,
         |rule| match rule {
@@ -102,6 +112,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
             BehaviorWeightRule::UnderAttack => i32::from(under_attack),
             BehaviorWeightRule::PeopleNearby => i32::from(people),
             BehaviorWeightRule::PlayerNearby => i32::from(player),
+            BehaviorWeightRule::FurnitureNearby => i32::from(furniture),
             _ => unreachable!(),
         },
         || u32::from(world_fx.next_shared_retail_random_u16()),
@@ -122,6 +133,30 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
         return Err(Block::Runtime("initializer fallback"));
     }
     Ok(())
+}
+
+/// `425680`'s rule8: any terrain object within a quarter of the entity's
+/// current strict axis, with no kind filter. The scan draws no RNG.
+pub(crate) fn furniture_nearby(
+    entity: &Entity,
+    resources: &crate::resource_cache::ResourceCache,
+) -> Result<bool, NativeGroundActorBlock> {
+    let RetailRuntimeValue::Known(axis) = entity.actor_common_axis_descriptor else {
+        return Err(NativeGroundActorBlock::Runtime("furniture selector axis"));
+    };
+    let terrain = resources
+        .level_terrain()
+        .ok_or(NativeGroundActorBlock::Runtime(
+            "furniture selector terrain",
+        ))?;
+    Ok(crate::trash_furniture::find_furniture(
+        terrain,
+        resources.terrain_objects(),
+        entity.position_raw(),
+        axis.strict_axis_limit_raw / 4,
+        -1,
+    )
+    .is_some())
 }
 
 pub(crate) fn secondary<P: NativeGroundActorProfile>(

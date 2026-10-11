@@ -40,10 +40,88 @@ pub enum SharedFishImpactOutcome {
     },
 }
 
+/// BAF0's mutable static world and Playing's lent player for Type124's
+/// class63 terminal. The shared frame lends neither, so it holds that death.
+pub(crate) struct FishAutoPilotWorld<'a> {
+    pub resources: &'a mut crate::resource_cache::ResourceCache,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub player: Option<crate::native_actor_capture::pair::PlayingPlayerContact<'a>>,
+}
+
+struct FishHitFrame<'a> {
+    entities: &'a mut crate::entity::EntityManager,
+    world_fx: &'a mut crate::world_fx::WorldFx,
+    scheduler: &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    retail_tick: u32,
+    auto_pilot: Option<FishAutoPilotWorld<'a>>,
+}
+
 pub(crate) fn apply_shared_fish_particle_hit(
     frame: crate::shared_actor_impact::SharedActorImpactFrame<'_>,
     impact: ParticleEntityImpact,
 ) -> SharedFishImpactOutcome {
+    apply(
+        FishHitFrame {
+            entities: frame.entities,
+            world_fx: frame.world_fx,
+            scheduler: frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            auto_pilot: None,
+        },
+        impact,
+    )
+}
+
+/// Playing lends Type124 the class63 radial owner. Custody and the committed
+/// prefix park match the shared fish adapter.
+pub(crate) fn apply_playing_type124_particle_hit(
+    frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> SharedFishImpactOutcome {
+    let id = impact.target_entity_id;
+    if !super::allocation_authenticates(frame.entities, id)
+        || frame.scheduler.shared_fish_has_pending_prefix(id)
+    {
+        return SharedFishImpactOutcome::Blocked {
+            reason: SharedFishImpactBlock::Runtime("completed native allocation/task custody"),
+            committed_prefix: false,
+        };
+    }
+    let result = apply(
+        FishHitFrame {
+            entities: &mut *frame.entities,
+            world_fx: frame.world_fx,
+            scheduler: &mut *frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            auto_pilot: Some(FishAutoPilotWorld {
+                resources: frame.resources,
+                static_damage: frame.static_damage,
+                player: Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                    hull: frame.player_hull,
+                    extra_lives: frame.extra_lives,
+                }),
+            }),
+        },
+        impact,
+    );
+    if matches!(
+        result,
+        SharedFishImpactOutcome::Blocked {
+            committed_prefix: true,
+            ..
+        }
+    ) {
+        frame
+            .scheduler
+            .park_native_contact_prefix(frame.entities, id);
+    }
+    result
+}
+
+fn apply(frame: FishHitFrame<'_>, impact: ParticleEntityImpact) -> SharedFishImpactOutcome {
     let Some(entity) = frame
         .entities
         .iter_all()
@@ -66,14 +144,22 @@ pub(crate) fn apply_shared_fish_particle_hit(
         };
     }
     let mut committed = false;
+    let FishHitFrame {
+        entities,
+        world_fx,
+        scheduler,
+        notifications,
+        retail_tick,
+        auto_pilot,
+    } = frame;
     let result = run(
-        crate::shared_actor_impact::SharedActorImpactFrame {
-            resources: frame.resources,
-            entities: &mut *frame.entities,
-            world_fx: &mut *frame.world_fx,
-            scheduler: &mut *frame.scheduler,
-            notifications: &mut *frame.notifications,
-            retail_tick: frame.retail_tick,
+        FishHitFrame {
+            entities: &mut *entities,
+            world_fx,
+            scheduler,
+            notifications,
+            retail_tick,
+            auto_pilot,
         },
         impact,
         &mut committed,
@@ -84,8 +170,7 @@ pub(crate) fn apply_shared_fish_particle_hit(
             if committed {
                 // Class2 already retired its scheduler owner. Allocation custody
                 // must still prevent replay of a failed repeat-hit/suffix prefix.
-                frame
-                    .entities
+                entities
                     .entity_mut(impact.target_entity_id)
                     .unwrap()
                     .shared_fish_runtime
@@ -102,18 +187,18 @@ pub(crate) fn apply_shared_fish_particle_hit(
 }
 
 fn run(
-    frame: crate::shared_actor_impact::SharedActorImpactFrame<'_>,
+    frame: FishHitFrame<'_>,
     impact: ParticleEntityImpact,
     committed: &mut bool,
 ) -> Result<LiveActorDamageOutcome<()>, SharedFishImpactBlock> {
     use SharedFishImpactBlock as Block;
-    let crate::shared_actor_impact::SharedActorImpactFrame {
+    let FishHitFrame {
         entities: manager,
         world_fx,
         scheduler,
         notifications,
         retail_tick,
-        resources: _,
+        auto_pilot,
     } = frame;
     let id = impact.target_entity_id;
     let static_route = particle_uses_static_route_entity_hit(impact.source_particle_class);
@@ -127,7 +212,14 @@ fn run(
         return Err(Block::Runtime("native allocation"));
     }
     let completed_death = super::death::completed_shared_fish_death(manager, id);
-    if !scheduler.shared_fish_completed_owner(manager, id) && !completed_death {
+    // BC90 retired Type124's owner but keeps its allocation hittable until
+    // 14990; only the finished class63 receipt replaces task custody.
+    let finished_auto_pilot =
+        crate::class49_death::finished_terminal_hit_authenticates(manager, id);
+    if !scheduler.shared_fish_completed_owner(manager, id)
+        && !completed_death
+        && !finished_auto_pilot
+    {
         return Err(Block::Runtime("completed fish task custody"));
     }
     let entity_type = manager
@@ -211,6 +303,13 @@ fn run(
         address
             if completed_death
                 && address == crate::entity_behavior::QUIET_DEATH_STYLE.frame_address => {}
+        // Class63's style is zero apart from its +40 initializer.
+        address
+            if finished_auto_pilot
+                && address
+                    == crate::entity_behavior::AUTO_PILOT_BEHAVIOR_PROGRAM
+                        .initial_style
+                        .frame_address => {}
         _ => return Err(Block::Runtime("unaudited fish hit style")),
     }
     let entity = manager.entity_mut(id).unwrap();
@@ -259,8 +358,30 @@ fn run(
             delivery,
             entry: LiveActorDamageEntry::Checked,
         },
-        |manager, world_fx, _| {
-            super::death::begin_shared_fish_standard_death(manager, id, world_fx, scheduler)
+        |manager, world_fx, feedback| {
+            if entity_type != 124 {
+                return super::death::begin_shared_fish_standard_death(
+                    manager, id, world_fx, scheduler,
+                );
+            }
+            let (Some(world), Some(feedback)) = (auto_pilot, feedback) else {
+                return Err(SharedFishDeathBlock::Runtime("class63 radial owner"));
+            };
+            super::death::run_type124_auto_pilot_death(
+                crate::class49_terminal::Class49TerminalFrame {
+                    entities: manager,
+                    resources: world.resources,
+                    world_fx,
+                    static_damage: world.static_damage,
+                    notifications: &mut *feedback.notifications,
+                    retail_tick,
+                    world: crate::class49_terminal::Class49WorldContext::for_contact(
+                        &mut *scheduler,
+                        world.player,
+                    ),
+                },
+                id,
+            )
         },
     )
     .map_err(|error| {
@@ -770,7 +891,7 @@ mod tests {
     }
 
     #[v2k_test_support::retail_test]
-    fn type124_lethal_hit_retains_reselection_and_reaction_at_named_boundary() {
+    fn type124_shared_frame_lethal_hit_keeps_its_prefix_without_a_radial_owner() {
         let mut f = World::with_type(30, 124);
         f.manager.entity_mut(f.id).unwrap().collision.health_raw = RetailRuntimeValue::Known(1);
         let task_before = f
@@ -807,10 +928,7 @@ mod tests {
                 if matches!(
                     &error.reason,
                     crate::live_actor_checked_damage::LiveActorDamageBlock::Death(
-                        SharedFishDeathBlock::UnsupportedDeathProgram {
-                            entity_type: 124,
-                            alternate_behavior_class: 63,
-                        }
+                        SharedFishDeathBlock::Runtime("class63 radial owner")
                     )
                 )
             ),

@@ -1,4 +1,4 @@
-//! Native Type16/17/26/58/122 `11AD0 -> D7F0/D860 -> 141D0` terrain/water contact.
+//! Native Type16/17/18/26/28/58/122 `11AD0 -> D7F0/D860 -> 141D0` terrain/water contact.
 //!
 //! Living C8=39/439 clears10000; Class12's reverse mask2015 restores it and yields
 //! effective policy28 (428 for Type122), with null solid/water style hooks.
@@ -47,6 +47,9 @@ enum NativeSurfaceProfile {
     Type58,
     Type30,
     Type122,
+    Type18,
+    Type28,
+    Type76Family(crate::native_type76::Type76Row),
     RollingBoulder(crate::rolling_boulder::RollingBoulderProfile),
 }
 
@@ -59,9 +62,12 @@ impl NativeSurfaceProfile {
             58 => Some(Self::Type58),
             30 => Some(Self::Type30),
             122 => Some(Self::Type122),
+            18 => Some(Self::Type18),
+            28 => Some(Self::Type28),
             3 | 27 => crate::rolling_boulder::RollingBoulderProfile::for_entity_type(entity_type)
                 .map(Self::RollingBoulder),
-            _ => None,
+            entity_type => crate::native_type76::Type76Row::from_entity_type(entity_type)
+                .map(Self::Type76Family),
         }
     }
 
@@ -73,6 +79,9 @@ impl NativeSurfaceProfile {
             Self::Type58 => 58,
             Self::Type30 => 30,
             Self::Type122 => 122,
+            Self::Type18 => 18,
+            Self::Type28 => 28,
+            Self::Type76Family(row) => row.entity_type(),
             Self::RollingBoulder(profile) => profile.entity_type(),
         }
     }
@@ -97,6 +106,11 @@ impl NativeSurfaceProfile {
             Self::Type122 => {
                 crate::native_type122::type122_manager_allocation_authenticates(manager, id)
             }
+            Self::Type18 => crate::native_type18::manager_allocation_authenticates(manager, id),
+            Self::Type28 => crate::native_type28::manager_allocation_authenticates(manager, id),
+            Self::Type76Family(_) => {
+                crate::native_type76::manager_allocation_authenticates(manager, id)
+            }
             Self::Type17 => {
                 crate::intro2_type17::type17_manager_allocation_authenticates(manager, id)
             }
@@ -116,12 +130,21 @@ impl NativeSurfaceProfile {
             .type_runtime_metadata(self.entity_type())
             .ok_or(Block::Runtime("native surface metadata"))?;
         let metadata_matches = match self {
-            Self::Type16 => crate::intro2_type16::authenticate_metadata(metadata).is_ok(),
+            Self::Type16 => crate::intro2_type16::authenticate_metadata(
+                crate::intro2_type16::Type16Row::Type16,
+                metadata,
+            )
+            .is_ok(),
             Self::Type26 => {
                 crate::intro2_type26_defecate_virus::authenticate_metadata(metadata).is_ok()
             }
             Self::Type30 => crate::native_type30::authenticate_metadata(metadata).is_ok(),
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
+            Self::Type18 => crate::native_type18::authenticate_metadata(metadata).is_ok(),
+            Self::Type28 => crate::native_type28::authenticate_metadata(metadata).is_ok(),
+            Self::Type76Family(row) => {
+                crate::native_type76::authenticate_metadata(row, metadata).is_ok()
+            }
             Self::Type17 => crate::intro2_type17::authenticate_metadata(metadata).is_ok(),
             Self::Type58 => crate::intro2_type58::authenticate_metadata(metadata).is_ok(),
             Self::RollingBoulder(profile) => {
@@ -356,13 +379,17 @@ fn resolve(
                 },
                 |manager, fx, feedback| {
                     let publication = match profile {
-                        NativeSurfaceProfile::Type17 | NativeSurfaceProfile::Type122 => {
+                        NativeSurfaceProfile::Type17
+                        | NativeSurfaceProfile::Type122
+                        | NativeSurfaceProfile::Type18
+                        | NativeSurfaceProfile::Type28 => {
                             let feedback = feedback
                                 .ok_or(Intro2CommonDyingBlock::Runtime("surface death feedback"))?;
                             crate::native_actor_capture::publish_native_captor_standard_death(
                                 manager,
                                 id,
                                 &mut crate::intro2_type17::capture::CaptureContext {
+                                    resources: None,
                                     tasks: frame.actor_tasks,
                                     world_fx: fx,
                                     notifications: feedback.notifications,
@@ -376,7 +403,8 @@ fn resolve(
                         NativeSurfaceProfile::Type16
                         | NativeSurfaceProfile::Type26
                         | NativeSurfaceProfile::Type58
-                        | NativeSurfaceProfile::Type30 => {
+                        | NativeSurfaceProfile::Type30
+                        | NativeSurfaceProfile::Type76Family(_) => {
                             crate::intro2_common_dying::publish_intro2_common_standard_death(
                                 manager, id, fx,
                             )?

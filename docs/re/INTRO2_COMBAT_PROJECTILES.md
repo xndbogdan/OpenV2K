@@ -123,6 +123,12 @@ and the gravity multiplier is `0x300000` in the signed fixed-point product.
 The class40 allocation is rejected at or below flat sea, but that rejection
 does not remove the subsequent gravity or jitter draws.
 
+`43F350` is the update callback of four descriptors: classes 38, 39, 85 and
+93 (table `0x004CC138`, stride `0x34`, `+0x14`). Its trail child is
+`(class != 0x26) + 40`: class38 emits class40, while 39, 85 and 93 emit
+class41. The port owns only class38's use; the other three classes have no
+port update owner yet.
+
 `441B70` consumes class38 on surface selector 7. Selector 6 places an effect
 at the response Y, choosing class43 at/below flat sea or class75 above it,
 with incoming velocity `[0,200,0]`, then consumes the fireball. Other selectors

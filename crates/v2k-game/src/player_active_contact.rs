@@ -1147,7 +1147,7 @@ fn constructor_pair_policy_for_unresolved_style(
     match entity_type {
         PLAYER_ENTITY_TYPE => Some(PairContactCallbackPolicy::PlayerContact),
         MAIN_BASE_ENTITY_TYPE => Some(PairContactCallbackPolicy::MainBaseConversion),
-        FACTORY_ENTITY_TYPE => Some(PairContactCallbackPolicy::LifterDelivery),
+        FACTORY_ENTITY_TYPE | 125 => Some(PairContactCallbackPolicy::LifterDelivery),
         // Class 46 `FUN_004259F0` is an exact no-op against player capability
         // set 5. Generic construction leaves that style unpublished, so the
         // type-67 constructor identity must still admit the player-solid pass.

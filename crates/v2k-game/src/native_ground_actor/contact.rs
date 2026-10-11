@@ -39,6 +39,7 @@ use crate::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
         LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathResult,
     },
+    native_actor_capture::pair::PlayingPlayerContact,
     static_contact::{
         apply_contact_response_raw, scan_deepest_static_contact, static_contact_subject_eligible,
         StaticContactError, StaticContactQuery, StaticModelContact,
@@ -51,6 +52,10 @@ use crate::{
 pub enum NativeStaticActorDeathBlock {
     Common(Intro2CommonDyingBlock),
     Flying(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
+    /// A class63 carrier's BAF0/BC90 terminal blocked after its prefix.
+    AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
+    /// An alternate-class1 actor's BAF0/BAC0 terminal blocked after its prefix.
+    Class1(Box<crate::class49_terminal::Class49TerminalBlock>),
     RollingBoulder(crate::rolling_boulder::death::RollingBoulderDeathBlock),
 }
 
@@ -96,6 +101,15 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeGroundContactOutcome {
+    resolve_native_ground_static_contact_with_playing::<P>(frame, id, None)
+}
+
+/// Playing's walk lends its player to a terminal profile's BAF0 radial.
+pub(crate) fn resolve_native_ground_static_contact_with_playing<P: NativeGroundActorProfile>(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeGroundContactOutcome {
     resolve_profile_static_contact(
         frame,
         id,
@@ -105,8 +119,29 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
             retained_entry_model_id: None,
             manager_authenticates: P::manager_authenticates,
             metadata_authenticates: P::metadata_authenticates,
-            completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
+            completed_owner: |tasks, manager, id| {
+                // A finished BAC0/BC90 corpse keeps only its terminal receipt.
+                (P::TERMINAL_DEATH
+                    && crate::class49_death::finished_terminal_hit_authenticates(manager, id))
+                    || tasks.prepare_native_actor_mutation(manager, id)
+            },
             publish_standard_death: |manager, id, context| {
+                if P::TERMINAL_DEATH {
+                    return P::publish_standard_death(
+                        manager,
+                        id,
+                        &mut NativeGroundDeathContext::Terminal {
+                            resources: context.resources,
+                            fx: context.world_fx,
+                            static_damage: context.static_damage,
+                            notifications: context.notifications,
+                            retail_tick: context.retail_tick,
+                            tasks: context.tasks,
+                            player: context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                        },
+                    )
+                    .map_err(NativeStaticActorDeathBlock::Common);
+                }
                 P::publish_standard_death(
                     manager,
                     id,
@@ -115,6 +150,7 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
                     } else {
                         NativeGroundDeathContext::Capture { resources: context.resources,
                             context: crate::native_actor_capture::CaptureContext {
+                                resources: Some(context.resources),
                                 tasks: context.tasks, world_fx: context.world_fx,
                                 notifications: context.notifications, retail_tick: context.retail_tick,
                                 result_screen: crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
@@ -126,6 +162,7 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
                 .map_err(NativeStaticActorDeathBlock::Common)
             },
         },
+        playing,
     )
 }
 
@@ -136,6 +173,16 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
 pub fn resolve_insect_static_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
+) -> NativeGroundContactOutcome {
+    resolve_insect_static_contact_with_playing(frame, id, None)
+}
+
+/// Playing's walk lends its player to a terminal static death's radial: the
+/// class63 carriers' BC90 and Type43's class1 BAC0 both run BAF0's 4566E0.
+pub fn resolve_insect_static_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
 ) -> NativeGroundContactOutcome {
     let Some(entity) = frame.entities.iter_all().find(|entity| entity.id == id) else {
         return NativeGroundContactOutcome::Ineligible;
@@ -159,7 +206,11 @@ pub fn resolve_insect_static_contact(
                     .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates)
             },
             metadata_authenticates: |metadata| {
-                crate::intro2_type16::authenticate_metadata(metadata).is_ok()
+                crate::intro2_type16::authenticate_metadata(
+                    crate::intro2_type16::Type16Row::Type16,
+                    metadata,
+                )
+                .is_ok()
             },
             completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
             publish_standard_death: |manager, id, context| {
@@ -170,6 +221,53 @@ pub fn resolve_insect_static_contact(
                 )
                 .map(common_death_result)
                 .map_err(NativeStaticActorDeathBlock::Common)
+            },
+        },
+        // Type128 is Type16's row with alternate class63: its death is the
+        // shared BAF0/BC90 terminal through this walk's lent radial owner, and
+        // a finished corpse keeps its tasks until 14990.
+        128 => StaticActorProfile {
+            entity_type: 128,
+            default_flags: 0x439,
+            retained_entry_model_id: None,
+            manager_authenticates: |manager, id| {
+                manager
+                    .iter_all()
+                    .find(|entity| entity.id == id)
+                    .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates)
+            },
+            metadata_authenticates: |metadata| {
+                crate::intro2_type16::authenticate_metadata(
+                    crate::intro2_type16::Type16Row::Type128,
+                    metadata,
+                )
+                .is_ok()
+            },
+            completed_owner: |tasks, manager, id| {
+                crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                    || tasks.prepare_native_actor_mutation(manager, id)
+            },
+            publish_standard_death: |manager, id, context| {
+                crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: context.resources,
+                        world_fx: context.world_fx,
+                        static_damage: context.static_damage,
+                        notifications: context.notifications,
+                        retail_tick: context.retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            context.tasks,
+                            context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| NativeStaticActorDeathBlock::AutoPilot(Box::new(error)))
             },
         },
         26 => StaticActorProfile {
@@ -216,6 +314,44 @@ pub fn resolve_insect_static_contact(
                 .map_err(NativeStaticActorDeathBlock::Common)
             },
         },
+        // The Search styles reverse +C0's 0x20000, so the living shooter
+        // keeps 0x8000 and a clear 0x08000000: 11AD0 scans it. Its lethal
+        // collision damage publishes class1 through the shared terminal.
+        43 => StaticActorProfile {
+            entity_type: crate::native_type43::ENTITY_TYPE,
+            default_flags: crate::native_type43::DEFAULT_FLAGS,
+            retained_entry_model_id: None,
+            manager_authenticates: crate::native_type43::manager_allocation_authenticates,
+            metadata_authenticates: |metadata| {
+                crate::native_type43::authenticate_metadata(metadata).is_ok()
+            },
+            completed_owner: |tasks, manager, id| {
+                crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                    || tasks.prepare_native_actor_mutation(manager, id)
+            },
+            publish_standard_death: |manager, id, context| {
+                crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: context.resources,
+                        world_fx: context.world_fx,
+                        static_damage: context.static_damage,
+                        notifications: context.notifications,
+                        retail_tick: context.retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            context.tasks,
+                            context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| NativeStaticActorDeathBlock::Class1(Box::new(error)))
+            },
+        },
         3 => rolling_boulder_static_profile(
             3,
             |metadata| {
@@ -260,7 +396,7 @@ pub fn resolve_insect_static_contact(
         ),
         _ => return NativeGroundContactOutcome::Ineligible,
     };
-    resolve_profile_static_contact(frame, id, profile)
+    resolve_profile_static_contact(frame, id, profile, playing)
 }
 
 /// Rolling Boulder Type3/27 in either class20 style. Both styles and both
@@ -324,6 +460,8 @@ struct StaticDeathContext<'a> {
     world_fx: &'a mut crate::world_fx::WorldFx,
     notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
     retail_tick: u32,
+    /// Playing's player, lent only by a walk that owns it.
+    player: Option<PlayingPlayerContact<'a>>,
 }
 
 fn common_death_result(
@@ -341,7 +479,16 @@ pub fn resolve_flying_static_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeGroundContactOutcome {
-    resolve_flying_static_contact_entry(frame, id, None)
+    resolve_flying_static_contact_entry(frame, id, None, None)
+}
+
+/// Playing's walk lends its player to a Class1 static death's radial.
+pub fn resolve_flying_static_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeGroundContactOutcome {
+    resolve_flying_static_contact_entry(frame, id, None, playing)
 }
 
 /// Suffix of the same admitted living11AD0 surface visit. The source model
@@ -351,19 +498,29 @@ pub(crate) fn resolve_flying_static_contact_continuation(
     id: u32,
     entry_model_id: usize,
 ) -> NativeGroundContactOutcome {
-    resolve_flying_static_contact_entry(frame, id, Some(entry_model_id))
+    resolve_flying_static_contact_entry(frame, id, Some(entry_model_id), None)
+}
+
+pub(crate) fn resolve_flying_static_contact_continuation_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    entry_model_id: usize,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeGroundContactOutcome {
+    resolve_flying_static_contact_entry(frame, id, Some(entry_model_id), playing)
 }
 
 fn resolve_flying_static_contact_entry(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     retained_entry_model_id: Option<usize>,
+    playing: Option<PlayingPlayerContact<'_>>,
 ) -> NativeGroundContactOutcome {
     let Some(entity) = frame.entities.iter_all().find(|entity| entity.id == id) else {
         return NativeGroundContactOutcome::Ineligible;
     };
     let kind = entity.entity_type;
-    if !matches!(kind, 13 | 15 | 87 | 10 | 57) {
+    if !matches!(kind, 13 | 15 | 87 | 10 | 5 | 80 | 126 | 57) {
         return NativeGroundContactOutcome::Ineligible;
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -398,7 +555,9 @@ fn resolve_flying_static_contact_entry(
                 .find(|entity| entity.id == id)
                 .is_some_and(|entity| match entity.entity_type {
                     13 => crate::intro2_type13_live::authenticate_intro2_type13(entity).is_ok(),
-                    10 => crate::intro2_type10::intro2_type10_allocation_authenticates(entity),
+                    10 | 5 | 80 | 126 => {
+                        crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
+                    }
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
                     15 | 87 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
                     _ => false,
@@ -421,9 +580,15 @@ fn resolve_flying_static_contact_entry(
                         || (!tasks.intro2_type13_has_pending_prefix(id)
                             && tasks.intro2_type13_completed_owner(manager, id))
                 }
-                10 => {
+                10 | 5 => {
                     !tasks.intro2_type10_has_pending_prefix(id)
                         && tasks.intro2_type10_completed_owner(manager, id)
+                }
+                // A finished class63 corpse keeps its tasks until 14990.
+                80 | 126 => {
+                    crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                        || (!tasks.intro2_type10_has_pending_prefix(id)
+                            && tasks.intro2_type10_completed_owner(manager, id))
                 }
                 57 => {
                     !tasks.intro2_type57_has_pending_prefix(id)
@@ -449,10 +614,10 @@ fn resolve_flying_static_contact_entry(
                     static_damage: context.static_damage,
                     notifications: context.notifications,
                     retail_tick: context.retail_tick,
-                    world: crate::class49_terminal::Class49WorldContext::Cinematic {
-                        actor_tasks: context.tasks,
-                        active_terminal_calls: Vec::new(),
-                    },
+                    world: crate::class49_terminal::Class49WorldContext::for_contact(
+                        context.tasks,
+                        context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                    ),
                 },
                 id,
             )
@@ -468,16 +633,17 @@ fn resolve_flying_static_contact_entry(
             })
         },
     };
-    resolve_profile_static_contact(frame, id, profile)
+    resolve_profile_static_contact(frame, id, profile, playing)
 }
 
 fn resolve_profile_static_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     profile: StaticActorProfile,
+    playing: Option<PlayingPlayerContact<'_>>,
 ) -> NativeGroundContactOutcome {
     let mut committed = false;
-    match resolve(frame, id, profile, &mut committed) {
+    match resolve(frame, id, profile, playing, &mut committed) {
         Ok(outcome) => outcome,
         Err(reason) => {
             if committed {
@@ -508,6 +674,7 @@ fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
     profile: StaticActorProfile,
+    playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<NativeGroundContactOutcome, NativeGroundContactBlock> {
     use NativeGroundContactBlock as Block;
@@ -602,22 +769,32 @@ fn resolve(
             | 0x4c80c8
             | 0x4c8110
             | 0x4c8158
-    ) || (matches!(profile.entity_type, 16 | 26 | 56)
+    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18 | 77)
         && context.active_style().style_address() == 0x4c7e88)
-        || (matches!(profile.entity_type, 13 | 10 | 57 | 16 | 15 | 87 | 94)
-            && matches!(
-                context.active_style().style_address(),
-                0x4c7930 | 0x4c7978 | 0x4c74f8
-            ))
+        || (matches!(
+            profile.entity_type,
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 94 | 38 | 129 | 77
+        ) && matches!(
+            context.active_style().style_address(),
+            0x4c7930 | 0x4c7978 | 0x4c74f8
+        ))
         || (matches!(profile.entity_type, 15 | 87)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
-        || (profile.entity_type == 13
+        || (matches!(profile.entity_type, 13 | 43 | 38)
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
-        || (profile.entity_type == 26 && context.active_style().style_address() == 0x4c7738)
+        || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
+        || (matches!(profile.entity_type, 80 | 126 | 128 | 129)
+            && context.active_style().style_address() == 0x4c7198
+            && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
+        || (matches!(profile.entity_type, 26 | 18 | 28 | 76 | 77)
+            && context.active_style().style_address() == 0x4c7738)
         || (crate::native_type30::allocation_authenticates(entity)
             && matches!(context.active_style().style_address(), 0x4c7930 | 0x4c7738))
+        // Type28's class10 Run Away shares Type56's acquiring and fleeing styles.
+        || (profile.entity_type == 28
+            && matches!(context.active_style().style_address(), 0x4c7618 | 0x4c7660))
         || (profile.entity_type == 56
             && matches!(
                 context.active_style().style_address(),
@@ -650,7 +827,8 @@ fn resolve(
     if !(profile.completed_owner)(frame.actor_tasks, frame.entities, id) {
         return Err(Block::Runtime("completed contact owner"));
     }
-    apply_contact(frame, id, profile, contact, committed).map(NativeGroundContactOutcome::Applied)
+    apply_contact(frame, id, profile, contact, playing, committed)
+        .map(NativeGroundContactOutcome::Applied)
 }
 
 fn apply_contact(
@@ -658,6 +836,7 @@ fn apply_contact(
     id: u32,
     profile: StaticActorProfile,
     contact: StaticModelContact,
+    mut playing: Option<PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<NativeGroundContactApplied, NativeGroundContactBlock> {
     use NativeGroundContactBlock as Block;
@@ -789,7 +968,7 @@ fn apply_contact(
         0x4c7ed0 => profile.default_flags & !0x2015,
         0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c7ff0 | 0x4c8038 | 0x4c7b28 | 0x4c7b70 | 0x4c8080
         | 0x4c80c8 | 0x4c8110 | 0x4c8158 | 0x4c7e88 | 0x4c7930 | 0x4c7738 | 0x4c74f8 | 0x4c7420
-        | 0x4c7150 | 0x4c7618 | 0x4c7660 => profile.default_flags,
+        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 => profile.default_flags,
         0x4c7978 => (profile.default_flags | 0x80) & !2,
         0x4c78a0 | 0x4c78e8 if matches!(profile.entity_type, 3 | 27) => {
             crate::rolling_boulder::current_style(entity)
@@ -894,6 +1073,7 @@ fn apply_contact(
                         world_fx,
                         notifications: frame.notifications,
                         retail_tick: frame.retail_tick,
+                        player: playing.as_mut().map(PlayingPlayerContact::reborrow),
                     },
                 )
             },
@@ -971,7 +1151,10 @@ fn contact_task_hook(
         ),
         (0x4c7738, Some(Task::TrashFurniture(_)), None)
             if entity.entity_type == 26
-                || crate::native_type30::allocation_authenticates(entity) =>
+                || crate::native_type30::allocation_authenticates(entity)
+                || crate::native_type18::allocation_authenticates(entity)
+                || crate::native_type28::allocation_authenticates(entity)
+                || crate::native_type76::allocation_authenticates(entity) =>
         {
             Ok(NativeGroundStaticTaskHook::Furniture)
         }
@@ -986,7 +1169,28 @@ fn contact_task_hook(
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
-        (0x4c7150, None, None) if entity.entity_type == 13 => Ok(NativeGroundStaticTaskHook::Null),
+        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 43 | 38) => {
+            Ok(NativeGroundStaticTaskHook::Null)
+        }
+        // BC90 keeps a carrier's living tasks and A8B0 calls each task's +20
+        // without a style or dying test. Only the retained Primary's 02CA0
+        // writes; acquisition Secondaries keep 05FF0's null hook.
+        (0x4c7198, primary, _) => match primary {
+            None => Ok(NativeGroundStaticTaskHook::Null),
+            Some(Task::SharedRetarget(task)) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            )),
+            Some(Task::ChaseTarget(task)) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            )),
+            Some(Task::DefecateVirusWander(task)) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            )),
+            Some(Task::CapturePeoplePursuit(task)) => Ok(
+                NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
+            ),
+            _ => Err(Block::Runtime("contact task graph")),
+        },
         (0x4c7b28, Some(Task::SharedRetarget(task)), Some(Task::FollowBeaconAcquisition(_))) => Ok(
             NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
         ),
@@ -1069,12 +1273,102 @@ fn reselect_after_furniture_contact(
     id: u32,
 ) -> Result<(), NativeGroundContactBlock> {
     use NativeGroundContactBlock as Block;
+    if crate::native_type18::manager_allocation_authenticates(frame.entities, id) {
+        // Type18's root weighs rule8, read against the static cell C890 just
+        // damaged.
+        if super::behavior::reselect::<crate::native_type18::profile::Type18Profile>(
+            frame.entities,
+            id,
+            frame.retail_tick,
+            frame.world_fx,
+            Some(frame.resources),
+            super::behavior::ReselectionEntry::Impact,
+        )
+        .is_err()
+        {
+            if let Ok(owner) =
+                crate::native_type18::Type18Owner::adopt_blocked_prefix(frame.entities, id)
+            {
+                frame.actor_tasks.register_type18(owner);
+            }
+            return Err(Block::Runtime("Type18 static C690 suffix"));
+        }
+        let owner = crate::native_type18::Type18Owner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Type18 post-static owner"))?;
+        frame.actor_tasks.register_type18(owner);
+        return Ok(());
+    }
+    let type76_row = frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(crate::native_type76::type76_row);
+    if let Some(row) = type76_row {
+        let result = match row {
+            crate::native_type76::Type76Row::Type76 => {
+                super::behavior::reselect::<crate::native_type76::profile::Type76Profile>(
+                    frame.entities,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(frame.resources),
+                    super::behavior::ReselectionEntry::Impact,
+                )
+            }
+            crate::native_type76::Type76Row::Type77 => {
+                super::behavior::reselect::<crate::native_type76::profile::Type77Profile>(
+                    frame.entities,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(frame.resources),
+                    super::behavior::ReselectionEntry::Impact,
+                )
+            }
+        };
+        if result.is_err() {
+            if let Ok(owner) =
+                crate::native_type76::Type76FamilyOwner::adopt_blocked_prefix(frame.entities, id)
+            {
+                frame.actor_tasks.register_type76_family(owner);
+            }
+            return Err(Block::Runtime("Type76-family static C690 suffix"));
+        }
+        let owner = crate::native_type76::Type76FamilyOwner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Type76-family post-static owner"))?;
+        frame.actor_tasks.register_type76_family(owner);
+        return Ok(());
+    }
+    if crate::native_type28::manager_allocation_authenticates(frame.entities, id) {
+        if super::behavior::reselect::<crate::native_type28::profile::Type28Profile>(
+            frame.entities,
+            id,
+            frame.retail_tick,
+            frame.world_fx,
+            Some(frame.resources),
+            super::behavior::ReselectionEntry::Impact,
+        )
+        .is_err()
+        {
+            if let Ok(owner) =
+                crate::native_type28::Type28Owner::adopt_blocked_prefix(frame.entities, id)
+            {
+                frame.actor_tasks.register_type28(owner);
+            }
+            return Err(Block::Runtime("Type28 static C690 suffix"));
+        }
+        let owner = crate::native_type28::Type28Owner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Type28 post-static owner"))?;
+        frame.actor_tasks.register_type28(owner);
+        return Ok(());
+    }
     if crate::native_type30::manager_allocation_authenticates(frame.entities, id) {
         if super::behavior::reselect::<crate::native_type30::profile::Type30Profile>(
             frame.entities,
             id,
             frame.retail_tick,
             frame.world_fx,
+            Some(frame.resources),
             super::behavior::ReselectionEntry::Impact,
         )
         .is_err()
