@@ -340,7 +340,7 @@ fn run(
                     returned_nonzero: result.returned_nonzero,
                     publication: None,
                 })
-                .map_err(|error| Intro2CommonDyingBlock::AutoPilot(Box::new(error)));
+                .map_err(|error| Intro2CommonDyingBlock::Terminal(Box::new(error)));
             }
             publish_intro2_common_standard_death(manager, id, world_fx).map(|owner| {
                 LiveActorDeathResult {
