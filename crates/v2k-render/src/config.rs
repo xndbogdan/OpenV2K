@@ -246,6 +246,9 @@ pub struct GameConfig {
     /// How a standard game controller is bound; a port preference.
     #[serde(default)]
     pub controller_layout: ControllerLayout,
+    /// The port's fixes for retail bugs; each is on unless turned off.
+    #[serde(default)]
+    pub fixes: PortFixes,
 
     // Game
     #[serde(default)]
@@ -258,6 +261,27 @@ pub struct GameConfig {
     /// alongside the window mode; resource-tier changes apply next launch.
     #[serde(default)]
     pub detail: GraphicsDetail,
+}
+
+/// The port's fixes for retail bugs, beside the retail settings. Each is on
+/// by default; turning one off restores retail's behavior. The launcher's
+/// Options offer them, and the command line overrides them for one run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PortFixes {
+    /// Fire a beam command (C collects, D drops) when its 80-ms countdown
+    /// lands exactly on zero. Retail's `FUN_00446640` fires only when a
+    /// frame's whole-millisecond step overshoots the countdown, so at its
+    /// 125-fps cap every 8-ms frame lands on zero and C and D do nothing.
+    #[serde(default = "default_true")]
+    pub beam_commands: bool,
+}
+
+impl Default for PortFixes {
+    fn default() -> Self {
+        Self {
+            beam_commands: true,
+        }
+    }
 }
 
 fn default_true() -> bool {
@@ -338,6 +362,7 @@ impl Default for GameConfig {
             hud: true,
             language: 0,
             controller_layout: ControllerLayout::Remastered,
+            fixes: PortFixes::default(),
             difficulty: Difficulty::Medium,
             detail: GraphicsDetail::High,
         }

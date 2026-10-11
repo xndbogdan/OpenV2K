@@ -239,6 +239,7 @@ impl World {
     fn cargo_step(&mut self) -> Option<BeamOutcome> {
         let cargo = self.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20_000,
+            beam_expiry: crate::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                 terrain: self.session.cache.terrain().unwrap(),

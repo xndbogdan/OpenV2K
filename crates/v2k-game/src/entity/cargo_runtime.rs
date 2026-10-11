@@ -22,6 +22,8 @@ pub use attachment::{PlayerCargoAttachmentError, PlayerCargoAttachmentFrame};
 /// later through [`EntityManager::update_late_tail_materialisers`].
 pub struct PlayerCargoFrame<'a> {
     pub elapsed_micros: u32,
+    /// Whether the beam countdown fires when it lands on zero.
+    pub beam_expiry: BeamExpiry,
     pub drop_context: Option<CargoDropContext<'a>>,
     pub retail_tick: u32,
     pub scheduler: &'a mut SpecializedActorTaskScheduler,
@@ -59,8 +61,12 @@ impl EntityManager {
             terrain: frame.drop_context.map(|context| context.terrain),
             blocked: Vec::new(),
         };
-        let beam =
-            self.tick_beam_with_callbacks(frame.elapsed_micros, frame.drop_context, &mut callbacks);
+        let beam = self.tick_beam_with_callbacks(
+            frame.elapsed_micros,
+            frame.drop_context,
+            frame.beam_expiry,
+            &mut callbacks,
+        );
         PlayerCargoFrameOutcome {
             beam,
             blocked: callbacks.blocked,

@@ -531,6 +531,7 @@ fn real_converted_worker_can_be_beamed_dropped_and_rejects_a_parked_owner() {
         for step in 1..=30 {
             let result = manager.update_player_cargo(PlayerCargoFrame {
                 elapsed_micros: 20_000,
+                beam_expiry: crate::entity::BeamExpiry::AtZero,
                 drop_context: Some(CargoDropContext {
                     carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                     terrain: session.cache.terrain().unwrap(),
@@ -589,6 +590,7 @@ fn real_converted_worker_can_be_beamed_dropped_and_rejects_a_parked_owner() {
         for step in 31..=130 {
             let result = manager.update_player_cargo(PlayerCargoFrame {
                 elapsed_micros: 20_000,
+                beam_expiry: crate::entity::BeamExpiry::AtZero,
                 drop_context: Some(CargoDropContext {
                     carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
                     terrain: session.cache.terrain().unwrap(),
@@ -718,6 +720,7 @@ fn real_converted_worker_can_be_beamed_dropped_and_rejects_a_parked_owner() {
         for step in 231..=250 {
             let result = manager.update_player_cargo(PlayerCargoFrame {
                 elapsed_micros: 20_000,
+                beam_expiry: crate::entity::BeamExpiry::AtZero,
                 drop_context: None,
                 retail_tick: step,
                 scheduler: &mut scheduler,

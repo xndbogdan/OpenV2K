@@ -627,6 +627,7 @@ fn reconstructed_weight_drops_settles_and_can_be_collected_again() {
     for tick in 1..=100 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 terrain: world.session.cache.terrain().unwrap(),
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
@@ -687,6 +688,7 @@ fn reconstructed_weight_drops_settles_and_can_be_collected_again() {
     for tick in 101..=130 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: None,
             retail_tick: 4793 + tick,
             scheduler: &mut world.scheduler,
@@ -1042,6 +1044,7 @@ fn drop_123_cargo(world: &mut World, newborn: u32) {
     for tick in 1..=100 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
             elapsed_micros: 20000,
+            beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
                 terrain: world.session.cache.terrain().unwrap(),
                 carrier_orientation: [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],

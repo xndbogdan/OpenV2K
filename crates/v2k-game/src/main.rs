@@ -162,7 +162,7 @@ use v2k_game::primary_weapon::{
 };
 use v2k_game::projectile_emitter::projectile_class_row;
 use v2k_game::radial_damage::radial_distance_raw;
-use v2k_game::retail_clock::RetailTickClock;
+use v2k_game::retail_clock::{RetailFramePump, RetailTickClock};
 use v2k_game::save::{SaveManager, SavePathContext, SaveSource, SavedPlayerState};
 use v2k_game::specialized_actor_task_production::{
     SpecializedActorTaskProductionFrame, SpecializedActorTaskProductionOutcome,
@@ -1103,6 +1103,21 @@ struct Cli {
     /// (`controller_layout` in port-config.json).
     #[arg(long, value_enum)]
     controller_layout: Option<ControllerLayoutArg>,
+
+    /// Port fix for a retail bug, on unless saved off: fire a beam command
+    /// (C collects, D drops) when its 80-ms countdown lands exactly on zero,
+    /// which every frame does at retail's 125-fps cap. `false` restores
+    /// retail's countdown for this run (`fixes.beam_commands` in
+    /// port-config.json).
+    #[arg(long, value_name = "BOOL", action = clap::ArgAction::Set)]
+    beam_commands: Option<bool>,
+}
+
+/// Single-run overrides of saved port preferences; none is written back.
+#[derive(Clone, Copy, Debug, Default)]
+struct RunOverrides {
+    controller_layout: Option<ControllerLayout>,
+    beam_commands: Option<bool>,
 }
 
 /// CLI spelling of [`v2k_render::ControllerLayout`].
@@ -1488,7 +1503,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 cli.overlay_depth_policy
                     .unwrap_or(OverlayDepthPolicyArg::TerrainRecede)
                     .to_policy(),
-                cli.controller_layout.map(ControllerLayoutArg::to_layout),
+                RunOverrides {
+                    controller_layout: cli.controller_layout.map(ControllerLayoutArg::to_layout),
+                    beam_commands: cli.beam_commands,
+                },
             );
             if let Err(error) = outcome {
                 if cli.launcher
@@ -1591,7 +1609,7 @@ fn run_game(
     enter_world_immediately: bool,
     vtol_trace_path: Option<&Path>,
     overlay_depth_policy: v2k_render::OverlayDepthPolicy,
-    controller_layout: Option<ControllerLayout>,
+    overrides: RunOverrides,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
@@ -1610,8 +1628,19 @@ fn run_game(
         config.self_righting
     );
     // A game controller's bindings follow the screen; see pad_layout.
-    let mut pad_bindings = PadBindings::new(controller_layout.unwrap_or(config.controller_layout));
+    let mut pad_bindings = PadBindings::new(
+        overrides
+            .controller_layout
+            .unwrap_or(config.controller_layout),
+    );
     log!("Controller layout: {}", pad_bindings.layout().label());
+    // The port's fixes for retail bugs: saved, or overridden for this run.
+    let mut port_fixes = config.fixes;
+    if let Some(enabled) = overrides.beam_commands {
+        port_fixes.beam_commands = enabled;
+    }
+    log!("Port fixes: {port_fixes:?}");
+    let beam_expiry = v2k_game::entity::BeamExpiry::from_port_fix(port_fixes.beam_commands);
 
     // Determine backend
     let cli_override = match renderer_choice {
@@ -2023,8 +2052,9 @@ fn run_game(
     let mouse_sensitivity = 0.003_f32;
     let fly_speed = 50.0_f32;
 
-    let target_frame_time = Duration::from_millis(16);
-    let mut last_frame = Instant::now();
+    // FUN_00494070 runs a frame only once FUN_00495FF0's whole-millisecond
+    // clock has advanced 8 ms, so frames top out at 125 a second.
+    let mut frame_pump = RetailFramePump::new();
     // Exact process-global 50-Hz clock (`DAT_004FED60`). Active engine states
     // advance it once per frame; loading, the AVI and gameplay pause freeze it.
     let mut retail_clock = RetailTickClock::new();
@@ -2036,13 +2066,11 @@ fn run_game(
     let mut gameplay_overlay_frame = GameplayOverlayFrame::default();
 
     'main_loop: loop {
-        let now = Instant::now();
-        let frame_delta = now.duration_since(last_frame);
-        let uncapped_elapsed_micros = frame_delta.as_micros().min(u128::from(u32::MAX)) as u32;
+        let frame_delta_micros = frame_pump.wait_for_frame();
+        let uncapped_elapsed_micros = frame_delta_micros.min(u64::from(u32::MAX)) as u32;
         let elapsed_micros = uncapped_elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
         let dt = elapsed_micros as f32 / 1_000_000.0;
         let mut retail_tick = retail_clock.current();
-        last_frame = now;
 
         // Process events — behavior depends on game state
         let mut events = Vec::new();
@@ -2822,7 +2850,7 @@ fn run_game(
                 state = GameState::Menu(shell);
                 // Teardown is synchronous and must not become the first
                 // frontend clock advance.
-                reset_frame_clock_after_blocking_load(&mut last_frame);
+                frame_pump.restart();
                 continue;
             }
 
@@ -3816,7 +3844,7 @@ fn run_game(
                 // Loading is synchronous. Its wall time is neither a retail
                 // simulation tick nor part of Klaus's opening callback, so
                 // the next frame must begin from this boundary.
-                reset_frame_clock_after_blocking_load(&mut last_frame);
+                frame_pump.restart();
             }
 
             GameState::OpeningCinematic {
@@ -5037,6 +5065,7 @@ fn run_game(
                 let mut cargo_full_fx = None;
                 let cargo_frame = em.update_player_cargo(PlayerCargoFrame {
                     elapsed_micros,
+                    beam_expiry,
                     drop_context,
                     retail_tick,
                     scheduler: &mut specialized_actor_tasks,
@@ -8191,12 +8220,6 @@ fn run_game(
                 retail_tick,
             );
             debug_panel.render(&lines);
-        }
-
-        // Frame rate limiter
-        let frame_time = now.elapsed();
-        if frame_time < target_frame_time {
-            std::thread::sleep(target_frame_time - frame_time);
         }
     }
 
@@ -14190,10 +14213,6 @@ fn menu_depth_scale(base_depth_raw: f32, offset_raw: f32) -> f32 {
     base_depth_raw / (base_depth_raw + offset_raw).max(1.0)
 }
 
-fn reset_frame_clock_after_blocking_load(last_frame: &mut Instant) {
-    *last_frame = Instant::now();
-}
-
 /// Render a vertical list menu (submenus), with the screen's decorative
 /// 3D prop (from the screen record) turning behind the text.
 #[allow(clippy::too_many_arguments)]
@@ -15869,9 +15888,13 @@ mod menu_visual_tests {
 
     #[test]
     fn blocking_load_time_is_not_charged_to_the_next_simulation_frame() {
-        let mut last_frame = Instant::now() - Duration::from_secs(5);
-        reset_frame_clock_after_blocking_load(&mut last_frame);
-        assert!(last_frame.elapsed() < Duration::from_millis(50));
+        let mut pump = RetailFramePump::new();
+        // A blocking load longer than any frame.
+        std::thread::sleep(Duration::from_millis(60));
+        pump.restart();
+        let delta = pump.wait_for_frame();
+        assert!((8_000..50_000).contains(&delta), "{delta}");
+        assert_eq!(delta % 1_000, 0, "whole milliseconds, as timeGetTime gives");
     }
 
     #[test]

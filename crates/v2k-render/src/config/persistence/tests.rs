@@ -359,6 +359,44 @@ fn controller_layout_is_a_port_preference_beside_the_native_words() {
 }
 
 #[test]
+fn port_fixes_are_on_by_default_and_saved_beside_the_native_words() {
+    assert!(GameConfig::default().fixes.beam_commands);
+    let baseline = native_to_save(&GameConfig::default());
+    for beam_commands in [false, true] {
+        let dir = Directory::new();
+        let mut config = GameConfig {
+            fixes: PortFixes { beam_commands },
+            ..GameConfig::default()
+        };
+        let mut written = None;
+        save_with_registry(&mut config, &dir.0, |native| {
+            written = Some(native.clone());
+            Ok(())
+        })
+        .unwrap();
+        // A fix is a port choice: it never reaches the native table.
+        assert_eq!(written.clone().unwrap(), baseline, "{beam_commands}");
+        let port: PortPreferences = read_json(&dir.0.join("port-config.json")).unwrap();
+        assert_eq!(port.fixes.beam_commands, beam_commands);
+        let restored = load_from_sources(&dir.0, written, None);
+        assert_eq!(restored.fixes.beam_commands, beam_commands);
+    }
+
+    // Files written before the fixes existed, or naming none of them, load
+    // every fix on.
+    let dir = Directory::new();
+    fs::write(
+        dir.0.join("port-config.json"),
+        br#"{"renderer":"opengl","width":800,"height":600}"#,
+    )
+    .unwrap();
+    assert!(load_from_sources(&dir.0, None, None).fixes.beam_commands);
+    let empty: PortPreferences =
+        serde_json::from_str(r#"{"renderer":"auto","width":800,"height":600,"fixes":{}}"#).unwrap();
+    assert!(empty.fixes.beam_commands);
+}
+
+#[test]
 fn low_detail_uses_minimum_window_while_preserving_native_low_tier_on_save() {
     let dir = Directory::new();
     let mut retail = NativeSettings::default();

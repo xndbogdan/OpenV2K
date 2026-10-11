@@ -431,6 +431,30 @@ pub enum BeamCommand {
     Drop,
 }
 
+/// When the signed beam countdown dispatches its command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BeamExpiry {
+    /// `FUN_00446640`: only a whole-millisecond step strictly greater than
+    /// the remaining magnitude fires. A step landing exactly on zero clears
+    /// the command unfired, which every 8-ms frame at retail's 125-fps cap
+    /// does.
+    Retail,
+    /// The port fix (`PortFixes::beam_commands`): landing on zero fires too.
+    #[default]
+    AtZero,
+}
+
+impl BeamExpiry {
+    /// The countdown `PortFixes::beam_commands` selects.
+    pub const fn from_port_fix(enabled: bool) -> Self {
+        if enabled {
+            Self::AtZero
+        } else {
+            Self::Retail
+        }
+    }
+}
+
 /// Observable result produced when a queued beam timer reaches its endpoint.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BeamOutcome {
@@ -12620,16 +12644,18 @@ impl EntityManager {
         self.beam_timer_ms
     }
 
-    /// Advance the signed beam delay using `FUN_00446640`'s exact arithmetic.
-    ///
-    /// The timestep truncates from microseconds to whole milliseconds for the
-    /// expiry comparison. Retail uses a strict crossing, but its variable
-    /// callback cadence does not normally land exactly on the 80-ms endpoint.
-    /// The port's 16-ms frame limiter does (80, 64, 48, 32, 16, 0), which would
-    /// deterministically swallow the command. Treat equality as expiry here so
-    /// the recovered delay remains usable independently of display cadence.
+    /// Advance the signed beam delay with the port's default fix
+    /// ([`BeamExpiry::AtZero`]).
     pub fn tick_beam(&mut self, dt_us: u32) -> Option<BeamOutcome> {
-        self.tick_beam_with_drop_context(dt_us, None)
+        self.tick_beam_with_expiry(dt_us, BeamExpiry::AtZero)
+    }
+
+    /// Advance the signed beam delay using `FUN_00446640`'s arithmetic. The
+    /// timestep truncates from microseconds to whole milliseconds for the
+    /// expiry comparison; `expiry` decides whether landing exactly on zero
+    /// fires, as the port fix does, or clears the command, as retail does.
+    pub fn tick_beam_with_expiry(&mut self, dt_us: u32, expiry: BeamExpiry) -> Option<BeamOutcome> {
+        self.tick_beam_with_callbacks(dt_us, None, expiry, &mut AttachmentProjectionCallbacks)
     }
 
     /// Advance the beam timer with the carrier basis and terrain required by
@@ -12641,13 +12667,19 @@ impl EntityManager {
         dt_us: u32,
         drop_context: Option<CargoDropContext<'_>>,
     ) -> Option<BeamOutcome> {
-        self.tick_beam_with_callbacks(dt_us, drop_context, &mut AttachmentProjectionCallbacks)
+        self.tick_beam_with_callbacks(
+            dt_us,
+            drop_context,
+            BeamExpiry::AtZero,
+            &mut AttachmentProjectionCallbacks,
+        )
     }
 
     fn tick_beam_with_callbacks<C: CargoRelationCallbacks>(
         &mut self,
         dt_us: u32,
         drop_context: Option<CargoDropContext<'_>>,
+        expiry: BeamExpiry,
         callbacks: &mut C,
     ) -> Option<BeamOutcome> {
         let timer = self.beam_timer_ms;
@@ -12657,16 +12689,22 @@ impl EntityManager {
 
         let step_ms = dt_us / 1_000;
         let narrowed_step = step_ms as u8 as i8;
+        // 4466EE/446720 `cmp remaining, step; jle` keeps counting down unless
+        // the step overshoots; at zero the countdown write clears the byte.
+        let expires = |remaining: u32| match expiry {
+            BeamExpiry::Retail => step_ms > remaining,
+            BeamExpiry::AtZero => step_ms >= remaining,
+        };
         if timer < 0 {
             let remaining = u32::from((-i16::from(timer)) as u16);
-            if remaining <= step_ms {
+            if expires(remaining) {
                 self.beam_timer_ms = 0;
                 Some(self.start_drop_proxy(drop_context, callbacks))
             } else {
                 self.beam_timer_ms = timer.wrapping_add(narrowed_step);
                 None
             }
-        } else if u32::from(timer as u8) <= step_ms {
+        } else if expires(u32::from(timer as u8)) {
             self.beam_timer_ms = 0;
             Some(self.collect_nearest_cargo(callbacks))
         } else {
@@ -26232,6 +26270,35 @@ mod tests {
     }
 
     #[test]
+    fn retail_beam_timer_loses_commands_that_land_on_zero() {
+        let mut manager = make_cargo_manager(1);
+        set_entity_position(&mut manager, 1, [10.0, 0.0, 10.0]);
+        set_entity_position(&mut manager, 2, [11.0, 0.0, 10.0]);
+
+        // Retail's 125-fps cap gives 8-ms frames: 80, 72, ..., 8, then a step
+        // that lands on zero clears the command unfired.
+        manager.queue_beam(BeamCommand::Collect);
+        for _ in 0..10 {
+            assert_eq!(
+                manager.tick_beam_with_expiry(8_999, BeamExpiry::Retail),
+                None
+            );
+        }
+        assert_eq!(manager.beam_timer_ms(), 0);
+        assert_eq!(manager.attached_cargo_mass(), 0);
+        // A step that overshoots still fires.
+        manager.queue_beam(BeamCommand::Collect);
+        assert_eq!(
+            manager.tick_beam_with_expiry(72_000, BeamExpiry::Retail),
+            None
+        );
+        assert_eq!(
+            manager.tick_beam_with_expiry(9_000, BeamExpiry::Retail),
+            Some(BeamOutcome::Collected { entity_id: 2 })
+        );
+    }
+
+    #[test]
     fn beam_timer_expires_on_equality_so_frame_cadence_cannot_swallow_commands() {
         let mut manager = make_cargo_manager(1);
         let terrain = flat_terrain(0);
@@ -26239,13 +26306,13 @@ mod tests {
         set_entity_position(&mut manager, 2, [11.0, 0.0, 10.0]);
 
         manager.queue_beam(BeamCommand::Collect);
-        // The port targets 16-ms frames, an exact divisor of the authored
-        // 80-ms delay. Five ordinary frames must still dispatch the command.
-        for _ in 0..4 {
-            assert_eq!(manager.tick_beam(16_000), None);
+        // Retail's 8-ms frames divide the authored 80-ms delay exactly. With
+        // the port fix the tenth frame still dispatches the command.
+        for _ in 0..9 {
+            assert_eq!(manager.tick_beam(8_000), None);
         }
         assert_eq!(
-            manager.tick_beam(16_000),
+            manager.tick_beam(8_000),
             Some(BeamOutcome::Collected { entity_id: 2 })
         );
         assert_eq!(manager.beam_timer_ms(), 0);
