@@ -83,6 +83,7 @@ impl Fixture {
             &mut self.entities,
             self.id,
             &mut CaptureContext {
+                resources: None,
                 tasks: &mut self.tasks,
                 world_fx: &mut self.fx,
                 notifications: &mut self.notifications,

@@ -159,6 +159,24 @@ static walk, pair lanes and the abort take class1 (Type38) or class63 with the
 authored Type61 drop (Type129). Drowning (`E370`) fails closed until the surface
 step can lend the terminal its world.
 
+The nineteen ordinary [Type18 insects](TYPE18_RUNTIME.md) (worlds16, 21-23,
+30, 33, 34 and36) run on the ground host with Type122's capture and class12
+death. Their root mixes Defecate Virus4, Capture9, Search7, Follow Beacons33
+and Trash Furniture26, all existing programs. The host now evaluates rule8
+(FurnitureNearby) when it reselects, and both the living host and class12
+gate drag on effective bit8: Type18's `+C0` 0x431 has none (dying 0x420).
+The eleven [Type28 insects](TYPE28_RUNTIME.md) (worlds21-23, 30 and36) use the
+same machinery without an emitter: Capture9, Run Away10, Furniture26 and
+Follow Beacons33. A carried four-choice person that drowns still fails closed
+and parks (its `E370` admits no `CE90` release hook), then blocks its captor's
+release; that chain is held.
+The six Type76 and eight Type77 [insects](TYPE76_RUNTIME.md) (worlds26, 31,
+37, 39 and40) share one owner on the same host, without capture. Each fires
+its own emitter (methods24/30) from Search's Aim. Both roots weigh Follow
+Beacons33, Furniture26 and Search7; Type77 adds Defecate Virus4 and Move About
+Aimlessly5, whose `ACD0` initializer now publishes through the shared root.
+Every death, including world40's `E370` drowning, takes class12.
+
 The [shared Type47 gunner](TYPE47_RUNTIME.md) extends that construction policy
 to all eight ordinary actors (three in13, one in14, two each in15/31) and the
 three native Intro2 births. Each retains its real Sub-D allocation, authored

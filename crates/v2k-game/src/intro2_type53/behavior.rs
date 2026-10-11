@@ -7,7 +7,10 @@ pub(super) fn reselect(
     id: u32,
     tick: u32,
     world_fx: &mut WorldFx,
+    resources: Option<&crate::resource_cache::ResourceCache>,
     entry: ReselectionEntry,
 ) -> Result<(), Intro2Type53Block> {
-    shared::behavior::reselect::<super::profile::Type53Profile>(manager, id, tick, world_fx, entry)
+    shared::behavior::reselect::<super::profile::Type53Profile>(
+        manager, id, tick, world_fx, resources, entry,
+    )
 }

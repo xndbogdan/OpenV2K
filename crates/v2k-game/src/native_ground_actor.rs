@@ -10,6 +10,7 @@ pub(crate) mod defecate;
 pub mod impact;
 pub(crate) mod live;
 pub(crate) mod mover;
+pub(crate) mod publication;
 pub(crate) mod run_away;
 pub(crate) mod search;
 mod world;

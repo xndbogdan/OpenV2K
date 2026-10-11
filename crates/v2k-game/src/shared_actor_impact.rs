@@ -52,6 +52,9 @@ pub enum SharedActorImpactOutcome {
     Type53(Intro2Type53ImpactOutcome),
     Type58(Intro2Type58ImpactOutcome),
     Type122(Type122ImpactOutcome),
+    Type18(crate::native_type18::impact::Type18ImpactOutcome),
+    Type28(crate::native_type28::impact::Type28ImpactOutcome),
+    Type76Family(crate::native_type76::impact::Type76ImpactOutcome),
     Type30(Type30ImpactOutcome),
     Type40(Type40ImpactOutcome),
     Type56(crate::native_type56::impact::Type56ImpactOutcome),
@@ -295,6 +298,9 @@ pub fn apply_shared_actor_particle_hit(
         53 if entity.intro2_type53_runtime.is_some() => 53,
         58 if entity.intro2_type58_runtime.is_some() => 58,
         122 if entity.native_type122_runtime.is_some() => 122,
+        18 if entity.native_type18_runtime.is_some() => 18,
+        28 if entity.native_type28_runtime.is_some() => 28,
+        76 | 77 if entity.native_type76_runtime.is_some() => 76,
         30 if entity.native_type30_runtime.is_some() => 30,
         40 if entity.native_type40_runtime.is_some() => 40,
         56 if entity.native_type56_runtime.is_some() => 56,
@@ -352,6 +358,21 @@ pub fn apply_shared_actor_particle_hit(
     if family == 122 {
         return Some(SharedActorImpactOutcome::Type122(
             apply_shared_type122_particle_hit(frame, impact),
+        ));
+    }
+    if family == 18 {
+        return Some(SharedActorImpactOutcome::Type18(
+            apply_shared_type18_particle_hit(frame, impact),
+        ));
+    }
+    if family == 28 {
+        return Some(SharedActorImpactOutcome::Type28(
+            apply_shared_type28_particle_hit(frame, impact),
+        ));
+    }
+    if family == 76 {
+        return Some(SharedActorImpactOutcome::Type76Family(
+            apply_shared_type76_family_particle_hit(frame, impact),
         ));
     }
     if family == 123 {
@@ -468,6 +489,132 @@ pub(crate) fn apply_shared_type58_particle_hit(
     if matches!(
         result,
         Intro2Type58ImpactOutcome::Blocked {
+            committed_prefix: true,
+            ..
+        }
+    ) {
+        frame
+            .scheduler
+            .park_native_contact_prefix(frame.entities, id);
+    }
+    result
+}
+
+pub(crate) fn apply_shared_type18_particle_hit(
+    frame: SharedActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> crate::native_type18::impact::Type18ImpactOutcome {
+    use crate::intro2_radial::Intro2RadialTaskCustody;
+    use crate::native_type18::impact::{Type18ImpactBlock, Type18ImpactOutcome};
+    let id = impact.target_entity_id;
+    if !crate::native_type18::manager_allocation_authenticates(frame.entities, id)
+        || !frame
+            .scheduler
+            .prepare_native_actor_mutation(frame.entities, id)
+    {
+        return Type18ImpactOutcome::Blocked {
+            reason: Type18ImpactBlock::Runtime("completed native allocation/task custody"),
+            committed_prefix: false,
+        };
+    }
+    let result = crate::native_type18::impact::apply_type18_particle_hit(
+        SharedActorImpactFrame {
+            entities: frame.entities,
+            resources: frame.resources,
+            world_fx: frame.world_fx,
+            scheduler: &mut *frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+        },
+        impact,
+    );
+    if matches!(
+        result,
+        Type18ImpactOutcome::Blocked {
+            committed_prefix: true,
+            ..
+        }
+    ) {
+        frame
+            .scheduler
+            .park_native_contact_prefix(frame.entities, id);
+    }
+    result
+}
+
+pub(crate) fn apply_shared_type28_particle_hit(
+    frame: SharedActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> crate::native_type28::impact::Type28ImpactOutcome {
+    use crate::intro2_radial::Intro2RadialTaskCustody;
+    use crate::native_type28::impact::{Type28ImpactBlock, Type28ImpactOutcome};
+    let id = impact.target_entity_id;
+    if !crate::native_type28::manager_allocation_authenticates(frame.entities, id)
+        || !frame
+            .scheduler
+            .prepare_native_actor_mutation(frame.entities, id)
+    {
+        return Type28ImpactOutcome::Blocked {
+            reason: Type28ImpactBlock::Runtime("completed native allocation/task custody"),
+            committed_prefix: false,
+        };
+    }
+    let result = crate::native_type28::impact::apply_type28_particle_hit(
+        SharedActorImpactFrame {
+            entities: frame.entities,
+            resources: frame.resources,
+            world_fx: frame.world_fx,
+            scheduler: &mut *frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+        },
+        impact,
+    );
+    if matches!(
+        result,
+        Type28ImpactOutcome::Blocked {
+            committed_prefix: true,
+            ..
+        }
+    ) {
+        frame
+            .scheduler
+            .park_native_contact_prefix(frame.entities, id);
+    }
+    result
+}
+
+pub(crate) fn apply_shared_type76_family_particle_hit(
+    frame: SharedActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> crate::native_type76::impact::Type76ImpactOutcome {
+    use crate::intro2_radial::Intro2RadialTaskCustody;
+    use crate::native_type76::impact::{Type76ImpactBlock, Type76ImpactOutcome};
+    let id = impact.target_entity_id;
+    if !crate::native_type76::manager_allocation_authenticates(frame.entities, id)
+        || !frame
+            .scheduler
+            .prepare_native_actor_mutation(frame.entities, id)
+    {
+        return Type76ImpactOutcome::Blocked {
+            reason: Type76ImpactBlock::Runtime("completed native allocation/task custody"),
+            committed_prefix: false,
+        };
+    }
+    let result = crate::native_type76::impact::apply_type76_family_particle_hit(
+        SharedActorImpactFrame {
+            entities: frame.entities,
+            resources: frame.resources,
+            world_fx: frame.world_fx,
+            scheduler: &mut *frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+        },
+        impact,
+    );
+    if matches!(
+        result,
+        Type76ImpactOutcome::Blocked {
             committed_prefix: true,
             ..
         }

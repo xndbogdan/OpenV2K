@@ -130,7 +130,7 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
         .state_flags_at_0x08
         .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
     let mut velocity = entity.velocity_raw();
-    // 39/439 have gravity/drag, no ground-snap bit2, and C+0c is terrain-only.
+    // 39/439/431 have gravity, no ground-snap bit2, and C+0c is terrain-only.
     apply_common_gravity_and_underwater_raw(
         &mut velocity,
         dt,
@@ -144,19 +144,22 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
         },
     );
     let mut angles = entity.rotation_heading_pitch_roll_raw();
-    apply_common_wind_drag_raw(
-        &mut velocity,
-        &mut angles,
-        environment,
-        CommonWindDragFrame {
-            terrain,
-            position_raw: entity.position_raw(),
-            basis: attitude.rebuild_body_basis(heading),
-            callback_mass_raw: std::num::NonZeroU16::new(entity.mass_raw)
-                .ok_or(Block::Runtime("zero environment mass"))?,
-            elapsed_micros: dt,
-        },
-    );
+    // 40E354 calls 44EC60 only for effective bit8: 39/439 drag, 431 does not.
+    if effective_flags & 0x08 != 0 {
+        apply_common_wind_drag_raw(
+            &mut velocity,
+            &mut angles,
+            environment,
+            CommonWindDragFrame {
+                terrain,
+                position_raw: entity.position_raw(),
+                basis: attitude.rebuild_body_basis(heading),
+                callback_mass_raw: std::num::NonZeroU16::new(entity.mass_raw)
+                    .ok_or(Block::Runtime("zero environment mass"))?,
+                elapsed_micros: dt,
+            },
+        );
+    }
     entity.set_velocity_raw(velocity);
     entity.set_rotation_heading_pitch_roll_raw(angles);
     run_surface::<P>(
@@ -235,6 +238,7 @@ fn run_surface<P: NativeGroundActorProfile>(
                 P::allocation_authenticates, |manager, id, world_fx| P::publish_standard_death(manager, id,
                     &mut NativeGroundDeathContext::Capture { resources,
                         context: crate::native_actor_capture::CaptureContext {
+                            resources: Some(resources),
                             tasks: &mut **tasks, world_fx, notifications: &mut **notifications, retail_tick: tick,
                             result_screen: crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
                             hive_dying: Default::default(),
