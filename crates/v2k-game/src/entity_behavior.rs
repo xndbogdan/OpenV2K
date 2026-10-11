@@ -607,6 +607,25 @@ pub const EXPLODE_WITH_RING_BEHAVIOR_PROGRAM: BehaviorProgram = BehaviorProgram 
     )
 };
 
+/// Class63 is the direct alternate of every power-up carrier (Types 71, 80,
+/// 81, 117, 124 and 126..129). Style `0x004C7198` is zero apart from its
+/// `+40` initializer: `FUN_0040BC90` runs BAF0's burst and radial pass,
+/// constructs a Type61 from the carrier's `+88` payload at its position,
+/// then stages deferred removal. Unlike BD20 it never calls A860.
+pub const AUTO_PILOT_BEHAVIOR_PROGRAM: BehaviorProgram = BehaviorProgram {
+    initializer_argument_raw: RetailRuntimeValue::Known(0),
+    ..behavior!(
+        63,
+        "Auto Pilot",
+        0x004C8828,
+        0x004C7198,
+        0,
+        0,
+        0,
+        0x0040BC90
+    )
+};
+
 /// Type46's alternate rule1/class25. Descriptor4CDB48 starts at the
 /// Player Control table's Dying bounce frame4CDAA8.447280 publishes the
 /// BB8/4476F0 timed object after its synchronous wreck burst.
@@ -697,6 +716,7 @@ pub static AUDITED_ALTERNATE_BEHAVIOR_PROGRAMS: &[BehaviorProgram] = &[
     SPLIT_AND_EXPLODE_BEHAVIOR_PROGRAM,
     PLAYER_DYING_BEHAVIOR_PROGRAM,
     EXPLODE_WITH_RING_BEHAVIOR_PROGRAM,
+    AUTO_PILOT_BEHAVIOR_PROGRAM,
 ];
 
 /// Every behavior class referenced by the cumulative retail Section-12

@@ -27,6 +27,7 @@ use v2k_formats::collision::{
 };
 
 pub(crate) fn authenticate_metadata(
+    row: Type16Row,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> Result<(), Intro2Type16Error> {
     let Some(initializer) = &metadata.initializer else {
@@ -95,7 +96,7 @@ pub(crate) fn authenticate_metadata(
                 aim_threshold_raw: 16_000,
                 speed_override_raw: 0,
                 target_axis_tolerance_raw: 2560,
-                sound_id: 81,
+                sound_id: row.emitter_sound(),
                 raw_word_at_0x12: 158,
                 alternate_emitter_raw: 0,
                 stochastic_gate_mode: 0,
@@ -107,7 +108,7 @@ pub(crate) fn authenticate_metadata(
         || initializer.common_axis_descriptor != AXIS
         || initializer.behavior_choices.as_ref() != INITIAL_CHOICES
         || initializer.behavior_rule_ref != 1
-        || initializer.alternate_behavior_class_ref != 12
+        || initializer.alternate_behavior_class_ref != row.alternate_behavior_class()
         || sub_h.completion_sound_id.is_some()
         || sub_h.records.len() != refs.len()
         || sub_h.records.iter().enumerate().any(|(i, record)| {
@@ -148,7 +149,7 @@ pub(crate) fn publish_intro2_type16(
     {
         return Err(Intro2Type16Error::Identity);
     }
-    authenticate_metadata(metadata)?;
+    authenticate_metadata(Type16Row::Type16, metadata)?;
     authenticate_birth_storage(entity)?;
     if preceding.iter().any(|candidate| {
         candidate
@@ -163,6 +164,7 @@ pub(crate) fn publish_intro2_type16(
         .expect("authenticated Type16 spawn/seed owns its first-query receipt");
     publish_birth(
         entity,
+        Type16Row::Type16,
         metadata,
         preceding,
         terrain,
@@ -202,9 +204,9 @@ pub(crate) fn publish_authored_type16(
         constructor_surface_bits,
         sub_d,
     } = request;
+    let row = Type16Row::from_entity_type(spawn.entity_type).ok_or(Intro2Type16Error::Identity)?;
     if !entity.active
-        || entity.entity_type != 16
-        || spawn.entity_type != 16
+        || entity.entity_type != row.entity_type()
         || entity.id != allocation.entity_id
         || entity.authored_spawn_index != Some(spawn.index)
         || entity.model_slots != [Some(MODEL); 4]
@@ -220,7 +222,7 @@ pub(crate) fn publish_authored_type16(
     {
         return Err(Intro2Type16Error::Identity);
     }
-    authenticate_metadata(metadata)?;
+    authenticate_metadata(row, metadata)?;
     authenticate_birth_storage(entity)?;
     if sub_d.descriptor != INTRO2_TYPE16_SUB_D
         || sub_d.runtime != Type9SubDRuntime::from_constructor()
@@ -243,6 +245,7 @@ pub(crate) fn publish_authored_type16(
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
     publish_birth(
         entity,
+        row,
         metadata,
         preceding,
         terrain,
@@ -278,6 +281,7 @@ fn authenticate_birth_storage(entity: &Entity) -> Result<(), Intro2Type16Error> 
 #[allow(clippy::too_many_arguments)]
 fn publish_birth(
     entity: &mut Entity,
+    row: Type16Row,
     metadata: &EntityTypeRuntimeMetadata,
     preceding: &[Entity],
     terrain: &TerrainGrid,
@@ -318,7 +322,7 @@ fn publish_birth(
         joint_bindings: [None; 2],
         projectile_method: 20,
         emitter_selector: 0,
-        sound_id: 81,
+        sound_id: u32::from(row.emitter_sound()),
         direct_mode: 0,
         remaining_time_raw: 0,
         manual_step_raw: 0,
@@ -335,6 +339,7 @@ fn publish_birth(
     entity.intro2_type16_runtime = Some(Intro2Type16Runtime {
         entity_id: entity.id,
         spawn_index: spawn,
+        row,
         sub_d_runtime,
         sub_d_owner,
         sub_e_runtime,
