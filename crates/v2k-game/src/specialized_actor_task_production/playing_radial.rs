@@ -141,6 +141,7 @@ impl SpecializedActorTaskScheduler {
                 53 => entity.intro2_type53_runtime.is_some(),
                 58 => entity.intro2_type58_runtime.is_some(),
                 122 => entity.native_type122_runtime.is_some(),
+                18 => entity.native_type18_runtime.is_some(),
                 30 => entity.native_type30_runtime.is_some(),
                 40 => entity.native_type40_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
@@ -195,6 +196,7 @@ impl SpecializedActorTaskScheduler {
                                         || entity.intro2_type53_runtime.is_some()
                                         || entity.intro2_type58_runtime.is_some()
                                         || entity.native_type122_runtime.is_some()
+                                        || entity.native_type18_runtime.is_some()
                                         || entity.native_type30_runtime.is_some()
                                         || entity.native_type40_runtime.is_some()
                                         || entity.native_type56_runtime.is_some()

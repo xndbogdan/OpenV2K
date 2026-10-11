@@ -1,4 +1,4 @@
-//! Native Type16/17/26/58/122 `11AD0 -> D7F0/D860 -> 141D0` terrain/water contact.
+//! Native Type16/17/18/26/58/122 `11AD0 -> D7F0/D860 -> 141D0` terrain/water contact.
 //!
 //! Living C8=39/439 clears10000; Class12's reverse mask2015 restores it and yields
 //! effective policy28 (428 for Type122), with null solid/water style hooks. The outer walk retains
@@ -44,6 +44,7 @@ enum NativeSurfaceProfile {
     Type58,
     Type30,
     Type122,
+    Type18,
 }
 
 impl NativeSurfaceProfile {
@@ -55,6 +56,7 @@ impl NativeSurfaceProfile {
             58 => Some(Self::Type58),
             30 => Some(Self::Type30),
             122 => Some(Self::Type122),
+            18 => Some(Self::Type18),
             _ => None,
         }
     }
@@ -67,6 +69,7 @@ impl NativeSurfaceProfile {
             Self::Type58 => 58,
             Self::Type30 => 30,
             Self::Type122 => 122,
+            Self::Type18 => 18,
         }
     }
 
@@ -90,6 +93,7 @@ impl NativeSurfaceProfile {
             Self::Type122 => {
                 crate::native_type122::type122_manager_allocation_authenticates(manager, id)
             }
+            Self::Type18 => crate::native_type18::manager_allocation_authenticates(manager, id),
             Self::Type17 => {
                 crate::intro2_type17::type17_manager_allocation_authenticates(manager, id)
             }
@@ -114,6 +118,7 @@ impl NativeSurfaceProfile {
             }
             Self::Type30 => crate::native_type30::authenticate_metadata(metadata).is_ok(),
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
+            Self::Type18 => crate::native_type18::authenticate_metadata(metadata).is_ok(),
             Self::Type17 => crate::intro2_type17::authenticate_metadata(metadata).is_ok(),
             Self::Type58 => crate::intro2_type58::authenticate_metadata(metadata).is_ok(),
         };
@@ -328,13 +333,16 @@ fn resolve(
                 },
                 |manager, fx, feedback| {
                     let publication = match profile {
-                        NativeSurfaceProfile::Type17 | NativeSurfaceProfile::Type122 => {
+                        NativeSurfaceProfile::Type17
+                        | NativeSurfaceProfile::Type122
+                        | NativeSurfaceProfile::Type18 => {
                             let feedback = feedback
                                 .ok_or(Intro2CommonDyingBlock::Runtime("surface death feedback"))?;
                             crate::native_actor_capture::publish_native_captor_standard_death(
                                 manager,
                                 id,
                                 &mut crate::intro2_type17::capture::CaptureContext {
+                                    resources: None,
                                     tasks: frame.actor_tasks,
                                     world_fx: fx,
                                     notifications: feedback.notifications,

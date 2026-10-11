@@ -35,6 +35,7 @@ pub struct NativeCaptureRelation {
 pub(crate) enum NativeCaptorProfile {
     Type17,
     Type122,
+    Type18,
 }
 
 impl NativeCaptorProfile {
@@ -47,6 +48,9 @@ impl NativeCaptorProfile {
             122 if crate::native_type122::type122_manager_allocation_authenticates(manager, id) => {
                 Self::Type122
             }
+            18 if crate::native_type18::manager_allocation_authenticates(manager, id) => {
+                Self::Type18
+            }
             _ => return Err(CaptureBlock::new("capture native allocation")),
         };
         let metadata = manager
@@ -55,6 +59,7 @@ impl NativeCaptorProfile {
         let authentic = match profile {
             Self::Type17 => crate::intro2_type17::authenticate_metadata(metadata).is_ok(),
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
+            Self::Type18 => crate::native_type18::authenticate_metadata(metadata).is_ok(),
         };
         if !authentic {
             return Err(CaptureBlock::new("capture native metadata"));
@@ -66,6 +71,7 @@ impl NativeCaptorProfile {
         match self {
             Self::Type17 => 17,
             Self::Type122 => 122,
+            Self::Type18 => 18,
         }
     }
 
@@ -91,6 +97,19 @@ impl NativeCaptorProfile {
                 id,
                 context.retail_tick,
                 context.world_fx,
+                context.resources,
+                crate::native_ground_actor::behavior::ReselectionEntry::Impact,
+            )
+            .map_err(|_| ()),
+            // Type18's root weighs rule8: the entry must lend its world.
+            Self::Type18 => crate::native_ground_actor::behavior::reselect::<
+                crate::native_type18::profile::Type18Profile,
+            >(
+                manager,
+                id,
+                context.retail_tick,
+                context.world_fx,
+                context.resources,
                 crate::native_ground_actor::behavior::ReselectionEntry::Impact,
             )
             .map_err(|_| ()),
@@ -154,6 +173,9 @@ pub struct CaptureHiveDyingBurst<'a> {
 }
 
 pub struct CaptureContext<'a> {
+    /// The resident world, when the entry holds it. A captor whose living
+    /// root weighs rule8 (FurnitureNearby) needs it for C690's object scan.
+    pub resources: Option<&'a crate::resource_cache::ResourceCache>,
     pub tasks: &'a mut dyn CaptureTaskCustody,
     pub world_fx: &'a mut WorldFx,
     pub notifications: &'a mut GameplayNotifications,
@@ -447,7 +469,7 @@ pub fn apply_capture_pair_checked_damage(
         LiveActorDamageRequest, LiveActorDeathResult,
     };
     let target_type = actor(manager, target)?.entity_type;
-    let is_captor = matches!(target_type, 17 | 122);
+    let is_captor = matches!(target_type, 17 | 122 | 18);
     let is_hive_destination = target_type == 67;
     if is_captor {
         captor(manager, target)?;
@@ -498,6 +520,7 @@ pub fn apply_capture_pair_checked_damage(
             let feedback =
                 feedback.ok_or(CaptureBlock::new("capture physical notification context"))?;
             let mut nested = CaptureContext {
+                resources: None,
                 tasks: context.tasks,
                 world_fx,
                 notifications: feedback.notifications,

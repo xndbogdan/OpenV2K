@@ -366,6 +366,31 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type122: {error:?}"))?;
             }
+            18 => {
+                let sub_d = sub_d.ok_or("missing Type18 Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type18 constructor surface")?;
+                crate::native_type18::publish_native_type18(
+                    crate::native_type18::NativeType18ConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        preceding: &self.entities,
+                        resources,
+                        constructor_surface_bits,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type18: {error:?}"))?;
+            }
             16 | 128 => {
                 let sub_d = sub_d.ok_or("missing Type16 Sub-D allocation")?;
                 let constructor_surface_bits =

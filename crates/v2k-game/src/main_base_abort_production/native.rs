@@ -31,6 +31,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     Type53(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type58(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type122(crate::native_actor_capture::CaptureBlock),
+    Type18(crate::native_actor_capture::CaptureBlock),
     Type66(crate::intro2_type66::death::Intro2Type66DeathBlock),
     MainBase(crate::main_base_runtime::MainBaseDeathBlock),
     Fish(crate::shared_fish::death::SharedFishDeathBlock),
@@ -154,6 +155,7 @@ enum NativeActor {
     Type53,
     Type58,
     Type122,
+    Type18,
     Factory,
     SharedFish,
 }
@@ -193,6 +195,7 @@ pub(super) fn dispatch_native_actor(
         53 if entity.intro2_type53_runtime.is_some() => NativeActor::Type53,
         58 if entity.intro2_type58_runtime.is_some() => NativeActor::Type58,
         122 if entity.native_type122_runtime.is_some() => NativeActor::Type122,
+        18 if entity.native_type18_runtime.is_some() => NativeActor::Type18,
         6 if entity.main_base_runtime.is_some() => NativeActor::MainBase,
         66 if entity.intro2_type66_runtime.is_some() => NativeActor::Factory,
         type_id
@@ -324,6 +327,7 @@ fn dispatch(
             | NativeActor::Type53
             | NativeActor::Type58
             | NativeActor::Type122
+            | NativeActor::Type18
             | NativeActor::Type10Family
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
@@ -388,6 +392,7 @@ fn dispatch(
                 entities,
                 id,
                 &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
                     tasks: specialized_tasks,
                     world_fx,
                     notifications: gameplay.notifications,
@@ -402,6 +407,29 @@ fn dispatch(
                 publications.type122_common_dying += 1;
             }
             MainBaseAbortActorDisposition::Type122Death
+        }
+        // Type18's 10C10 is Type122's: the captor death releases or kills
+        // any captive, then class12.
+        NativeActor::Type18 => {
+            let owner = crate::native_actor_capture::publish_native_captor_standard_death(
+                entities,
+                id,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: specialized_tasks,
+                    world_fx,
+                    notifications: gameplay.notifications,
+                    retail_tick: gameplay.retail_tick,
+                    result_screen: MainBaseType9ResultScreenState::AlreadyShownByMainBaseAbort,
+                    hive_dying: Default::default(),
+                },
+            )
+            .map_err(|error| block(Block::Type18(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type18_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type18Death
         }
         NativeActor::Worker => {
             let death = crate::intro2_type8::impact::run_intro2_type8_standard_death(
@@ -486,6 +514,7 @@ fn dispatch(
                 entities,
                 id,
                 &mut crate::intro2_type17::capture::CaptureContext {
+                    resources: None,
                     tasks: specialized_tasks,
                     world_fx,
                     notifications: gameplay.notifications,
@@ -574,6 +603,8 @@ fn block(error: NativeMainBaseAbortDeathBlock) -> DispatchFailure {
 mod tests;
 #[cfg(test)]
 mod type122_tests;
+#[cfg(test)]
+mod type18_tests;
 #[cfg(test)]
 mod type62_tests;
 

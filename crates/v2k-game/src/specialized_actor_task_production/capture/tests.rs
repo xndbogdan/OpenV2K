@@ -45,6 +45,7 @@ fn corpse_attachment_retires_native_owner_in_each_actual_storage() {
                 &mut manager,
                 id,
                 &mut CaptureContext {
+                    resources: None,
                     tasks: &mut scheduler,
                     world_fx: &mut fx,
                     notifications: &mut notifications,
@@ -150,6 +151,7 @@ fn delivered_child_task_is_consumed_before_its_deferred_body_sweep() {
                     &mut f.manager,
                     f.child,
                     &mut CaptureContext {
+                        resources: None,
                         tasks: &mut f.scheduler,
                         world_fx: &mut f.fx,
                         notifications: &mut f.notifications,
@@ -195,6 +197,7 @@ fn delivered_child_task_is_consumed_before_its_deferred_body_sweep() {
                 f.parent,
                 destination,
                 &mut CaptureContext {
+                    resources: None,
                     tasks,
                     world_fx: &mut f.fx,
                     notifications: &mut f.notifications,

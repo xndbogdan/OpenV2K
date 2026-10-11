@@ -231,6 +231,8 @@ impl CargoRelationCallbacks for AttachmentProjectionCallbacks {
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
+            native_type18_runtime: None,
+            native_type18_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,

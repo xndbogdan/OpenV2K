@@ -59,6 +59,7 @@ an emitter or rebuilds the incoming body matrix.
 | Intro2 Type94 |439| Generic crush; owned Follow/Search/Capture acquisition or pursuit has null style+1C |
 | Type53 |39| No generic crush; admitted style+1C is null |
 | Type122 |439| Generic crush; retains its own Capture relation and death owner |
+| Ordinary Type18 |431| Generic crush; Type122's capture and death; Furniture C890 reselects with rule8 |
 | Living Type13/10/57 |8| No generic crush; Search/Move/fallback style+1C is null |
 | Living Type15/87 | Authored initializer word | Own Search hook and null style+1C; actual alternate2 C470 death |
 | Ordinary Type43 |2003B| No generic crush; Search/Pursuit style+1C is null; class1 death |

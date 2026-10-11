@@ -149,6 +149,7 @@ pub(crate) fn resolve_native_ground_static_contact_with_playing<P: NativeGroundA
                     } else {
                         NativeGroundDeathContext::Capture { resources: context.resources,
                             context: crate::native_actor_capture::CaptureContext {
+                                resources: Some(context.resources),
                                 tasks: context.tasks, world_fx: context.world_fx,
                                 notifications: context.notifications, retail_tick: context.retail_tick,
                                 result_screen: crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
@@ -695,7 +696,7 @@ fn resolve(
             | 0x4c80c8
             | 0x4c8110
             | 0x4c8158
-    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56)
+    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18)
         && context.active_style().style_address() == 0x4c7e88)
         || (matches!(
             profile.entity_type,
@@ -714,7 +715,8 @@ fn resolve(
         || (matches!(profile.entity_type, 80 | 126 | 128 | 129)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
-        || (profile.entity_type == 26 && context.active_style().style_address() == 0x4c7738)
+        || (matches!(profile.entity_type, 26 | 18)
+            && context.active_style().style_address() == 0x4c7738)
         || (crate::native_type30::allocation_authenticates(entity)
             && matches!(context.active_style().style_address(), 0x4c7930 | 0x4c7738))
         || (profile.entity_type == 56
@@ -1053,7 +1055,8 @@ fn contact_task_hook(
         ),
         (0x4c7738, Some(Task::TrashFurniture(_)), None)
             if entity.entity_type == 26
-                || crate::native_type30::allocation_authenticates(entity) =>
+                || crate::native_type30::allocation_authenticates(entity)
+                || crate::native_type18::allocation_authenticates(entity) =>
         {
             Ok(NativeGroundStaticTaskHook::Furniture)
         }
@@ -1165,12 +1168,38 @@ fn reselect_after_furniture_contact(
     id: u32,
 ) -> Result<(), NativeGroundContactBlock> {
     use NativeGroundContactBlock as Block;
+    if crate::native_type18::manager_allocation_authenticates(frame.entities, id) {
+        // Type18's root weighs rule8, read against the static cell C890 just
+        // damaged.
+        if super::behavior::reselect::<crate::native_type18::profile::Type18Profile>(
+            frame.entities,
+            id,
+            frame.retail_tick,
+            frame.world_fx,
+            Some(frame.resources),
+            super::behavior::ReselectionEntry::Impact,
+        )
+        .is_err()
+        {
+            if let Ok(owner) =
+                crate::native_type18::Type18Owner::adopt_blocked_prefix(frame.entities, id)
+            {
+                frame.actor_tasks.register_type18(owner);
+            }
+            return Err(Block::Runtime("Type18 static C690 suffix"));
+        }
+        let owner = crate::native_type18::Type18Owner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Type18 post-static owner"))?;
+        frame.actor_tasks.register_type18(owner);
+        return Ok(());
+    }
     if crate::native_type30::manager_allocation_authenticates(frame.entities, id) {
         if super::behavior::reselect::<crate::native_type30::profile::Type30Profile>(
             frame.entities,
             id,
             frame.retail_tick,
             frame.world_fx,
+            Some(frame.resources),
             super::behavior::ReselectionEntry::Impact,
         )
         .is_err()

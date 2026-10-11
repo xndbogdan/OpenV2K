@@ -3644,6 +3644,7 @@ fn run_game(
                 }
                 specialized_actor_tasks.adopt_intro2_type53(&em);
                 specialized_actor_tasks.adopt_type122(&em);
+                specialized_actor_tasks.adopt_type18(&em);
                 specialized_actor_tasks.adopt_type30(&em);
                 specialized_actor_tasks.adopt_type40(&em);
                 specialized_actor_tasks.adopt_type56(&em);
@@ -3979,6 +3980,9 @@ fn run_game(
                             )
                             | SpecializedActorTaskProductionOutcome::NativeType122(
                                 v2k_game::native_type122::Type122Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType18(
+                                v2k_game::native_type18::Type18Outcome::Blocked { .. },
                             )
                             | SpecializedActorTaskProductionOutcome::NativeType30(
                                 v2k_game::native_type30::Type30Outcome::Blocked { .. },
@@ -7131,6 +7135,22 @@ fn run_game(
                             log!("Ordinary Type122 {id} static contact: {result:?}");
                         }
                         if matches!(result, Type122ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type18::contact::{
+                            resolve_type18_static_contact, Type18ContactOutcome,
+                        };
+                        let result = resolve_type18_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type18ContactOutcome::Ineligible | Type18ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type18 {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type18ContactOutcome::Blocked { .. }) {
                             continue;
                         }
                     }

@@ -304,6 +304,7 @@ fn owns_captor_contact(entity: &Entity) -> bool {
     // must report a changed body rather than silently discarding its pairs.
     (entity.entity_type == 17 && entity.intro2_type17_runtime.is_some())
         || (entity.entity_type == 122 && entity.native_type122_runtime.is_some())
+        || (entity.entity_type == 18 && entity.native_type18_runtime.is_some())
 }
 
 /// Independent Type58 side of an 11AD0 pair.
@@ -755,6 +756,7 @@ fn behavior(
                 frame.entities,
                 opposite,
                 &mut capture::CaptureContext {
+                    resources: Some(&*frame.resources),
                     tasks: frame.actor_tasks,
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,
@@ -771,13 +773,14 @@ fn behavior(
             *committed = true;
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
-        PairContactCallbackPolicy::CapturePeople if matches!(entity.entity_type, 17 | 122) => {
+        PairContactCallbackPolicy::CapturePeople if matches!(entity.entity_type, 17 | 122 | 18) => {
             let RetailRuntimeValue::Known(Some(rows)) = &entity.sub_j_attachment_runtime else {
                 return Err(NativeCaptorPairBlock::Runtime("capture capacity"));
             };
             let full = rows.len() >= rows.capacity();
             let result = {
                 let mut context = capture::CaptureContext {
+                    resources: Some(&*frame.resources),
                     tasks: frame.actor_tasks,
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,
@@ -825,13 +828,14 @@ fn behavior(
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         PairContactCallbackPolicy::UnknownAddress(0x0040_d0b0)
-            if matches!(entity.entity_type, 17 | 122) =>
+            if matches!(entity.entity_type, 17 | 122 | 18) =>
         {
             let result = capture::execute_capture_delivery(
                 frame.entities,
                 owner,
                 opposite,
                 &mut capture::CaptureContext {
+                    resources: Some(&*frame.resources),
                     tasks: frame.actor_tasks,
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,
@@ -974,6 +978,11 @@ fn adopt_captor(frame: &mut Intro2ContactFrame<'_>, id: u32) -> Result<(), Nativ
             let owner = crate::native_type122::Type122Owner::adopt(frame.entities, id)
                 .map_err(NativeCaptorPairBlock::GroundTask)?;
             frame.actor_tasks.register_type122(owner);
+        }
+        NativeCaptorProfile::Type18 => {
+            let owner = crate::native_type18::Type18Owner::adopt(frame.entities, id)
+                .map_err(NativeCaptorPairBlock::GroundTask)?;
+            frame.actor_tasks.register_type18(owner);
         }
     }
     Ok(())
@@ -1215,6 +1224,7 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || crate::intro2_type53::intro2_type53_allocation_authenticates(entity)
         || crate::intro2_type58::intro2_type58_allocation_authenticates(entity)
         || crate::native_type122::type122_allocation_authenticates(entity)
+        || crate::native_type18::allocation_authenticates(entity)
         || crate::native_type30::allocation_authenticates(entity)
         || crate::native_type40::allocation_authenticates(entity)
         || crate::native_type56::allocation_authenticates(entity)
@@ -1393,7 +1403,7 @@ fn apply_pair_checked_damage(
         })?;
         return Ok(());
     }
-    if matches!(kind, 9 | 17 | 122 | 123)
+    if matches!(kind, 9 | 17 | 122 | 18 | 123)
         || NativeWorkerProfile::from_entity_type(kind).is_some()
         || NativeFourChoiceProfile::from_entity_type(kind).is_some()
     {
@@ -1402,6 +1412,7 @@ fn apply_pair_checked_damage(
             target,
             delivery,
             &mut capture::CaptureContext {
+                resources: Some(&*frame.resources),
                 tasks: frame.actor_tasks,
                 world_fx: frame.world_fx,
                 notifications: frame.notifications,

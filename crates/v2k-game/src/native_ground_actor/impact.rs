@@ -250,6 +250,7 @@ fn run<P: NativeGroundActorProfile>(
                 id,
                 retail_tick,
                 world_fx,
+                Some(resources.cache()),
                 super::behavior::ReselectionEntry::Impact,
             ) {
                 if let Ok(owner) = NativeGroundActorOwner::<P>::adopt_blocked_prefix(manager, id) {
@@ -268,6 +269,7 @@ fn run<P: NativeGroundActorProfile>(
                 id,
                 crate::native_actor_capture::CaptureRootCallback::Cleanup,
                 &mut crate::native_actor_capture::CaptureContext {
+                    resources: Some(resources.cache()),
                     tasks: scheduler,
                     world_fx,
                     notifications,
@@ -361,6 +363,7 @@ fn run<P: NativeGroundActorProfile>(
                     NativeGroundDeathContext::Split { resources, fx: world_fx, tick: feedback.retail_tick, tasks: scheduler }
                 } else {
                     NativeGroundDeathContext::Capture { resources, context: crate::intro2_type17::capture::CaptureContext {
+                        resources: Some(resources),
                         tasks: scheduler, world_fx, notifications: feedback.notifications,
                         retail_tick: feedback.retail_tick,
                         result_screen: crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
