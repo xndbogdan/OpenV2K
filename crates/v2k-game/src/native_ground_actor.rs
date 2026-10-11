@@ -10,6 +10,7 @@ pub(crate) mod defecate;
 pub mod impact;
 pub(crate) mod live;
 pub(crate) mod mover;
+pub(crate) mod publication;
 pub(crate) mod run_away;
 pub(crate) mod search;
 mod world;
@@ -98,6 +99,18 @@ pub enum NativeGroundDeathContext<'a> {
         tick: u32,
         tasks: &'a mut dyn NativeGroundTaskCustody,
     },
+    /// The shared class1/49/63 terminal: BAF0's radial needs the mutable
+    /// static world, the scheduler's target custody and, in Playing, the
+    /// player. Only an entry that owns all of them can lend this context.
+    Terminal {
+        resources: &'a mut crate::resource_cache::ResourceCache,
+        fx: &'a mut WorldFx,
+        static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+        notifications: &'a mut GameplayNotifications,
+        retail_tick: u32,
+        tasks: &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+        player: Option<crate::native_actor_capture::pair::PlayingPlayerContact<'a>>,
+    },
 }
 impl NativeGroundDeathContext<'_> {
     pub fn resources(&self) -> &crate::resource_cache::ResourceCache {
@@ -105,13 +118,65 @@ impl NativeGroundDeathContext<'_> {
             Self::Basic { resources, .. }
             | Self::Capture { resources, .. }
             | Self::Split { resources, .. } => resources,
+            Self::Terminal { resources, .. } => resources,
         }
     }
     pub fn world_fx(&mut self) -> &mut WorldFx {
         match self {
-            Self::Basic { fx, .. } | Self::Split { fx, .. } => fx,
+            Self::Basic { fx, .. } | Self::Split { fx, .. } | Self::Terminal { fx, .. } => fx,
             Self::Capture { context, .. } => context.world_fx,
         }
+    }
+
+    /// Run the shared terminal through a lent Terminal context.
+    pub(crate) fn run_class49_terminal(
+        &mut self,
+        manager: &mut EntityManager,
+        id: u32,
+    ) -> Result<
+        crate::live_actor_checked_damage::LiveActorDeathResult<NativeGroundTerminalPublication>,
+        crate::intro2_common_dying::Intro2CommonDyingBlock,
+    > {
+        let Self::Terminal {
+            resources,
+            fx,
+            static_damage,
+            notifications,
+            retail_tick,
+            tasks,
+            player,
+        } = self
+        else {
+            return Err(crate::intro2_common_dying::Intro2CommonDyingBlock::Runtime(
+                "class1/49/63 terminal without its static world",
+            ));
+        };
+        crate::class49_terminal::run_class49_standard_death(
+            crate::class49_terminal::Class49TerminalFrame {
+                entities: manager,
+                resources,
+                world_fx: fx,
+                static_damage,
+                notifications,
+                retail_tick: *retail_tick,
+                world: crate::class49_terminal::Class49WorldContext::for_contact(
+                    tasks,
+                    player
+                        .as_mut()
+                        .map(crate::native_actor_capture::pair::PlayingPlayerContact::reborrow),
+                ),
+            },
+            id,
+        )
+        .map(
+            |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                returned_nonzero: result.returned_nonzero,
+                publication: None,
+            },
+        )
+        .map_err(|error| {
+            crate::intro2_common_dying::Intro2CommonDyingBlock::Terminal(Box::new(error))
+        })
     }
 }
 
@@ -230,6 +295,9 @@ pub(crate) mod sealed {
         const AXIS: CommonAxisDescriptor;
         const CHOICES: &'static [BehaviorChoice];
         const LIVING_CLASSES: &'static [u8];
+        /// The alternate is a shared class1/49/63 terminal, not class12/18.
+        /// Its deaths need a Terminal context; E370 lends none in the tick.
+        const TERMINAL_DEATH: bool = false;
         fn graph_authenticates(_: &Entity) -> bool {
             true
         }

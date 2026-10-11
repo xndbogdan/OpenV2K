@@ -128,7 +128,7 @@ impl SpecializedActorTaskScheduler {
                 type_id if NativeFourChoiceProfile::from_entity_type(type_id).is_some() => {
                     entity.native_type86_runtime.is_some()
                 }
-                16 => entity.intro2_type16_runtime.is_some(),
+                16 | 128 => entity.intro2_type16_runtime.is_some(),
                 10 | 5 | 80 | 126 => entity.intro2_type10_runtime.is_some(),
                 // A receipt selects the owner; its adapter authenticates it.
                 13 => {
@@ -141,6 +141,9 @@ impl SpecializedActorTaskScheduler {
                 53 => entity.intro2_type53_runtime.is_some(),
                 58 => entity.intro2_type58_runtime.is_some(),
                 122 => entity.native_type122_runtime.is_some(),
+                18 => entity.native_type18_runtime.is_some(),
+                28 => entity.native_type28_runtime.is_some(),
+                76 | 77 => entity.native_type76_runtime.is_some(),
                 30 => entity.native_type30_runtime.is_some(),
                 40 => entity.native_type40_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
@@ -195,9 +198,14 @@ impl SpecializedActorTaskScheduler {
                                         || entity.intro2_type53_runtime.is_some()
                                         || entity.intro2_type58_runtime.is_some()
                                         || entity.native_type122_runtime.is_some()
+                                        || entity.native_type18_runtime.is_some()
+                                        || entity.native_type28_runtime.is_some()
+                                        || entity.native_type76_runtime.is_some()
                                         || entity.native_type30_runtime.is_some()
                                         || entity.native_type40_runtime.is_some()
                                         || entity.native_type56_runtime.is_some()
+                                        || entity.native_type43_runtime.is_some()
+                                        || entity.native_type38_runtime.is_some()
                                         || entity.shared_fish_runtime.is_some())
                             }) {
                                 callbacks.scheduler.park_native_contact_prefix(entities, id);

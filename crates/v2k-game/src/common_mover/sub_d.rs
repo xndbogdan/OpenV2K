@@ -237,6 +237,42 @@ pub const NATIVE_TYPE30_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     reserved_at_0x0b: 0,
 };
 
+/// Ordinary Type38/Type129 (worlds 41/42/43): the shared no-pitch 1F660 path
+/// with divisor100, probes512/256 and the recovered object/water/slope13.
+pub const NATIVE_TYPE38_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 100,
+    couple_yaw_into_roll_raw: 0,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 512,
+    lateral_probe_raw: 256,
+    classifier_flags: 0x13,
+    reserved_at_0x0b: 0,
+};
+
+/// Ordinary Type18 (eight worlds): the no-pitch 1F660 path with divisor40,
+/// probes350/256 and flags10, the steepness arm alone (no water or object).
+pub const NATIVE_TYPE18_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 40,
+    couple_yaw_into_roll_raw: 0,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 350,
+    lateral_probe_raw: 256,
+    classifier_flags: 0x10,
+    reserved_at_0x0b: 0,
+};
+
+/// Ordinary Type28 (five worlds): divisor128, probes512/256 and the same
+/// steepness-only flags10 as Type18.
+pub const NATIVE_TYPE28_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 128,
+    couple_yaw_into_roll_raw: 0,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 512,
+    lateral_probe_raw: 256,
+    classifier_flags: 0x10,
+    reserved_at_0x0b: 0,
+};
+
 /// Type94's exact authored descriptor equals Type58's steering/probe values.
 /// Its independent constructor/first-query receipt below is not interchangeable.
 pub const INTRO2_TYPE94_SUB_D: SubDSteeringDescriptor = INTRO2_TYPE58_SUB_D;
@@ -303,6 +339,9 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | INTRO2_TYPE16_SUB_D
             | INTRO2_TYPE58_SUB_D
             | NATIVE_TYPE30_SUB_D
+            | NATIVE_TYPE38_SUB_D
+            | NATIVE_TYPE18_SUB_D
+            | NATIVE_TYPE28_SUB_D
             | INTRO2_TYPE10_SUB_D
             | SHARED_FISH_SUB_D
             | TYPE62_SUB_D

@@ -104,6 +104,14 @@ pub enum NativeCaptorPairBlock {
             (),
         >,
     ),
+    /// A class63 carrier's or Type43's lethal pair runs BAF0, then BC90 or
+    /// BAC0, through the lent player.
+    TerminalPairDamage(
+        crate::live_actor_checked_damage::LiveActorDamageError<
+            crate::class49_terminal::Class49TerminalBlock,
+            (),
+        >,
+    ),
     /// Lethal Type97 pair without the explicit Playing player-hull context.
     /// The checked health prefix is already committed; this preserves the
     /// cinematic fail-closed boundary instead of inventing a hull.
@@ -296,6 +304,8 @@ fn owns_captor_contact(entity: &Entity) -> bool {
     // must report a changed body rather than silently discarding its pairs.
     (entity.entity_type == 17 && entity.intro2_type17_runtime.is_some())
         || (entity.entity_type == 122 && entity.native_type122_runtime.is_some())
+        || (entity.entity_type == 18 && entity.native_type18_runtime.is_some())
+        || (entity.entity_type == 28 && entity.native_type28_runtime.is_some())
 }
 
 /// Independent Type58 side of an 11AD0 pair.
@@ -747,6 +757,7 @@ fn behavior(
                 frame.entities,
                 opposite,
                 &mut capture::CaptureContext {
+                    resources: Some(&*frame.resources),
                     tasks: frame.actor_tasks,
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,
@@ -763,13 +774,16 @@ fn behavior(
             *committed = true;
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
-        PairContactCallbackPolicy::CapturePeople if matches!(entity.entity_type, 17 | 122) => {
+        PairContactCallbackPolicy::CapturePeople
+            if matches!(entity.entity_type, 17 | 122 | 18 | 28) =>
+        {
             let RetailRuntimeValue::Known(Some(rows)) = &entity.sub_j_attachment_runtime else {
                 return Err(NativeCaptorPairBlock::Runtime("capture capacity"));
             };
             let full = rows.len() >= rows.capacity();
             let result = {
                 let mut context = capture::CaptureContext {
+                    resources: Some(&*frame.resources),
                     tasks: frame.actor_tasks,
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,
@@ -817,13 +831,14 @@ fn behavior(
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         PairContactCallbackPolicy::UnknownAddress(0x0040_d0b0)
-            if matches!(entity.entity_type, 17 | 122) =>
+            if matches!(entity.entity_type, 17 | 122 | 18 | 28) =>
         {
             let result = capture::execute_capture_delivery(
                 frame.entities,
                 owner,
                 opposite,
                 &mut capture::CaptureContext {
+                    resources: Some(&*frame.resources),
                     tasks: frame.actor_tasks,
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,
@@ -966,6 +981,16 @@ fn adopt_captor(frame: &mut Intro2ContactFrame<'_>, id: u32) -> Result<(), Nativ
             let owner = crate::native_type122::Type122Owner::adopt(frame.entities, id)
                 .map_err(NativeCaptorPairBlock::GroundTask)?;
             frame.actor_tasks.register_type122(owner);
+        }
+        NativeCaptorProfile::Type18 => {
+            let owner = crate::native_type18::Type18Owner::adopt(frame.entities, id)
+                .map_err(NativeCaptorPairBlock::GroundTask)?;
+            frame.actor_tasks.register_type18(owner);
+        }
+        NativeCaptorProfile::Type28 => {
+            let owner = crate::native_type28::Type28Owner::adopt(frame.entities, id)
+                .map_err(NativeCaptorPairBlock::GroundTask)?;
+            frame.actor_tasks.register_type28(owner);
         }
     }
     Ok(())
@@ -1192,6 +1217,8 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || entity.intro2_type57_runtime.is_some()
         || entity.intro2_type17_runtime.is_some()
         || entity.intro2_gun_turret_runtime.is_some()
+        || entity.native_type43_runtime.is_some()
+        || entity.native_type38_runtime.is_some()
         || crate::intro2_type16::intro2_type16_allocation_authenticates(entity)
         || entity.shared_fish_runtime.is_some()
         || entity.cleansing_vehicle_runtime.is_some()
@@ -1205,6 +1232,9 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || crate::intro2_type53::intro2_type53_allocation_authenticates(entity)
         || crate::intro2_type58::intro2_type58_allocation_authenticates(entity)
         || crate::native_type122::type122_allocation_authenticates(entity)
+        || crate::native_type18::allocation_authenticates(entity)
+        || crate::native_type28::allocation_authenticates(entity)
+        || crate::native_type76::allocation_authenticates(entity)
         || crate::native_type30::allocation_authenticates(entity)
         || crate::native_type40::allocation_authenticates(entity)
         || crate::native_type56::allocation_authenticates(entity)
@@ -1383,7 +1413,7 @@ fn apply_pair_checked_damage(
         })?;
         return Ok(());
     }
-    if matches!(kind, 9 | 17 | 122 | 123)
+    if matches!(kind, 9 | 17 | 122 | 18 | 28 | 123)
         || NativeWorkerProfile::from_entity_type(kind).is_some()
         || NativeFourChoiceProfile::from_entity_type(kind).is_some()
     {
@@ -1392,6 +1422,7 @@ fn apply_pair_checked_damage(
             target,
             delivery,
             &mut capture::CaptureContext {
+                resources: Some(&*frame.resources),
                 tasks: frame.actor_tasks,
                 world_fx: frame.world_fx,
                 notifications: frame.notifications,
@@ -1406,6 +1437,26 @@ fn apply_pair_checked_damage(
             frame.actor_tasks.register_intro2_common_dying(owner);
         }
         return Ok(());
+    }
+    // Type128's alternate is class63 (BC90) and Type43's class1 (BAC0); both
+    // are shared BAF0 terminals with no living replacement owner.
+    if frame.entities.iter_all().any(|entity| {
+        entity.id == target
+            && ((entity.entity_type == 128
+                && crate::class49_death::source_profile(entity).is_some_and(|profile| {
+                    profile.policy() == crate::class49_death::NativeExplosionPolicy::Class63
+                }))
+                || (entity.entity_type == crate::native_type43::ENTITY_TYPE
+                    && crate::native_type43::allocation_authenticates(entity))
+                || crate::native_type38::type38_row(entity).is_some())
+    }) {
+        return apply_terminal_pair_checked_damage(
+            frame,
+            target,
+            delivery,
+            playing_player,
+            committed,
+        );
     }
     if kind == 97
         && frame
@@ -1627,6 +1678,84 @@ fn apply_type97_pair_checked_damage(
     }
 }
 
+/// Type128's lethal pair: 15040's death is AC60's direct class63, so BAF0's
+/// radial and BC90's Type61 drop finish inside this pair callback. Its
+/// finished corpse stays pairable until 14990 without replaying the terminal.
+fn apply_terminal_pair_checked_damage(
+    frame: &mut Intro2ContactFrame<'_>,
+    target: u32,
+    delivery: crate::damage::DamageDeliveryRecord,
+    mut playing_player: Option<PlayingPlayerContact<'_>>,
+    committed: &mut bool,
+) -> Result<(), NativeCaptorPairBlock> {
+    use crate::live_actor_checked_damage::{
+        apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageRequest,
+    };
+    if !crate::class49_death::finished_terminal_hit_authenticates(frame.entities, target)
+        && !frame
+            .actor_tasks
+            .prepare_native_actor_mutation(frame.entities, target)
+    {
+        return Err(NativeCaptorPairBlock::Runtime(
+            "completed terminal damage owner",
+        ));
+    }
+    let crate::intro2_contacts::Intro2ContactFrame {
+        entities,
+        resources,
+        world_fx,
+        static_damage,
+        notifications,
+        retail_tick,
+        actor_tasks,
+    } = &mut *frame;
+    let retail_tick = *retail_tick;
+    apply_live_actor_checked_damage(
+        entities,
+        world_fx,
+        LiveActorDamageRequest {
+            ratio_numerator: 0,
+            ratio_denominator: 0,
+            entity_id: target,
+            delivery,
+            entry: LiveActorDamageEntry::Checked,
+            feedback: Some(crate::live_actor_checked_damage::LiveActorDamageFeedback {
+                notifications,
+                retail_tick,
+            }),
+        },
+        |manager, world_fx, feedback| {
+            let feedback = feedback.expect("pair request retains its notification context");
+            crate::class49_terminal::run_class49_standard_death(
+                crate::class49_terminal::Class49TerminalFrame {
+                    entities: manager,
+                    resources,
+                    world_fx,
+                    static_damage,
+                    notifications: feedback.notifications,
+                    retail_tick: feedback.retail_tick,
+                    world: crate::class49_terminal::Class49WorldContext::for_contact(
+                        actor_tasks,
+                        playing_player.as_mut().map(PlayingPlayerContact::reborrow),
+                    ),
+                },
+                target,
+            )
+            .map(
+                |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                },
+            )
+        },
+    )
+    .map(|_| ())
+    .map_err(|error| {
+        *committed |= error.committed_prefix;
+        NativeCaptorPairBlock::TerminalPairDamage(error)
+    })
+}
+
 #[cfg(test)]
 #[path = "pair_insect_factory_tests.rs"]
 mod insect_factory_tests;
@@ -1634,6 +1763,10 @@ mod insect_factory_tests;
 #[cfg(test)]
 #[path = "pair_hive_impact_tests.rs"]
 mod hive_impact_tests;
+
+#[cfg(test)]
+#[path = "pair_type38_tests.rs"]
+mod type38_tests;
 
 #[cfg(test)]
 #[path = "pair_ground_damage_tests.rs"]

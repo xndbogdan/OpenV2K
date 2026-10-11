@@ -366,7 +366,83 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type122: {error:?}"))?;
             }
-            16 => {
+            18 => {
+                let sub_d = sub_d.ok_or("missing Type18 Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type18 constructor surface")?;
+                crate::native_type18::publish_native_type18(
+                    crate::native_type18::NativeType18ConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        preceding: &self.entities,
+                        resources,
+                        constructor_surface_bits,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type18: {error:?}"))?;
+            }
+            28 => {
+                let sub_d = sub_d.ok_or("missing Type28 Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type28 constructor surface")?;
+                crate::native_type28::publish_native_type28(
+                    crate::native_type28::NativeType28ConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        preceding: &self.entities,
+                        resources,
+                        constructor_surface_bits,
+                        retail_tick,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type28: {error:?}"))?;
+            }
+            76 | 77 => {
+                let sub_d = sub_d.ok_or("missing Type76-family Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type76-family constructor surface")?;
+                crate::native_type76::publish_native_type76(
+                    crate::native_type76::NativeType76ConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        resources,
+                        constructor_surface_bits,
+                        retail_tick,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type76-family: {error:?}"))?;
+            }
+            16 | 128 => {
                 let sub_d = sub_d.ok_or("missing Type16 Sub-D allocation")?;
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(
@@ -414,6 +490,58 @@ impl EntityManager {
                     &mut || u32::from(world_fx.next_shared_retail_random_u16()),
                 )
                 .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
+            }
+            // Type38 and its Type129 carriers share one ground-host row.
+            38 | 129 => {
+                let sub_d = sub_d.ok_or("missing Type38-family Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type38-family constructor surface")?;
+                crate::native_type38::publish_authored_type38(
+                    crate::native_type38::Type38AuthoredConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        preceding: &self.entities,
+                        resources,
+                        constructor_surface_bits,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
+            }
+            // Emitter-only Search And Attack: no Sub-D allocation precedes it.
+            43 => {
+                if sub_d.is_some() {
+                    return Err("unexpected Type43 Sub-D allocation".into());
+                }
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type43 constructor surface")?;
+                crate::native_type43::publish_authored_type43(
+                    crate::native_type43::Type43AuthoredConstruction {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        terrain,
+                        constructor_surface_bits,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type43: {error:?}"))?;
             }
             13 => {
                 let sub_d = sub_d.ok_or("missing Type13 Sub-D allocation")?;

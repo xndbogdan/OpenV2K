@@ -426,6 +426,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                 id,
                 crate::native_actor_capture::CaptureRootCallback::ReleaseOrKill,
                 &mut crate::native_actor_capture::CaptureContext {
+                    resources: Some(&frame.resources),
                     tasks: &mut **tasks,
                     world_fx: frame.world_fx,
                     notifications: &mut **notifications,
@@ -600,6 +601,7 @@ fn run_frame<P: NativeGroundActorProfile>(
             id,
             frame.retail_tick,
             frame.world_fx,
+            Some(&frame.resources),
             super::behavior::ReselectionEntry::TaskResult,
         )?;
     }
@@ -621,6 +623,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                     id,
                     frame.retail_tick,
                     frame.world_fx,
+                    Some(&frame.resources),
                     super::behavior::ReselectionEntry::TaskResult,
                 )?;
             }
@@ -639,6 +642,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                     id,
                     frame.retail_tick,
                     frame.world_fx,
+                    Some(&frame.resources),
                     super::behavior::ReselectionEntry::TaskResult,
                 )?;
             }

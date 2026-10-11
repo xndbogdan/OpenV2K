@@ -71,6 +71,12 @@ pub enum NativeExplosionSourceProfile {
     Fish124,
     /// Ordinary Type80/126 carriers on the Type10 owner, alternate class63.
     Type10Carrier(crate::intro2_type10::Type10Profile),
+    /// Ordinary Type128 carriers on the Type16 owner, alternate class63.
+    Type16Carrier(crate::intro2_type16::Type16Row),
+    /// Ordinary emitter-only Type43 shooters, alternate class1.
+    Type43,
+    /// Ordinary ground shooters: Type38 takes class1, Type129 class63.
+    Type38Family(crate::native_type38::Type38Row),
 }
 
 impl NativeExplosionSourceProfile {
@@ -83,6 +89,9 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(kind) => kind.entity_type() as u32,
             Self::Fish124 => 124,
             Self::Type10Carrier(profile) => profile.entity_type(),
+            Self::Type16Carrier(row) => row.entity_type(),
+            Self::Type43 => crate::native_type43::ENTITY_TYPE,
+            Self::Type38Family(row) => row.entity_type(),
         }
     }
 
@@ -124,6 +133,15 @@ impl NativeExplosionSourceProfile {
             Self::Type10Carrier(profile) => {
                 crate::intro2_type10::authenticate_metadata(profile, metadata).is_ok()
             }
+            Self::Type16Carrier(row) => {
+                crate::intro2_type16::authenticate_metadata(row, metadata).is_ok()
+            }
+            // The row's own authentication already pins alternate1.
+            Self::Type43 => crate::native_type43::authenticate_metadata(metadata).is_ok(),
+            // The row's own authentication pins its alternate class.
+            Self::Type38Family(row) => {
+                crate::native_type38::authenticate_metadata(row, metadata).is_ok()
+            }
         }
     }
 
@@ -155,6 +173,27 @@ impl NativeExplosionSourceProfile {
             Self::Type10Carrier(_) => {
                 matches!(style, 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8)
             }
+            // Aimless, Defecate Virus, Search and people pursuit: +2C null. The
+            // four carrying Capture variants own D040's release instead.
+            Self::Type16Carrier(_) => matches!(
+                style,
+                0x004c_7930
+                    | 0x004c_7978
+                    | 0x004c_7e88
+                    | 0x004c_7a50
+                    | 0x004c_7a98
+                    | 0x004c_7ae0
+                    | 0x004c_7ff0
+                    | 0x004c_8038
+                    | 0x004c_74f8
+            ),
+            // Search acquiring, pursuing, completion and the fallback: +2C null.
+            Self::Type43 => matches!(style, 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8),
+            // Aimless, Move completion, Search and the fallback: +2C null.
+            Self::Type38Family(_) => matches!(
+                style,
+                0x004c_7930 | 0x004c_7978 | 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8
+            ),
         }
     }
 
@@ -176,6 +215,13 @@ impl NativeExplosionSourceProfile {
             Self::Fish124 => (10, [37, 37]),
             // Nonnull G takes 40BBB3.
             Self::Type10Carrier(_) => (10, [37, 37]),
+            // Nonnull A takes 40BBB3.
+            Self::Type16Carrier(_) => (10, [37, 37]),
+            // Empty A/B/N/G, no capability40, not type 49 or 112..115:
+            // 40BB9C keeps ten particles of class16.
+            Self::Type43 => (10, [16, 16]),
+            // Nonnull A takes 40BBB3.
+            Self::Type38Family(_) => (10, [37, 37]),
         }
     }
 
@@ -183,10 +229,17 @@ impl NativeExplosionSourceProfile {
         match self {
             Self::GunTurret(Intro2GunTurretProfile::Type115)
             | Self::Intro2Type13
+            | Self::Type43
+            | Self::Type38Family(crate::native_type38::Type38Row::Type38)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
                 NativeExplosionPolicy::Class1
             }
-            Self::Fish124 | Self::Type10Carrier(_) => NativeExplosionPolicy::Class63,
+            Self::Fish124
+            | Self::Type10Carrier(_)
+            | Self::Type16Carrier(_)
+            | Self::Type38Family(crate::native_type38::Type38Row::Type129) => {
+                NativeExplosionPolicy::Class63
+            }
             _ => NativeExplosionPolicy::Class49,
         }
     }
@@ -208,9 +261,15 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::Intro2Type13)
     } else if entity.entity_type == 124 && entity.shared_fish_runtime.is_some() {
         Some(NativeExplosionSourceProfile::Fish124)
+    } else if let Some(profile) = crate::intro2_type10::type10_auto_pilot_profile(entity) {
+        Some(NativeExplosionSourceProfile::Type10Carrier(profile))
+    } else if crate::native_type43::allocation_authenticates(entity) {
+        Some(NativeExplosionSourceProfile::Type43)
+    } else if let Some(row) = crate::native_type38::type38_row(entity) {
+        Some(NativeExplosionSourceProfile::Type38Family(row))
     } else {
-        crate::intro2_type10::type10_auto_pilot_profile(entity)
-            .map(NativeExplosionSourceProfile::Type10Carrier)
+        crate::intro2_type16::type16_auto_pilot_row(entity)
+            .map(NativeExplosionSourceProfile::Type16Carrier)
     }
 }
 
@@ -255,6 +314,15 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         }
         Some(NativeExplosionSourceProfile::Type10Carrier(_)) => {
             crate::intro2_type10::type10_manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::Type16Carrier(_)) => {
+            crate::intro2_type16::type16_manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::Type43) => {
+            crate::native_type43::manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::Type38Family(_)) => {
+            crate::native_type38::manager_allocation_authenticates(manager, id)
         }
         None => false,
     }
