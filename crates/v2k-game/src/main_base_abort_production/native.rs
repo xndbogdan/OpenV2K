@@ -59,6 +59,9 @@ pub(super) fn dispatch_native_class49(
         // So does the emitter-only Type43's.
         || (entity.entity_type == crate::native_type43::ENTITY_TYPE
             && entity.native_type43_runtime.is_some())
+        // Type38 (class1) and the Type129 carriers (class63).
+        || (crate::native_type38::Type38Row::from_entity_type(entity.entity_type).is_some()
+            && entity.native_type38_runtime.is_some())
         // Type124 and the Type80/126 carriers enter class63, BC90: BAF0 then a
         // tail-appended Type61.
         || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some())
@@ -590,6 +593,8 @@ mod type124_tests;
 mod type128_tests;
 #[cfg(test)]
 mod type13_tests;
+#[cfg(test)]
+mod type38_tests;
 #[cfg(test)]
 mod type43_tests;
 #[cfg(test)]

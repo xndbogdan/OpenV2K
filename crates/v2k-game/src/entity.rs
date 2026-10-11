@@ -1521,6 +1521,9 @@ pub struct Entity {
     /// Native ordinary Type43 E allocation and its queued Aim transactions.
     pub native_type43_runtime: Option<crate::native_type43::Type43Runtime>,
     pub native_type43_aim_runtime: Option<crate::native_type43::aim::Type43AimRuntime>,
+    /// Native ordinary Type38/Type129 components and queued Aim transactions.
+    pub native_type38_runtime: Option<crate::native_type38::Type38Runtime>,
+    pub native_type38_aim_runtime: Option<crate::native_type38::aim::Type38AimRuntime>,
     pub native_type56_runtime: Option<crate::native_type56::Type56Runtime>,
     pub native_type56_aim_runtime:
         Option<crate::intro2_native_ballistic_aim::NativeBallisticAimRuntime>,
@@ -1702,6 +1705,8 @@ impl Entity {
             native_type40_aim_runtime: self.native_type40_aim_runtime.clone(),
             native_type43_runtime: self.native_type43_runtime,
             native_type43_aim_runtime: self.native_type43_aim_runtime.clone(),
+            native_type38_runtime: self.native_type38_runtime.clone(),
+            native_type38_aim_runtime: self.native_type38_aim_runtime.clone(),
             native_type56_runtime: self.native_type56_runtime,
             native_type56_aim_runtime: self.native_type56_aim_runtime.clone(),
             native_type122_aim_runtime: self.native_type122_aim_runtime.clone(),
@@ -1810,6 +1815,8 @@ impl Entity {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
@@ -3077,6 +3084,8 @@ fn build_type93_materialiser_entity(
         native_type40_aim_runtime: None,
         native_type43_runtime: None,
         native_type43_aim_runtime: None,
+        native_type38_runtime: None,
+        native_type38_aim_runtime: None,
         native_type56_runtime: None,
         native_type56_aim_runtime: None,
         native_type122_aim_runtime: None,
@@ -4905,6 +4914,7 @@ impl EntityManager {
                             | 24
                             | 26
                             | 30
+                            | 38
                             | 40
                             | 43
                             | 47
@@ -4927,6 +4937,7 @@ impl EntityManager {
                             | 124
                             | 126
                             | 128
+                            | 129
                     ));
             let construction_stamp_at_0xb4 = manager.begin_common_body_attempt();
             let native_sub_d = if native_ordinary {
@@ -5339,6 +5350,8 @@ impl EntityManager {
                 native_type40_aim_runtime: None,
                 native_type43_runtime: None,
                 native_type43_aim_runtime: None,
+                native_type38_runtime: None,
+                native_type38_aim_runtime: None,
                 native_type56_runtime: None,
                 native_type56_aim_runtime: None,
                 native_type122_aim_runtime: None,
@@ -5806,6 +5819,8 @@ impl EntityManager {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
@@ -6602,6 +6617,8 @@ impl EntityManager {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,
@@ -8067,6 +8084,8 @@ impl EntityManager {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
             native_type56_runtime: None,
             native_type56_aim_runtime: None,
             native_type122_aim_runtime: None,

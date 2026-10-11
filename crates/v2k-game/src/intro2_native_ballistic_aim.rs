@@ -52,6 +52,9 @@ pub(crate) enum NativeBallisticProfileId {
     Type126,
     /// Ordinary emitter-only Type43 shooters: method 10 at Type10's override.
     Type43,
+    /// Ordinary Type38 ground shooters and the silent Type129 carriers.
+    Type38,
+    Type129,
     Type16,
     /// Ordinary Type128 carriers on the Type16 owner: a silent emitter.
     Type128,
@@ -67,7 +70,13 @@ pub(crate) enum NativeBallisticProfileId {
 impl NativeBallisticProfileId {
     const fn method(self) -> u32 {
         match self {
-            Self::Type10 | Self::Type5 | Self::Type80 | Self::Type126 | Self::Type43 => 10,
+            Self::Type10
+            | Self::Type5
+            | Self::Type80
+            | Self::Type126
+            | Self::Type43
+            | Self::Type38
+            | Self::Type129 => 10,
             Self::Type16 | Self::Type128 | Self::Type58 | Self::Type94 | Self::Type30 => 20,
             Self::Type57 | Self::Type122 => 24,
             Self::Type56 => 30,
@@ -76,7 +85,12 @@ impl NativeBallisticProfileId {
     }
     const fn speed_override(self) -> i16 {
         match self {
-            Self::Type10 | Self::Type80 | Self::Type126 | Self::Type43 => 1500,
+            Self::Type10
+            | Self::Type80
+            | Self::Type126
+            | Self::Type43
+            | Self::Type38
+            | Self::Type129 => 1500,
             Self::Type5
             | Self::Type16
             | Self::Type128
@@ -111,6 +125,8 @@ impl NativeBallisticProfileId {
             Self::Type10 | Self::Type5 | Self::Type80 => 81,
             Self::Type126 => 82,
             Self::Type43 => 68,
+            Self::Type38 => 82,
+            Self::Type129 => 0,
             Self::Type16 => 81,
             Self::Type58 => 70,
             Self::Type94 => 69,
@@ -126,6 +142,8 @@ impl NativeBallisticProfileId {
             Self::Type80 => 0x5459_5038_3053_5243,
             Self::Type126 => 0x5459_3132_3653_5243,
             Self::Type43 => 0x5459_5034_3353_5243,
+            Self::Type38 => 0x5459_5033_3853_5243,
+            Self::Type129 => 0x5459_3132_3953_5243,
             Self::Type16 => 0x5459_5031_3653_5243,
             Self::Type128 => 0x5459_3132_3853_5243,
             Self::Type58 => 0x5459_5035_3853_5243,
@@ -144,6 +162,8 @@ impl NativeBallisticProfileId {
             Self::Type80 => 0x5459_5038_3054_4754,
             Self::Type126 => 0x5459_3132_3654_4754,
             Self::Type43 => 0x5459_5034_3354_4754,
+            Self::Type38 => 0x5459_5033_3854_4754,
+            Self::Type129 => 0x5459_3132_3954_4754,
             Self::Type16 => 0x5459_5031_3654_4754,
             Self::Type128 => 0x5459_3132_3854_4754,
             Self::Type58 => 0x5459_5035_3854_4754,
@@ -161,6 +181,7 @@ impl NativeBallisticProfileId {
             Self::Type5 => (300_000, 512, 48, 40_000, 5120),
             Self::Type80 | Self::Type126 => (300_000, 128, 44, 24_000, 5120),
             Self::Type43 => (300_000, 1024, 0, 65_535, 7680),
+            Self::Type38 | Self::Type129 => (600_000, 256, 122, 4000, 5120),
             Self::Type16 | Self::Type128 => (300_000, 100, 158, 16_000, 2560),
             Self::Type58 => (400_000, 256, 150, 16_000, 2560),
             Self::Type94 => (700_000, 256, 102, 12_000, 2304),
@@ -563,7 +584,9 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
                     | NativeBallisticProfileId::Type5
                     | NativeBallisticProfileId::Type80
                     | NativeBallisticProfileId::Type126
-                    | NativeBallisticProfileId::Type43 => drain_type13_transient_request(
+                    | NativeBallisticProfileId::Type43
+                    | NativeBallisticProfileId::Type38
+                    | NativeBallisticProfileId::Type129 => drain_type13_transient_request(
                         request,
                         entity.position_raw(),
                         entity.velocity_raw(),
@@ -609,7 +632,9 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
             | NativeBallisticProfileId::Type5
             | NativeBallisticProfileId::Type80
             | NativeBallisticProfileId::Type126
-            | NativeBallisticProfileId::Type43 => world_fx
+            | NativeBallisticProfileId::Type43
+            | NativeBallisticProfileId::Type38
+            | NativeBallisticProfileId::Type129 => world_fx
                 .materialize_class_38_request(
                     Class38ParticleRequest {
                         position_raw: solution.position_raw,

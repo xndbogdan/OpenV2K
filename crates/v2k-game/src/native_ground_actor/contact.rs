@@ -100,6 +100,15 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeGroundContactOutcome {
+    resolve_native_ground_static_contact_with_playing::<P>(frame, id, None)
+}
+
+/// Playing's walk lends its player to a terminal profile's BAF0 radial.
+pub(crate) fn resolve_native_ground_static_contact_with_playing<P: NativeGroundActorProfile>(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    playing: Option<PlayingPlayerContact<'_>>,
+) -> NativeGroundContactOutcome {
     resolve_profile_static_contact(
         frame,
         id,
@@ -109,8 +118,29 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
             retained_entry_model_id: None,
             manager_authenticates: P::manager_authenticates,
             metadata_authenticates: P::metadata_authenticates,
-            completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
+            completed_owner: |tasks, manager, id| {
+                // A finished BAC0/BC90 corpse keeps only its terminal receipt.
+                (P::TERMINAL_DEATH
+                    && crate::class49_death::finished_terminal_hit_authenticates(manager, id))
+                    || tasks.prepare_native_actor_mutation(manager, id)
+            },
             publish_standard_death: |manager, id, context| {
+                if P::TERMINAL_DEATH {
+                    return P::publish_standard_death(
+                        manager,
+                        id,
+                        &mut NativeGroundDeathContext::Terminal {
+                            resources: context.resources,
+                            fx: context.world_fx,
+                            static_damage: context.static_damage,
+                            notifications: context.notifications,
+                            retail_tick: context.retail_tick,
+                            tasks: context.tasks,
+                            player: context.player.as_mut().map(PlayingPlayerContact::reborrow),
+                        },
+                    )
+                    .map_err(NativeStaticActorDeathBlock::Common);
+                }
                 P::publish_standard_death(
                     manager,
                     id,
@@ -130,7 +160,7 @@ pub(crate) fn resolve_native_ground_static_contact<P: NativeGroundActorProfile>(
                 .map_err(NativeStaticActorDeathBlock::Common)
             },
         },
-        None,
+        playing,
     )
 }
 
@@ -669,7 +699,7 @@ fn resolve(
         && context.active_style().style_address() == 0x4c7e88)
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 94
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 94 | 38 | 129
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -677,11 +707,11 @@ fn resolve(
         || (matches!(profile.entity_type, 15 | 87)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
-        || (matches!(profile.entity_type, 13 | 43)
+        || (matches!(profile.entity_type, 13 | 43 | 38)
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
-        || (matches!(profile.entity_type, 80 | 126 | 128)
+        || (matches!(profile.entity_type, 80 | 126 | 128 | 129)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 26 && context.active_style().style_address() == 0x4c7738)
@@ -1031,7 +1061,7 @@ fn contact_task_hook(
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
-        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 43) => {
+        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 43 | 38) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
         // BC90 keeps a carrier's living tasks and A8B0 calls each task's +20

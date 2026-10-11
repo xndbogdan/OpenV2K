@@ -35,6 +35,7 @@ fn adopt_authored_tasks(manager: &mut EntityManager) -> SpecializedActorTaskSche
     tasks.adopt_intro2_type53(manager);
     tasks.adopt_type122(manager);
     tasks.adopt_type43(manager);
+    tasks.adopt_type38_family(manager);
     tasks.adopt_shared_fish(manager);
     tasks.adopt_cleansing_vehicle(manager);
     tasks.adopt_intro2_type16(manager);

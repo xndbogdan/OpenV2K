@@ -1201,6 +1201,7 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || entity.intro2_type17_runtime.is_some()
         || entity.intro2_gun_turret_runtime.is_some()
         || entity.native_type43_runtime.is_some()
+        || entity.native_type38_runtime.is_some()
         || crate::intro2_type16::intro2_type16_allocation_authenticates(entity)
         || entity.shared_fish_runtime.is_some()
         || entity.cleansing_vehicle_runtime.is_some()
@@ -1425,7 +1426,8 @@ fn apply_pair_checked_damage(
                     profile.policy() == crate::class49_death::NativeExplosionPolicy::Class63
                 }))
                 || (entity.entity_type == crate::native_type43::ENTITY_TYPE
-                    && crate::native_type43::allocation_authenticates(entity)))
+                    && crate::native_type43::allocation_authenticates(entity))
+                || crate::native_type38::type38_row(entity).is_some())
     }) {
         return apply_terminal_pair_checked_damage(
             frame,
@@ -1740,6 +1742,10 @@ mod insect_factory_tests;
 #[cfg(test)]
 #[path = "pair_hive_impact_tests.rs"]
 mod hive_impact_tests;
+
+#[cfg(test)]
+#[path = "pair_type38_tests.rs"]
+mod type38_tests;
 
 #[cfg(test)]
 #[path = "pair_ground_damage_tests.rs"]

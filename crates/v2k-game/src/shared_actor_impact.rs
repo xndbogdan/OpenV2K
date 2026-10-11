@@ -66,6 +66,7 @@ pub enum SharedActorImpactOutcome {
     Type13(crate::intro2_type13_live::impact::Intro2Type13ImpactOutcome),
     Type10(crate::intro2_type10::impact::Intro2Type10ImpactOutcome),
     Type43(crate::native_type43::impact::Type43ImpactOutcome),
+    Type38Family(crate::native_type38::impact::Type38ImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -154,6 +155,14 @@ pub fn apply_playing_actor_particle_hit(
     {
         return Some(SharedActorImpactOutcome::Type10(
             crate::intro2_type10::impact::apply_playing_type10_family_particle_hit(frame, impact),
+        ));
+    }
+    // Type38/129's lethal class1/class63 blasts need the same Playing world.
+    if crate::native_type38::Type38Row::from_entity_type(entity.entity_type).is_some()
+        && entity.native_type38_runtime.is_some()
+    {
+        return Some(SharedActorImpactOutcome::Type38Family(
+            crate::native_type38::impact::apply_playing_type38_family_particle_hit(frame, impact),
         ));
     }
     // Type43's lethal class1 blast needs Playing's static world and player.

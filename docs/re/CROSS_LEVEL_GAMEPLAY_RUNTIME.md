@@ -151,6 +151,14 @@ radials, static and pair contacts and the abort take alternate class1 through
 the shared terminal. Type35, the same shape firing Type34 meteor births, is
 the next boundary.
 
+The ten [Type38 ground shooters](TYPE38_GROUND_SHOOTER.md) (worlds42/43) and
+the 25 Type129 carriers (world41) share one native owner on the ground host
+that carries Type30. Their class5/class7 roots, method10 Aim and model1131's
+own K/L bank binding run under the real scheduler. Lethal hits, radials, the
+static walk, pair lanes and the abort take class1 (Type38) or class63 with the
+authored Type61 drop (Type129). Drowning (`E370`) fails closed until the surface
+step can lend the terminal its world.
+
 The [shared Type47 gunner](TYPE47_RUNTIME.md) extends that construction policy
 to all eight ordinary actors (three in13, one in14, two each in15/31) and the
 three native Intro2 births. Each retains its real Sub-D allocation, authored

@@ -415,6 +415,32 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
             }
+            // Type38 and its Type129 carriers share one ground-host row.
+            38 | 129 => {
+                let sub_d = sub_d.ok_or("missing Type38-family Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type38-family constructor surface")?;
+                crate::native_type38::publish_authored_type38(
+                    crate::native_type38::Type38AuthoredConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        spawn,
+                        preceding: &self.entities,
+                        resources,
+                        constructor_surface_bits,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
+            }
             // Emitter-only Search And Attack: no Sub-D allocation precedes it.
             43 => {
                 if sub_d.is_some() {

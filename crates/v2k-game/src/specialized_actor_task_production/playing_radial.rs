@@ -199,6 +199,7 @@ impl SpecializedActorTaskScheduler {
                                         || entity.native_type40_runtime.is_some()
                                         || entity.native_type56_runtime.is_some()
                                         || entity.native_type43_runtime.is_some()
+                                        || entity.native_type38_runtime.is_some()
                                         || entity.shared_fish_runtime.is_some())
                             }) {
                                 callbacks.scheduler.park_native_contact_prefix(entities, id);
