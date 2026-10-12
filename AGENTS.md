@@ -97,9 +97,9 @@ merge, and state the result in the pull request.
 `main` only takes milestones: a pull request from `staging` into `main` that
 bumps `crates/v2k-game`'s version. GitHub Actions workflows run only when
 started by hand, because the free plan's Actions minutes aren't enough, so
-validate the milestone with `scripts/check.ps1` too. The `v<version>` release
-with the Windows and Linux binaries is built and published from a local
-machine after the merge.
+validate the milestone with `scripts/check.ps1` too. After the merge, publish the
+`v<version>` release with the Windows and Linux packages from a clean checkout
+of `main` with `scripts/release.ps1 -Publish`; the Linux package needs Docker.
 
 Use short imperative subjects with an optional scope, for example
 `menu: resolve backdrop model`. Keep commits focused. A pull request should:

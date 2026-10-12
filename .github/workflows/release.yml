@@ -1,7 +1,7 @@
 name: Release
 
 # Manual only: the free plan's 2,000 Actions minutes a month aren't enough for
-# this workflow, so releases are built and published from a local machine.
+# this workflow, so releases are published with scripts/release.ps1 instead.
 # A run publishes a GitHub Release when crates/v2k-game's version has no
 # `v<version>` tag yet. Versions with a suffix (0.2.0-rc1) are marked as
 # pre-releases.
