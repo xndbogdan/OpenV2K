@@ -167,7 +167,7 @@ git config core.hooksPath .githooks
 ```
 
 The pre-commit hook runs `scripts/progress.ps1`, which regenerates the
-reverse-engineering progress numbers and adds them to the commit. CI fails if
+reverse-engineering progress numbers and adds them to the commit. `scripts/check.ps1` fails if
 they are stale.
 
 Retail tests use `#[v2k_test_support::retail_test]` and

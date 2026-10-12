@@ -149,7 +149,7 @@ start. Run ``scripts/progress.ps1 -ListUnresolved`` to list them.
   ``not-needed`` removes a function from the denominator, for example
   DirectPlay networking or debug-only paths.
 - The numbers are regenerated on every commit by the ``.githooks/pre-commit``
-  hook. CI runs ``scripts/progress.ps1 -Check`` and fails if they are stale.
+  hook. ``scripts/check.ps1`` runs ``scripts/progress.ps1 -Check`` and fails if they are stale.
 "@
 
 $readmePath = Join-Path $root 'README.md'
