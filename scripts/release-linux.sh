@@ -25,7 +25,8 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd /src
 cargo build --release -p v2k-game --features sdl2/bundled,sdl2/static-link
 
-package="$RELEASE_OUT/$RELEASE_NAME"
+# Stage inside the container: modes set on the Windows bind mount don't stick.
+package="/tmp/$RELEASE_NAME"
 rm -rf "$package"
 mkdir -p "$package"
 cp README.md LAUNCHER.md LICENSE-MIT LICENSE-APACHE "$package/"
@@ -33,5 +34,5 @@ cp "$RELEASE_OUT/THIRD_PARTY_LICENSES.html" "$package/"
 chmod 644 "$package"/*
 cp "$CARGO_TARGET_DIR/release/v2k-game" "$package/openv2k"
 chmod 755 "$package/openv2k"
-tar -C "$RELEASE_OUT" -czf "$RELEASE_OUT/$RELEASE_NAME.tar.gz" "$RELEASE_NAME"
+tar -C /tmp --owner=0 --group=0 -czf "$RELEASE_OUT/$RELEASE_NAME.tar.gz" "$RELEASE_NAME"
 rm -rf "$package"
