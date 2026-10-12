@@ -36,6 +36,10 @@ if ($RequireRetailData) {
 }
 
 Invoke-Checked 'rustfmt' 'cargo' @('fmt', '--all', '--', '--check')
+Invoke-Checked 'RE progress numbers are current' 'powershell' @(
+    '-NoProfile', '-ExecutionPolicy', 'Bypass',
+    '-File', (Join-Path $PSScriptRoot 'progress.ps1'), '-Check'
+)
 if ($Mode -eq 'Quick') {
     Invoke-Checked 'check' 'cargo' @('check', '--workspace', '--all-targets')
 }
