@@ -91,13 +91,15 @@ are handed off.
 
 Never commit directly to `main` or `staging`. Work on a branch and open the
 pull request against `staging` (`gh pr create --base staging`). CI does not run
-on those pull requests, so run `scripts/check.ps1` locally before asking for a
+on pull requests, so run `scripts/check.ps1` locally before asking for a
 merge, and state the result in the pull request.
 
 `main` only takes milestones: a pull request from `staging` into `main` that
-bumps `crates/v2k-game`'s version. CI runs on that pull request and again when
-it lands, and the merge publishes the `v<version>` release with the Windows and
-Linux binaries. Pushing a `v*` tag by hand still publishes that tag.
+bumps `crates/v2k-game`'s version. GitHub Actions workflows run only when
+started by hand, because the free plan's Actions minutes aren't enough, so
+validate the milestone with `scripts/check.ps1` too. The `v<version>` release
+with the Windows and Linux binaries is built and published from a local
+machine after the merge.
 
 Use short imperative subjects with an optional scope, for example
 `menu: resolve backdrop model`. Keep commits focused. A pull request should:

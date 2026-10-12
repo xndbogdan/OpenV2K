@@ -1,13 +1,12 @@
 name: Release
 
-# A merge into main publishes a GitHub Release when crates/v2k-game's version
-# has no `v<version>` tag yet; bump the version in the milestone pull request.
-# Pushing a tag such as v0.1.0 still builds and publishes that tag. Versions
-# with a suffix (0.2.0-rc1) are marked as pre-releases.
+# Manual only: the free plan's 2,000 Actions minutes a month aren't enough for
+# this workflow, so releases are built and published from a local machine.
+# A run publishes a GitHub Release when crates/v2k-game's version has no
+# `v<version>` tag yet. Versions with a suffix (0.2.0-rc1) are marked as
+# pre-releases.
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
