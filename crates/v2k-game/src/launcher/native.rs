@@ -794,10 +794,56 @@ impl WindowState {
         }
     }
 
+    /// The banner, composed off screen and copied to the window in one blit.
+    /// Drawn straight onto the window, the compositor could show the black
+    /// fill before the frame landed on it, and the logo flickered.
     unsafe fn paint_banner(&self, window: Handle) {
         let mut paint: PaintStruct = zeroed();
         let dc = BeginPaint(window, &mut paint);
-        let mut banner = self.header_bounds();
+        let banner = self.header_bounds();
+        let width = banner.right - banner.left;
+        let height = banner.bottom - banner.top;
+        let memory = CreateCompatibleDC(dc);
+        let surface = if memory != 0 {
+            CreateCompatibleBitmap(dc, width, height)
+        } else {
+            0
+        };
+        if surface != 0 {
+            let previous = SelectObject(memory, surface);
+            self.draw_banner(
+                memory,
+                Rect {
+                    left: 0,
+                    top: 0,
+                    right: width,
+                    bottom: height,
+                },
+            );
+            BitBlt(
+                dc,
+                banner.left,
+                banner.top,
+                width,
+                height,
+                memory,
+                0,
+                0,
+                0x00cc_0020, // SRCCOPY
+            );
+            SelectObject(memory, previous);
+            DeleteObject(surface);
+        } else {
+            self.draw_banner(dc, banner);
+        }
+        if memory != 0 {
+            DeleteDC(memory);
+        }
+        EndPaint(window, &paint);
+    }
+
+    /// The current baked frame on black inside `banner`, its aspect kept.
+    unsafe fn draw_banner(&self, dc: Handle, mut banner: Rect) {
         let header_image = self.header_animation.frame();
         FillRect(dc, &banner, self.header_brush);
         let image_height = self.pixel(98);
@@ -819,7 +865,7 @@ impl WindowState {
         StretchDIBits(
             dc,
             image_x,
-            self.pixel(18),
+            banner.top + self.pixel(18) - self.pixel(16),
             image_width,
             image_height,
             0,
@@ -832,7 +878,6 @@ impl WindowState {
             0x00cc_0020, // SRCCOPY
         );
         DrawEdge(dc, &mut banner, 0x000a, 0x000f);
-        EndPaint(window, &paint);
     }
 
     unsafe fn command(&mut self, id: usize) {
