@@ -300,6 +300,21 @@ unsafe extern "system" {
     pub fn SetBrushOrgEx(dc: Handle, x: i32, y: i32, previous: *mut Point) -> i32;
     pub fn CreateSolidBrush(color: u32) -> Handle;
     pub fn DeleteObject(object: Handle) -> i32;
+    pub fn CreateCompatibleDC(dc: Handle) -> Handle;
+    pub fn CreateCompatibleBitmap(dc: Handle, width: i32, height: i32) -> Handle;
+    pub fn SelectObject(dc: Handle, object: Handle) -> Handle;
+    pub fn DeleteDC(dc: Handle) -> i32;
+    pub fn BitBlt(
+        dc: Handle,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        source: Handle,
+        source_x: i32,
+        source_y: i32,
+        operation: u32,
+    ) -> i32;
 }
 
 #[link(name = "comdlg32")]

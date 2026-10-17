@@ -26,7 +26,9 @@ are kept outside this repository; only the exported atlas is tracked here. The a
 palette indices and one shared palette. A separate 20 ms timer updates a single
 cached BGRA frame and invalidates only the header when its frame changes;
 delayed timers skip to the current loop position. Ordinary GDI painting keeps
-the aspect ratio and reuses the cached frame. Both the icon and header are
+the aspect ratio and reuses the cached frame. Each paint composes the header
+off screen and copies it to the window in one blit, so the compositor never
+shows the banner's black fill between frames. Both the icon and header are
 embedded, so the launcher can display them before installation, without
 Blender or an OpenGL context.
 The game and launcher window titles use **V2K**, including Options and setup
