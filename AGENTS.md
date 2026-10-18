@@ -132,6 +132,20 @@ validate the milestone with `scripts/check.ps1` too. After the merge, publish th
 `v<version>` release with the Windows and Linux packages from a clean checkout
 of `main` with `scripts/release.ps1 -Publish`; the Linux package needs Docker.
 
+Merge by rebase, never with a merge commit, so the history stays linear:
+
+- A pull request into `staging` merges with **Rebase and merge**. Delete its
+  branch afterwards.
+- A milestone pull request from `staging` into `main` also merges with
+  **Rebase and merge**. GitHub's rebase gives `main` new copies of `staging`'s
+  commits, so reset `staging` to `main` right after, or `staging` shows as
+  behind: `git fetch origin` then
+  `git push --force-with-lease=staging origin origin/main:staging`. Rebase
+  any open branch on the new `staging` (`git rebase origin/staging` drops the
+  commits it already has). `main` and `staging` then name the same commit.
+- "Create a merge commit" is how `staging` fell behind `main` before: each
+  milestone's merge commit (#21, #26, #50, #53) stayed on `main` only.
+
 Use short imperative subjects with an optional scope, for example
 `menu: resolve backdrop model`. Keep commits focused. A pull request should:
 
