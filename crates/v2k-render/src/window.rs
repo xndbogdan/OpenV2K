@@ -380,11 +380,23 @@ pub struct GameWindow {
     pointer_mode: Option<PointerMode>,
     controllers: Option<Controllers>,
     primary_window_id: Cell<Option<u32>>,
+    hidden: bool,
 }
 
 impl GameWindow {
     /// Initialize SDL2. Call this before creating a window or renderer.
     pub fn new() -> Result<Self, String> {
+        Self::create(false)
+    }
+
+    /// For unattended test runs: game windows stay hidden, nothing plays on
+    /// the speakers and no attached controller is read, so only scripted
+    /// input reaches the game.
+    pub fn new_hidden() -> Result<Self, String> {
+        Self::create(true)
+    }
+
+    fn create(hidden: bool) -> Result<Self, String> {
         // Physical pixels throughout (see `declare_dpi_awareness`); window
         // sizes stay unscaled pixels too.
         sdl2::hint::set("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2");
@@ -392,12 +404,19 @@ impl GameWindow {
         // and X/Y the other way round, and SDL would otherwise follow the
         // print, moving their bottom button to "B".
         sdl2::hint::set("SDL_GAMECONTROLLER_USE_BUTTON_LABELS", "0");
+        if hidden {
+            sdl2::hint::set("SDL_AUDIODRIVER", "dummy");
+        }
         let sdl = sdl2::init()?;
         let video = sdl.video()?;
         // Controllers are optional: the keyboard and mouse still play.
-        let controllers = Controllers::new(&sdl)
-            .map_err(|error| eprintln!("Controller support unavailable: {error}"))
-            .ok();
+        let controllers = (!hidden)
+            .then(|| {
+                Controllers::new(&sdl)
+                    .map_err(|error| eprintln!("Controller support unavailable: {error}"))
+                    .ok()
+            })
+            .flatten();
         let event_pump = sdl.event_pump()?;
 
         Ok(Self {
@@ -408,6 +427,7 @@ impl GameWindow {
             pointer_mode: None,
             controllers,
             primary_window_id: Cell::new(None),
+            hidden,
         })
     }
 
@@ -478,6 +498,9 @@ impl GameWindow {
         builder.resizable();
         if opengl {
             builder.opengl();
+        }
+        if self.hidden {
+            builder.hidden();
         }
         let mut window = builder.build().map_err(|e| e.to_string())?;
         apply_app_window_icon(&mut window);

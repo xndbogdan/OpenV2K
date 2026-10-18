@@ -179,6 +179,10 @@ pub struct GameConfig {
     #[serde(skip)]
     #[doc(hidden)]
     pub settings_snapshot: Option<persistence::SettingsSnapshot>,
+    /// Loaded by [`Self::load_portable`]: the folder's files are the only
+    /// source and destination; the registry is neither read nor written.
+    #[serde(skip)]
+    pub portable: bool,
     // Display
     pub renderer: RendererChoice,
     /// The selected resolution: a window's client size or a full-screen
@@ -342,6 +346,7 @@ impl Default for GameConfig {
     fn default() -> Self {
         Self {
             settings_snapshot: None,
+            portable: false,
             renderer: RendererChoice::Auto,
             width: 800,
             height: 600,
@@ -392,6 +397,13 @@ impl GameConfig {
     /// Load native settings and the separate port presentation preferences.
     pub fn load(dir: &Path) -> Self {
         persistence::load(dir)
+    }
+
+    /// Load only `dir`'s settings.json and port-config.json (defaults where
+    /// absent). Saves then go to `dir` alone, so a test run never reads or
+    /// changes the registry.
+    pub fn load_portable(dir: &Path) -> Self {
+        persistence::load_portable(dir)
     }
 
     fn normalize_presentation(&mut self) {

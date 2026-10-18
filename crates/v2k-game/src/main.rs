@@ -13,6 +13,7 @@ mod diagnostic_console;
 mod launcher;
 mod launcher_startup;
 mod live_display;
+mod probe;
 use v2k_game::{launcher_preferences, setup};
 mod paused_gameplay;
 use paused_gameplay::{
@@ -231,7 +232,7 @@ use v2k_render::{
     ControllerLayout, ExternalFrameMode, FrameCaptureSource, GameConfig, GameEvent, GameWindow,
     ModelDepthFade, ModelNearClip, ModelOverlayKind, MusicPlayer, PointerMode, ProjectionEffect,
     RenderScene, Renderer, RendererChoice, SoundListener, SoundManager, SpriteFog, ViewPinMode,
-    WorldSprite, WorldSpriteBlend, HALF_ADDITIVE_ALPHA,
+    WindowMode, WorldSprite, WorldSpriteBlend, HALF_ADDITIVE_ALPHA,
 };
 
 /// Sea-plane tint for the translucent water pass. A flat sea blue stands in
@@ -1111,6 +1112,107 @@ struct Cli {
     /// port-config.json).
     #[arg(long, value_name = "BOOL", action = clap::ArgAction::Set)]
     beam_commands: Option<bool>,
+
+    // ── Test runs (see probe.rs); any of them skips the launcher ──
+    /// Portable settings folder: its settings.json and port-config.json are
+    /// the only settings read and written. The registry is untouched.
+    #[arg(long, value_name = "DIR")]
+    settings: Option<PathBuf>,
+
+    /// Window size in physical pixels, saved like the Display menu's choice
+    /// (requires --height and --settings).
+    #[arg(long, requires_all = ["height", "settings"])]
+    width: Option<u32>,
+
+    /// See --width.
+    #[arg(long, requires_all = ["width", "settings"])]
+    height: Option<u32>,
+
+    /// Keep the game window hidden: silent, windowed and deaf to controllers.
+    /// Requires --frames and --settings, so a test run ends and never
+    /// changes the registry.
+    #[arg(long, requires_all = ["frames", "settings"])]
+    hidden: bool,
+
+    /// Stop after this many frames.
+    #[arg(long, value_name = "N")]
+    frames: Option<u64>,
+
+    /// Advance the clock by this many microseconds a frame instead of the
+    /// real time: whole milliseconds of at least 8000 (retail's 125-fps
+    /// cap). Frames then run as fast as they draw, the same on every run.
+    #[arg(long, value_name = "MICROS", value_parser = probe::parse_fixed_step)]
+    fixed_step_micros: Option<u32>,
+
+    /// Save the last presented frame as a PNG when the run ends.
+    #[arg(long, value_name = "PATH")]
+    snapshot: Option<PathBuf>,
+
+    /// Save frame FRAME (counted from 1, as --frames counts) as a PNG at
+    /// PATH; repeat for several frames of one run.
+    #[arg(long, value_name = "FRAME:PATH", value_parser = probe::parse_snapshot_at)]
+    snapshot_at: Vec<(u64, PathBuf)>,
+
+    /// Scripted keys: a JSON list of {"frame", "key", "pressed"} with SDL
+    /// key names (Up, Space, Return, Tab, Right Shift, A), each arriving
+    /// with its frame's own events.
+    #[arg(long, value_name = "FILE")]
+    input_replay: Option<PathBuf>,
+
+    /// Start in gameplay from STATE, a JSON file: {"save": FILE} plays a
+    /// native save (a copy of Slot02, say); {"level": N} plays global
+    /// overlay N, with an optional raw "position": [x, y, z] and "heading".
+    #[arg(long, value_name = "STATE", conflicts_with = "level")]
+    start: Option<PathBuf>,
+
+    /// Write each frame's clock, the player's state and the entities that
+    /// appeared or went, as JSON lines, to FILE.
+    #[arg(long, value_name = "FILE")]
+    event_log: Option<PathBuf>,
+}
+
+impl Cli {
+    /// A command-line run that skips the launcher.
+    fn direct_run(&self) -> bool {
+        self.level.is_some()
+            || self.vtol_trace.is_some()
+            || self.settings.is_some()
+            || self.hidden
+            || self.frames.is_some()
+            || self.fixed_step_micros.is_some()
+            || self.snapshot.is_some()
+            || !self.snapshot_at.is_empty()
+            || self.input_replay.is_some()
+            || self.start.is_some()
+            || self.event_log.is_some()
+    }
+
+    fn probe_run(&self) -> Result<probe::ProbeRun, Box<dyn std::error::Error>> {
+        Ok(probe::ProbeRun {
+            settings: self.settings.clone(),
+            size: self.width.zip(self.height),
+            hidden: self.hidden,
+            frames: self.frames,
+            fixed_step_micros: self.fixed_step_micros,
+            snapshot: self.snapshot.clone(),
+            snapshot_at: self.snapshot_at.clone(),
+            input: match &self.input_replay {
+                Some(path) => probe::InputReplay::load(path)?,
+                None => probe::InputReplay::default(),
+            },
+            start: self
+                .start
+                .as_deref()
+                .map(probe::StartState::load)
+                .transpose()?,
+            event_log: self
+                .event_log
+                .as_deref()
+                .map(probe::EventLog::create)
+                .transpose()?,
+            entities: probe::EntityCensus::default(),
+        })
+    }
 }
 
 /// Single-run overrides of saved port preferences; none is written back.
@@ -1330,7 +1432,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let selection = launcher_startup::prepare(&cli).map_err(|error| {
             if cli.launcher
                 || cli.launcher_smoke_ms.is_some()
-                || (!cli.no_launcher && cli.level.is_none() && cli.vtol_trace.is_none())
+                || (!cli.no_launcher && !cli.direct_run())
             {
                 launcher::show_error(&error.to_string());
             }
@@ -1492,26 +1594,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         // No subcommand → run the game
         None => {
-            let enter_world_immediately = cli.level.is_some();
-            let outcome = run_game(
-                &data_dir,
-                cli.level.unwrap_or(FIRST_WORLD_LEVEL_ID),
-                &cli.renderer,
-                cli.skip_intro || enter_world_immediately,
-                enter_world_immediately,
-                cli.vtol_trace.as_deref(),
-                cli.overlay_depth_policy
-                    .unwrap_or(OverlayDepthPolicyArg::TerrainRecede)
-                    .to_policy(),
-                RunOverrides {
-                    controller_layout: cli.controller_layout.map(ControllerLayoutArg::to_layout),
-                    beam_commands: cli.beam_commands,
-                },
-            );
+            let enter_world_immediately = cli.level.is_some() || cli.start.is_some();
+            let outcome = cli.probe_run().and_then(|probe| {
+                run_game(
+                    &data_dir,
+                    cli.level.unwrap_or(FIRST_WORLD_LEVEL_ID),
+                    &cli.renderer,
+                    cli.skip_intro || enter_world_immediately,
+                    enter_world_immediately,
+                    cli.vtol_trace.as_deref(),
+                    cli.overlay_depth_policy
+                        .unwrap_or(OverlayDepthPolicyArg::TerrainRecede)
+                        .to_policy(),
+                    RunOverrides {
+                        controller_layout: cli
+                            .controller_layout
+                            .map(ControllerLayoutArg::to_layout),
+                        beam_commands: cli.beam_commands,
+                    },
+                    probe,
+                )
+            });
             if let Err(error) = outcome {
-                if cli.launcher
-                    || (!cli.no_launcher && cli.level.is_none() && cli.vtol_trace.is_none())
-                {
+                if cli.launcher || (!cli.no_launcher && !cli.direct_run()) {
                     launcher::show_error(&error.to_string());
                 }
                 return Err(error);
@@ -1610,6 +1715,7 @@ fn run_game(
     vtol_trace_path: Option<&Path>,
     overlay_depth_policy: v2k_render::OverlayDepthPolicy,
     overrides: RunOverrides,
+    mut probe: probe::ProbeRun,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
@@ -1620,7 +1726,20 @@ fn run_game(
     let mut auto_new_game_tick = std::env::var("V2K_NEW_GAME_AFTER_TICKS")
         .ok()
         .and_then(|value| value.parse::<u32>().ok());
-    let mut config = GameConfig::load(data_dir);
+    let settings_dir = probe.settings.clone();
+    let settings_dir = settings_dir.as_deref().unwrap_or(data_dir);
+    let mut config = if probe.settings.is_some() {
+        GameConfig::load_portable(settings_dir)
+    } else {
+        GameConfig::load(data_dir)
+    };
+    if let Some((width, height)) = probe.size {
+        (config.width, config.height) = (width, height);
+    }
+    if probe.hidden {
+        // A hidden window never takes the display.
+        config.display = WindowMode::Window;
+    }
     log!(
         "Controls: {} => Sensitivity {}/15, Self Righting {}",
         data_dir.join("config.json").display(),
@@ -1650,7 +1769,11 @@ fn run_game(
     let preferred = config.resolve_backend(cli_override);
 
     // Initialize SDL2 and renderer
-    let mut game_window = GameWindow::new()?;
+    let mut game_window = if probe.hidden {
+        GameWindow::new_hidden()?
+    } else {
+        GameWindow::new()?
+    };
     let mut debug_panel = DebugPanel::new();
     let mut vtol_trace = match vtol_trace_path {
         Some(path) => {
@@ -1695,7 +1818,7 @@ fn run_game(
     // working combination in the settings.
     if config.renderer == RendererChoice::Auto || actual_backend != preferred {
         config.set_detected_backend(actual_backend);
-        if let Err(error) = config.try_save(data_dir) {
+        if let Err(error) = config.try_save(settings_dir) {
             eprintln!("Could not save settings: {error}");
         }
     }
@@ -1843,11 +1966,45 @@ fn run_game(
         }};
     }
 
+    // --start: the first load's level, purpose and the player's pose.
+    let mut start_arrival = None;
+    let (level_id, start_purpose) = match probe.start.take() {
+        Some(probe::StartState {
+            save: Some(path), ..
+        }) => {
+            let save = v2k_game::save::read_native_save_file(&path)?;
+            let native = save
+                .native
+                .as_ref()
+                .ok_or("start save: no native payload")?;
+            let restore = v2k_game::save::NativeSaveRestore::decode(native)
+                .map_err(|error| format!("start save {}: {error:?}", path.display()))?;
+            save_baseline = restore.state_payload;
+            log!("Start: {} (global level {})", path.display(), save.level_id);
+            let purpose = LoadingPurpose::NativeSave {
+                restore: Box::new(restore),
+            };
+            (save.level_id, purpose)
+        }
+        Some(probe::StartState {
+            level: Some(level),
+            position,
+            heading,
+            ..
+        }) => {
+            start_arrival = position.map(|position_raw| v2k_game::entity::AuthoredPlayerArrival {
+                position_raw,
+                heading_raw: heading.unwrap_or(0),
+            });
+            (level, LoadingPurpose::Normal)
+        }
+        _ => (level_id, LoadingPurpose::Normal),
+    };
     let mut state = if enter_world_immediately {
         eprintln!("Debug boot: loading overlay {level_id}, skipping intro and menu");
         GameState::Loading {
             level_id,
-            purpose: LoadingPurpose::Normal,
+            purpose: start_purpose,
         }
     } else if skip_intro {
         GameState::Menu(make_menu!())
@@ -1940,7 +2097,8 @@ fn run_game(
 
     // --- Music player for CD audio tracks ---
     let mut music_player: Option<MusicPlayer> = None;
-    if let Some(music_dir) = find_cd_audio_dir(data_dir) {
+    // A hidden run's silent audio driver has the sound effects' one device.
+    if let Some(music_dir) = find_cd_audio_dir(data_dir).filter(|_| !probe.hidden) {
         match MusicPlayer::new(&game_window.sdl, &music_dir) {
             Ok(mp) => {
                 log!(
@@ -2064,17 +2222,54 @@ fn run_game(
     let mut paused_gameplay_scene: Option<PausedGameplayScene> = None;
     let mut paused_world_redraw_pending = false;
     let mut gameplay_overlay_frame = GameplayOverlayFrame::default();
+    // Test runs: frames completed so far, and the last one's delta.
+    let mut frames_done = 0u64;
+    let mut last_frame_delta_micros = 0u32;
 
     'main_loop: loop {
-        let frame_delta_micros = frame_pump.wait_for_frame();
+        // The frame just completed: its event lines, its snapshots, the end.
+        if frames_done > 0 {
+            if let Some(log) = probe.event_log.as_mut() {
+                write_probe_events(
+                    log,
+                    &mut probe.entities,
+                    frames_done,
+                    &state,
+                    current_level_id,
+                    last_frame_delta_micros,
+                    retail_clock.current(),
+                    entity_manager.as_ref(),
+                    &player_craft,
+                    &player_hull,
+                )?;
+            }
+            for (_, path) in probe
+                .snapshot_at
+                .iter()
+                .filter(|(frame, _)| *frame == frames_done)
+            {
+                save_snapshot(renderer.as_mut(), path)?;
+            }
+            if probe.frames == Some(frames_done) {
+                break 'main_loop;
+            }
+        }
+        let frame_delta_micros = match probe.fixed_step_micros {
+            Some(step) => u64::from(step),
+            None => frame_pump.wait_for_frame(),
+        };
         let uncapped_elapsed_micros = frame_delta_micros.min(u64::from(u32::MAX)) as u32;
         let elapsed_micros = uncapped_elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
         let dt = elapsed_micros as f32 / 1_000_000.0;
         let mut retail_tick = retail_clock.current();
+        frames_done += 1;
+        last_frame_delta_micros = elapsed_micros;
 
         // Process events — behavior depends on game state
         let mut events = Vec::new();
-        for event in game_window.poll_events() {
+        let mut polled = game_window.poll_events();
+        polled.extend(probe.input.events(frames_done));
+        for event in polled {
             match event {
                 // Backquote/tilde owns the text console in every state and
                 // must not skip the intro, activate a menu or move the camera.
@@ -2301,7 +2496,7 @@ fn run_game(
                                 Keycode::Escape if shell.back_is_inert() => None,
                                 Keycode::Escape => {
                                     // Leaving a settings screen — persist config.
-                                    if let Err(error) = config.try_save(data_dir) {
+                                    if let Err(error) = config.try_save(settings_dir) {
                                         eprintln!("Could not save settings: {error}");
                                     }
                                     Some(MenuInput::Back)
@@ -2351,7 +2546,7 @@ fn run_game(
                         }
                         PadAction::Menu(MenuInput::Back) if shell.back_is_inert() => None,
                         PadAction::Menu(MenuInput::Back) | PadAction::PauseResumeOrBack => {
-                            if let Err(error) = config.try_save(data_dir) {
+                            if let Err(error) = config.try_save(settings_dir) {
                                 eprintln!("Could not save settings: {error}");
                             }
                             Some(MenuInput::Back)
@@ -2506,7 +2701,7 @@ fn run_game(
                                 ));
                             }
                             world_projection.apply_to(&mut camera, renderer.viewport_size());
-                            if let Err(error) = config.try_save(data_dir) {
+                            if let Err(error) = config.try_save(settings_dir) {
                                 eprintln!("Could not save settings: {error}");
                             }
                             let ctx = MenuCtx {
@@ -3029,6 +3224,8 @@ fn run_game(
                 } else {
                     None
                 };
+                // --start's pose, for the first load only.
+                let direct_world_arrival = start_arrival.take().or(direct_world_arrival);
                 current_level_id = Some(lid);
                 if let Some(restore) = native_restore {
                     // Mode6 restores these controller owners before42E570's
@@ -8223,7 +8420,84 @@ fn run_game(
         }
     }
 
+    if let Some(path) = &probe.snapshot {
+        save_snapshot(renderer.as_mut(), path)?;
+    }
+    if let Some(log) = probe.event_log.as_mut() {
+        log.flush()?;
+    }
     log!("Exiting.");
+    Ok(())
+}
+
+/// `--snapshot`/`--snapshot-at`: the last presented frame as a PNG.
+fn save_snapshot(
+    renderer: &mut dyn Renderer,
+    path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let frame = renderer
+        .capture_frame(FrameCaptureSource::Presented)
+        .ok_or("this renderer cannot read its frame back")?;
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        std::fs::create_dir_all(parent)?;
+    }
+    frame
+        .write_png(path)
+        .map_err(|error| format!("snapshot {}: {error}", path.display()))?;
+    Ok(())
+}
+
+/// `--event-log`: the lines of one completed frame.
+#[allow(clippy::too_many_arguments)]
+fn write_probe_events(
+    log: &mut probe::EventLog,
+    census: &mut probe::EntityCensus,
+    frame: u64,
+    state: &GameState,
+    level: Option<u32>,
+    delta_us: u32,
+    tick: u32,
+    manager: Option<&v2k_game::entity::EntityManager>,
+    craft: &PlayerCraft,
+    hull: &PlayerHull,
+) -> std::io::Result<()> {
+    let state_name = match state {
+        GameState::Intro => "intro",
+        GameState::Menu(_) => "menu",
+        GameState::Loading { .. } => "loading",
+        GameState::OpeningCinematic { .. } => "opening_cinematic",
+        GameState::PostIntro { .. } => "post_intro",
+        GameState::Paused { .. } => "paused",
+        GameState::ReturningToFrontend => "returning_to_frontend",
+        GameState::Playing => "playing",
+    };
+    log.frame(frame, state_name, level, delta_us, tick)?;
+    let Some(manager) = manager else {
+        census.clear();
+        return Ok(());
+    };
+    if let Some(player) = manager.player() {
+        log.player(
+            frame,
+            tick,
+            &probe::PlayerLine {
+                position: player.position_raw(),
+                velocity: player.velocity_raw(),
+                heading: player.heading_raw(),
+                mode: craft.mode.label(),
+                health: hull.health_raw,
+            },
+        )?;
+    }
+    let entities = manager
+        .iter_all()
+        .map(|entity| (entity.id, entity.entity_type, entity.position_raw()));
+    for (ev, id, entity_type, position) in census.update(entities) {
+        log.entity(frame, tick, ev, id, entity_type, position)?;
+    }
     Ok(())
 }
 
