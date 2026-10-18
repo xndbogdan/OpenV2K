@@ -64,7 +64,9 @@ verbatim; the retail installer and original executable are not required.
 The file chooser defaults to `V2000.bin` and also accepts CUE and ISO files.
 A BIN automatically uses its companion CUE if present. A CUE resolves its
 referenced image files relative to itself and supplies the physical track
-boundaries. Bare BIN data can be installed without inventing audio boundaries.
+boundaries. Its data track may be `MODE1/2352`, `MODE1/2048` or `MODE2/2352`
+(CD-ROM XA Form 1, whose data follows an 8-byte subheader, as on images of
+the November 1998 pressing). Bare BIN data can be installed without inventing audio boundaries.
 Conventional ISO images supply data files; absent CD audio is a warning rather
 than a reason to block Play.
 
@@ -94,33 +96,48 @@ Disc installation validates the source before publication, writes staged
 files, compares source and destination SHA-256 checksums, and retains backups
 when replacing managed files. `v2000-installation.json` records installed
 file sizes and hashes for later verification. The executable also embeds the
-verified retail reference for `PRELOAD.DAT` and all 212 overlays, so matching
-retail installations need no sidecar JSON. A launcher-only manifest can record
-just the executable while those 213 game files use the embedded fingerprints.
-Gameplay settings and saves are not repair targets.
+verified retail references for `PRELOAD.DAT` and all 212 overlays of two
+pressings, so matching retail installations need no sidecar JSON. A
+launcher-only manifest can record just the executable while those 213 game
+files use the embedded fingerprints. Gameplay settings and saves are not
+repair targets.
 
-Required bytes that differ from the bundled reference must match a recorded
-installer fingerprint. Otherwise Play is blocked as an **unrecognized release
-or changed required file**, even if structural checks pass; a fingerprint
-difference alone is not proof of corruption. Installing from a supported
-custom disc image records its source hashes and allows subsequent verification
-without requiring that release to match the bundled reference. A mismatch
-against an existing installer-recorded required-file hash always blocks Play.
-Replacing the port executable with a newer build is an optional checksum
-warning; required retail game files still receive strict verification.
+Required bytes that match neither pressing nor a recorded installer
+fingerprint get a warning on each such file: **checksum not recognized**, so
+expect unexpected behavior. They still have to pass every structural check,
+so Play stays available; a fingerprint difference alone is not proof of
+corruption. Installing from a supported custom disc image records its source
+hashes, and later verification uses them. A mismatch against an existing
+installer-recorded required-file hash blocks Play: those bytes changed after
+the launcher verified them. Replacing the port executable with a newer build
+is an optional checksum warning.
 
-The reviewable [embedded reference](crates/v2k-game/src/setup/retail-checksums.json)
-contains sizes and SHA-256 values only. It was generated from the supplied
-`V2000.bin` installation manifest, with all 213 files independently matching
-the canonical port corpus. Regeneration verifies the complete corpus against
-an existing source/destination manifest before replacing this table:
+The reviewable embedded references contain sizes and SHA-256 values only:
+
+- [`retail-checksums.json`](crates/v2k-game/src/setup/retail-checksums.json),
+  the September 1998 pressing (`V2000.EXE` linked 1998-09-16), was generated
+  from the supplied `V2000.bin` installation manifest, with all 213 files
+  independently matching the canonical port corpus.
+- [`retail-checksums-1998-11.json`](crates/v2k-game/src/setup/retail-checksums-1998-11.json),
+  the November 1998 pressing (`V2000.EXE` linked 1998-11-02, a Mode 2 data
+  track), was generated from a launcher installation of its CUE/BIN, with all
+  213 files independently matching the files read from the mounted disc. 31
+  files differ from the September pressing: 26 overlays name another
+  build-tool temporary file, and `PRELOAD.DAT` and the four level-2 overlays
+  hold frontend string 24 as `j` rather than `ja`. No menu item uses that
+  string.
+
+Regeneration verifies the complete corpus against an existing
+source/destination manifest before replacing a table:
 
 ```powershell
 .\scripts\generate-retail-checksums.ps1 -ReferenceManifest .tmp\launcher\no-music-install\v2000-installation.json
 ```
 
-Run that command from the repository root. Reference regeneration is explicit;
-ordinary builds embed the checked-in table and need no private game data.
+Run that command from the repository root. `-DataRoot`, `-Output` and
+`-Source` select another pressing's corpus, table and description. Reference
+regeneration is explicit; ordinary builds embed the checked-in tables and need
+no private game data.
 
 Missing or corrupt required assets block Play with file-specific diagnostics.
 Missing videos or soundtrack tracks remain optional warnings. Setup runs in

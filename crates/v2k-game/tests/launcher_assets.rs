@@ -294,6 +294,35 @@ fn cue_resolves_bin_preserves_track_numbers_and_wav_source_bytes() {
 }
 
 #[test]
+fn mode2_cue_installs_xa_form1_data_after_the_subheader() {
+    let fixture = Fixture::new();
+    let mut iso = synthetic_iso();
+    // XA mastering counts the root record's system-use area in its length.
+    iso[16 * 2048 + 156] = 48;
+    let mut raw = vec![0; iso.len() / 2048 * 2352];
+    for (index, sector) in iso.chunks_exact(2048).enumerate() {
+        raw[index * 2352 + 24..index * 2352 + 24 + 2048].copy_from_slice(sector);
+    }
+    fs::write(fixture.root.join("V2000"), raw).unwrap();
+    let cue = fixture.root.join("V2000.cue");
+    fs::write(
+        &cue,
+        "FILE \"V2000\" BINARY\nTRACK 01 MODE2/2352\nINDEX 01 00:00:00\n",
+    )
+    .unwrap();
+    let destination = fixture.root.join("installed");
+    let result = DiscImage::open(&cue)
+        .unwrap()
+        .install(&request(&destination), |_| {})
+        .unwrap();
+    assert!(result.report.is_ready() && result.report.manifest_verified);
+    assert_eq!(
+        fs::read(destination.join("PRELOAD.DAT")).unwrap(),
+        preload()
+    );
+}
+
+#[test]
 fn executable_folder_precedes_hints_but_explicit_invalid_folder_is_authoritative() {
     let fixture = Fixture::new();
     let image = DiscImage::open(&fixture.image()).unwrap();
@@ -653,21 +682,26 @@ fn launcher_placement_preserves_retail_assets_settings_saves_and_manifest() {
     assert_eq!(in_place.files_written, 0);
     assert!(in_place.backup_directory.is_none());
     // This synthetic corpus is not in the bundled retail reference. Removing
-    // its source fingerprints makes it unverified, rather than a bare retail
-    // installation whose known fingerprints are already compiled into the port.
+    // its source fingerprints leaves an unrecognized but structurally valid
+    // release: it plays with a warning, and the launcher can be placed in it.
     fs::remove_file(installed.join(MANIFEST_FILENAME)).unwrap();
     fs::remove_file(&installed_exe).unwrap();
     fs::remove_file(installed.join("SDL2.dll")).unwrap();
-    assert!(!validate_installation(&installed).is_ready());
+    let unrecognized = validate_installation(&installed);
+    assert!(unrecognized.is_ready(), "{:?}", unrecognized.issues);
+    assert!(!unrecognized.embedded_checksums_verified);
+    assert!(unrecognized.issues.iter().any(|issue| issue.severity
+        == v2k_game::setup::IssueSeverity::Warning
+        && issue.message.contains("expect unexpected behavior")));
     let bare = install_launcher(
         &installed,
         &executable,
         &[source_directory.join("SDL2.dll")],
         |_| {},
     )
-    .unwrap_err();
-    assert!(bare.contains("needs repair"));
-    assert!(!installed_exe.exists());
+    .unwrap();
+    assert!(bare.report.is_ready());
+    assert_eq!(fs::read(&installed_exe).unwrap(), b"new portable launcher");
     assert_eq!(
         fs::read(installed.join("PRELOAD.DAT")).unwrap(),
         preload_before
@@ -757,16 +791,15 @@ fn bundled_checksums_cover_bare_retail_and_enforce_recorded_custom_file_consiste
         "the byte mutation still passes structural checks"
     );
     assert!(
-        !unrecognized.is_ready(),
-        "unverified changed required bytes must block Play"
+        unrecognized.is_ready(),
+        "structurally valid unrecognized bytes play with a warning: {:?}",
+        unrecognized.issues
     );
     assert!(!unrecognized.embedded_checksums_verified);
     assert_eq!(unrecognized.verified_game_checksums, 212);
     assert!(unrecognized.issues.iter().any(|issue| issue.path == path
-        && issue.severity == v2k_game::setup::IssueSeverity::Error
-        && issue
-            .message
-            .contains("unrecognized release or changed required file")));
+        && issue.severity == v2k_game::setup::IssueSeverity::Warning
+        && issue.message.contains("expect unexpected behavior")));
 
     manifest["files"]
         .as_array_mut()
@@ -803,13 +836,21 @@ fn bundled_checksums_cover_bare_retail_and_enforce_recorded_custom_file_consiste
     assert_eq!(custom.verified_game_checksums, 213);
 
     fs::remove_file(manifest_path).unwrap();
+    let bare = validate_installation(&installed);
     assert!(
-        !validate_installation(&installed).is_ready(),
-        "a bare unlisted release needs source verification"
+        bare.is_ready() && !bare.embedded_checksums_verified,
+        "a bare unlisted release plays unverified"
     );
     fs::write(path, original).unwrap();
+    let restored = validate_installation(&installed);
     assert!(
-        validate_installation(&installed).is_ready(),
-        "restored bundled bytes require no sidecar"
+        restored.is_ready()
+            && restored.embedded_checksums_verified
+            && !restored
+                .issues
+                .iter()
+                .any(|issue| issue.message.contains("Checksum")),
+        "restored bundled bytes require no sidecar: {:?}",
+        restored.issues
     );
 }

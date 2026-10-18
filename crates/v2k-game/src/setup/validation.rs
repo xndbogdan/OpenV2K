@@ -2,7 +2,7 @@ use super::{expected_overlay_names, find_child, SetupResult, MANIFEST_FILENAME};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     fs,
     io::Read,
     path::{Path, PathBuf},
@@ -71,15 +71,26 @@ pub(crate) struct ManifestFile {
     pub sha256: String,
 }
 
-fn bundled_retail_fingerprints() -> &'static HashMap<String, ManifestFile> {
-    static FINGERPRINTS: OnceLock<HashMap<String, ManifestFile>> = OnceLock::new();
+/// The retail pressings the port recognizes, each covering every required file.
+const RETAIL_RELEASES: [&str; 2] = [
+    include_str!("retail-checksums.json"),
+    include_str!("retail-checksums-1998-11.json"),
+];
+
+/// Lowercase path, size and SHA-256 of every required file in any pressing.
+fn bundled_retail_fingerprints() -> &'static HashSet<(String, u64, String)> {
+    static FINGERPRINTS: OnceLock<HashSet<(String, u64, String)>> = OnceLock::new();
     FINGERPRINTS.get_or_init(|| {
-        let manifest: InstallManifest = serde_json::from_str(include_str!("retail-checksums.json"))
-            .expect("compiled retail fingerprint manifest must be valid");
-        manifest
-            .files
-            .into_iter()
-            .map(|entry| (entry.path.to_ascii_lowercase(), entry))
+        RETAIL_RELEASES
+            .iter()
+            .flat_map(|release| {
+                let manifest: InstallManifest = serde_json::from_str(release)
+                    .expect("compiled retail fingerprint manifest must be valid");
+                manifest
+                    .files
+                    .into_iter()
+                    .map(|entry| (entry.path.to_ascii_lowercase(), entry.bytes, entry.sha256))
+            })
             .collect()
     })
 }
@@ -99,14 +110,15 @@ fn observe_reference_checksum(
     matched: &mut HashSet<String>,
     unrecognized: &mut Vec<(String, PathBuf)>,
 ) {
-    let relative = relative.to_ascii_lowercase();
-    let recognized = bundled_retail_fingerprints()
-        .get(&relative)
-        .is_some_and(|entry| entry.bytes == bytes.len() as u64 && entry.sha256 == digest(bytes));
-    if recognized {
-        matched.insert(relative);
+    let fingerprint = (
+        relative.to_ascii_lowercase(),
+        bytes.len() as u64,
+        digest(bytes),
+    );
+    if bundled_retail_fingerprints().contains(&fingerprint) {
+        matched.insert(fingerprint.0);
     } else {
-        unrecognized.push((relative, path.to_path_buf()));
+        unrecognized.push((fingerprint.0, path.to_path_buf()));
     }
 }
 
@@ -424,12 +436,12 @@ pub fn validate_installation(root: &Path) -> ValidationReport {
     }
     report.verified_game_checksums = matched_checksums.len();
     // Differing bytes are not proof of corruption: another release or a
-    // custom image may be valid. It must supply installer-recorded source
-    // fingerprints before Play can claim the required files are verified.
+    // custom image may be valid. Structural checks passed, so Play is allowed;
+    // the warning says the port was not verified against these bytes.
     if !manifest_failed {
         for (relative, path) in unrecognized_checksums {
             if !matched_checksums.contains(&relative) {
-                report.issue(path, IssueSeverity::Error, "Checksum not recognized by the bundled retail reference: unrecognized release or changed required file. Structural checks passed; install or verify from the original disc image before playing");
+                report.issue(path, IssueSeverity::Warning, "Checksum not recognized: not from a retail release this port knows, or the file was changed. Structural checks passed, so the game can start; expect unexpected behavior");
             }
         }
     }
@@ -585,21 +597,30 @@ mod tests {
     }
 
     #[test]
-    fn embedded_retail_reference_covers_exactly_the_required_files() {
-        let manifest: InstallManifest =
-            serde_json::from_str(include_str!("retail-checksums.json")).unwrap();
-        assert_eq!(manifest.version, 1);
-        assert_eq!(manifest.files.len(), 213);
-        assert!(!manifest.source.is_empty());
-        let fingerprints = bundled_retail_fingerprints();
-        assert_eq!(
-            fingerprints.keys().cloned().collect::<HashSet<_>>(),
-            required_game_paths()
-        );
-        for entry in fingerprints.values() {
-            assert!(entry.bytes > 0 && entry.bytes <= MAX_ASSET_BYTES);
-            assert_eq!(entry.sha256.len(), 64);
-            assert!(entry.sha256.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    fn embedded_retail_references_cover_exactly_the_required_files() {
+        for release in RETAIL_RELEASES {
+            let manifest: InstallManifest = serde_json::from_str(release).unwrap();
+            assert_eq!(manifest.version, 1);
+            assert_eq!(manifest.files.len(), 213);
+            assert!(!manifest.source.is_empty());
+            assert_eq!(
+                manifest
+                    .files
+                    .iter()
+                    .map(|entry| entry.path.to_ascii_lowercase())
+                    .collect::<HashSet<_>>(),
+                required_game_paths()
+            );
+            for entry in &manifest.files {
+                assert!(entry.bytes > 0 && entry.bytes <= MAX_ASSET_BYTES);
+                assert_eq!(entry.sha256.len(), 64);
+                assert!(entry
+                    .sha256
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()));
+            }
         }
+        // The November 1998 pressing differs in 31 of the 213 files.
+        assert_eq!(bundled_retail_fingerprints().len(), 213 + 31);
     }
 }

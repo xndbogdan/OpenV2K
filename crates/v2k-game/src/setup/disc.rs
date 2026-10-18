@@ -282,7 +282,10 @@ fn parse_cue(path: &Path) -> SetupResult<(DataTrack, Vec<AudioTrack>, Vec<String
                     return Err("CUE tracks must have increasing numbers 01–99".into());
                 }
                 let mode = words[2].to_ascii_uppercase();
-                if !matches!(mode.as_str(), "AUDIO" | "MODE1/2352" | "MODE1/2048") {
+                if !matches!(
+                    mode.as_str(),
+                    "AUDIO" | "MODE1/2352" | "MODE1/2048" | "MODE2/2352"
+                ) {
                     return Err(format!("Unsupported CUE track mode {mode}"));
                 }
                 tracks.push(CueTrack {
@@ -430,7 +433,12 @@ fn parse_cue(path: &Path) -> SetupResult<(DataTrack, Vec<AudioTrack>, Vec<String
                 start_sector: start,
                 end_sector: end,
                 sector_bytes,
-                payload_offset: if sector_bytes == RAW_SECTOR { 16 } else { 0 },
+                // CD-ROM XA Form 1 data follows Mode 2's 8-byte subheader.
+                payload_offset: match track.mode.as_str() {
+                    "MODE2/2352" => 24,
+                    "MODE1/2352" => 16,
+                    _ => 0,
+                },
             });
         }
     }
@@ -563,7 +571,9 @@ fn read_iso_files(track: &DataTrack) -> SetupResult<BTreeMap<String, DiscFile>> 
         return Err("ISO volume is longer than its data track".into());
     }
     let root = &descriptor[156..190];
-    if root[0] != 34 || root[25] & 2 == 0 {
+    // XA mastering counts the root record's system-use area in its length,
+    // though the descriptor keeps only the record's first 34 bytes.
+    if root[0] < 34 || root[25] & 2 == 0 {
         return Err("Invalid ISO root directory".into());
     }
     let root_extent = both32(root, 2)?;
