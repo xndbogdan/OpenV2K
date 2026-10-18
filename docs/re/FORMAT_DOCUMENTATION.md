@@ -1971,6 +1971,6 @@ checkpoint after writing JSON, and never changes either retail import path.
 
 ## Disc Image / CD Audio
 
-Mixed-mode disc image containing 10 Red Book CD-DA audio tracks (~63 minutes total). Track 1 is the data track; tracks 2–11 are music.
+Mixed-mode disc image containing 10 Red Book CD-DA audio tracks (~63 minutes total). Track 1 is the data track; tracks 2–11 are music. The September 1998 pressing masters track 1 as Mode 1; the November 1998 pressing as CD-ROM XA Mode 2 Form 1, whose directory records carry XA system-use fields ([launcher](../../LAUNCHER.md#disc-images-and-music)).
 
 **Status:** CD audio is external disc media, not an extracted source artifact.

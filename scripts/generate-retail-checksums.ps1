@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ReferenceManifest,
     [string]$DataRoot = (Join-Path $PSScriptRoot '../retail'),
-    [string]$Output = (Join-Path $PSScriptRoot '../crates/v2k-game/src/setup/retail-checksums.json')
+    [string]$Output = (Join-Path $PSScriptRoot '../crates/v2k-game/src/setup/retail-checksums.json'),
+    [string]$Source = 'Verified V2000.bin retail installation; required bytes also match the canonical port corpus'
 )
 
 Set-StrictMode -Version Latest
@@ -45,7 +46,7 @@ foreach ($relative in $required) {
 $lines = @(
     '{',
     '  "version": 1,',
-    '  "source": "Verified V2000.bin retail installation; required bytes also match the canonical port corpus",',
+    ('  "source": ' + ($Source | ConvertTo-Json) + ','),
     '  "files": ['
 )
 for ($index = 0; $index -lt $rows.Count; $index++) {
