@@ -50,6 +50,37 @@ policy self-test, and workspace tests). Add `-RequireRetailData` for a fidelity
 handoff that must exercise the retail corpus. Add `-Clippy` to opt into lints;
 some pre-existing test-expression lints are not clean yet.
 
+### Test runs
+
+Repeatable, unattended runs of the game itself, for reproducing a report or
+checking a change; any of these flags skips the launcher:
+
+```sh
+cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
+  --start .tmp/probe/start.json --input-replay .tmp/probe/keys.json \
+  --hidden --renderer software --fixed-step-micros 20000 --frames 600 \
+  --snapshot .tmp/probe/end.png --event-log .tmp/probe/events.jsonl
+```
+
+- `--settings DIR` reads and writes only that folder's `settings.json` and
+  `port-config.json`, never the registry key `HKCU\Software\V2000 Port\1.0`.
+  `--hidden` and `--width`/`--height` require it. To play as a user does,
+  copy their install's two files into the folder.
+- `--start` takes `{"level": 13}`, optionally with a raw `"position": [x, y,
+  z]` and `"heading"`, or `{"save": "Slot02"}`, a copy of a native save
+  beside the state file.
+- `--input-replay` takes `[{"frame": 10, "key": "Space", "pressed": true}]`
+  with SDL key names. Frames count from 1, as `--frames` and
+  `--snapshot-at FRAME:PATH` do.
+- With `--fixed-step-micros` (whole milliseconds, at least 8000) frames run
+  as fast as they draw, and the same arguments give the same frames and logs.
+  Take pixel evidence with `--renderer software`.
+- `--event-log` writes JSON lines: each frame's state, level, delta and world
+  tick; the player's position, velocity, heading, mode and health; and the
+  entities that appeared (`spawn`) or went (`dispose`).
+- `scripts/level-sweep.ps1` plays every world this way and lists each one's
+  notable log lines; `-Baseline TAG` compares with an earlier sweep.
+
 Retail-backed tests use `#[v2k_test_support::retail_test]` and are reported as
 **ignored** when no retail corpus is configured. Once any payload is present,
 incomplete or corrupt data must fail instead of being skipped.

@@ -912,6 +912,29 @@ pub struct CapturedFrame {
     pub height: u32,
 }
 
+impl CapturedFrame {
+    /// Save as an 8-bit RGB PNG. The alpha channel is dropped: the frame is
+    /// what the display shows, and framebuffer alpha is not part of it.
+    pub fn write_png(&self, path: &std::path::Path) -> std::io::Result<()> {
+        let rgb: Vec<u8> = self
+            .rgba
+            .chunks_exact(4)
+            .flat_map(|pixel| [pixel[0], pixel[1], pixel[2]])
+            .collect();
+        let mut encoder = png::Encoder::new(
+            std::io::BufWriter::new(std::fs::File::create(path)?),
+            self.width,
+            self.height,
+        );
+        encoder.set_color(png::ColorType::Rgb);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder
+            .write_header()
+            .and_then(|mut writer| writer.write_image_data(&rgb))
+            .map_err(std::io::Error::other)
+    }
+}
+
 /// Logical render surface and the physical output rectangle it occupies.
 /// Logical dimensions drive projection/UI math; the physical rectangle is
 /// the backend viewport (or the software blit destination).
@@ -1331,6 +1354,24 @@ mod viewport_tests {
         ModelDepthFade, RenderViewport, SpriteFog, TextureId, WorldSprite, WorldSpriteBlend,
     };
     use crate::config::ScalingMode;
+
+    #[test]
+    fn captured_frame_saves_as_an_rgb_png_without_alpha() {
+        let frame = super::CapturedFrame {
+            rgba: vec![10, 20, 30, 0, 40, 50, 60, 255],
+            width: 2,
+            height: 1,
+        };
+        let path = std::env::temp_dir().join(format!("v2k-capture-{}.png", std::process::id()));
+        frame.write_png(&path).unwrap();
+        let decoder = png::Decoder::new(std::fs::File::open(&path).unwrap());
+        let mut reader = decoder.read_info().unwrap();
+        let mut pixels = vec![0; reader.output_buffer_size()];
+        let info = reader.next_frame(&mut pixels).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(info.color_type, png::ColorType::Rgb);
+        assert_eq!(&pixels[..info.buffer_size()], &[10, 20, 30, 40, 50, 60]);
+    }
 
     #[test]
     fn native_uses_the_complete_output() {

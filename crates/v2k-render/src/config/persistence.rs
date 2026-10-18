@@ -224,6 +224,13 @@ pub(super) fn load(dir: &Path) -> GameConfig {
     load_from_sources(dir, sources.0, sources.1)
 }
 
+pub(super) fn load_portable(dir: &Path) -> GameConfig {
+    GameConfig {
+        portable: true,
+        ..load_from_sources(dir, None, None)
+    }
+}
+
 pub(super) fn retail_save_directory() -> Option<std::path::PathBuf> {
     #[cfg(windows)]
     {
@@ -289,6 +296,9 @@ fn load_from_sources(
 }
 
 pub(super) fn save(config: &mut GameConfig, dir: &Path) -> io::Result<()> {
+    if config.portable {
+        return save_with_registry(config, dir, |_| Ok(()));
+    }
     save_with_registry(config, dir, |native| {
         #[cfg(windows)]
         {

@@ -19,7 +19,7 @@ pub(super) fn prepare(cli: &super::Cli) -> Result<Option<PathBuf>, Box<dyn std::
         .clone()
         .unwrap_or_else(default_state_path);
     let preferences = LauncherPreferences::load(&preferences_path);
-    let direct = cli.level.is_some() || cli.vtol_trace.is_some();
+    let direct = cli.direct_run();
     let explicit = cli
         .data_dir
         .clone()

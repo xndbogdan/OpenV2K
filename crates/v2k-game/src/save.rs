@@ -543,6 +543,20 @@ fn load_retail_slot(
     SaveSlotEntry::Missing
 }
 
+/// One native save file (a retail `SlotNN` or a copy of one), read as the
+/// Load menu reads its rows; an error names why the menu would refuse it.
+pub fn read_native_save_file(path: &Path) -> Result<SaveSlot, String> {
+    match load_native_slot(path, "") {
+        SaveSlotEntry::Valid(save) => Ok(save),
+        SaveSlotEntry::Missing => Err(format!("{}: no such save", path.display())),
+        SaveSlotEntry::Corrupt => Err(format!("{}: not a valid V2000 save", path.display())),
+        SaveSlotEntry::Unsupported(_) | SaveSlotEntry::ProbeValidLoadInvalid(_) => Err(format!(
+            "{}: a valid save the port cannot restore yet",
+            path.display()
+        )),
+    }
+}
+
 fn load_native_slot(path: &Path, timestamp: &str) -> SaveSlotEntry {
     match fs::read(path) {
         Ok(bytes) => parse_native_slot(&bytes, timestamp),

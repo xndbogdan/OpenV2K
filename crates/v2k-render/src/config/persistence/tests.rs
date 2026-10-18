@@ -163,6 +163,25 @@ fn persistence_separates_native_and_port_files_and_preserves_original_evidence()
 }
 
 #[test]
+fn portable_settings_round_trip_through_their_folder_alone() {
+    let dir = Directory::new();
+    let mut config = load_portable(&dir.0);
+    assert!(config.portable);
+    assert_eq!((config.width, config.height), (800, 600));
+    config.width = 1024;
+    config.height = 768;
+    config.self_righting = 3;
+    // Portable: the registry closure is never consulted.
+    save(&mut config, &dir.0).unwrap();
+    let restored = load_portable(&dir.0);
+    assert!(restored.portable);
+    assert_eq!((restored.width, restored.height), (1024, 768));
+    assert_eq!(restored.self_righting, 3);
+    assert!(dir.0.join("settings.json").exists());
+    assert!(dir.0.join("port-config.json").exists());
+}
+
+#[test]
 fn native_write_errors_are_visible_and_do_not_replace_fallback_or_preferences() {
     let dir = Directory::new();
     let mut config = GameConfig::default();
