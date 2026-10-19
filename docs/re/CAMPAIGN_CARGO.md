@@ -300,15 +300,13 @@ BA40 receipt for the canonical load drain, and attaches through the
 16700/DBF0/CE70 carrying adapter with the player as parent; the beam can drop
 them back through CE90 reselection. Type 68's null style-`+08` path is unchanged.
 The [Type49 rover](CLEANSING_VEHICLE.md) now supplies its native class68/42
-constructor and attachment lifecycle. Other eligible constructors
-(74, 83, 107, 121) remain unsupported explicitly. The port does not yet own
-vaporise59, tinyscan60, or tank class-7/29 (D190 is the singleton turret, not a
-tank), so 451C00 must not invent them. The session+184 auxiliary list keeps its
+constructor and attachment lifecycle, and the [Type83 Portable Radar](PORTABLE_RADAR.md)
+its class60 one: a miss builds the zero-record radar grounded at the origin,
+and both a miss and a match attach through `16700 -> C690 -> AC60 -> C560`.
+Other eligible constructors (74, 107, 121) remain unsupported explicitly. The
+port does not yet own vaporise59 or tank class-7/29 (D190 is the singleton
+turret, not a tank), so 451C00 must not invent them. The session+184 auxiliary list keeps its
 own controller-operation reconstruction, which has no evidenced Type123 entry.
-The [Type83 Portable Radar source matrix](PORTABLE_RADAR.md) recovers C560,
-its deployment/destructor task, and the ordered coverage/carry/death/abort
-contracts. Native task custody and shared radar ownership remain unimplemented;
-this evidence does not admit its constructor or cargo restore.
 Source sequential errors retain earlier attachments, the newborn and consumed stamp
 where applicable. Main Loading stops, unloads the failed destination and returns
 to the frontend instead of continuing with partial generic cargo or uncertain

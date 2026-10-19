@@ -626,6 +626,7 @@ fn reconstructed_weight_drops_settles_and_can_be_collected_again() {
     let mut released = None;
     for tick in 1..=100 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 20000,
             beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
@@ -687,6 +688,7 @@ fn reconstructed_weight_drops_settles_and_can_be_collected_again() {
     let mut collected = false;
     for tick in 101..=130 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 20000,
             beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: None,
@@ -767,10 +769,6 @@ fn remaining_unrecovered_cargo_and_person_exclusions_stay_explicit() {
     assert!(matches!(
         world.restore(CampaignCargoControllerState::from_packed(5, [0x0001_004a])),
         Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type: 74 })
-    ));
-    assert!(matches!(
-        world.restore(CampaignCargoControllerState::from_packed(5, [0x0001_0053])),
-        Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type: 83 })
     ));
     assert!(matches!(
         world.restore(CampaignCargoControllerState::from_packed(5, [0x0001_006b])),
@@ -1043,6 +1041,7 @@ fn drop_123_cargo(world: &mut World, newborn: u32) {
     let mut released = None;
     for tick in 1..=100 {
         let pass = world.entities.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 20000,
             beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {

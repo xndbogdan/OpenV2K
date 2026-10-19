@@ -81,6 +81,7 @@ fn adopt_world(manager: &mut EntityManager) -> SpecializedActorTaskScheduler {
     tasks.adopt_intro2_type94(manager);
     tasks.adopt_intro2_type66(manager);
     tasks.adopt_class0_actors(manager);
+    tasks.adopt_portable_radars(manager);
     tasks.adopt_main_base(manager);
     tasks.adopt_intro2_type10(manager);
     tasks.adopt_intro2_type57(manager);

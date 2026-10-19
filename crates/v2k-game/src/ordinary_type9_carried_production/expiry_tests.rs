@@ -427,6 +427,7 @@ fn level1_materialiser_carried_expiry_hands_off_scheduler_and_retires_parent_row
         let mut proxy = None;
         for tick in 0..6 {
             let cargo = manager.update_player_cargo(PlayerCargoFrame {
+                radar: None,
                 elapsed_micros: 20_000,
                 beam_expiry: crate::entity::BeamExpiry::AtZero,
                 drop_context: Some(CargoDropContext {

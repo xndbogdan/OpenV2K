@@ -517,10 +517,9 @@ typed owner through blast/ring completion;10B70 then adds no second queue
 entry. Contradictory pending state/queue custody blocks before the first
 death mutation.
 
-Currently admitted turret and rover records have a zero `+0x90` selector.
-Type83 authors sound62, requiring two distinct requests once its native
-lifecycle is admitted. A nonzero parsed-data fixture tests the common prefix;
-it does not establish native Type83 admission.
+The admitted turret and rover records have a zero `+0x90` selector. Type83
+authors sound62: its native class49 death makes two distinct requests, this
+10C10 cue and then BAF0's scatter-surface sound62.
 
 **Shared underwater scatter sound position.** In
 game_logic.c, `440950` passes its local position to

@@ -105,6 +105,7 @@ impl World {
 
     fn cargo_frame(&mut self) -> PlayerCargoFrameOutcome {
         let pass = self.manager.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 20_000,
             beam_expiry: crate::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {

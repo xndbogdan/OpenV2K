@@ -530,6 +530,7 @@ fn real_converted_worker_can_be_beamed_dropped_and_rejects_a_parked_owner() {
         let mut collected = false;
         for step in 1..=30 {
             let result = manager.update_player_cargo(PlayerCargoFrame {
+                radar: None,
                 elapsed_micros: 20_000,
                 beam_expiry: crate::entity::BeamExpiry::AtZero,
                 drop_context: Some(CargoDropContext {
@@ -589,6 +590,7 @@ fn real_converted_worker_can_be_beamed_dropped_and_rejects_a_parked_owner() {
         let pending_before_drop = manager.pending_actor_deferred_destroy_ids().to_vec();
         for step in 31..=130 {
             let result = manager.update_player_cargo(PlayerCargoFrame {
+                radar: None,
                 elapsed_micros: 20_000,
                 beam_expiry: crate::entity::BeamExpiry::AtZero,
                 drop_context: Some(CargoDropContext {
@@ -719,6 +721,7 @@ fn real_converted_worker_can_be_beamed_dropped_and_rejects_a_parked_owner() {
         let mut blocked = false;
         for step in 231..=250 {
             let result = manager.update_player_cargo(PlayerCargoFrame {
+                radar: None,
                 elapsed_micros: 20_000,
                 beam_expiry: crate::entity::BeamExpiry::AtZero,
                 drop_context: None,

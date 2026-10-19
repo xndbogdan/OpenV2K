@@ -70,6 +70,9 @@ pub(super) fn dispatch_native_class49(
         || (entity.entity_type == 71 && entity.native_type47_construction.is_some())
         || (entity.entity_type == crate::native_type43::ENTITY_TYPE
             && entity.native_type43_runtime.is_some())
+        // Type83's alternate class49: BD20, whose A860 removes its coverage.
+        || (entity.entity_type == crate::portable_radar::ENTITY_TYPE
+            && entity.portable_radar_runtime.is_some())
         || (crate::intro2_flyers_live::flyer_explodes(entity.entity_type)
             && entity.intro2_flyer_frame_owner.is_some())
         // Type38 (class1) and the Type129 carriers (class63).

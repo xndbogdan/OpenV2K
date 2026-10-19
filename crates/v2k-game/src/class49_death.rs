@@ -84,6 +84,8 @@ pub enum NativeExplosionSourceProfile {
     ExplodingFlyer(u32),
     /// The Type71 gunner, whose alternate class 63 explodes and drops a Type61.
     Type71Gunner,
+    /// Type83, whose class49 A860 runs the radar's 4055C0 after the radial.
+    PortableRadar,
 }
 
 impl NativeExplosionSourceProfile {
@@ -102,6 +104,7 @@ impl NativeExplosionSourceProfile {
             Self::RollingBoulder => 3,
             Self::ExplodingFlyer(entity_type) => entity_type,
             Self::Type71Gunner => 71,
+            Self::PortableRadar => crate::portable_radar::ENTITY_TYPE,
         }
     }
 
@@ -168,6 +171,8 @@ impl NativeExplosionSourceProfile {
                 crate::intro2_flyers_live::authenticate_native_flyer_metadata(entity_type, metadata)
                     .is_ok()
             }
+            // The row's authentication pins alternate49.
+            Self::PortableRadar => crate::portable_radar::authenticate_metadata(metadata).is_ok(),
         }
     }
 
@@ -237,6 +242,8 @@ impl NativeExplosionSourceProfile {
                 style,
                 0x004c_7930 | 0x004c_7978 | 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8
             ),
+            // Class60's only style: +2C is null.
+            Self::PortableRadar => style == crate::portable_radar::STYLE,
         }
     }
 
@@ -272,6 +279,9 @@ impl NativeExplosionSourceProfile {
             Self::ExplodingFlyer(_) => (10, [37, 37]),
             // Nonnull A takes 40BBB3.
             Self::Type71Gunner => (10, [37, 37]),
+            // No A/B/N/G, no capability40, neither type49 nor 112..115:
+            // 40BB9C keeps ten particles of class16.
+            Self::PortableRadar => (10, [16, 16]),
         }
     }
 
@@ -335,6 +345,8 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::ExplodingFlyer(
             entity.entity_type,
         ))
+    } else if crate::portable_radar::allocation_authenticates(entity) {
+        Some(NativeExplosionSourceProfile::PortableRadar)
     } else {
         crate::intro2_type16::type16_auto_pilot_row(entity)
             .map(NativeExplosionSourceProfile::Type16Carrier)
@@ -400,6 +412,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         }
         Some(NativeExplosionSourceProfile::ExplodingFlyer(_)) => {
             crate::intro2_flyers_live::flyer_manager_identity_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::PortableRadar) => {
+            crate::portable_radar::manager_allocation_authenticates(manager, id)
         }
         None => false,
     }
@@ -602,6 +617,18 @@ pub fn begin_class49_standard_death(
             return Err(Block::Runtime("power-up constructor"));
         }
     }
+    if profile == NativeExplosionSourceProfile::PortableRadar {
+        // A860 will run 4055C0 on this completed Primary; a deployed radar
+        // needs the persistent raster, so close that input before the burst.
+        crate::portable_radar::PortableRadarOwner::adopt(manager, id).map_err(|_| Block::Graph)?;
+        if entity
+            .portable_radar_runtime
+            .is_some_and(|runtime| runtime.sub_k1 == u16::MAX)
+            && resources.level_terrain_radar().is_none()
+        {
+            return Err(Block::Runtime("radar coverage"));
+        }
+    }
     if profile == NativeExplosionSourceProfile::RollingBoulder {
         // The current style's own task graph, as the scheduler retains it.
         crate::rolling_boulder::RollingBoulderOwner::adopt(manager, id)
@@ -747,7 +774,7 @@ pub(crate) fn active_terminal_receipt(
 pub fn finish_class49_terminal(
     manager: &mut EntityManager,
     receipt: Class49TerminalReceipt,
-    resources: &ResourceCache,
+    resources: &mut ResourceCache,
     fx: &mut WorldFx,
 ) -> Result<Class49TerminalCompletion, Class49DeathBlock> {
     finish_with_allocator(manager, receipt, resources, fx, &mut HostType60Allocator)
@@ -756,7 +783,7 @@ pub fn finish_class49_terminal(
 fn finish_with_allocator(
     manager: &mut EntityManager,
     receipt: Class49TerminalReceipt,
-    resources: &ResourceCache,
+    resources: &mut ResourceCache,
     fx: &mut WorldFx,
     allocator: &mut impl Type60Allocator,
 ) -> Result<Class49TerminalCompletion, Class49DeathBlock> {
@@ -772,7 +799,14 @@ fn finish_with_allocator(
     // BAC0 and BD20 clear all slots only after BAF0's radial pass. Only
     // BD20 rereads cached source +08/+96 and attempts the ring allocation.
     let policy = receipt.profile.policy();
-    if policy != NativeExplosionPolicy::Class63 {
+    if receipt.profile == NativeExplosionSourceProfile::PortableRadar {
+        // A860's Primary destructor removes a deployed footprint after the
+        // radial pass and before the Type60 ring; a failure keeps the tasks.
+        crate::portable_radar::clear_all_tasks(entity, resources, &mut || {
+            fx.next_shared_retail_random_u16()
+        })
+        .map_err(|_| Block::Runtime("radar coverage"))?;
+    } else if policy != NativeExplosionPolicy::Class63 {
         for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
             entity.actor_tasks.clear_slot(slot);
         }

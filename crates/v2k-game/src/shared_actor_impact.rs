@@ -71,6 +71,7 @@ pub enum SharedActorImpactOutcome {
     Type43(crate::native_type43::impact::Type43ImpactOutcome),
     Type38Family(crate::native_type38::impact::Type38ImpactOutcome),
     RollingBoulder(crate::rolling_boulder::impact::RollingBoulderImpactOutcome),
+    PortableRadar(crate::portable_radar::impact::PortableRadarImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -199,6 +200,14 @@ pub fn apply_playing_actor_particle_hit(
     {
         return Some(SharedActorImpactOutcome::Type43(
             crate::native_type43::impact::apply_playing_type43_particle_hit(frame, impact),
+        ));
+    }
+    // Type83's lethal class49 blast needs Playing's static world and player.
+    if entity.entity_type == crate::portable_radar::ENTITY_TYPE
+        && entity.portable_radar_runtime.is_some()
+    {
+        return Some(SharedActorImpactOutcome::PortableRadar(
+            crate::portable_radar::impact::apply_playing_portable_radar_particle_hit(frame, impact),
         ));
     }
     if entity.intro2_gun_turret_runtime.is_some() {

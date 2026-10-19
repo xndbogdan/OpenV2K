@@ -49,7 +49,7 @@ fn castle_fixture() -> (crate::session::GameSession, EntityManager, WorldFx) {
 
 #[v2k_test_support::retail_test]
 fn virus_flower_class1_runs_baf0_then_removes_without_a_ring() {
-    let Some((session, metadata)) = fixture() else {
+    let Some((mut session, metadata)) = fixture() else {
         return;
     };
     let mut manager = generic(&session, &metadata);
@@ -81,7 +81,8 @@ fn virus_flower_class1_runs_baf0_then_removes_without_a_ring() {
         "BAF0 precedes A860"
     );
     assert!(claim_class49_terminal(&mut manager, &receipt));
-    let result = finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx).unwrap();
+    let result =
+        finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx).unwrap();
     assert!(result.ring.is_none());
     assert!(result.ring_owner.is_none());
     assert!(!manager.iter_all().any(|entity| entity.entity_type == 60));
@@ -101,7 +102,7 @@ fn virus_flower_class1_runs_baf0_then_removes_without_a_ring() {
 
 #[v2k_test_support::retail_test]
 fn castle_flowers_and_power_ups_keep_their_distinct_terminal_suffixes() {
-    let (session, mut manager, _) = castle_fixture();
+    let (mut session, mut manager, _) = castle_fixture();
     let sources: Vec<_> = manager
         .iter_all()
         .filter(|entity| matches!(entity.entity_type, 61 | 115))
@@ -156,7 +157,7 @@ fn castle_flowers_and_power_ups_keep_their_distinct_terminal_suffixes() {
         );
         assert!(claim_class49_terminal(&mut manager, &receipt));
         let completion =
-            finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx).unwrap();
+            finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx).unwrap();
         assert_eq!(completion.ring.is_some(), !class1);
         assert_eq!(completion.ring_owner.is_some(), !class1);
         assert!(finished_terminal_hit_authenticates(&manager, id));
@@ -173,7 +174,7 @@ fn castle_flowers_and_power_ups_keep_their_distinct_terminal_suffixes() {
 
 #[v2k_test_support::retail_test]
 fn native_power_up_pending_pickup_keeps_its_existing_deferred_owner_after_class49() {
-    let (session, mut manager, _) = castle_fixture();
+    let (mut session, mut manager, _) = castle_fixture();
     let id = manager
         .iter_all()
         .find(|entity| entity.authored_spawn_index == Some(2))
@@ -194,7 +195,7 @@ fn native_power_up_pending_pickup_keeps_its_existing_deferred_owner_after_class4
     );
     assert!(claim_class49_terminal(&mut manager, &receipt));
     let completion =
-        finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx).unwrap();
+        finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx).unwrap();
     assert!(completion.ring.is_some());
     assert_eq!(manager.pending_power_up_destroy_ids(), &[id]);
     assert!(manager.pending_actor_deferred_destroy_ids().is_empty());
@@ -216,7 +217,7 @@ fn native_power_up_pending_pickup_keeps_its_existing_deferred_owner_after_class4
 
 #[v2k_test_support::retail_test]
 fn native_type102_class49_emits_own_baf0_branch_before_slot_clear_and_ring() {
-    let Some((session, metadata)) = fixture() else {
+    let Some((mut session, metadata)) = fixture() else {
         return;
     };
     for spawn in [53, 54] {
@@ -310,7 +311,7 @@ fn native_type102_class49_emits_own_baf0_branch_before_slot_clear_and_ring() {
         );
         assert!(manager.pending_actor_deferred_destroy_ids().is_empty());
         assert_eq!(
-            finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx),
+            finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx),
             Err(Class49DeathBlock::TerminalReceipt)
         );
         assert_eq!(
@@ -478,7 +479,7 @@ fn class49_nonzero_header_death_cue_precedes_scatter_sound_without_rng() {
 
 #[v2k_test_support::retail_test]
 fn native_type102_terminal_claim_is_one_use_and_finish_reads_post_radial_pose() {
-    let Some((session, metadata)) = fixture() else {
+    let Some((mut session, metadata)) = fixture() else {
         return;
     };
     let mut manager = generic(&session, &metadata);
@@ -497,7 +498,8 @@ fn native_type102_terminal_claim_is_one_use_and_finish_reads_post_radial_pose() 
     let source = manager.entity_mut(id).unwrap();
     source.set_position_raw([900, 7000, -800]);
     source.collision.health_raw = RetailRuntimeValue::Known(-19);
-    let result = finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx).unwrap();
+    let result =
+        finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx).unwrap();
     let Some(Type60ConstructionOutcome::ActorLinked(ring)) = result.ring else {
         panic!("{result:?}")
     };
@@ -514,14 +516,14 @@ fn native_type102_terminal_claim_is_one_use_and_finish_reads_post_radial_pose() 
     assert_eq!(source.collision.health_raw, RetailRuntimeValue::Known(-19));
     assert_eq!(manager.pending_actor_deferred_destroy_ids(), &[id]);
     assert_eq!(
-        finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx),
+        finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx),
         Err(Class49DeathBlock::TerminalReceipt)
     );
 }
 
 #[v2k_test_support::retail_test]
 fn native_type102_terminal_rereads_remote_gate_after_radial_and_still_removes_source() {
-    let Some((session, metadata)) = fixture() else {
+    let Some((mut session, metadata)) = fixture() else {
         return;
     };
     let mut manager = generic(&session, &metadata);
@@ -539,7 +541,8 @@ fn native_type102_terminal_rereads_remote_gate_after_radial_and_still_removes_so
         .state_flags_at_0x08
         .overwrite(REMOTE_OWNED_STATE_BIT, REMOTE_OWNED_STATE_BIT);
     let mut oracle = fx.fork_for_main_base_abort_transaction();
-    let result = finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx).unwrap();
+    let result =
+        finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx).unwrap();
     assert_eq!(result.ring, None);
     assert_eq!(result.ring_owner, None);
     assert_eq!(
@@ -598,7 +601,7 @@ impl Type60Allocator for FailingAllocator {
 
 #[v2k_test_support::retail_test]
 fn native_type102_ring_allocation_failures_consume_source_return_and_preserve_rng_order() {
-    let Some((session, metadata)) = fixture() else {
+    let Some((mut session, metadata)) = fixture() else {
         return;
     };
     for stage in 0..3 {
@@ -615,7 +618,7 @@ fn native_type102_ring_allocation_failures_consume_source_return_and_preserve_rn
         let result = finish_with_allocator(
             &mut manager,
             receipt,
-            &session.cache,
+            &mut session.cache,
             &mut fx,
             &mut FailingAllocator(stage),
         )
@@ -644,7 +647,7 @@ fn native_type102_ring_allocation_failures_consume_source_return_and_preserve_rn
 
 #[v2k_test_support::retail_test]
 fn native_type102_terminal_late_unknown_state_keeps_clear_prefix_and_cannot_reenter() {
-    let Some((session, metadata)) = fixture() else {
+    let Some((mut session, metadata)) = fixture() else {
         return;
     };
     let mut manager = generic(&session, &metadata);
@@ -661,7 +664,7 @@ fn native_type102_terminal_late_unknown_state_keeps_clear_prefix_and_cannot_reen
         .collision
         .state_flags_at_0x08 = crate::entity_collision_state::RetailStateWord::unknown();
     assert_eq!(
-        finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx),
+        finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx),
         Err(Class49DeathBlock::Runtime("state bits"))
     );
     let entity = manager.entity_mut(id).unwrap();
@@ -674,7 +677,7 @@ fn native_type102_terminal_late_unknown_state_keeps_clear_prefix_and_cannot_reen
         .overwrite(u32::MAX, 0x0806_c000);
     assert!(!claim_class49_terminal(&mut manager, &receipt));
     assert_eq!(
-        finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx),
+        finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx),
         Err(Class49DeathBlock::TerminalReceipt)
     );
     assert!(manager.pending_actor_deferred_destroy_ids().is_empty());
@@ -686,7 +689,7 @@ fn type13_search_and_aimless_class1_prefix_retains_slots_until_radial_completion
         plan_type13_initial_behavior, publish_type13_reselected_initial_behavior,
     };
     for selector in [0u32, 0x4000] {
-        let Some((session, mut manager, _)) =
+        let Some((mut session, mut manager, _)) =
             crate::intro2_type47_live::world::native_intro2_fixture()
         else {
             return;
@@ -775,13 +778,13 @@ fn type13_search_and_aimless_class1_prefix_retains_slots_until_radial_completion
         assert!(claim_class49_terminal(&mut manager, &receipt));
         assert!(!claim_class49_terminal(&mut manager, &receipt));
         let completed =
-            finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx).unwrap();
+            finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx).unwrap();
         assert!(completed.ring.is_none());
         assert!(completed.ring_owner.is_none());
         assert_eq!(manager.pending_actor_deferred_destroy_ids(), &[id]);
         assert!(finished_terminal_hit_authenticates(&manager, id));
         assert_eq!(
-            finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx),
+            finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx),
             Err(Class49DeathBlock::TerminalReceipt)
         );
         let count = fx.particle_count();

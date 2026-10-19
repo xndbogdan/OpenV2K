@@ -43,7 +43,7 @@ impl EntityManager {
             .iter_all()
             .find(|entity| entity.id == cargo)
             .ok_or(PlayerCargoAttachmentError::ChildUnavailable)?;
-        if matches!(entity.entity_type, 49 | 92 | 96 | 97 | 100 | 123)
+        if matches!(entity.entity_type, 49 | 83 | 92 | 96 | 97 | 100 | 123)
             && entity.capability_flags & 0x1000 != 0
         {
             let mut callbacks = LiveCargoCallbacks {
@@ -52,6 +52,7 @@ impl EntityManager {
                 notifications: frame.notifications,
                 retail_tick: frame.retail_tick,
                 terrain: None,
+                radar: None,
                 blocked: Vec::new(),
             };
             return callbacks.attach_to_player(self, cargo);
@@ -67,6 +68,7 @@ impl EntityManager {
             notifications: frame.notifications,
             retail_tick: frame.retail_tick,
             terrain: None,
+            radar: None,
             blocked: Vec::new(),
         };
         callbacks.attach_to_player(self, cargo)

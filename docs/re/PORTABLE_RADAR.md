@@ -1,10 +1,10 @@
 # V2000 Portable Radar (Type 83)
 
 This document owns the recovered class-60 Portable Radar constructor, task,
-coverage, and lifecycle contracts. **The native runtime remains unimplemented.**
-Source recovery does not admit Type83 construction, authored gameplay execution,
-or campaign-cargo restoration. A constructor-only adapter would omit the task's
-shared radar mutation and its destructor's cleanup.
+coverage, and lifecycle contracts. The port runs them natively in
+[portable_radar](../../crates/v2k-game/src/portable_radar.rs): authored and
+campaign-cargo births, deployment, hits and death, beam carry and drop, and
+world teardown. [Port integration](#port-integration) lists what it leaves out.
 
 [CAMPAIGN_CARGO.md](CAMPAIGN_CARGO.md) owns saved identities and the common
 match/miss/attachment transaction. [ACTOR_RUNTIME.md](ACTOR_RUNTIME.md) owns
@@ -258,61 +258,35 @@ replace this observable RNG sequence. Teardown must precede resource unloading
 and the next world's constructor/raster RNG. Ordinary pause and map close do
 not enter this path.
 
-## Port integration boundary
+## Port integration
 
-The current [class49 owner](../../crates/v2k-game/src/class49_death.rs)
-authenticates GunTurret and CleansingVehicle profiles only. Its terminal
-phase clears task slots without a Type83 resource/RNG-aware destructor.
-Adding a Type83 profile or accepting a matching public type alone would not
-establish valid allocation, component, or coverage custody.
+[`portable_radar/actor.rs`](../../crates/v2k-game/src/portable_radar/actor.rs)
+owns the allocation and the entity's Sub-K word 1 (model selector 1), shared by
+the detached `405610` and `4055C0` programs; no task keeps a copy.
 
-The shared raster foundation is implemented. [ResourceCache](../../crates/v2k-game/src/resource_cache.rs)
-owns `level_terrain_radar`, retains it through abort rollback, and supports
-ordered cell refresh. [main.rs](../../crates/v2k-game/src/main.rs) initializes
-ordinary gameplay and Intro2 at the post-constructor phase above, before cargo
-restoration. Repeated initialization of an already resident world preserves
-the allocation and consumes no RNG.
+| Retail entry | Port owner |
+|---|---|
+| Authored `104B0 -> D4A0 -> AC60 -> C560` | `publish_portable_radar`, from a creation record: it grounds at the record's X/Z, draws the singleton selector word, zeroes Euler, clears Secondary then Tertiary, installs the lifetime-0 Primary and builds the identity basis |
+| `12DA0 -> DCA0/E870 -> A800 -> 405610` | `tick_portable_radar_owner`: the shared scheduler prefix and relation repair, then the task visit, DCA0's sound gate when detailed, E100 gravity and E370's decay; master motion stays suppressed by `0x08000000` |
+| Lethal hit or radial, Main Base abort | The shared class49 terminal: `BAF0` (ten class16 particles, the header radial), then A860 runs `4055C0` before the Type60 ring |
+| Attach `16700 -> C690` and release `16750 -> D1C0` | `portable_radar/cargo.rs`: both reach `AC60 -> C560`, whose `40A7A0` runs the old Primary's destructor; the beam lends the resident raster apart from its cache for a pickup |
+| Teardown `42E980 -> 14990` | `retire_world_radars`, before the old world unloads on a return to the frontend or the next world's load |
+| `451C00` match or miss | Campaign cargo reuses the first stamp match or builds a zero-record radar, then attaches it to the player |
 
-[GameplayRadar](../../crates/v2k-game/src/gameplay_radar.rs) reads this owner
-for both HUD and fullscreen presentation. It constructs no second coverage map
-or terrain raster and uses caller-supplied process RNG for marker flicker.
-Fullscreen images follow current raster changes without rerunning static
-coverage construction or its random draws. The shared terrain-light and crater
-refresh paths now reach HUD/map output; this does not authorize Type83 deployment.
+The retail lab supplies the deployment receipt: world 30's radar holds its
+birth pose with state `0x08228805` from its first `12DA0` visit, then deploys
+54 ticks after arrival while `44A5C0` draws 8,307 words. The port's
+[world-30 test](../../crates/v2k-game/src/portable_radar/actor_tests.rs) births
+the same state word (less the per-frame detail bits) and deploys after 53 ticks
+of callback time with the same 8,307 raster draws. The other tests cover the 14
+authored births, coverage removal inside class49 after a deployed or partial
+deployment, the beam's pickup, carry, Type93 drop and redeployment at the
+landing point, campaign miss and match, and teardown.
 
-The shared owner also implements ordered `44A8D0` coverage mutation, including
-whole-byte carries/borrows, wrapped coordinates, zero-contribution cell refresh
-and immediate raster RNG. [portable_radar.rs](../../crates/v2k-game/src/portable_radar.rs)
-implements detached `405610` and `4055C0` callbacks against that owner. These
-borrow the caller's SubK word and current position; they do not install a task,
-authenticate an entity allocation, run the scheduler, or dispatch cargo/death
-callbacks. Partial deployment and partial destruction require no radar resource.
+The port leaves out:
 
-The detached callback preserves its source prefix on a resource error:
-deployment writes K1=`FFFF` before attempting coverage, whereas destruction
-zeros K1 only after successful removal. A future native owner must park a failed
-deployment prefix and retain a task whose destructor failed; the saturated word
-alone cannot prove that coverage was successfully installed. These adapter
-errors are port boundaries, not additional retail return branches.
-
-A coherent native Type83 checkpoint still needs all of the following:
-
-- Authenticate the invariant header, actual allocation, SubK storage and
-  wrapper/slot custody; implement construction prefixes and allocation failure.
-- Execute deployment through detailed/coarse task scheduling with the shared
-  world RNG and persistent radar state, routing activation to the implemented
-  coverage operation without reconstructing static coverage.
-- Run the destructor on successful replacement, cargo attachment/release,
-  initializer-failure fallback, class49 post-radial task clearing, and world
-  teardown before resource unloading. Suspended callbacks and abort rollback
-  need the same task/resource transaction guarantees.
-- Extend checked/radial hits, class49 scatter/terminal ownership, Main Base
-  abort, authored births, campaign match/miss, and cargo drop as one lifecycle.
-
-Validation must distinguish partial deployment, first saturation, repeated
-deployed ticks, overlapping footprints, byte carry/borrow, world wrapping,
-zero-contribution refresh RNG, successful replacement versus allocation failure,
-direct allocation failure versus outer fallback, carry/release, post-radial
-destruction ordering, and teardown RNG before the next world. Then inspect
-ordinary-world HUD/map behavior with deployed Type83 coverage. Shared raster integration and
-static routine recovery do not close those native lifecycle conditions.
+- Primary allocation failure and `40C6B0`'s outer fallback: the port's task
+  allocation cannot fail, as for every other native owner.
+- Static-route particle hits (`442950 -> 411180`): they stop typed at the
+  shared actor dispatch, as for the other owners without that wrapper.
+- Display-tier changes that rebuild static coverage, described above.

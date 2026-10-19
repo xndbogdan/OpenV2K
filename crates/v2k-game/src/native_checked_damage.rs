@@ -562,6 +562,7 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         || entity.native_type56_runtime.is_some()
         || entity.native_type43_runtime.is_some()
         || entity.native_type38_runtime.is_some()
+        || entity.portable_radar_runtime.is_some()
         || entity.intro2_type94_runtime.is_some()
         || entity.native_type47_construction.is_some()
         || entity.intro2_type10_runtime.is_some()
@@ -615,6 +616,8 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         native_type43_valid
     } else if entity.native_type38_runtime.is_some() {
         native_type38_valid
+    } else if entity.portable_radar_runtime.is_some() {
+        crate::portable_radar::manager_allocation_authenticates(manager, id)
     } else if entity.intro2_type94_runtime.is_some() {
         crate::intro2_type94::intro2_type94_allocation_authenticates(entity)
     } else if entity.intro2_type8_runtime.is_some() {

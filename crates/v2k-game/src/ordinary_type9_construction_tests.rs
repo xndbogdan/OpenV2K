@@ -94,6 +94,7 @@ impl CargoWorld {
     fn step(&mut self) -> (Option<BeamOutcome>, Vec<Outcome>) {
         let mut claims: Vec<_> = self.scheduler.actor_animation_claims().collect();
         let cargo = self.manager.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 20_000,
             beam_expiry: crate::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
