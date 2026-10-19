@@ -341,6 +341,10 @@ fog constructor each:
 | `0x68`, `0xE8` | flat billboard | `FUN_00467840` | `FUN_004680F0` |
 | `0x78`, `0xB8`, `0xF8` | sprite billboard | `FUN_00467C60` | `FUN_00468520` |
 
+| Routine | Does |
+| --- | --- |
+| `FUN_0045B320` | the near pass's vertex fetch for the mirrored faces: returns slot n (0x14 bytes) as cached when its outcode has a low bit set; when it holds only 0x80 (its pair's handler computed the view point without projecting it), projects it now (method `+C4`) and stores that outcode with 0x80; otherwise runs the near-pass handler for its record's type flag (table `+3C`, record n / 2 at `+88`) |
+
 The adapter (`crates/v2k-render/src/sw_model.rs`) rebuilds these inputs
 from the port's materialized model, one command per source polygon and
 edge. A node whose producer owns its integer frame (`FUN_00465870`'s origin

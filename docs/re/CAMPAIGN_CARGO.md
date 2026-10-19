@@ -72,16 +72,16 @@ Type 52 has no beam capability and is absent from this list.
 `493E40(3)`, the latter performs this order:
 
 1. Reset session word `+0x2D4` to zero at `00451763`.
-2. If `450390(session)` is false, call `451AF0` to create the player through
+2. If `00450390(session)` is false, call `00451AF0` to create the player through
    `4438A0 -> 438080 -> 40D720 -> 4104B0`. Otherwise call `456C20` at
    `00451797` and discard its result: the skipped player still consumes one
-   stamp. `450390` is true for signed phase `< 4`, or phase 4 with `+0x34 == 11`.
+   stamp. `00450390` is true for signed phase `< 4`, or phase 4 with `+0x34 == 11`.
 3. When session `+0x278` is nonzero, call `42E570` at `004517AB`. Its authored
    Section 13 loop visits indices 0 through count - 1 via `42E440 -> 438080`.
    Completed-world death/removal policy runs **after** each birth, so those
    actors still consume stamps. `42EFB0` then removes duplicate exit markers;
    that cleanup creates no actors and consumes no additional stamp.
-4. If `450390` is false, invoke `451C00` at `004517C9`, after destination
+4. If `00450390` is false, invoke `451C00` at `004517C9`, after destination
    authored actors exist. Successful restoration is followed by `443260`
    at `00451800`, refreshing the saved controller profile.
 
@@ -321,7 +321,7 @@ profiles. Intro2 retains its separate skipped-player/load policy:
   `41DE60(terrain, X, Z, 0) + 0x200`. The signed surface comparison sets
   `0x200000` below, `0x400000` above, neither on equality. These flags describe
   the position before the Y raise and are not recomputed afterward.
-- After it, `00451E2F..00451EDC` checks `42EB50(controller) == 6`
+- After it, `00451E2F..00451EDC` checks `0042EB50(controller) == 6`
   (world-record `+0x48`, not the logical world index). With a player Sub-J and
   attached mass from `4185C0` below 200, it constructs one zero-record Type68
   ballast through `438080` and attaches it through `443B30`. This is exactly

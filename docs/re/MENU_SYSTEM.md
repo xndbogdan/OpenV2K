@@ -114,7 +114,7 @@ See the [active world frame order](LOADING_TRANSITIONS.md#active-world-frame-and
 | 0x4CA7F8 | **Frontend menu** | FUN_0042B230 | 0x4CA760 → 42AA40,42AA60,42B870,42AA80,42BA30,42AA90,42AAB0; render 0x4CA788 → 42B5D0 |
 | 0x4C9840 | Attract/demo loader | FUN_00426320 | 0x4C9830 → FUN_004263F0 |
 | 0x4D0918 | In-game | FUN_004515E0 | 0x4D07A8 |
-| 0x4D0950/0988/09C0/09F8 | Results A/B/C | 0x453330/451390/451420 | via ptr table 0x4D0DA0 |
+| 0x4D0950/0988/09C0/09F8 | Results A/B/C | 0x00453330/00451390/00451420 | via ptr table 0x4D0DA0 |
 
 The late-demo differential closes the promotional page inside this same mode
 system. Retail event dispatcher `0044FCD0`, predecessor descriptor `004D0A30`,
@@ -255,7 +255,7 @@ screen of the stack is rendered (no parents behind).
   camera), others y = 0xDAC + (0x7000−clk)/2 (recede). Then the stack
   switches, DCEC4 resets, clock re-arms for fly-in: props at y = 0xDAC +
   clk/2. Full ring↔submenu transition ≈ 1.25 s, then text types on.
-  Prop-draw anim channels (LAB_0043B610): ch0 = DAT_004FED60 (50 Hz tick),
+  Prop-draw anim channels (`FUN_0043B610`): ch0 = DAT_004FED60 (50 Hz tick),
   ch1-2 = (0x7000−clk) during fly-out / clk during fly-in. This is visible in
   L5 `screenop`: its stream applies op-0x5C Y rotation from callback operand
   `0x81` before instancing `screeno2` (global model 317). The monitor therefore
@@ -1244,6 +1244,74 @@ The NoCD05 Alpine failure is a [short overlay read followed by an
 error-dialog callback crash](RETAIL_DATA_INTEGRITY.md#nocd05-alpine-load-failure),
 not a protection failure. Its missing-file text is stale CRT errno from EOF;
 the requested file opens successfully.
+
+## Other frontend and mode routines (STATIC)
+
+### Frontend modes and the sheet
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00426F00` | from startup (`FUN_0044E2E0`): when `FUN_00426F80` allows it, routes through the menu (`FUN_0042A940`) and switches the session to the attract mode copied from `004C9840` |
+| `FUN_0042ADC0` | switches the session to the frontend menu (`004CA7F8`) through `FUN_0042A9B0` |
+| `FUN_0042AE50` | the intro movie mode's exit: when the movie ran (`004CA6C0`), stops and destroys it, closes its screen and restores the saved display device and screen (`004DB1D0`); then the common exit `FUN_0042AAC0`, and `004DB200` becomes 1 |
+| `FUN_0042AAC0` | a mode's exit: frees its input set (`FUN_00471C10`) and releases its binding tables (`FUN_00429160`) |
+| `FUN_0042D500` | builds the intro movie's display description from the settings: the mode string (`004FE628 +4BC` or `+4C0` by settings word `+10`), the five-word screen descriptor from `004FE634`, the settings bytes `+14`, `+18` and `+1C`, and flag `+12` when either of the last two is zero; it then opens and closes the named file (`FUN_004B3C00`, `FUN_004B3B10`) |
+| `FUN_00426200` | the options menu's accept: shows HUD sprite 3 and, when the language word changed, reloads overlays 4, 5 and 12 and the HUD set for the new language, then returns to the menu (`FUN_0042A940`) |
+| `FUN_00426E60` | the sheet mode's update: advances the clock `004DB0CC` and the ripple's two spring words (`004DB0C8`, kept to 16 bits, and the decaying `004DB0C0`), and after 30 s (`004DB0C4`) returns to the menu (`FUN_0042A940`) |
+| `FUN_00426680` | draws the frontend's rippling sheet as flat strips through `FUN_0047A960`, unrolling it in three phases and shaping each corner with `FUN_00426890`, until the draw call fails |
+| `FUN_00426890` | maps a point of the 160-by-104 sheet to the screen at the given depth, with a travelling sine ripple from the clock `004DB0CC` |
+| `FUN_004269D0` | the same sheet textured with a sprite from the table at `004FE62C +0x1414`, through `FUN_0047AAE0` |
+| `FUN_00426CB0` | the textured counterpart of `FUN_00426890`, also giving each corner's texture coordinates |
+| `FUN_0042BF20` | builds the frontend craft's Primary through `FUN_00401020` (record `FUN_0042BFD0`, tick `FUN_0042C090`, destructor `FUN_0042C050`), seeds Sub-K variable 2 from `004DB218` and sets `004DB210` |
+| `FUN_0042C610` | poses the frontend craft: the folded rest angles (`FUN_0042C660`), the idle sway (`FUN_0042C710`, gain 100) and, while a click pose runs, that pose with a gain that falls over 48 steps |
+
+### In-game modes
+
+The descriptors are the 14-dword mode descriptors of Layer 1 above; `0x4D0A68`
+is the full-screen map and `0x4D0A30` the predecessor descriptor.
+
+| Routine | Does |
+| --- | --- |
+| `FUN_004559E0` | installs a mode's binding sets: a fresh input list at `+4`, the given table registered at `+8` (`FUN_00428F70`, `FUN_00429100`) with the global set `004FED00`, optionally a second table at `+68`, then the mode's binding set replaced (`FUN_00494530`); a failure frees what it made |
+| `FUN_00455990` | a mode's exit handler: frees the mode's input set and scene object and, when the session's `+297` is set, queues menu command 1 (`FUN_0042CEA0`) and runs `FUN_0042CEB0(1)`; clears `+297` |
+| `FUN_004532E0` | the exit handler of mode descriptor `0x4D0918`: clears the session's `+2AC` and, unless its phase (`+296`) is 1, 2 or 4, stores the player's body handle at `+2A8` (`FUN_00443AC0`) |
+| `FUN_00453AD0` | the preceding step of mode descriptor `0x4D0950` (chain `0x4D0848`): when `FUN_00428C10` counts no device and the phase is above 4, opens screen `0x4C5008` (`FUN_0043A960`) and runs `FUN_004513E0`; then clears the block at `004FE820` (`FUN_004383D0`) |
+| `FUN_00453B20` | the exit handler of mode descriptor `0x4D0950`: drops the references `004F71C0` and `004F71C8`, frees the mode's input set and scene object (and the second scene object `+68` when the phase is above 4), and clears `004F718C` and `004F7190` |
+| `FUN_00453D40` | the final card's text, a step of the primary chain `0x4D0728`: during the opening (phase below 3, `+28E` clear) after tick 4000, types strings 550 and 551 (`FUN_00452790`) on the mode's record, timed from that tick |
+| `FUN_00453EE0` | the exit handler of the predecessor descriptor `0x4D0A30`: clears the final-card state `+28A` and mask bit 0x20 (`FUN_0044F400`), stops the music (`FUN_00456BA0`), records the current world index (`+2B4`) and `+34` (`+2B8`); unless `+28E` is set, frees every particle (`FUN_00441B10`) and removes the world's entities (`FUN_0042E980`); unless `+292` is set, removes them through `FUN_0042E960`, which also sets the world's level `+C4` to `+34` |
+| `FUN_0044FD60` | an in-game event handler (from the dispatcher `FUN_0044FCD0`): for the event the session names at `+4`, clears `+289` and returns to the menu (`FUN_0042A940`); for any other, switches to the results mode from the table `0x4D0DA0`, indexed by the session's `+268`, whether `+260` is positive, and the network flag `004FE60C` |
+| `FUN_004514A0` | a presentation step of the results chains `0x4D0768` and `0x4D080C`: draws the screen (`FUN_0043AA40`) and, when `FUN_00428C10` counts no device, string 132 as one line at the layout's lower left |
+| `FUN_00451580` | the exit handler of mode descriptor `0x4D09F8`: frees the mode's input set (`FUN_00471C10`, `+4`) and scene object (`FUN_00429160`, `+8`), clears `004F718C` and `004F7190`, hands the Self Righting setting to the controller (`FUN_00448450`), and runs the music poll (`FUN_00456A00`) |
+| `FUN_00453F70` | the init handler of the map descriptor `0x4D0A68`: clears the map's frame count (`004F72EC`), sets mask bit 2 (`FUN_0044F3E0`), resumes the music (`FUN_00456AC0`), sets the application word (`FUN_00494050`, the mode's `+C`) and, when that succeeds, installs the map's binding set `0x4C4730` (`FUN_004559E0`) |
+| `FUN_004542E0` | the map descriptor's tick: the display-surface upkeep (`FUN_00428D00`), forcing a clear to colour entry 85 during the map's first two frames (`004F72EC` 1 and 2) |
+| `FUN_00454330` | the exit handler of the map descriptor: frees the mode's input set and scene object, restores the application word (`FUN_00494050`, the mode's `+8`), runs the music poll (`FUN_00456A00`) and clears mask bit 2 (`FUN_0044F400`) |
+
+### Progress map
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00454C00` | the progress map's point transform (from `FUN_00454520`): rotates (x, y) by a Q15 sine and cosine and scales each axis by the screen's scale (`004FE620`) over 256 |
+| `FUN_00455430` | finds a world's node in the progress map's node list (`004FE600`, built by `FUN_00454FF0`), returning the link before it |
+| `FUN_00455460` | finds the progress map's route between two worlds in either direction, searching each node's link list (`+14`) for a link whose ends (`+10`, `+14`) carry the two world numbers |
+
+### Network screen
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0043D0E0` | the Network screen's entry: clears its lists (`FUN_0043D1B0`, `FUN_0043D070`) and enumerates the DirectPlay service providers (`FUN_0046C8C0`) through `FUN_0043D110` |
+| `FUN_0043D110` | the service-provider callback: copies each provider's name (`004DCA68`, 0x44 bytes apart) and connection (`004DCAA8`), shows its row (`004CB2F8`, 0x1C bytes apart: flag 4 set, 8 clear), and stops after six (code `0x100`) |
+| `FUN_0043D210` | a Network row's draw (`0x4C10D8`): records the local name (`FUN_00439010`) and drains the inbound queue (`FUN_004695E0`) every frame; once its text has typed on (reveal `0x7FFF`) and the local slot is known (`004F7378`), gives every entity a handle under it (`FUN_00410BB0`) and sets `004DCEAC` to 1; then draws its string |
+| `FUN_0043CD50` | the Network screen's Host item, on selection: checks the disc as the game start does (the track fingerprint, plus `FUN_004B3474` equal to three times `FUN_004B335D`) and quits to the desktop when it fails; then hosts a session named after the computer (`FUN_0046CB50`; a failure plays menu sound 2), gives every entity a handle under the local slot (`FUN_00410BB0`), resets the multiplayer state (`FUN_00439290`) and raises code `0xC02` |
+| `FUN_0043D0A0` | the Host item's draw: its string (`004FE628` by id) through `FUN_0043B1C0` |
+
+### Save write, cheats and status rows
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0043BA50` | the save write that `FUN_0043B9A0` runs once the **Saving game** screen has flown in: `FUN_00449110` always returns 2, so its branches to `0x4C19E0` and `0x4C1660` never run; inside an error scope it writes slot `004CB3F8` (`FUN_00448CF0`) and replaces the screen with **Game Saved** (`0x4C1820`); an error plays menu sound 2 and replaces it with `0x4C1900` for code `0xA404`, else with **Access Failed** (`0x4C1890`) |
+| `FUN_00450D70` | the Cheats world selector's callback: left and right step the world number (`004D04E0`) between 1 and the maximum, skipping 13, 15, 16, 17, 29 and 32, with menu sound 1 (sound 0 at a limit); selecting plays sound 3, sets session `+28C`, clears the fly clocks (`FUN_0043C7D0`) and runs Skip to World (`FUN_004512E0`) |
+| `FUN_00450E80` | the Cheats world selector's draw: string 138 formatted with the world's name, string 152 + the world number (string 127 when absent) |
+| `FUN_00450EF0` | a status row's draw: `%s: %s %s` with its label, the session's text at `+14` (`FUN_00456C10`) and the current level's name (`FUN_00456E20`, over a fresh controller snapshot and the world's control words) |
 
 ## Decompilation artifacts & tools
 

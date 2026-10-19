@@ -49,7 +49,7 @@ Three words set this row apart from the hosted profiles:
   `40E354` tests bit 8 before `44EC60`. Type18 therefore falls under gravity
   but takes neither wind nor drag. The ground host now gates `44EC60` on the
   effective bit.
-- **Sub-D classifier `0x10`** runs `41FEB0`'s steepness arm alone: no water
+- **Sub-D classifier `0x10`** runs `0041FEB0`'s steepness arm alone: no water
   or object avoidance.
 - **Aim sound 82 has period 0.** `AimAndFire` draws and plays its optional
   sound only from period `0x400`, so this cue never sounds and draws no word.

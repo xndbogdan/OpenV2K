@@ -433,6 +433,30 @@ reconstructed from the visible `MaterializedModel` triangles.
 | `0x95` | align2: `i16 relative_offset` | continue on the previous primitive hit, otherwise branch from the aligned payload |
 | `0x05` | align2: child id/orientation/span/attach/remaps | recurse into a collision-only child model hierarchy |
 
+Each primitive is tested by the query's table: one table per query shape, one
+entry per primitive. The Targetter's probe uses the point and sphere tables
+(`FUN_0044D950`).
+
+| Query | Table | Sphere `0x8E` | Cylinder `0x90` | Box `0x8F` | Plane `0x89` | Plane `0x8A` |
+|---|---|---|---|---|---|---|
+| point | `0x4D4908` | `FUN_00469740` | `FUN_00469C00` | `FUN_00469FA0` | `FUN_0046A890` | `FUN_0046A950` |
+| sphere | `0x4D4920` | `FUN_00469770` | `FUN_00469C20` | `FUN_0046A1C0` | `FUN_0046A8B0` | `FUN_0046ABF0` |
+| upright cylinder | `0x4D4938` | `FUN_00469850` | `FUN_00469CE0` | `FUN_0046A440` | `FUN_0046A8D0` | `FUN_0046A8D0` |
+| box | `0x4D4950` | `FUN_00469910` | `FUN_00469DF0` | `FUN_0046A560` | `FUN_0046A8D0` | `FUN_0046A8D0` |
+| model | `0x4D4968` | `FUN_00469B70` | `FUN_00469F00` | `FUN_0046A7F0` | `FUN_0046A8D0` | `FUN_0046A8D0` |
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00469FA0` | the point query against a box primitive: inside the box's half extents on every axis, the hit separates along the axis of least penetration, a signed Q12 unit with that penetration |
+| `FUN_00469850` | the upright-cylinder query against a sphere primitive: within the cylinder's height (`+14` up to `+14` + `+24`, widened by the sphere's radius) and their summed radii horizontally, separates in XZ only: the Q12 unit of the horizontal offset and the summed radii less its length; (1, 0, 0) and the full sum at zero length |
+| `FUN_00469CE0` | the upright-cylinder query against a cylinder primitive: when their boxes overlap (radii on X and Z, heights on Y), the hit is the Q12 unit of the centre offset with penetration 1 |
+| `FUN_0046A440` | the upright-cylinder query against a box primitive: when the box's half extents overlap the cylinder's radius and height, the hit is the Q12 unit of the centre offset with penetration 1 |
+| `FUN_00469910` | the box query against a sphere primitive: overlapping on every axis (the box's half extents `+28..+30` plus the radius), the hit separates along the axis of least penetration, a signed Q12 unit with that penetration |
+| `FUN_00469DF0` | the box query against a cylinder primitive: when the box's half extents overlap the cylinder's radius and height, the hit is the Q12 unit of the centre offset with penetration 1 |
+| `FUN_0046A560` | the box query against a box primitive: overlapping on every axis (summed half extents), the hit separates along the axis of least penetration, a signed Q12 unit with that penetration |
+| `FUN_00469F00` | the model query against a cylinder primitive: runs the moving model's collision program (`FUN_0046AEF0`) as an upright-cylinder query of that radius and height (table `0x4D4938`) at the primitive's offset, keeping the projector block `004FEEA0` across it |
+| `FUN_0046A7F0` | the model query against a box primitive: runs the moving model's collision program (`FUN_0046AEF0`) as a box query of those half extents (table `0x4D4950`) at the primitive's offset, keeping the projector block `004FEEA0` across it |
+
 The child command is also valid on the **query** side. `FUN_0046AF20`
 case `0x05` calls `FUN_0046B6D0`, which copies the selected callback context
 and recurses into `FUN_0046AF20` with the child model, attachment-relative
@@ -790,6 +814,34 @@ refs are slot indices XOR'd with the requesting slot's mirror bit):
 | 12 | 2,808 | alias of slot a (same position — separate shade/material per face set). Default handlers `FUN_0046E9F0`/`FUN_0046EA60`/`FUN_0046EAE0` copy X/Y/Z exactly; world setup additionally swaps this entry for a terrain-grounding handler — see the static-extraction caveat below |
 | 13 | 7,036 | slot a with absolute view-space Y forced to signed −32767 in 8.8 units (−32767/256 world) while preserving view X/Z — "sky pin" (screen-vertical support/beam) |
 | 14 | 1,908 | vertex in an external attachment frame: callback ctx+0x5C transforms (a,b,c) from another object's space, then re-bases into this model's frame (world-anchored points: contrails, tethers) |
+
+The handlers by pass (table `0x4D4A78`):
+
+| tf | Far pass (`+0x00`) | Near pass (`+0x3C`) | Pass 3 (`+0x78`) |
+|----|----|----|----|
+| 0 | `FUN_0046D9F0` | `FUN_0046D7E0` | `FUN_0046D610` |
+| 1 | `FUN_0046DC00` | `FUN_0046DC00` | `FUN_0046DC00` |
+| 2 | `FUN_0046DED0` | `FUN_0046DE30` | `FUN_0046DDB0` |
+| 3 | `FUN_0046E0E0` | `FUN_0046E020` | `FUN_0046DF70` |
+| 4 | `FUN_0046E560` | `FUN_0046E360` | `FUN_0046E1A0` |
+| 5 | `FUN_0046E910` | `FUN_0046E830` | `FUN_0046E760` |
+| 6 | `FUN_0046F400` | `FUN_0046F2D0` | `FUN_0046F1B0` |
+| 7 | `FUN_0046F6F0` | `FUN_0046F600` | `FUN_0046F530` |
+| 8 | `FUN_0046FA20` | `FUN_0046F8F0` | `FUN_0046F7D0` |
+| 9 | `FUN_0046FEF0` | `FUN_0046FEA0` | `FUN_0046FB50` |
+| 10 | `FUN_00470270` | `FUN_004700D0` | `FUN_0046FF40` |
+| 11 | `FUN_004705F0` | `FUN_004704E0` | `FUN_00470410` |
+| 12 | `FUN_0046EAE0` | `FUN_0046EA60` | `FUN_0046E9F0` |
+| 13 | `FUN_0046EC60` | `FUN_0046EBD0` | `FUN_0046EB60` |
+| 14 | `FUN_0046F010` | `FUN_0046EE70` | `FUN_0046ECF0` |
+
+A plain-vertex handler computes both slots of a pair and projects only the
+one asked for; the other keeps its view point with the bare `0x80` outcode,
+which a later fetch projects (the mirrored faces' `FUN_0045B320` does). The far
+pass projects through `+0xC0` (with the fog byte) and the near pass through
+`+0xC4`; pass 3 only transforms and marks the slot `0x80`. With render-context
+word `+0x3C` set, the handlers add the record to the translation without the
+camera basis.
 
 `eval(v)` (FUN_00470700): `v&0xC0` = 0x00 → `v&0x3F`; 0x40 →
 `(v&0x3F)<<10`; 0x80 → dynamic callback ctx+0x58 (entity-driven, e.g.
@@ -1366,7 +1418,7 @@ and bindings `[0, 0, 1, 0, 0, 0]`; Working Factory type 66 authors raw word 8
 and bindings `[4, 3, 0, 2, 1, 0]`. Both records have no Sub-G payload.
 
 `19010` adds the signed offsets when the product is born. The external-frame
-callback `0A9F0 ->198E0 ->199B0` later resolves descriptor slot `+00` in the
+callback `0A9F0 ->004198E0 ->004199B0` later resolves descriptor slot `+00` in the
 current model draw context and updates tracked product Sub-M `+88` with the
 same world offsets. See [FACTORY_PRODUCT_MARKERS.md](FACTORY_PRODUCT_MARKERS.md)
 for the recovered machine-code writer and applicable authored models.
@@ -1430,7 +1482,7 @@ type-14 records. Selectors0..11 form the same six H pairs; selector12 in
 slot152 is consumed by Sub-E emitter0, whose authored source slot is150.
 The stream reaches it in its first, transparent sprite668 triangle. The
 sprite's 2x2 RGBA data is entirely zero, but reached corner resolution still
-performs `424F20`'s queued-emitter stamp. The model submits 34 edges. See
+performs `00424F20`'s queued-emitter stamp. The model submits 34 edges. See
 [Type47 draw ownership](TYPE47_RUNTIME.md#authored-draw-and-firing-origin)
 for the actor/FIFO epochs and explicit current-node custody boundary.
 The long legs are opcode-`0x22`

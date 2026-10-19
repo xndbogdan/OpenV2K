@@ -1353,3 +1353,74 @@ infection coverage. These checks do not establish complete visual parity for
 Castle: the shared furniture scan's unresolved constructor target-Y edge,
 uncaptured allocator residue, and unimplemented other insect families retain
 their explicit boundaries.
+
+### Task programs of the other classes (STATIC)
+
+These are the programs, hooks and records of the behavior classes this note
+has not covered above, by retail's class number and name (the class table at
+`0x4C8AA0`). Style addresses such as `4BE0F8` name the next style a tick
+selects; "detailed visits" are those of a body with the detail bit.
+
+| Class | Routine | Does |
+| --- | --- | --- |
+| 9 Capture People | `FUN_00422F10` | capture-target search (from `FUN_004021B0`): among live bodies other than the captor that `FUN_00411A20` does not exclude, either of the captor's own type or matching the given capability mask, that `FUN_00423030` admits, keeps the one with the lowest word `+88` (ties at random); takes `4BE8D0` when none |
+| 15 Trash Buildings, 26 Trash Furniture | `FUN_00401CA0` | builds the Primary: the common wrapper with the 0x24-byte furniture record (`FUN_00401D30`), tick `FUN_00401DA0` and destructor `FUN_00407120`, in the requested slot |
+| 15 Trash Buildings, 26 Trash Furniture | `FUN_0040C890` | static-contact hook (style `+1C`): deals the touched static object a channel-1, 40,000 packet through `FUN_00427950`, attributed to this body, then reselects through `FUN_0040C690` |
+| 16 Generate Flares | `FUN_00406300` | builds the Primary through `FUN_00401020` with tick `FUN_00406390` |
+| 16 Generate Flares | `FUN_00406390` | tick: picks a random point from -4,096 to +4,095 in X and -1,024 to +3,071 in Z around the player; when that cell is water (material class 7) or below the sea, emits a class-47 particle there on the waved sea surface |
+| 21 Mobbing Target | `FUN_0040B2C0` | initializer: clears Secondary and Tertiary, builds `FUN_00403900`'s task when the type has a Sub-G, then `FUN_00403B70`'s 5,000-ms task on the context's target |
+| 21 Mobbing Target | `FUN_00403900` | builds the Primary: initializer `FUN_00401350`, tick `FUN_00403A00`, destructor `FUN_00407120`, contact hooks `FUN_00402DA0` and `FUN_00402CA0`; with a type steering descriptor (`+8`) the mover's speed becomes 4/3 of that descriptor's word `+4` |
+| 21 Mobbing Target | `FUN_00403A00` | tick: moves through `FUN_00401430` toward the tracked target and picks the next style: target gone (`4BE0F8`), dying (`4BE100`), unreachable by `FUN_00423030` (`4BE110`), or, within 0x200 in X and Z and more than 300 above it, a passing `FUN_0041E930` forward test (`4BE108`); otherwise steers Sub-G (`+0x20`) to 500 above the target through `FUN_0041B940` |
+| 21 Mobbing Target | `FUN_00404D50` | tick (installed by `FUN_00404BE0`): with a Sub-G it takes `4BE180` once within 200 of the ground or the waved sea under it, or below its target; moves through `FUN_00401430`, plays the record's sound at its period on detailed visits, and takes `4BE188` once the target is more than 0x300 away in X or Z |
+| 21 Mobbing Target | `FUN_0040CF00` | pair-contact hook (style `+18`): a touched body with capability bit 0 (the player) takes a checked channel-1, 6,000 packet through `FUN_00415040`, attributed to this body |
+| 25 Player Death | `FUN_00409950` | spawns a Type98 through `FUN_00438080` at the given body's position, owned (`+60`) by the caller's handle, then gives Type98 a patched copy of its type vtable at `004DAE90` whose entry `+0x20` is `004097A0` |
+| 27 Destroy Furniture | `FUN_0040B800` | initializer: plays the type's sound (`+0x9A`) at the body, clears Tertiary and Secondary, then builds the 5,000-ms Primary `FUN_00402430` with the type's sound `+0x9C` and period `+0xA8` |
+| 27 Destroy Furniture | `FUN_00402430` | builds the Primary as `FUN_00401CA0` does, with tick `FUN_004024E0`, then stores the caller's sound id and period at record `+0x1C` and `+0x20` |
+| 27 Destroy Furniture | `FUN_004024E0` | tick: without furniture (or on a 1-in-16 retry) asks `FUN_004230C0` for one and keeps its X/Z with the bilinear ground height; moves through `FUN_00401430`; while alive, plays the record's sound at its period on detailed visits and fires the type's emitter (`+0x18`) at the furniture through `FUN_00424650` |
+| 28 Guided Missile | `FUN_00407F20` | builds the Primary through `FUN_00401020`: record `FUN_00408610`, tick `FUN_00407FB0`, destructor `FUN_004086A0` |
+| 28 Guided Missile | `FUN_00408610` | allocates the zeroed 12-byte record (target, flight time, speed), rebuilds the basis (`FUN_00413F70`) and starts at the speed of its current velocity |
+| 28 Guided Missile | `FUN_00407FB0` | tick: dies through `FUN_00410C10` after 15 s; rolls its basis; with a live target it turns toward it (500 above when far), each turn capped at the elapsed time over 32, the larger turn whole and the other halved; without one it searches (`FUN_004083F0`); accelerates by its steering descriptor's word 0 up to a quarter of word 2 and flies along its forward axis, climbing by an eighth when untargeted or far |
+| 28 Guided Missile | `FUN_004083F0` | target search: the closest live, admitted body (capability `0x9`, state `0x8000` without `0x4000`) other than itself, within 4,500 units, not excluded by `FUN_00411A20` and inside its forward cone, scored by distance plus twice the lateral offset |
+| 30 Materialiser | `FUN_004090C0` | builds the Primary through `FUN_00401020`: record `FUN_00409150`, tick `FUN_004091B0`, destructor `FUN_004086A0` |
+| 31 MindBall | `FUN_00409320` | builds the Primary through `FUN_00401020`: record `FUN_004093B0`, tick `FUN_00409460`, destructor `FUN_00409420` |
+| 31 MindBall | `FUN_004093B0` | allocates the 0x24-byte record, copying the entity's `+88` launch record when it has one, and points `+88` at it |
+| 31 MindBall | `FUN_00409460` | tick: four timed phases (500 ms each, the flight 250 ms plus 256 µs per unit of distance): sits on the source, rises, flies from its start offset onto the target while staying above the ground, then drops onto it; each phase sets the progress word `+20`, and the last ends in generic death `FUN_00410C10` |
+| 31 MindBall | `FUN_00409420` | destructor: writes the record's word `+4` back to the session through `FUN_00456770` (`+0x2A8`), then frees the record |
+| 34 Proximity Mine | `FUN_00406B00` | builds the Primary through `FUN_00401020` with tick `FUN_00406BA0`, then clears Sub-K variable 2 |
+| 34 Proximity Mine | `FUN_00406BA0` | tick while it falls: turns its heading, eases its pitch toward `0x1000`, advances Sub-K variable 1 by the elapsed time over 4 and clears variable 2; takes `4BE248` once within 300 of the ground or the sea under it |
+| 34 Proximity Mine | `FUN_00406E90` | builds the Primary through `FUN_00401020` with tick `FUN_00406F20` |
+| 34 Proximity Mine | `FUN_00406F20` | tick once landed: eases its pitch back to 0, advances Sub-K variable 1 by the elapsed time over 16, eases variable 2 toward `0x4000`, then applies the type's lift (`FUN_0041F1C0`) and drag (`FUN_0041EB50`) |
+| 36 Die When Moved | `FUN_00404A20` | builds the Primary: initializer `FUN_00401350`, tick `FUN_00404AA0`, destructor `FUN_00407120` |
+| 36 Die When Moved | `FUN_00404AA0` | tick, detailed visits: compares the position with the one it last stored, stores the new one, and once the body has moved more than 16 units runs generic death `FUN_00410C10` |
+| 45 Attract Attention | `FUN_00402A10` | builds a Primary whose tick is the zero-return `FUN_00438050` and destructor `FUN_00402AC0`, then starts the type's attention cue (`+0x28`) through `FUN_00420870` |
+| 50 Defender Ball | `FUN_00407070` | builds the Primary through `FUN_00401020` (tick `FUN_00407150`, destructor `FUN_00407120`) and gives the ball a random pitch |
+| 50 Defender Ball | `FUN_00407150` | tick: sits on its owner (`+60`) with zero velocity and spins its roll and pitch words by the elapsed time |
+| 52 Lightning Shield | `FUN_00407770` | tick (installed by `FUN_004076E0`): sits on its owner with zero velocity and turns its heading by the elapsed time |
+| 53 Defender Drone | `FUN_004071F0` | builds the Primary through `FUN_00401020`: tick `FUN_00407280`, destructor `FUN_00407120` |
+| 53 Defender Drone | `FUN_00407280` | tick: while its owner lives, a target from `FUN_00422CD0` puts its goal 300 units from the owner toward that target, with Sub-D steering (`FUN_0041F660`) and emitter fire (`FUN_00424650`); without one it eases to the owner's attitude and keeps a fixed offset in the owner's frame; it closes on the goal by a frame-scaled fraction and damps its roll |
+| 55 Megablast | `FUN_00407800` | builds the Primary through `FUN_00401020` with tick `FUN_004078C0`, stores the caller's word in Sub-K variable 2 and clears variable 1 |
+| 57 Fire Monster | `FUN_00406740` | tick (installed by `FUN_004066B0`): on nearly every visit (all but a random one in 10,000,000/elapsed) emits a class-47 particle at the body's X/Z, on the higher of the ground and the waved sea |
+| 58 Tractor Beam | `FUN_00405240` | tick, detailed visits: sits on its target (record `+8`; gone or dying takes `4BE160`) and measures the target against the beam's owner (`+60`): beyond 2,560 units the beam dies through `FUN_00410C10`; beyond 1,024 it pulls the two together, with an impulse that grows as the gap closes toward 1,024 |
+| 59 Remote Beamer | `FUN_00405420` | builds the Primary: tick `FUN_004054C0` and destructor `FUN_004054A0` |
+| 59 Remote Beamer | `FUN_004054C0` | tick: while the body is not held (state `0x1000`), advances Sub-K variable 1 by the elapsed microseconds over 16, saturating at `0xFFFF`; a held body resets it to 0 |
+| 65 Geyser | `FUN_00407BC0` | builds the Primary through `FUN_00401020` with tick `FUN_00407CA0`, then sets its sea delta: entity `+88` when nonzero, otherwise the body's Y less the sea level, shifted left 8 |
+| 65 Geyser | `FUN_00407CA0` | tick: on detailed visits sprays class-13 particles upward (speed 1,500, jittered), one per 30 ms of the frame; lifts every body over it through `FUN_00407DF0`; then moves the sea toward its delta through `FUN_004013A0` |
+| 65 Geyser | `FUN_00407DF0` | per body: one above the geyser inside its cone (horizontal reach 50 plus half its height, height under 1,200) gets an upward kick of (2,000 less its height) times 4, scaled by the frame time |
+| 67 Queen | `FUN_004222C0` | tick: allocates the record on the first visit (`FUN_00421B40`); while alive, picks a target (`FUN_004226A0`), rebuilds her joint chain from the body basis, aims her joints (`FUN_00421E00`), cycles two animated words between their limits, counts two cooldowns down and keeps the body she holds (`FUN_004225C0`); dying hands over to `FUN_00422840`; the joint angles return to the Sub-K variables |
+| 67 Queen | `FUN_00421B40` | allocates her zeroed 0xF8-byte record: pointers to her eight Sub-K model variables for three joints and two animated words, the joint limits at `004C9408` and `004C9420`, and two weapons' periods, ranges and particle kinds (300 ms, 5,000, kind 85; 600 ms, 3,000, kind 68) |
+| 67 Queen | `FUN_004226A0` | target choice: each admitted body with capability bit 0 or 2 within 20,000 scores 20,000 less its distance (the current target's distance counts 1.5 times), plus 30,000 for the player; the best becomes the target, with its position and forward offset |
+| 67 Queen | `FUN_00421E00` | aims a joint at her target, leading it by its velocity over the time to reach it, steers it (and a second joint at half) through `FUN_00421C60`, and fires the joint's weapon once its period has passed with the target between 0x40 and 5,000 units and both bearing errors under 0x400 |
+| 67 Queen | `FUN_00421C60` | drives one joint: adds frame-scaled demands to its two angular rates (doubled against the current rate), then clamps the rates and the angles to the joint's limits |
+| 67 Queen | `FUN_00422B40` | keeps a joint inside its limits: at a limit it drops the rate pushing outward and drives back with ±0x6000 through `FUN_00421C60` |
+| 67 Queen | `FUN_00421D40` | emits seven class-51 particles at growing spacing along a joint's direction (`+4C..+54`) from its point (`+18`) |
+| 67 Queen | `FUN_004225C0` | keeps the body she holds: when it is missing, spawns a Type68 (model 286, capability 8); it sits at the record's point (`+2C`) with state `0x40000000` |
+| 67 Queen | `FUN_00421990` | hit callback (style `+28`): zeroes the velocity; a hit within 256 units of the record's weak point (`+2C`) whose direction lines up with its axis (`+54..+5C`) sets the weak-spot flag `+DC` |
+| 67 Queen | `FUN_00421910` | weak-spot gate (from `FUN_004104B0`): with the flag `+DC` that `FUN_00421990` set, a hit from the player (capability bit 0) clears it |
+| 69 Shark Attack | `FUN_004056D0` | builds the Primary through `FUN_00401020` directly: private record `FUN_00405D50`, tick `FUN_00405760`, destructor `FUN_004086A0` and pair-contact hook `FUN_00405E10` |
+| 69 Shark Attack | `FUN_00405D50` | allocates the zeroed 0x3C-byte record: phase 0, a target record through `FUN_004012E0`, and two speeds drawn between 128/256 and 191/256 of the type swimmer's word `+4` |
+| 69 Shark Attack | `FUN_00405760` | tick: picks prey when idle (`FUN_00405950`), counts the phase timer down, then circles (phases 1-2, `FUN_004059E0`) or attacks (phase 3, `FUN_00405C00`); keeps its goal at least 0x80 below the sea and sets the swimmer's attack flag (`+3D`) in phase 3; moves through `FUN_00401430`, plays its sound at its period on detailed visits, and takes `4BE1C8` once it has no prey |
+| 69 Shark Attack | `FUN_00405950` | finds the nearest entity with capability bit 0 (the player) by wrapped distance and makes it the prey, in phase 1 with a random timer |
+| 69 Shark Attack | `FUN_004059E0` | circling: steers to a point 1,400 units from the prey at a depth that rises with distance, blending its two speeds by distance; when its timer runs out it attacks (phase 3) for a fresh random time; a vanished prey ends the hunt |
+| 69 Shark Attack | `FUN_00405C00` | attack: steers straight at the prey, with speed scaled by how squarely the prey lies ahead; drops back to phase 1 when the prey is behind it inside 1,400 units or once its timer ends |
+| 69 Shark Attack | `FUN_00405E10` | pair contact: a body outside its forward half-space ends an attack (phase 2, new timer); its prey takes a checked bite through `FUN_00415040` (packet channel 1, 8,000) and, below the sea, a burst of class-45 particles scaled by the frame time |
+| spiders | `FUN_00421AE0` | stamps the spider's emitter sources through `FUN_00424FA0`: slot 27 when asked, then slot 28, setting each source's state to 2 |

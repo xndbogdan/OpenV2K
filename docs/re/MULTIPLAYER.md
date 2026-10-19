@@ -82,3 +82,72 @@ frag limit (low word) and the winner (high word).
 | `FUN_00439DF0` | packs a record: a header word from its kind byte and three data bytes, then the optional words its flag bits 0 and 1 select |
 | `FUN_00439E70` | calls `FUN_00439E90` with a zero third argument |
 | `FUN_00438F60` | reports a game event of kind 0, 1 or 2 with two words: the host sends message 4 with their high bytes, a client message 5 with the kind folded into a third byte |
+
+## Messages
+
+The message table at `0x4CAE08` holds one 16-byte entry per kind: the apply
+and pack routines, the kind and a size word. The pair after kind 25,
+`FUN_00438BE0` and `FUN_00438BB0`, handles the 12-byte stamp. Impact reactions
+send kind 10 for network-owned bodies, and the session tick sends kinds 3, 7,
+12, 16, 18, 19 and 21.
+
+| Kind | Size word | Apply | Pack | Carries |
+| --- | --- | --- | --- | --- |
+| 0 | 0 | `FUN_00438050` | `FUN_00438050` | nothing |
+| 1 | 20 | `FUN_00439FB0` | `FUN_00439F80` | a particle |
+| 2 | 12 | `FUN_0043A020` | `FUN_00439FF0` | a burst |
+| 3 | 16 | `FUN_00437910` | `FUN_00437730` | the sea level and terrain runs |
+| 4 | 4 | `FUN_00437B60` | `FUN_00437B00` | one cell, from the host |
+| 5 | 4 | `FUN_00437CB0` | `FUN_00437C50` | a client's cell request |
+| 6 | 4 | `FUN_00428910` | `FUN_00428900` | a static object's destruction |
+| 7 | 64 | `FUN_00417680` | `FUN_00417240` | a body's sync record |
+| 8 | 4 | `FUN_00417D90` | `FUN_00417D70` | a body's removal |
+| 9 | 8 | `FUN_00417E10` | `FUN_00417DB0` | damage |
+| 10 | 16 | `FUN_00417EB0` | `FUN_00417E70` | an impact's velocity and attitude deltas |
+| 11 | 4 | `FUN_00417F30` | `FUN_00417D70` | a body's state bit 1 |
+| 12 | 64 | `FUN_00417F60` | `FUN_00417FC0` | the live-body list |
+| 13 | 12 | `FUN_00418030` | `FUN_004182C0` | an attach |
+| 14 | 8 | `FUN_004180A0` | `FUN_004182F0` | a release |
+| 15 | 12 | `FUN_00418290` | `FUN_004182C0` | a record for `FUN_004180F0` |
+| 16 | 4 | `FUN_00439940` | `FUN_00439BC0` | a score word |
+| 17 | 4 | `FUN_00439A40` | `FUN_00439BA0` | a kill report |
+| 18 | 40 | `FUN_004398E0` | `FUN_00439B40` | the frag limit, winner and scores |
+| 19 | 4 | `FUN_00439720` | `FUN_00439700` | a name request |
+| 20 | 32 | `FUN_00439820` | `FUN_004397C0` | a name and initials |
+| 21 | 64 | `FUN_00439880` | `FUN_00439770` | a chat or announcement line |
+| 22 to 25 | 4, 8, 12, 16 | `FUN_00439E70`, `FUN_00439F20`, `FUN_00439F40`, `FUN_00439F60` | `FUN_00439DF0` | a sound cue at a position (`FUN_00439E90` to `FUN_0044F450`), with optional gain and rate words |
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00439FB0` | spawns a remote particle from the 20-byte record through `FUN_00440A60` |
+| `FUN_0043A020` | presents a remote burst through `FUN_00440950` from the message's three words, with no source |
+| `FUN_00437730` | packs a terrain update: the sea level, then run-length pairs from `FUN_004377E0` up to 0x60 bytes or 4,096 cells |
+| `FUN_004377E0` | measures a run of up to 255 cells from (x, z), advancing X then Z with wrap, that share the infection bit and, on cells with an attribute byte or flag `0x08`, that flag and whether the attribute byte is clear; returns the length and a flags byte (1 infected, 2 flag `0x08`, 4 attribute byte clear) |
+| `FUN_00437910` | applies a terrain update: the sea level when the sender is the host, then each run through `FUN_004379C0`, with `004DC9B4` marking the remote write |
+| `FUN_004379C0` | applies a received run of cells from (x, z), advancing X then Z with wrap: sets each cell's infection bit to the run's (`FUN_00433720`) and, on a cell whose attribute byte is set, flag `0x08` to the run's (`FUN_004337E0`), clearing the attribute byte when the run's bit 4 says so (`FUN_00433860`) |
+| `FUN_00437B60` | syncs one cell: its material through `FUN_00433900` and its flags `0x10` (`FUN_00433720`) and `0x08` (`FUN_004337E0`) when they differ |
+| `FUN_00437CB0` | the host applies a client's cell request: set or clear flag `0x10` (`FUN_00433720`) or `0x08` (`FUN_004337E0`), or set the material (`FUN_00433900`) |
+| `FUN_00428910` | destroys the cell's static object, unless it carries `0x800`, through `FUN_00428720` with its kind's template (`004C9E40`) |
+| `FUN_00417240` | packs a body's sync record: handle, the word at `+7C` and a flag word that selects the optional fields that follow (position, velocity, Euler attitude, a basis compressed to two rows of 13 bits, the capability word and the `+88`/`+50` payloads), returning -1 when the buffer is too small; a successful pack clears the change words (`+84`, state bits 0-10) |
+| `FUN_00417DB0` | packs a damage message: the target handle, the amount and the kind word, with the local slot (`004F7378`) in its high byte |
+| `FUN_00417E10` | applies a damage message to a local body through `FUN_00414E90` |
+| `FUN_00417EB0` | adds a message's velocity and attitude deltas to a local body |
+| `FUN_00417FC0` | lists the handles of every body in state `0x82000000` |
+| `FUN_00417F60` | gives each listed body a 750-ms wait (`+78`) and the detail bits `0x06000000` |
+| `FUN_00418030` | attaches a local body to its parent through `FUN_00416700`, setting `0x20000000` for flag 1 and clearing render bit `0x800` without flag 2 |
+| `FUN_004180A0` | releases a local body from the named parent through `FUN_00416750` |
+| `FUN_00438BE0` | keeps a stamp in `004DC780`; when it matches the slot's expected id (`004DC758`) and the session agrees (`FUN_00450C90`), marks the slot ready (`004DC7B8`), and a newer counter is recorded |
+
+## Session tick, handles and queues
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00450CC0` | the in-game network step (simulation chain `0x4D0700`, after the gameplay frame), for network play only: when the slot or the world changed, flushes (`FUN_004691D0`), records the world (`004DC9D8`), refreshes the stamp (`FUN_00438B60`) and `FUN_00469110(1)`; records the local name, running `FUN_00414990` on a change; runs the session tick (`FUN_00438CB0`); drains the inbound queue (`FUN_004695E0`); and sets the abort flag (`+28D`) when `004F73BC` or the session-lost flag `004F73C0` is set |
+| `FUN_00438CB0` | the network session tick: decays the killer hold (`004DC9C4`); every `004CAE00` microseconds sends the live-body list (kind 12) and the periodic messages: the host's announcement line (kind 21) every 150 game seconds once there is a winner, its terrain record (kind 3), the host's or a client's status (kind 18 or 16), and a name request (kind 19) for each newly ready slot; then resends each of the slot's own bodies (kind 7) when its sync timer (`+74`) runs out, about once a second at rest and every 35 ms otherwise, counting resends at `+7C`; then flushes (`FUN_004691D0`) |
+| `FUN_00438A20` | the network message lines: counts each of the four slots' lifetimes down (`004DC7F0`, 0x54 bytes apart), skips the oldest index past expired ones (`004DC9DC`), and draws the live lines word-wrapped (`FUN_00470AE0`) down the screen's top-left |
+| `FUN_00410BB0` | spins until the local network slot `004F7378` is set, then frees each live entity's handle (`FUN_0043A600`) and gives it a new one under that slot (`FUN_0043A290`) |
+| `FUN_0043A1D0` | builds one block of network handles: its entries (12 bytes each) chained into a free list, each handle carrying the block's number in its upper bits |
+| `FUN_0043A600` | frees a network handle: forgets the cached lookup (`004DC9F0`) when it names this handle and returns the entry to its block's free list |
+| `FUN_0043A800` | frees every network handle block (`004DC9F4`, 0x18 bytes each, count `004DC9F8`) and its entry array, and resets the cached lookup |
+| `FUN_00469110` | starts a fresh outgoing message on channel n (records at `004F7340`, 0x1C bytes apart): sends a pending one first (`FUN_0046C050`), writes the header (two zero bytes, the channel and the local slot `004F7378`), lets the channel's header callback (`004F7384`) add its part, rounded up to 4 bytes (a negative size is error `0x3902`), and sets the write cursor, the room left and an empty count |
+| `FUN_004694F0` | the address of a ring's next entry, `+10` + `+4` × `+C`, giving its index `+C` through the second argument (from the receive step `FUN_0046C570`) |

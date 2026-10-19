@@ -66,7 +66,7 @@ objdump -s --start-address=0x4c8888 --stop-address=0x4c8890 retail/V2000.EXE
 | Routine | Source-ordered contract |
 |---|---|
 | `0040C560..0040C5D4` | Zero entity Euler words `+A2`, `+A4`, `+A6`; clear Secondary through `40A7A0(entity, 1, NULL)`; clear Tertiary through slot2; return `405540(entity, 0, 0)` |
-| `00405540..004055B0` | Resolve entity `+4C` context; prepare the `405FF0` wrapper with tick `405610`, context, and supplied lifetime; override template destructor `+14` with `4055C0`; call `406030`; replace the requested task slot through `40A7A0` only on success |
+| `00405540..004055B0` | Resolve entity `+4C` context; prepare the `405FF0` wrapper with tick `00405610`, context, and supplied lifetime; override template destructor `+14` with `004055C0`; call `406030`; replace the requested task slot through `40A7A0` only on success |
 | `00406030` | Allocate through `401020`; only a successful allocation runs component reset `406070` |
 | `0040A7A0` | Destroy the old slot through `4010D0` before storing its replacement; initialize the new task's context field afterwards |
 | `0040A860` | Destroy and clear Primary, Secondary, Tertiary in that order |
@@ -100,7 +100,7 @@ has a distinct basis sequence described below.
 
 ### Deployment tick and destruction
 
-`405610` accesses SubK variable1 through `40A950(entity, 1)` as an **unsigned
+`00405610` accesses SubK variable1 through `40A950(entity, 1)` as an **unsigned
 16-bit word**. It does not use the detailed/coarse callback mode argument.
 Every path returns zero and does not request a behavior transition.
 
@@ -110,7 +110,7 @@ Every path returns zero and does not request a behavior transition.
 2. If K1 is `0xFFFF`, return without refreshing radar or advancing it.
 3. Otherwise write `min(0xFFFF, old_K1 + (delta_us >> 4))`.
 4. Only if that write reaches `0xFFFF`, call
-   `44A8D0(current_position_x, current_position_z, +1)` at `004056AB`.
+   `0044A8D0(current_position_x, current_position_z, +1)` at `004056AB`.
 
 There is no fractional time accumulator. At fixed 20000-us visits, each adds
 1250; the 53rd visit reaches deployment. The wrapper uses lifetime0 rather
@@ -127,19 +127,19 @@ surface selectors leave E370's timer decay, except when state `0x20000000`
 suppresses that owner. Reusing the turret's `0x25027` suffix would incorrectly
 suppress gravity and introduce ground snap.
 
-Destructor `4055C0` checks K1 at `004055D0`. When it equals `0xFFFF`, it reads
-the current position and calls `44A8D0(x, z, -1)` at `004055F4`. Only after
+Destructor `004055C0` checks K1 at `004055D0`. When it equals `0xFFFF`, it reads
+the current position and calls `0044A8D0(x, z, -1)` at `004055F4`. Only after
 that call does it resolve K1 again and write zero at `00405607`. It records
 no activation center, and no separate boolean may replace the shared component
 word. Destruction of a partly deployed task only resets the word.
 
 ## Coverage and raster mutation
 
-`44A8D0` and its immediate raster consumer `44A5C0` are retained in
+`0044A8D0` and its immediate raster consumer `44A5C0` are retained in
 game_logic.c. Coverage is the packed byte array at
 `004EF130`; the 256x256 terrain raster is at `004DF118`.
 
-`44A8D0` reads the common scalar pointers at `DAT_004FE620 + 2C` (footprint
+`0044A8D0` reads the common scalar pointers at `DAT_004FE620 + 2C` (footprint
 radius), `+28` (maximum contribution), and `+20` (raster color argument).
 For the authored positive-radius domain, the operation is:
 
@@ -199,7 +199,7 @@ Marker flicker is a separate, source-owned consumer of the same process RNG
   that draw, so actors rejected by this later test still advance the stream.
 - Fullscreen `44C430` first requires a nonzero map-icon selector and nonzero,
   non-dying, non-attached state. It then applies the same uncovered/non-Type46
-  draw. `44C340` traverses markers only during a nonzero blink phase; map setup
+  draw. `0044C340` traverses markers only during a nonzero blink phase; map setup
   and the blank blink phase consume no marker RNG.
 
 Retail has one exceptional reconstruction path: `494A0` compares the current
@@ -215,7 +215,7 @@ changes and their exceptional rebuild remain outside this checkpoint.
 |---|---|
 | Attach `416700` | Set state `0x1000`, store parent `+80`, then type callback `40DBF0 -> style +08 -> 40C690 -> 40AC60 -> 40C560` |
 | Release `416750` | Clear `0x20001000`, set `0x800`, reapply type flags through `40D3C0`, clear parent, then `40DC50 -> style +0C -> 40D1C0` |
-| Release callback `40D1C0` | First `416AC0(entity)`, then singleton `40AC60 -> 40C560` |
+| Release callback `40D1C0` | First `00416AC0(entity)`, then singleton `40AC60 -> 40C560` |
 | Nonlethal hit | Common checked/generic damage owners retain timestamp, accepted damage and reaction ordering. Class60 has null primary/infected callbacks, no hit sounds, no capability8 hit-particle suffix, and zero low-health effect inputs |
 | Standard death `410C10` | Remote returns before mutation; otherwise first death zeros health, sets dying `0x4000`, requests sound62, stops any attached sound, and enters common type death dispatch `40DB80 -> 40AC60`, selecting alternate class49 |
 | Class49 `40BD20` | Run `40BAF0` scatter and radial first; then `40A860` task destruction; then construct Type60 at the current position unless remote; finally `410B70` deferred destruction |
@@ -226,7 +226,7 @@ Relation and terrain-basis routines are in game_logic.c;
 Cargo membership, notifications, and success presentation surround the relation
 callback as specified by [CAMPAIGN_CARGO.md](CAMPAIGN_CARGO.md).
 
-`416AC0` samples terrain gradients and writes the full Q31 body basis, setting
+`00416AC0` samples terrain gradients and writes the full Q31 body basis, setting
 state `0x28`; it does not write entity position. C560 then zeros Euler but does
 not rebuild that basis. Preserve this release-versus-birth asymmetry and the
 actual current position supplied by the cargo/drop owner.
@@ -248,7 +248,7 @@ completed radial pass and Type60 construction. Earlier removal changes both
 radar observations and shared RNG ordering.
 
 World teardown is a second destructor entry, without class49's death effects.
-`42E980` traverses the retail actor list and invokes `42EA00`, which requests
+`0042E980` traverses the retail actor list and invokes `0042EA00`, which requests
 `10B70` deferred removal for every type except 0 and 1. It then runs `14990`'s
 ordered removal sweep. Each `149F0` first calls `A620`, which calls `A860`
 before freeing actor components. A deployed Type83 consequently removes its
@@ -262,15 +262,15 @@ not enter this path.
 
 [`portable_radar/actor.rs`](../../crates/v2k-game/src/portable_radar/actor.rs)
 owns the allocation and the entity's Sub-K word 1 (model selector 1), shared by
-the detached `405610` and `4055C0` programs; no task keeps a copy.
+the detached `00405610` and `004055C0` programs; no task keeps a copy.
 
 | Retail entry | Port owner |
 |---|---|
 | Authored `104B0 -> D4A0 -> AC60 -> C560` | `publish_portable_radar`, from a creation record: it grounds at the record's X/Z, draws the singleton selector word, zeroes Euler, clears Secondary then Tertiary, installs the lifetime-0 Primary and builds the identity basis |
-| `12DA0 -> DCA0/E870 -> A800 -> 405610` | `tick_portable_radar_owner`: the shared scheduler prefix and relation repair, then the task visit, DCA0's sound gate when detailed, E100 gravity and E370's decay; master motion stays suppressed by `0x08000000` |
-| Lethal hit or radial, Main Base abort | The shared class49 terminal: `BAF0` (ten class16 particles, the header radial), then A860 runs `4055C0` before the Type60 ring |
+| `12DA0 -> DCA0/E870 -> A800 -> 00405610` | `tick_portable_radar_owner`: the shared scheduler prefix and relation repair, then the task visit, DCA0's sound gate when detailed, E100 gravity and E370's decay; master motion stays suppressed by `0x08000000` |
+| Lethal hit or radial, Main Base abort | The shared class49 terminal: `BAF0` (ten class16 particles, the header radial), then A860 runs `004055C0` before the Type60 ring |
 | Attach `16700 -> C690` and release `16750 -> D1C0` | `portable_radar/cargo.rs`: both reach `AC60 -> C560`, whose `40A7A0` runs the old Primary's destructor; the beam lends the resident raster apart from its cache for a pickup |
-| Teardown `42E980 -> 14990` | `retire_world_radars`, before the old world unloads on a return to the frontend or the next world's load |
+| Teardown `0042E980 -> 14990` | `retire_world_radars`, before the old world unloads on a return to the frontend or the next world's load |
 | `451C00` match or miss | Campaign cargo reuses the first stamp match or builds a zero-record radar, then attaches it to the player |
 
 The retail lab supplies the deployment receipt: world 30's radar holds its

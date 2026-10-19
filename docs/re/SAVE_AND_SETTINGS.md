@@ -33,7 +33,7 @@ state `+0x24`: signed-8.8 position at `+0x24..+0x29`, signed-8.8 velocity at
 `+0x2A..+0x2F`, heading/pitch/roll words at `+0x30/+0x32/+0x34`, and hull health
 at `+0x3C`. `FUN_00443560` restores the controller block and writes these values
 back to the reconstructed type-46 entity, rebuilding its basis through
-`413F70`. `451710 ->451AF0 ->443560` creates/restores the player **before**
+`413F70`. `451710 ->00451AF0 ->443560` creates/restores the player **before**
 `42E570` constructs authored actors; `451C00` then restores cargo, followed by
 `443260` refreshing the controller snapshot. Native load requests use this
 player-first shared construction path, including the first construction stamp,

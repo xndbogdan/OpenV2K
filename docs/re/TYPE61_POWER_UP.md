@@ -69,7 +69,7 @@ It never calls `A860`, so the carrier keeps its task slots until the sweep;
 It does not test the remote bit or bind the newborn's `+60` relation.
 Carrier `+88` is the Section-13 spawn's `+1C` dword, the same packed
 selector/amount that authored Type61 rows carry. Solo play never rewrites it;
-only network sync `417680` (flag `0x400`) does, so the port retains it at
+only network sync `00417680` (flag `0x400`) does, so the port retains it at
 construction as `auto_pilot_payload_packed` for alternate-63 rows only.
 
 The port runs class63 through the shared BAF0 terminal in

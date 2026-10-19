@@ -202,7 +202,7 @@ whose actions are currently being applied. Admission itself has no RNG draw,
 damage filter or terrain write. Because particles follow the static pass,
 their new programs first execute on the following static update.
 
-Opcode11 calls `37100`: for a positive amount and nonzero high three light
+Opcode11 calls `00437100`: for a positive amount and nonzero high three light
 bits, subtract the amount, clamp at zero, and preserve the low five bits.
 Neither a static descriptor nor its model/height is required. `281A0` supplies
 X=`cellX*256+128`, Z=`cellZ*256`; `4A890` refresh uses that exact position,
@@ -255,7 +255,7 @@ The varied run's tick2201 hit by Type13 sourceid1 (class38) against runtimeid2,
 authored **spawn1/Type57/model122**, is now natively admitted: its class7 SearchAndAttack
 styles `4C7A50/4C7A98` dispatch C690 at primary+28 and infected+20, followed by ordinary
 impact reaction and checked damage. Filtered damage (24000) exceeds health (5000),
-entering alternate11 `C660/404360`, initializing Sub-G with `1B970` tumble, and
+entering alternate11 `C660/00404360`, initializing Sub-G with `1B970` tumble, and
 publishing `Intro2Type57Tumble`. Contact resolves to the `C750/BAC0` terminal explosion
 with sound 40950 and class 37 scatter, authenticating radial death.
 
@@ -383,7 +383,7 @@ After40120 increments age,425D0 stamps the descriptor packet's source/owner,
 adds `(256 - particle_age_byte) / 4` to the owner's signed-word B2 with wrapping,
 then performs direct or native Q31 follow. Only the rotated branch consumes one
 shared RNG word, even at zero frame delta or under impact suppression. It calls
-4417E0 when `low16_rng * 2 < elapsed_micros`. That helper compares signed raw Y
+004417E0 when `low16_rng * 2 < elapsed_micros`. That helper compares signed raw Y
 to the authored flat sea word, independently of displaced waves and the water
 enablement gate: class31 above, class42 at-or-below. It supplies zero velocity,
 current process emitter provenance and the parent's suppression bit to40A60;
@@ -398,7 +398,7 @@ Water classification still occurs before425D0's follow at the retained position.
 
 The attached birth's initial source-type byte1C remains unresolved in the older
 allocation request.425D0's first transient packet stamp copies that byte, but
-4417E0 does not consume the packet and there is no callback before425D0 replaces
+004417E0 does not consume the packet and there is no callback before425D0 replaces
 both provenance words at4427FF/44280F. Thus it cannot affect this clear-bit
 callback result. Keep the missing birth byte explicit; completing provenance
 for a future consumer requires a genuine target-type lookup, not an invented

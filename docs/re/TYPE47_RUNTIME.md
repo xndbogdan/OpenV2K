@@ -91,7 +91,7 @@ endpoints through type13 aliases. Normal admission precedes live selector
 resolution; resolving every selector before this gate changes source cache
 and RNG order.
 
-`424F20 -> 424FA0` resolves the current emitter source slot in the current
+`00424F20 -> 00424FA0` resolves the current emitter source slot in the current
 VIEW frame, inversely transforms it with the native viewport, narrows the
 three coordinates to signed words, and stamps every queued command for that
 emitter. This stamp clears the command's center-origin fallback. Source
@@ -136,7 +136,7 @@ zero displacement multiplier. An unknown relation handle blocks terminal
 selector zero before RNG; it is not replaced with the AI target or a captured
 position.
 
-The original-PE arithmetic oracle executes `424FA0` and its called plain
+The original-PE arithmetic oracle executes `00424FA0` and its called plain
 vertex instructions with actual model302 slot data. Its three controlled
 frame cases agree with the Rust callback's dwords and signed words, including
 both torus seams. These are independent machine-code arithmetic controls;
@@ -150,7 +150,7 @@ query below now observes it for specific original invocations.
 ## Model and shot presentation
 
 Native `53760 ->11720 ->11400` presents each model before draining that
-actor's FIFO. The later `53A60` particle traversal therefore sees newborn
+actor's FIFO. The later `00453A60` particle traversal therefore sees newborn
 class87 at birth position in the same frame, while its first40120 movement
 waits for the following simulation pass. See the corrected actor/particle/
 terrain ordering in [rendering](RENDER_PIPELINE.md#terrain-shade-input).
@@ -166,7 +166,7 @@ tick1402. All four enter442240 at ESP001AFE30 and copy the record to001AFE10,
 so copied phase `(pointer >>5)&15` is zero and first copied source scale256
 is unchanged. The live pool phases15,9,1,5 instead produce effective scales
 752,656,528,592 from source512 and divisor32. The original return words
-authenticate `493F6B ->53A60 ->43DCB0 ->43DCD0 ->442240`; balanced source
+authenticate `493F6B ->00453A60 ->43DCB0 ->43DCD0 ->442240`; balanced source
 argument cleanup proves a fixed ESP across this pool scan and its six
 descriptor classes. The query validates loaded index, callback, descriptor,
 thread/tick, exact copied address and scale order;14 guard tests reject

@@ -107,7 +107,7 @@ origin, while campaign zero-record/at-player-pose E/L reconstruction remains a
 separate cargo origin; it does not authorize an ordinary living turret.
 
 The shared pair adapter requires the completed current turret owner before
-physical writes. Class29 style4C8230 has a null pair slot at+28;4086D0 explicitly
+physical writes. Class29 style4C8230 has a null pair slot at+28;004086D0 explicitly
 writes null task+18 at408721. The adapter therefore authenticates the actual
 Tertiary GunTurret task before accepting that null contact. It does not install
 a missing task or replace the behavior context with a null context.
@@ -169,7 +169,7 @@ singleton Always1/Class29, alternate49, rule1, mass100, initializer state
 Ordinary 92/96/99/102/103 now take the same `104B0 -> D4A0/D190` birth,
 metadata authentication (including each row's own model-variable count),
 class-29 owner, aim and FIFO drain, pair damage and class49 dispatch as Type97.
-`425160` submits every method through `4147A0`. `44EA60` gives methods 12..15
+`00425160` submits every method through `4147A0`. `44EA60` gives methods 12..15
 no gravity lead, so method 13 drains like 12 and 14, into class56 (class82
 underwater). Ownership is decided by construction origin, not type number:
 Intro2's 92/102 identities keep their cinematic owners and campaign
@@ -230,14 +230,14 @@ The class29 descriptor is `0x004C8928`, style `0x004C8230`, initializer
 give effective0x25027. `AC60→425680` consumes one shared RNG word even for this
 singleton list. None of the E/L or turret task constructors consumes a word.
 
-`D190` clears Secondary, then Primary, and calls `4086D0(handle,Tertiary)`.
+`D190` clears Secondary, then Primary, and calls `004086D0(handle,Tertiary)`.
 The wrapper uses initializer408DF0, body408770, destructor4086A0, and lifetime0.
 The new wrapper/private allocation is prepared before A7A0 destroys the old
 Tertiary; executing wrappers retain normal deferred outer reclamation. Successful
 installation ORs state0x28. Destructor4086A0 only frees the private allocation and
 clears the wrapper pointer; it does not restore capabilities or clear state0x100.
 
-`408DF0` zeroes a0x2C private allocation and then publishes:
+`00408DF0` zeroes a0x2C private allocation and then publishes:
 
 | Private offset | Initial value |
 |---|---|
@@ -270,7 +270,7 @@ only select the camera at50s and56s. The dragons receive EnableComponents at50s.
 Native turret code must consume retained entity flags and actual delivered
 callback time, without activating itself from the presentation clock.
 
-The implemented gun task follows `408770/408BD0` target selection and tracking,
+The implemented gun task follows `00408770/00408BD0` target selection and tracking,
 with manual emission through425160. It has no shared `03490/02300` Chase/Aim
 graph. Selection preserves native intrusive target order, relation exclusions,
 capability priorities and current-target hysteresis. Normal priorities are
@@ -295,7 +295,7 @@ phase. Task yaw/pitch move L's model bindings, not the actor body matrix.
 
 ## Manual firing and model-owned muzzle drain
 
-425160 advances E cadence using the global host delta, even when the task has
+00425160 advances E cadence using the global host delta, even when the task has
 no firing direction. A null direction consumes no RNG. A real direction consumes
 one stochastic word; acceptance does not add random spread words. The loop emits
 while cadence is nonpositive, accumulating the descriptor's interval as each

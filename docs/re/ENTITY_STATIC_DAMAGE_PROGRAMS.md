@@ -129,7 +129,7 @@ original per-program removal order.
 
 Class38's standalone `4C98F8` program also enters this registry through
 `441B70 -> 28720`: exactly `[0,11,1]` followed by `[0,0,0]`. The pointer at
-`4C9910` is separate data after the terminator. Its opcode11 invokes `37100`
+`4C9910` is separate data after the terminator. Its opcode11 invokes `00437100`
 without requiring a static descriptor or model: subtract one from the cell's
 high three lighting bits, clamp at zero and preserve the low five bits.
 Only an actual write reaches `4A890`, retaining the original radar coverage
@@ -297,7 +297,7 @@ kind descriptor's `+0x0C` pointer as a radius/depth pair. Only kind 27 has a
 nonnull pointer in the retail table: `4C9E28` supplies radius 2048 and depth 20.
 The remaining two retained dwords are not inputs to this call.
 
-`427894 -> 436E00` runs synchronously with material-enable 1, before the next
+`427894 -> 00436E00` runs synchronously with material-enable 1, before the next
 program opcode. Its X/Z are the burned cell centre, `(word & 0xFF00) + 0x80`,
 and Y is that cell's current signed height byte times 32. This differs from
 the FIFO's ordinary effect/radial origin: `281A0` already cached that origin
@@ -317,7 +317,7 @@ radial caller; repeated burns dispatch nothing. Its descriptor has no crater,
 so these adapters preserve the existing kind27 crater owner and timing.
 
 The later Intro2 replay proves why the listener matters. After the Type66 hut
-crater, tick 436 enters `436E00` from `427899` at raw
+crater, tick 436 enters `00436E00` from `427899` at raw
 `[-29056,-224,31872]`, centred in cell `[142,124]`. In the captured 19×19 patch,
 164 heights change; the centre goes from `-7` to `-32`, below unchanged sea
 raw Y `-847`. Submerged vertices increase from 23 to 44. This is the missing
@@ -685,3 +685,11 @@ scale 1280, frame scale 256 and physical-slot jitter use the existing shared
 render path. Matched RNG, births, camera, draw cadence and source ages are
 still needed to accept exact projected sizes, counts and lifetimes. The
 unsynchronized tick 430 images do not establish a debris-rendering defect.
+
+### Other static programs and effects (STATIC)
+
+| Routine | Does |
+| --- | --- |
+| `FUN_004371B0` | a terrain ripple program (from `FUN_004374B0`): its ring grows over the period `+1C` with a height that ramps up through the first quarter and down after three quarters (`+18`); each cell inside the ring changes by the difference between this frame's and last frame's profile (each falling off away from the ring), and a cell that drops calls `FUN_00427B20` |
+| `FUN_00437550` | refreshes one 16-by-16 block of cells per call through `FUN_0044A890`, sweeping the whole map in 256 calls (`004DC688`); a new sea level or a reset restarts the sweep |
+| `FUN_00427C30` | emits a cell's static-object effect through `FUN_00440DC0`: the kind's ground template (`004C9E54`, 0x2C bytes per kind) at the cell centre, or its top template (`004C9E50`) at the top of the object's model less 0x80, with the particle from `004C9E48`; a network client marks it remote |

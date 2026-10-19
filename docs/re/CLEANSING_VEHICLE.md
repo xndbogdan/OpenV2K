@@ -78,7 +78,7 @@ Primary None03230/03250. This constructor consumes one SubA reset word; its
 tick has no effect because Type49 has no SubI. Stationary and already carrying
 styles have null attachment callbacks and retain their existing tasks.
 
-Release from Stationary/normal cleansing runs D1C0→16AC0 terrain basis→AC60.
+Release from Stationary/normal cleansing runs D1C0→00416AC0 terrain basis→AC60.
 Release from carrying runs CE90, sets8000h, skips absent SubI, then AC60.
 Player→Type93 and Type93→world are separate releases and selections.
 409030 copies the proxy position to both+90/+96 before the latter release.

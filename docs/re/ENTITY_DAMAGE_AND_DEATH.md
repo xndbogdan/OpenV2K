@@ -1213,3 +1213,10 @@ F590 handlers. Unauthenticated or broader non-Type-17 actors retain the
 yaw-derived fallback; class-32 owner velocity remains separate. General callback binding
 and the two short-lived route actors without selector history keep the scope
 `PARTIAL` before the trace-defined gate may expose the hive.
+
+## Radial infection and the splitting death (STATIC)
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00414C50` | radial infection or cure: every admitted, visible body inside the radius takes the infection hit `FUN_00411250` when clean or, for a cure, the cure hit `FUN_00411320` when infected |
+| `FUN_00416820` | lethal-hit splitter for Type73 and Type109: once aged, unless the damage was mostly channel 3, a local body spawns two of its own type around it with random offsets, velocities and headings, capped at 25 of those types alive (hint 24 when the player's shot meets the cap); it then emits particle kind 90 (channel-3 deaths) or 51, zeroes its buffer and health and dies through `FUN_00410C10` |

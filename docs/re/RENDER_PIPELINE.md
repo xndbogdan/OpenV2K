@@ -1467,18 +1467,18 @@ The field-6 callback `530D0` begins the active world frame by clearing all
 0x400 bytes. Presentation callback `53570` then calls
 `FUN_004383F0(camera_x_raw, camera_z_raw + 0x0A00)`, using signed 8.8
 truncation toward zero to place the window ten cells ahead of the camera.
-The actual retail array `4D07A8` is `42AA40,53570,53410,53760,53A60,536A0,
-53710,42AA80,42AA90,53AA0,42AAB0,0`. The identical retail EXEs retain SHA-256
+The actual retail array `4D07A8` is `42AA40,53570,53410,53760,00453A60,004536A0,
+00453710,42AA80,42AA90,53AA0,42AAB0,0`. The identical retail EXEs retain SHA-256
 `E9BE7A833612FBA3A5A5AB92A974ECE1A689E4B7E72409D9EE8331380573B4BA`.
 
 `53760 ->11720 ->11400` first submits each actor's model and then drains that
 actor's shot FIFO through `14870`. Ordinary actor `138F0` therefore samples
-the pre-particle light field. Next, `53A60 ->3DCB0 ->3DCD0/3DDC0` traverses
+the pre-particle light field. Next, `00453A60 ->3DCB0 ->3DCD0/3DDC0` traverses
 the particle draw callbacks. New shots enter this same presentation at their
 birth position and age; their first physical movement waits for the next
 `40120`. `FUN_0043D410` selects the current frame, derives its positive
 height-scaled or negative age-faded radius, and calls `FUN_004385E0`.
-Only afterward does `536A0` dispatch terrain and static-object consumers,
+Only afterward does `004536A0` dispatch terrain and static-object consumers,
 including `2F650`, which see the accumulated particle light. The earlier
 claim that all model consumers follow particle accumulation was too broad.
 
@@ -1487,7 +1487,7 @@ FIFO suffix, accumulate into the existing positioned field without another
 clear, and share those owned survivors with later sprite submission. A
 second preparation would repeat copied D300/442240 samples and lifetime
 decisions. Final-card `world+28A` suppresses both ordinary actor and particle
-presentation through the native `53760/53A60` guards. `FUN_00441420` and
+presentation through the native `53760/00453A60` guards. `FUN_00441420` and
 `FUN_00441610` provide the other signed saturated writers. Underwater
 darkness uses the Section 10 words at terrain context `+0x36/+0x38`,
 subtracting up to eight before the clamp. This is independent of the
@@ -1710,7 +1710,7 @@ authenticates the accepted tick 952 viewport pair and active publication only;
 other model-local, identity-reset and Klaus-evolved pairs remain separately
 owned. In the model-node context, `+0x74/+0x78` instead hold terminal colour
 and the inherited viewport pointer. That scene pointer is distinct from the
-immediate parent model context at child `+0xC0`, which `470410` follows for
+immediate parent model context at child `+0xC0`, which `00470410` follows for
 selected tf11 cache imports through the child `+0x90` remap table. A native
 fog/queue producer must preserve those owners and layouts independently.
 The remaining sprite/raster boundary is described
@@ -2082,6 +2082,19 @@ All pass; the 66 sampled source rectangles are unchanged. Extracted images and
 hidden-GL thumbnail/backdrop frames show the repaired pixels and proportions.
 The normal indexed copyright and all 91 paired menu/Klaus/Intro2/gameplay
 controls remain unchanged. Matched retail presentation acceptance remains open.
+
+## Weather, wobble projectors and text nodes (STATIC)
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0042DB70` | runs a level's weather from its effects record (`004FE654`, indexed by the session's `+C4`): `+70` the first shadow pattern (`FUN_0040FA20`), `+78` the second (`FUN_0040FD90`), `+6C` falling class-35 particles around the camera in proportion to the elapsed time plus the first pattern, and `+74` lightning: a random flash (`FUN_0040FCB0`) whose chance grows each frame, then a 9-step cooldown; error `4C0DA0` without a record |
+| `FUN_0040FA20` | darkens the terrain-light window `4FE820` with a moving pattern: four sines of the cell coordinates and the frame counter `004DAFC4`, adding only negative sums (over 64), saturating at `0x7F` |
+| `FUN_0040FD90` | adds a second moving four-sine pattern of the cell coordinates and the frame counter `004DAFC4` to the terrain-light window `4FE820` (sums over `0x80000`), saturating at `0x7F` |
+| `FUN_00435E70` | projects a camera-relative point to the screen (scales `004FEED0/004FEED4`, centre `004FEEE0/004FEEE4`) with a sine wobble of the frame counter, and returns its clip outcode against `004FEED8/004FEEDC` |
+| `FUN_00436010` | the second wobbling projector, as `FUN_00435E70` with a different wobble phase |
+| `FUN_00421840` | bump-allocates a queued text node with a depth word in a draw arena (cursor `+14`, limit `+10`, list tail `+8`), failing with `4BE7F8` when full |
+| `FUN_004218A0` | the same without the depth word, failing with `4BE808` when full |
+| `FUN_004571E0` | hands the current world's sprite set to the Direct3D texture pages (from the in-game init `FUN_004515E0`): pairs each sprite the world's resource record lists (`004FE658`) with its record (`004FE62C`) and passes them to `FUN_004AB170` |
 
 ## Key addresses
 

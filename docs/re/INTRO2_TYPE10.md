@@ -146,9 +146,9 @@ custody and ordinary-birth/static-contact boundaries are in
 ## Death and remaining boundaries
 
 Type10's alternate is class11, not the common class12 corpse. `10C10`
-enters `C660/404360`: clear Secondary/Tertiary, consume the generic G
+enters `C660/00404360`: clear Secondary/Tertiary, consume the generic G
 constructor suffix, set G+3F to 1 with `1B970`, and publish the zero-lifetime
-Tumble Primary. `404460` owns its accumulated-age rotation. Its detailed
+Tumble Primary. `00404460` owns its accumulated-age rotation. Its detailed
 path calls `018A0` directly, with no target prelude or Sub-D step.
 
 G's tumble path is exact: `41A6AA -> 41A9CB -> 41AA36` clears dwords

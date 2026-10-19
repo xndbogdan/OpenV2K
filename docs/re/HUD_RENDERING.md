@@ -367,7 +367,7 @@ the world is completed, or a world failure enters results state 5. The active
 `0:00` half-second from the timer's `+500` bias still draws both.
 
 The trophy uses global model 138 at raw depth 2000, orientation
-`FUN_0042A2E0(2 * cargo_spin,0,0)`, and the same `42A520` model callback as
+`FUN_0042A2E0(2 * cargo_spin,0,0)`, and the same `0042A520` model callback as
 cargo. Its screen anchor is global Section-1 point 40; the `%1d:%02d` clock
 uses global font 0 at point 41. These are system-3 local points 27/28 and are
 absolute screen positions, not offsets from the status orb:
@@ -384,7 +384,7 @@ then replaces the two projection-origin words with the trophy point. System2
 owns global Section-0 base zero; its high-tier focal lengths are 512, 640 and
 820. The trophybody's raw Y extent is 0..114 at depth 2000, so the tier-3
 lens can extend its top above the retained y=30 origin. The callback at
-`42A520` supplies only animation channels; it adds no anchor or scale offset.
+`0042A520` supplies only animation channels; it adds no anchor or scale offset.
 
 Above the original output sizes, High Native uses normal 640-tier art pixel
 metrics for this trophy's model lens before applying the shared HUD readability
@@ -396,7 +396,7 @@ policy for modern outputs, not a claim of retail raster acceptance.
 The port's `gameplay_hud::time_trophy` owns this presentation and submits it
 before cargo, weapons and the status orb. It consumes the existing time
 controller, so pausing, completion and expiry cannot race a second clock.
-The shared 42A520 cargo/trophy policy must traverse the linked hierarchy:
+The shared 0042A520 cargo/trophy policy must traverse the linked hierarchy:
 global 138 (`trophy`) has two vertices and no faces; its child 139
 (`trophybody`) supplies 52 vertices and 91 triangles. A zero recursion budget
 silently draws only the empty root even though model138 is resident. The HUD
@@ -416,6 +416,29 @@ owns timing, campaign awards and NoCD05's bounded active-timer evidence.
 The explicitly requested physical-pickup clock stop adds a shared tick/HUD
 gate to the port's timer; [Player shield](PLAYER_SHIELD.md#requested-pickup-clock-policy)
 records its user-directed status and the static retail distinction.
+
+### Radar plotting
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0044AA50` | the radar's terrain listener, registered by `FUN_0044A500` for a cell's flag `0x08` change (`FUN_004337E0`) and attribute clear (`FUN_00433860`): when the cell's attribute is of kind 8, removes radar coverage around it (`FUN_0044A8D0(x, z, -1)`) |
+| `FUN_0044BC80` | copies the radar palette: 32 colours from the colour table (`004FE63C`) starting at `004DF114`, then its entries 31, 34 and 33 |
+| `FUN_0044B950` | plots a radar blip: the centre pixel solid unless flag 2; with flag 1 a halo, the four edge neighbours at an even blend (`FUN_0044B6F0`) and the four diagonal ones at a quarter (`FUN_0044B810`), within the radar's width `004EF128` and height `004DF110` |
+| `FUN_0044B6F0` | plots a radar pixel at an even blend of its colour with the pixel already there, within the radar's bounds, in the surface's channel layout |
+| `FUN_0044B810` | plots a radar pixel at a quarter of its colour over three quarters of the pixel already there |
+
+### Targetter program and presentation record
+
+The controller's `+22C` holds the Targetter's active program (installed by
+`FUN_0044CF30`).
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0044CF70` | the Targetter program's per-frame step (from `FUN_00446640`): calls method `+08` (no arguments) and then `+0C` (two arguments) of the program's description `+44` when each exists |
+| `FUN_00448090` | runs the Targetter program's method `+10` (`FUN_0044CFB0`) on the controller's program at `+22C` inside an error scope and returns the error code (from `FUN_00453710`, in the in-game presentation chain) |
+| `FUN_0044D950` | the Targetter's model probe: when a point lies within an entity's active model radius (`+A8..+AE` by its detail bits) plus a margin, runs the FGDK model hit test (`FUN_0046AEF0`) with the entity's basis and its type's collision description (`+78`), exact (`0x4D4908`) without a margin and near (`0x4D4920`) with one; otherwise reports no hit |
+| `FUN_0044DDD0` | the animation channels of the Targetter's ring (from `FUN_0044DB10`): channel 0 the frame counter (`004FED60`); 1 the ring size, (the target's active model radius + 0x20) × 0x80 capped at 0xFFFF; 2 the target's health fraction (`FUN_004167C0`); the target is `+C` when `+10` is set, else `+4`; without a record channel 1 is 0x8000 |
+| `FUN_004538B0` | fills a presentation record for the emblem and trophy steps (`FUN_004537F0`, `FUN_004539D0`): the current world index, the controller and, while the session's body (`+2A8`) is live, its position and campaign selectors 3, 4, 1 and 2 (`DAT_004FECDC`); otherwise zeroes the first two selector words |
 
 ### Key Globals
 

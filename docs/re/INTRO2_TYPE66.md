@@ -40,7 +40,7 @@ the field. This does not authenticate a captured Level1 allocation.
 
 The sole class choice is Always, with weight 1, selecting class 39 Working Factory,
 descriptor `4C9708`, style `4C9558`. Even this singleton consumes one shared
-AC60 RNG word. `257C0` clears Tertiary then Secondary; `25BD0` allocates through
+AC60 RNG word. `257C0` clears Tertiary then Secondary; `00425BD0` allocates through
 `01020` and publishes a zero-lifetime Primary with callback `25C60`. It does
 not invoke `06070` or consume component-reset RNG. Reselection retains the existing
 Sub-M allocation and context payload, replacing the graph through the same
@@ -109,10 +109,10 @@ retained. A health-only revival would lose this task and RNG transition.
 hut's template bit `0x20` advances the following reached stage directly to 32;
 the factory's zero flags use the normal 32-stage sequence. Terminal entry
 commits clock `-1`, handles the tracked pickup, writes health 0 and selects the
-appropriate destroyed model slot before the second sound 62 and `37390`.
+appropriate destroyed model slot before the second sound 62 and `00437390`.
 The supplied template has its source type/handle fields patched at that point.
 
-`37390` runs before scientist/capacity clear, animation resets and status
+`00437390` runs before scientist/capacity clear, animation resets and status
 publication. Hut flags `0x2A` request presentation and a crater; factory flags 0
 perform neither. Neither authored template has deferred bit `0x01`, radial
 bit `0x04`, or Main Base-abort bit `0x10`. After the effects, the native class 0
@@ -130,7 +130,7 @@ one-frame delay remains open in [RENDER_PIPELINE.md](RENDER_PIPELINE.md).
 
 ## Crater, static programs, radar, and grounded actors
 
-`36E00` visits X then Z offsets from negative to positive radius in steps of
+`00436E00` visits X then Z offsets from negative to positive radius in steps of
 256 raw units, wrapping both position words. It accepts only squared
 distances strictly inside the outer circle. The original signed-height-byte
 arithmetic uses inner radius `4r/6`, static/material radius `5r/6`, truncating
@@ -160,7 +160,7 @@ Finally `EB20` visits the live actor list. It requires
 `state & 0x08009000 == 0x08008000`, strict wrapped XZ distance inside the crater,
 and default ground-snap bit `0x20`. The high mask bit is **fixed**, so ordinary
 moving peasants do not qualify. It resamples bilinear Y, adds the selected
-signed model-header extent only for default bit `0x40`, then calls `16AC0`.
+signed model-header extent only for default bit `0x40`, then calls `00416AC0`.
 That basis uses forward differences along +X and +Z, Q12 normalized tangents,
 their cross product, saturated Q31 expansion and `57960` normalization. It
 does not change Euler words. State dirty bits `0x28` are set afterward.
@@ -173,7 +173,7 @@ matrix remains in [opening.rs](../../crates/v2k-game/src/opening.rs).
 ### Retail crater and water comparison
 
 The read-only `V200001.run` replay in
-`20260919-intro2-hut-crater-ttd.txt` records `436E00` at `FB636:1E7`, tick
+`20260919-intro2-hut-crater-ttd.txt` records `00436E00` at `FB636:1E7`, tick
 342, and its return at `FB641:13FB`. The caller is `437463`; arguments are
 position `[-28672,-256,-32768]`, radius 1280, depth 16 and material-enable 1.
 Section-10 sea dword remains `FFFCB100` (`-216832`, raw Y `-847`) on both
@@ -230,7 +230,7 @@ supplied image is 1905×1069 and those port captures are 640×480; the caption
 alone does not match the exact camera or simulation state.
 
 The later replay identifies the missing foreground mutation. At tick 436,
-`427899` returns from a second `436E00` call, radius 2048/depth 20, centred at
+`427899` returns from a second `00436E00` call, radius 2048/depth 20, centred at
 raw `[-29056,-224,31872]` (cell `[142,124]` plus half a cell). This is the
 [kind-27 static burn callback](ENTITY_STATIC_DAMAGE_PROGRAMS.md#burn-callback-and-secondary-crater),
 which the port's opcode-10 burned-bit write had omitted. It is not another

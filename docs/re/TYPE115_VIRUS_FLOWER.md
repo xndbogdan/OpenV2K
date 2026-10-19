@@ -60,9 +60,9 @@ authorize replacing weighted selection with an always-firing turret.
 
 Class29's descriptor/style/initializer are `004C8928/004C8230/0040D190`.
 D190 clears Secondary then Primary and installs Tertiary through4086D0,
-whose private initializer/body/destructor are408DF0/408770/4086A0.
+whose private initializer/body/destructor are408DF0/00408770/4086A0.
 The existing shared gun task owns target selection, aim and tracking. Its
-408DF0 gravity-lead word comes from44EA60(E.method): method16 uses jump
+00408DF0 gravity-lead word comes from44EA60(E.method): method16 uses jump
 index4 and returns1, unlike the zero used by methods12/14. After retaining
 the original capability and priority table, state0x2000 changes the live
 capability to `(old & ~0x1004) | 8` and the constructor sets state0x100.
@@ -227,7 +227,7 @@ before requesting any further recording.
 
 The contact contracts above were verified against the retail executable by
 read-only disassembly of441EA0..44213C,442B40..442B98,4163E0..416401,
-408DF0..408EBA,40D190..40D1DF,40C490..40C4C0 and44EA60's jump table.
+00408DF0..408EBA,40D190..40D1DF,40C490..40C4C0 and44EA60's jump table.
 For example, from the repository root:
 
 ```powershell
