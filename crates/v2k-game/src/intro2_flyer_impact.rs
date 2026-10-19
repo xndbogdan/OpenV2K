@@ -1,12 +1,16 @@
-//! Native Type15/87 hits: 10EB0/11250/11320 -> DAC0/DA00/DA60 -> 11030 -> 15040.
+//! Native Type15/87/108/14 hits: 10EB0/11250/11320 -> DAC0/DA00/DA60 ->
+//! 11030 -> 15040.
 //!
-//! Search hit hooks reselect the authenticated current B/D/E/G graph before
-//! reaction and filtering. Alternate2 owns quiet death, not a falling corpse.
-//! Native Type15/Type87 Hive births retain this same constructor/task custody.
+//! Every style's hit hooks reselect the authenticated current graph before
+//! reaction and filtering. Alternate2 owns quiet death, not a falling corpse;
+//! Type14's alternate1 explodes through the class-1 terminal, which needs
+//! Playing's lent static world and player. Native Hive births retain this
+//! same constructor/task custody.
 
 use crate::intro2_flyers_live::{
-    authenticate_flyer_mover_metadata, flyer_manager_identity_authenticates, reselect_flyer,
-    Intro2FlyerRuntimeBlock, Intro2FlyerSchedulerOwner,
+    authenticate_flyer_mover_metadata, flyer_attachment_sound,
+    flyer_manager_identity_authenticates, reselect_flyer, Intro2FlyerRuntimeBlock,
+    Intro2FlyerSchedulerOwner, TYPE14_ENTITY_TYPE,
 };
 use crate::{
     entity::Entity,
@@ -66,7 +70,11 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
         (0x004C_7A50, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search acquiring
         (0x004C_7A98, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search pursuing
         (0x004C_7930, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Move About Aimlessly
+        (0x004C_7E88, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Defecate Virus
+        (0x004C_7DF8, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Flocking search
+        (0x004C_7E40, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Flocking route
         (0x004C_7420, 0, 0, 0),                               // completed quiet death
+        (0x004C_7150, 0, 0, 0),                               // completed Class1 terminal
     ]
     .into_iter()
     .find(|(address, _, _, _)| *address == style.style_address())?;
@@ -81,25 +89,104 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
     }
 }
 
+/// The hit's resources: shared read-only, or Playing's terminal world.
+enum HitResources<'a> {
+    Shared(&'a crate::resource_cache::ResourceCache),
+    Playing {
+        resources: &'a mut crate::resource_cache::ResourceCache,
+        static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+        player_hull: &'a mut crate::player_hull::PlayerHull,
+        extra_lives: RetailRuntimeValue<u8>,
+    },
+}
+
+impl HitResources<'_> {
+    fn cache(&self) -> &crate::resource_cache::ResourceCache {
+        match self {
+            Self::Shared(resources) => resources,
+            Self::Playing { resources, .. } => resources,
+        }
+    }
+}
+
 pub(crate) fn apply_native_flyer_particle_hit(
     frame: SharedActorImpactFrame<'_>,
     impact: ParticleEntityImpact,
 ) -> NativeFlyerImpactOutcome {
-    if !frame.entities.iter_all().any(|entity| {
-        entity.id == impact.target_entity_id && matches!(entity.entity_type, 15 | 87 | 108)
+    let SharedActorImpactFrame {
+        entities,
+        resources,
+        world_fx,
+        scheduler,
+        notifications,
+        retail_tick,
+    } = frame;
+    apply(
+        entities,
+        HitResources::Shared(resources),
+        world_fx,
+        scheduler,
+        notifications,
+        retail_tick,
+        impact,
+    )
+}
+
+/// Playing's entry, whose lent world lets Type14 explode through class 1.
+pub(crate) fn apply_playing_native_flyer_particle_hit(
+    frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> NativeFlyerImpactOutcome {
+    let crate::shared_actor_impact::PlayingActorImpactFrame {
+        resources,
+        entities,
+        world_fx,
+        scheduler,
+        notifications,
+        static_damage,
+        player_hull,
+        extra_lives,
+        retail_tick,
+    } = frame;
+    apply(
+        entities,
+        HitResources::Playing {
+            resources,
+            static_damage,
+            player_hull,
+            extra_lives,
+        },
+        world_fx,
+        scheduler,
+        notifications,
+        retail_tick,
+        impact,
+    )
+}
+
+fn apply(
+    entities: &mut crate::entity::EntityManager,
+    resources: HitResources<'_>,
+    world_fx: &mut crate::world_fx::WorldFx,
+    scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    notifications: &mut crate::gameplay_notifications::GameplayNotifications,
+    retail_tick: u32,
+    impact: ParticleEntityImpact,
+) -> NativeFlyerImpactOutcome {
+    if !entities.iter_all().any(|entity| {
+        entity.id == impact.target_entity_id
+            && matches!(entity.entity_type, 15 | 87 | 108 | TYPE14_ENTITY_TYPE)
     }) {
         return NativeFlyerImpactOutcome::NotApplicable;
     }
     let mut committed = false;
     match run(
-        SharedActorImpactFrame {
-            entities: &mut *frame.entities,
-            resources: frame.resources,
-            world_fx: &mut *frame.world_fx,
-            scheduler: &mut *frame.scheduler,
-            notifications: &mut *frame.notifications,
-            retail_tick: frame.retail_tick,
-        },
+        &mut *entities,
+        resources,
+        &mut *world_fx,
+        &mut *scheduler,
+        &mut *notifications,
+        retail_tick,
         impact,
         &mut committed,
     ) {
@@ -108,9 +195,7 @@ pub(crate) fn apply_native_flyer_particle_hit(
             if committed {
                 // Retain the current replacement graph. A committed callback
                 // cannot resume the old task lease or replay its RNG.
-                frame
-                    .scheduler
-                    .park_intro2_flyer_contact_prefix(impact.target_entity_id);
+                scheduler.park_intro2_flyer_contact_prefix(impact.target_entity_id);
             }
             NativeFlyerImpactOutcome::Blocked {
                 reason,
@@ -127,19 +212,17 @@ fn state_bits(entity: &Entity, mask: u32) -> Result<u32, NativeFlyerImpactBlock>
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run(
-    frame: SharedActorImpactFrame<'_>,
+    manager: &mut crate::entity::EntityManager,
+    mut resources: HitResources<'_>,
+    world_fx: &mut crate::world_fx::WorldFx,
+    scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    notifications: &mut crate::gameplay_notifications::GameplayNotifications,
+    retail_tick: u32,
     impact: ParticleEntityImpact,
     committed: &mut bool,
 ) -> Result<LiveActorDamageOutcome<NativeFlyingSurfaceDeathPublication>, NativeFlyerImpactBlock> {
-    let SharedActorImpactFrame {
-        entities: manager,
-        resources,
-        world_fx,
-        scheduler,
-        notifications,
-        retail_tick,
-    } = frame;
     use NativeFlyerImpactBlock as Block;
     let id = impact.target_entity_id;
     let delivery = impact
@@ -151,6 +234,7 @@ fn run(
         return Err(Block::Runtime("static-route wrapper unowned"));
     }
     let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    let is_type14 = entity.entity_type == TYPE14_ENTITY_TYPE;
     let metadata = manager
         .type_runtime_metadata(entity.entity_type)
         .cloned()
@@ -159,17 +243,19 @@ fn run(
         return Err(Block::Runtime("native flyer allocation"));
     }
     authenticate_flyer_mover_metadata(entity.entity_type, &metadata)
-        .map_err(|_| Block::Runtime("B/D/E/G metadata"))?;
+        .map_err(|_| Block::Runtime("flyer metadata"))?;
     if metadata.mass_raw != 100
         || metadata.capability_flags != 8
         || metadata.model_slots.map(usize::from).map(Some) != entity.model_slots
-        || metadata.constructor_sound_attachment_id != RetailRuntimeValue::Known(Some(11))
+        || metadata.constructor_sound_attachment_id
+            != RetailRuntimeValue::Known(flyer_attachment_sound(entity.entity_type))
     {
         return Err(Block::Runtime("authored flyer profile"));
     }
     // A same-walk, completed C470 still owns its live allocation until central
     // removal. Otherwise only an unparked, completed Search graph may mutate.
     if !native_flyer_quiet_death_authenticates(manager, id)
+        && !(is_type14 && crate::class49_death::finished_terminal_hit_authenticates(manager, id))
         && !scheduler.intro2_flyer_completed_owner(manager, id)
     {
         return Err(Block::Runtime("completed native flyer custody"));
@@ -264,7 +350,42 @@ fn run(
             delivery,
             entry: LiveActorDamageEntry::Checked,
         },
-        |manager, world_fx, _feedback| publish_native_flying_standard_death(manager, id, world_fx),
+        |manager, world_fx, feedback| match (&mut resources, feedback) {
+            // Type14's alternate1: BAC0/BAF0 complete before damage returns.
+            (
+                HitResources::Playing {
+                    resources,
+                    static_damage,
+                    player_hull,
+                    extra_lives,
+                },
+                Some(feedback),
+            ) if is_type14 => crate::class49_terminal::run_class49_standard_death(
+                crate::class49_terminal::Class49TerminalFrame {
+                    entities: manager,
+                    resources,
+                    world_fx,
+                    static_damage,
+                    notifications: feedback.notifications,
+                    retail_tick: feedback.retail_tick,
+                    world: crate::class49_terminal::Class49WorldContext::Playing {
+                        scheduler,
+                        player_hull,
+                        extra_lives: *extra_lives,
+                        active_terminal_calls: Vec::new(),
+                    },
+                },
+                id,
+            )
+            .map(
+                |result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                },
+            )
+            .map_err(|error| NativeFlyingSurfaceDeathBlock::Class1(Box::new(error))),
+            _ => publish_native_flying_standard_death(manager, id, world_fx),
+        },
     )
     .map_err(|error| {
         *committed |= error.committed_prefix;
@@ -296,6 +417,7 @@ fn run(
             let slot = active_model_slot_from_state_flags(flags);
             let model = entity.model_slots[slot].ok_or(Block::Runtime("accepted-hit model"))?;
             let extent = resources
+                .cache()
                 .global_model(model)
                 .ok_or(Block::Runtime("accepted-hit model extent"))?
                 .radius;

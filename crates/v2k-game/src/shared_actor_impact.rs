@@ -185,6 +185,14 @@ pub fn apply_playing_actor_particle_hit(
             crate::native_type38::impact::apply_playing_type38_family_particle_hit(frame, impact),
         ));
     }
+    // Type14's lethal class1 blast needs the same Playing world.
+    if entity.entity_type == crate::intro2_flyers_live::TYPE14_ENTITY_TYPE
+        && entity.intro2_flyer_frame_owner.is_some()
+    {
+        return Some(SharedActorImpactOutcome::Flyer(
+            crate::intro2_flyer_impact::apply_playing_native_flyer_particle_hit(frame, impact),
+        ));
+    }
     // Type43's lethal class1 blast needs Playing's static world and player.
     if entity.entity_type == crate::native_type43::ENTITY_TYPE
         && entity.native_type43_runtime.is_some()
@@ -265,7 +273,8 @@ pub fn apply_shared_actor_particle_hit(
             entity_type: entity.entity_type,
         });
     }
-    if matches!(entity.entity_type, 15 | 87 | 108) && entity.intro2_flyer_frame_owner.is_some() {
+    if matches!(entity.entity_type, 14 | 15 | 87 | 108) && entity.intro2_flyer_frame_owner.is_some()
+    {
         return Some(SharedActorImpactOutcome::Flyer(
             crate::intro2_flyer_impact::apply_native_flyer_particle_hit(frame, impact),
         ));

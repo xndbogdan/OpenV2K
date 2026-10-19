@@ -172,7 +172,7 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Rolling Boulder: {error:?}"))?;
             }
-            15 | 87 | 108 => {
+            14 | 15 | 87 | 108 => {
                 // The level start adopts the published owner (adopt_intro2_flyers).
                 let sub_d = sub_d.ok_or("missing flyer Sub-D allocation")?;
                 crate::intro2_flyers_live::publish_native_flyer(

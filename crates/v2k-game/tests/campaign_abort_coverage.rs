@@ -98,7 +98,9 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (17, 40),
     (18, 73),
     (19, 40),
-    (20, 14),
+    // Type14 flyers explode through their class1 terminal; world20's and
+    // world37's next unsupported callbacks are a Type15 wasp and a Type16.
+    (20, 15),
     // Native Type18/28 take Type122's captor class12 abort death.
     (21, 89),
     (22, 41),
@@ -120,7 +122,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (34, 25),
     (35, 27),
     (36, 74),
-    (37, 14),
+    (37, 16),
     (38, 82),
     (39, 83),
     // Type125 factories share Type66's class39 owner.

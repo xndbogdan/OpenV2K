@@ -5244,6 +5244,14 @@ impl SpecializedActorTaskScheduler {
                         world_fx,
                         &mut next_shared_random,
                     );
+                    if let Intro2FlyerSchedulerProductionOutcome::Type14Visit {
+                        infection_write: Some(write),
+                        ..
+                    } = tick.outcome
+                    {
+                        // The flyer frame already required the level terrain.
+                        resources.apply_level_infection_writes(&[write]);
+                    }
                     if let Some(owner) = tick.retained_owner {
                         retained.push(SpecializedActorTaskOwner::Intro2FlyerScheduler(owner));
                     }
@@ -6944,6 +6952,18 @@ fn prepare_intro2_radial_actor_mutation(
                 SpecializedActorTaskOwner::Intro2Type13SearchAttack(owner)
                 if owner.entity_id() == entity_id && owner.completed_contact_boundary(manager))
             });
+    }
+    if entity.entity_type == crate::intro2_flyers_live::TYPE14_ENTITY_TYPE
+        && entity.intro2_flyer_frame_owner.is_some()
+    {
+        // A completed class1 corpse keeps only its Finished receipt until the sweep.
+        if crate::class49_death::finished_terminal_hit_authenticates(manager, entity_id) {
+            return true;
+        }
+        return owners.iter().any(|owner| {
+            matches!(owner, SpecializedActorTaskOwner::Intro2FlyerScheduler(owner)
+                if owner.entity_id() == entity_id && owner.matches_completed_entity(entity))
+        });
     }
     if entity.intro2_type16_runtime.is_some() {
         return owners.iter().any(|owner| {

@@ -3,7 +3,7 @@
 //! Callback timing and callback mass belong to the common scheduler. A task
 //! evidence block parks that already-entered visit instead of replaying its
 //! prefix/RNG on another frame. Unsupported relation, wind and surface effect
-//! histories fail before entry to this bounded B/D/E/G route.
+//! histories fail before entry to this bounded B/D/E/G and B/D/G route.
 
 use super::*;
 use crate::common_mover::type9_surface::{
@@ -64,11 +64,12 @@ fn effective_flags(entity: &Entity) -> Result<u32, Intro2FlyerWorldBlock> {
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Intro2FlyerWorldBlock::UnsupportedEffectiveFlags);
     };
-    // Style +38; Move About Aimlessly (Type108's class 5) masks nothing.
+    // Style +38. Move About Aimlessly and Type14's Defecate Virus and both
+    // Flocking styles mask nothing.
     let disable = match context.active_style().style_address() {
         0x004c_7a50 => 0x0002_1080,
         0x004c_7a98 => 0x80,
-        0x004c_7930 => 0,
+        0x004c_7930 | 0x004c_7e88 | 0x004c_7df8 | 0x004c_7e40 => 0,
         _ => return Err(Intro2FlyerWorldBlock::UnsupportedEffectiveFlags),
     };
     let flags = default & !disable;
@@ -118,7 +119,8 @@ fn preflight_suffix(
     }
     if metadata.common_world_effects
         != RetailRuntimeValue::Known(CommonWorldEffectProfile::default())
-        || metadata.constructor_sound_attachment_id != RetailRuntimeValue::Known(Some(11))
+        || metadata.constructor_sound_attachment_id
+            != RetailRuntimeValue::Known(flyer_attachment_sound(entity.entity_type))
         || metadata.sub_c_lift_descriptor != RetailRuntimeValue::Known(None)
         || metadata.actor_animation_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_j_attachment_descriptor != RetailRuntimeValue::Known(None)
@@ -194,7 +196,7 @@ pub(super) fn tick_world(
         return world_block(owner, Intro2FlyerWorldBlock::UnsupportedRelation);
     }
     if entity.collision.constructor_sound_attachment_id_at_0x8c
-        != RetailRuntimeValue::Known(Some(11))
+        != RetailRuntimeValue::Known(flyer_attachment_sound(entity.entity_type))
     {
         return world_block(owner, Intro2FlyerWorldBlock::UnsupportedSoundAttachment);
     }
@@ -285,6 +287,7 @@ pub(super) fn tick_world(
     entity.mass_raw = mass;
     let (terrain, active_model_extent_raw, attached_cargo_mass) = frame_inputs.unwrap();
     let task_frame = FlyerTaskFrame {
+        resources: frame.resources,
         metadata: &metadata,
         terrain,
         active_model_extent_raw,
@@ -299,10 +302,13 @@ pub(super) fn tick_world(
         },
     };
     let tick = tick_flyer_tasks(manager, owner, task_frame, world_fx, next_random);
+    // Every completed visit, aimless and Type14 ones included, owns the suffix.
     let completed = matches!(
         tick.outcome,
         Intro2FlyerSchedulerProductionOutcome::B6c0Visit { .. }
             | Intro2FlyerSchedulerProductionOutcome::PursuingVisit { .. }
+            | Intro2FlyerSchedulerProductionOutcome::AimlessVisit { .. }
+            | Intro2FlyerSchedulerProductionOutcome::Type14Visit { .. }
     );
     if !completed {
         return tick;

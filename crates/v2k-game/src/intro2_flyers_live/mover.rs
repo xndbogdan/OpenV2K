@@ -2,9 +2,9 @@
 //! The caller owns task lifetime, publication and the 12DA0 world suffix.
 
 use super::{
-    Intro2FlyerFrameOwner, FLYER_COMMON_MOVER_TOPOLOGY, FLYER_SUB_B, INTRO2_TYPE15_ENTITY_TYPE,
-    INTRO2_TYPE87_ENTITY_TYPE, TYPE108_ENTITY_TYPE, TYPE108_SUB_G_DESCRIPTOR,
-    TYPE15_SUB_G_DESCRIPTOR, TYPE87_SUB_G_DESCRIPTOR,
+    flyer_sub_d, flyer_topology, Intro2FlyerFrameOwner, FLYER_SUB_B, INTRO2_TYPE15_ENTITY_TYPE,
+    INTRO2_TYPE87_ENTITY_TYPE, TYPE108_ENTITY_TYPE, TYPE108_SUB_G_DESCRIPTOR, TYPE14_ENTITY_TYPE,
+    TYPE14_SUB_G_DESCRIPTOR, TYPE15_SUB_G_DESCRIPTOR, TYPE87_SUB_G_DESCRIPTOR,
 };
 use crate::chase_target::ChaseTargetCommonMoverReturn;
 use crate::common_mover::component_dispatch::{CommonMoverDispatchMode, CommonMoverDispatchPhase};
@@ -14,7 +14,7 @@ use crate::common_mover::frame_machine::{
     CommonMoverFramePoll, CommonMoverFrameRequest, CommonMoverFrameResume,
     CommonMoverFrameSnapshot,
 };
-use crate::common_mover::sub_d::{apply_type9_sub_d, Type9SubDStep, FLYER_SUB_D};
+use crate::common_mover::sub_d::{apply_type9_sub_d, Type9SubDStep};
 use crate::common_mover::target_prelude::{
     CommonMoverPreludeSubD, CommonMoverTrackedTargetSnapshot,
 };
@@ -85,6 +85,7 @@ pub(super) fn flyer_sub_g_descriptor(entity_type: u32) -> Option<&'static [u8; 1
         INTRO2_TYPE15_ENTITY_TYPE => Some(&TYPE15_SUB_G_DESCRIPTOR),
         INTRO2_TYPE87_ENTITY_TYPE => Some(&TYPE87_SUB_G_DESCRIPTOR),
         TYPE108_ENTITY_TYPE => Some(&TYPE108_SUB_G_DESCRIPTOR),
+        TYPE14_ENTITY_TYPE => Some(&TYPE14_SUB_G_DESCRIPTOR),
         _ => None,
     }
 }
@@ -95,9 +96,10 @@ pub(crate) fn authenticate_flyer_mover_metadata(
 ) -> Result<&'static [u8; 104], Intro2FlyerCommonMoverBlock> {
     let descriptor =
         flyer_sub_g_descriptor(entity_type).ok_or(Intro2FlyerCommonMoverBlock::MetadataMismatch)?;
-    if metadata.common_mover_topology != RetailRuntimeValue::Known(FLYER_COMMON_MOVER_TOPOLOGY)
+    if metadata.common_mover_topology != RetailRuntimeValue::Known(flyer_topology(entity_type))
         || metadata.sub_b_lateral_descriptor != RetailRuntimeValue::Known(Some(FLYER_SUB_B))
-        || metadata.sub_d_steering_descriptor != RetailRuntimeValue::Known(Some(FLYER_SUB_D))
+        || metadata.sub_d_steering_descriptor
+            != RetailRuntimeValue::Known(Some(flyer_sub_d(entity_type)))
         || !matches!(metadata.common_mover_gkl_payloads, RetailRuntimeValue::Known(payloads)
             if payloads.sub_g == Some(*descriptor) && payloads.sub_k.is_none() && payloads.sub_l.is_none())
     {
@@ -106,7 +108,7 @@ pub(crate) fn authenticate_flyer_mover_metadata(
     Ok(descriptor)
 }
 
-/// Bind the two authored B/D/E/G shapes to the shared 01430 frame machine.
+/// Bind the authored B/D/E/G and B/D/G shapes to the shared 01430 frame machine.
 ///
 /// 02BA0 contributes only its target prefix. 01430 performs target reversal,
 /// classifier-free Sub-D and the normal 1A690/AA60/AC40/B210 flight chain.
@@ -117,8 +119,9 @@ pub fn evaluate_intro2_flyer_common_mover(
     request: Intro2FlyerCommonMoverRequest<'_>,
     next_random: impl FnMut() -> u32,
 ) -> Result<Intro2FlyerCommonMoverOutcome, Intro2FlyerCommonMoverBlock> {
-    let descriptor =
-        authenticate_flyer_mover_metadata(request.frame_owner.entity_type, request.metadata)?;
+    let entity_type = request.frame_owner.entity_type;
+    let descriptor = authenticate_flyer_mover_metadata(entity_type, request.metadata)?;
+    let sub_d = flyer_sub_d(entity_type);
     let RetailRuntimeValue::Known(basis) = request.body_basis else {
         return Err(Intro2FlyerCommonMoverBlock::BodyBasisUnavailable);
     };
@@ -144,15 +147,15 @@ pub fn evaluate_intro2_flyer_common_mover(
         CommonMoverFrameRequest {
             configuration: CommonMoverFrameConfiguration {
                 controlled_entity_handle: request.entity_id,
-                topology: FLYER_COMMON_MOVER_TOPOLOGY,
+                topology: flyer_topology(entity_type),
                 dispatch_mode: request.dispatch_mode,
                 elapsed_micros: request.elapsed_micros,
                 sub_a_descriptor: None,
                 sub_b_descriptor: Some(FLYER_SUB_B),
                 sub_c_descriptor: None,
                 sub_d_descriptor: Some(CommonMoverPreludeSubD {
-                    steering_divisor_raw: FLYER_SUB_D.steering_divisor_raw,
-                    couple_yaw_into_roll: FLYER_SUB_D.couple_yaw_into_roll_raw != 0,
+                    steering_divisor_raw: sub_d.steering_divisor_raw,
+                    couple_yaw_into_roll: sub_d.couple_yaw_into_roll_raw != 0,
                 }),
                 target_resource_context_present: true,
             },
@@ -212,7 +215,7 @@ pub fn evaluate_intro2_flyer_common_mover(
                 let evidence = frame_owner
                     .sub_d_frame_owner
                     .evidence_for_classifier_free_frame(
-                        FLYER_SUB_D,
+                        sub_d,
                         live.position_raw,
                         target_position_raw,
                         basis.lateral,
@@ -220,7 +223,7 @@ pub fn evaluate_intro2_flyer_common_mover(
                     )
                     .ok_or(Intro2FlyerCommonMoverBlock::UnexpectedFrameAction)?;
                 let yaw_step_raw = match apply_type9_sub_d(
-                    FLYER_SUB_D,
+                    sub_d,
                     &mut frame_owner.sub_d_runtime,
                     evidence,
                     request.elapsed_micros,
@@ -330,14 +333,14 @@ mod tests {
 
     fn metadata(entity_type: u32) -> EntityTypeRuntimeMetadata {
         EntityTypeRuntimeMetadata {
-            common_mover_topology: RetailRuntimeValue::Known(FLYER_COMMON_MOVER_TOPOLOGY),
+            common_mover_topology: RetailRuntimeValue::Known(flyer_topology(entity_type)),
             common_mover_gkl_payloads: RetailRuntimeValue::Known(CommonMoverGklPayloads {
                 sub_g: flyer_sub_g_descriptor(entity_type).copied(),
                 sub_k: None,
                 sub_l: None,
             }),
             sub_b_lateral_descriptor: RetailRuntimeValue::Known(Some(FLYER_SUB_B)),
-            sub_d_steering_descriptor: RetailRuntimeValue::Known(Some(FLYER_SUB_D)),
+            sub_d_steering_descriptor: RetailRuntimeValue::Known(Some(flyer_sub_d(entity_type))),
             ..EntityTypeRuntimeMetadata::default()
         }
     }

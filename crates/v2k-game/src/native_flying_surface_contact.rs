@@ -67,7 +67,7 @@ pub(crate) fn publish_native_flying_standard_death(
             .map_err(NativeFlyingSurfaceDeathBlock::Type57)?,
         15 | 87 | 108 => publish_native_flyer_quiet_death(manager, id, world_fx)?
             .map(NativeFlyingSurfaceDeathPublication::QuietDeath),
-        13 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
+        13 | 14 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
         80 | 126 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeAutoPilotContextUnavailable),
         _ => return Err(NativeFlyingSurfaceDeathBlock::Runtime("death type")),
     };
@@ -92,7 +92,7 @@ pub(crate) fn run_native_flying_standard_death(
         || frame
             .entities
             .iter_all()
-            .any(|entity| entity.id == id && entity.entity_type == 13)
+            .any(|entity| entity.id == id && matches!(entity.entity_type, 13 | 14))
     {
         crate::class49_terminal::run_class49_standard_death(frame, id)
             .map(|result| LiveActorDeathResult {

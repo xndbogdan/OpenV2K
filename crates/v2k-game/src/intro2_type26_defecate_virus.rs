@@ -693,18 +693,14 @@ pub fn tick_intro2_type26_defecate_virus_tertiary(
         return Err(Intro2Type26TertiaryVisitBlock::TerrainVisitUnavailable);
     };
 
-    let result = match intro2_type26_terrain_callback_request(
-        entity,
-        model_extent_raw_by_state,
-        elapsed_micros,
-    ) {
-        Ok(request) => {
-            Intro2Type26TertiaryVisitResult::Planned(plan_defecate_virus_callback(request, || {
-                next_random() as u16
-            }))
-        }
-        Err(result) => result,
-    };
+    let result =
+        match defecate_virus_callback_request(entity, model_extent_raw_by_state, elapsed_micros) {
+            Ok(request) => Intro2Type26TertiaryVisitResult::Planned(plan_defecate_virus_callback(
+                request,
+                || next_random() as u16,
+            )),
+            Err(result) => result,
+        };
     finish_intro2_type26_exact_visit(entity, visit);
     let owner_transition = resolve_intro2_type26_terrain_owner_transition(entity, visit, prefix);
     Ok(Intro2Type26TertiaryVisit {
@@ -771,7 +767,7 @@ fn resolve_intro2_type26_class4_owner_transition(entity: &Entity) -> Intro2Type2
     }
 }
 
-fn intro2_type26_terrain_callback_request(
+pub(crate) fn defecate_virus_callback_request(
     entity: &Entity,
     model_extent_raw_by_state: [Option<u16>; 4],
     elapsed_micros: u32,

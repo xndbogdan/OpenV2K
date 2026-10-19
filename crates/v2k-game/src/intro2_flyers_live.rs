@@ -27,7 +27,9 @@ use crate::chase_target::{
     ChaseTargetCommonMoverReturn, ChaseTargetProximityControl, ChaseTargetTargetRuntimeState,
 };
 use crate::common_mover::component_dispatch::CommonMoverDispatchMode;
-use crate::common_mover::sub_d::{Type9SubDFrameOwner, Type9SubDRuntime, FLYER_SUB_D};
+use crate::common_mover::sub_d::{
+    Type9SubDFrameOwner, Type9SubDRuntime, FLYER_SUB_D, TYPE14_SUB_D,
+};
 use crate::common_mover::target_prelude::CommonMoverTrackedTargetSnapshot;
 use crate::common_mover::type9_attitude::Type9BodyBasis;
 use crate::entity::{Entity, EntityManager};
@@ -54,7 +56,7 @@ use crate::shared_retarget_mover::{
     shared_retarget_after_unwind, SharedRetargetCallbackPrefix, SharedRetargetPostUnwind,
     SharedRetargetTaskState,
 };
-use crate::sub_g_runtime::SubG06070RuntimeState;
+use crate::sub_g_runtime::{SubG06070RuntimeState, Type13SubGSound};
 use crate::type13_initial_behavior::{
     TYPE13_MOVE_ABOUT_AIMLESSLY_CLASS_ID as MOVE_ABOUT_AIMLESSLY_CLASS_ID,
     TYPE13_MOVE_ABOUT_AIMLESSLY_STYLE_ADDRESS as MOVE_ABOUT_AIMLESSLY_STYLE_ADDRESS,
@@ -62,7 +64,13 @@ use crate::type13_initial_behavior::{
 use crate::wander_near_location::{WanderNearCommonMoverReturn, WanderNearPrivateState};
 use crate::world_fx::WorldFx;
 use crate::wrapped_axis_range::WrappedAxisRange;
-use v2k_formats::collision::{CommonAxisDescriptor, SubBLateralDescriptor};
+use v2k_formats::collision::{CommonAxisDescriptor, SubBLateralDescriptor, SubDSteeringDescriptor};
+
+/// Class 4, `Defecate Virus`.
+pub const DEFECATE_VIRUS_CLASS_ID: u8 =
+    crate::intro2_type26_defecate_virus::INTRO2_DEFECATE_VIRUS_BEHAVIOR_CLASS_ID;
+/// Class 13, `Flocking`.
+pub const FLOCKING_CLASS_ID: u8 = 13;
 use v2k_formats::terrain::TerrainGrid;
 
 pub const INTRO2_TYPE15_SPAWN_INDEX: usize = 44;
@@ -78,6 +86,10 @@ pub const INTRO2_TYPE87_MODEL_ID: u16 = 270;
 
 pub const TYPE108_ENTITY_TYPE: u32 = 108;
 pub const TYPE108_MODEL_ID: u16 = 1167;
+
+/// A B/D/G flyer with no emitter: it defecates virus, wanders and flocks.
+pub const TYPE14_ENTITY_TYPE: u32 = 14;
+pub const TYPE14_MODEL_ID: u16 = 277;
 
 pub const INTRO2_TYPE15_POSITION_RAW: [i16; 3] = [-17152, 0, 32256];
 pub const INTRO2_TYPE87_POSITION_RAW: [i16; 3] = [-18176, 1024, 4864];
@@ -117,12 +129,79 @@ pub const TYPE108_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
     raw_word_at_0x04: 0x405,
 };
 
+/// Type14's axis; Flocking's B640 restores the filter word from it.
+pub const TYPE14_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 6400,
+    raw_word_at_0x04: 0x801,
+};
+
 /// The type's common axis, which B6C0 copies into the actor-local word.
 pub(crate) const fn flyer_common_axis(entity_type: u32) -> Option<CommonAxisDescriptor> {
     match entity_type {
         INTRO2_TYPE15_ENTITY_TYPE | INTRO2_TYPE87_ENTITY_TYPE => Some(FLYER_COMMON_AXIS),
         TYPE108_ENTITY_TYPE => Some(TYPE108_COMMON_AXIS),
+        TYPE14_ENTITY_TYPE => Some(TYPE14_COMMON_AXIS),
         _ => None,
+    }
+}
+
+/// Type14 authors no Sub-E projectile emitter.
+pub const TYPE14_COMMON_MOVER_TOPOLOGY: CommonMoverComponentTopology =
+    CommonMoverComponentTopology {
+        sub_e: false,
+        ..FLYER_COMMON_MOVER_TOPOLOGY
+    };
+
+pub(crate) const fn flyer_topology(entity_type: u32) -> CommonMoverComponentTopology {
+    match entity_type {
+        TYPE14_ENTITY_TYPE => TYPE14_COMMON_MOVER_TOPOLOGY,
+        _ => FLYER_COMMON_MOVER_TOPOLOGY,
+    }
+}
+
+pub(crate) const fn flyer_sub_d(entity_type: u32) -> SubDSteeringDescriptor {
+    match entity_type {
+        TYPE14_ENTITY_TYPE => TYPE14_SUB_D,
+        _ => FLYER_SUB_D,
+    }
+}
+
+/// Types 15/87/108 shoot through Sub-E; Type14 has none.
+pub(crate) const fn flyer_has_emitter(entity_type: u32) -> bool {
+    entity_type != TYPE14_ENTITY_TYPE
+}
+
+/// The constructor's attached sound 11, which Type14 does not author.
+pub(crate) const fn flyer_attachment_sound(entity_type: u32) -> Option<u16> {
+    if flyer_has_emitter(entity_type) {
+        Some(11)
+    } else {
+        None
+    }
+}
+
+/// Alternate class 2 dies quietly; Type14's class 1 explodes.
+pub(crate) const fn flyer_alternate_class(entity_type: u32) -> u32 {
+    if entity_type == TYPE14_ENTITY_TYPE {
+        1
+    } else {
+        2
+    }
+}
+
+/// The behavior classes each flyer type authors, all with rule Always.
+const fn flyer_choice_classes(entity_type: u32) -> &'static [u8] {
+    match entity_type {
+        TYPE108_ENTITY_TYPE => &[
+            SEARCH_ATTACK_BEHAVIOR_CLASS_ID,
+            MOVE_ABOUT_AIMLESSLY_CLASS_ID,
+        ],
+        TYPE14_ENTITY_TYPE => &[
+            DEFECATE_VIRUS_CLASS_ID,
+            MOVE_ABOUT_AIMLESSLY_CLASS_ID,
+            FLOCKING_CLASS_ID,
+        ],
+        _ => &[SEARCH_ATTACK_BEHAVIOR_CLASS_ID],
     }
 }
 
@@ -146,6 +225,14 @@ pub const TYPE108_SUB_G_DESCRIPTOR: [u8; 104] = [
     64, 0, 0, 238, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 96, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+/// Type15's table with speed cap 400 and wing-beat sound 71 at `+0x0E`.
+pub const TYPE14_SUB_G_DESCRIPTOR: [u8; 104] = [
+    20, 0, 0, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100, 0, 71, 0, 244, 1, 0, 0, 188, 2, 0, 0, 88, 2, 0, 0,
+    0, 64, 0, 0, 144, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 96, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
 const FLYER_WANDER_LIFETIME_MS: u32 = 500;
@@ -376,15 +463,17 @@ fn publish_flyer_behavior_phase(
     // admit67/46/51, not15/87. Original4C8A30+30 is null. This generic
     //14E90 hook is distinct from Search's primary/infected style hooks.
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
-    crate::intro2_flyer_aim::ensure_intro2_flyer_aim_runtime(entity, Some(metadata))
-        .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
+    if flyer_has_emitter(entity.entity_type) {
+        crate::intro2_flyer_aim::ensure_intro2_flyer_aim_runtime(entity, Some(metadata))
+            .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
+    }
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     entity.physical_body_basis_q31 =
         RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(heading, pitch, roll));
     Ok(())
 }
 
-/// Every choice is Always, of class 7 or 5, with the type's common axis.
+/// Every choice is Always, of a class the type authors, with its common axis.
 fn authenticate_flyer_choices(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
@@ -392,16 +481,15 @@ fn authenticate_flyer_choices(
     let Some(initializer) = &metadata.initializer else {
         return Err(Intro2FlyerPublicationError::MetadataMismatch);
     };
-    let classes = [
-        u32::from(SEARCH_ATTACK_BEHAVIOR_CLASS_ID),
-        u32::from(MOVE_ABOUT_AIMLESSLY_CLASS_ID),
-    ];
+    let classes = flyer_choice_classes(entity_type);
     if Some(initializer.common_axis_descriptor) != flyer_common_axis(entity_type)
         || initializer.behavior_choices.is_empty()
         || initializer.behavior_choices.iter().any(|choice| {
             choice.weight_rule_id != 1
                 || choice.weight_multiplier == 0
-                || !classes.contains(&choice.behavior_class_id)
+                || !classes
+                    .iter()
+                    .any(|&class| u32::from(class) == choice.behavior_class_id)
         })
     {
         return Err(Intro2FlyerPublicationError::MetadataMismatch);
@@ -427,7 +515,8 @@ fn select_flyer_behavior(
     .ok_or(Intro2FlyerPublicationError::BehaviorProgramUnavailable)
 }
 
-/// Publish the selected class: B6C0's acquiring graph or ACD0's aimless one.
+/// Publish the selected class: B6C0's acquiring graph, ACD0's aimless one,
+/// or Type14's B9E0 virus graph or B640 flock search.
 fn publish_flyer_selection(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
@@ -443,8 +532,28 @@ fn publish_flyer_selection(
         ActiveBehaviorStyle::Audited(style) if style.class_id == MOVE_ABOUT_AIMLESSLY_CLASS_ID => {
             publish_flyer_aimless(entity, metadata, context, next_random)
         }
+        ActiveBehaviorStyle::Audited(style) if style.class_id == DEFECATE_VIRUS_CLASS_ID => {
+            type14::publish_defecate(entity, metadata, context, next_random)
+        }
+        ActiveBehaviorStyle::Audited(style) if style.class_id == FLOCKING_CLASS_ID => {
+            type14::publish_flocking(entity, metadata, context, next_random)
+        }
         _ => Err(Intro2FlyerPublicationError::BehaviorProgramUnavailable),
     }
+}
+
+/// `406070`'s Sub-G branch for one task constructor, drawing one RNG word.
+fn apply_task_constructor_sub_g_reset(
+    sub_g: &mut SubG06070RuntimeState,
+    descriptor: &[u8; 104],
+    next_random: &mut impl FnMut() -> u32,
+) {
+    let source = u32::from_le_bytes(descriptor[0..4].try_into().unwrap());
+    let clearance = i32::from(i16::from_le_bytes(descriptor[12..14].try_into().unwrap()));
+    sub_g.apply_shared_06070_sub_g_branch(
+        clearance.wrapping_add(i32::from((next_random() as u16) >> 8)),
+        source,
+    );
 }
 
 /// ACD0: clear slots 2 then 1, then `FUN_00402B10(entity, 0, 5000)`, whose
@@ -472,12 +581,7 @@ fn publish_flyer_aimless(
         .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
-    let source = u32::from_le_bytes(descriptor[0..4].try_into().unwrap());
-    let clearance = i32::from(i16::from_le_bytes(descriptor[12..14].try_into().unwrap()));
-    sub_g.apply_shared_06070_sub_g_branch(
-        clearance.wrapping_add(i32::from((next_random() as u16) >> 8)),
-        source,
-    );
+    apply_task_constructor_sub_g_reset(&mut sub_g, descriptor, next_random);
     entity.sub_g_06070_runtime = RetailRuntimeValue::Known(Some(sub_g));
     let owner_pos_raw = entity.position_raw();
     entity.actor_tasks.replace_prepared(
@@ -516,8 +620,6 @@ fn publish_flyer_acquiring(
     let radius = SearchAttackRadius::from_raw(axis.strict_axis_limit_raw);
     let filter = SearchAttackCandidateFilter::from_raw(axis.raw_word_at_0x04);
     let setup = search_attack_variant_setup(SearchAttackVariant::Acquiring);
-    let source = u32::from_le_bytes(descriptor[0..4].try_into().unwrap());
-    let clearance = i32::from(i16::from_le_bytes(descriptor[12..14].try_into().unwrap()));
     let setup_result = apply_search_attack_task_setup(
         &mut entity.actor_tasks,
         SearchAttackTaskSetupRequest::Acquiring,
@@ -544,10 +646,7 @@ fn publish_flyer_acquiring(
             };
             // Both task constructors invoke 06070. Each B940 call owns a
             // distinct RNG word; neither reuses the allocation's 1B8C0 draw.
-            sub_g.apply_shared_06070_sub_g_branch(
-                clearance.wrapping_add(i32::from((next_random() as u16) >> 8)),
-                source,
-            );
+            apply_task_constructor_sub_g_reset(&mut sub_g, descriptor, next_random);
             Ok(prepared)
         },
     );
@@ -665,6 +764,8 @@ pub struct Intro2FlyerPrimaryVisit {
     pub prefix: SharedRetargetCallbackPrefix,
     pub result: Intro2FlyerPrimaryVisitResult,
     pub post_unwind: SharedRetargetPostUnwind,
+    /// Sub-G's wing beat (`+0x0E`), silent unless the type authors one.
+    pub sound: Option<Type13SubGSound>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -672,6 +773,7 @@ pub struct Intro2FlyerChaseVisit {
     pub prefix: ChaseTargetCallbackPrefix,
     pub result: ChaseTargetCallbackResult,
     pub transition_due: bool,
+    pub sound: Option<Type13SubGSound>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -705,6 +807,16 @@ pub enum Intro2FlyerSchedulerProductionOutcome {
         acquisition: SearchAttackLiveAcquisitionOutcome,
         aim: Option<crate::intro2_flyer_aim::Intro2FlyerAimTickOutcome>,
     },
+    /// A visit of one of Type14's virus, flock-search, route or aimless
+    /// graphs; `joined_flock` when its search handed over to the route.
+    Type14Visit {
+        entity_id: u32,
+        reselected: bool,
+        joined_flock: bool,
+        /// A coarse virus visit's direct terrain write, which the caller
+        /// commits before the next actor.
+        infection_write: Option<crate::infection_evolution::InfectionCellWrite>,
+    },
     Blocked {
         entity_id: u32,
         reason: Intro2FlyerRuntimeBlock,
@@ -723,6 +835,7 @@ impl Intro2FlyerSchedulerProductionOutcome {
             | Self::B6c0Visit { entity_id, .. }
             | Self::PursuingVisit { entity_id, .. }
             | Self::AimlessVisit { entity_id, .. }
+            | Self::Type14Visit { entity_id, .. }
             | Self::Blocked { entity_id, .. }
             | Self::Dropped { entity_id, .. } => *entity_id,
         }
@@ -771,6 +884,9 @@ impl Intro2FlyerSchedulerOwner {
         if !intro2_flyer_acquiring_graph_authenticates(entity)
             && !intro2_flyer_pursuing_graph_authenticates(entity)
             && !intro2_flyer_aimless_graph_authenticates(entity)
+            && !type14::defecate_graph_authenticates(entity)
+            && !type14::flocking_graph_authenticates(entity)
+            && !type14::route_graph_authenticates(entity)
         {
             return Err(Intro2FlyerSchedulerAdoptionError::GraphUnavailable {
                 entity_id: entity.id,
@@ -970,6 +1086,7 @@ pub(crate) fn reselect_flyer(
     if !flyer_context_authenticates(entity, SearchAttackVariant::Acquiring)
         && !flyer_context_authenticates(entity, SearchAttackVariant::Pursuing)
         && !flyer_aimless_context_authenticates(entity)
+        && !type14::context_authenticates(entity)
     {
         return Err(Intro2FlyerRuntimeBlock::MetadataMismatch);
     }
@@ -994,6 +1111,7 @@ pub(crate) fn reselect_flyer(
 
 #[derive(Clone, Copy)]
 struct FlyerTaskFrame<'a> {
+    resources: &'a ResourceCache,
     metadata: &'a EntityTypeRuntimeMetadata,
     terrain: &'a TerrainGrid,
     active_model_extent_raw: u16,
@@ -1107,6 +1225,7 @@ fn tick_flyer_shared_retarget(
         prefix,
         result,
         post_unwind: shared_retarget_after_unwind(visit, prefix, mover_return),
+        sound: outcome.sound,
     })
 }
 
@@ -1249,6 +1368,7 @@ fn tick_flyer_chase(
         prefix,
         result,
         transition_due: chase_target_transition_after_unwind(visit, prefix, result).is_some(),
+        sound: applied.and_then(|outcome| outcome.sound),
     })
 }
 
@@ -1274,7 +1394,17 @@ fn tick_flyer_tasks(
     };
     let aimless = intro2_flyer_aimless_graph_authenticates(entity);
     let acquiring = intro2_flyer_acquiring_graph_authenticates(entity);
-    if !aimless && !acquiring && !intro2_flyer_pursuing_graph_authenticates(entity) {
+    let defecating = type14::defecate_graph_authenticates(entity);
+    let flocking = type14::flocking_graph_authenticates(entity);
+    let routing = type14::route_graph_authenticates(entity);
+    let type14 = entity.entity_type == TYPE14_ENTITY_TYPE;
+    if !aimless
+        && !acquiring
+        && !defecating
+        && !flocking
+        && !routing
+        && !intro2_flyer_pursuing_graph_authenticates(entity)
+    {
         return Intro2FlyerSchedulerOwnerTick {
             outcome: Intro2FlyerSchedulerProductionOutcome::Dropped {
                 entity_id,
@@ -1285,7 +1415,7 @@ fn tick_flyer_tasks(
     }
     let mut primary = None;
     let mut chase = None;
-    let transition_due = if acquiring || aimless {
+    let (transition_due, sound) = if acquiring || aimless || flocking {
         match tick_flyer_shared_retarget(
             manager.intro2_flyer_entity_mut(entity_id).unwrap(),
             frame,
@@ -1293,19 +1423,43 @@ fn tick_flyer_tasks(
         ) {
             Ok(visit) => {
                 primary = Some(visit);
-                matches!(visit.post_unwind, SharedRetargetPostUnwind::Transition(_))
+                (
+                    matches!(visit.post_unwind, SharedRetargetPostUnwind::Transition(_)),
+                    visit.sound,
+                )
             }
+            Err(reason) => return park_flyer(owner, reason),
+        }
+    } else if defecating {
+        match type14::tick_defecate_wander(
+            manager.intro2_flyer_entity_mut(entity_id).unwrap(),
+            frame,
+            &mut || next_random(world_fx),
+        ) {
+            Ok(visit) => visit,
+            Err(reason) => return park_flyer(owner, reason),
+        }
+    } else if routing {
+        match type14::tick_route(manager, entity_id, frame, &mut || next_random(world_fx)) {
+            Ok(visit) => visit,
             Err(reason) => return park_flyer(owner, reason),
         }
     } else {
         match tick_flyer_chase(manager, entity_id, frame, &mut || next_random(world_fx)) {
             Ok(visit) => {
                 chase = Some(visit);
-                visit.transition_due
+                (visit.transition_due, visit.sound)
             }
             Err(reason) => return park_flyer(owner, reason),
         }
     };
+    if let Some(sound) = sound {
+        world_fx.queue_fixed_positional_sound_raw_at_rate(
+            sound.sound_id,
+            sound.position_raw,
+            sound.rate_q16,
+        );
+    }
     let mut reselected = false;
     if transition_due {
         match reselect_flyer(
@@ -1316,6 +1470,40 @@ fn tick_flyer_tasks(
             Ok(applied) => reselected |= applied,
             Err(reason) => return park_flyer(owner, reason),
         }
+    }
+    if type14 {
+        // Slots 1 and 2 are read fresh after Primary and C690: a graph C690
+        // just published runs its Secondary or Tertiary in this same pass.
+        let mut joined_flock = false;
+        if manager
+            .iter_all()
+            .find(|entity| entity.id == entity_id)
+            .is_some_and(type14::flocking_graph_authenticates)
+        {
+            match type14::acquire_flock_target(manager, entity_id, frame.metadata, &mut || {
+                next_random(world_fx)
+            }) {
+                Ok(joined) => joined_flock = joined,
+                Err(reason) => return park_flyer(owner, reason),
+            }
+        }
+        let entity = manager.intro2_flyer_entity_mut(entity_id).unwrap();
+        let mut infection_write = None;
+        if type14::defecate_graph_authenticates(entity) {
+            match type14::tick_virus(entity, frame, world_fx, next_random) {
+                Ok(write) => infection_write = write,
+                Err(reason) => return park_flyer(owner, reason),
+            }
+        }
+        return Intro2FlyerSchedulerOwnerTick {
+            outcome: Intro2FlyerSchedulerProductionOutcome::Type14Visit {
+                entity_id,
+                reselected,
+                joined_flock,
+                infection_write,
+            },
+            retained_owner: Some(owner),
+        };
     }
     // The generic owner freshly reads Secondary after Primary/C690. ADE0 may
     // replace the graph here, but the new Primary never runs twice this pass.
@@ -1422,6 +1610,7 @@ pub(crate) fn tick_intro2_flyer_scheduler_owner_with_random(
 
 mod birth;
 mod mover;
+mod type14;
 mod world;
 pub(crate) use birth::{
     authenticate_native_flyer_body, authenticate_native_flyer_metadata, native_flyer_model_id,
