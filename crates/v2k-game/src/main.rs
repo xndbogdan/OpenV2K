@@ -1161,7 +1161,8 @@ struct Cli {
 
     /// Start in gameplay from STATE, a JSON file: {"save": FILE} plays a
     /// native save (a copy of Slot02, say); {"level": N} plays global
-    /// overlay N, with an optional raw "position": [x, y, z] and "heading".
+    /// overlay N, with an optional raw "position": [x, y, z] and "heading",
+    /// and with a position, "velocity": [x, y, z] and "attitude": [pitch, roll].
     #[arg(long, value_name = "STATE", conflicts_with = "level")]
     start: Option<PathBuf>,
 
@@ -1979,6 +1980,7 @@ fn run_game(
 
     // --start: the first load's level, purpose and the player's pose.
     let mut start_arrival = None;
+    let mut start_motion = None;
     let (level_id, start_purpose) = match probe.start.take() {
         Some(probe::StartState {
             save: Some(path), ..
@@ -2001,12 +2003,15 @@ fn run_game(
             level: Some(level),
             position,
             heading,
+            velocity,
+            attitude,
             ..
         }) => {
             start_arrival = position.map(|position_raw| v2k_game::entity::AuthoredPlayerArrival {
                 position_raw,
                 heading_raw: heading.unwrap_or(0),
             });
+            start_motion = Some((velocity, attitude));
             (level, LoadingPurpose::Normal)
         }
         _ => (level_id, LoadingPurpose::Normal),
@@ -3751,6 +3756,15 @@ fn run_game(
                         player.pitch_raw as i16,
                         player.roll_raw as i16,
                     ]);
+                }
+                // --start's motion, for the first load only.
+                if let Some((velocity, attitude)) = start_motion.take() {
+                    if let Some(attitude) = attitude {
+                        player_craft.restore_body_angle_words(attitude);
+                    }
+                    if let (Some(velocity), Some(player)) = (velocity, em.player_mut()) {
+                        player.set_motion_raw(player.position_raw(), velocity);
+                    }
                 }
 
                 // Position camera
@@ -8546,6 +8560,7 @@ fn write_probe_events(
                 position: player.position_raw(),
                 velocity: player.velocity_raw(),
                 heading: player.heading_raw(),
+                attitude: craft.body_angle_words(),
                 mode: craft.mode.label(),
                 health: hull.health_raw,
             },
