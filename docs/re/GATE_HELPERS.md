@@ -37,6 +37,12 @@ index `+C4`, checks its 37-slot range and subtype 1..5, then tests
 `(controller[world]+D8 >> 4) & (1 << (subtype-1))`. A marker contains no
 destination or route-availability test.
 
+The 37 world-control words at `+D8` have their own helpers. `FUN_0042ECC0`
+copies all 37 in. `FUN_0042EDA0` tests bit `0x4` of one word and
+`FUN_0042EDF0` returns its bit `0x2`; both answer 0 for an index outside the
+range. `FUN_0042EE30` sets the low four bits of every word, and
+`FUN_0042EE50` sets every bit above them.
+
 `416FF0` zeroes a 0x4C constructor request, copies XYZ, sets type `0x6F`, and
 calls `438080 -> 4104B0`. After successful construction:
 

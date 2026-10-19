@@ -37,12 +37,33 @@ Intro2, game logic included.
 
 1. **Queue thunks** `0x0047A720..0x0047AB00` call one Graph2D fill slot with
    the queue record's payload (`record + 8`).
+   Each thunk calls one slot:
+
+   | Slot and thunk | | | |
+   |---|---|---|---|
+   | `+0x1020` `FUN_0047A720` | `+0x1024` `FUN_0047A740` | `+0x1028` `FUN_0047A760` | `+0x102C` `FUN_0047A780` |
+   | `+0x1030` `FUN_0047A7A0` | `+0x1034` `FUN_0047A7C0` | `+0x1038` `FUN_0047A7E0` | `+0x103C` `FUN_0047A800` |
+   | `+0x1040` `FUN_0047A820` | `+0x1044` `FUN_0047A840` | `+0x1048` `FUN_0047A860` | `+0x104C` `FUN_0047A880` |
+   | `+0x1050` `FUN_0047A8A0` | `+0x1054` `FUN_0047A8C0` | `+0x1058` `FUN_0047A8E0` | `+0x105C` `FUN_0047A900` |
+   | `+0x1060` `FUN_0047A920` | `+0x1064` `FUN_0047A940` | `+0x1080` `FUN_0047A960` | `+0x1084` `FUN_0047A980` |
+   | `+0x1088` `FUN_0047A9A0` | `+0x108C` `FUN_0047A9C0` | `+0x1090` `FUN_0047A9E0` | `+0x1094` `FUN_0047AA00` |
+   | `+0x1098` `FUN_0047AA20` | `+0x109C` `FUN_0047AA40` | `+0x10A0` `FUN_0047AA60` | `+0x10A4` `FUN_0047AA80` |
+   | `+0x10A8` `FUN_0047AAA0` | `+0x10AC` `FUN_0047AAC0` | `+0x10C0` `FUN_0047AAE0` | `+0x10C4` `FUN_0047AB00` |
+
+   `FUN_0047A700` and `FUN_0047A710`, just before them, open and close the
+   module record at `0x004D5C68` ([PLATFORM_RUNTIME.md](PLATFORM_RUNTIME.md)).
 2. **Fill-slot handler.** `FUN_00480D10` stores the software handlers at
    Graph2D `+0x101C..+0x10C4` when its mode descriptor's word `+8` is zero
-   and word `+4` (bits per pixel) is 16; a non-zero `+8` installs the
-   alternate table. The queue reaches 32 of the 43 software slots;
-   `+0x101C`, `+0x1068..+0x107C` and `+0x10B0..+0x10BC` have no thunk or
-   call site.
+   and word `+4` (bits per pixel) is 16; `+8` = 1 installs an unused
+   [Direct3D table](DIRECT3D_TABLE.md). The queue reaches 32 of the 43
+   software slots; `+0x101C`, `+0x1068..+0x107C` and `+0x10B0..+0x10BC` have
+   no thunk or call site. Of those, `+0x101C` (`FUN_0047ABB0`) plots one
+   clipped pixel. The rest are triangles (`FUN_0047D4C0`/`FUN_0047D680`,
+   `FUN_0047D8E0`/`FUN_0047DA30`, `FUN_0047DC90`/`FUN_0047DEE0`) and quads
+   (`FUN_0047FCC0`/`FUN_0047FE00`, `FUN_004800B0`/`FUN_00480200`) in plain
+   and fogged pairs: the fogged one rebuilds the ramp with `FUN_0047CA20`,
+   and both write their corners through `FUN_0047D600`. The port does not
+   implement them.
    - Six **2D slots** write the surface themselves (`+0x1020..+0x1034`).
    - 26 **polygon slots** decode corners and attributes into the vertex pool,
      bind a material and a span row, store `0xE49C` into the dither word
@@ -283,6 +304,42 @@ and rejects a node wholly beyond the far plane
   size on each side; sprite billboards scale by the sprite's aspect. Fog
   billboards take the anchor's fade on every corner and skip a fully faded
   anchor.
+
+The two tables share 40 entries: node and control opcodes, and the 186
+undefined opcodes, which reach `FUN_00466150`, an endless loop (retail hangs
+on a malformed stream). The face, edge and billboard opcodes have a near and a
+fog constructor each:
+
+| Opcode | Primitive | Near | Fog |
+|---|---|---|---|
+| `0x03` | triangle | `FUN_00459AC0` | `FUN_00459D60` |
+| `0x04` | quad | `FUN_0045CFB0` | `FUN_0045D260` |
+| `0x07` | mirrored triangle | `FUN_0045AEA0` | `FUN_0045B390` |
+| `0x08` | mirrored quad | `FUN_0045E6B0` | `FUN_0045EA90` |
+| `0x23` | Gouraud triangle | `FUN_00460CC0` | `FUN_00460F20` |
+| `0x24` | Gouraud quad | `FUN_00462A00` | `FUN_00462D00` |
+| `0x27` | Gouraud mirrored triangle | `FUN_004616B0` | `FUN_00461B30` |
+| `0x28` | Gouraud mirrored quad | `FUN_00463670` | `FUN_00463BD0` |
+| `0x43` | lit triangle | `FUN_00459FF0` | `FUN_0045A240` |
+| `0x44` | lit quad | `FUN_0045D560` | `FUN_0045D820` |
+| `0x47` | lit mirrored triangle | `FUN_0045B7D0` | `FUN_0045BB80` |
+| `0x48` | lit mirrored quad | `FUN_0045EFF0` | `FUN_0045F440` |
+| `0x83` | sprite triangle | `FUN_0045A4E0` | `FUN_0045A730` |
+| `0x84` | sprite quad | `FUN_0045DB30` | `FUN_0045DDE0` |
+| `0x87` | sprite mirrored triangle | `FUN_0045BFF0` | `FUN_0045C370` |
+| `0x88` | sprite mirrored quad | `FUN_0045F9C0` | `FUN_0045FDA0` |
+| `0xA3` | Gouraud sprite triangle | `FUN_004611C0` | `FUN_00461420` |
+| `0xA4` | Gouraud sprite quad | `FUN_00463040` | `FUN_00463330` |
+| `0xA7` | Gouraud sprite mirrored triangle | `FUN_00462070` | `FUN_004624C0` |
+| `0xA8` | Gouraud sprite mirrored quad | `FUN_00464270` | `FUN_004647C0` |
+| `0xC3` | lit sprite triangle | `FUN_0045A9C0` | `FUN_0045AC10` |
+| `0xC4` | lit sprite quad | `FUN_0045E0E0` | `FUN_0045E3A0` |
+| `0xC7` | lit sprite mirrored triangle | `FUN_0045C7B0` | `FUN_0045CB50` |
+| `0xC8` | lit sprite mirrored quad | `FUN_004602F0` | `FUN_00460740` |
+| `0x02` | edge line | `FUN_00458C60` | `FUN_00458E20` |
+| `0x22` | edge sprite | `FUN_00459000` | `FUN_00459550` |
+| `0x68`, `0xE8` | flat billboard | `FUN_00467840` | `FUN_004680F0` |
+| `0x78`, `0xB8`, `0xF8` | sprite billboard | `FUN_00467C60` | `FUN_00468520` |
 
 The adapter (`crates/v2k-render/src/sw_model.rs`) rebuilds these inputs
 from the port's materialized model, one command per source polygon and

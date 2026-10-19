@@ -510,7 +510,7 @@ Both fence families use static kind 9 and admit starting-gun damage; see
 tables indexed by the command word: 0x4D3CE0 (render near), 0x4D40E0
 (render far LOD — selected by distance vs header radius, entry flags bit 5
 forces near), 0x4D44E0 (pass 3, transform-only — computes vertex positions
-without emitting primitives). 0x4D55A0 (previously listed as "pass 4") is
+without emitting primitives; its handlers are listed below). 0x4D55A0 (previously listed as "pass 4") is
 NOT a command-stream table: it is the scanline rasterizer's edge-interpolator
 function table (per-scanline span steppers/fillers). Render entry
 `FUN_00464e60`; all handlers decompiled in `decompiled/cmd_stream_handlers.c`
@@ -567,7 +567,7 @@ why geometric triangle winding cannot substitute for the authored normal.
 
 | Opcode | Args | Meaning |
 |--------|------|---------|
-| 0x00 | — | end of stream |
+| 0x00 | — | end of stream (`FUN_00466400`, which clears the word at `0x004D3CD8`) |
 | 0x02 | 3 | line/edge `[mat][v0][v1]` |
 | 0x03/0x43/0x83/0xC3 | 5 | triangle `[mat][norm][v0][v1][v2]` (see mat note below) |
 | 0x07/0x47/0x87/0xC7 | 5 | triangle + mirror instance |
@@ -578,25 +578,92 @@ why geometric triangle winding cannot substitute for the authored normal.
 | 0x24/0xA4 | 10 | Gouraud quad `[mat][norm][v0..v3][s0..s3]` |
 | 0x28/0xA8 | 10 | Gouraud quad + mirror |
 | 0x22 | 4 | line variant `[a][b][v0][v1]` |
-| 0x0B | 2 | jump if normal backfacing: `[jump][norm]`, jump in words from args |
-| 0x0C | 2 | jump variant `[jump][vertex]` |
-| 0x13 | 3 | jump if `imm32 <= view_dist` `[jump][lo][hi]` (LOD select) |
-| 0x14 | 3 | jump if `view_dist < imm32` |
-| 0x2B | 3 | jump if `eval(a) != eval(b)` `[jump][a][b]` (animation frame select) |
-| 0x2C | 3 | jump if `eval(a) == eval(b)` |
-| 0x0D/0x1D/.../0xFD | 3 | variable ops on 64-entry register file at ctx+0x94 |
-| 0x06 / 0x26 / 0x38 | scan | list to 0xFFFF: open unsorted group at max/min vertex Z; 0x38 is `4689D0` vertex-number diagnostics and skips slot resolution when `4FEEF4 == 0` |
-| 0x46, 0x15 | 1 | vertex-Z group: 0x46 unsorted, 0x15 sorted |
-| 0xA6 | 2 | unsorted group at fixed signed i32 key |
-| 0xC6 | 3 | unsorted group at vertex Z + signed i32 offset; changes queue order, not geometry |
-| 0x66/0x86/0xE6/0x10 | 0 | unsorted group at origin Z / fixed -1 / close group / other state |
+| 0x0B | 2 | jump if normal backfacing: `[jump][norm]`, jump in words from args (`FUN_00467050`) |
+| 0x0C | 2 | jump variant `[jump][vertex]` (`FUN_00467090`) |
+| 0x13 | 3 | jump if `imm32 <= view_dist` `[jump][lo][hi]` (LOD select, `FUN_004670D0`) |
+| 0x14 | 3 | jump if `view_dist < imm32` (`FUN_00467100`) |
+| 0x2B | 3 | jump if `eval(a) != eval(b)` `[jump][a][b]` (animation frame select, `FUN_00467130`) |
+| 0x2C | 3 | jump if `eval(a) == eval(b)` (`FUN_00467180`) |
+| 0x0D/0x1D/.../0xFD | 3 | variable ops on 64-entry register file at ctx+0x94 (listed below) |
+| 0x06 / 0x26 / 0x38 | scan | list to 0xFFFF: open unsorted group at max/min vertex Z (`FUN_004669E0`, `FUN_00466A70`); 0x38 is `FUN_004689D0` vertex-number diagnostics and skips slot resolution when `4FEEF4 == 0` |
+| 0x46, 0x15 | 1 | vertex-Z group: 0x46 unsorted (`FUN_00466B00`), 0x15 sorted (`FUN_00466C50`) |
+| 0xA6 | 2 | unsorted group at fixed signed i32 key (`FUN_00466BA0`) |
+| 0xC6 | 3 | unsorted group at vertex Z + signed i32 offset; changes queue order, not geometry (`FUN_00466BD0`) |
+| 0x66/0x86/0xE6 | 0 | unsorted group at origin Z (`FUN_00466B60`) / fixed -1 (`FUN_00466B80`) / close group (`FUN_00466CB0`) |
+| 0x10 | 0 | restore the node's saved basis as the current mount, and its global copy at `0x004FEEA0` (`FUN_00467010`) |
 | 0x0F | 0 | reset the current mount basis to Q1.31 identity (`FUN_00466fc0`) |
 | 0x1C | 2 | compose axis rotation into the current mount `[axis][packed_angle]` (`FUN_004671D0` → `FUN_004671F0`); preserves the mount established by `0x5C` |
-| 0x3C | 3 | mount basis from three resolved vertex slots (`FUN_00466cd0`) |
+| 0x3C | 3 | mount basis from three resolved vertex slots (`FUN_00466F50` → `FUN_00466cd0`) |
 | 0x5C | 3 | mount orientation `[orient_code][axis][packed_angle]`: permute/negate parent basis, then optional axis rotation (`FUN_00466f80`) |
 | 0x68/0xE8 | 4 | flat billboard `[slot][color_id][size][angle]` (FUN_00467840) |
 | 0x78/0xB8/0xF8 | 4 | textured billboard `[slot][sprite_id][size][angle]` (FUN_00467c60) |
-| 0x0E | var | inline instance of another model: `[?][model_id][skip_BYTES][attach_v]`; next cmd at args + skip_bytes |
+| 0x0E | var | inline instance of another model: `[?][model_id][skip_BYTES][attach_v]`; next cmd at args + skip_bytes (`FUN_004673E0`) |
+
+Face, edge and billboard opcodes have a near and a fog constructor each
+([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); the 186
+undefined opcodes reach `FUN_00466150`, an endless loop.
+
+**Variable ops** `[dst][a][b]` decode both operands with `FUN_00470840` and
+store a 16-bit result in register `dst`:
+
+| Opcode | Result | Handler |
+|---|---|---|
+| 0x0D | `a + b` | `FUN_00466410` |
+| 0x1D | `a - b` | `FUN_00466450` |
+| 0x2D | `a * b` (low 16 bits) | `FUN_00466490` |
+| 0x3D | `a / b` unsigned; `a` when `b` is 0 | `FUN_004664D0` |
+| 0x4D | `a >> b`, logical | `FUN_00466540` |
+| 0x5D | `a << b` | `FUN_00466590` |
+| 0x6D | the unsigned larger of `a` and `b` | `FUN_004665D0` |
+| 0x7D | `a` when unsigned `a < b`, else `b - 1` | `FUN_00466630` |
+| 0x8D | `(a << 16) / b` unsigned; `a` when `b` is 0 | `FUN_00466690` |
+| 0x9D | `a >> b`, arithmetic | `FUN_00466700` |
+| 0xAD | the context's callback (`+0x58`, with `+0x60`) at `a + b` | `FUN_00466750` |
+| 0xBD | `a` when unsigned `a >= b`, else 0 | `FUN_004667B0` |
+| 0xCD | `a` when unsigned `a <= b`, else 0 | `FUN_00466810` |
+| 0xDD | `a` times the sine of angle `b` | `FUN_00466870` |
+| 0xED | `a` times the cosine of angle `b` | `FUN_00466900` |
+| 0xFD | `a & b` | `FUN_004669A0` |
+
+The sine and cosine come from the quarter-wave table at `0x004D14D0`.
+
+`FUN_00470840` decodes an operand word. With bit `0x80` set it reads
+register `w & 0x3F` when bit `0x40` is also set, and otherwise asks the
+context's callback for variable `w & 0x3F`. Without bit `0x80` the operand
+is an immediate: `w & 0xFF03` rotated left by `(w >> 2) & 0xF` bits within
+the word.
+
+The executable also holds a value-returning copy of the sixteen ops, in
+opcode order, as the table at `0x004CDF08`: `FUN_00448780`, `FUN_00448790`,
+`FUN_004487A0`, `FUN_00469650`, `FUN_004487B0`, `FUN_004487C0`,
+`FUN_004487D0`, `FUN_004487F0`, `FUN_00448810`, `FUN_00448840`,
+`FUN_00448850`, `FUN_00448880`, `FUN_004696B0`, `FUN_004488A0`,
+`FUN_004696D0` and `FUN_00448900`.
+
+**Transform-only table** (`0x004D44E0`). It shares the drawing tables'
+control and variable ops. Its face, edge and billboard handlers resolve each
+vertex they reference that is not yet projected, through the vertex-type
+handlers, and queue nothing:
+
+| Opcodes | Handler |
+|---|---|
+| `0x03`/`0x43`/`0x83`/`0xC3` | `FUN_004580C0` |
+| `0x04`/`0x44`/`0x84`/`0xC4` | `FUN_004582D0` |
+| `0x07`/`0x47`/`0x87`/`0xC7` | `FUN_00458170` |
+| `0x08`/`0x48`/`0x88`/`0xC8` | `FUN_004583B0` |
+| `0x23`/`0xA3` | `FUN_00458580` |
+| `0x24`/`0xA4` | `FUN_00458790` |
+| `0x27`/`0xA7` | `FUN_00458630` |
+| `0x28`/`0xA8` | `FUN_00458870` |
+| `0x02`, `0x22` | `FUN_00457FC0`, `FUN_00458040` |
+| `0x68`/`0x78`/`0xB8`/`0xE8`/`0xF8` | `FUN_00458A40` (the anchor) |
+| `0xC6` | `FUN_00458AA0` (its vertex) |
+| `0x15`/`0x46`, `0xA6` | `FUN_00458AF0`, `FUN_00458A90` (skip one or two words) |
+| `0x06`/`0x26`/`0x66`/`0x86`/`0xE6` | `FUN_00458B00` (returns the position it was given) |
+
+`FUN_00413BE0` runs a model through this pass with `FUN_00458B10` and
+`FUN_00458B40`, which enters the node pass `FUN_00464E60` inside an error
+scope.
 
 **Face `mat` operand — DECODED 2026-07-06 (colouring):** the first face-command
 operand (`mat`) is the per-face colour source, and the **opcode's 0x80 bit**
@@ -1840,7 +1907,7 @@ and gameplay restoration status is summarized in
 
 The retail menu renders 15 rows, but only rows 0 through 13 are playable save
 slots. They map directly to the 2,048-byte files `Slot00` through `Slot13` via
-the `"%s\\Slot%02d"` path formatter. Row 14 is not a `Slot14` game save:
+the `"%s\\Slot%02d"` path formatter (`FUN_00448CD0`). Row 14 is not a `Slot14` game save:
 `FUN_0043BB20` renders resource string 80, **"Used for game settings"**, and
 the extracted `0x4C1D28` menu item has no selection callback.
 
@@ -1964,6 +2031,14 @@ checkpoint after writing JSON, and never changes either retail import path.
 - `FUN_00448BD0`: load four version, two state, and two tail records
 - `FUN_00448CF0`: write the same eight-record sequence
 - `FUN_00448E70`: probe a slot and cache its 32-byte name/status
+- `FUN_00448CD0`: format a slot's path
+- `FUN_00448E50`: copy the `0x92`-dword state out of `DAT_004DEEC8`
+- `FUN_00448E10`: return the 15 rows to the writer, because `FUN_00449110`
+  always returns 2
+- `FUN_00448920`: build the CRC table; `FUN_00448910` frees the buffer at
+  `DAT_004DEEC0`
+- `FUN_00448930` / `FUN_00448940`: open and close the module record at
+  `0x004CE008`
 
 **Canonical decoder:** [`v2k-formats::saves`](../../crates/v2k-formats/src/saves.rs)
 
