@@ -33,7 +33,6 @@ DirectPlay object `004F73C8` and its session. `004F73B8` is set on the host.
 | `FUN_0046BFC0` | stops the session: closes it (`FUN_0046C660`), stops the receive thread, returns the local slot to 1 and clears the player table |
 | `FUN_0046C660` | closes a session object: destroys the local player, `Close`, `Release`, and closes its event |
 | `FUN_0046CA30` | frees a global buffer from the enumeration callbacks |
-| `FUN_0046C5F1` | an empty callback returning zero |
 
 ## Player slots
 

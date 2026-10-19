@@ -24,7 +24,7 @@ overlay\%dx%dxx.ovl    →    0X14XX.OVL = variant 0, level 14 (Medaeval)
 | 13–50 | Game world | 38 playable levels (deathmatch arenas + campaign) |
 | 51–52 | Misc | Additional data |
 
-### OVL Loading Function (0x00493654)
+### OVL Loading Function (0x00493640)
 
 Formats the path `overlay\%dx%dxx.ovl` and calls the file open chain. The main dispatch function `FUN_00493E40` (OVLDispatch) checks if a level is already loaded, calls the init vtable function, then invokes `SectionReader` (0x00493BF0).
 
@@ -1816,7 +1816,7 @@ uint32[15][53]    Section-major order, little-endian
 
 | Address | Function / Data | Description |
 |---------|-----------------|-------------|
-| `0x00493654` | LoadOverlay | Formats `overlay\%dx%dxx.ovl`, opens file |
+| `0x00493640` | LoadOverlay | Formats `overlay\%dx%dxx.ovl`, opens file |
 | `0x00493680` | FileOpenChain | Allocates file handle, opens with path formatting |
 | `0x00493860` | LoadPreload | Opens `preload.dat`, reads per-section resource counts |
 | `0x00493BF0` | SectionReader | Iterates 15 sections: abcd verify + handler vtable dispatch |
