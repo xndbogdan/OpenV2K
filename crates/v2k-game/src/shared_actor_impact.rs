@@ -88,6 +88,25 @@ pub struct PlayingActorImpactFrame<'a> {
     pub retail_tick: u32,
 }
 
+/// Targets whose owner runs the static-route `11180` wrapper: peasants, the
+/// constructed Type26, the shared fish and the native ground actors.
+fn static_route_target_owned(entity: &crate::entity::Entity) -> bool {
+    match entity.entity_type {
+        9 => true,
+        26 => entity.intro2_type26_sub_d_runtime.is_some(),
+        53 => entity.intro2_type53_runtime.is_some(),
+        122 => entity.native_type122_runtime.is_some(),
+        18 => entity.native_type18_runtime.is_some(),
+        28 => entity.native_type28_runtime.is_some(),
+        30 => entity.native_type30_runtime.is_some(),
+        40 => entity.native_type40_runtime.is_some(),
+        56 => entity.native_type56_runtime.is_some(),
+        type_id => {
+            crate::shared_fish::is_shared_fish_type(type_id) && entity.shared_fish_runtime.is_some()
+        }
+    }
+}
+
 pub fn apply_playing_actor_particle_hit(
     frame: PlayingActorImpactFrame<'_>,
     impact: ParticleEntityImpact,
@@ -102,10 +121,7 @@ pub fn apply_playing_actor_particle_hit(
         ));
     }
     if crate::world_fx::particle_uses_static_route_entity_hit(impact.source_particle_class)
-        && entity.entity_type != 9
-        && !(entity.entity_type == 26 && entity.intro2_type26_sub_d_runtime.is_some())
-        && !(crate::shared_fish::is_shared_fish_type(entity.entity_type)
-            && entity.shared_fish_runtime.is_some())
+        && !static_route_target_owned(entity)
     {
         return Some(SharedActorImpactOutcome::UnsupportedStaticRouteTarget {
             entity_type: entity.entity_type,
@@ -243,10 +259,7 @@ pub fn apply_shared_actor_particle_hit(
         .iter_all()
         .find(|entity| entity.id == impact.target_entity_id)?;
     if crate::world_fx::particle_uses_static_route_entity_hit(impact.source_particle_class)
-        && entity.entity_type != 9
-        && !(entity.entity_type == 26 && entity.intro2_type26_sub_d_runtime.is_some())
-        && !(crate::shared_fish::is_shared_fish_type(entity.entity_type)
-            && entity.shared_fish_runtime.is_some())
+        && !static_route_target_owned(entity)
     {
         return Some(SharedActorImpactOutcome::UnsupportedStaticRouteTarget {
             entity_type: entity.entity_type,

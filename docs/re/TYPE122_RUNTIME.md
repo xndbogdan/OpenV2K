@@ -266,13 +266,14 @@ not substitute for fresh authored task custody.
 Outgoing projectile combat has a separate target-admission boundary.
 `intro2_effects::deliver_entity_impact` dispatches particle52/68/85 to the
 411180 owner before the generic DAC0/DA00 chain. That owner currently admits
-Type13 targets and explicitly blocks other target families. The shared ground
-hit adapter likewise rejects52/68/85 before any primary-hit timestamp, task,
-health or RNG mutation in ordinary gameplay; it cannot relabel411180 as DAC0.
-Type122's
-method24/class68 emission and static route therefore do not certify complete
-combat delivery to arbitrary entities. This is independent of D9B0 generic
-crushing and of capture transport.
+Type13 targets and explicitly blocks other target families. In ordinary
+gameplay the shared ground hit adapter runs52/68/85 through411180: 10EB0's
+stamp and DAC0 style hook, the living accepted-hit cue before the hook rather
+than after accepted damage, eight times the11030 impulse, and no accepted-hit
+suffix or class5 capability particle. The local player owns the same wrapper.
+Type122's method24/class68 shots therefore damage native ground actors and the
+player; target families without an owner still reject the route. This is
+independent of D9B0 generic crushing and of capture transport.
 
 The original boundary was visible before this constructor checkpoint: the
 Type58 contact smoke recorded11 `UnresolvedBehavior` pair failures against
@@ -439,7 +440,9 @@ Type122 controls cover all ten authored births, exact
 component/model provenance, real E/Aim and its presentation FIFO, live
 scheduling, static crushing, surface/impact/death/abort entry points, and late
 radial child-custody failure in Playing, Intro2 and both cursor-storage cases.
-The411180 particle guard rejects52/68/85 before primary-hit side effects.
+Static-route controls run52/68/85 through411180 on a native Type122 and check
+where it parts from10EB0: the cue before damage (also for a filtered-zero
+packet), the eightfold impulse and no class5 particle.
 Active-pair controls also prove the actual world46 model0 zero-radius skip
 without suppressing missing resources or unresolved nonzero-body counterparts.
 

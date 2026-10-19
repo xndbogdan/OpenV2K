@@ -14,15 +14,23 @@ use crate::{
     world_fx::{BallisticDamageRequest, ParticleEntityImpact},
 };
 
+/// 442950's 11180 on a native Type122 differs from 10EB0 only where retail's
+/// wrapper does: its living accepted-hit cue (92) precedes 15040, so a
+/// filtered-zero packet still queues it; 11030 takes eight times the packet
+/// sum; no class5 capability particle follows. Both stamp +34 and run C690.
 #[v2k_test_support::retail_test]
-fn static_route_projectiles_do_not_enter_primary_hit_or_change_native_custody() {
-    let mut f = super::contact_tests::Fixture::new(24);
-    for class in [52, 68, 85] {
-        let before = f.entity().collision.clone();
-        let slots =
-            ActorTaskSlot::IN_RETAIL_TICK_ORDER.map(|s| f.entity().actor_tasks.task_in_slot(s));
-        let mut rng = f.fx.fork_for_main_base_abort_transaction();
-        let events = f.fx.pending_event_count();
+fn static_route_hits_run_11180_on_native_type122() {
+    let hit = |class: u8, packet: DamagePacket| {
+        let mut f = super::contact_tests::Fixture::new(24);
+        f.enable_contact();
+        let entity = f.entities.entity_mut(f.id).unwrap();
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(u32::MAX, 0x0406_8000);
+        entity.set_motion_raw([0, 10_000, 0], [50, -80, 100]);
+        let primary = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary);
+        let (events, particles) = (f.fx.pending_event_count(), f.fx.particle_count());
         let result = apply_shared_actor_particle_hit(
             SharedActorImpactFrame {
                 resources: &f.session.cache,
@@ -39,33 +47,54 @@ fn static_route_projectiles_do_not_enter_primary_hit_or_change_native_custody() 
                 position_world: [0.0; 3],
                 velocity_raw: [0, 0, 8192],
                 damage: Some(BallisticDamageRequest {
-                    packet: DamagePacket {
-                        channels: [1, 0],
-                        amounts_raw: [12000, 0],
-                    },
+                    packet,
                     source_entity_type_at_birth: Some(122),
                     source_owner_id: Some(35),
                 }),
             },
         );
-        assert!(
-            matches!(
-                result,
-                Some(SharedActorImpactOutcome::UnsupportedStaticRouteTarget { entity_type: 122 })
-            ),
-            "{result:?}"
-        );
-        assert_eq!(f.entity().collision, before);
+        let Some(SharedActorImpactOutcome::Type122(impact::Type122ImpactOutcome::Applied(applied))) =
+            result
+        else {
+            panic!("class{class}: {result:?}")
+        };
         assert_eq!(
-            ActorTaskSlot::IN_RETAIL_TICK_ORDER.map(|s| f.entity().actor_tasks.task_in_slot(s)),
-            slots
+            f.entity().collision.last_hit_presentation_tick_at_0x34,
+            RetailRuntimeValue::Known(500)
         );
-        assert_eq!(f.fx.pending_event_count(), events);
+        assert_ne!(
+            f.entity().actor_tasks.task_in_slot(ActorTaskSlot::Primary),
+            primary
+        );
+        (
+            applied.filtered_damage_raw,
+            f.fx.pending_event_count() - events,
+            f.fx.particle_count() - particles,
+            f.entity().velocity_raw(),
+        )
+    };
+    let damaging = DamagePacket {
+        channels: [1, 0],
+        amounts_raw: [6_000, 0],
+    };
+    // Type122's channel-6 multiplier is zero.
+    let filtered_out = DamagePacket {
+        channels: [6, 0],
+        amounts_raw: [1_000, 0],
+    };
+    let primary = hit(16, damaging);
+    assert_eq!((primary.0, primary.1, primary.2), (2000, 1, 1));
+    assert_eq!(hit(16, filtered_out).1, 0);
+    for class in [52, 68, 85] {
+        let static_route = hit(class, damaging);
         assert_eq!(
-            f.fx.next_shared_retail_random_u16(),
-            rng.next_shared_retail_random_u16()
+            (static_route.0, static_route.1, static_route.2),
+            (2000, 1, 0),
+            "class{class}"
         );
-        assert_eq!(f.tasks.adopt_type122(&f.entities), 0);
+        assert_ne!(static_route.3, primary.3, "class{class}: eightfold 11030");
+        let filtered = hit(class, filtered_out);
+        assert_eq!((filtered.0, filtered.1), (0, 1), "class{class}");
     }
 }
 

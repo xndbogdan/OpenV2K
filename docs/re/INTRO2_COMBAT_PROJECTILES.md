@@ -358,7 +358,8 @@ replacement and same-visit E3D0 ground tail; subsequent mode0 visits intentional
 skip contacts. The [Type57 surface contract](INTRO2_TYPE57.md#projectile-surface-replacement)
 owns its complete decision matrix. Type57 method24 is the known
 emitter of this family (class68); 52/85 emitters are unaudited. The local
-player owns `11180` ([PLAYER_CRAFT.md](PLAYER_CRAFT.md)); other target families
+player ([PLAYER_CRAFT.md](PLAYER_CRAFT.md)) and the native ground actors
+(Types 53, 122, 18, 28, 30, 40 and 56) own `11180`; other target families
 without an owner explicitly reject the route rather than entering their
 F590-style owners. Immediate target-record unlink/recycling by an unowned
 wrapper would require cached physical entity-record custody across11180/F610;

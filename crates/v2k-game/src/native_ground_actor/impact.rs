@@ -1,4 +1,4 @@
-//! Native ground-actor particle hits: 10EB0/11250/11320, DAC0/DA00/DA60, 11030, 15040.
+//! Native ground-actor particle hits: 10EB0/11250/11320/11180, DAC0/DA00/DA60, 11030, 15040.
 //!
 //! The common vtable at 4C8A30 uses DAC0 for primary (+14), DA00 for infected
 //! (+18), and a null generic-hit (+30) callback. The admitted class5/7/9/26/33
@@ -154,12 +154,11 @@ fn run<P: NativeGroundActorProfile>(
         mut resources,
     } = frame;
     let id = impact.target_entity_id;
-    // 442950 classes dispatch411180, which has different force/presentation
-    // ordering from10EB0. A supported actor receipt does not authorize routing
-    // that still-unimplemented target entry through the primary callback.
-    if crate::world_fx::particle_uses_static_route_entity_hit(impact.source_particle_class) {
-        return Err(Block::Runtime("unsupported411180 ground actor target"));
-    }
+    // 442950 classes enter 11180: 10EB0's stamp and DAC0 style hook, but the
+    // living +80 cue precedes the hook, 11030 takes eight times the packet's
+    // sum, and nothing follows 15040.
+    let static_route =
+        crate::world_fx::particle_uses_static_route_entity_hit(impact.source_particle_class);
     if scheduler.native_ground_has_pending_prefix(id) {
         return Err(Block::Runtime("pending actor/contact prefix"));
     }
@@ -176,6 +175,14 @@ fn run<P: NativeGroundActorProfile>(
     if !P::metadata_authenticates(&metadata) {
         return Err(Block::Runtime("metadata"));
     }
+    let static_route_cue = if static_route {
+        let RetailRuntimeValue::Known(sound) = metadata.accepted_hit_presentation_sound_id else {
+            return Err(Block::Runtime("accepted-hit sound"));
+        };
+        sound
+    } else {
+        None
+    };
     let entity = manager.entity_mut(id).unwrap();
     let hit_entry = impact.entity_hit_entry();
     let infected = hit_entry == crate::damage::EntityHitEntry::Infected;
@@ -193,6 +200,11 @@ fn run<P: NativeGroundActorProfile>(
         entity.collision.last_hit_presentation_tick_at_0x34 =
             RetailRuntimeValue::Known(retail_tick);
         *committed = true;
+        if let Some(sound) = static_route_cue {
+            if super::live::bits(entity, DYING_STATE_BIT).map_err(Block::Behavior)? == 0 {
+                world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+            }
+        }
     }
     let entity = manager.entity_mut(id).unwrap();
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -310,7 +322,10 @@ fn run<P: NativeGroundActorProfile>(
     apply_impact_reaction(
         &mut body,
         id,
-        delivery.packet.impact_sum_raw(),
+        delivery
+            .packet
+            .impact_sum_raw()
+            .wrapping_mul(if static_route { 8 } else { 1 }),
         impact.velocity_raw,
         || u32::from(world_fx.next_shared_retail_random_u16()),
     )
@@ -383,7 +398,7 @@ fn run<P: NativeGroundActorProfile>(
     if let Some(owner) = checked.death_publication {
         scheduler.register_native_ground_terminal(owner);
     }
-    if !infected && !cured && checked.filtered_damage_raw != 0 {
+    if !infected && !cured && !static_route && checked.filtered_damage_raw != 0 {
         let entity = manager.entity_mut(id).unwrap();
         let flags = super::live::bits(entity, DYING_STATE_BIT | 0x2000 | 0x8000_0000)
             .map_err(Block::Behavior)?;
