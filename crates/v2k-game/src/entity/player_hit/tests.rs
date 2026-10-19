@@ -1169,3 +1169,89 @@ fn authored_class6_traversal_reaches_the_playing_player_cure_bridge() {
         "consumed native parent must not replay"
     );
 }
+
+/// 442950's 11180 on the player, as retail's world-24 Type122 hits: the
+/// living +80 cue, 11030 at eight times the packet's impact sum, then 15040's
+/// class68 packet (5800 against type 46's profile) with the +34 stamp.
+#[v2k_test_support::retail_test]
+fn static_route_hit_cues_strikes_eightfold_and_damages_the_player() {
+    let (mut manager, mut hull, mut fx, resources) = fixture(
+        40_000,
+        0,
+        CHECKED_DAMAGE_ENABLED_STATE_BIT | IMPACT_REACTION_ENABLED_STATE_BIT,
+    );
+    manager
+        .entity_mut(7)
+        .unwrap()
+        .collision
+        .accepted_hit_presentation_sound_id = RetailRuntimeValue::Known(Some(57));
+    let packet = crate::damage::CLASS68_STATIC_ROUTE_DAMAGE_PACKET;
+    let hit = ParticleEntityImpact {
+        source_particle_class: 68,
+        impact_position_argument_va: 0x1234,
+        target_entity_id: 7,
+        position_world: [0.0; 3],
+        velocity_raw: [i16::MAX, i16::MIN, 0],
+        damage: Some(BallisticDamageRequest {
+            packet,
+            source_entity_type_at_birth: Some(122),
+            source_owner_id: Some(9),
+        }),
+    };
+    let mut expected_fx = WorldFx::new();
+    let mut expected = ImpactReactionBody {
+        state_flags_at_0x08: IMPACT_REACTION_ENABLED_STATE_BIT,
+        mass_raw_at_0xb0: 100,
+        linear_velocity_xyz_raw: [0; 3],
+        angular_heading_pitch_roll_raw: [0; 3],
+    };
+    apply_impact_reaction(
+        &mut expected,
+        7,
+        packet.impact_sum_raw() * 8,
+        hit.velocity_raw,
+        || u32::from(expected_fx.next_shared_retail_random_u16()),
+    )
+    .unwrap();
+    let outcome = manager.apply_player_static_route_particle_hit(
+        hit,
+        PlayerCheckedDamageFrame {
+            hull: &mut hull,
+            resources: &resources,
+            world_fx: &mut fx,
+            retail_tick: 510,
+            notifications: &mut GameplayNotifications::new(),
+            extra_lives: 0,
+        },
+    );
+    assert!(
+        matches!(
+            outcome,
+            PlayerStaticRouteHitOutcome::Applied {
+                checked: PlayerCheckedDamageOutcome::Applied {
+                    filtered_damage_raw: 5800,
+                    ..
+                }
+            }
+        ),
+        "{outcome:?}"
+    );
+    assert_eq!(hull.health_raw, 34_200);
+    let player = manager.player().unwrap();
+    assert_eq!(
+        player.collision.last_hit_presentation_tick_at_0x34,
+        RetailRuntimeValue::Known(510)
+    );
+    assert_eq!(player.velocity_raw(), expected.linear_velocity_xyz_raw);
+    assert_eq!(
+        player.rotation_heading_pitch_roll_raw(),
+        expected.angular_heading_pitch_roll_raw
+    );
+    assert_eq!(
+        fx.take_positional_sounds()
+            .iter()
+            .map(|sound| sound.sound_id)
+            .collect::<Vec<_>>(),
+        [57]
+    );
+}

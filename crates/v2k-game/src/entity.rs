@@ -62,6 +62,7 @@ pub use player_hit::{
     PlayerCheckedDamageBlock, PlayerCheckedDamageFrame, PlayerCheckedDamageOutcome,
     PlayerCheckedDamageRequest, PlayerDamageEntry, PlayerDyingContactBurstRequest,
     PlayerDyingContactRuntime, PlayerModelSwitchHitBlock, PlayerModelSwitchHitOutcome,
+    PlayerStaticRouteHitOutcome,
 };
 mod radial;
 mod type60_exploding_ring_live;
@@ -9118,6 +9119,23 @@ impl EntityManager {
         target_id: u32,
         packet: DamagePacket,
         direction_q15: [i16; 3],
+        next_random: impl FnMut() -> u32,
+    ) -> Fun00411250ImpactReactionOutcome {
+        self.apply_player_impact_reaction_raw(
+            target_id,
+            packet.impact_sum_raw(),
+            direction_q15,
+            next_random,
+        )
+    }
+
+    /// `FUN_00411030` on the player with the caller's impact strength:
+    /// `FUN_00411180` passes eight times the packet's sum.
+    fn apply_player_impact_reaction_raw(
+        &mut self,
+        target_id: u32,
+        impact_raw: i32,
+        direction_q15: [i16; 3],
         mut next_random: impl FnMut() -> u32,
     ) -> Fun00411250ImpactReactionOutcome {
         let Some(index) = self
@@ -9162,7 +9180,7 @@ impl EntityManager {
         let outcome = match apply_impact_reaction(
             &mut body,
             target_id,
-            packet.impact_sum_raw(),
+            impact_raw,
             direction_q15,
             &mut next_random,
         ) {

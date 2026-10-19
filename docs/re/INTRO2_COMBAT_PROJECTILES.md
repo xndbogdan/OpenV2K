@@ -357,9 +357,10 @@ The shared descriptor surface owner now retains `442420`'s source-specific
 replacement and same-visit E3D0 ground tail; subsequent mode0 visits intentionally
 skip contacts. The [Type57 surface contract](INTRO2_TYPE57.md#projectile-surface-replacement)
 owns its complete decision matrix. Type57 method24 is the known
-emitter of this family (class68); 52/85 emitters are unaudited. Other target
-families explicitly reject the unowned `11180` route rather than entering
-their F590-style owners. Immediate target-record unlink/recycling by an unowned
+emitter of this family (class68); 52/85 emitters are unaudited. The local
+player owns `11180` ([PLAYER_CRAFT.md](PLAYER_CRAFT.md)); other target families
+without an owner explicitly reject the route rather than entering their
+F590-style owners. Immediate target-record unlink/recycling by an unowned
 wrapper would require cached physical entity-record custody across11180/F610;
 the live-handle adapter does not invent that memory history. Those boundaries
 limit full projectile-family fidelity.
@@ -497,6 +498,18 @@ read. A native turret's attached damage also completes its class49 radial
 death and a real player's immediate wreck burst/CA notification before return.
 These source-backed callbacks do not establish matched retail cinematic
 acceptance or ownership of every target's remaining callback.
+
+The three attached descriptors draw through `FUN_00442CB0`, never `D410`, so
+their null frame lists do not delete them. The callback marks bit80 when the
+owner handle no longer resolves. Otherwise, for an owner with state bit
+`0x02000000` (the detailed view), it submits the descriptor's model (`+04`:
+models 20, 22 and 23) at the particle with the owner's basis and an alpha that
+fades with age (`FUN_00465840`). The port applies the orphan mark before its
+draw walk and skips these records in it. The attached model is not presented
+yet; the first record to survive the walk logs that boundary. Before, the walk
+deleted every attached record as a null-frame `D410` sprite, so each lived for
+one attached update at most: a Type122 class68 hit on the player in world 24
+dealt one 22-point tick instead of retail's 255.
 
 ## Evidence limits and comparison requirements
 
