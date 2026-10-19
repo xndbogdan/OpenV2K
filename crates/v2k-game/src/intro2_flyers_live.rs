@@ -91,6 +91,13 @@ pub const TYPE108_MODEL_ID: u16 = 1167;
 pub const TYPE14_ENTITY_TYPE: u32 = 14;
 pub const TYPE14_MODEL_ID: u16 = 277;
 
+/// A B/D/E/G/K flyer that wanders and attacks, and explodes when it dies.
+pub const TYPE39_ENTITY_TYPE: u32 = 39;
+pub const TYPE39_MODEL_ID: u16 = 287;
+/// Sub-K's two output selectors: `24450` binds its words to model variables 2
+/// and 3.
+pub const TYPE39_SUB_K: [u8; 2] = [2, 3];
+
 pub const INTRO2_TYPE15_POSITION_RAW: [i16; 3] = [-17152, 0, 32256];
 pub const INTRO2_TYPE87_POSITION_RAW: [i16; 3] = [-18176, 1024, 4864];
 
@@ -141,6 +148,27 @@ pub(crate) const fn flyer_common_axis(entity_type: u32) -> Option<CommonAxisDesc
         INTRO2_TYPE15_ENTITY_TYPE | INTRO2_TYPE87_ENTITY_TYPE => Some(FLYER_COMMON_AXIS),
         TYPE108_ENTITY_TYPE => Some(TYPE108_COMMON_AXIS),
         TYPE14_ENTITY_TYPE => Some(TYPE14_COMMON_AXIS),
+        TYPE39_ENTITY_TYPE => Some(TYPE39_COMMON_AXIS),
+        _ => None,
+    }
+}
+
+pub const TYPE39_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 3840,
+    raw_word_at_0x04: 1,
+};
+
+/// Type39 adds Sub-K to the shooting flyers' B/D/E/G.
+pub const TYPE39_COMMON_MOVER_TOPOLOGY: CommonMoverComponentTopology =
+    CommonMoverComponentTopology {
+        sub_k: true,
+        ..FLYER_COMMON_MOVER_TOPOLOGY
+    };
+
+/// The authored Sub-K payload: its two output selectors.
+pub(crate) const fn flyer_sub_k(entity_type: u32) -> Option<[u8; 2]> {
+    match entity_type {
+        TYPE39_ENTITY_TYPE => Some(TYPE39_SUB_K),
         _ => None,
     }
 }
@@ -155,6 +183,7 @@ pub const TYPE14_COMMON_MOVER_TOPOLOGY: CommonMoverComponentTopology =
 pub(crate) const fn flyer_topology(entity_type: u32) -> CommonMoverComponentTopology {
     match entity_type {
         TYPE14_ENTITY_TYPE => TYPE14_COMMON_MOVER_TOPOLOGY,
+        TYPE39_ENTITY_TYPE => TYPE39_COMMON_MOVER_TOPOLOGY,
         _ => FLYER_COMMON_MOVER_TOPOLOGY,
     }
 }
@@ -166,23 +195,27 @@ pub(crate) const fn flyer_sub_d(entity_type: u32) -> SubDSteeringDescriptor {
     }
 }
 
-/// Types 15/87/108 shoot through Sub-E; Type14 has none.
+/// Types 15/87/108/39 shoot through Sub-E; Type14 has none.
 pub(crate) const fn flyer_has_emitter(entity_type: u32) -> bool {
     entity_type != TYPE14_ENTITY_TYPE
 }
 
-/// The constructor's attached sound 11, which Type14 does not author.
+/// The constructor's attached sound 11, which Type14 and Type39 do not author.
 pub(crate) const fn flyer_attachment_sound(entity_type: u32) -> Option<u16> {
-    if flyer_has_emitter(entity_type) {
-        Some(11)
-    } else {
-        None
+    match entity_type {
+        INTRO2_TYPE15_ENTITY_TYPE | INTRO2_TYPE87_ENTITY_TYPE | TYPE108_ENTITY_TYPE => Some(11),
+        _ => None,
     }
 }
 
-/// Alternate class 2 dies quietly; Type14's class 1 explodes.
+/// Type14 and Type39 take alternate class 1 and explode.
+pub(crate) const fn flyer_explodes(entity_type: u32) -> bool {
+    matches!(entity_type, TYPE14_ENTITY_TYPE | TYPE39_ENTITY_TYPE)
+}
+
+/// Alternate class 2 dies quietly; class 1 explodes.
 pub(crate) const fn flyer_alternate_class(entity_type: u32) -> u32 {
-    if entity_type == TYPE14_ENTITY_TYPE {
+    if flyer_explodes(entity_type) {
         1
     } else {
         2
@@ -192,7 +225,7 @@ pub(crate) const fn flyer_alternate_class(entity_type: u32) -> u32 {
 /// The behavior classes each flyer type authors, all with rule Always.
 const fn flyer_choice_classes(entity_type: u32) -> &'static [u8] {
     match entity_type {
-        TYPE108_ENTITY_TYPE => &[
+        TYPE108_ENTITY_TYPE | TYPE39_ENTITY_TYPE => &[
             SEARCH_ATTACK_BEHAVIOR_CLASS_ID,
             MOVE_ABOUT_AIMLESSLY_CLASS_ID,
         ],
@@ -235,6 +268,14 @@ pub const TYPE14_SUB_G_DESCRIPTOR: [u8; 104] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+/// Type108's table with speed cap 1500 and wing amplitude `0x4000` at `+0x2E`.
+pub const TYPE39_SUB_G_DESCRIPTOR: [u8; 104] = [
+    20, 0, 0, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 244, 1, 0, 0, 188, 2, 0, 0, 88, 2, 0, 0, 0,
+    64, 0, 0, 220, 5, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 64, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
 const FLYER_WANDER_LIFETIME_MS: u32 = 500;
 /// ACD0's `FUN_00402B10(entity, 0, 5000)`.
 const FLYER_AIMLESS_LIFETIME_MS: u32 = 5000;
@@ -246,6 +287,10 @@ pub struct Intro2FlyerFrameOwner {
     pub sub_d_runtime: Type9SubDRuntime,
     pub sub_d_frame_owner: Type9SubDFrameOwner,
     pub wing_var1: i32,
+    /// Sub-K's input, the prelude's smoothed steering word, and its two
+    /// output words; zero for a flyer without Sub-K.
+    pub sub_k_smoothed_raw: i32,
+    pub sub_k_output_raw: [i16; 2],
 }
 
 /// The authored Intro2 subset and a native zero-record flyer keep distinct
@@ -454,6 +499,9 @@ fn publish_flyer_behavior_phase(
         // Constructor-resolved variable storage is zero; AA60 is the first
         // per-frame writer of the descriptor's selector-one animation word.
         wing_var1: 0,
+        // 24450 clears K's state; its bank words start at zero too.
+        sub_k_smoothed_raw: 0,
+        sub_k_output_raw: [0; 2],
     });
     // Native birth policy for retail's unwritten heap word +B2:
     // initialize the transient callback-mass offset deterministically once.

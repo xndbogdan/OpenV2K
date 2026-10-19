@@ -80,7 +80,7 @@ pub fn resolve_native_flyer_contacts_with_playing(
             && entity
                 .intro2_type10_runtime
                 .is_some_and(|runtime| runtime.ordinary_allocation.is_some());
-    if !matches!(entity.entity_type, 14 | 15 | 87 | 108)
+    if !matches!(entity.entity_type, 14 | 15 | 39 | 87 | 108)
         && !ordinary_type13
         && !ordinary_type10_family
     {
@@ -255,7 +255,7 @@ fn resolve(
         .iter_all()
         .find(|e| e.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if !entity.active || !matches!(entity.entity_type, 14 | 15 | 87 | 108) {
+    if !entity.active || !matches!(entity.entity_type, 14 | 15 | 39 | 87 | 108) {
         return Ok(Intro2FlyerContactOutcome::Ineligible);
     }
     let entity_type = entity.entity_type;

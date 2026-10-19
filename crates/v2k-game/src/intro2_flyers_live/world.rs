@@ -3,7 +3,8 @@
 //! Callback timing and callback mass belong to the common scheduler. A task
 //! evidence block parks that already-entered visit instead of replaying its
 //! prefix/RNG on another frame. Unsupported relation, wind and surface effect
-//! histories fail before entry to this bounded B/D/E/G and B/D/G route.
+//! histories fail before entry to this bounded B/D/E/G, B/D/G and B/D/E/G/K
+//! route.
 
 use super::*;
 use crate::common_mover::type9_surface::{
@@ -35,6 +36,7 @@ pub enum Intro2FlyerWorldBlock {
     SurfaceStateUnavailable,
     SurfaceTimerUnavailable,
     MasterMotionStateUnavailable,
+    DetailedSoundUnavailable,
 }
 
 fn blocked(
@@ -117,8 +119,13 @@ fn preflight_suffix(
     if entity.attached_to.is_some() || !relation_supported {
         return Err(Intro2FlyerWorldBlock::UnsupportedRelation);
     }
-    if metadata.common_world_effects
-        != RetailRuntimeValue::Known(CommonWorldEffectProfile::default())
+    // DCA0's sound gate reads the +94/+96/+A0 words; E370's surface words
+    // must stay zero.
+    if !matches!(metadata.common_world_effects, RetailRuntimeValue::Known(effects)
+            if CommonWorldEffectProfile {
+                low_health_effect_words: [0; 3],
+                ..effects
+            } == CommonWorldEffectProfile::default())
         || metadata.constructor_sound_attachment_id
             != RetailRuntimeValue::Known(flyer_attachment_sound(entity.entity_type))
         || metadata.sub_c_lift_descriptor != RetailRuntimeValue::Known(None)
@@ -319,6 +326,32 @@ pub(super) fn tick_world(
             tick.retained_owner.unwrap(),
             Intro2FlyerRuntimeBlock::World(reason),
         );
+    }
+    if state & SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT != 0 {
+        // DCA0's post-task sound gate; E870's coarse suffix has none.
+        let (Some(record), RetailRuntimeValue::Known(health), RetailRuntimeValue::Known(visible)) = (
+            frame
+                .resources
+                .global_entity_type(entity.entity_type as usize),
+            entity.collision.health_raw,
+            entity.collision.state_flags_at_0x08.masked(0x800),
+        ) else {
+            return park_flyer(
+                tick.retained_owner.unwrap(),
+                Intro2FlyerRuntimeBlock::World(Intro2FlyerWorldBlock::DetailedSoundUnavailable),
+            );
+        };
+        if let Some(sound) = crate::actor_detailed_sound::plan_actor_detailed_sound(
+            crate::actor_detailed_sound::ActorDetailedSoundFrame {
+                type_record: record,
+                health_raw: health,
+                visible: visible != 0,
+                callback_elapsed_micros: callback_elapsed_us,
+            },
+            &mut || next_random(world_fx),
+        ) {
+            world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        }
     }
     if basis_flags.unwrap() & 0x4000 == 0 {
         let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();

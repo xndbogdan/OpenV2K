@@ -2,9 +2,10 @@
 //! The caller owns task lifetime, publication and the 12DA0 world suffix.
 
 use super::{
-    flyer_sub_d, flyer_topology, Intro2FlyerFrameOwner, FLYER_SUB_B, INTRO2_TYPE15_ENTITY_TYPE,
-    INTRO2_TYPE87_ENTITY_TYPE, TYPE108_ENTITY_TYPE, TYPE108_SUB_G_DESCRIPTOR, TYPE14_ENTITY_TYPE,
-    TYPE14_SUB_G_DESCRIPTOR, TYPE15_SUB_G_DESCRIPTOR, TYPE87_SUB_G_DESCRIPTOR,
+    flyer_sub_d, flyer_sub_k, flyer_topology, Intro2FlyerFrameOwner, FLYER_SUB_B,
+    INTRO2_TYPE15_ENTITY_TYPE, INTRO2_TYPE87_ENTITY_TYPE, TYPE108_ENTITY_TYPE,
+    TYPE108_SUB_G_DESCRIPTOR, TYPE14_ENTITY_TYPE, TYPE14_SUB_G_DESCRIPTOR, TYPE15_SUB_G_DESCRIPTOR,
+    TYPE39_ENTITY_TYPE, TYPE39_SUB_G_DESCRIPTOR, TYPE87_SUB_G_DESCRIPTOR,
 };
 use crate::chase_target::ChaseTargetCommonMoverReturn;
 use crate::common_mover::component_dispatch::{CommonMoverDispatchMode, CommonMoverDispatchPhase};
@@ -86,6 +87,7 @@ pub(super) fn flyer_sub_g_descriptor(entity_type: u32) -> Option<&'static [u8; 1
         INTRO2_TYPE87_ENTITY_TYPE => Some(&TYPE87_SUB_G_DESCRIPTOR),
         TYPE108_ENTITY_TYPE => Some(&TYPE108_SUB_G_DESCRIPTOR),
         TYPE14_ENTITY_TYPE => Some(&TYPE14_SUB_G_DESCRIPTOR),
+        TYPE39_ENTITY_TYPE => Some(&TYPE39_SUB_G_DESCRIPTOR),
         _ => None,
     }
 }
@@ -101,14 +103,17 @@ pub(crate) fn authenticate_flyer_mover_metadata(
         || metadata.sub_d_steering_descriptor
             != RetailRuntimeValue::Known(Some(flyer_sub_d(entity_type)))
         || !matches!(metadata.common_mover_gkl_payloads, RetailRuntimeValue::Known(payloads)
-            if payloads.sub_g == Some(*descriptor) && payloads.sub_k.is_none() && payloads.sub_l.is_none())
+            if payloads.sub_g == Some(*descriptor)
+                && payloads.sub_k == flyer_sub_k(entity_type)
+                && payloads.sub_l.is_none())
     {
         return Err(Intro2FlyerCommonMoverBlock::MetadataMismatch);
     }
     Ok(descriptor)
 }
 
-/// Bind the authored B/D/E/G and B/D/G shapes to the shared 01430 frame machine.
+/// Bind the authored B/D/E/G, B/D/G and B/D/E/G/K shapes to the shared 01430
+/// frame machine.
 ///
 /// 02BA0 contributes only its target prefix. 01430 performs target reversal,
 /// classifier-free Sub-D and the normal 1A690/AA60/AC40/B210 flight chain.
@@ -122,6 +127,7 @@ pub fn evaluate_intro2_flyer_common_mover(
     let entity_type = request.frame_owner.entity_type;
     let descriptor = authenticate_flyer_mover_metadata(entity_type, request.metadata)?;
     let sub_d = flyer_sub_d(entity_type);
+    let topology = flyer_topology(entity_type);
     let RetailRuntimeValue::Known(basis) = request.body_basis else {
         return Err(Intro2FlyerCommonMoverBlock::BodyBasisUnavailable);
     };
@@ -139,7 +145,9 @@ pub fn evaluate_intro2_flyer_common_mover(
         sub_f_smoothed_raw: None,
         sub_g_runtime_angle_raw: 0,
         sub_g_state_byte_3c: 0,
-        sub_k_smoothed_raw: None,
+        sub_k_smoothed_raw: topology
+            .sub_k
+            .then_some(request.frame_owner.sub_k_smoothed_raw),
         sub_n_accumulator_raw: None,
         sub_o_link_raw: 0,
     };
@@ -147,7 +155,7 @@ pub fn evaluate_intro2_flyer_common_mover(
         CommonMoverFrameRequest {
             configuration: CommonMoverFrameConfiguration {
                 controlled_entity_handle: request.entity_id,
-                topology: flyer_topology(entity_type),
+                topology,
                 dispatch_mode: request.dispatch_mode,
                 elapsed_micros: request.elapsed_micros,
                 sub_a_descriptor: None,
@@ -241,10 +249,14 @@ pub fn evaluate_intro2_flyer_common_mover(
             }
             CommonMoverFramePoll::Action(CommonMoverFrameAction::CommitPostSubDWrites(plan)) => {
                 if plan.sub_f.is_some()
-                    || plan.sub_k_smoothed_raw.is_some()
+                    || plan.sub_k_smoothed_raw.is_some() != topology.sub_k
                     || plan.sub_l_exact_raw.is_some()
                 {
                     return Err(Intro2FlyerCommonMoverBlock::UnexpectedFrameAction);
+                }
+                if let Some(smoothed) = plan.sub_k_smoothed_raw {
+                    frame_owner.sub_k_smoothed_raw = smoothed;
+                    live.sub_k_smoothed_raw = Some(smoothed);
                 }
                 CommonMoverFrameResume::Committed {
                     phase: CommonMoverFrameCommitPhase::PostSubDWrites,
@@ -292,6 +304,23 @@ pub fn evaluate_intro2_flyer_common_mover(
                     snapshot: live,
                 }
             }
+            CommonMoverFramePoll::Action(CommonMoverFrameAction::InvokeComponent {
+                phase: CommonMoverDispatchPhase::SubK,
+                ..
+            }) => {
+                // 018A0 invokes K after G, so its second output reads the
+                // vertical velocity Sub-G has just written.
+                frame_owner.sub_k_output_raw =
+                    crate::gkl_common_mover::component_outputs::advance_sub_k(
+                        frame_owner.sub_k_output_raw,
+                        frame_owner.sub_k_smoothed_raw,
+                        live.velocity_raw[1],
+                    );
+                CommonMoverFrameResume::ComponentReturned {
+                    phase: CommonMoverDispatchPhase::SubK,
+                    snapshot: live,
+                }
+            }
             CommonMoverFramePoll::Action(CommonMoverFrameAction::CommitSubB { velocity_raw }) => {
                 live.velocity_raw = velocity_raw;
                 CommonMoverFrameResume::Committed {
@@ -336,7 +365,7 @@ mod tests {
             common_mover_topology: RetailRuntimeValue::Known(flyer_topology(entity_type)),
             common_mover_gkl_payloads: RetailRuntimeValue::Known(CommonMoverGklPayloads {
                 sub_g: flyer_sub_g_descriptor(entity_type).copied(),
-                sub_k: None,
+                sub_k: flyer_sub_k(entity_type),
                 sub_l: None,
             }),
             sub_b_lateral_descriptor: RetailRuntimeValue::Known(Some(FLYER_SUB_B)),
@@ -378,6 +407,8 @@ mod tests {
                 sub_d_runtime: Type9SubDRuntime::from_constructor(),
                 sub_d_frame_owner: Type9SubDFrameOwner::flyer(),
                 wing_var1: 0,
+                sub_k_smoothed_raw: 0,
+                sub_k_output_raw: [0; 2],
             },
             sub_g_runtime: sub_g,
             target_private,
@@ -457,6 +488,37 @@ mod tests {
             };
             assert_eq!(outputs[0], outcome.frame_owner.wing_var1 as i16);
         }
+    }
+
+    /// 018A0 runs Type39's K after G: the prelude's smoothed steering word and
+    /// Sub-G's new vertical velocity feed 243B0. Flyers without K keep zero.
+    #[test]
+    fn type39_sub_k_follows_the_prelude_and_sub_g() {
+        let terrain = terrain();
+        let type39_metadata = metadata(TYPE39_ENTITY_TYPE);
+        let mut type39_request = request(&type39_metadata, &terrain, TYPE39_ENTITY_TYPE);
+        type39_request.frame_owner.sub_k_output_raw = [300, -200];
+        let outcome = evaluate_intro2_flyer_common_mover(type39_request, || 0).unwrap();
+        let owner = outcome.frame_owner;
+        assert_ne!(owner.sub_k_smoothed_raw, 0, "the prelude writes K's input");
+        assert_eq!(
+            owner.sub_k_output_raw,
+            crate::gkl_common_mover::component_outputs::advance_sub_k(
+                [300, -200],
+                owner.sub_k_smoothed_raw,
+                outcome.velocity_raw[1],
+            )
+        );
+        let wasp_metadata = metadata(15);
+        let wasp = evaluate_intro2_flyer_common_mover(request(&wasp_metadata, &terrain, 15), || 0)
+            .unwrap();
+        assert_eq!(
+            (
+                wasp.frame_owner.sub_k_smoothed_raw,
+                wasp.frame_owner.sub_k_output_raw
+            ),
+            (0, [0; 2])
+        );
     }
 
     #[test]

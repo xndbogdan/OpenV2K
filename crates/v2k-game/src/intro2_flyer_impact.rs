@@ -10,7 +10,7 @@
 use crate::intro2_flyers_live::{
     authenticate_flyer_mover_metadata, flyer_attachment_sound,
     flyer_manager_identity_authenticates, reselect_flyer, Intro2FlyerRuntimeBlock,
-    Intro2FlyerSchedulerOwner, TYPE14_ENTITY_TYPE,
+    Intro2FlyerSchedulerOwner,
 };
 use crate::{
     entity::Entity,
@@ -175,7 +175,7 @@ fn apply(
 ) -> NativeFlyerImpactOutcome {
     if !entities.iter_all().any(|entity| {
         entity.id == impact.target_entity_id
-            && matches!(entity.entity_type, 15 | 87 | 108 | TYPE14_ENTITY_TYPE)
+            && matches!(entity.entity_type, 14 | 15 | 39 | 87 | 108)
     }) {
         return NativeFlyerImpactOutcome::NotApplicable;
     }
@@ -234,7 +234,7 @@ fn run(
         return Err(Block::Runtime("static-route wrapper unowned"));
     }
     let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
-    let is_type14 = entity.entity_type == TYPE14_ENTITY_TYPE;
+    let explodes = crate::intro2_flyers_live::flyer_explodes(entity.entity_type);
     let metadata = manager
         .type_runtime_metadata(entity.entity_type)
         .cloned()
@@ -255,7 +255,7 @@ fn run(
     // A same-walk, completed C470 still owns its live allocation until central
     // removal. Otherwise only an unparked, completed Search graph may mutate.
     if !native_flyer_quiet_death_authenticates(manager, id)
-        && !(is_type14 && crate::class49_death::finished_terminal_hit_authenticates(manager, id))
+        && !(explodes && crate::class49_death::finished_terminal_hit_authenticates(manager, id))
         && !scheduler.intro2_flyer_completed_owner(manager, id)
     {
         return Err(Block::Runtime("completed native flyer custody"));
@@ -351,7 +351,8 @@ fn run(
             entry: LiveActorDamageEntry::Checked,
         },
         |manager, world_fx, feedback| match (&mut resources, feedback) {
-            // Type14's alternate1: BAC0/BAF0 complete before damage returns.
+            // Alternate class 1 (Type14, Type39): BAC0/BAF0 complete before
+            // damage returns.
             (
                 HitResources::Playing {
                     resources,
@@ -360,7 +361,7 @@ fn run(
                     extra_lives,
                 },
                 Some(feedback),
-            ) if is_type14 => crate::class49_terminal::run_class49_standard_death(
+            ) if explodes => crate::class49_terminal::run_class49_standard_death(
                 crate::class49_terminal::Class49TerminalFrame {
                     entities: manager,
                     resources,

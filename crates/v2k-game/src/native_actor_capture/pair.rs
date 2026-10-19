@@ -1312,7 +1312,7 @@ fn apply_pair_checked_damage(
         }
         return Ok(());
     }
-    if matches!(kind, 13 | 14 | 15 | 87 | 108 | 10 | 5 | 80 | 126 | 57) {
+    if matches!(kind, 13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 57) {
         let result = crate::live_actor_checked_damage::apply_live_actor_checked_damage(
             frame.entities,
             frame.world_fx,

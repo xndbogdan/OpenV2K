@@ -1,4 +1,4 @@
-//! Flyer (wasp/deathwas/Type108) Aim, using the shared `FUN_00424650` transaction.
+//! Flyer (wasp/deathwas/Type108/Type39) Aim, using the shared `FUN_00424650` transaction.
 //!
 //! Their Sub-E descriptors own cadence, spread and sound; methods 30, 20 and 24
 //! select classes 87, 52 and 68. All use the original ballistic target launch
@@ -46,6 +46,7 @@ enum FlyerEmitterProfile {
     Wasp,
     Deathwas,
     Type108,
+    Type39,
 }
 
 impl FlyerEmitterProfile {
@@ -61,6 +62,7 @@ impl FlyerEmitterProfile {
             15 => Some(Self::Wasp),
             87 => Some(Self::Deathwas),
             108 => Some(Self::Type108),
+            39 => Some(Self::Type39),
             _ => None,
         }
     }
@@ -68,7 +70,7 @@ impl FlyerEmitterProfile {
     fn method(self) -> u32 {
         match self {
             Self::Wasp => 30,
-            Self::Deathwas => 20,
+            Self::Deathwas | Self::Type39 => 20,
             Self::Type108 => 24,
         }
     }
@@ -76,7 +78,7 @@ impl FlyerEmitterProfile {
         match self {
             Self::Wasp => 70,
             Self::Deathwas => 92,
-            Self::Type108 => 105,
+            Self::Type108 | Self::Type39 => 105,
         }
     }
     /// Sub-E random interval and target-axis tolerance.
@@ -84,10 +86,24 @@ impl FlyerEmitterProfile {
         match self {
             Self::Wasp | Self::Deathwas => (600_000, 2_560),
             Self::Type108 => (400_000, 3_072),
+            Self::Type39 => (2_000_000, 2_560),
+        }
+    }
+    /// Sub-E `+0x0C`; zero takes the method's table speed.
+    fn speed_override(self) -> i16 {
+        match self {
+            Self::Type39 => 512,
+            _ => 0,
         }
     }
     fn table_speed(self) -> i16 {
         projectile_class_row(self.method()).unwrap().speed_raw as i16
+    }
+    fn launch_speed(self) -> i16 {
+        match self.speed_override() {
+            0 => self.table_speed(),
+            speed => speed,
+        }
     }
     fn particle_class(self) -> u8 {
         projectile_class_row(self.method()).unwrap().particle_class
@@ -120,7 +136,7 @@ impl FlyerEmitterProfile {
             && descriptor.variable_bindings == [0; 4]
             && descriptor.alternate_emitter_raw == 0
             && descriptor.auxiliary_command == 0
-            && descriptor.speed_override_raw == 0
+            && descriptor.speed_override_raw == self.speed_override()
     }
 }
 
@@ -749,7 +765,7 @@ fn handle_flyer_generic_action(
             if request.cached_source.handle != entity_id
                 || request.cached_source.allocation_identity != source_allocation_identity
                 || request.projectile_method != profile.method()
-                || request.speed_override_raw != 0
+                || request.speed_override_raw != profile.speed_override()
                 || request.current_target.is_some_and(|target| {
                     target.handle != target_entity_id
                         || target.allocation_identity != target_allocation_identity
@@ -965,7 +981,7 @@ fn is_exact_transient_request(
         && request.owner_handle == source_entity_id
         && request.projectile_method == profile.method()
         && request.emitter_selector == 0
-        && request.speed_field == GenericEmitterSpeedField::Explicit(profile.table_speed())
+        && request.speed_field == GenericEmitterSpeedField::Explicit(profile.launch_speed())
         && !request.auxiliary
 }
 

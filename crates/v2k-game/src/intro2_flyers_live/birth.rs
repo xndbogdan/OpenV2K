@@ -20,13 +20,14 @@ pub(crate) struct NativeFlyerConstructionRequest<'a> {
 }
 
 /// The authored B/D/E/G rows: Type15 (wasp), Type87 (deathwas) and Type108;
-/// and Type14's B/D/G row.
+/// Type14's B/D/G row and Type39's B/D/E/G/K row.
 pub(crate) const fn native_flyer_model_id(entity_type: u32) -> Option<u16> {
     match entity_type {
         INTRO2_TYPE15_ENTITY_TYPE => Some(INTRO2_TYPE15_MODEL_ID),
         INTRO2_TYPE87_ENTITY_TYPE => Some(INTRO2_TYPE87_MODEL_ID),
         TYPE108_ENTITY_TYPE => Some(TYPE108_MODEL_ID),
         TYPE14_ENTITY_TYPE => Some(TYPE14_MODEL_ID),
+        TYPE39_ENTITY_TYPE => Some(TYPE39_MODEL_ID),
         _ => None,
     }
 }

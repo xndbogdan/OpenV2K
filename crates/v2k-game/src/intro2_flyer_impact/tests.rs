@@ -453,17 +453,21 @@ fn native_flyer_foreign_custody_and_static_route_reject_before_any_prefix() {
     }
 }
 
-/// Type14's alternate1: a lethal Playing hit completes the class-1 terminal
-/// (BAC0/BAF0) synchronously and leaves its Finished receipt. The world-less
-/// shared entry refuses that death instead of borrowing the quiet one.
+/// Type14's and Type39's alternate1: a lethal Playing hit completes the
+/// class-1 terminal (BAC0/BAF0) synchronously and leaves its Finished receipt.
+/// The world-less shared entry refuses that death instead of borrowing the
+/// quiet one.
 #[v2k_test_support::retail_test]
-fn type14_lethal_playing_hit_explodes_through_class1() {
-    for playing in [false, true] {
+fn exploding_flyer_lethal_playing_hit_explodes_through_class1() {
+    for ((level, entity_type), playing) in [(20, 14), (31, 39)]
+        .into_iter()
+        .flat_map(|row| [(row, false), (row, true)])
+    {
         let (mut session, mut manager, mut fx) =
-            crate::native_type122::construction_tests::native_fixture_with_player(20);
+            crate::native_type122::construction_tests::native_fixture_with_player(level);
         let id = manager
             .iter_all()
-            .find(|entity| entity.entity_type == TYPE14_ENTITY_TYPE)
+            .find(|entity| entity.entity_type == entity_type)
             .unwrap()
             .id;
         {

@@ -158,8 +158,8 @@ fn hive_wasp_unowned_type_metadata_or_resource_rejects_without_body_sub_d_rng_or
         let mut request = request;
         let mut context = context(&session);
         match case {
-            // Type39 has no native constructor.
-            0 => request.entity_type = 39,
+            // Type25 has no native constructor.
+            0 => request.entity_type = 25,
             1 => {
                 manager.type_metadata[15].projectile_emitter_descriptor =
                     RetailRuntimeValue::Unresolved

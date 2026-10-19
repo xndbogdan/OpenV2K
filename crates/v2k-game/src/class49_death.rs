@@ -80,7 +80,8 @@ pub enum NativeExplosionSourceProfile {
     /// Type3 Rolling Boulder; its alternate is class1. Type27 splits instead.
     RollingBoulder,
     /// Type14's B/D/G flyer on the native flyer owner, alternate class1.
-    Type14Flyer,
+    /// Type14 or Type39, whose alternate class 1 explodes.
+    ExplodingFlyer(u32),
 }
 
 impl NativeExplosionSourceProfile {
@@ -97,7 +98,7 @@ impl NativeExplosionSourceProfile {
             Self::Type43 => crate::native_type43::ENTITY_TYPE,
             Self::Type38Family(row) => row.entity_type(),
             Self::RollingBoulder => 3,
-            Self::Type14Flyer => crate::intro2_flyers_live::TYPE14_ENTITY_TYPE,
+            Self::ExplodingFlyer(entity_type) => entity_type,
         }
     }
 
@@ -153,12 +154,11 @@ impl NativeExplosionSourceProfile {
                 metadata,
             )
             .is_ok(),
-            // The flyer authentication pins alternate1 for Type14.
-            Self::Type14Flyer => crate::intro2_flyers_live::authenticate_native_flyer_metadata(
-                crate::intro2_flyers_live::TYPE14_ENTITY_TYPE,
-                metadata,
-            )
-            .is_ok(),
+            // The flyer authentication pins alternate1 for these types.
+            Self::ExplodingFlyer(entity_type) => {
+                crate::intro2_flyers_live::authenticate_native_flyer_metadata(entity_type, metadata)
+                    .is_ok()
+            }
         }
     }
 
@@ -214,9 +214,14 @@ impl NativeExplosionSourceProfile {
             // Both class20 styles have a null +2C.
             Self::RollingBoulder => matches!(style, 0x004c_78a0 | 0x004c_78e8),
             // Defecate Virus, Aimless, both Flocking styles and the fallback.
-            Self::Type14Flyer => matches!(
+            Self::ExplodingFlyer(crate::intro2_flyers_live::TYPE14_ENTITY_TYPE) => matches!(
                 style,
                 0x004c_7e88 | 0x004c_7930 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_74f8
+            ),
+            // Type39: Aimless, Move completion, Search and the fallback.
+            Self::ExplodingFlyer(_) => matches!(
+                style,
+                0x004c_7930 | 0x004c_7978 | 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8
             ),
         }
     }
@@ -250,7 +255,7 @@ impl NativeExplosionSourceProfile {
             // the 40BB9C default keeps count10 with class16.
             Self::RollingBoulder => (10, [16, 16]),
             // Nonnull B takes 40BBB3.
-            Self::Type14Flyer => (10, [37, 37]),
+            Self::ExplodingFlyer(_) => (10, [37, 37]),
         }
     }
 
@@ -261,7 +266,7 @@ impl NativeExplosionSourceProfile {
             | Self::Type43
             | Self::Type38Family(crate::native_type38::Type38Row::Type38)
             | Self::RollingBoulder
-            | Self::Type14Flyer
+            | Self::ExplodingFlyer(_)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
                 NativeExplosionPolicy::Class1
             }
@@ -302,10 +307,12 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         && crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
     {
         Some(NativeExplosionSourceProfile::RollingBoulder)
-    } else if entity.entity_type == crate::intro2_flyers_live::TYPE14_ENTITY_TYPE
+    } else if crate::intro2_flyers_live::flyer_explodes(entity.entity_type)
         && crate::intro2_flyers_live::flyer_identity_authenticates(entity)
     {
-        Some(NativeExplosionSourceProfile::Type14Flyer)
+        Some(NativeExplosionSourceProfile::ExplodingFlyer(
+            entity.entity_type,
+        ))
     } else {
         crate::intro2_type16::type16_auto_pilot_row(entity)
             .map(NativeExplosionSourceProfile::Type16Carrier)
@@ -366,7 +373,7 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         Some(NativeExplosionSourceProfile::RollingBoulder) => {
             crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
         }
-        Some(NativeExplosionSourceProfile::Type14Flyer) => {
+        Some(NativeExplosionSourceProfile::ExplodingFlyer(_)) => {
             crate::intro2_flyers_live::flyer_manager_identity_authenticates(manager, id)
         }
         None => false,

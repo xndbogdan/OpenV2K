@@ -65,10 +65,10 @@ pub(super) fn dispatch_native_class49(
         || (entity.entity_type == 61 && crate::native_type61::has_native_allocation(entity))
         // Ordinary Type13's 10C10 -> DB80 enters alternate class1, BAC0.
         || (entity.entity_type == 13 && entity.native_type13_allocation.is_some())
-        // So does the emitter-only Type43's, and the flyer Type14's.
+        // So does the emitter-only Type43's, and the flyers Type14's and Type39's.
         || (entity.entity_type == crate::native_type43::ENTITY_TYPE
             && entity.native_type43_runtime.is_some())
-        || (entity.entity_type == crate::intro2_flyers_live::TYPE14_ENTITY_TYPE
+        || (crate::intro2_flyers_live::flyer_explodes(entity.entity_type)
             && entity.intro2_flyer_frame_owner.is_some())
         // Type38 (class1) and the Type129 carriers (class63).
         || (crate::native_type38::Type38Row::from_entity_type(entity.entity_type).is_some()
