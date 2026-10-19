@@ -40,6 +40,7 @@ impl SpecializedActorTaskOwner {
             Self::Intro2Type94(owner) => Some(owner.actor_lease()),
             Self::Intro2CommonDying(owner) => Some(owner.actor_lease()),
             Self::NativeWeapon(owner) => Some(owner.actor),
+            Self::PortableRadar(owner) => Some(owner.allocation()),
             _ => self.type9_actor_lease(),
         }
     }

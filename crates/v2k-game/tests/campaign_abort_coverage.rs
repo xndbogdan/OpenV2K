@@ -46,6 +46,7 @@ fn adopt_authored_tasks(manager: &mut EntityManager) -> SpecializedActorTaskSche
     tasks.adopt_intro2_type94(manager);
     tasks.adopt_intro2_type66(manager);
     tasks.adopt_class0_actors(manager);
+    tasks.adopt_portable_radars(manager);
     tasks.adopt_main_base(manager);
     tasks.adopt_intro2_type10(manager);
     tasks.adopt_intro2_type57(manager);
@@ -114,7 +115,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // Native class29 turrets now complete; their finished class49 terminals
     // admit the later power-up radial, as 14AE0 does.
     (29, 55),
-    (30, 83),
+    // Worlds 30 and 39 complete: their Type83 radars take class49.
     (31, 107),
     (32, 40),
     (33, 20),
@@ -123,12 +124,12 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (36, 74),
     (37, 106),
     (38, 82),
-    (39, 83),
     // Type125 factories share Type66's class39 owner.
     (40, 50),
     (41, 35),
-    // Type108 flyers die quietly; Alien1's next is its Type83.
-    (42, 83),
+    // Type108 flyers die quietly and the Type83 radar through class49;
+    // Alien1's next is its Type35.
+    (42, 35),
     (43, 35),
     (45, 40),
     // Ordinary Type13 and the emitter-only Type43 take their native class1
@@ -362,7 +363,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
         );
         assert!(controller.abort_frame_submitted(), "world{world}");
     }
-    assert_eq!(exact_worlds, [13, 14, 15, 28, 44, 48]);
+    assert_eq!(exact_worlds, [13, 14, 15, 28, 30, 39, 44, 48]);
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
         "first incomplete actor matrix changed"

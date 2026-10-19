@@ -3052,6 +3052,7 @@ fn run_game(
                 player_fan_audio.reset();
                 entity_positional_audio.reset_after_audio_stop();
                 campaign_warp.reset_after_audio_stop();
+                retire_world_radars(entity_manager.as_mut(), &mut session.cache, &mut world_fx);
                 entity_manager = None;
                 gameplay_overlay_frame = GameplayOverlayFrame::default();
                 specialized_actor_tasks.clear_after_manager_reset();
@@ -3175,6 +3176,7 @@ fn run_game(
                 // manager allocation. Invalidate that allocation before
                 // releasing scheduler custody; campaign-warp cancellation
                 // above deliberately returns before either operation.
+                retire_world_radars(entity_manager.as_mut(), &mut session.cache, &mut world_fx);
                 entity_manager = None;
                 specialized_actor_tasks.clear_after_manager_reset();
                 specialized_actor_task_error_reported = false;
@@ -3940,6 +3942,7 @@ fn run_game(
                 specialized_actor_tasks.adopt_intro2_type94(&em);
                 specialized_actor_tasks.adopt_intro2_type66(&em);
                 specialized_actor_tasks.adopt_class0_actors(&em);
+                specialized_actor_tasks.adopt_portable_radars(&em);
                 specialized_actor_tasks.adopt_main_base(&em);
                 specialized_actor_tasks.adopt_intro2_type10(&em);
                 specialized_actor_tasks.adopt_intro2_type57(&em);
@@ -5304,21 +5307,26 @@ fn run_game(
                 gameplay_hud_elapsed_micros =
                     advance_retail_bar_clock(gameplay_hud_elapsed_micros, elapsed_micros);
                 gameplay_hud.advance_spins(elapsed_micros);
-                let drop_context = em.player().and_then(|player| {
-                    session.cache.terrain().map(|terrain| CargoDropContext {
-                        carrier_orientation: player_model_orientation(&player_craft, player),
-                        terrain,
-                    })
-                });
                 let mut cargo_full_fx = None;
-                let cargo_frame = em.update_player_cargo(PlayerCargoFrame {
-                    elapsed_micros,
-                    beam_expiry,
-                    drop_context,
-                    retail_tick,
-                    scheduler: &mut specialized_actor_tasks,
-                    world_fx: &mut world_fx,
-                    notifications: &mut gameplay_notifications,
+                // Picking up a deployed Portable Radar removes its coverage
+                // while the drop context reads terrain: lend the radar apart.
+                let cargo_frame = session.cache.with_detached_terrain_radar(|cache, radar| {
+                    let drop_context = em.player().and_then(|player| {
+                        cache.terrain().map(|terrain| CargoDropContext {
+                            carrier_orientation: player_model_orientation(&player_craft, player),
+                            terrain,
+                        })
+                    });
+                    em.update_player_cargo(PlayerCargoFrame {
+                        elapsed_micros,
+                        beam_expiry,
+                        drop_context,
+                        retail_tick,
+                        scheduler: &mut specialized_actor_tasks,
+                        world_fx: &mut world_fx,
+                        notifications: &mut gameplay_notifications,
+                        radar: Some(radar),
+                    })
                 });
                 for (entity_id, reason) in &cargo_frame.blocked {
                     log!("Cargo behavior {entity_id} blocked: {reason}");
@@ -6543,6 +6551,34 @@ fn run_game(
                             log!("Class0 entity {entity_id}: owner dropped");
                         }
                         SpecializedActorTaskProductionOutcome::Class0Actor(_) => {}
+                        SpecializedActorTaskProductionOutcome::PortableRadar(
+                            v2k_game::portable_radar::PortableRadarActorOutcome::Blocked {
+                                entity_id,
+                                reason,
+                                ..
+                            },
+                        ) if !specialized_actor_task_error_reported => {
+                            eprintln!("Portable Radar entity {entity_id} stopped: {reason:?}");
+                            specialized_actor_task_error_reported = true;
+                        }
+                        SpecializedActorTaskProductionOutcome::PortableRadar(
+                            v2k_game::portable_radar::PortableRadarActorOutcome::Advanced {
+                                entity_id,
+                                radar:
+                                    Some(v2k_game::portable_radar::PortableRadarTickOutcome::Deployed {
+                                        random_draws,
+                                    }),
+                                ..
+                            },
+                        ) => {
+                            log!("Portable Radar entity {entity_id}: deployed ({random_draws} raster draws)");
+                        }
+                        SpecializedActorTaskProductionOutcome::PortableRadar(
+                            v2k_game::portable_radar::PortableRadarActorOutcome::Dropped { entity_id },
+                        ) => {
+                            log!("Portable Radar entity {entity_id}: owner dropped");
+                        }
+                        SpecializedActorTaskProductionOutcome::PortableRadar(_) => {}
                         SpecializedActorTaskProductionOutcome::Intro2Type26(outcome) => {
                             log!("Intro2 Type26: {outcome:?}");
                         }
@@ -14445,6 +14481,21 @@ fn draw_menu_branding(
 /// itself remains visible while the loader blocks. The port has no proven
 /// retry loop, so this path intentionally requests system string 34
 /// (`Loading`) only.
+/// 42E980's teardown sweep precedes unloading the old world: each deployed
+/// Portable Radar removes its coverage, drawing the process RNG.
+fn retire_world_radars(
+    manager: Option<&mut EntityManager>,
+    cache: &mut v2k_game::resource_cache::ResourceCache,
+    world_fx: &mut WorldFx,
+) {
+    let Some(manager) = manager else {
+        return;
+    };
+    if let Err(error) = v2k_game::portable_radar::retire_world_radars(manager, cache, world_fx) {
+        eprintln!("World teardown: Portable Radar coverage removal blocked: {error:?}");
+    }
+}
+
 fn render_loading_card(
     renderer: &mut dyn v2k_render::Renderer,
     system_strings: &[String],

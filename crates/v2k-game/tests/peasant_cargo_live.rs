@@ -183,6 +183,7 @@ impl World {
         // replacement, the actor pass, and unclaimed-animation fallback.
         let mut claims: Vec<_> = self.scheduler.actor_animation_claims().collect();
         let cargo = self.entities.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros,
             beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
@@ -979,6 +980,7 @@ fn nonlocal_or_unresolved_cargo_drop_keeps_relation_tasks_and_rng() {
             [position[0] + 0.25, position[1] - 1., position[2]];
         world.entities.queue_beam(BeamCommand::Collect);
         let collected = world.entities.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 80_000,
             beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {
@@ -1032,6 +1034,7 @@ fn nonlocal_or_unresolved_cargo_drop_keeps_relation_tasks_and_rng() {
         let mut untouched_effects = WorldFx::new();
         world.entities.queue_beam(BeamCommand::Drop);
         let dropped = world.entities.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 80_000,
             beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {

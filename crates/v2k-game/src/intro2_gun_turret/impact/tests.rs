@@ -462,7 +462,7 @@ fn incomplete_and_foreign_terminal_receipts_cannot_admit_repeated_hits() {
                     assert!(finish_class49_terminal(
                         &mut world.manager,
                         receipt,
-                        &world.session.cache,
+                        &mut world.session.cache,
                         &mut world.fx
                     )
                     .is_err());

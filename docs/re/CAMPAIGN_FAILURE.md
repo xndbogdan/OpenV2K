@@ -266,7 +266,7 @@ later runtime graph or predecessor history.
 
 | Fresh-world exact sweep | Global OVLs |
 |---|---|
-| Complete | 13, 14, 15, 28, 44, 48 |
+| Complete | 13, 14, 15, 28, 30, 39, 44, 48 |
 | No campaign controller or casualty record | 49, 50 |
 
 The remaining first unsupported ordinary callbacks are listed below. Each is
@@ -281,7 +281,7 @@ retail skips those actors.
 | 27 | 27, 35 |
 | 29 | 20, 24 |
 | 31 | 16 |
-| 35 | 41, 43, 46 |
+| 35 | 41, 42, 43, 46 |
 | 40 | 17, 19, 32, 45 |
 | 41 | 22 |
 | 50 | 40 |
@@ -289,15 +289,14 @@ retail skips those actors.
 | 73 | 18 |
 | 74 | 36 |
 | 82 | 25, 38 |
-| 83 | 30, 39, 42 |
 | 89 | 21 |
 | 106 | 37 |
 | 107 | 31 |
 | 109 | 26 |
 | 110 | 47 |
 
-Thus exact fresh-world actor cleanup is complete for three of the 21 casualty
-worlds (13/14/15); the other eighteen use the explicitly bounded transition.
+Thus exact fresh-world actor cleanup is complete for four of the 21 casualty
+worlds (13/14/15/39); the other seventeen use the explicitly bounded transition.
 The authored-threshold regression additionally verifies all 21 warning/loss
 boundaries, saved/aborted suppression, per-load latch reset, scientist-plus-
 peasant census, and the ordered selector's warning delivery.

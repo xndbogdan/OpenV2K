@@ -220,7 +220,7 @@ struct TerrainRadarConfig {
 
 /// The signed contribution passed by the Portable Radar task to `44A8D0`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum RadarCoverageChange {
+pub enum RadarCoverageChange {
     Add,
     Remove,
 }
@@ -794,6 +794,11 @@ impl TerrainRadar {
         self.indices[z * WORLD_SIZE + x] = color_index.min(34);
         coverage != 0
     }
+}
+
+/// Whether `44A8D0`'s terrain and object inputs are resident.
+pub(crate) fn terrain_radar_inputs_present(cache: &ResourceCache) -> bool {
+    terrain_radar_resources(cache).is_ok()
 }
 
 fn terrain_radar_resources(

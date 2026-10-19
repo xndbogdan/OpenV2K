@@ -276,6 +276,7 @@ fn cleansing_rover_collect_drop_and_settle_retains_identity_and_republishes_task
     let mut proxy = None;
     for tick in 1002..1102 {
         let pass = manager.update_player_cargo(PlayerCargoFrame {
+            radar: None,
             elapsed_micros: 20_000,
             beam_expiry: crate::entity::BeamExpiry::AtZero,
             drop_context: Some(CargoDropContext {

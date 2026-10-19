@@ -323,7 +323,7 @@ fn a_class63_fish_corpse_keeps_its_task_descriptor_hook_until_the_sweep() {
             .unwrap()
             .expect("live Type124");
     assert!(claim_class49_terminal(&mut f.entities, &receipt));
-    finish_class49_terminal(&mut f.entities, receipt, &f.session.cache, &mut f.fx).unwrap();
+    finish_class49_terminal(&mut f.entities, receipt, &mut f.session.cache, &mut f.fx).unwrap();
     // The terminal's scheduler finish retires the living owner.
     f.scheduler.retire_shared_fish(id);
     assert!(!f.scheduler.prepare_native_actor_mutation(&f.entities, id));

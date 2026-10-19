@@ -299,7 +299,7 @@ The restoration path passes the focused, workspace and runtime controls in
 owners coexist with selected Type9 adoption; conflicting entity IDs still
 reject atomically without consuming sidecars or changing existing custody.
 
-Remaining eligible cargo constructors (74, 83, 107, 121, 123) stay
+Remaining eligible cargo constructors (74, 107, 121) stay
 evidence-blocked `UnsupportedConstructor`. Reached Type9 nonzero-wind stays
 explicit unsupported; carried underwater expiry now composes actual CE90
 release/reselection and class14 custody. Factory C830 voices now

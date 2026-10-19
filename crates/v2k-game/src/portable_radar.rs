@@ -2,12 +2,31 @@
 //!
 //! Sub-K variable 1 belongs to the entity, not the task wrapper. These detached
 //! programs borrow that exact word; they retain neither an activation boolean
-//! nor a previous footprint center. Native construction, scheduler custody,
-//! task installation, cargo and death/teardown dispatch remain separate owners.
+//! nor a previous footprint center. [`actor`] owns the native Type83 birth,
+//! scheduler visit and task replacement that call them.
+
+mod actor;
+#[cfg(test)]
+mod actor_tests;
+pub(crate) mod cargo;
+#[cfg(test)]
+mod cargo_tests;
+pub mod impact;
+
+pub(crate) use actor::{
+    allocation_authenticates, clear_all_tasks, has_pending_prefix,
+    manager_allocation_authenticates, publish_portable_radar, PortableRadarConstruction,
+    ENTITY_TYPE, STYLE,
+};
+pub use actor::{
+    authenticate_metadata, retire_world_radars, tick_portable_radar_owner, PortableRadarActorFrame,
+    PortableRadarActorOutcome, PortableRadarActorTick, PortableRadarError, PortableRadarOwner,
+    PortableRadarRuntime,
+};
 
 use crate::{
     gameplay_radar::{RadarCoverageChange, TerrainRadarError},
-    resource_cache::ResourceCache,
+    resource_cache::RadarCoverage,
 };
 
 /// Inputs at the actual component callback boundary. The outer scheduler owns
@@ -38,7 +57,7 @@ pub enum PortableRadarTickOutcome {
 pub fn tick_portable_radar(
     sub_k1: &mut u16,
     frame: PortableRadarFrame,
-    resources: &mut ResourceCache,
+    coverage: &mut impl RadarCoverage,
     next_random: &mut impl FnMut() -> u16,
 ) -> Result<PortableRadarTickOutcome, TerrainRadarError> {
     if frame.state_flags_raw & 0x1000 != 0 {
@@ -55,11 +74,8 @@ pub fn tick_portable_radar(
         return Ok(PortableRadarTickOutcome::Deploying);
     }
     let [x, _, z] = frame.position_raw;
-    let random_draws = resources.mutate_level_terrain_radar_coverage(
-        [x, z],
-        RadarCoverageChange::Add,
-        next_random,
-    )?;
+    let random_draws =
+        coverage.mutate_radar_coverage([x, z], RadarCoverageChange::Add, next_random)?;
     Ok(PortableRadarTickOutcome::Deployed { random_draws })
 }
 
@@ -74,16 +90,12 @@ pub fn tick_portable_radar(
 pub fn destroy_portable_radar(
     sub_k1: &mut u16,
     position_raw: [i16; 3],
-    resources: &mut ResourceCache,
+    coverage: &mut impl RadarCoverage,
     next_random: &mut impl FnMut() -> u16,
 ) -> Result<usize, TerrainRadarError> {
     let draws = if *sub_k1 == u16::MAX {
         let [x, _, z] = position_raw;
-        resources.mutate_level_terrain_radar_coverage(
-            [x, z],
-            RadarCoverageChange::Remove,
-            next_random,
-        )?
+        coverage.mutate_radar_coverage([x, z], RadarCoverageChange::Remove, next_random)?
     } else {
         0
     };
@@ -94,6 +106,7 @@ pub fn destroy_portable_radar(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::resource_cache::ResourceCache;
 
     fn frame(elapsed_micros: u32) -> PortableRadarFrame {
         PortableRadarFrame {

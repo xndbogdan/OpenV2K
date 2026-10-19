@@ -29,6 +29,9 @@ pub struct PlayerCargoFrame<'a> {
     pub scheduler: &'a mut SpecializedActorTaskScheduler,
     pub world_fx: &'a mut WorldFx,
     pub notifications: &'a mut GameplayNotifications,
+    /// The resident radar, lent apart from the cache whose terrain the drop
+    /// context borrows: picking up a deployed Type83 removes its coverage.
+    pub radar: Option<crate::resource_cache::DetachedRadarCoverage<'a>>,
 }
 
 #[derive(Debug)]
@@ -59,6 +62,7 @@ impl EntityManager {
             notifications: frame.notifications,
             retail_tick: frame.retail_tick,
             terrain: frame.drop_context.map(|context| context.terrain),
+            radar: frame.radar,
             blocked: Vec::new(),
         };
         let beam = self.tick_beam_with_callbacks(
@@ -87,6 +91,7 @@ impl EntityManager {
             notifications: frame.notifications,
             retail_tick: frame.retail_tick,
             terrain: Some(frame.terrain),
+            radar: None,
             blocked: Vec::new(),
         };
         self.update_type93_materialisers_with_callbacks(
@@ -235,6 +240,7 @@ impl CargoRelationCallbacks for AttachmentProjectionCallbacks {
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
+            portable_radar_runtime: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -350,12 +356,14 @@ struct LiveCargoCallbacks<'a> {
     notifications: &'a mut GameplayNotifications,
     retail_tick: u32,
     terrain: Option<&'a TerrainGrid>,
+    radar: Option<crate::resource_cache::DetachedRadarCoverage<'a>>,
     blocked: Vec<(u32, String)>,
 }
 
 enum CargoAttachPlan {
     Cleansing(crate::cleansing_vehicle::cargo::AttachPlan),
     Class0(super::class0_actor::cargo::Class0AttachPlan),
+    PortableRadar(crate::portable_radar::cargo::PortableRadarAttachPlan),
     Type8 {
         cargo: u32,
         parent: u32,
@@ -382,6 +390,7 @@ enum CargoAttachPlan {
 enum CargoReleasePlan {
     Cleansing(crate::cleansing_vehicle::cargo::ReleasePlan),
     Class0(super::class0_actor::cargo::Class0ReleasePlan),
+    PortableRadar(crate::portable_radar::cargo::PortableRadarReleasePlan),
     Type8 {
         cargo: u32,
         plan: crate::intro2_type8::cargo::Type8ReleasePlan,
@@ -450,10 +459,12 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
         // the constructor's shared-RNG word or any allocation publication.
         let entity = manager.iter_all().find(|entity| entity.id == cargo)?;
         let native_class0 = manager.native_class0_construction_present(cargo);
+        let radar = crate::portable_radar::allocation_authenticates(entity);
         if (matches!(entity.entity_type, 9 | 49 | 123)
             || NativeWorkerProfile::from_entity_type(entity.entity_type).is_some()
             || NativeFourChoiceProfile::from_entity_type(entity.entity_type).is_some()
-            || native_class0)
+            || native_class0
+            || radar)
             && entity
                 .collision
                 .state_flags_at_0x08
@@ -476,6 +487,27 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
                 return self.blocked(cargo, "cleansing drop relation unavailable");
             };
             if let Err(reason) = crate::cleansing_vehicle::cargo::prepare_release(
+                manager,
+                cargo,
+                parent,
+                Type9CargoReleasePosition::Retained,
+                terrain,
+            ) {
+                return self.blocked(cargo, reason);
+            }
+        }
+        if radar {
+            if !self
+                .scheduler
+                .prepare_portable_radar_external_mutation(manager, cargo)
+            {
+                return self.blocked(cargo, "radar task callback is not at a completed boundary");
+            }
+            let Some(parent) = entity.attached_to else {
+                return self.blocked(cargo, "radar drop relation unavailable");
+            };
+            // Close the release before the proxy's selector word.
+            if let Err(reason) = crate::portable_radar::cargo::prepare_release(
                 manager,
                 cargo,
                 parent,
@@ -566,6 +598,24 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
             }
             return match crate::cleansing_vehicle::cargo::prepare_attach(manager, cargo, parent) {
                 Ok(plan) => Some(CargoAttachPlan::Cleansing(plan)),
+                Err(reason) => self.blocked(cargo, reason),
+            };
+        }
+        if crate::portable_radar::allocation_authenticates(entity) {
+            if !self
+                .scheduler
+                .prepare_portable_radar_external_mutation(manager, cargo)
+            {
+                return self.blocked(cargo, "radar task callback is not at a completed boundary");
+            }
+            let resident = self
+                .radar
+                .as_ref()
+                .is_some_and(|radar| radar.raster_resident());
+            return match crate::portable_radar::cargo::prepare_attach(
+                manager, cargo, parent, resident,
+            ) {
+                Ok(plan) => Some(CargoAttachPlan::PortableRadar(plan)),
                 Err(reason) => self.blocked(cargo, reason),
             };
         }
@@ -705,6 +755,32 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
                     .prepare_class0_actor_external_mutation(manager, plan.cargo));
                 super::class0_actor::cargo::commit_attach(manager, plan, publish_sub_j);
             }
+            CargoAttachPlan::PortableRadar(plan) => {
+                let (cargo, parent) = (plan.cargo, plan.parent);
+                assert!(self
+                    .scheduler
+                    .take_portable_radar_external_mutation(manager, cargo));
+                publish_sub_j(manager);
+                project_relation_attach(manager.entity_mut(cargo).unwrap(), parent);
+                match self.radar.as_mut() {
+                    Some(radar) => crate::portable_radar::cargo::commit_attach(
+                        manager,
+                        plan,
+                        radar,
+                        self.world_fx,
+                    ),
+                    None => crate::portable_radar::cargo::commit_attach(
+                        manager,
+                        plan,
+                        &mut crate::portable_radar::cargo::NoRadarCoverage,
+                        self.world_fx,
+                    ),
+                }
+                self.scheduler.register_portable_radar(
+                    crate::portable_radar::PortableRadarOwner::adopt(manager, cargo)
+                        .expect("completed radar attach graph"),
+                );
+            }
             CargoAttachPlan::Type8 {
                 cargo,
                 parent,
@@ -812,6 +888,23 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
                 manager, cargo, parent, position, terrain,
             ) {
                 Ok(plan) => Some(CargoReleasePlan::Cleansing(plan)),
+                Err(reason) => self.blocked(cargo, reason),
+            };
+        }
+        if crate::portable_radar::allocation_authenticates(entity) {
+            if !self
+                .scheduler
+                .prepare_portable_radar_external_mutation(manager, cargo)
+            {
+                return self.blocked(cargo, "radar task callback is not at a completed boundary");
+            }
+            let Some(terrain) = self.terrain else {
+                return self.blocked(cargo, "radar release terrain unavailable");
+            };
+            return match crate::portable_radar::cargo::prepare_release(
+                manager, cargo, parent, position, terrain,
+            ) {
+                Ok(plan) => Some(CargoReleasePlan::PortableRadar(plan)),
                 Err(reason) => self.blocked(cargo, reason),
             };
         }
@@ -997,6 +1090,17 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
                 let owner = super::class0_actor::Class0ActorOwner::adopt(manager, cargo)
                     .expect("completed class0 release graph");
                 self.scheduler.register_class0_actor(owner);
+            }
+            CargoReleasePlan::PortableRadar(plan) => {
+                let cargo = plan.cargo;
+                assert!(self
+                    .scheduler
+                    .take_portable_radar_external_mutation(manager, cargo));
+                crate::portable_radar::cargo::commit_release(manager, plan, self.world_fx);
+                self.scheduler.register_portable_radar(
+                    crate::portable_radar::PortableRadarOwner::adopt(manager, cargo)
+                        .expect("completed radar release graph"),
+                );
             }
             CargoReleasePlan::Type8 { cargo, plan } => {
                 crate::intro2_type8::cargo::commit_release(

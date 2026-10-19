@@ -55,6 +55,7 @@ fn missing_native_type123_receipt_never_falls_back_to_unowned_relation_projectio
                 notifications: &mut notifications,
                 retail_tick: 5000,
                 terrain: session.cache.terrain(),
+                radar: None,
                 blocked: Vec::new(),
             };
             let plan = callbacks.prepare_attach(&manager, id, parent).unwrap();
@@ -84,6 +85,7 @@ fn missing_native_type123_receipt_never_falls_back_to_unowned_relation_projectio
                 notifications: &mut notifications,
                 retail_tick: 5000,
                 terrain: session.cache.terrain(),
+                radar: None,
                 blocked: Vec::new(),
             };
             if attached {
@@ -208,6 +210,7 @@ fn live_cargo_attach_transfers_living_graphs_and_retires_terminal_people_and_wor
                     notifications: &mut notifications,
                     retail_tick: 5000,
                     terrain: session.cache.terrain(),
+                    radar: None,
                     blocked: Vec::new(),
                 };
                 let plan = callbacks

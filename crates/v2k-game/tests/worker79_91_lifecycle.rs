@@ -438,6 +438,7 @@ fn native_worker_and_person_profiles_survive_player_collect_materialise_and_drop
         let mut collected = false;
         for tick in 2..=31 {
             let result = world.entities.update_player_cargo(PlayerCargoFrame {
+                radar: None,
                 elapsed_micros: 20_000,
                 beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
                 drop_context: None,
@@ -474,6 +475,7 @@ fn native_worker_and_person_profiles_survive_player_collect_materialise_and_drop
         let mut proxy = None;
         for tick in 32..=150 {
             let result = world.entities.update_player_cargo(PlayerCargoFrame {
+                radar: None,
                 elapsed_micros: 20_000,
                 beam_expiry: v2k_game::entity::BeamExpiry::AtZero,
                 drop_context: Some(CargoDropContext {

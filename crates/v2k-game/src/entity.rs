@@ -1155,13 +1155,14 @@ impl BaseFactoryRuntimeState {
 /// Section12 loader's pair, independently of their live task owner; see
 /// PLASMA_WEAPON_PRESENTATION.md for the type/model census and override audit.
 /// Type71's Section-12 row equals Type47's apart from data words and Sub-E,
-/// so the loader gives it the same pair.
+/// so the loader gives it the same pair. The native Type83 radar's row gets
+/// it too; its selector 1 is the Sub-K word 405610 counts.
 /// Keeping this as an explicit evidence policy prevents an unobserved type
 /// from acquiring animation merely because its model happens to look similar.
 pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool {
     matches!(
         entity_type,
-        9 | 13 | 17 | 26 | 30 | 40 | 47 | 56 | 61 | 71 | 92 | 96 | 97 | 99 | 102 | 103
+        9 | 13 | 17 | 26 | 30 | 40 | 47 | 56 | 61 | 71 | 83 | 92 | 96 | 97 | 99 | 102 | 103
     )
 }
 
@@ -1553,6 +1554,8 @@ pub struct Entity {
     /// Native ordinary Type43 E allocation and its queued Aim transactions.
     pub native_type43_runtime: Option<crate::native_type43::Type43Runtime>,
     pub native_type43_aim_runtime: Option<crate::native_type43::aim::Type43AimRuntime>,
+    /// Native Type83 Portable Radar allocation and its Sub-K word 1.
+    pub portable_radar_runtime: Option<crate::portable_radar::PortableRadarRuntime>,
     /// Native ordinary Type38/Type129 components and queued Aim transactions.
     pub native_type38_runtime: Option<crate::native_type38::Type38Runtime>,
     pub native_type38_aim_runtime: Option<crate::native_type38::aim::Type38AimRuntime>,
@@ -1745,6 +1748,7 @@ impl Entity {
             native_type40_runtime: self.native_type40_runtime,
             native_type40_aim_runtime: self.native_type40_aim_runtime.clone(),
             native_type43_runtime: self.native_type43_runtime,
+            portable_radar_runtime: self.portable_radar_runtime,
             native_type43_aim_runtime: self.native_type43_aim_runtime.clone(),
             native_type38_runtime: self.native_type38_runtime.clone(),
             native_type38_aim_runtime: self.native_type38_aim_runtime.clone(),
@@ -1861,6 +1865,7 @@ impl Entity {
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
+            portable_radar_runtime: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -2073,6 +2078,10 @@ impl Entity {
         }
         if let Some(runtime) = &self.native_type30_runtime {
             runtime.publish_model_variables(&mut vars);
+        }
+        if let Some(runtime) = self.portable_radar_runtime {
+            // 40D320's selector 1 is Sub-K word 1, 405610's deployment count.
+            vars.dynamic[1] = i32::from(runtime.sub_k1);
         }
         if let Some(runtime) = self.intro2_type10_runtime {
             for (selector, value) in crate::intro2_type10::SUB_K
@@ -3141,6 +3150,7 @@ fn build_type93_materialiser_entity(
         native_type40_runtime: None,
         native_type40_aim_runtime: None,
         native_type43_runtime: None,
+        portable_radar_runtime: None,
         native_type43_aim_runtime: None,
         native_type38_runtime: None,
         native_type38_aim_runtime: None,
@@ -5014,6 +5024,7 @@ impl EntityManager {
                             | 113
                             | 115
                             | 80
+                            | 83
                             | 122
                             | 123
                             | 124
@@ -5436,6 +5447,7 @@ impl EntityManager {
                 native_type40_runtime: None,
                 native_type40_aim_runtime: None,
                 native_type43_runtime: None,
+                portable_radar_runtime: None,
                 native_type43_aim_runtime: None,
                 native_type38_runtime: None,
                 native_type38_aim_runtime: None,
@@ -5914,6 +5926,7 @@ impl EntityManager {
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
+            portable_radar_runtime: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -6723,6 +6736,7 @@ impl EntityManager {
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
+            portable_radar_runtime: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -8196,6 +8210,7 @@ impl EntityManager {
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
+            portable_radar_runtime: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -13415,12 +13430,15 @@ impl EntityManager {
             .intro2_type8_runtime
             .is_some_and(|runtime| runtime.is_native_construction())
             && crate::intro2_type8::intro2_type8_manager_allocation_authenticates(self, cargo_id);
+        let native_radar_cargo =
+            crate::portable_radar::allocation_authenticates(&self.entities[cargo_index]);
         // FUN_00408F00 clears child/proxy body bit800 after the attach
         // callback, then borrows the selected model before clearing child
         // master motion. Native workers share this suffix; replay stays bounded.
         if self.entities[cargo_index].entity_type == 9
             || self.native_class0_construction_present(cargo_id)
             || native_type8_cargo
+            || native_radar_cargo
         {
             self.entities[cargo_index]
                 .collision
@@ -13443,6 +13461,7 @@ impl EntityManager {
         if self.entities[cargo_index].entity_type == 9
             || self.native_class0_construction_present(cargo_id)
             || native_type8_cargo
+            || native_radar_cargo
         {
             self.entities[cargo_index]
                 .collision

@@ -41,6 +41,54 @@ pub struct ResourceCache {
     level_terrain_presentation_dirty: bool,
 }
 
+/// `44A8D0`'s persistent coverage: the cache itself, or its radar lent apart.
+pub trait RadarCoverage {
+    fn mutate_radar_coverage(
+        &mut self,
+        position: [i16; 2],
+        change: crate::gameplay_radar::RadarCoverageChange,
+        next_random: &mut impl FnMut() -> u16,
+    ) -> Result<usize, crate::gameplay_radar::TerrainRadarError>;
+}
+
+impl RadarCoverage for ResourceCache {
+    fn mutate_radar_coverage(
+        &mut self,
+        position: [i16; 2],
+        change: crate::gameplay_radar::RadarCoverageChange,
+        next_random: &mut impl FnMut() -> u16,
+    ) -> Result<usize, crate::gameplay_radar::TerrainRadarError> {
+        self.mutate_level_terrain_radar_coverage(position, change, next_random)
+    }
+}
+
+/// The resident radar during [`ResourceCache::with_detached_terrain_radar`].
+pub struct DetachedRadarCoverage<'a> {
+    cache: &'a ResourceCache,
+    radar: Option<&'a mut crate::gameplay_radar::TerrainRadar>,
+}
+
+impl DetachedRadarCoverage<'_> {
+    /// Whether a resident raster and its terrain inputs can take a mutation.
+    pub(crate) fn raster_resident(&self) -> bool {
+        self.radar.is_some() && crate::gameplay_radar::terrain_radar_inputs_present(self.cache)
+    }
+}
+
+impl RadarCoverage for DetachedRadarCoverage<'_> {
+    fn mutate_radar_coverage(
+        &mut self,
+        position: [i16; 2],
+        change: crate::gameplay_radar::RadarCoverageChange,
+        next_random: &mut impl FnMut() -> u16,
+    ) -> Result<usize, crate::gameplay_radar::TerrainRadarError> {
+        self.radar
+            .as_deref_mut()
+            .ok_or(crate::gameplay_radar::TerrainRadarError::Uninitialized)?
+            .mutate_coverage(self.cache, position, change, next_random)
+    }
+}
+
 /// Panic-safe current-level write boundary for one speculative Main Base
 /// abort.
 ///
@@ -330,6 +378,24 @@ impl ResourceCache {
             .ok_or(crate::gameplay_radar::TerrainRadarError::Uninitialized)?;
         let result = radar.mutate_coverage(self, position, change, next_random);
         self.level_terrain_radar = Some(radar);
+        result
+    }
+
+    /// Lend the resident radar apart from this cache for one phase that also
+    /// borrows its terrain, such as the beam's drop context, then restore it.
+    pub fn with_detached_terrain_radar<R>(
+        &mut self,
+        phase: impl FnOnce(&Self, DetachedRadarCoverage<'_>) -> R,
+    ) -> R {
+        let mut radar = self.level_terrain_radar.take();
+        let result = phase(
+            self,
+            DetachedRadarCoverage {
+                cache: self,
+                radar: radar.as_mut(),
+            },
+        );
+        self.level_terrain_radar = radar;
         result
     }
 

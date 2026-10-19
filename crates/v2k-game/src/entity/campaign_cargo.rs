@@ -50,6 +50,7 @@ pub enum CampaignCargoRestoreError {
         reason: crate::native_type123::Type123Block,
     },
     CleansingVehicle(crate::cleansing_vehicle::CleansingVehicleError),
+    PortableRadar(crate::portable_radar::PortableRadarError),
     Attachment {
         entity_id: u32,
         reason: PlayerCargoAttachmentError,
@@ -104,6 +105,7 @@ impl EntityManager {
 
         self.restore_campaign_player_surface(&context)?;
         context.scheduler.adopt_class0_actors(self);
+        context.scheduler.adopt_portable_radars(self);
         // Player attach authenticates Type123 task custody through the
         // scheduler, which is still fresh this early in the load: adopt the
         // authored owners now, exactly like the later main-flow sweep would.
@@ -243,6 +245,7 @@ impl EntityManager {
             92 | 96 | 97 | 100 => {
                 self.append_native_zero_record_class29_turret(entity_type, context)
             }
+            83 => self.append_native_zero_record_portable_radar(context),
             123 => self.append_native_zero_record_type123(context),
             _ => Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type }),
         }
@@ -312,6 +315,61 @@ impl EntityManager {
         })?;
         assert_eq!(self.allocate_live_entity_id(), id);
         self.append_live_entity(entity);
+        Ok(id)
+    }
+
+    fn append_native_zero_record_portable_radar(
+        &mut self,
+        context: &mut CampaignCargoRestoreContext<'_>,
+    ) -> Result<u32, CampaignCargoRestoreError> {
+        let entity_type = crate::portable_radar::ENTITY_TYPE;
+        let metadata = self
+            .type_runtime_metadata(entity_type)
+            .cloned()
+            .ok_or(CampaignCargoRestoreError::EntityTypeUnavailable { entity_type })?;
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err(CampaignCargoRestoreError::PortableRadar(
+                crate::portable_radar::PortableRadarError::Runtime("native body stamp lineage"),
+            ));
+        }
+        let terrain = context
+            .resources
+            .terrain
+            .ok_or(CampaignCargoRestoreError::TerrainUnavailable)?;
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            [0; 3],
+            terrain,
+            context.retail_tick,
+            context.level.raw_u32(0x84).expect("descriptor+84") != 0,
+        )
+        .ok_or(CampaignCargoRestoreError::TerrainUnavailable)?;
+        let id = self.next_entity_id;
+        let stamp = self.begin_common_body_attempt();
+        let request = NativeInstanceBodyRequest::zeroed(entity_type);
+        let mut entity = native_instance_body(id, stamp, &metadata, terrain, request);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        crate::portable_radar::publish_portable_radar(
+            crate::portable_radar::PortableRadarConstruction {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+                record: NativeCreationRecord::zeroed(request),
+                terrain,
+                constructor_surface_bits,
+            },
+            &mut || u32::from(context.world_fx.next_shared_retail_random_u16()),
+        )
+        .map_err(CampaignCargoRestoreError::PortableRadar)?;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        // The following attach authenticates scheduler custody.
+        context.scheduler.register_portable_radar(
+            crate::portable_radar::PortableRadarOwner::adopt(self, id)
+                .expect("published native radar birth"),
+        );
         Ok(id)
     }
 

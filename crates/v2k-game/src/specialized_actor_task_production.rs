@@ -215,6 +215,7 @@ pub enum SpecializedActorTaskFamily {
     Intro2Type66,
     MainBase,
     Class0Actor,
+    PortableRadar,
     Intro2Type10,
     Intro2Type57,
     Intro2GunTurret,
@@ -284,6 +285,7 @@ enum SpecializedActorTaskOwner {
     Intro2Type66(crate::intro2_type66::Intro2Type66Owner),
     MainBase(crate::main_base_runtime::MainBaseOwner),
     Class0Actor(crate::entity::Class0ActorOwner),
+    PortableRadar(crate::portable_radar::PortableRadarOwner),
     Intro2Type10(crate::intro2_type10::Intro2Type10Owner),
     Intro2Type57(crate::intro2_type57::Intro2Type57Owner),
     Intro2GunTurret(crate::intro2_gun_turret::Intro2GunTurretOwner),
@@ -457,6 +459,7 @@ impl SpecializedActorTaskOwner {
             Self::Intro2Type66(owner) => owner.entity_id(),
             Self::MainBase(owner) => owner.entity_id(),
             Self::Class0Actor(owner) => owner.entity_id(),
+            Self::PortableRadar(owner) => owner.entity_id(),
             Self::Intro2Type10(owner) => owner.entity_id(),
             Self::Intro2Type57(owner) => owner.entity_id(),
             Self::Intro2GunTurret(owner) => owner.entity_id(),
@@ -522,6 +525,7 @@ impl SpecializedActorTaskOwner {
             Self::Intro2Type66(_) => SpecializedActorTaskFamily::Intro2Type66,
             Self::MainBase(_) => SpecializedActorTaskFamily::MainBase,
             Self::Class0Actor(_) => SpecializedActorTaskFamily::Class0Actor,
+            Self::PortableRadar(_) => SpecializedActorTaskFamily::PortableRadar,
             Self::Intro2Type10(_) => SpecializedActorTaskFamily::Intro2Type10,
             Self::Intro2Type57(_) => SpecializedActorTaskFamily::Intro2Type57,
             Self::Intro2GunTurret(_) => SpecializedActorTaskFamily::Intro2GunTurret,
@@ -670,6 +674,9 @@ impl SpecializedActorTaskOwner {
             Self::MainBase(owner) => Self::MainBase(owner.fork_for_main_base_abort_transaction()),
             Self::Class0Actor(owner) => {
                 Self::Class0Actor(owner.fork_for_main_base_abort_transaction())
+            }
+            Self::PortableRadar(owner) => {
+                Self::PortableRadar(owner.fork_for_main_base_abort_transaction())
             }
             Self::Intro2Type10(owner) => {
                 Self::Intro2Type10(owner.fork_for_main_base_abort_transaction())
@@ -1003,6 +1010,7 @@ pub enum SpecializedActorTaskProductionOutcome {
     Intro2Type66(crate::intro2_type66::Intro2Type66Outcome),
     MainBase(crate::main_base_runtime::MainBaseOutcome),
     Class0Actor(crate::entity::Class0ActorOutcome),
+    PortableRadar(crate::portable_radar::PortableRadarActorOutcome),
     Intro2Type10(crate::intro2_type10::Intro2Type10Outcome),
     Intro2Type57(crate::intro2_type57::Intro2Type57Outcome),
     Intro2GunTurret(crate::intro2_gun_turret::Intro2GunTurretOutcome),
@@ -1071,6 +1079,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::Intro2Type66(_) => SpecializedActorTaskFamily::Intro2Type66,
             Self::MainBase(_) => SpecializedActorTaskFamily::MainBase,
             Self::Class0Actor(_) => SpecializedActorTaskFamily::Class0Actor,
+            Self::PortableRadar(_) => SpecializedActorTaskFamily::PortableRadar,
             Self::Intro2Type10(_) => SpecializedActorTaskFamily::Intro2Type10,
             Self::Intro2Type57(_) => SpecializedActorTaskFamily::Intro2Type57,
             Self::Intro2GunTurret(_) => SpecializedActorTaskFamily::Intro2GunTurret,
@@ -1171,6 +1180,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::Intro2Type66(outcome) => outcome.entity_id(),
             Self::MainBase(outcome) => outcome.entity_id(),
             Self::Class0Actor(outcome) => outcome.entity_id(),
+            Self::PortableRadar(outcome) => outcome.entity_id(),
             Self::Intro2Type10(outcome) => outcome.entity_id(),
             Self::Intro2Type57(outcome) => outcome.entity_id(),
             Self::Intro2GunTurret(outcome) => outcome.entity_id(),
@@ -2431,6 +2441,60 @@ impl SpecializedActorTaskScheduler {
             .retain(|present| present.entity_id() != owner.entity_id());
         self.owners
             .push(SpecializedActorTaskOwner::Class0Actor(owner));
+    }
+    pub fn adopt_portable_radars(&mut self, manager: &EntityManager) -> usize {
+        let owners: Vec<_> = manager
+            .iter_all()
+            .filter_map(|entity| {
+                crate::portable_radar::PortableRadarOwner::adopt(manager, entity.id).ok()
+            })
+            .filter(|owner| {
+                !self
+                    .owners
+                    .iter()
+                    .any(|present| present.entity_id() == owner.entity_id())
+            })
+            .collect();
+        let count = owners.len();
+        self.owners.extend(
+            owners
+                .into_iter()
+                .map(SpecializedActorTaskOwner::PortableRadar),
+        );
+        count
+    }
+    /// A relation or death callback may mutate the radar only at a completed
+    /// visit boundary of its registered owner.
+    pub(crate) fn prepare_portable_radar_external_mutation(
+        &self,
+        manager: &EntityManager,
+        id: u32,
+    ) -> bool {
+        let Ok(current) = crate::portable_radar::PortableRadarOwner::adopt(manager, id) else {
+            return false;
+        };
+        self.owners.iter().any(|present|
+            matches!(present, SpecializedActorTaskOwner::PortableRadar(owner) if *owner == current))
+    }
+    pub(crate) fn take_portable_radar_external_mutation(
+        &mut self,
+        manager: &EntityManager,
+        id: u32,
+    ) -> bool {
+        if !self.prepare_portable_radar_external_mutation(manager, id) {
+            return false;
+        }
+        self.owners.retain(|present| present.entity_id() != id);
+        true
+    }
+    pub(crate) fn register_portable_radar(
+        &mut self,
+        owner: crate::portable_radar::PortableRadarOwner,
+    ) {
+        self.owners
+            .retain(|present| present.entity_id() != owner.entity_id());
+        self.owners
+            .push(SpecializedActorTaskOwner::PortableRadar(owner));
     }
     pub fn adopt_intro2_type10(&mut self, manager: &EntityManager) -> usize {
         let owners: Vec<_> = manager
@@ -4402,6 +4466,7 @@ impl SpecializedActorTaskScheduler {
                 || self.intro2_type66_has_pending_prefix(id)
                 || self.main_base_has_pending_prefix(id)
                 || self.intro2_gun_turret_has_pending_prefix(id)
+                || crate::portable_radar::has_pending_prefix(manager, id)
             {
                 continue;
             }
@@ -5853,6 +5918,25 @@ impl SpecializedActorTaskScheduler {
                         tick.outcome,
                     ));
                 }
+                // The first saturation of 405610 mutates the shared radar raster.
+                SpecializedActorTaskOwner::PortableRadar(owner) => {
+                    let tick = crate::portable_radar::tick_portable_radar_owner(
+                        manager,
+                        owner,
+                        crate::portable_radar::PortableRadarActorFrame {
+                            resources: &mut *resources,
+                            world_fx,
+                            elapsed_micros,
+                            retail_tick,
+                        },
+                    );
+                    if let Some(owner) = tick.retained_owner {
+                        retained.push(SpecializedActorTaskOwner::PortableRadar(owner));
+                    }
+                    outcomes.push(SpecializedActorTaskProductionOutcome::PortableRadar(
+                        tick.outcome,
+                    ));
+                }
                 SpecializedActorTaskOwner::Intro2Type17(owner) => {
                     let tick = crate::intro2_type17::tick_intro2_type17(
                         manager,
@@ -6383,6 +6467,13 @@ impl SpecializedActorTaskScheduler {
             SpecializedActorTaskOwner::Class0Actor(owner) => {
                 SpecializedActorTaskProductionOutcome::Class0Actor(
                     crate::entity::Class0ActorOutcome::Dropped {
+                        entity_id: owner.entity_id(),
+                    },
+                )
+            }
+            SpecializedActorTaskOwner::PortableRadar(owner) => {
+                SpecializedActorTaskProductionOutcome::PortableRadar(
+                    crate::portable_radar::PortableRadarActorOutcome::Dropped {
                         entity_id: owner.entity_id(),
                     },
                 )
@@ -7031,6 +7122,17 @@ fn prepare_intro2_radial_actor_mutation(
                 if owner.entity_id() == entity_id && owner.completed_mutation_boundary(manager))
         });
     }
+    if entity.portable_radar_runtime.is_some() {
+        // A completed class49 corpse keeps only its Finished receipt until the sweep.
+        if crate::class49_death::finished_terminal_hit_authenticates(manager, entity_id) {
+            return true;
+        }
+        let current = crate::portable_radar::PortableRadarOwner::adopt(manager, entity_id);
+        return owners.iter().any(|owner| {
+            matches!(owner,
+            SpecializedActorTaskOwner::PortableRadar(owner) if current == Ok(*owner))
+        });
+    }
     if entity.native_type40_runtime.is_some() {
         return owners.iter().any(|owner| {
             matches!(owner,
@@ -7309,6 +7411,7 @@ fn park_class49_terminal_owner(
                 || crate::intro2_type16::type16_auto_pilot_row(entity).is_some()
                 || crate::native_type43::allocation_authenticates(entity)
                 || crate::native_type38::allocation_authenticates(entity)
+                || crate::portable_radar::allocation_authenticates(entity)
                 || entity.rolling_boulder_runtime.is_some()
                 || crate::class49_death::intro2_type13_explosion_source_authenticates(entity))
     }) {
@@ -8359,12 +8462,15 @@ mod tests {
         for level in [14, 39] {
             let (_session, mut manager, mut scheduler, mut fx) =
                 native_load_after_campaign_cargo(level);
-            let class0: Vec<_> = scheduler
+            // 451C00 adopts the custody its attaches need: class0 bodies and
+            // the Type83 radars.
+            let early: Vec<_> = scheduler
                 .owners
                 .iter()
                 .map(|owner| match owner {
-                    SpecializedActorTaskOwner::Class0Actor(owner) => *owner,
-                    _ => panic!("451C00 only adopts its required class0 family"),
+                    SpecializedActorTaskOwner::Class0Actor(_)
+                    | SpecializedActorTaskOwner::PortableRadar(_) => owner.entity_id(),
+                    _ => panic!("451C00 only adopts its attach families"),
                 })
                 .collect();
             let selected: Vec<_> = manager
@@ -8380,28 +8486,26 @@ mod tests {
                 scheduler.adopt_fresh_level1_type9_selected(&mut manager),
                 Ok(selected.len())
             );
-            assert_eq!(scheduler.registered_len(), class0.len() + selected.len());
-            for (index, owner) in class0.iter().enumerate() {
-                assert!(
-                    matches!(&scheduler.owners[index], SpecializedActorTaskOwner::Class0Actor(retained)
-                    if retained == owner)
-                );
-                assert!(
-                    scheduler.prepare_class0_actor_external_mutation(&manager, owner.entity_id())
-                );
-            }
-            assert_eq!(
-                scheduler.owners[class0.len()..]
+            assert_eq!(scheduler.registered_len(), early.len() + selected.len());
+            let ids = |owners: &[SpecializedActorTaskOwner]| {
+                owners
                     .iter()
                     .map(|owner| owner.entity_id())
-                    .collect::<Vec<_>>(),
-                selected
-            );
+                    .collect::<Vec<_>>()
+            };
+            assert_eq!(ids(&scheduler.owners[..early.len()]), early);
+            for &id in &early {
+                assert!(
+                    scheduler.prepare_class0_actor_external_mutation(&manager, id)
+                        || scheduler.prepare_portable_radar_external_mutation(&manager, id)
+                );
+            }
+            assert_eq!(ids(&scheduler.owners[early.len()..]), selected);
             assert_eq!(
                 scheduler.adopt_fresh_level1_type9_selected(&mut manager),
                 Ok(0)
             );
-            assert_eq!(scheduler.registered_len(), class0.len() + selected.len());
+            assert_eq!(scheduler.registered_len(), early.len() + selected.len());
             assert_eq!(manager.next_common_body_ordinal(), stamp_counter);
             assert_eq!(
                 fx.next_shared_retail_random_u16(),

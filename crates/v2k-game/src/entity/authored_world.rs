@@ -590,6 +590,32 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type43: {error:?}"))?;
             }
+            // Sub-K-only Portable Radar: no Sub-D allocation precedes it.
+            83 => {
+                if sub_d.is_some() {
+                    return Err("unexpected Type83 Sub-D allocation".into());
+                }
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type83 constructor surface")?;
+                crate::portable_radar::publish_portable_radar(
+                    crate::portable_radar::PortableRadarConstruction {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        record: super::NativeCreationRecord::authored(spawn),
+                        terrain,
+                        constructor_surface_bits,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type83: {error:?}"))?;
+            }
             13 => {
                 let sub_d = sub_d.ok_or("missing Type13 Sub-D allocation")?;
                 let constructor_surface_bits =

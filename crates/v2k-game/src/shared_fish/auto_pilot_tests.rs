@@ -145,7 +145,7 @@ fn lethal_hit(id: u32) -> ParticleEntityImpact {
 #[v2k_test_support::retail_test]
 fn class63_keeps_the_tasks_and_drops_the_authored_power_up() {
     for world in CARRIER_WORLDS {
-        let (session, mut manager, mut fx, id) = fixture(world);
+        let (mut session, mut manager, mut fx, id) = fixture(world);
         let payload = authored_payload(&session, &manager, id);
         let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
         assert_eq!(entity.auto_pilot_payload_packed, Some(payload));
@@ -159,7 +159,7 @@ fn class63_keeps_the_tasks_and_drops_the_authored_power_up() {
         let mut expected = fx.fork_for_main_base_abort_transaction();
         expected.next_shared_retail_random_u16(); // Type61's singleton selector.
         let completion =
-            finish_class49_terminal(&mut manager, receipt, &session.cache, &mut fx).unwrap();
+            finish_class49_terminal(&mut manager, receipt, &mut session.cache, &mut fx).unwrap();
         assert_eq!(
             fx.next_shared_retail_random_u16(),
             expected.next_shared_retail_random_u16(),
