@@ -1463,6 +1463,17 @@ Common-Dying receipts. It publishes only the masked `0x06000000` state result;
 the type `+0x20` presentation callback and attachment tail remain separate
 presentation work.
 
+`FUN_00411720` walks the whole live list each presented frame (from the world
+at `0x0045377C` and the frontend at `0x0042B95B`), so every actor whose state
+has bit `0x800` is classified. The port does the same: the Type-9, class0,
+fish, cleansing-rover, meteor and Type-17 owners keep their own completed-visit
+boundaries, an owner holding a parked prefix keeps its frozen state, and every
+other live actor is classified. Until then the other families kept their
+constructor's `0x06000000` bits and ran detailed callbacks at any range. In
+world 39 retail's Type102 turrets, 6000 units from the camera, stay coarse and
+never hit the Type77s they acquire; detailed, the port's shot them from tick
+68 and started a fight that killed the turrets and the player.
+
 ### Default Detailed Submission (`FUN_004138F0`)
 
 - Selects one of the four active model words at
