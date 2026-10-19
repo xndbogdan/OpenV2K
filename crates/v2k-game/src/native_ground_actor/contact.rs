@@ -520,7 +520,7 @@ fn resolve_flying_static_contact_entry(
         return NativeGroundContactOutcome::Ineligible;
     };
     let kind = entity.entity_type;
-    if !matches!(kind, 13 | 15 | 87 | 10 | 5 | 80 | 126 | 57) {
+    if !matches!(kind, 13 | 15 | 87 | 108 | 10 | 5 | 80 | 126 | 57) {
         return NativeGroundContactOutcome::Ineligible;
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -559,7 +559,9 @@ fn resolve_flying_static_contact_entry(
                         crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
                     }
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
-                    15 | 87 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
+                    15 | 87 | 108 => {
+                        crate::intro2_flyers_live::flyer_identity_authenticates(entity)
+                    }
                     _ => false,
                 })
         },
@@ -594,7 +596,7 @@ fn resolve_flying_static_contact_entry(
                     !tasks.intro2_type57_has_pending_prefix(id)
                         && tasks.intro2_type57_completed_owner(manager, id)
                 }
-                15 | 87 => {
+                15 | 87 | 108 => {
                     crate::native_flying_surface_contact::native_flyer_quiet_death_authenticates(
                         manager, id,
                     ) || tasks.intro2_flyer_completed_owner(manager, id)
@@ -649,7 +651,7 @@ fn resolve_profile_static_contact(
             if committed {
                 // A completed death publication has already replaced the living
                 // owner. The scheduler parks whichever exact prefix survived.
-                if matches!(profile.entity_type, 15 | 87) {
+                if matches!(profile.entity_type, 15 | 87 | 108) {
                     if !frame
                         .actor_tasks
                         .park_native_contact_prefix(frame.entities, id)
@@ -773,12 +775,12 @@ fn resolve(
         && context.active_style().style_address() == 0x4c7e88)
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 94 | 38 | 129 | 77
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 108 | 94 | 38 | 129 | 77
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
         ))
-        || (matches!(profile.entity_type, 15 | 87)
+        || (matches!(profile.entity_type, 15 | 87 | 108)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
         || (matches!(profile.entity_type, 13 | 43 | 38)
@@ -1166,7 +1168,7 @@ fn contact_task_hook(
         {
             Ok(NativeGroundStaticTaskHook::Null)
         }
-        (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87) => {
+        (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87 | 108) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
         (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 43 | 38) => {

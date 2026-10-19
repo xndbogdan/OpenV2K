@@ -3,7 +3,8 @@
 
 use super::{
     Intro2FlyerFrameOwner, FLYER_COMMON_MOVER_TOPOLOGY, FLYER_SUB_B, INTRO2_TYPE15_ENTITY_TYPE,
-    INTRO2_TYPE87_ENTITY_TYPE, TYPE15_SUB_G_DESCRIPTOR, TYPE87_SUB_G_DESCRIPTOR,
+    INTRO2_TYPE87_ENTITY_TYPE, TYPE108_ENTITY_TYPE, TYPE108_SUB_G_DESCRIPTOR,
+    TYPE15_SUB_G_DESCRIPTOR, TYPE87_SUB_G_DESCRIPTOR,
 };
 use crate::chase_target::ChaseTargetCommonMoverReturn;
 use crate::common_mover::component_dispatch::{CommonMoverDispatchMode, CommonMoverDispatchPhase};
@@ -83,6 +84,7 @@ pub(super) fn flyer_sub_g_descriptor(entity_type: u32) -> Option<&'static [u8; 1
     match entity_type {
         INTRO2_TYPE15_ENTITY_TYPE => Some(&TYPE15_SUB_G_DESCRIPTOR),
         INTRO2_TYPE87_ENTITY_TYPE => Some(&TYPE87_SUB_G_DESCRIPTOR),
+        TYPE108_ENTITY_TYPE => Some(&TYPE108_SUB_G_DESCRIPTOR),
         _ => None,
     }
 }

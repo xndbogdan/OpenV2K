@@ -1,5 +1,7 @@
-//! Shared class7 flyer mover/tasks for authored Intro2 Wasps/Deathwas and
-//! allocation-authenticated native Type15/Type87 Hive children.
+//! Shared flyer mover/tasks for authored Intro2 Wasps/Deathwas and
+//! allocation-authenticated native Type15/Type87/Type108 births: Hive children
+//! and the authored flyers of ordinary worlds. Type108 also authors a class-5
+//! (`Move About Aimlessly`) choice beside class 7.
 //!
 //! Section-12 collision records in 1X3XX.OVL establish that both type 15 (wasp)
 //! and type 87 (deathwas) author:
@@ -53,6 +55,10 @@ use crate::shared_retarget_mover::{
     SharedRetargetTaskState,
 };
 use crate::sub_g_runtime::SubG06070RuntimeState;
+use crate::type13_initial_behavior::{
+    TYPE13_MOVE_ABOUT_AIMLESSLY_CLASS_ID as MOVE_ABOUT_AIMLESSLY_CLASS_ID,
+    TYPE13_MOVE_ABOUT_AIMLESSLY_STYLE_ADDRESS as MOVE_ABOUT_AIMLESSLY_STYLE_ADDRESS,
+};
 use crate::wander_near_location::{WanderNearCommonMoverReturn, WanderNearPrivateState};
 use crate::world_fx::WorldFx;
 use crate::wrapped_axis_range::WrappedAxisRange;
@@ -69,6 +75,9 @@ pub const INTRO2_TYPE87_ENTITY_TYPE: u32 = 87;
 
 pub const INTRO2_TYPE15_MODEL_ID: u16 = 276;
 pub const INTRO2_TYPE87_MODEL_ID: u16 = 270;
+
+pub const TYPE108_ENTITY_TYPE: u32 = 108;
+pub const TYPE108_MODEL_ID: u16 = 1167;
 
 pub const INTRO2_TYPE15_POSITION_RAW: [i16; 3] = [-17152, 0, 32256];
 pub const INTRO2_TYPE87_POSITION_RAW: [i16; 3] = [-18176, 1024, 4864];
@@ -102,6 +111,21 @@ pub const FLYER_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
     raw_word_at_0x04: 1,
 };
 
+/// Type108's filter word admits more target capabilities than 15/87's.
+pub const TYPE108_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 7680,
+    raw_word_at_0x04: 0x405,
+};
+
+/// The type's common axis, which B6C0 copies into the actor-local word.
+pub(crate) const fn flyer_common_axis(entity_type: u32) -> Option<CommonAxisDescriptor> {
+    match entity_type {
+        INTRO2_TYPE15_ENTITY_TYPE | INTRO2_TYPE87_ENTITY_TYPE => Some(FLYER_COMMON_AXIS),
+        TYPE108_ENTITY_TYPE => Some(TYPE108_COMMON_AXIS),
+        _ => None,
+    }
+}
+
 pub const TYPE15_SUB_G_DESCRIPTOR: [u8; 104] = [
     20, 0, 0, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 244, 1, 0, 0, 188, 2, 0, 0, 88, 2, 0, 0, 0,
     64, 0, 0, 244, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 96, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
@@ -116,7 +140,17 @@ pub const TYPE87_SUB_G_DESCRIPTOR: [u8; 104] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+/// Type87's flight table with the second force at 30 (Type15's).
+pub const TYPE108_SUB_G_DESCRIPTOR: [u8; 104] = [
+    20, 0, 0, 0, 30, 0, 0, 0, 0, 0, 0, 0, 100, 0, 0, 0, 244, 1, 0, 0, 188, 2, 0, 0, 88, 2, 0, 0, 0,
+    64, 0, 0, 238, 2, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 128, 0, 96, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
 const FLYER_WANDER_LIFETIME_MS: u32 = 500;
+/// ACD0's `FUN_00402B10(entity, 0, 5000)`.
+const FLYER_AIMLESS_LIFETIME_MS: u32 = 5000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Intro2FlyerFrameOwner {
@@ -139,13 +173,15 @@ pub enum FlyerBirthProvenance {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeFlyerBirth {
     allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    /// An ordinary world's authored spawn; a Hive child has none.
+    authored_spawn_index: Option<usize>,
 }
 
 impl FlyerBirthProvenance {
     pub const fn authored_spawn_index(self) -> Option<usize> {
         match self {
             Self::AuthoredIntro2 { spawn_index } => Some(spawn_index),
-            Self::NativeFlyer(_) => None,
+            Self::NativeFlyer(birth) => birth.authored_spawn_index,
         }
     }
 
@@ -294,7 +330,7 @@ fn publish_flyer_constructor_phase(
 ) -> Result<(), Intro2FlyerPublicationError> {
     let descriptor = authenticate_flyer_mover_metadata(entity.entity_type, metadata)
         .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
-    authenticate_flyer_choices(metadata)?;
+    authenticate_flyer_choices(entity.entity_type, metadata)?;
     entity.sub_g_06070_runtime = RetailRuntimeValue::Known(Some(
         SubG06070RuntimeState::from_1b8c0_constructor(descriptor, next_random() as u16),
     ));
@@ -318,11 +354,11 @@ fn publish_flyer_behavior_phase(
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), Intro2FlyerPublicationError> {
     // 425680 consumes a selector word even for a sole Always choice.
-    let selection = select_flyer_behavior(metadata, next_random)?;
+    let selection = select_flyer_behavior(entity.entity_type, metadata, next_random)?;
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(Intro2FlyerPublicationError::BehaviorContextUnavailable)?;
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
-    publish_flyer_acquiring(entity, metadata, context, next_random)?;
+    publish_flyer_selection(entity, metadata, context, next_random)?;
     entity.intro2_flyer_frame_owner = Some(Intro2FlyerFrameOwner {
         birth_provenance,
         entity_type: entity.entity_type,
@@ -348,18 +384,25 @@ fn publish_flyer_behavior_phase(
     Ok(())
 }
 
+/// Every choice is Always, of class 7 or 5, with the type's common axis.
 fn authenticate_flyer_choices(
+    entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> Result<(), Intro2FlyerPublicationError> {
     let Some(initializer) = &metadata.initializer else {
         return Err(Intro2FlyerPublicationError::MetadataMismatch);
     };
-    if initializer.common_axis_descriptor != FLYER_COMMON_AXIS
-        || initializer.behavior_choices.len() != 1
-        || initializer.behavior_choices[0].weight_rule_id != 1
-        || initializer.behavior_choices[0].weight_multiplier == 0
-        || initializer.behavior_choices[0].behavior_class_id
-            != u32::from(SEARCH_ATTACK_BEHAVIOR_CLASS_ID)
+    let classes = [
+        u32::from(SEARCH_ATTACK_BEHAVIOR_CLASS_ID),
+        u32::from(MOVE_ABOUT_AIMLESSLY_CLASS_ID),
+    ];
+    if Some(initializer.common_axis_descriptor) != flyer_common_axis(entity_type)
+        || initializer.behavior_choices.is_empty()
+        || initializer.behavior_choices.iter().any(|choice| {
+            choice.weight_rule_id != 1
+                || choice.weight_multiplier == 0
+                || !classes.contains(&choice.behavior_class_id)
+        })
     {
         return Err(Intro2FlyerPublicationError::MetadataMismatch);
     }
@@ -367,10 +410,11 @@ fn authenticate_flyer_choices(
 }
 
 fn select_flyer_behavior(
+    entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<BehaviorSelection, Intro2FlyerPublicationError> {
-    authenticate_flyer_choices(metadata)?;
+    authenticate_flyer_choices(entity_type, metadata)?;
     select_initial_behavior(
         &metadata.initializer.as_ref().unwrap().behavior_choices,
         |rule| {
@@ -383,6 +427,68 @@ fn select_flyer_behavior(
     .ok_or(Intro2FlyerPublicationError::BehaviorProgramUnavailable)
 }
 
+/// Publish the selected class: B6C0's acquiring graph or ACD0's aimless one.
+fn publish_flyer_selection(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    context: BehaviorContextRuntime,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<(), Intro2FlyerPublicationError> {
+    match context.active_style() {
+        ActiveBehaviorStyle::Audited(style)
+            if style.class_id == SEARCH_ATTACK_BEHAVIOR_CLASS_ID =>
+        {
+            publish_flyer_acquiring(entity, metadata, context, next_random)
+        }
+        ActiveBehaviorStyle::Audited(style) if style.class_id == MOVE_ABOUT_AIMLESSLY_CLASS_ID => {
+            publish_flyer_aimless(entity, metadata, context, next_random)
+        }
+        _ => Err(Intro2FlyerPublicationError::BehaviorProgramUnavailable),
+    }
+}
+
+/// ACD0: clear slots 2 then 1, then `FUN_00402B10(entity, 0, 5000)`, whose
+/// 06030 runs the Sub-G 06070 branch (one RNG word) before Primary. Unlike
+/// B6C0 it does not copy the type's common axis.
+fn publish_flyer_aimless(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    context: BehaviorContextRuntime,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<(), Intro2FlyerPublicationError> {
+    let descriptor = authenticate_flyer_mover_metadata(entity.entity_type, metadata)
+        .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
+    authenticate_flyer_choices(entity.entity_type, metadata)?;
+    let RetailRuntimeValue::Known(Some(mut sub_g)) = entity.sub_g_06070_runtime else {
+        return Err(Intro2FlyerPublicationError::SubGRuntimeUnavailable);
+    };
+    let program = behavior_program(u32::from(MOVE_ABOUT_AIMLESSLY_CLASS_ID))
+        .ok_or(Intro2FlyerPublicationError::BehaviorProgramUnavailable)?;
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
+    let policy = initial_behavior_state_policy(program);
+    entity
+        .collision
+        .state_flags_at_0x08
+        .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+    let source = u32::from_le_bytes(descriptor[0..4].try_into().unwrap());
+    let clearance = i32::from(i16::from_le_bytes(descriptor[12..14].try_into().unwrap()));
+    sub_g.apply_shared_06070_sub_g_branch(
+        clearance.wrapping_add(i32::from((next_random() as u16) >> 8)),
+        source,
+    );
+    entity.sub_g_06070_runtime = RetailRuntimeValue::Known(Some(sub_g));
+    let owner_pos_raw = entity.position_raw();
+    entity.actor_tasks.replace_prepared(
+        ActorTaskSlot::Primary,
+        PreparedActorTask::new(ActorTaskRuntime::SharedRetarget(
+            SharedRetargetTaskState::new(owner_pos_raw, FLYER_AIMLESS_LIFETIME_MS),
+        )),
+    );
+    Ok(())
+}
+
 fn publish_flyer_acquiring(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
@@ -391,7 +497,9 @@ fn publish_flyer_acquiring(
 ) -> Result<(), Intro2FlyerPublicationError> {
     let descriptor = authenticate_flyer_mover_metadata(entity.entity_type, metadata)
         .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
-    authenticate_flyer_choices(metadata)?;
+    authenticate_flyer_choices(entity.entity_type, metadata)?;
+    let axis = flyer_common_axis(entity.entity_type)
+        .ok_or(Intro2FlyerPublicationError::MetadataMismatch)?;
     let RetailRuntimeValue::Known(Some(mut sub_g)) = entity.sub_g_06070_runtime else {
         return Err(Intro2FlyerPublicationError::SubGRuntimeUnavailable);
     };
@@ -403,10 +511,10 @@ fn publish_flyer_acquiring(
         .collision
         .state_flags_at_0x08
         .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
-    entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(FLYER_COMMON_AXIS);
+    entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(axis);
     let owner_pos_raw = entity.position_raw();
-    let radius = SearchAttackRadius::from_raw(FLYER_COMMON_AXIS.strict_axis_limit_raw);
-    let filter = SearchAttackCandidateFilter::from_raw(FLYER_COMMON_AXIS.raw_word_at_0x04);
+    let radius = SearchAttackRadius::from_raw(axis.strict_axis_limit_raw);
+    let filter = SearchAttackCandidateFilter::from_raw(axis.raw_word_at_0x04);
     let setup = search_attack_variant_setup(SearchAttackVariant::Acquiring);
     let source = u32::from_le_bytes(descriptor[0..4].try_into().unwrap());
     let clearance = i32::from(i16::from_le_bytes(descriptor[12..14].try_into().unwrap()));
@@ -589,6 +697,14 @@ pub enum Intro2FlyerSchedulerProductionOutcome {
         acquisition: SearchAttackLiveAcquisitionOutcome,
         aim: Option<crate::intro2_flyer_aim::Intro2FlyerAimTickOutcome>,
     },
+    /// A class-5 visit of ACD0's Primary; C690 may publish class 7 in it.
+    AimlessVisit {
+        entity_id: u32,
+        primary: Intro2FlyerPrimaryVisit,
+        reselected: bool,
+        acquisition: SearchAttackLiveAcquisitionOutcome,
+        aim: Option<crate::intro2_flyer_aim::Intro2FlyerAimTickOutcome>,
+    },
     Blocked {
         entity_id: u32,
         reason: Intro2FlyerRuntimeBlock,
@@ -606,6 +722,7 @@ impl Intro2FlyerSchedulerProductionOutcome {
             | Self::CallbackDisabled { entity_id, .. }
             | Self::B6c0Visit { entity_id, .. }
             | Self::PursuingVisit { entity_id, .. }
+            | Self::AimlessVisit { entity_id, .. }
             | Self::Blocked { entity_id, .. }
             | Self::Dropped { entity_id, .. } => *entity_id,
         }
@@ -653,6 +770,7 @@ impl Intro2FlyerSchedulerOwner {
     pub fn adopt_published(entity: &Entity) -> Result<Self, Intro2FlyerSchedulerAdoptionError> {
         if !intro2_flyer_acquiring_graph_authenticates(entity)
             && !intro2_flyer_pursuing_graph_authenticates(entity)
+            && !intro2_flyer_aimless_graph_authenticates(entity)
         {
             return Err(Intro2FlyerSchedulerAdoptionError::GraphUnavailable {
                 entity_id: entity.id,
@@ -681,7 +799,8 @@ pub(crate) fn flyer_identity_authenticates(entity: &Entity) -> bool {
             }
         }
         FlyerBirthProvenance::NativeFlyer(birth)
-            if entity.authored_spawn_index.is_none() && entity.id == birth.allocation.entity_id =>
+            if entity.authored_spawn_index == birth.authored_spawn_index
+                && entity.id == birth.allocation.entity_id =>
         {
             match native_flyer_model_id(entity.entity_type) {
                 Some(model) => (entity.entity_type, model),
@@ -742,6 +861,24 @@ fn flyer_context_authenticates(entity: &Entity, variant: SearchAttackVariant) ->
         && style.frame_address == variant.style_address()
 }
 
+/// The class-5 initial style that ACD0 publishes.
+fn flyer_aimless_context_authenticates(entity: &Entity) -> bool {
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return false;
+    };
+    let Some(program) = behavior_program(u32::from(MOVE_ABOUT_AIMLESSLY_CLASS_ID)) else {
+        return false;
+    };
+    let ActiveBehaviorStyle::Audited(style) = context.active_style() else {
+        return false;
+    };
+    context.descriptor() == BehaviorDescriptorIdentity::Named(program)
+        && context.choice_list_source()
+            == RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeDefault)
+        && style.class_id == MOVE_ABOUT_AIMLESSLY_CLASS_ID
+        && style.frame_address == MOVE_ABOUT_AIMLESSLY_STYLE_ADDRESS
+}
+
 fn flyer_wrappers_live(entity: &Entity) -> bool {
     ActorTaskSlot::IN_RETAIL_TICK_ORDER.into_iter().all(|slot| {
         entity.actor_tasks.task_in_slot(slot).is_none_or(|task_id| {
@@ -765,6 +902,18 @@ fn intro2_flyer_acquiring_graph_authenticates(entity: &Entity) -> bool {
             entity.actor_task_state(ActorTaskSlot::Secondary),
             Some(ActorTaskRuntime::TargetAcquisition(_))
         )
+        && entity.actor_task_state(ActorTaskSlot::Tertiary).is_none()
+}
+
+fn intro2_flyer_aimless_graph_authenticates(entity: &Entity) -> bool {
+    flyer_identity_authenticates(entity)
+        && flyer_aimless_context_authenticates(entity)
+        && flyer_wrappers_live(entity)
+        && matches!(
+            entity.actor_task_state(ActorTaskSlot::Primary),
+            Some(ActorTaskRuntime::SharedRetarget(_))
+        )
+        && entity.actor_task_state(ActorTaskSlot::Secondary).is_none()
         && entity.actor_task_state(ActorTaskSlot::Tertiary).is_none()
 }
 
@@ -820,14 +969,16 @@ pub(crate) fn reselect_flyer(
     }
     if !flyer_context_authenticates(entity, SearchAttackVariant::Acquiring)
         && !flyer_context_authenticates(entity, SearchAttackVariant::Pursuing)
+        && !flyer_aimless_context_authenticates(entity)
     {
         return Err(Intro2FlyerRuntimeBlock::MetadataMismatch);
     }
-    authenticate_flyer_choices(metadata).map_err(|_| Intro2FlyerRuntimeBlock::MetadataMismatch)?;
+    authenticate_flyer_choices(entity.entity_type, metadata)
+        .map_err(|_| Intro2FlyerRuntimeBlock::MetadataMismatch)?;
     let RetailRuntimeValue::Known(Some(previous)) = entity.current_behavior_context else {
         return Err(Intro2FlyerRuntimeBlock::StateUnavailable);
     };
-    let selection = select_flyer_behavior(metadata, next_random)
+    let selection = select_flyer_behavior(entity.entity_type, metadata, next_random)
         .map_err(|_| Intro2FlyerRuntimeBlock::Publication)?;
     let context = previous
         .reselect_named_type_default(
@@ -836,7 +987,7 @@ pub(crate) fn reselect_flyer(
             selection.program.initial_style,
         )
         .ok_or(Intro2FlyerRuntimeBlock::Publication)?;
-    publish_flyer_acquiring(entity, metadata, context, next_random)
+    publish_flyer_selection(entity, metadata, context, next_random)
         .map_err(|_| Intro2FlyerRuntimeBlock::Publication)?;
     Ok(true)
 }
@@ -1121,8 +1272,9 @@ fn tick_flyer_tasks(
             retained_owner: None,
         };
     };
+    let aimless = intro2_flyer_aimless_graph_authenticates(entity);
     let acquiring = intro2_flyer_acquiring_graph_authenticates(entity);
-    if !acquiring && !intro2_flyer_pursuing_graph_authenticates(entity) {
+    if !aimless && !acquiring && !intro2_flyer_pursuing_graph_authenticates(entity) {
         return Intro2FlyerSchedulerOwnerTick {
             outcome: Intro2FlyerSchedulerProductionOutcome::Dropped {
                 entity_id,
@@ -1133,7 +1285,7 @@ fn tick_flyer_tasks(
     }
     let mut primary = None;
     let mut chase = None;
-    let transition_due = if acquiring {
+    let transition_due = if acquiring || aimless {
         match tick_flyer_shared_retarget(
             manager.intro2_flyer_entity_mut(entity_id).unwrap(),
             frame,
@@ -1210,7 +1362,15 @@ fn tick_flyer_tasks(
         }
         aim = Some(outcome);
     }
-    let outcome = if let Some(primary) = primary {
+    let outcome = if let (Some(primary), true) = (primary, aimless) {
+        Intro2FlyerSchedulerProductionOutcome::AimlessVisit {
+            entity_id,
+            primary,
+            reselected,
+            acquisition,
+            aim,
+        }
+    } else if let Some(primary) = primary {
         Intro2FlyerSchedulerProductionOutcome::B6c0Visit {
             entity_id,
             primary,

@@ -348,7 +348,7 @@ impl EntityManager {
         };
         entity.set_position_raw(position);
         let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
-        authenticate_native_flyer_body(&entity, allocation, &metadata)
+        authenticate_native_flyer_body(&entity, allocation, &metadata, None)
             .map_err(HiveNativeBirthBlock::Metadata)?;
 
         // No unowned feature remains. A source construction failure after this
@@ -360,6 +360,7 @@ impl EntityManager {
                 entity: &mut entity,
                 allocation,
                 metadata: &metadata,
+                authored: None,
             },
             world_fx,
         )

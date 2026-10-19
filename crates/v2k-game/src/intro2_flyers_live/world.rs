@@ -64,9 +64,11 @@ fn effective_flags(entity: &Entity) -> Result<u32, Intro2FlyerWorldBlock> {
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Intro2FlyerWorldBlock::UnsupportedEffectiveFlags);
     };
+    // Style +38; Move About Aimlessly (Type108's class 5) masks nothing.
     let disable = match context.active_style().style_address() {
         0x004c_7a50 => 0x0002_1080,
         0x004c_7a98 => 0x80,
+        0x004c_7930 => 0,
         _ => return Err(Intro2FlyerWorldBlock::UnsupportedEffectiveFlags),
     };
     let flags = default & !disable;

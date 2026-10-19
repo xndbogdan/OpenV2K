@@ -65,7 +65,7 @@ pub(crate) fn publish_native_flying_standard_death(
         57 => crate::intro2_type57::publish_intro2_type57_standard_death(manager, id, world_fx)
             .map(|owner| owner.map(NativeFlyingSurfaceDeathPublication::Type57))
             .map_err(NativeFlyingSurfaceDeathBlock::Type57)?,
-        15 | 87 => publish_native_flyer_quiet_death(manager, id, world_fx)?
+        15 | 87 | 108 => publish_native_flyer_quiet_death(manager, id, world_fx)?
             .map(NativeFlyingSurfaceDeathPublication::QuietDeath),
         13 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
         80 | 126 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeAutoPilotContextUnavailable),
