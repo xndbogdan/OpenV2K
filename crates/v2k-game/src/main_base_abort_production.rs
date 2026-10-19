@@ -109,6 +109,10 @@ pub enum MainBaseAbortActorDisposition {
     Type18Death,
     Type28Death,
     Type76Death,
+    /// The native Type16 row: alternate class12, Flip Over And Die.
+    Type16Death,
+    /// The native Type94: alternate class12.
+    Type94Death,
     /// Ordinary Type10-family rows: alternate class11 publishes Tumble.
     Type10Death,
     Class49Death,
@@ -135,6 +139,8 @@ pub struct MainBaseAbortPublicationCounts {
     pub type18_common_dying: usize,
     pub type28_common_dying: usize,
     pub type76_common_dying: usize,
+    pub type16_common_dying: usize,
+    pub type94_common_dying: usize,
     pub type10_tumble: usize,
     pub type54_sea_level: usize,
     pub type66_production: usize,
@@ -163,6 +169,8 @@ impl MainBaseAbortPublicationCounts {
             + self.type18_common_dying
             + self.type28_common_dying
             + self.type76_common_dying
+            + self.type16_common_dying
+            + self.type94_common_dying
             + self.type10_tumble
             + self.type54_sea_level
             + self.type66_production
