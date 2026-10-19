@@ -27,6 +27,40 @@ Manual statuses from [`status.csv`](status.csv):
 87 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
 
+## Map
+
+![Treemap of retail V2000.EXE's game functions by owning RE note and state](treemap.svg)
+
+Each rectangle is the RE note that cites its functions most often, sized by
+their bytes and split by state; its label gives the share of its functions the
+port's code references. A function only catalog notes cite (small functions,
+the Infestation cross-reference, the fidelity-gap list) joins its nearest
+neighbour's note.
+
+Where the code's references are thinnest:
+
+| Note | Not referenced by code | Of them, its neighbours | Referenced |
+|---|---:|---:|---:|
+| [Platform](../re/PLATFORM_RUNTIME.md) | 458 | 76 | 12 |
+| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 122 | 25 | 43 |
+| [Menu system](../re/MENU_SYSTEM.md) | 111 | 69 | 76 |
+| [Software raster](../re/SOFTWARE_RASTER.md) | 83 | 4 | 54 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 75 | 16 | 2 |
+| [Controls](../re/CONTROLS.md) | 69 | 31 | 21 |
+| [Direct3d table](../re/DIRECT3D_TABLE.md) | 58 | 8 | 31 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 55 | 28 | 39 |
+| [Hud rendering](../re/HUD_RENDERING.md) | 48 | 38 | 31 |
+| [Render pipeline](../re/RENDER_PIPELINE.md) | 48 | 34 | 112 |
+
+## Omitted
+
+Functions marked `not-needed` in [`status.csv`](status.csv) leave the
+denominator:
+
+| Reason | Functions |
+|---|---:|
+| WinMain: protection-library start and stop around the engine main; the port has its own entry point | 1 |
+
 ## Method
 
 - [`retail-functions.csv`](retail-functions.csv) lists every function start in
