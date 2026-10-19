@@ -33,6 +33,7 @@ fn native_flyer_abort_dies_quietly_through_alternate_class2() {
                 notifications: &mut GameplayNotifications::new(),
                 retail_tick: 600,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .expect("a native flyer has a native abort death")
         .unwrap_or_else(|failure| panic!("world{level}: {:?}", failure.callback_error));

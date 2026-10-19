@@ -266,7 +266,7 @@ later runtime graph or predecessor history.
 
 | Fresh-world exact sweep | Global OVLs |
 |---|---|
-| Complete | 13, 14, 15, 28, 30, 39, 44, 48 |
+| Complete | 13, 14, 15, 28, 30, 39, 44, 45, 48 |
 | No campaign controller or casualty record | 49, 50 |
 
 The remaining first unsupported ordinary callbacks are listed below. Each is
@@ -276,16 +276,16 @@ retail skips those actors.
 
 | First unsupported entity type | Global OVLs |
 |---|---|
+| 12 | 35 |
 | 20 | 33 |
 | 25 | 23, 34 |
-| 27 | 27, 35 |
 | 29 | 20, 24 |
 | 31 | 16 |
 | 35 | 41, 42, 43, 46 |
-| 40 | 17, 19, 32, 45 |
 | 41 | 22 |
 | 50 | 40 |
-| 55 | 29 |
+| 55 | 19, 29, 32 |
+| 72 | 17 |
 | 73 | 18 |
 | 74 | 36 |
 | 82 | 25, 38 |
@@ -294,6 +294,7 @@ retail skips those actors.
 | 107 | 31 |
 | 109 | 26 |
 | 110 | 47 |
+| 127 | 27 |
 
 Thus exact fresh-world actor cleanup is complete for four of the 21 casualty
 worlds (13/14/15/39); the other seventeen use the explicitly bounded transition.

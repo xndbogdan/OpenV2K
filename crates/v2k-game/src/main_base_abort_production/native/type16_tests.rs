@@ -31,6 +31,7 @@ fn type16_abort_flips_over_through_class12() {
                 notifications: &mut GameplayNotifications::new(),
                 retail_tick: 600,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .expect("a native Type16 has a native abort death")
         .unwrap_or_else(|failure| panic!("world{level}: {:?}", failure.callback_error));

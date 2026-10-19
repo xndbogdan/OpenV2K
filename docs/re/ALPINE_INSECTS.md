@@ -249,6 +249,10 @@ state policy. The birth entry is `00438080`, followed by `0040D73A ->
 Finally `00410B70` marks the parent for deferred destruction: clear `0x60000`,
 set `0x100000`.
 
+The Main Base abort's `10C10` enters the same class18 split. Its walk then
+reaches the appended Type56 children, which die through class2's quiet
+terminal; the abort's visit limit counts each Type40's eight.
+
 Birth-record+00 is the current null/default handle value from `DAT_004DCA00`
 (all accepted split births carry zero), copied through `4380D3` to104B0 parameter4.
 Zero selects fresh-handle43A290; nonzero calls43A3C0 with that requested handle.

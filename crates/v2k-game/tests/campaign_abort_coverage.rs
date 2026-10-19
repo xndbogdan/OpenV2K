@@ -37,6 +37,10 @@ fn adopt_authored_tasks(manager: &mut EntityManager) -> SpecializedActorTaskSche
     tasks.adopt_type18(manager);
     tasks.adopt_type28(manager);
     tasks.adopt_type76_family(manager);
+    tasks.adopt_type30(manager);
+    tasks.adopt_rolling_boulders(manager);
+    tasks.adopt_type40(manager);
+    tasks.adopt_type56(manager);
     tasks.adopt_type43(manager);
     tasks.adopt_type38_family(manager);
     tasks.adopt_shared_fish(manager);
@@ -96,9 +100,11 @@ fn construct_world(
 // matrix; every earlier actor must continue to execute or roll back correctly.
 const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (16, 31),
-    (17, 40),
+    // Type40 splits into Type56s (class18), which die quietly; Type30 takes
+    // class12. World 45 completes.
+    (17, 72),
     (18, 73),
-    (19, 40),
+    (19, 55),
     // Type14 flyers explode through their class1 terminal, Type15 wasps die
     // quietly through class2, and Type16 and Type94 enter class12.
     (20, 29),
@@ -111,16 +117,17 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (24, 29),
     (25, 82),
     (26, 109),
-    (27, 27),
+    // Type27 boulders split into Type3s (class18), which explode (class1).
+    (27, 127),
     // Native class29 turrets now complete; their finished class49 terminals
     // admit the later power-up radial, as 14AE0 does.
     (29, 55),
     // Worlds 30 and 39 complete: their Type83 radars take class49.
     (31, 107),
-    (32, 40),
+    (32, 55),
     (33, 20),
     (34, 25),
-    (35, 27),
+    (35, 12),
     (36, 74),
     (37, 106),
     (38, 82),
@@ -131,7 +138,6 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // Alien1's next is its Type35.
     (42, 35),
     (43, 35),
-    (45, 40),
     // Ordinary Type13 and the emitter-only Type43 take their native class1
     // abort deaths and Type5 its class11 Tumble publication.
     (46, 35),
@@ -363,7 +369,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
         );
         assert!(controller.abort_frame_submitted(), "world{world}");
     }
-    assert_eq!(exact_worlds, [13, 14, 15, 28, 30, 39, 44, 48]);
+    assert_eq!(exact_worlds, [13, 14, 15, 28, 30, 39, 44, 45, 48]);
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
         "first incomplete actor matrix changed"

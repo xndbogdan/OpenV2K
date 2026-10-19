@@ -31,6 +31,7 @@ fn type94_abort_enters_class12() {
                 notifications: &mut GameplayNotifications::new(),
                 retail_tick: 600,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .expect("a native Type94 has a native abort death")
         .unwrap_or_else(|failure| panic!("world{level}: {:?}", failure.callback_error));

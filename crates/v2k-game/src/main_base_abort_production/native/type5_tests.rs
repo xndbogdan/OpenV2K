@@ -37,6 +37,7 @@ fn ordinary_type5_abort_publishes_its_class11_tumble_once() {
                         notifications: &mut notifications,
                         retail_tick: 0x1dcb,
                     },
+                    &crate::resource_cache::ResourceCache::new(Vec::new()),
                 )
                 .expect("ordinary Type5 is a native abort actor")
                 .unwrap_or_else(|failure| panic!("world{level}: {:?}", failure.callback_error))

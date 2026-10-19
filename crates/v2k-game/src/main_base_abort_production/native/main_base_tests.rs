@@ -106,6 +106,7 @@ fn casualty_walk_starts_native_main_base_progression_and_replaces_its_task_owner
             notifications: &mut GameplayNotifications::new(),
             retail_tick: 0x1dcb,
         },
+        &crate::resource_cache::ResourceCache::new(Vec::new()),
     )
     .unwrap()
     .unwrap_or_else(|failure| panic!("{:?}", failure.callback_error));
@@ -183,6 +184,7 @@ fn casualty_main_base_rejects_missing_or_executing_owner_before_death_prefix() {
                 notifications: &mut GameplayNotifications::new(),
                 retail_tick: 0x1dcb,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .unwrap();
         assert!(result.is_err());

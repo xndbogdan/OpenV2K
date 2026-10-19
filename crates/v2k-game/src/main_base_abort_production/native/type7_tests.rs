@@ -65,6 +65,7 @@ fn type7_abort_replaces_each_real_owner_once_and_rejects_foreign_or_parked_recei
                     notifications: &mut notifications,
                     retail_tick: 5000,
                 },
+                &crate::resource_cache::ResourceCache::new(Vec::new()),
             )
             .unwrap();
             if invalid.is_some() {
@@ -113,7 +114,8 @@ fn type7_abort_replaces_each_real_owner_once_and_rejects_foreign_or_parked_recei
                         extra_lives: crate::entity_collision_state::RetailRuntimeValue::Unresolved,
                         notifications: &mut notifications,
                         retail_tick: 5001
-                    }
+                    },
+                    &crate::resource_cache::ResourceCache::new(Vec::new()),
                 )
                 .unwrap()
                 .is_ok());

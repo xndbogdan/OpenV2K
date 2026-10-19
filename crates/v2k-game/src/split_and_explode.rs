@@ -270,7 +270,7 @@ impl SplitAndExplodeExecution {
     }
 }
 
-fn split_policy(parent_type: u32) -> (u32, i32) {
+pub(crate) fn split_policy(parent_type: u32) -> (u32, i32) {
     match parent_type {
         27 => (3, 2),
         31 => (105, 8),

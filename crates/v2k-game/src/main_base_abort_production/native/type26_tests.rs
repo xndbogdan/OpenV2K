@@ -48,6 +48,7 @@ fn native_type26_abort_replaces_only_completed_live_graphs_and_preserves_corpse(
                 notifications: &mut notifications,
                 retail_tick: 0x1dcb,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .unwrap();
         if inside_callback {
@@ -88,6 +89,7 @@ fn native_type26_abort_replaces_only_completed_live_graphs_and_preserves_corpse(
                 notifications: &mut notifications,
                 retail_tick: 0x1dcc
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .unwrap()
         .is_ok());
