@@ -5461,6 +5461,12 @@ fn run_game(
                             sensitivity,
                         )
                     });
+                    // 12DA0 zeroes +B2 after the controlled player's callbacks,
+                    // as for every scheduled actor; attached particles add their
+                    // mass to it later in the frame.
+                    if let Some(player) = em.player_mut() {
+                        player.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
+                    }
                     // FUN_00420920 creates and retunes both persistent fan
                     // layers inside the controlled-player callback, before
                     // entity force/contact integration moves the emitter.

@@ -676,3 +676,29 @@ fn attached_descriptor_frozen_words_skip_integration_before_water_classification
         assert_eq!(parent.position, raw_position_to_world([1000, 2000, 3000]));
     }
 }
+
+/// Retail's player +B2 counts 63, 62, 61 while one particle ages on it: the
+/// word starts at zero, as 12DA0 leaves it after every player callback, and
+/// the live update adds the particle's mass instead of blocking.
+#[v2k_test_support::retail_test]
+fn a_particle_attached_to_the_player_adds_its_mass_to_a_known_b2() {
+    let (_, mut manager, _) =
+        crate::native_type122::construction_tests::native_fixture_with_player(13);
+    let player = manager.player().unwrap().id;
+    assert_eq!(
+        manager.player().unwrap().collision.animation_offset_at_0xb2,
+        RetailRuntimeValue::Known(0)
+    );
+    let lookup = begin_attached_particle_owner_update(
+        &mut manager,
+        AttachedParticleOwnerRequest {
+            owner_handle: player,
+            age_byte: 4,
+        },
+    );
+    assert!(matches!(lookup, AttachedParticleOwnerLookup::Updated(_)));
+    assert_eq!(
+        manager.player().unwrap().collision.animation_offset_at_0xb2,
+        RetailRuntimeValue::Known(63)
+    );
+}
