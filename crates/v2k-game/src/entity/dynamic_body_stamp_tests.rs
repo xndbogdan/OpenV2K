@@ -151,6 +151,15 @@ fn factory_pickup_worker_and_materialiser_charge_one_body_each_after_admission()
         selector
     );
     assert_eq!(fx.next_sub_d_allocation_seed(), seed, "Type61 has no Sub-D");
+    // 12DA0 leaves +B2 zero; 13F70 builds the basis from the zero angles.
+    assert_eq!(
+        entity.collision.animation_offset_at_0xb2,
+        RetailRuntimeValue::Known(0)
+    );
+    assert_eq!(
+        entity.physical_body_basis_q31,
+        RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(0, 0, 0))
+    );
     assert_eq!(
         fx.next_shared_retail_random_u16(),
         expected_fx.next_shared_retail_random_u16()

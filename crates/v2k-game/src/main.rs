@@ -5421,6 +5421,8 @@ fn run_game(
                     .copied()
                     .chain(pad_bindings.held_keys())
                     .collect();
+                // 12DA0 visits every power-up this frame, whatever the camera.
+                em.clear_power_up_b2();
                 if chase_mode {
                     // FUN_00446640 snapshots entity +0x30 at callback entry;
                     // the later solid-contact pass cannot affect its warning

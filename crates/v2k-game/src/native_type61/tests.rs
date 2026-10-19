@@ -61,3 +61,40 @@ fn native_power_up_receipt_survives_live_state_but_rejects_another_world_allocat
     entity.collision.health_raw = RetailRuntimeValue::Known(800_000);
     assert!(allocation_authenticates(&first, id));
 }
+
+/// World 42's Type108 shots stick to a Type61 power-up. 12DA0 visits the
+/// power-up every frame and leaves +B2 zero, so the particle's mass adds to a
+/// known word, and the frame's clear returns it to zero.
+#[v2k_test_support::retail_test]
+fn a_particle_attached_to_a_power_up_adds_its_mass_to_a_known_b2() {
+    use crate::world_fx::{
+        begin_attached_particle_owner_update, AttachedParticleOwnerLookup,
+        AttachedParticleOwnerRequest,
+    };
+    let (_, mut manager, _) = crate::native_type122::construction_tests::native_fixture(42);
+    let power_up = manager
+        .iter_all()
+        .find(|entity| entity_authenticates(entity))
+        .unwrap()
+        .id;
+    let b2 = |manager: &EntityManager| {
+        manager
+            .iter_all()
+            .find(|entity| entity.id == power_up)
+            .unwrap()
+            .collision
+            .animation_offset_at_0xb2
+    };
+    assert_eq!(b2(&manager), RetailRuntimeValue::Known(0));
+    let lookup = begin_attached_particle_owner_update(
+        &mut manager,
+        AttachedParticleOwnerRequest {
+            owner_handle: power_up,
+            age_byte: 4,
+        },
+    );
+    assert!(matches!(lookup, AttachedParticleOwnerLookup::Updated(_)));
+    assert_eq!(b2(&manager), RetailRuntimeValue::Known(63));
+    manager.clear_power_up_b2();
+    assert_eq!(b2(&manager), RetailRuntimeValue::Known(0));
+}
