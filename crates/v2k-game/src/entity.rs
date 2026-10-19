@@ -3439,6 +3439,19 @@ const fn fresh_level_one_quiet_death_profile(
             initial_behavior_class_id: 0,
             death_sound_id: Some(62),
         }),
+        // Worlds 37, 38 and 40: a modelless body whose death loses the world.
+        106 => Some(FreshLevelOneQuietDeathProfile {
+            entity_type,
+            model_slots: [0; 4],
+            mass_raw: 1,
+            capability_flags: 0x4000,
+            initial_health_raw: 1,
+            initializer_state_flags_raw: 0x7385,
+            behavior_weight_rule_id: 1,
+            behavior_weight_multiplier: 1,
+            initial_behavior_class_id: 0,
+            death_sound_id: None,
+        }),
         _ => None,
     }
 }
@@ -3479,7 +3492,7 @@ fn quiet_death_metadata_matches(
             sub_f: true,
             ..CommonMoverComponentTopology::default()
         },
-        52 | 68 => CommonMoverComponentTopology::default(),
+        52 | 68 | 106 => CommonMoverComponentTopology::default(),
         _ => return false,
     };
     metadata.mass_raw == profile.mass_raw
@@ -5026,6 +5039,8 @@ impl EntityManager {
                             | 115
                             | 80
                             | 83
+                            | 85
+                            | 106
                             | 122
                             | 123
                             | 124
@@ -10271,7 +10286,7 @@ impl EntityManager {
         let native_class0 = self.native_class0_construction_present(entity_id);
         let native_type62 = entity.entity_type == 62 && entity.shared_fish_runtime.is_some();
         if native_class0 {
-            if !matches!(entity.entity_type, 52 | 68)
+            if !matches!(entity.entity_type, 52 | 68 | 106)
                 || !self.native_class0_allocation_authenticates(entity_id)
             {
                 return Err(MainBaseAbortQuietDeathBlock::NativeConstructorReceiptMismatch);
@@ -10962,7 +10977,7 @@ impl EntityManager {
         // adapter stays Level 1's Type54.
         if entity.entity_type != LEVEL_ONE_TYPE54_ENTITY_TYPE
             && !(native_class0
-                && entity.entity_type == crate::main_base_type54_abort::TYPE72_ENTITY_TYPE)
+                && crate::main_base_type54_abort::is_change_sea_level_type(entity.entity_type))
         {
             return Err(MainBaseType54DeathBlock::UnsupportedEntityType {
                 actual: entity.entity_type,

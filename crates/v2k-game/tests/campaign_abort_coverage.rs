@@ -128,7 +128,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (34, 25),
     (35, 12),
     (36, 74),
-    (37, 106),
+    // World 37 completes: its Type106 dies quietly through class2.
     (38, 82),
     // Type125 factories share Type66's class39 owner.
     (40, 50),
@@ -368,7 +368,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
         );
         assert!(controller.abort_frame_submitted(), "world{world}");
     }
-    assert_eq!(exact_worlds, [13, 14, 15, 17, 28, 30, 39, 44, 45, 48]);
+    assert_eq!(exact_worlds, [13, 14, 15, 17, 28, 30, 37, 39, 44, 45, 48]);
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
         "first incomplete actor matrix changed"

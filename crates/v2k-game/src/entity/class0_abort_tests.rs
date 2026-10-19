@@ -225,7 +225,14 @@ impl World {
 
 #[v2k_test_support::retail_test]
 fn later_world_native_class0_actors_commit_quiet_death_and_deferred_unlink() {
-    for (level_id, types) in [(14, &[52, 68][..]), (25, &[68][..]), (39, &[68][..])] {
+    for (level_id, types) in [
+        (14, &[52, 68][..]),
+        (25, &[68][..]),
+        (39, &[68][..]),
+        (37, &[106][..]),
+        (38, &[106][..]),
+        (40, &[106][..]),
+    ] {
         let mut world = World::load(level_id);
         assert!(!world.manager.fresh_new_game_first_world);
         let ids: Vec<_> = types
