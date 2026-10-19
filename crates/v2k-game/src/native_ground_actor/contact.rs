@@ -520,7 +520,7 @@ fn resolve_flying_static_contact_entry(
         return NativeGroundContactOutcome::Ineligible;
     };
     let kind = entity.entity_type;
-    if !matches!(kind, 13 | 15 | 87 | 108 | 10 | 5 | 80 | 126 | 57) {
+    if !matches!(kind, 13 | 14 | 15 | 87 | 108 | 10 | 5 | 80 | 126 | 57) {
         return NativeGroundContactOutcome::Ineligible;
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -559,7 +559,7 @@ fn resolve_flying_static_contact_entry(
                         crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
                     }
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
-                    15 | 87 | 108 => {
+                    14 | 15 | 87 | 108 => {
                         crate::intro2_flyers_live::flyer_identity_authenticates(entity)
                     }
                     _ => false,
@@ -595,6 +595,10 @@ fn resolve_flying_static_contact_entry(
                 57 => {
                     !tasks.intro2_type57_has_pending_prefix(id)
                         && tasks.intro2_type57_completed_owner(manager, id)
+                }
+                14 => {
+                    crate::class49_death::finished_terminal_hit_authenticates(manager, id)
+                        || tasks.intro2_flyer_completed_owner(manager, id)
                 }
                 15 | 87 | 108 => {
                     crate::native_flying_surface_contact::native_flyer_quiet_death_authenticates(
@@ -651,7 +655,7 @@ fn resolve_profile_static_contact(
             if committed {
                 // A completed death publication has already replaced the living
                 // owner. The scheduler parks whichever exact prefix survived.
-                if matches!(profile.entity_type, 15 | 87 | 108) {
+                if matches!(profile.entity_type, 14 | 15 | 87 | 108) {
                     if !frame
                         .actor_tasks
                         .park_native_contact_prefix(frame.entities, id)
@@ -771,11 +775,14 @@ fn resolve(
             | 0x4c80c8
             | 0x4c8110
             | 0x4c8158
-    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18 | 77)
+    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18 | 77 | 14)
         && context.active_style().style_address() == 0x4c7e88)
+        // Type14's Flocking search and route rows have null contact hooks.
+        || (profile.entity_type == 14
+            && matches!(context.active_style().style_address(), 0x4c7df8 | 0x4c7e40))
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 15 | 87 | 108 | 94 | 38 | 129 | 77
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 14 | 15 | 87 | 108 | 94 | 38 | 129 | 77
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -783,7 +790,7 @@ fn resolve(
         || (matches!(profile.entity_type, 15 | 87 | 108)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
-        || (matches!(profile.entity_type, 13 | 43 | 38)
+        || (matches!(profile.entity_type, 13 | 14 | 43 | 38)
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
@@ -1171,9 +1178,21 @@ fn contact_task_hook(
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87 | 108) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
-        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 43 | 38) => {
+        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 14 | 43 | 38) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
+        // Type14's Flocking: 02B10's and 03650's Primary hook 02CA0; the
+        // 01F80 search keeps 05FF0's null hook.
+        (0x4c7df8, Some(Task::SharedRetarget(task)), Some(Task::GuardLocationAcquisition(_)))
+            if entity.entity_type == 14 =>
+        {
+            Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            ))
+        }
+        (0x4c7e40, Some(Task::FishTargetRoute(task)), None) if entity.entity_type == 14 => Ok(
+            NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
+        ),
         // BC90 keeps a carrier's living tasks and A8B0 calls each task's +20
         // without a style or dying test. Only the retained Primary's 02CA0
         // writes; acquisition Secondaries keep 05FF0's null hook.

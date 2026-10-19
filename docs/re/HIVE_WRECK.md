@@ -230,6 +230,11 @@ a Type57 at tick 51; world42's to a Type13 at 153; world46's to a Type5 at 251
 and world48's to a Type10 at 252. Type87 is the most common Hive birth, in
 seven of the worlds the cheats reach.
 
+Type14 rows take the same flyer constructor ([TYPE14_RUNTIME.md](TYPE14_RUNTIME.md)):
+a B/D/G flyer with no emitter whose choices are Defecate Virus, Move About
+Aimlessly and Flocking. World 18's first Type14 birth lands on retail's tick
+1001, and the next follow every 1500 ticks.
+
 The reset consumes one shared RNG word and is exactly:
 
 ```text

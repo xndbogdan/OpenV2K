@@ -19,12 +19,14 @@ pub(crate) struct NativeFlyerConstructionRequest<'a> {
     pub authored: Option<(usize, crate::common_mover::sub_d::NativeSubDConstruction)>,
 }
 
-/// The authored B/D/E/G rows: Type15 (wasp), Type87 (deathwas) and Type108.
+/// The authored B/D/E/G rows: Type15 (wasp), Type87 (deathwas) and Type108;
+/// and Type14's B/D/G row.
 pub(crate) const fn native_flyer_model_id(entity_type: u32) -> Option<u16> {
     match entity_type {
         INTRO2_TYPE15_ENTITY_TYPE => Some(INTRO2_TYPE15_MODEL_ID),
         INTRO2_TYPE87_ENTITY_TYPE => Some(INTRO2_TYPE87_MODEL_ID),
         TYPE108_ENTITY_TYPE => Some(TYPE108_MODEL_ID),
+        TYPE14_ENTITY_TYPE => Some(TYPE14_MODEL_ID),
         _ => None,
     }
 }
@@ -44,17 +46,22 @@ pub(crate) fn authenticate_native_flyer_metadata(
         || metadata.capability_flags != 8
         || metadata.initial_health_raw.is_none()
         || metadata.damage_profile.is_none()
-        || metadata.constructor_sound_attachment_id != RetailRuntimeValue::Known(Some(11))
+        || metadata.constructor_sound_attachment_id
+            != RetailRuntimeValue::Known(flyer_attachment_sound(entity_type))
         || metadata
             .initializer
             .as_ref()
             .unwrap()
             .alternate_behavior_class_ref
-            != 2
-        || !crate::intro2_flyer_aim::flyer_projectile_descriptor_authenticates(
-            entity_type,
-            metadata,
-        )
+            != flyer_alternate_class(entity_type)
+        || !if flyer_has_emitter(entity_type) {
+            crate::intro2_flyer_aim::flyer_projectile_descriptor_authenticates(
+                entity_type,
+                metadata,
+            )
+        } else {
+            metadata.projectile_emitter_descriptor == RetailRuntimeValue::Known(None)
+        }
     {
         return Err(Intro2FlyerPublicationError::MetadataMismatch);
     }
@@ -85,7 +92,7 @@ pub(crate) fn publish_native_flyer(
         )));
     let sub_d = match authored {
         Some((_, sub_d)) => sub_d,
-        None => world_fx.construct_entity_sub_d(FLYER_SUB_D),
+        None => world_fx.construct_entity_sub_d(flyer_sub_d(entity.entity_type)),
     };
     publish_flyer_behavior_phase(
         entity,
@@ -132,7 +139,7 @@ pub(crate) fn authenticate_native_flyer_body(
         || entity.collision.health_raw
             != RetailRuntimeValue::Known(metadata.initial_health_raw.unwrap())
         || entity.collision.constructor_sound_attachment_id_at_0x8c
-            != RetailRuntimeValue::Known(Some(11))
+            != RetailRuntimeValue::Known(flyer_attachment_sound(entity.entity_type))
         || entity.current_behavior_context != RetailRuntimeValue::Unresolved
         || !initial_behavior_supported
         || ActorTaskSlot::IN_RETAIL_TICK_ORDER

@@ -854,7 +854,7 @@ fn assert_hive_child(
 /// Retail (lab, idle player from the default arrival): world18's Hive gives
 /// birth to a Type77 at ticks 503 and 1006 and a Type14 at 1001.
 #[v2k_test_support::retail_test]
-fn world18_hive_births_type77_through_the_shared_constructor() {
+fn world18_hive_births_type77_and_type14_through_their_constructors() {
     let (manager, scheduler, births) = hive_world_births(18, 1100);
     let type77: Vec<_> = births.iter().filter(|birth| birth.1 == 77).collect();
     assert_eq!(type77.len(), 2, "{births:?}");
@@ -878,11 +878,26 @@ fn world18_hive_births_type77_through_the_shared_constructor() {
             crate::native_type76::manager_allocation_authenticates,
         );
     }
-    assert!(births.iter().all(|birth| birth.1 == 77), "{births:?}");
-    assert!(scheduler
-        .hive_diagnostics
-        .iter()
-        .any(|line| line.contains("UnsupportedEntityType { entity_type: 14 }")));
+    // The Type14 row runs the B/D/G flyer constructor (no emitter).
+    let type14: Vec<_> = births.iter().filter(|birth| birth.1 == 14).collect();
+    assert_eq!(type14.len(), 1, "{births:?}");
+    assert!((990..=1010).contains(&type14[0].0), "{births:?}");
+    let id = type14[0].2;
+    assert!(scheduler.owners.iter().any(|owner| owner.entity_id() == id));
+    let child = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    assert!(crate::intro2_flyers_live::flyer_identity_authenticates(
+        child
+    ));
+    assert_eq!(child.authored_spawn_index, None);
+    assert!(
+        births.iter().all(|birth| matches!(birth.1, 77 | 14)),
+        "{births:?}"
+    );
+    assert!(
+        scheduler.hive_diagnostics.is_empty(),
+        "{:?}",
+        scheduler.hive_diagnostics
+    );
 }
 
 /// Retail: world36's Hive gives birth to a Type18 one tick after the arrival

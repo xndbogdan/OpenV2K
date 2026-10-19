@@ -452,3 +452,87 @@ fn native_flyer_foreign_custody_and_static_route_reject_before_any_prefix() {
         assert_eq!(fx.particle_count(), 0);
     }
 }
+
+/// Type14's alternate1: a lethal Playing hit completes the class-1 terminal
+/// (BAC0/BAF0) synchronously and leaves its Finished receipt. The world-less
+/// shared entry refuses that death instead of borrowing the quiet one.
+#[v2k_test_support::retail_test]
+fn type14_lethal_playing_hit_explodes_through_class1() {
+    for playing in [false, true] {
+        let (mut session, mut manager, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(20);
+        let id = manager
+            .iter_all()
+            .find(|entity| entity.entity_type == TYPE14_ENTITY_TYPE)
+            .unwrap()
+            .id;
+        {
+            let entity = manager.entity_mut(id).unwrap();
+            entity.collision.pre_health_damage_buffer_raw = RetailRuntimeValue::Known(0);
+            entity.collision.health_raw = RetailRuntimeValue::Known(100);
+        }
+        let mut scheduler = SpecializedActorTaskScheduler::new();
+        scheduler.register_intro2_flyer(
+            Intro2FlyerSchedulerOwner::adopt_published(
+                manager.iter_all().find(|entity| entity.id == id).unwrap(),
+            )
+            .unwrap(),
+        );
+        let hit = impact(id, false, packet(10000));
+        if !playing {
+            let outcome = apply_native_flyer_particle_hit(
+                SharedActorImpactFrame {
+                    entities: &mut manager,
+                    resources: &session.cache,
+                    world_fx: &mut fx,
+                    scheduler: &mut scheduler,
+                    notifications: &mut GameplayNotifications::new(),
+                    retail_tick: 600,
+                },
+                hit,
+            );
+            assert!(
+                matches!(
+                    outcome,
+                    NativeFlyerImpactOutcome::Blocked {
+                        reason: NativeFlyerImpactBlock::Damage(_),
+                        ..
+                    }
+                ),
+                "{outcome:?}"
+            );
+            continue;
+        }
+        let outcome = crate::shared_actor_impact::apply_playing_actor_particle_hit(
+            crate::shared_actor_impact::PlayingActorImpactFrame {
+                extra_lives: RetailRuntimeValue::Unresolved,
+                resources: &mut session.cache,
+                entities: &mut manager,
+                world_fx: &mut fx,
+                scheduler: &mut scheduler,
+                notifications: &mut GameplayNotifications::new(),
+                static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
+                player_hull: &mut crate::player_hull::PlayerHull::default(),
+                retail_tick: 600,
+            },
+            hit,
+        );
+        let Some(SharedActorImpactOutcome::Flyer(NativeFlyerImpactOutcome::Applied(result))) =
+            outcome
+        else {
+            panic!("{outcome:?}")
+        };
+        assert!(result.filtered_damage_raw > 0);
+        assert!(result.death_publication.is_none());
+        assert!(crate::class49_death::finished_terminal_hit_authenticates(
+            &manager, id
+        ));
+        let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
+        assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(0));
+        assert_eq!(
+            entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT),
+            RetailRuntimeValue::Known(DYING_STATE_BIT)
+        );
+        assert!(!native_flyer_quiet_death_authenticates(&manager, id));
+    }
+}
