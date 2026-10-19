@@ -4364,6 +4364,48 @@ impl SpecializedActorTaskScheduler {
                 publish_type17_common_dying_owner_presented_view_detail(manager, *owner, context);
             }
         }
+        // 411720 classifies every live actor; 411400 gates each on its own
+        // 0x800 bit. The owners above keep their completed-visit boundaries,
+        // and a parked prefix keeps its frozen mode and state.
+        let ids: Vec<u32> = manager.retail_live_order_ids().collect();
+        for id in ids {
+            let own_boundary = self.owners.iter().any(|owner| {
+                owner.entity_id() == id
+                    && (owner.is_native_contact_prefix()
+                        || owner.type9_actor_lease().is_some()
+                        || matches!(
+                            owner,
+                            SpecializedActorTaskOwner::Class0Actor(_)
+                                | SpecializedActorTaskOwner::Intro2Meteor(_)
+                                | SpecializedActorTaskOwner::SharedFish(_)
+                                | SpecializedActorTaskOwner::CleansingVehicle(_)
+                                | SpecializedActorTaskOwner::OrdinaryType9Wander(_)
+                                | SpecializedActorTaskOwner::OrdinaryType9GoToJob(_)
+                                | SpecializedActorTaskOwner::OrdinaryType9RunAway(_)
+                                | SpecializedActorTaskOwner::OrdinaryType9AttractAttention(_)
+                                | SpecializedActorTaskOwner::MainBaseType9Exploding(_)
+                                | SpecializedActorTaskOwner::Type17CommonDying(_)
+                        ))
+            });
+            if own_boundary
+                || self.native_ground_has_pending_prefix(id)
+                || self.intro2_type13_has_pending_prefix(id)
+                || self.intro2_type16_has_pending_prefix(id)
+                || self.intro2_type58_has_pending_prefix(id)
+                || self.intro2_type94_has_pending_prefix(id)
+                || self.intro2_type66_has_pending_prefix(id)
+                || self.main_base_has_pending_prefix(id)
+                || self.intro2_gun_turret_has_pending_prefix(id)
+            {
+                continue;
+            }
+            if let Some(entity) = manager.entity_mut(id).filter(|entity| entity.active) {
+                context.publish(
+                    entity.position_raw(),
+                    &mut entity.collision.state_flags_at_0x08,
+                );
+            }
+        }
     }
 
     /// Tick the current intrusive live list with the process-global WorldFx RNG.
