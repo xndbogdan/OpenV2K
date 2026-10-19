@@ -81,6 +81,12 @@ snapshots also contained the same 39-handle topology. Mode-specific hull and
 landing-gear presentation therefore belongs to `player4`'s conditional
 Section-8 hierarchy, not a model-slot swap or a separately spawned entity.
 
+Slot 2 is the infected craft, slot 3 its wreck. A warp releases the old body,
+and `FUN_004438A0` constructs the player at the controller snapshot's arrival,
+so `104B0` selects slot 2 when that cell's terrain type has bit `0x10`, as
+world 43's arrival does. Both live slots hold model 41, so the player's pair
+walk resolves the infected craft as it does the clean one.
+
 **Mode-joint recovery (2026-07-17).** Type 46's authored Sub-O bytes are exactly
 `05 06 07 08`. `FUN_00409A80` resolves these through `FUN_0040A950` into the
 zero-initialized per-entity joint array; `FUN_0040D320` is the model callback

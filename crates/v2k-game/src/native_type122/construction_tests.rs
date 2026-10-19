@@ -125,10 +125,19 @@ pub(crate) fn native_fixture(level: u32) -> (GameSession, EntityManager, WorldFx
 /// Sub-J storage. The retail controller default is a controlled fixture pose;
 /// no player, attachment row or component is synthesized after construction.
 pub(crate) fn native_fixture_with_player(level: u32) -> (GameSession, EntityManager, WorldFx) {
+    let arrival = crate::campaign_transition::RETAIL_CONTROLLER_DEFAULT_ARRIVAL;
+    native_fixture_with_arrival(level, arrival.position_raw, arrival.heading_raw)
+}
+
+/// The same world with the player born at a chosen arrival pose.
+pub(crate) fn native_fixture_with_arrival(
+    level: u32,
+    position_raw: [i16; 3],
+    heading_raw: u16,
+) -> (GameSession, EntityManager, WorldFx) {
     assert!((13..=49).contains(&level), "ordinary player world required");
     let (mut session, metadata) = fixture();
     session.load_level_by_id(level, 1).unwrap();
-    let arrival = crate::campaign_transition::RETAIL_CONTROLLER_DEFAULT_ARRIVAL;
     let mut fx = WorldFx::new();
     let manager = EntityManager::from_authored_world(
         AuthoredWorldConstruction {
@@ -143,8 +152,8 @@ pub(crate) fn native_fixture_with_player(level: u32) -> (GameSession, EntityMana
                 }),
             },
             player_arrival: Some(crate::entity::AuthoredPlayerArrival {
-                position_raw: arrival.position_raw,
-                heading_raw: arrival.heading_raw,
+                position_raw,
+                heading_raw,
             }),
             retail_tick: 4793,
         },
