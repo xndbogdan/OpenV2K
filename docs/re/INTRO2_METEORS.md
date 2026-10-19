@@ -24,8 +24,8 @@ Class19 descriptor `0x004C8900` selects style `0x004C7858` and initializer
 | 34 | `[32256,5120,-26112]` | 50 |
 | 35 | `[-30208,5120,-26112]` | 75 |
 
-`B910` first constructs Tertiary through `4069E0(slot2,0x28)`, clears Secondary,
-then constructs Primary through `404580(slot0,5000)`. The Primary's
+`B910` first constructs Tertiary through `004069E0(slot2,0x28)`, clears Secondary,
+then constructs Primary through `00404580(slot0,5000)`. The Primary's
 `401350 -> 4012E0` private initializer copies the **authored, pre-launch** XYZ,
 sets direction dword `+10=1`, and clears movement words `+14/+16` and stationary
 counter `+18`. Its common-mover initializer has no component work for Type34.
@@ -96,7 +96,7 @@ is exact: position `[-32256,6400,-26112] -> [-32188,6378,-26249]`, velocity
 
 ## Live fire trail and explosion effects
 
-Tertiary callback `406A70` emits only in detailed mode and only when the
+Tertiary callback `00406A70` emits only in detailed mode and only when the
 wrapping signed sum `vx²+vy²+vz²` is strictly greater than `0x77A10` (700²).
 It sees Primary's damped velocity and the pre-environment, pre-integration pose.
 It calls `4061A0(entity,0x28,dt)`, then ORs entity byte+84 with0x20.

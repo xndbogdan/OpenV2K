@@ -19,7 +19,7 @@ Section12 Sub-F (`type+C8+1C`, subsection field39) is exactly fourteen bytes:
 | 07..0C | Six signed `40A950` model-variable selectors; zero leaves a null pointer |
 | 0D | Retained byte, no recovered consumer |
 
-Successful `424220` zeroes a forty-hex-byte runtime allocation, then sets:
+Successful `00424220` zeroes a forty-hex-byte runtime allocation, then sets:
 
 1. `+34 = base + ((low16(random1) * signed_span) >>16)`.
 2. If `speed_base - (low16(random2)>>8) <50`, `+38=50`; otherwise
@@ -43,7 +43,7 @@ Successful target-route constructor `403650` subsequently invokes `424390(1)`.
 is clear. Otherwise it advances roll and damps pitch; it does not animate,
 sample terrain, control acceleration or apply velocity drag.
 
-The living path is animation first, controller `423DF0` second, then forward
+The living path is animation first, controller `00423DF0` second, then forward
 and vertical acceleration, pitch/roll damping, and Q31 velocity drag. Animation
 therefore reads the **previous** acceleration and pre-controller pitch.
 
@@ -54,7 +54,7 @@ Output pointers may alias: mode0's three steering writes precede the sine
 writes, and the last bound output reads the word resulting from earlier writes.
 The last output uses its previous **unsigned** word and signed division by4.
 
-`423DF0` samples bilinear terrain at current XZ and one forward-basis offset
+`00423DF0` samples bilinear terrain at current XZ and one forward-basis offset
 (`forward.x/z >>21`), using the higher terrain for model clearance. The active
 model header+8 extent is unsigned. It clamps current vertical velocity to
 [-300,250], computes speed correction, and clamps forward acceleration to

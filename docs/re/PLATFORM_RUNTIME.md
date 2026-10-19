@@ -453,3 +453,10 @@ current mode.
 | `FUN_00494540` | dispatches an event code and argument to an application's modes in order, through each one's handler (word 12), until one handles it |
 | `FUN_00494490`, `FUN_004944D0` | create a `0x28`-byte record from a ten-word description, calling its first word; destroy one, calling its fifth. The world application's create callback makes four, from the descriptions at `004D0878`, `004D08A0`, `004D08F0` and `004D08C8` |
 | `FUN_00494780`, `FUN_004948B0` | empty callbacks returning success |
+
+## Loading worker and overlay reload
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0042D620` | the loading worker's timer callback (started by `FUN_0042D7F0`): guarded against re-entry (`004DB248`), it measures the real time since its last visit (clamped to 7.8-125 ms), pumps one Windows message, advances the loading animation (`004DB1D8`, `FUN_0042AF00`/`FUN_0042B1E0`), and either stops the timer when asked (`004DB244`, flagging `004DB240`) or re-arms it with a period cut to 7/8 after a visit under 43.75 ms (above 50 ms) or stretched to 9/8 after a slower one |
+| `FUN_00493BA0` | loads one overlay through its file module (from `FUN_00493A40`): opens it with the module's method `+8` (with `004FBE2C` and the request's `+0C`), runs the section reader (`FUN_00493BF0`) and its error check (`FUN_00493DB0`), then closes it (method `+0C`) |

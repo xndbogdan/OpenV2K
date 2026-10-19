@@ -161,7 +161,7 @@ until unlink, including the direct and native Q31 basis-rotated branches.
 Damage precedes F610; suppression gates the attachment but not11180.
 Class68's `442420` surface dispatch now follows the shared descriptor owner
 described below. The complete83/84/86 attached callback now owns B2, follow,
-`4417E0`, marking, scaled direct15040, ratio/age and cascade order on native
+`004417E0`, marking, scaled direct15040, ratio/age and cascade order on native
 living owners as well as the native postdeath Type9 class84 zero-return path.
 Damage/death run synchronously before the suffix rereads the current physical
 particle and the original authenticated allocation's post-callback velocity.
@@ -236,14 +236,14 @@ contract and remaining ordinary-birth/static/pair boundaries are owned by
 ## Alternate11 and implementation boundary
 
 Type57 shares Type10's source alternate11 path:10C10 writes health0/DYING
-after the remote/already-dying gates, then C660/404360 clears Secondary and
+after the remote/already-dying gates, then C660/00404360 clears Secondary and
 Tertiary, runs the successful common G suffix, sets G+3F=1 via1B970 and
 publishes the zero-lifetime Tumble Primary. There is one constructor G word,
 no selector draw and no common12 vertical launch. Null Type57 sounds do not
 authorize moving mutable component/graph validation ahead of the health/DYING
 prefix when a later phase can block.
 
-404460 retains elapsed age; detailed mode rotates by
+00404460 retains elapsed age; detailed mode rotates by
 `max(1,3-signed(age_ms)/1000)` times the source dt shifts, then calls018A0
 directly. There is no target prelude or Sub-D step. Tumble G clears its two
 forces and skips ordinary wing/audio/terrain attitude; K/L use retained state.
@@ -281,5 +281,5 @@ dormant B2 clear, class7 live motion, method24/particle68/sound93 fire,
 incoming lethal class38 hits, and alternate11 tumble/terminal are implemented,
 as are the 442950 sweep, the 411180 Type9/13/26 damage prefix, the attached84
 allocation/follow lifecycle and the descriptor-owned 442420 surface replacement.
-The complete disabled-damage83/84/86 callback, including B2, `4417E0` and cascade,
+The complete disabled-damage83/84/86 callback, including B2, `004417E0` and cascade,
 is implemented. Enabled attached damage and cached entity-record custody remain open.

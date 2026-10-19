@@ -103,7 +103,7 @@ gunner callback. This is a guarded source foundation, not accepted ram play.
 
 The following live `1BEB0` visit bypasses locked health when `+0x44` is
 nonzero. After infection, its component death branch conditionally calls
-`4568B0(3) -> 1D050(objective_hostile) -> 4567B0`: forced death while objective
+`4568B0(3) -> 0041D050(objective_hostile) -> 4567B0`: forced death while objective
 actors remain skips this completion prefix. It then writes controller0 and
 health0, plays the authored Sub-N cue at the current entity position, emits
 `40950` scatter and `4566E0` radial at the retained `+0x54` anchor using the
@@ -399,8 +399,8 @@ Retained arrival, checkpoint and same-world reconstruction belong to
 [loading](LOADING_TRANSITIONS.md#campaign-exit-routes-runtime-validated-2026-07-22);
 matched warp animation/presentation remains a separate acceptance boundary.
 
-Normal routing uses `427E20 -> 4464B0` on the player's real static-model
-contact, followed by `42DD10 -> 42E300 -> 446440`. This applies to kinds22..26
+Normal routing uses `427E20 -> 004464B0` on the player's real static-model
+contact, followed by `42DD10 -> 0042E300 -> 00446440`. This applies to kinds22..26
 without a model343 check. Authored Hive dying slot3 varies by world (for
 example model585 in OVL16 and1188 in Cistern). Cistern's Hive is beside a
 subtype3 marker, whereas its subtype1 marker is elsewhere. Neither Hive death

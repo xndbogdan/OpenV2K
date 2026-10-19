@@ -510,7 +510,7 @@ campaign bits are live for the in-session controller. The
 campaign-completion transition runs at hive death and retains state 3 or 4;
 it does not force results state 5. Native checkpoints retain these campaign
 bits; hive completion itself does not save to disk. A newly set bit `0x8` also
-reaches `456820(1) -> 413600(player,0x13F) -> 40DB20 -> 445A90`. The packed
+reaches `456820(1) -> 413600(player,0x13F) -> 0040DB20 -> 445A90`. The packed
 operation is selector `0x3F`, amount 1: count one trophy, grant one extra life
 on every fifth count, and play sound 50 at normal rate or `0x20000` for that
 extra life. Amount 1 does not restore shield/hull or claim hidden bit `0x2`.
@@ -552,8 +552,8 @@ arrival XYZ is `+0x04/+0x06/+0x08`, and global overlay id is logical level +
 `FUN_00456D10` then raises player `+0x1F4` plus camera transition type 15.
 `FUN_0042EF60` controls marker visibility/capability, not whether the marker
 exists or whether only the two captured cells may route. The player static
-contact path `427E20 -> 4464B0` stamps the actual terrain cell. `42DD10 ->
-42E300 -> 446440` admits that stamp for fewer than two wrapped retail ticks;
+contact path `427E20 -> 004464B0` stamps the actual terrain cell. `42DD10 ->
+0042E300 -> 00446440` admits that stamp for fewer than two wrapped retail ticks;
 proximity to Type111 is not the route predicate. Record `+0x1E` compares terrain
 bit3 and `+0x1F` compares bit4, with signed selector2 meaning wildcard. Records
 are evaluated in authored order, retaining their original indices for pair
@@ -623,7 +623,7 @@ Accepted synchronized trace
   therefore creates a fresh entity/component but restores serialized
   controller state. Static `FUN_00443440`/`FUN_00443560` confirms that mode,
   fuel, health, capabilities, cargo capacity, and weapon descriptors are
-  controller-owned. `42E270 ->448070` stages override flags `0xF`; after
+  controller-owned. `42E270 ->00448070` stages override flags `0xF`; after
   teardown `443440` sets the authored arrival, zero velocity, yaw `0x4000`,
   zero pitch/roll and health `40000`. The shield remains in controller
   `+0x1BC` and `443560` restores it to new entity `+0x50`; the NoCD save
@@ -733,7 +733,7 @@ matched retail warp presentation remains open.
 Retry XYZ is session `+38/+3C`, retained across player movement. `44FEB0`
 initializes it from the default profile; `44F650/448E50` copy native state at
 session `+14`, mapping payload `+24` to these XYZ words. A normal marker first
-stages its exact incoming tuple through `42E270 ->448070`; map initializer
+stages its exact incoming tuple through `42E270 ->00448070`; map initializer
 `4556A0` calls `443260` with output `session+38` to commit that tuple. Other
 `443260` callers may choose different snapshot buffers. `456D10` reuses only
 the retained XYZ and forces zero velocity/attitude plus heading4000. The port

@@ -43,7 +43,7 @@ owners. Let `h00,h01,h10,h11` denote the heights at `(x,z)`, `(x,z+1)`,
 `(x+1,z)` and `(x+1,z+1)`. The callback rejects the cell if the greatest
 corner height is at or below `center_y - radius`. Otherwise:
 
-1. `415770` independently cross-products and normalizes the two corner
+1. `00415770` independently cross-products and normalizes the two corner
    tangent pairs, equivalent to normals of
    `[-256*(h10-h00),65536,-256*(h01-h00)]` and
    `[256*(h01-h11),65536,256*(h10-h11)]`.
@@ -61,7 +61,7 @@ corner height is at or below `center_y - radius`. Otherwise:
    guessed deep-terrain recovery clamp.
 
 The Q12 helpers use integer square roots and truncating signed division.
-`415770` and `415690` first reduce large vectors by arithmetic shifts of
+`00415770` and `00415690` first reduce large vectors by arithmetic shifts of
 0/5/10/15/20 according to highest set magnitude bit thresholds 14/19/24/29.
 `415610` takes the already bounded sum without that scaling. Zero length
 returns `[4096,0,0]`. The executable's wrapped products and signed-word
@@ -69,7 +69,7 @@ intermediates remain part of the contract.
 
 ## Perimeter fallback
 
-A projection outside the cell takes `415900`, which finds the closest
+A projection outside the cell takes `00415900`, which finds the closest
 point on the four perimeter edges, clockwise from `(x,z)` through
 `(x+1,z)`, `(x+1,z+1)` and `(x,z+1)`. There is no diagonal edge.
 Each edge uses its integer length and Q12 direction, clamps the dot-product
@@ -81,7 +81,7 @@ admission is deliberately **signed**: `4154CF` uses `jge` against wrapped
 penetration is the radius minus its signed-word integer distance. This
 asymmetry matters when squared distance wraps across bit31.
 
-If the sphere center is above the closest point, `415690` normalizes the
+If the sphere center is above the closest point, `00415690` normalizes the
 full center-minus-point vector. Otherwise the normal has zero Y, preserving
 retail's suppression of downward edge separation. A recovered asymmetric
 branch at `41551B/41551F` tests `center_x == closest_x` **and**
@@ -89,10 +89,16 @@ branch at `41551B/41551F` tests `center_x == closest_x` **and**
 comparison really uses closest **X**. Replacing it with closest Z or merely
 relying on a zero-vector fallback changes reachable results.
 
+## Sea surface
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00415E10` | the sea-surface counterpart of `FUN_00415160`: the same sphere sweep over the cells its box covers, against the flat sea plane, keeping the deepest contact |
+
 ## Evidence and acceptance boundary
 
 The original `V2000.EXE` instructions at `415160..415601`, `415610..4158F8`,
-`415900` and `46ABA0` establish the contract. A local Unicorn harness executes
+`00415900` and `46ABA0` establish the contract. A local Unicorn harness executes
 those original PE instructions with a copied Level-50 terrain buffer; it does
 not attach to retail, record gameplay, or emulate the complete engine. This is
 an isolated instruction oracle, **not a TTD observation of an actor's route**.

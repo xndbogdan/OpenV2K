@@ -75,6 +75,17 @@ Left-Shift weapon changes as active-slot transitions followed by complete
 descriptor swaps. The older action-name interpretation had these families
 reversed even though its raw key grouping was correct.
 
+The craft descriptors with callbacks: `0x4CD850` held fire (the PC's),
+`0x4CD858` the special-weapon deploy `FUN_00444400`, `0x4CD860` D,
+`0x4CD868` C, `0x4CD870`/`0x4CD878` the weapon walks, `0x4CD8C0` TAB
+(`FUN_004442B0`) and `0x4CD8C8` E (`FUN_004442E0`).
+
+| Routine | Does |
+| --- | --- |
+| `FUN_004443B0` | the PC's held-fire descriptor callback (`0x4CD850`): while the key is down, reads the controller's record `+44` (`FUN_004715E0`) and, when it is nonzero, runs the special-weapon deploy (`FUN_00444400`) |
+| `FUN_00444070` | the craft set's D callback (descriptor `0x4CD860`): on a press, starts a beam-out (`+20E` = -80) when the beam is idle and cancels a beam-in in progress |
+| `FUN_004440A0` | the craft set's C callback (descriptor `0x4CD868`): on a press, cancels a beam-out in progress and starts a beam-in (`+20E` = +80) when the beam is idle |
+
 \* A foreground retail capture observes Enter and right mouse feeding the same
 held trigger. This supersedes the earlier Ctrl inference from the isolated
 input-reader decompile; Ctrl does not fire in the captured retail configuration.
@@ -298,6 +309,7 @@ press. Debug actions test bits of the session's cheat word `+1C4`.
 | `FUN_00455E20`, `FUN_00456050` | with cheat bit 2 (the second on key state 2 only), play cue 3 and give the player every Cheats -> Weapons entry, the menu rows whose callback is `FUN_00455F50` |
 | `FUN_00455EB0`, `FUN_00456070`, `FUN_00456100` | with cheat bit 4, give the player power-up operations (`FUN_00413600`, amount above the operation byte): `0x33` with 200000 less a controller word, `0x37` with 40000 less its health, and `0x35` with 100000 |
 | `FUN_004562B0` | clears all six cheat enables (`FUN_00450FC0`) and pops a screen |
+| `FUN_004564E0` | an in-play debug action: on a press, steps the controller's craft type (`+190`, `FUN_00447C60`) to the next of the 18 entries at `0x4D13B8` whose world mask has the current world, rebuilds the player as that type (`FUN_00447C20`, keeping it in phase 4), and stores its body handle at `+2A8` |
 
 ### Original console controller layouts
 
@@ -398,6 +410,28 @@ poll then multiplies the level by 15/16 (`(level × 15) >> 4`), so a
 full-strength hit buzzes for 30 polls, 240 ms, thinning out as it fades. The
 large-motor byte is never written.
 
+## Binding sets and devices (STATIC)
+
+Each device with bindings has an input state (`004DB0E8`, twelve slots); a
+mode's binding block holds twelve button and twelve axis binding records, one
+per device. Button bindings feed the matcher `FUN_00472320`; axis bindings
+write value records that the frame pump stamps and drains each frame.
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00428FE0` | installs a mode's bindings for one device: creates the device's input state (`FUN_00472040`, kept at `004DB0E8`) on first use and sets its axes (`FUN_00428EE0`), then builds the mode's button bindings for it (`FUN_00471880`) and, from the table at `+30`, its axis bindings (`FUN_00471A40`) |
+| `FUN_00428EE0` | sets a device input state's eight axes (`FUN_00472520`): each from its `004CA448` table entry, with `004CA5D0` and mode 2 |
+| `FUN_00429100` | appends a mode's twelve per-device button bindings to list `+08` (`FUN_00471C80`) and its twelve axis bindings to list `+14` (`FUN_00471CD0`), skipping empty entries |
+| `FUN_00429160` | drops one reference from each of a mode's twelve button (`FUN_004719F0`) and twelve axis (`FUN_00471B80`) binding records |
+| `FUN_00472040` | creates a device's input state (0xCC bytes, kept at `004DB0E8` by `FUN_00428FE0`): the device, a cleared 16-word state, eight axes at scale 0x40000000 and mode 2 (`+4C`, 12 bytes each), two empty binding lists, and `FUN_00472180` as the device's callback (`FUN_00494D80`); linked at the tail of the input-state list `004FB850` |
+| `FUN_00471880` | builds a device's button bindings (from `FUN_00428FE0`): a 0x34-byte record holding the binding table (0x14-byte rows), the callback table, the device's input state and an argument, with a value record per row (`FUN_004712B0` into `004FB858`); a failure drops those made and frees it |
+| `FUN_00471A40` | builds a device's axis bindings (from `FUN_00428FE0`): a 0x18-byte record holding the axis table (0x18-byte rows), the callbacks and the device's input state, with a reference record per row (`FUN_004712B0` into `004FB830`); a failure drops those made and frees it |
+| `FUN_00472180` | a device's callback: copies the device's 16-word state into the input state (`+0C`), then updates the axis bindings (`FUN_004721F0`) when they are enabled (`+BC`) and runs the button matcher (`FUN_00472320`) when there are button bindings (`+AC`) |
+| `FUN_004721F0` | updates a device's axis bindings: scales each of the eight raw axes ((raw + offset) × scale × gain, Q31), then for each binding row (axis, flags, offset, scale, gain) computes its value and, when it changed, writes it to the bound value record's `+14` (adding the change when the row's flag 1 is set) and notifies an armed record (`+20`, `FUN_00471760`) |
+| `FUN_004715F0` | the frame pump's value step (from `FUN_00494070`): stamps every value record (`004FB858`) with the frame's clock (`+20/+24`, clearing `+28/+2C`), then drains the 32-entry event ring (`004FB870`, 0x28 bytes each, from `004FB83C` to `004FB854`): an event that turns its value on stores its time in its timing record, one that turns it off adds the time held; each event's value is written to its target and its callback runs with its argument, value and time; finally it reads the clock (`FUN_00495FF0`, `004FB840`) |
+| `FUN_00428C10` | counts the devices with an input state (`004DB0E8`, twelve slots) whose value record at `004DB118` reads zero (`FUN_004715E0`) |
+| `FUN_00428C60` | the same count over device slots 1, 2 and 8 only, for the menu's visibility mask |
+
 ## Port controller layouts
 
 The launcher's Options (Controls, Controller) choose how a standard game
@@ -468,7 +502,7 @@ whether the console pad moves it there is not traced.
   result at 200000.
 - **An empty-fuel TAB appears refused, but retail implements it as an immediate
   VTOL callback round trip.** `FUN_004442B0` raises `+0x20d` unconditionally
-  and `0x447970` commits the fly style. The first `FUN_00445310` call sees
+  and `0x00447970` commits the fly style. The first `FUN_00445310` call sees
   `fuel < 1`, plays positional sound `0x31`, submits once-per-level resource
   event `0x0B` (table-selected Section-2 string `0xEC`,
   `You cannot fly without any fuel`), and requests Hover again. The port

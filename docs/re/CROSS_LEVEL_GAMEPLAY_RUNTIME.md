@@ -426,7 +426,7 @@ progressive-death fields generically. Known constructor callback facts permit
 their nonlethal damage arithmetic outside world13. Retail class39 Working Factory
 (`257C0`, Primary `25C60`, pair `25850`) and class41 Main Base (`25730`, pair
 `258A0`) both use progressive death `19750`; `19B50` owns timed stages and
-`37390` consumes the actual destruction template. See game_logic.c.
+`00437390` consumes the actual destruction template. See game_logic.c.
 
 | Authored factory | Models, healthy / dying | Capacity | Packed payload | Production / delivery / cooldown, microseconds |
 | --- | --- | ---: | ---: | --- |

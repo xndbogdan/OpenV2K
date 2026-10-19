@@ -1342,3 +1342,12 @@ Acceptance is based on authored spawns/models, valid task topology and targets,
 retail timing/motion envelopes, live camera following, and the same functional
 cinematic outcome—not frame-identical actor coordinates. Fixed-seed tests remain
 appropriate for individual transaction and draw-count contracts.
+
+## Other runtime helpers (STATIC)
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0040EAB0` | sets or clears checked-damage admission (`0x8000`): a nonzero argument clears it; zero sets it unless the effective flags (`+C8` with the style's `+34`/`+38`) carry `0x80` |
+| `FUN_0040EB20` | re-grounds every admitted resting body (state `0x08008000` without `0x1000`, default flag `0x20`) within a radius of a point: bilinear terrain height, plus the active model's extent for flag `0x40`, then `FUN_00416AC0`'s terrain basis |
+| `FUN_00417D30` | when the type has the descriptor at `+EC`, resets the component its Primary task holds through `FUN_00438040` (the kind-7 apply's suffix) |
+| `FUN_004202E0` | Sub-D's turn-rate integrator (from `FUN_0041F660`): damps the rate word `+8` by the elapsed time, adds the steering demand over the descriptor's inertia (doubled when it reverses the rate), and clamps it to ±0x20000 over the inertia |

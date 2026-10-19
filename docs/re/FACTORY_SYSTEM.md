@@ -337,7 +337,7 @@ belong to the separately ejected workers. The
 0x4C spawn request is still the factory origin (pickup offset `[0,0,0]`);
 capture `20260731-001224` is `[0x5700, 0xFD00, 0x3A00]`. That origin is the
 `lifter` model origin, inside the building. The visible/contact site is updated later by the draw-owned
-`0A9F0 ->198E0 ->199B0` Sub-M selector-zero callback. It resolves descriptor
+`0A9F0 ->004198E0 ->004199B0` Sub-M selector-zero callback. It resolves descriptor
 word `+00` (slot8 for Type66) in the current nested model, returns that marker
 as tf14 geometry, then writes tracked product `+88` with signed descriptor
 world offsets and state bit20. The Level1 fork marker includes `[0,78,0]`

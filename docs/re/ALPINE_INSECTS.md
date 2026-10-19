@@ -177,7 +177,7 @@ receipt is a constructor request, not a proof of successful ring publication.
 
 Recording02's first rocket `04E00001` is selector5/callback5, published at
 `CF8FA:166A`. Its three task arguments are scalar0/1/31 for callbacks
-`403860/401FB0/406A70`. The forward receipt observes15 executions of each,
+`403860/401FB0/00406A70`. The forward receipt observes15 executions of each,
 15 mover visits, and1446000us of age. Terrain hook `40D7F0` at `D7152:25C2`
 dispatches `40CEF0 -> 410C10` at `D7152:25DE/25E1`; radial explosion follows
 before all three slots are cleared and deferred destruction is marked at
@@ -213,7 +213,7 @@ Launch XYZ belongs to the pending-record/render transaction. The grenade's
 pending origin flag changes1→0 before consumption and its emitted XYZ is
 copied through `414870 -> 44E770 -> 438080`; all three retained rockets keep
 flag1 and use `411400`'s current-source-center fallback. These receipts do
-not retain the exact `424F20` writer occurrence or its current-node VIEW
+not retain the exact `00424F20` writer occurrence or its current-node VIEW
 cache. Static normal-tier PLAYER4 callback4 selects `pl4tubegun`, whose
 reached type14 selectors0/1 resolve Sub-E plain source slots18/20 in that
 child's mounted frame. Callback5 selects `pl4fmissile`, whose type14 records
@@ -355,7 +355,7 @@ for other models or their child collision programs.
 
 Two replaceable allocation policies remain approximations. Transient `+B2`
 starts at zero once, then accepts actual callback/animation writes. Source
-`401D30` leaves Furniture target Y unwritten, although `401DA0` still calls
+`00401D30` leaves Furniture target Y unwritten, although `00401DA0` still calls
 `01430` after a failed scan. Type30 therefore selects explicit
 [`InitialActorHeightApproximation`](../../crates/v2k-game/src/trash_furniture.rs)
 at each Furniture task publication: it seeds that task's Y from the current

@@ -23,8 +23,8 @@ another entity):
 1. `FUN_00446640` consumes `+0x20d` (game_logic.c:35838-35847) and calls the
    current mode-record's **morph handler** (`record+4`).
 2. Morph handlers map body→new style via jump tables:
-   **A `0x447970` (→fly)**: `{body 0→1, 1→2, 2→1, 3→3}`;
-   **B `0x4479f0` (→hover)**: `{0→0, 1→2, 2→0, 3→4}`. Player = body 0, so
+   **A `0x00447970` (→fly)**: `{body 0→1, 1→2, 2→1, 3→3}`;
+   **B `0x004479F0` (→hover)**: `{0→0, 1→2, 2→0, 3→4}`. Player = body 0, so
    **hover style 0 ↔ fly style 1**.
 3. Handler calls `FUN_0040c6b0(entity, new_style)` (game_logic.c:3485-3490):
    selects mode record `0x4cd940 + style*0x48`, stores it at **`entity+0xb8`**
@@ -43,7 +43,7 @@ another entity):
 **Empty-fuel Hover→VTOL is an immediate callback round trip, not a separate
 input gate.** User observation correctly established that pressing TAB with an
 empty fuel bar leaves the craft in skimmer. Disassembly now closes the
-mechanism: `FUN_004442B0` unconditionally raises `+0x20d`; `0x447970` commits
+mechanism: `FUN_004442B0` unconditionally raises `+0x20d`; `0x00447970` commits
 style 1; then the first `FUN_00445310` callback sees `+0x88 < 1`, plays
 positional global sound `0x31`, submits deduplicated resource event `0x0B`, and
 raises `+0x20d` for the return to Hover. `DAT_004CAD80[0x0B]` selects global
@@ -292,9 +292,9 @@ Section-13 `+9C/+A0/+A4` into signed-word authored/current wind vectors,
 `+94` into drag strength, `+98` into the signed height cap, `+90` into mode,
 and `+80 != 0` into the sea-side selector. A zero vector forces mode and
 height cap to zero. Nonzero mode uses the current vector; mode 2 alone
-updates it through `44EBD0`.
+updates it through `0044EBD0`.
 
-`44EBD0` adds the active frame delta to wrapping process-global
+`0044EBD0` adds the active frame delta to wrapping process-global
 `DAT_004D04C8`, then scales each authored signed word by
 `retail_sine_q15(phase >> 7) >> 15`. It runs once before world actor
 callbacks, never once per actor. `44EB40` does not reset this phase on a
@@ -1095,7 +1095,7 @@ requires an admitted native draw; it cannot replace the missing viewport.
 
 Successful Type42 construction consumes four shared words in order: SubA
 constructor, singleton weighted behavior selector, `401F80` SubA reset, then
-`403840` final reset. `4069E0` installs the trail without another reset. The
+`403840` final reset. `004069E0` installs the trail without another reset. The
 initial×3/2 target write is overwritten; final target is randomized from authored
 base10000. Type59 consumes its one singleton selector word. Class22 retains
 C→A→B force order, Type42 SubA4000/-4000, SubB100000/100000 and SubC clearance75,
@@ -1235,10 +1235,10 @@ task slots2 then1, zeroes control7, and replaces slot0 with the `BB8`/`4476F0`
 wrapper. The host's `PlayerDeathLifecycle` owns that wrapper and begins charging
 elapsed time on the following controlled visit, before common physics. Its
 primary-weapon reset is local adapter cleanup. Dying style masks `+34/+38` are
-zero, so living controls and Sub-O fan retunes stop;447280 has no fan-loop stop
-call. Terrain/water447AF0 owns strict signed latch comparison, contact burst
-and `rng16>>11 + tick` reseed; static447C90 has no burst/latch/Y1000 suffix.
-Pending replacement446D70, non-null logical attachment release, nonempty cargo,
+zero, so living controls and Sub-O fan retunes stop; `00447280` has no fan-loop stop
+call. Terrain/water `00447AF0` owns strict signed latch comparison, contact burst
+and `rng16>>11 + tick` reseed; static `00447C90` has no burst/latch/Y1000 suffix.
+Pending replacement `00446D70`, non-null logical attachment release, nonempty cargo,
 and the capability20 post-death objective continuation report named preflight
 blocks. The retained wreck observations and source cadence are distinguished in
 [the existing wreck-effect note](#player-wreck-bursts-and-sample-timing-retail-trace-2026-07-22).
@@ -1254,10 +1254,10 @@ comparison, synchronous `475F0`, `rng16>>11 + tick` reseed and finally live
 short words with its `>>12` dot product. Its `475F0` extent is half the fresh
 active model's unsigned `+08` radius. Water type `+88` sound precedes the hook,
 including selector7's later common-response suppression. Static type `+8A`
-sound and pickup precede `447C90`; kind9 enters existing `427B20 ->28720`
+sound and pickup precede `00447C90`; kind9 enters existing `427B20 ->28720`
 destruction before `11760`, with no wreck burst, RNG or `VY=1000` write. The
-callback matrix is Player Control frames0..4 `448280/NULL/447C90`, frame5
-`447AF0/447AF0/447C90`, and frame6 all NULL; alternate class25 authenticates
+callback matrix is Player Control frames0..4 `448280/NULL/00447C90`, frame5
+`447AF0/447AF0/00447C90`, and frame6 all NULL; alternate class25 authenticates
 exactly frame5. The current force-feedback backend remains unowned: the port
 reports each reached command and retains its exact strength. Native Level1
 controls exercise real player-model terrain geometry, material death ordering,
@@ -1520,3 +1520,57 @@ Needed pieces (see workstream breakdown in the session log):
    `capture-hover-model-callback.ps1` trace follows the type-record `+0x78`
    pair so retail callback values and branch-state coupling can be calibrated
    without invoking unknown game code.
+
+## 6. Controller, death and mind-control routines (STATIC)
+
+The controller is the player's `0x5AC`-byte record (`+68` its body, `+74` the
+99-dword profile block, `+22C` the Targetter program).
+
+### The controller
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00442ED0` | creates the local player's controller (0x5AC bytes, from `FUN_0044FA30`): zeroed, no body yet, the Self Righting byte `+20C` = 15 and `+200` the tick; adds its reference-counted records from the tables at `004CDB58` (`FUN_00471510`, some also linked with `FUN_004715E0`) and `004CDBA0` (`FUN_00471280`), restores the profile block (`FUN_00443560`) and links it at the tail of the controller list (`004DE850`); a failure releases what it made, frees it and raises the error |
+| `FUN_00443110` | creates a remote player's controller: the same record without the reference-counted records, restored from a profile block (`FUN_00443560`) and linked at the list's tail; the network birth of a Type51 craft (`FUN_00438080`) passes a zeroed profile |
+| `FUN_004431C0` | frees a controller: unlinks it, stages its live body (`+68`) for deferred destruction (`FUN_00410B70`) and runs `FUN_0044CF00` on `+22C`, drops each record of both tables, then frees it |
+| `FUN_00443AC0` | returns a controller's body handle (`+68`) when that body is live, else error `0x8801` |
+| `FUN_00444330` | sets (argument 0) or clears (nonzero) checked-damage admission `0x8000` on the controller's body, and through `FUN_0040EAB0` on each live attached entity of its list `+220` that lacks `0x4000` |
+| `FUN_004382E0` | removes a body (from the frontend init `FUN_0042B230`): a Type51 craft first frees its controller (`+88`, `FUN_004431C0`), then the body is flagged for the deferred sweep (`FUN_0040D750`) |
+| `FUN_00446530` | installs the Player Control task (from the style initializer `FUN_004464F0`): without a controller (error `0x8802`) does nothing; otherwise stores the movement style in controller `+86`, builds the task around the per-frame update `FUN_00446640` (`FUN_00401020`, `FUN_0040A7A0`), and on a craft whose description has `+20` set stores 1 in its first record's `+42` (`FUN_0041B9B0`) |
+| `FUN_00447F70` | applies the controller's staged start to a newly created player body (from `FUN_00451AF0`): empties the list `+220`, then by the flags at `+290` copies the position (bit 2, `+294` to `+96`), velocity (bit 4, `+29A` to `+9C`) and heading, pitch and roll (bit 8, `+2A0` to `+A2`), sets full health 40000 (bit 1), and rebuilds the basis (`FUN_00413F70`) |
+| `FUN_00446BD0` | the beam-in collection: walks the live entity list, letting `FUN_00446C80` keep the nearest eligible candidate (an error from it ends the walk), then attaches the chosen one to the player (`FUN_00443B50`) |
+| `FUN_00421590` | the player craft's draw callback: the default draw `FUN_004138F0`; in a network game, a remote craft gets its name tag from the slot table `004FE7A0` drawn above it (`FUN_00470A70`, queued through `FUN_00421840`/`FUN_004218A0`); then the lock reticle `FUN_00421230` while a lock runs |
+| `FUN_00424480` | the Targetter's launch preview (from `FUN_0044D0F0`): builds the player's launch request for its emitter (the method class from `FUN_0044EA60`, pitched by the weapon's elevation word unless method 5) and passes it to `FUN_0044E770`; error `0xA200` without an emitter |
+
+### Passive Player
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00446F30` | installs the Passive Player (class 66) task around its per-frame update `FUN_00446FC0` (`FUN_00401020`, `FUN_0040A7A0`) |
+| `FUN_00446FC0` | the Passive Player's per-frame update, a craft with no controls: spins the model's two fan channels toward full when its description's `+44` is set; applies lift with the cargo mass (`FUN_004185C0`, `FUN_0041F1C0`) and, on a detailed body, its effect draw (`FUN_00440E80`); applies drag (`FUN_0041EB50`); and below 20000 health on a detailed body emits smoke behind it at random (`FUN_00441670`, a 1-in-max(2, health >> 13) chance), setting `+84` bit 8 |
+
+### Death
+
+| Routine | Does |
+| --- | --- |
+| `FUN_004478E0` | Player Death's second style initializer: without a controller (error `0x8802`) only stages the body for deferred destruction; otherwise releases its task slots (`FUN_0040A860`), runs the death of each entity on the controller's list `+220` (`FUN_00410C10`), empties the list (`FUN_00414AA0`) and stages the body (`FUN_00410B70`) |
+| `FUN_00447590` | drops all of a dying player's cargo: pops the body's Sub-J rows one by one (`FUN_00418500`) until none is left |
+| `FUN_00447750` | places one of a dying network player's Type61 power-ups (operation and amount in `+20`) at a random point around the body (x and z within 0x200, y up to 0x1FF above), kept between 0x80 above the ground and 0x800 above the higher of ground and sea, and creates it through the network birth (`FUN_00438080`) |
+| `FUN_00450980` | the player's death, from the gameplay frame (`FUN_0044FFA0`) once the body is gone: clears the message queue (`FUN_00437F30`), takes the dying controller's snapshot (`FUN_00443260`), restores the checkpoint state into the session (`FUN_00448E50`, in an error scope) and the world's control words (`FUN_0042ECC0`, then bit 4 with `FUN_0042EEE0`), keeps and re-applies the cheats (`+1C4`, `FUN_0044F830`), sets health 40000 (`+50`), carries one life fewer (`+158`, not below zero) and the snapshot's other fields over (all 64 dwords at `+54` in single play, two in network play), and refills the cargo list `+160` from the snapshot without types 7-9, 78, 79, 86, 90, 91, 95 and 116, zeroing every second slot after them up to the capacity `+15D` |
+
+### Mind control
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00421800` | starts the lock search (mode 1) when idle or more than 1 s into the current mode; reached from the projectile launch `FUN_0044E770` |
+| `FUN_00420C60` | advances the player's mind-control lock (the Primary's record): searching (mode 1) for up to 1.5 s through `FUN_00420E00`, locked (mode 2) while `FUN_00421070` keeps the target in its cone, and after 1 s locked taking control of it through `FUN_004480E0`; it also spins the reticle angle (`+48`) and grows the reticle word `+44` up to `0x600` |
+| `FUN_00420E00` | the lock's search: the closest live, admitted, solid body with capability bit 3 within 4/3 of the range and inside a narrow forward cone (each lateral offset under half the forward distance), scored by distance plus twice the offsets |
+| `FUN_00421070` | keeps a lock while the target lives, lies within four times the range, and stays ahead (forward distance over 0x80 with both lateral offsets no larger) |
+| `FUN_00421230` | draws the lock reticle (draw callback `FUN_00421570`) along the line from the craft to a locked target (mode 2), storing that distance in `+44` |
+| `FUN_004480E0` | the mind-control takeover (from `FUN_00420C60`): gives the target Type46's behavior source (`+D0`) and the controller (`+88`), gives the old body Type88's, points the controller at the target (`+68`, the old body at `+6C`), reinstalls both behaviors (`FUN_0040AC60`), clears the target's fan and record flags (`FUN_0041B9B0`, `FUN_00424F10`), records the body in the session (`FUN_00456770`), and holds controller `+70` at 60000 (500 when the install failed) |
+
+### Wind on trail particles
+
+| Routine | Does |
+| --- | --- |
+| `FUN_0044F0C0` | the wind owner's particle form, for class-31 trails (`FUN_0043F290` passes mass 5): on the selected side of the sea, pulls the velocity toward the current wind vector scaled by the capped clearance above the upstream terrain, as `FUN_0044EC60` does, then applies the subtraction drag |

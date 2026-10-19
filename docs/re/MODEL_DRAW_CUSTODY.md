@@ -93,7 +93,7 @@ Newant's tf13 slots 136/138/140/142/144/146 refer to tf14
 112/114/116/118/120/122. Its body shadow instead aliases ordinary body
 corners through tf13 slots 78/80/82/84. The first sprite 668 triangle also
 references tf14 slot 152, selector 12: Sub-H reserves 0..11 and Sub-E reserves
-one emitter slot from descriptor words 150/0. `424F20 -> 424FA0` resolves
+one emitter slot from descriptor words 150/0. `00424F20 -> 00424FA0` resolves
 current slot 150 and inverse-projects it through the retained viewport; it
 refreshes matching emitter 0 transient origins and clears their custom-origin
 flag. That transparent 2x2 triangle still owns callback side effects. It is
@@ -157,10 +157,10 @@ projecting a generated local result cannot recover per-source Q31 rounding.
 | Family | Native rule and source dependency order |
 | --- | --- |
 | tf0/4 | Existing plain/pinned mirror-after-shift leaf transform |
-| tf2 `46DDB0` | `2 * node VIEW origin - C`, wrapped dwords |
+| tf2 `0046DDB0` | `2 * node VIEW origin - C`, wrapped dwords |
 | tf5 `46E760` | `(B + C) / 2`, wrapped sum, division toward zero |
 | tf6 `46F1B0` | Resolve B,C,A, then wrapped `A + B - C` |
-| tf7 `46F530` | Resolve B,C, then wrapped `B + C - node VIEW origin` |
+| tf7 `0046F530` | Resolve B,C, then wrapped `B + C - node VIEW origin` |
 | tf8 `46F7D0` | Resolve B,C, then current 70700 phase and signed Q31 stage |
 | tf9 `46FB80` | Resolve B,C,C+2,B+2, then phase; contributions quantized 2/4/8 |
 | tf11/12/13/14 | Completed linked cache / active world callback / external owner |
@@ -197,7 +197,7 @@ The production failure-receipt test also covers an entirely skipped surface
 mesh and an unrelated surviving face through the deferred buffer. These are
 source/corpus controls, not new matched retail acceptance.
 
-Native tf5 (`46E760`, with the same XYZ arithmetic in `46E830/46E910`)
+Native tf5 (`46E760`, with the same XYZ arithmetic in `0046E830/0046E910`)
 resolves source slots `b ^ odd` and `c ^ odd` in VIEW space, then computes
 each wrapping signed-dword sum divided by two toward zero. Operand `a` is
 unused. The sources must be projected separately before averaging; averaging

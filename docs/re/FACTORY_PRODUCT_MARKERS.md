@@ -14,7 +14,7 @@ recent relation at `+60`. A Level2 factory uses root model218 and its animated
 child220, so the name search returned no point and its product remained at its
 birth position inside the building. Even Level1 omitted the fork's authored
 slot8 point `[0,78,0]` relative to the child origin. The missing shared runtime
-consumer is `0A9F0 ->198E0 ->199B0`, not an absent birth offset or cargo link.
+consumer is `0A9F0 ->004198E0 ->004199B0`, not an absent birth offset or cargo link.
 
 The Level1 capture `20260731-001224-second-scientist-factory-activation-v2`
 records the factory product birth request at raw `[5700,FD00,3A00]` with a zero
@@ -27,23 +27,23 @@ replay query was used to assign the marker semantics below.
 
 The repository retail image and local `<install>/V2000.EXE` match SHA256
 `E9BE7A833612FBA3A5A5AB92A974ECE1A689E4B7E72409D9EE8331380573B4BA`.
-The decisive missing `198E0` body was recovered directly from that PE's machine
+The decisive missing `004198E0` body was recovered directly from that PE's machine
 code, rather than guessed from the incomplete bulk-C call graph. It can be
 rechecked with `objdump -D -Mintel --start-address=0x4198E0
---stop-address=0x4199B0 V2000.EXE`. `199B0` is also present in
+--stop-address=0x4199B0 V2000.EXE`. `004199B0` is also present in
 bulk_clean/game_logic.c.
 
 1. `19010` births the product at entity `+96/+98/+9A` plus signed descriptor
    `+0C/+0E/+10`. It records the product in runtime Sub-M `+88` and the recent
    producer relation at product `+60`. It does not call cargo attachment `08F00`.
 2. `0A9F0` consumes any Sub-H and Sub-I selector ranges first. When Sub-M is
-   present and the remaining selector is zero, it calls `198E0`. Type6 and
+   present and the remaining selector is zero, it calls `004198E0`. Type6 and
    Type66 have neither preceding selector family in the audited metadata.
 3. `41991C..41993F` obtains the current descriptor/runtime, reads descriptor
    word `+00`, and passes that model slot plus the current draw context to
-   `199B0`. The context is the actual nested node, with its current animation,
+   `004199B0`. The context is the actual nested node, with its current animation,
    linked slots and transform. This is not necessarily the root building.
-4. `199B0` resolves the selected model slot in that context, converts its
+4. `004199B0` resolves the selected model slot in that context, converts its
    cached view coordinates through the inherited viewport frame when
    necessary, adds the viewport origin, and returns both dword point
    coordinates and wrapping short world coordinates.
@@ -182,7 +182,7 @@ callback table entry at `4D4A78+78` selects `46D610`, which materializes a slot
 in the current node's VIEW coordinates using `ctx+18..38` and
 `ctx+08/+0C/+10`. `467410` consumes the parent attachment's resolved VIEW
 point as the child origin; `4676C0` installs its VIEW basis. `464E60` retains
-the viewport pointer, and `199B0` converts the child VIEW point back to world.
+the viewport pointer, and `004199B0` converts the child VIEW point back to world.
 The inherited pointer therefore does not omit the child's attachment.
 
 [NativeWorldViewport and NativeModelFrame](../../crates/v2k-game/src/native_model_frame.rs)
@@ -195,17 +195,17 @@ and the native mount commands, including `66FC0` identity and `671F0`
 table-word rotation. The `46D610` mirror negates its already shifted X term.
 `46F7D0` interpolates already projected VIEW slots using
 `a + 2*((delta*phase)>>17)`, rather than interpolating model coordinates
-before projection. `199B0` inverse-projects with the inherited viewport's
+before projection. `004199B0` inverse-projects with the inherited viewport's
 columns, adds its origin, and narrows to wrapping shorts. The product suffix
 then adds signed world offsets and writes state20. Native face admission
 uses `46D3F0`'s raw record anchor, wrapping integer dot product and strict
 negative sign; generated float anchors do not substitute for that input.
 
 [ChaseCameraState::native_viewport](../../crates/v2k-game/src/chase_camera.rs)
-publishes source `0F3A0 ->0F350` words from the owned raw eye/focus springs.
+publishes source `0F3A0 ->0040F350` words from the owned raw eye/focus springs.
 It wraps the eye-to-focus short difference, caps only positive Y at500,
 uses the `57960` integer normalizer for forward and right, and forms up with
-separately shifted Q31 cross-products. `0F350` supplies signed eye shorts,
+separately shifted Q31 cross-products. `0040F350` supplies signed eye shorts,
 the nine right/up/forward words and identity0. All 5,890 duplicate-stable
 accepted Intro2 camera records and 1,164 accepted campaign camera records
 match that source constructor. Eighteen retained camera cases form the
@@ -227,7 +227,7 @@ viewport, and forward VIEW projection. Missing world terrain leaves this
 attachment unowned. No level offset or float surface transform supplies it.
 
 The bounded retail instruction executor
-runs the verified PE instructions for `46D610`, `46F7D0`, `70700`, `199B0`
+runs the verified PE instructions for `46D610`, `46F7D0`, `70700`, `004199B0`
 and the applicable world alias `4340B0 ->445860` in controlled memory.
 Its 34 cases include cold/warm slots, mirrors,
 accepted factory/camera inputs, and the actual final OpenGL fixture's
@@ -240,7 +240,7 @@ than from the port's math. The `4138F0/465870` prefix and orientation0 child
 copy are source-reconstructed setup, explicitly identified in the oracle.
 Accepted factory and camera snapshots are independent cross-track records;
 they are controlled valid inputs, not a claimed simultaneous native callback.
-No captured Type8 `199B0` return is present in the retained campaign window.
+No captured Type8 `004199B0` return is present in the retained campaign window.
 
 With the accepted-camera fixture, native birth/delivery shorts are
 `[15655,-964,-32302]` and `[15655,-845,-32304]`. With the final render's

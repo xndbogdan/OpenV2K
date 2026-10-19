@@ -56,7 +56,7 @@ suppresses its abort when the world is already saved, and otherwise aborts and
 returns. An already-aborted entry instead tests the separate interior request
 `+1F4`; when that is zero it enters the record scan with `+1F8` still pending
 (`42DE17..42DE73`).
-`42E300` identifies the resolved player by capability1, and `446440` tests the
+`0042E300` identifies the resolved player by capability1, and `00446440` tests the
 stamp subtype/selectors/age without a separate hull-dying or abort gate.
 Death remains with each actor's standard-death owner: Type9 E370
 expiry runs relation release `00416750`, then `00410C10` and its class-14

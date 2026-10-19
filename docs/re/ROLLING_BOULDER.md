@@ -28,7 +28,7 @@ faststart04 recording:
 
 | Style | `+04` (tag 9C00) | `+10`/`+14`/`+1C` | `+18` pair | `+28` impact | `+34`/`+38` | Initializer | Primary |
 |---|---|---|---|---|---|---|---|
-| 0 rolling `4C78A0` | `40C750` -> style1 | null | null | null | `0`/`1005` | `40B950` | `404580(slot0, 0)` |
+| 0 rolling `4C78A0` | `40C750` -> style1 | null | null | null | `0`/`1005` | `40B950` | `00404580(slot0, 0)` |
 | 1 resting `4C78E8` | `40C730` -> style0 | null | `40C730` | `40C730` | `1005`/`0` | `40B9B0` | `404B40(slot0, 0)` |
 
 Both initializers first clear Tertiary and Secondary through `40A7A0`.
@@ -40,7 +40,7 @@ and `0x5065` while resting (bit4 suppresses gravity). Neither sets bit8 (4EC60
 drag), bit2 (DF70 ground snap) or bit400 (D9B0 crush).
 
 Both Primaries are built through `05FF0`, which zeroes `+00`, `+04` and
-`+14..+24` and stores the callback at `+10`. `404580` then writes wrapper
+`+14..+24` and stores the callback at `+10`. `00404580` then writes wrapper
 `401350` at `+00` and destructor `407120` at `+24`; `404B40` goes through
 `05F80`, which adds neither. Neither writes the static hook `+20`. The callback
 `404690` is the rolling body task the Intro2 meteors also use (they give it a

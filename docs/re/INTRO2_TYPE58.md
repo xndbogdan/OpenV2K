@@ -59,7 +59,7 @@ original allocator failure.
 1D30 writes target X/Z0, null tracked handle, filter-1, direction1 and reversal
 timer0; target Y remains allocator residue. 1DA0 always scans while X=Z=0;
 otherwise it draws once and scans iff unsigned low16 `< 0x0FFF`. It scans the
-full current actor axis and resolves Y only after finding furniture. 4230C0
+full current actor axis and resolves Y only after finding furniture. 004230C0
 visits rings `r=1..trunc(radius/256)-1`, steps `s=0..2r-1`, and offsets
 `[-r,-r-s]`, `[r,r-s]`, `[-r-s,r]`, `[r-s,-r]` in that order. It retains
 coordinate low bytes, wraps the terrain grid, skips attribute0/damaged-bit8,

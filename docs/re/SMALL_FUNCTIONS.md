@@ -132,6 +132,8 @@ Six of them (`0x004167BA`, `0x0042776E`, `0x0043B3D5`, `0x0046C5F1`,
 | `FUN_0044CFB0` | calls method `+0x10` of the object at `+0x44` when both exist |
 | `FUN_00461B00` | lights normal `n` (`FUN_0046D3F0`) when its 8-byte record's byte 5 is set |
 | `FUN_0046FB50` | runs `FUN_0046FB80` with a zero last argument, then marks the slot projected (`0x80`) |
+| `FUN_004167C0` | returns a body's health as a fraction of its type's initial health (`+14`), scaled to `0xFFFF`, for health under `0x10000` |
+| `FUN_00418F30` | the word `+B4` of the record that the Primary task's `+30` points to, for the kind-7 pack |
 
 ## Arithmetic and storage
 
@@ -156,6 +158,9 @@ Six of them (`0x004167BA`, `0x0042776E`, `0x0043B3D5`, `0x0046C5F1`,
 | `FUN_004725C0` | stores a callback and its argument at `0x004FBD70` and `0x004FBDB8`, and calls it once with `0x004FBD78` |
 | `FUN_00471280` / `FUN_00471510` | add a record through `FUN_004712B0` to the lists at `0x004FB858` (`0x30` bytes, `FUN_004713A0`) and `0x004FB830` (`0x24` bytes, `FUN_00471540`) |
 | `FUN_00493B70` | closes a handle (`FUN_00493AF0`) and clears it |
+| `FUN_004577D0` | the integer square root of a signed 64-bit value (zero for values not above zero), bit by bit from the highest power of four not above it; `FUN_00457730` is the 32-bit one |
+| `FUN_00418960` | the dword at `+8` of a table's 12-byte entry `i` (`[table] + 8 + 12i`), unchecked |
+| `FUN_00471370` | finds the record of a list whose `+0x0C` and `+0x10` equal its two arguments, or none |
 
 ## Messages
 
@@ -193,6 +198,7 @@ when the buffer is too small.
 | `FUN_00469740` | clears `+0x20` of its second argument, then calls `FUN_00469770` |
 | `FUN_00469C00` | calls `FUN_00469C20` with a zero fourth argument |
 | `FUN_0046AEF0` | calls `FUN_0046AF20` |
+| `FUN_0042E8F0` | the level record's music track word (`+48`, from `004FE654` by the session's `+C4`), for `FUN_00456AF0`; error `4C0DC0` without a record |
 
 ## Larger helpers
 
@@ -234,6 +240,12 @@ when the buffer is too small.
 | `FUN_00471C80` / `FUN_00471CD0` | append a node holding their argument to the list at `+0x08` or `+0x14` |
 | `FUN_004724E0` | unlinks a node, releases its `+0x08` handle (`FUN_00494D80`) and frees it |
 | `FUN_0048AFF0` | sets the Direct3D texture handle (`SetRenderState(1, handle)`) when it differs from the one cached at `+0x1A4` |
+| `FUN_0041BE30` | frees a list record: unlinks and frees every node of each of its `+2C` lists (`+18`, 20 bytes apart), then frees list `+8`, the array and the record |
+| `FUN_004208F0` | releases a record's two sound handles (`+1C`, `+28`) through `FUN_0044CC90`, then frees it |
+| `FUN_004288C0` | frees every node of the list at `004DB0D0` |
+| `FUN_00468D50` | opens a file in mode 0, 1 or 2 (`"rb"`, `"wb"`, `"wb+"`); error `0x1001` with the name when it fails, `0x1000` for any other mode |
+| `FUN_00468F80` | writes a buffer to a file (`fwrite`) and raises error `0x1003` with the C runtime's message for `errno` when fewer bytes were written |
+| `FUN_0047C740` | fills one vertex of a software raster command (for the textured fill slots such as `FUN_0047C600`): four optional shade bytes as 16.16 values centred in their unit (`× 0x10000 + 0x8000`), the screen point (x << 16, y) and, when asked, two texture coordinates |
 
 ## Vectors, terrain and system
 

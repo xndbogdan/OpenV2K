@@ -53,8 +53,8 @@ initializer has a 06070 component-reset suffix:
 
 | Family | Source constructor and Primary | Live style |
 |---|---|---|
-| Main Base | `25730` clears T then S; `25CD0 ->01020` publishes `25D60`, zero lifetime/latch | class 41, `4C9480` |
-| Working Factory | `257C0` clears T then S; `25BD0 ->01020` publishes `25C60`, zero lifetime/latch | class 39, `4C9558` |
+| Main Base | `25730` clears T then S; `00425CD0 ->01020` publishes `00425D60`, zero lifetime/latch | class 41, `4C9480` |
+| Working Factory | `257C0` clears T then S; `00425BD0 ->01020` publishes `25C60`, zero lifetime/latch | class 39, `4C9558` |
 
 The native publishers are
 [publish_main_base](../../crates/v2k-game/src/main_base_runtime/native.rs)
@@ -73,7 +73,7 @@ progression pass, including a visit that parks after a committed prefix.
 12DA0 caps one callback's elapsed time at 125000 microseconds and retains the
 remainder in `+6C`; disabling random waits does not remove that cap.
 
-`25D60` sends an active death clock directly to 19B50. Otherwise 16490 determines
+`00425D60` sends an active death clock directly to 19B50. Otherwise 16490 determines
 the under-attack state: a quiet frame clears the private latch; a newly
 attacked Base queues text C8 and then sets it. The global Main Base abort flag
 suppresses the notification without setting the latch. Working Factory's
@@ -90,7 +90,7 @@ into an invented retail allocation failure so production can advance.
 
 Product birth and draw position have separate native owners. `19010` births
 at the producer origin plus descriptor offsets; an executed Sub-M external
-frame callback `198E0` resolves the current nested model marker and moves the
+frame callback `004198E0` resolves the current nested model marker and moves the
 tracked `+88` product. This generalized Type6/66 rule, authored marker census,
 draw admission and explicit precision boundaries are owned by
 [FACTORY_PRODUCT_MARKERS.md](FACTORY_PRODUCT_MARKERS.md).
