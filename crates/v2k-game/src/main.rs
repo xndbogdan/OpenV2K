@@ -1169,6 +1169,11 @@ struct Cli {
     /// appeared or went, as JSON lines, to FILE.
     #[arg(long, value_name = "FILE")]
     event_log: Option<PathBuf>,
+
+    /// Write every live entity's id, type, position and health each frame,
+    /// one JSON line a frame, to FILE.
+    #[arg(long, value_name = "FILE")]
+    actor_log: Option<PathBuf>,
 }
 
 impl Cli {
@@ -1185,6 +1190,7 @@ impl Cli {
             || self.input_replay.is_some()
             || self.start.is_some()
             || self.event_log.is_some()
+            || self.actor_log.is_some()
     }
 
     fn probe_run(&self) -> Result<probe::ProbeRun, Box<dyn std::error::Error>> {
@@ -1207,6 +1213,11 @@ impl Cli {
                 .transpose()?,
             event_log: self
                 .event_log
+                .as_deref()
+                .map(probe::EventLog::create)
+                .transpose()?,
+            actor_log: self
+                .actor_log
                 .as_deref()
                 .map(probe::EventLog::create)
                 .transpose()?,
@@ -2241,6 +2252,31 @@ fn run_game(
                     entity_manager.as_ref(),
                     &player_craft,
                     &player_hull,
+                )?;
+            }
+            if let (Some(log), Some(manager)) = (probe.actor_log.as_mut(), entity_manager.as_ref())
+            {
+                log.actors(
+                    frames_done,
+                    retail_clock.current(),
+                    manager.iter_all().map(|entity| {
+                        let health = match entity.collision.health_raw {
+                            RetailRuntimeValue::Known(health) => Some(health),
+                            RetailRuntimeValue::Unresolved => None,
+                        };
+                        let detailed =
+                            match entity.collision.state_flags_at_0x08.masked(0x0200_0000) {
+                                RetailRuntimeValue::Known(bit) => Some(bit != 0),
+                                RetailRuntimeValue::Unresolved => None,
+                            };
+                        (
+                            entity.id,
+                            entity.entity_type,
+                            entity.position_raw(),
+                            health,
+                            detailed,
+                        )
+                    }),
                 )?;
             }
             for (_, path) in probe
@@ -8423,7 +8459,10 @@ fn run_game(
     if let Some(path) = &probe.snapshot {
         save_snapshot(renderer.as_mut(), path)?;
     }
-    if let Some(log) = probe.event_log.as_mut() {
+    for log in [probe.event_log.as_mut(), probe.actor_log.as_mut()]
+        .into_iter()
+        .flatten()
+    {
         log.flush()?;
     }
     log!("Exiting.");
