@@ -65,8 +65,8 @@ fn publish(
     world_fx: &mut WorldFx,
 ) -> Intro2FlyerSchedulerOwner {
     let allocation = manager.main_base_abort_actor_observation(id).unwrap().lease;
-    publish_native_type15(
-        NativeType15ConstructionRequest {
+    publish_native_flyer(
+        NativeFlyerConstructionRequest {
             entity: manager.entity_mut(id).unwrap(),
             allocation,
             metadata,
@@ -167,8 +167,8 @@ fn native_wasp_metadata_or_component_mismatch_blocks_before_family_rng_or_tasks(
         let before_flags = entity.collision.state_flags_at_0x08;
         let before_sub_g = entity.sub_g_06070_runtime;
         assert!(
-            publish_native_type15(
-                NativeType15ConstructionRequest {
+            publish_native_flyer(
+                NativeFlyerConstructionRequest {
                     entity,
                     allocation,
                     metadata: &bad_metadata,

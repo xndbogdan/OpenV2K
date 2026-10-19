@@ -70,7 +70,10 @@ quarter of the strict axis.
 
 Construction is Type18's without J. `09A80` builds H and D before A. A's
 `20450` consumes its own word, then the selector word, then the class's
-`06070` suffix.
+`06070` suffix. A Hive row's zeroed record takes the same constructor
+([Hive births](HIVE_WRECK.md#authored-creature-births-and-failed-world-selection)):
+worlds 18 and 26 give birth to Type77 this way. With no authored index, the
+newborn authenticates by its allocation lease.
 
 Move About Aimlessly (`ACD0`) is new to the shared root publisher. It clears
 the tertiary slot, then the secondary, then installs `402B10(owner, 0, 5000)`

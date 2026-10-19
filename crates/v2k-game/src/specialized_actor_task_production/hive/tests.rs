@@ -553,7 +553,7 @@ fn failed_level1_hive_wasp_playing_contact_restores_gate_and_corrects_solid_buri
             assert_eq!(child.authored_spawn_index, None);
             assert!(matches!(
                 child.intro2_flyer_frame_owner.unwrap().birth_provenance,
-                crate::intro2_flyers_live::FlyerBirthProvenance::NativeType15(_)
+                crate::intro2_flyers_live::FlyerBirthProvenance::NativeFlyer(_)
             ));
             assert_eq!(
                 child.collision.state_flags_at_0x08.masked(0x8000),
@@ -737,4 +737,212 @@ fn failed_level1_hive_wasp_playing_contact_restores_gate_and_corrects_solid_buri
             }
         }
     }
+}
+
+/// Every Hive of a native world through the production scheduler, viewed from
+/// the arriving player: each new allocation's (tick, type, id). No other owner
+/// is adopted, so only Hive births appear. Ground newborns never block.
+fn hive_world_births(
+    level: u32,
+    ticks: u32,
+) -> (
+    EntityManager,
+    SpecializedActorTaskScheduler,
+    Vec<(u32, u32, u32)>,
+) {
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(level);
+    let view = manager.player().unwrap().position_raw();
+    let mut known: std::collections::BTreeSet<u32> =
+        manager.iter_all().map(|entity| entity.id).collect();
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    let mut notifications = GameplayNotifications::new();
+    let mut tally = WorldCompleteTally::default();
+    let mut static_damage = StaticDamageScheduler::new();
+    let mut births = Vec::new();
+    for t in 1..=ticks {
+        let pass = scheduler.tick(
+            &mut manager,
+            SpecializedActorTaskProductionFrame {
+                world: SpecializedActorTaskWorld::Cinematic,
+                hive_components: Some(HiveComponentProductionContext {
+                    world_complete_tally: &mut tally,
+                    view_detail: RetailViewDetailContext::from_raw(
+                        view.map(i32::from),
+                        0,
+                        (52, 30),
+                    ),
+                }),
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                static_damage: &mut static_damage,
+                elapsed_micros: 20_000,
+                global_elapsed_micros: t * 20_000,
+                retail_tick: 4793 + t,
+                notification_phase: GameplayNotificationPhase::Playing,
+                main_base_abort_active: false,
+            },
+            &mut notifications,
+        );
+        assert!(
+            pass.block.is_none(),
+            "world{level} tick{t}: {:?}",
+            pass.block
+        );
+        for outcome in &pass.outcomes {
+            if let SpecializedActorTaskProductionOutcome::NativeType18(outcome)
+            | SpecializedActorTaskProductionOutcome::NativeType38Family(outcome)
+            | SpecializedActorTaskProductionOutcome::NativeType76Family(outcome) = outcome
+            {
+                assert!(
+                    !matches!(
+                        outcome,
+                        crate::native_ground_actor::NativeGroundActorOutcome::Blocked { .. }
+                    ),
+                    "world{level} tick{t}: {outcome:?}"
+                );
+            }
+            if let SpecializedActorTaskProductionOutcome::Intro2FlyerScheduler(outcome) = outcome {
+                assert!(
+                    !matches!(
+                        outcome,
+                        Intro2FlyerSchedulerProductionOutcome::Blocked { .. }
+                            | Intro2FlyerSchedulerProductionOutcome::Dropped { .. }
+                    ),
+                    "world{level} tick{t}: {outcome:?}"
+                );
+            }
+        }
+        for entity in manager.iter_all() {
+            if known.insert(entity.id) {
+                births.push((t, entity.entity_type, entity.id));
+            }
+        }
+    }
+    (manager, scheduler, births)
+}
+
+/// A dynamic ground newborn: no authored index, the Hive at +60, the row's
+/// objective bit, a scheduler owner from its birth pass.
+fn assert_hive_child(
+    manager: &EntityManager,
+    scheduler: &SpecializedActorTaskScheduler,
+    id: u32,
+    authenticates: fn(&EntityManager, u32) -> bool,
+) {
+    assert!(scheduler.owners.iter().any(|owner| owner.entity_id() == id));
+    assert!(authenticates(manager, id), "child{id}");
+    let child = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    assert_eq!(child.authored_spawn_index, None);
+    let RetailRuntimeValue::Known(Some(hive)) = child.collision.recent_relation_id_at_0x60 else {
+        panic!("child{id} has no source");
+    };
+    assert_eq!(
+        manager
+            .iter_all()
+            .find(|entity| entity.id == hive)
+            .map(|entity| entity.entity_type),
+        Some(67)
+    );
+    assert_eq!(
+        child.collision.state_flags_at_0x08.masked(0x0100_0000),
+        RetailRuntimeValue::Known(0x0100_0000),
+        "the row's flag bit 0 is the objective constructor flag"
+    );
+}
+
+/// Retail (lab, idle player from the default arrival): world18's Hive gives
+/// birth to a Type77 at ticks 503 and 1006 and a Type14 at 1001.
+#[v2k_test_support::retail_test]
+fn world18_hive_births_type77_through_the_shared_constructor() {
+    let (manager, scheduler, births) = hive_world_births(18, 1100);
+    let type77: Vec<_> = births.iter().filter(|birth| birth.1 == 77).collect();
+    assert_eq!(type77.len(), 2, "{births:?}");
+    assert_eq!(type77[0].0, 501, "retail's coarse-gated visit lands on 503");
+    assert!((990..=1010).contains(&type77[1].0), "{births:?}");
+    for birth in &type77 {
+        assert_eq!(
+            manager
+                .iter_all()
+                .find(|e| e.id == birth.2)
+                .unwrap()
+                .native_type76_runtime
+                .unwrap()
+                .spawn_index,
+            None
+        );
+        assert_hive_child(
+            &manager,
+            &scheduler,
+            birth.2,
+            crate::native_type76::manager_allocation_authenticates,
+        );
+    }
+    assert!(births.iter().all(|birth| birth.1 == 77), "{births:?}");
+    assert!(scheduler
+        .hive_diagnostics
+        .iter()
+        .any(|line| line.contains("UnsupportedEntityType { entity_type: 14 }")));
+}
+
+/// Retail: world36's Hive gives birth to a Type18 one tick after the arrival
+/// and again at tick 1000.
+#[v2k_test_support::retail_test]
+fn world36_hive_births_type18_through_the_shared_constructor() {
+    let (manager, scheduler, births) = hive_world_births(36, 60);
+    let type18: Vec<_> = births.iter().filter(|birth| birth.1 == 18).collect();
+    assert_eq!(type18.len(), 1, "{births:?}");
+    assert!(type18[0].0 <= 2, "{births:?}");
+    assert_hive_child(
+        &manager,
+        &scheduler,
+        type18[0].2,
+        crate::native_type18::manager_allocation_authenticates,
+    );
+}
+
+/// Retail: world42's Hive gives birth to a Type38 two ticks after the arrival
+/// and again at 504.
+#[v2k_test_support::retail_test]
+fn world42_hive_births_type38_through_the_shared_constructor() {
+    let (manager, scheduler, births) = hive_world_births(42, 60);
+    let type38: Vec<_> = births.iter().filter(|birth| birth.1 == 38).collect();
+    assert_eq!(type38.len(), 1, "{births:?}");
+    assert!(type38[0].0 <= 3, "{births:?}");
+    assert_hive_child(
+        &manager,
+        &scheduler,
+        type38[0].2,
+        crate::native_type38::manager_allocation_authenticates,
+    );
+}
+
+/// Retail: world21's Hive gives birth to a Type87 (deathwas) at ticks 151, 401
+/// and 653, through the same class7 flyer constructor as the Type15 Wasp.
+#[v2k_test_support::retail_test]
+fn world21_hive_births_type87_through_the_flyer_constructor() {
+    let (manager, scheduler, births) = hive_world_births(21, 200);
+    let type87: Vec<_> = births.iter().filter(|birth| birth.1 == 87).collect();
+    assert_eq!(type87.len(), 1, "{births:?}");
+    assert_eq!(type87[0].0, 151, "retail's tick too");
+    let id = type87[0].2;
+    assert!(scheduler.owners.iter().any(|owner| owner.entity_id() == id));
+    let child = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    assert_eq!(child.authored_spawn_index, None);
+    assert_eq!(
+        child.model_index,
+        Some(usize::from(
+            crate::intro2_flyers_live::INTRO2_TYPE87_MODEL_ID
+        ))
+    );
+    assert!(matches!(
+        child
+            .intro2_flyer_frame_owner
+            .map(|owner| owner.birth_provenance),
+        Some(crate::intro2_flyers_live::FlyerBirthProvenance::NativeFlyer(_))
+    ));
+    assert_eq!(
+        child.collision.state_flags_at_0x08.masked(0x0100_0000),
+        RetailRuntimeValue::Known(0x0100_0000)
+    );
 }

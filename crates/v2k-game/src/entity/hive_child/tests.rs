@@ -158,7 +158,8 @@ fn hive_wasp_unowned_type_metadata_or_resource_rejects_without_body_sub_d_rng_or
         let mut request = request;
         let mut context = context(&session);
         match case {
-            0 => request.entity_type = 87,
+            // Type14 has no native constructor.
+            0 => request.entity_type = 14,
             1 => {
                 manager.type_metadata[15].projectile_emitter_descriptor =
                     RetailRuntimeValue::Unresolved
@@ -194,6 +195,9 @@ fn hive_wasp_native_source_suffix_runs_class7_and_quiet_death_clears_tasks() {
     let owner = manager
         .append_native_hive_child(request, context(&session), &mut fx)
         .unwrap();
+    let NativeHiveNewborn::Flyer(owner) = owner else {
+        panic!("Type15 births a Wasp owner");
+    };
     let id = owner.entity_id();
     for entity in &mut manager.entities {
         if entity.id != id {

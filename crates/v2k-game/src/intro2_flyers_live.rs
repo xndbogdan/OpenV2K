@@ -1,5 +1,5 @@
 //! Shared class7 flyer mover/tasks for authored Intro2 Wasps/Deathwas and
-//! allocation-authenticated native Type15 Hive children.
+//! allocation-authenticated native Type15/Type87 Hive children.
 //!
 //! Section-12 collision records in 1X3XX.OVL establish that both type 15 (wasp)
 //! and type 87 (deathwas) author:
@@ -127,17 +127,17 @@ pub struct Intro2FlyerFrameOwner {
     pub wing_var1: i32,
 }
 
-/// The authored Intro2 subset and a native zero-record Wasp keep distinct
+/// The authored Intro2 subset and a native zero-record flyer keep distinct
 /// constructor authority while sharing the same class7 task and mover policy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlyerBirthProvenance {
     AuthoredIntro2 { spawn_index: usize },
-    NativeType15(NativeType15Birth),
+    NativeFlyer(NativeFlyerBirth),
 }
 
 /// Minted only after the complete native SubG/weighted/task constructor phase.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NativeType15Birth {
+pub struct NativeFlyerBirth {
     allocation: crate::main_base_abort::MainBaseAbortActorLease,
 }
 
@@ -145,14 +145,14 @@ impl FlyerBirthProvenance {
     pub const fn authored_spawn_index(self) -> Option<usize> {
         match self {
             Self::AuthoredIntro2 { spawn_index } => Some(spawn_index),
-            Self::NativeType15(_) => None,
+            Self::NativeFlyer(_) => None,
         }
     }
 
     pub const fn allocation(self) -> Option<crate::main_base_abort::MainBaseAbortActorLease> {
         match self {
             Self::AuthoredIntro2 { .. } => None,
-            Self::NativeType15(birth) => Some(birth.allocation),
+            Self::NativeFlyer(birth) => Some(birth.allocation),
         }
     }
 }
@@ -680,10 +680,13 @@ pub(crate) fn flyer_identity_authenticates(entity: &Entity) -> bool {
                 _ => return false,
             }
         }
-        FlyerBirthProvenance::NativeType15(birth)
+        FlyerBirthProvenance::NativeFlyer(birth)
             if entity.authored_spawn_index.is_none() && entity.id == birth.allocation.entity_id =>
         {
-            (INTRO2_TYPE15_ENTITY_TYPE, INTRO2_TYPE15_MODEL_ID)
+            match native_flyer_model_id(entity.entity_type) {
+                Some(model) => (entity.entity_type, model),
+                None => return false,
+            }
         }
         _ => return false,
     };
@@ -1261,8 +1264,8 @@ mod birth;
 mod mover;
 mod world;
 pub(crate) use birth::{
-    authenticate_native_type15_body, authenticate_native_type15_metadata, publish_native_type15,
-    NativeType15ConstructionRequest,
+    authenticate_native_flyer_body, authenticate_native_flyer_metadata, native_flyer_model_id,
+    publish_native_flyer, NativeFlyerConstructionRequest,
 };
 pub(crate) use mover::authenticate_flyer_mover_metadata;
 pub use mover::{

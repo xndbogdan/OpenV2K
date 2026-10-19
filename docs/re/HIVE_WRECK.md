@@ -192,6 +192,25 @@ Constructor dispatch occurs before the delay draw. A returned constructor
 error is dispatched and still resets the delay; the successful
 child/list/count/ejection suffix does not run.
 
+The record reaches the same family constructor as an authored spawn, as a
+birth with no authored index: zero angles, no model override or damage buffer,
+and the row's bit `0x1` as the parameter. The ground families
+([Type76/77](TYPE76_RUNTIME.md), [Type18](TYPE18_RUNTIME.md) and
+[Type38/129](TYPE38_GROUND_SHOOTER.md)) take the body ordinal, then the process
+Sub-D allocation, then Sub-A's word, the D4A0 anchor and their initial
+selection over the current live list. The class7 flyers Type15 (wasp) and
+Type87 (deathwas) share one native constructor and the flyer owner of Intro2's
+authored pair, each with its own row (model 276 or 270, emitter method 30 or
+20). Every newborn's task owner
+joins the walk in its birth pass; other types keep the row's explicit block.
+
+In retail (lab runs from each world's default arrival, the first minute with an
+idle player) world18's Hive gives birth to a Type77 every 10 s from the arrival
+and a Type14 at 20 s, then every 30 s; world26's to a Type77 every 10 s from
+5 s; world36's to a Type18 a tick after the arrival; world42's to a Type38 two
+ticks after it; world21's to a Type87 at ticks 151, 401 and 653. Type87 is the
+most common Hive birth, in seven of the worlds the cheats reach.
+
 The reset consumes one shared RNG word and is exactly:
 
 ```text

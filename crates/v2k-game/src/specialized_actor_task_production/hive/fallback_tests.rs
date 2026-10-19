@@ -154,7 +154,10 @@ fn missing_actor_resources_keep_native_custody_while_hive_final_ejection_restore
         emitter.arm_wreck_suction();
         emitter.advance_wreck_timer(6_000_000);
         let mut scheduler = SpecializedActorTaskScheduler::new();
-        scheduler.register_intro2_flyer(owners.into_iter().next().unwrap());
+        let Some(crate::entity::NativeHiveNewborn::Flyer(owner)) = owners.into_iter().next() else {
+            panic!("Type15 births a Wasp owner");
+        };
+        scheduler.register_intro2_flyer(owner);
         let child_entity = manager.entity_mut(child).unwrap();
         let before_tasks: Vec<_> = ActorTaskSlot::IN_RETAIL_TICK_ORDER
             .into_iter()
