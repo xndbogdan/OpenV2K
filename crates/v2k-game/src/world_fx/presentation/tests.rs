@@ -445,3 +445,28 @@ fn backward_streak_samples_finish_before_next_intrusive_particle_without_allocat
     );
     fx.particles.assert_valid_topology();
 }
+
+/// 442CB0 never reaches D410: the null-frame attached classes keep their
+/// records through the draw walk, and only a record whose owner is gone is
+/// marked for the next traversal.
+#[test]
+fn attached_records_survive_the_draw_walk_and_only_orphans_are_marked() {
+    let mut fx = WorldFx::new();
+    let slots = [(83, 7), (84, 7), (86, 9)].map(|(particle_class, target_handle)| {
+        fx.emit_attached_static_particle_raw(AttachedStaticEmission {
+            target_handle,
+            position_world: [0.0, 2.0, 0.0],
+            offset_raw: [0; 3],
+            particle_class,
+        })
+        .expect("attached birth in an empty pool")
+        .slot
+    });
+    assert!(fx.mark_orphaned_attached_particles(|id| id == 7));
+    let frame = fx.prepare_presentation(VIEWPORT, FAR, |_| center(0x100, 0));
+    assert_eq!(frame.particles().len(), 0);
+    let pending = slots.map(|slot| fx.particles.slots[slot].map(|p| p.pending_destruction));
+    assert_eq!(pending, [Some(false), Some(false), Some(true)]);
+    assert!(!fx.mark_orphaned_attached_particles(|_| false));
+    fx.particles.assert_valid_topology();
+}

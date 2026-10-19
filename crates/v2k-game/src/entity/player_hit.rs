@@ -108,6 +108,14 @@ pub enum PlayerCheckedDamageOutcome {
     },
 }
 
+/// The static-route wrapper shares the model-switch wrappers' blocks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlayerStaticRouteHitOutcome {
+    NotApplicable,
+    Blocked(PlayerModelSwitchHitBlock),
+    Applied { checked: PlayerCheckedDamageOutcome },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerModelSwitchHitBlock {
     Delivery,
@@ -810,6 +818,131 @@ impl EntityManager {
                 RetailRuntimeValue::Unresolved => unreachable!("preflight resolved model bits"),
             },
             checked,
+        }
+    }
+
+    /// Complete local 442950/11180 player visit: stamp +34, request the
+    /// living target's accepted-hit +80 cue, strike 11030 with eight times the
+    /// packet's impact sum, then direct 15040. Unlike 10EB0, the cue does not
+    /// wait for accepted damage.
+    pub fn apply_player_static_route_particle_hit(
+        &mut self,
+        impact: ParticleEntityImpact,
+        frame: PlayerCheckedDamageFrame<'_>,
+    ) -> PlayerStaticRouteHitOutcome {
+        let PlayerCheckedDamageFrame {
+            hull,
+            resources,
+            world_fx: fx,
+            retail_tick,
+            notifications,
+            extra_lives,
+        } = frame;
+        if !crate::world_fx::particle_uses_static_route_entity_hit(impact.source_particle_class)
+            || self.player_id != Some(impact.target_entity_id)
+        {
+            return PlayerStaticRouteHitOutcome::NotApplicable;
+        }
+        let blocked = |block| PlayerStaticRouteHitOutcome::Blocked(block);
+        // 442950 delivers 11180 whatever the particle's suppression bit says.
+        let Some(delivery) = impact.damage_delivery_record() else {
+            return blocked(PlayerModelSwitchHitBlock::Delivery);
+        };
+        let Some(index) = self
+            .entities
+            .iter()
+            .position(|entity| entity.id == impact.target_entity_id)
+        else {
+            return blocked(PlayerModelSwitchHitBlock::Runtime("player allocation"));
+        };
+        let entity = &self.entities[index];
+        if entity.entity_type != PLAYER_ENTITY_TYPE || !player_control_style(entity) {
+            return blocked(PlayerModelSwitchHitBlock::Style);
+        }
+        let Ok(flags) = known(
+            entity.collision.state_flags_at_0x08.masked(
+                DYING_STATE_BIT
+                    | IMPACT_REACTION_ENABLED_STATE_BIT
+                    | IMPACT_REACTION_SUPPRESSED_STATE_BIT,
+            ),
+            "dying/impact bits",
+        ) else {
+            return blocked(PlayerModelSwitchHitBlock::Runtime("dying/impact bits"));
+        };
+        let cue = if flags & DYING_STATE_BIT == 0 {
+            match entity.collision.accepted_hit_presentation_sound_id {
+                RetailRuntimeValue::Known(cue) => cue,
+                RetailRuntimeValue::Unresolved => {
+                    return blocked(PlayerModelSwitchHitBlock::Runtime("accepted-hit sound"))
+                }
+            }
+        } else {
+            None
+        };
+        let reaction_enabled = flags & IMPACT_REACTION_ENABLED_STATE_BIT != 0
+            && flags & IMPACT_REACTION_SUPPRESSED_STATE_BIT == 0;
+        if reaction_enabled {
+            match known(
+                entity
+                    .collision
+                    .state_flags_at_0x08
+                    .masked(IMPACT_REACTION_NETWORKED_STATE_BIT),
+                "network impact bit",
+            ) {
+                Ok(0) => {}
+                Ok(_) => {
+                    return blocked(PlayerModelSwitchHitBlock::Impact(
+                        Fun00411250ImpactReactionBlock::NetworkRequest,
+                    ))
+                }
+                Err(_) => return blocked(PlayerModelSwitchHitBlock::Runtime("network impact bit")),
+            }
+            if entity.mass_raw == 0 {
+                return blocked(PlayerModelSwitchHitBlock::Impact(
+                    Fun00411250ImpactReactionBlock::ZeroMass,
+                ));
+            }
+        }
+        let position_raw = entity.position_raw();
+        let request = PlayerCheckedDamageRequest {
+            entry: PlayerDamageEntry::Checked,
+            target_id: impact.target_entity_id,
+            delivery,
+            ratio_numerator: 0,
+            ratio_denominator: 0,
+        };
+        let plan = match self.prepare_player_checked_damage(request, hull, None, resources) {
+            Ok(plan) => plan,
+            Err(block) => return blocked(PlayerModelSwitchHitBlock::Checked(block)),
+        };
+        self.entities[index]
+            .collision
+            .last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(retail_tick);
+        if let Some(sound_id) = cue {
+            fx.emit_fixed_positional_sound_raw(sound_id, position_raw);
+        }
+        // 40DAC0 reaches every Player Control frame's null style+28 hook.
+        if reaction_enabled {
+            let reaction = self.apply_player_impact_reaction_raw(
+                impact.target_entity_id,
+                delivery.packet.impact_sum_raw().wrapping_mul(8),
+                impact.velocity_raw,
+                || u32::from(fx.next_shared_retail_random_u16()),
+            );
+            debug_assert!(matches!(
+                reaction,
+                Fun00411250ImpactReactionOutcome::Applied(_)
+            ));
+        }
+        PlayerStaticRouteHitOutcome::Applied {
+            checked: self.commit_player_checked_damage(
+                plan,
+                hull,
+                fx,
+                retail_tick,
+                notifications,
+                extra_lives,
+            ),
         }
     }
 }

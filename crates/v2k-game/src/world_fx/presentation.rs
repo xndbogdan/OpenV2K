@@ -7,6 +7,8 @@ const STREAK_DRAW_CALLBACK_VA: u32 = 0x0043_D300;
 const STREAK_SAMPLE_COUNT: usize = 10;
 const BACKWARD_STREAK_DRAW_CALLBACK_VA: u32 = 0x0044_2240;
 const BACKWARD_STREAK_SAMPLE_COUNT: usize = 7;
+/// Attached classes 83/84/86: never D410, only the owner's model.
+const ATTACHED_MODEL_DRAW_CALLBACK_VA: u32 = 0x0044_2CB0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum DrawRecord {
@@ -16,6 +18,27 @@ enum DrawRecord {
 }
 
 impl WorldFx {
+    /// `FUN_00442CB0`'s first branch, before the draw walk: an attached record
+    /// whose owner no longer resolves sets `+0x1D` bit `0x80` for the next
+    /// traversal. Returns whether any record still has a live owner, whose
+    /// model a detailed owner shows (`FUN_00465840`); that model is not
+    /// presented yet.
+    pub fn mark_orphaned_attached_particles(&mut self, owner_live: impl Fn(u32) -> bool) -> bool {
+        let mut attached = false;
+        for particle in self.particles.slots.iter_mut().flatten() {
+            if particle_descriptor(particle.source_class).is_some_and(|descriptor| {
+                descriptor.raw_u32(0x30) == ATTACHED_MODEL_DRAW_CALLBACK_VA
+            }) {
+                if particle.attached_owner_handle.is_some_and(&owner_live) {
+                    attached = true;
+                } else {
+                    particle.pending_destruction = true;
+                }
+            }
+        }
+        attached
+    }
+
     /// Run the retail draw callbacks once and retain their ordered D410
     /// survivors for both terrain lighting and subsequent sprite submission.
     pub fn prepare_presentation(
@@ -55,6 +78,9 @@ impl WorldFx {
                 self.particles.free(slot);
                 continue;
             };
+            if descriptor.raw_u32(0x30) == ATTACHED_MODEL_DRAW_CALLBACK_VA {
+                continue;
+            }
             let record = match descriptor.raw_u32(0x30) {
                 STREAK_DRAW_CALLBACK_VA => DrawRecord::StackStreak,
                 BACKWARD_STREAK_DRAW_CALLBACK_VA => DrawRecord::LiveThenBackwardStackStreak,

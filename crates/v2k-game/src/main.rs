@@ -6654,6 +6654,20 @@ fn run_game(
                                 &mut particle_collision_error_reported,
                             ));
                         }
+                        let player_static_route = em.apply_player_static_route_particle_hit(
+                            entity_impact, PlayerCheckedDamageFrame { hull: &mut player_hull, resources: cache, world_fx, retail_tick, notifications: &mut gameplay_notifications, extra_lives: player_campaign_progress.extra_lives() },
+                        );
+                        if !matches!(player_static_route, v2k_game::entity::PlayerStaticRouteHitOutcome::NotApplicable) {
+                            if matches!(player_static_route, v2k_game::entity::PlayerStaticRouteHitOutcome::Blocked(_)) {
+                                eprintln!("Player {} static-route hit blocked: {player_static_route:?}", entity_impact.target_entity_id);
+                            } else {
+                                log!("Player {} static-route hit: {player_static_route:?}", entity_impact.target_entity_id);
+                            }
+                            return ParticleCollisionCacheRefresh::Replace(build_particle_collision_models(
+                                cache, em, player_model_id, &player_craft,
+                                &mut particle_collision_error_reported,
+                            ));
+                        }
                         if let Some(outcome) = v2k_game::shared_actor_impact::apply_playing_actor_particle_hit(
                             v2k_game::shared_actor_impact::PlayingActorImpactFrame {
                                 extra_lives: RetailRuntimeValue::Known(player_campaign_progress.extra_lives()),
@@ -9415,6 +9429,7 @@ fn draw_gameplay_world(
             renderer,
             camera,
             world_fx,
+            em,
             GAMEPLAY_PARTICLE_FAR_DEPTH_RAW,
         ),
         GameplayWorldParticles::Frozen(frame) => {
@@ -9868,8 +9883,13 @@ fn render_opening_cinematic(
 
     // 53760 -> 53A60 -> 536A0: callbacks and each FIFO precede the
     // single destructive particle draw gate, including this frame's births.
-    let particle_presentation =
-        prepare_particle_presentation(renderer, camera, world_fx, INTRO2_PARTICLE_FAR_DEPTH_RAW);
+    let particle_presentation = prepare_particle_presentation(
+        renderer,
+        camera,
+        world_fx,
+        entities,
+        INTRO2_PARTICLE_FAR_DEPTH_RAW,
+    );
     if let Some(terrain) = cache.terrain() {
         accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation);
     }
@@ -10022,8 +10042,17 @@ fn prepare_particle_presentation(
     renderer: &dyn v2k_render::Renderer,
     camera: &Camera,
     world_fx: &mut WorldFx,
+    entities: &EntityManager,
     far_depth_raw: i32,
 ) -> ParticlePresentationFrame {
+    static ATTACHED_MODEL_REPORTED: std::sync::atomic::AtomicBool =
+        std::sync::atomic::AtomicBool::new(false);
+    if world_fx
+        .mark_orphaned_attached_particles(|id| entities.iter_all().any(|entity| entity.id == id))
+        && !ATTACHED_MODEL_REPORTED.swap(true, std::sync::atomic::Ordering::Relaxed)
+    {
+        eprintln!("Particle draw0x00442CB0: the model an attached class 83/84/86 particle shows on a detailed owner is not presented yet; the particle keeps its retail life and damage.");
+    }
     let (width, height) = renderer.viewport_size();
     let viewport = [width, height];
     world_fx.prepare_presentation(viewport, far_depth_raw, |particle| {

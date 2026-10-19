@@ -1322,6 +1322,19 @@ The port's player starts with `+B2` zero and the controlled-player tick zeroes
 it after the craft's callback; before, the unresolved word retired every
 particle attached to the player.
 
+Static-route particles (classes 52, 68 and 85, `FUN_00442950`) reach the
+player through `FUN_00411180`, not `FUN_00410EB0`. It stamps `+34`, requests
+type 46's accepted-hit cue (`+80`) while the player is alive and before
+damage, calls the type's `+14` trampoline (`FUN_0040DAC0`, whose style `+28`
+hook is null in every Player Control frame), strikes `FUN_00411030` with eight
+times the packet's impact sum, then runs checked damage `FUN_00415040`. A
+Type122 or Type57 class68 shot therefore deals 5800 to the player
+(`[2,6]/[2000,2000]` against type 46's profile), and the class84 particle that
+`FUN_00442950` then attaches adds the 255 kind -5 ticks above. Retail's idle
+player in world 24 takes its first such hit 510 ticks after the arrival. The
+port used to hand these hits to the shared actor owners, which reject the
+player, so none of them landed.
+
 <a id="delayed-player-wreck-burst-retail-trace-2026-07-22"></a>
 
 ### Player-wreck bursts and sample timing (retail trace, 2026-07-22)
