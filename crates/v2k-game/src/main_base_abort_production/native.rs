@@ -39,6 +39,9 @@ pub enum NativeMainBaseAbortDeathBlock {
     Fish(crate::shared_fish::death::SharedFishDeathBlock),
     GunTurret(crate::class49_terminal::Class49TerminalBlock),
     Type10(crate::intro2_type10::death::Intro2Type10DeathBlock),
+    Flyer(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
+    Type16(crate::intro2_common_dying::Intro2CommonDyingBlock),
+    Type94(crate::intro2_common_dying::Intro2CommonDyingBlock),
 }
 
 pub(super) fn dispatch_native_class49(
@@ -167,6 +170,9 @@ enum NativeActor {
     Type76Family,
     Factory,
     SharedFish,
+    Flyer,
+    Type16,
+    Type94,
 }
 
 pub(super) fn dispatch_native_actor(
@@ -219,6 +225,11 @@ pub(super) fn dispatch_native_actor(
             NativeActor::Type10Family
         }
         22 | 23 | 24 | 62 if entity.shared_fish_runtime.is_some() => NativeActor::SharedFish,
+        // Type14's alternate class1 belongs to the class49 dispatch above.
+        15 | 87 | 108 if entity.intro2_flyer_frame_owner.is_some() => NativeActor::Flyer,
+        // Type128's class63 Auto Pilot belongs to the class49 dispatch above.
+        16 if entity.intro2_type16_runtime.is_some() => NativeActor::Type16,
+        94 if entity.intro2_type94_runtime.is_some() => NativeActor::Type94,
         _ => return None,
     };
     Some(dispatch(
@@ -332,6 +343,7 @@ fn dispatch(
                 specialized_tasks.shared_fish_completed_owner(entities, id)
                     && !specialized_tasks.shared_fish_has_pending_prefix(id)
             }
+            NativeActor::Flyer => specialized_tasks.intro2_flyer_completed_owner(entities, id),
             NativeActor::CapturingInsect
             | NativeActor::Type26
             | NativeActor::ShootingInsect
@@ -342,6 +354,8 @@ fn dispatch(
             | NativeActor::Type28
             | NativeActor::Type76Family
             | NativeActor::Type10Family
+            | NativeActor::Type16
+            | NativeActor::Type94
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
         if !ready {
@@ -384,6 +398,46 @@ fn dispatch(
                 publications.main_base_production += 1;
             }
             MainBaseAbortActorDisposition::MainBaseDeath
+        }
+        NativeActor::Type16 => {
+            // 10C10 -> DB80 -> alternate class12 (Flip Over And Die), as a
+            // lethal hit's publisher.
+            let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type16(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type16_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type16Death
+        }
+        NativeActor::Type94 => {
+            // 10C10 -> DB80 -> alternate class12, as a lethal hit's publisher.
+            let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type94(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type94_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type94Death
+        }
+        NativeActor::Flyer => {
+            // 10C10 stops sound 11, then DB80/AC60 enters alternate class2's
+            // C470 quiet terminal, exactly as a lethal hit's publisher.
+            let death = crate::native_flying_surface_contact::publish_native_flying_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Flyer(error)))?;
+            if let Some(publication) = death.publication {
+                crate::native_flying_surface_contact::register_native_flying_death(
+                    specialized_tasks,
+                    publication,
+                );
+            }
+            MainBaseAbortActorDisposition::QuietDeath
         }
         NativeActor::SharedFish => {
             // These B/D/F swimmers can move away from the authored anchor.
@@ -672,6 +726,8 @@ mod type26_tests;
 #[cfg(test)]
 mod carrier_tests;
 #[cfg(test)]
+mod flyer_tests;
+#[cfg(test)]
 mod ring_custody_tests;
 #[cfg(test)]
 mod type124_tests;
@@ -682,6 +738,8 @@ mod type13_tests;
 #[cfg(test)]
 mod type14_tests;
 #[cfg(test)]
+mod type16_tests;
+#[cfg(test)]
 mod type38_tests;
 #[cfg(test)]
 mod type43_tests;
@@ -691,6 +749,8 @@ mod type5_tests;
 mod type61_tests;
 #[cfg(test)]
 mod type7_tests;
+#[cfg(test)]
+mod type94_tests;
 #[cfg(test)]
 mod type97_tests;
 #[cfg(test)]

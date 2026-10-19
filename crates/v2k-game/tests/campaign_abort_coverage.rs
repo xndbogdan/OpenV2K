@@ -98,16 +98,16 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (17, 40),
     (18, 73),
     (19, 40),
-    // Type14 flyers explode through their class1 terminal; world20's and
-    // world37's next unsupported callbacks are a Type15 wasp and a Type16.
-    (20, 15),
+    // Type14 flyers explode through their class1 terminal, Type15 wasps die
+    // quietly through class2, and Type16 and Type94 enter class12.
+    (20, 29),
     // Native Type18/28 take Type122's captor class12 abort death.
     (21, 89),
     (22, 41),
     // Native22/23/24 fish now execute the existing class2 quiet terminal;
     // Reef's next unsupported callback is its Type25 actor.
     (23, 25),
-    (24, 16),
+    (24, 29),
     (25, 82),
     (26, 109),
     (27, 27),
@@ -122,13 +122,14 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (34, 25),
     (35, 27),
     (36, 74),
-    (37, 16),
+    (37, 106),
     (38, 82),
     (39, 83),
     // Type125 factories share Type66's class39 owner.
     (40, 50),
     (41, 35),
-    (42, 108),
+    // Type108 flyers die quietly; Alien1's next is its Type83.
+    (42, 83),
     (43, 35),
     (45, 40),
     // Ordinary Type13 and the emitter-only Type43 take their native class1
