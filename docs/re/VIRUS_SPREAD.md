@@ -459,6 +459,10 @@ All three virus-trigger messages live in **`0X3XX.OVL` Section 2** (system level
 
 The leading `<delay,duration,?,x_pos,y_pos,?,?,color>` parameter prefix is embedded in the string itself — the HUD render strips and applies it.
 
+As global ids, #82 is text `0xCB`, #92 is text `0xD5` and #121 is resource
+event `0x12`'s string `0xF2`. Selector zero's virus limit queues all three
+([virus limit](CAMPAIGN_FAILURE.md#virus-and-census-limits-flags-0x20-and-0x08)).
+
 ### Seedpod Pickup (CONFIRMED — unchanged)
 
 `game_logic.c` case `0x39` at line 35465:

@@ -322,7 +322,7 @@ use crate::whole_body_surface::{
     WholeBodySurfaceClassificationRequest, WholeBodySurfaceFallbackResponseRequest,
 };
 use crate::world_complete_results::{
-    fun_0042e210_capability_census, Fun0042e210CapabilityCensus, Fun0042e210EntitySample,
+    fun_0042e210_bucket_counts, Fun0042e210CapabilityCensus, Fun0042e210EntitySample,
 };
 use crate::world_fx::WorldFx;
 use crate::wrapped_axis_range::WrappedAxisRange;
@@ -12326,7 +12326,12 @@ impl EntityManager {
     /// added into `+0x1A8` without the dying gate; capability buckets still
     /// exclude dying bit `0x4000` and zero `+0x08`.
     pub fn fun_0042e210_capability_census(&self) -> Fun0042e210CapabilityCensus {
-        fun_0042e210_capability_census(self.iter_all().map(|entity| Fun0042e210EntitySample {
+        Fun0042e210CapabilityCensus::from_buckets(self.fun_0042e210_bucket_counts())
+    }
+
+    /// Every `FUN_0042E210` bucket of the same walk (masks `DAT_004CAA30`).
+    pub fn fun_0042e210_bucket_counts(&self) -> [i32; 14] {
+        fun_0042e210_bucket_counts(self.iter_all().map(|entity| Fun0042e210EntitySample {
             capability: entity.capability_flags,
             state: entity.collision.state_flags_at_0x08,
             sub_m_native_count_raw: match entity.base_factory_runtime {

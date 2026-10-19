@@ -238,7 +238,6 @@ fn failed_interior_preempts_a_real_marker_stamp_without_pair_or_exit_progress_wr
         CampaignSelectorEntry, CampaignSelectorStep,
     };
     use crate::power_up_contact::RETAIL_CONTROL_SLOT_COUNT;
-    use crate::world_complete_results::Fun0042e210CapabilityCensus;
     use v2k_formats::levels::CampaignRecord;
 
     let mut record = CampaignRecord { data: [0; 32] };
@@ -257,9 +256,8 @@ fn failed_interior_preempts_a_real_marker_stamp_without_pair_or_exit_progress_wr
     let mut state = CampaignCasualtyState::default();
     let mut cursor = CampaignSelectorCursor::new(
         CampaignCasualtyFrame {
-            census: Fun0042e210CapabilityCensus::default(),
-            world_saved: false,
             abort_active: true,
+            ..CampaignCasualtyFrame::default()
         },
         CampaignSelectorEntry {
             failed_world_interior_request: true,

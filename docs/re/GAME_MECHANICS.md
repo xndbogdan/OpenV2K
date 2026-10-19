@@ -1005,7 +1005,7 @@ beam path described above.
 - Kill all creatures → hive becomes vulnerable → destroy hive
 - Rescue N natives (varies per level)
 - Casualty limits (e.g., "Lose another person and this world will be lost")
-- Contain virus spread below threshold
+- Contain virus spread below the world's authored limit ([virus limit](CAMPAIGN_FAILURE.md#virus-and-census-limits-flags-0x20-and-0x08))
 - Prevent reactor meltdown (timed)
 - "The Hive is now vulnerable" (gating message)
 

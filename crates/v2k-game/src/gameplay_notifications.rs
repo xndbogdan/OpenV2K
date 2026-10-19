@@ -115,6 +115,9 @@ pub const HIVE_LOCKED_HINT_EVENT_ID: u8 = 10;
 pub const HIVE_UNLOCK_HINT_EVENT_ID: u8 = 0x0e;
 /// Direct `FUN_00456900(0xD2)` submitted immediately before the unlock hint.
 pub const HIVE_NOW_VULNERABLE_TEXT_ID: usize = 0xd2;
+/// Selector zero's `FUN_004568B0(0x12)` while a virus-limit row has at most
+/// eight points left. `DAT_004CAD80[0x12]` is global Section-2 string `0xF2`.
+pub const VIRUS_CRITICAL_HINT_EVENT_ID: u8 = 0x12;
 /// Direct text `0xCE` when a visible staffing clamp hits capacity, including
 /// the damaged-repair re-entry path in `FUN_00419010`.
 pub const FACTORY_CAPACITY_STAFFING_TEXT_ID: usize = 0xce;
@@ -613,6 +616,11 @@ impl GameplayNotifications {
         retail_tick: i32,
     ) {
         self.queue_direct(text.string_id(), 0, retail_tick);
+    }
+
+    /// Queue selector zero's virus-limit resource event `0x12`.
+    pub fn queue_virus_critical_hint(&mut self, retail_tick: i32) {
+        self.queue_resource(VIRUS_CRITICAL_HINT_EVENT_ID, retail_tick);
     }
 
     /// Queue `FUN_00445310`'s empty-at-entry resource event.

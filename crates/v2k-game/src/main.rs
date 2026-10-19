@@ -213,13 +213,14 @@ use v2k_game::weapon_inventory::{
 };
 use v2k_game::world_complete_results::{
     fun_0042dd10_selector3_rescued, landscape_virus_percent, session_music_should_play,
-    WorldCompleteResultsRuntime, WorldCompleteTally,
+    Fun0042e210CapabilityCensus, WorldCompleteResultsRuntime, WorldCompleteTally,
 };
 use v2k_game::world_fx::{
     particle_uses_fun_0043f780_entity_hit, EntityCollisionModel, ParticleCollisionCacheRefresh,
     ParticleEnvironment, ParticleOwnerMotion, ParticlePresentationFrame, PrimaryImpact,
     TerrainCollisionContext, TerrainExplosionLight, WorldFx, FUEL_EXHAUSTED_SOUND_ID,
     FUEL_LOW_SOUND_ID, HULL_LOW_SOUND_GAIN, HULL_LOW_SOUND_ID, PLAYER_PICKUP_SOUND_ID,
+    VIRUS_CRITICAL_SOUND_ID,
 };
 use v2k_game::world_projection::WorldProjection;
 use v2k_render::config::GraphicsDetail;
@@ -7933,14 +7934,22 @@ fn run_game(
 
                 // 42DD10 snapshots saved/abort state once, then visits authored
                 // records in order. An earlier route returns before later casualty
-                // text; a casualty abort resumes at the following record.
+                // text; a record's abort resumes at the following record.
                 let world_saved = player_campaign_progress
                     .current_control_slot()
                     .and_then(|slot| player_campaign_progress.control_slot_world_saved(slot))
                     .unwrap_or(false);
+                let capability_buckets = em.fun_0042e210_bucket_counts();
                 let mut selector = CampaignSelectorCursor::new(
                     CampaignCasualtyFrame {
-                        census: em.fun_0042e210_capability_census(),
+                        census: Fun0042e210CapabilityCensus::from_buckets(capability_buckets),
+                        capability_buckets,
+                        virus_percent: session
+                            .cache
+                            .level_terrain()
+                            .map(|terrain| landscape_virus_percent(infected_cell_count(terrain))),
+                        results_stamped: world_complete_tally.ticks_0x2bc != 0,
+                        world_clock: retail_tick as i32,
                         world_saved,
                         abort_active: main_base_level_abort.abort_flag_0x28f(),
                     },
@@ -7961,7 +7970,7 @@ fn run_game(
                         match selector.next_step(&mut main_base_level_abort.casualty, records) {
                             Ok(step) => step,
                             Err(error) => {
-                                eprintln!("Campaign casualty predicate unresolved: {error:?}");
+                                eprintln!("Campaign record predicate unresolved: {error:?}");
                                 break;
                             }
                         };
@@ -7969,6 +7978,19 @@ fn run_game(
                         CampaignSelectorStep::DirectText(text) => {
                             gameplay_notifications
                                 .queue_campaign_casualty_text(text, retail_tick as i32);
+                            continue;
+                        }
+                        CampaignSelectorStep::VirusCriticalHint => {
+                            gameplay_notifications.queue_virus_critical_hint(retail_tick as i32);
+                            continue;
+                        }
+                        CampaignSelectorStep::VirusCriticalSound => {
+                            GlobalSoundRuntime::new(
+                                &session.cache,
+                                &mut world_fx,
+                                sound_manager.as_mut(),
+                            )
+                            .play_global_sound(VIRUS_CRITICAL_SOUND_ID);
                             continue;
                         }
                         CampaignSelectorStep::RetryCurrentWorld => {
@@ -8010,8 +8032,8 @@ fn run_game(
                         CampaignSelectorStep::AbortMainBase => {
                             pending_main_base_abort_origin.take()
                         }
-                        CampaignSelectorStep::AbortCasualties { record_index } => {
-                            log!("Campaign casualty loss: record {record_index}");
+                        CampaignSelectorStep::AbortRecord { record_index } => {
+                            log!("Campaign record loss: record {record_index}");
                             None
                         }
                         CampaignSelectorStep::Finished => break,
@@ -15317,8 +15339,7 @@ mod active_pair_scope_tests {
                 cap_0x800: 6,
                 cap_0x08: 0,
             },
-            world_saved: false,
-            abort_active: false,
+            ..CampaignCasualtyFrame::default()
         };
         let warning = [CampaignCasualtyAction::DirectText(
             CampaignCasualtyText::OneMoreLoss,

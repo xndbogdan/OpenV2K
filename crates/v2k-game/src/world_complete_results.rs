@@ -53,32 +53,55 @@ pub fn fun_0042e210_entity_is_live(state: RetailStateWord) -> bool {
     word != 0 && (word & DYING_STATE_BIT) == 0
 }
 
-/// Count capability `0x400` / `0x800` / `0x08` matches the way `FUN_0042E210`
-/// increments its mask/count pairs. One entity may contribute to more than
-/// one bucket. Sub-M `+0x68` is added into `+0x1A8` before that loop and is
-/// not gated on the dying bit.
-pub fn fun_0042e210_capability_census(
+/// `DAT_004CAA30`: the masks of `FUN_0042E210`'s 14 mask/count pairs, copied
+/// to controller `+0x174 + 8k`; bucket `k` counts at `+0x178 + 8k`. Bucket 0's
+/// mask is zero, so it never counts.
+pub const FUN_0042E210_BUCKET_MASKS: [u32; 14] = [
+    0, 0x4000, 0x20, 0x80, 0x04, 0x08, 0x400, 0x800, 0x01, 0x02, 0x10, 0x40, 0x100, 0x200,
+];
+const SCIENTIST_BUCKET: usize = 6;
+const PEASANT_BUCKET: usize = 7;
+const ALIEN_BUCKET: usize = 5;
+
+/// Count every bucket the way `FUN_0042E210` increments its mask/count pairs.
+/// One entity may contribute to more than one bucket. Sub-M `+0x68` is added
+/// into `+0x1A8` (bucket 6) before that loop and is not gated on the dying bit.
+pub fn fun_0042e210_bucket_counts(
     entities: impl IntoIterator<Item = Fun0042e210EntitySample>,
-) -> Fun0042e210CapabilityCensus {
-    let mut census = Fun0042e210CapabilityCensus::default();
+) -> [i32; 14] {
+    let mut counts = [0i32; 14];
     for sample in entities {
         if let Some(native_count) = sample.sub_m_native_count_raw {
-            census.cap_0x400 = census.cap_0x400.saturating_add(native_count);
+            counts[SCIENTIST_BUCKET] = counts[SCIENTIST_BUCKET].saturating_add(native_count);
         }
         if !fun_0042e210_entity_is_live(sample.state) {
             continue;
         }
-        if sample.capability & FUN_0042E210_CAPABILITY_0X400 != 0 {
-            census.cap_0x400 = census.cap_0x400.saturating_add(1);
-        }
-        if sample.capability & FUN_0042E210_CAPABILITY_0X800 != 0 {
-            census.cap_0x800 = census.cap_0x800.saturating_add(1);
-        }
-        if sample.capability & FUN_0042E210_CAPABILITY_0X08 != 0 {
-            census.cap_0x08 = census.cap_0x08.saturating_add(1);
+        for (count, mask) in counts.iter_mut().zip(FUN_0042E210_BUCKET_MASKS) {
+            if sample.capability & mask != 0 {
+                *count = count.saturating_add(1);
+            }
         }
     }
-    census
+    counts
+}
+
+impl Fun0042e210CapabilityCensus {
+    /// Controller `+0x1A8`, `+0x1B0` and `+0x1A0` of one bucket pass.
+    pub const fn from_buckets(counts: [i32; 14]) -> Self {
+        Self {
+            cap_0x400: counts[SCIENTIST_BUCKET],
+            cap_0x800: counts[PEASANT_BUCKET],
+            cap_0x08: counts[ALIEN_BUCKET],
+        }
+    }
+}
+
+/// The capability `0x400` / `0x800` / `0x08` buckets of [`fun_0042e210_bucket_counts`].
+pub fn fun_0042e210_capability_census(
+    entities: impl IntoIterator<Item = Fun0042e210EntitySample>,
+) -> Fun0042e210CapabilityCensus {
+    Fun0042e210CapabilityCensus::from_buckets(fun_0042e210_bucket_counts(entities))
 }
 
 /// Global Section-2 ids for the ordinary world-complete card.

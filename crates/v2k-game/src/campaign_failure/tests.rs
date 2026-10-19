@@ -17,8 +17,7 @@ fn frame(scientists: i32, peasants: i32) -> CampaignCasualtyFrame {
             cap_0x800: peasants,
             cap_0x08: 0,
         },
-        world_saved: false,
-        abort_active: false,
+        ..CampaignCasualtyFrame::default()
     }
 }
 
@@ -136,10 +135,14 @@ fn mixed_unsupported_predicates_do_not_commit_population_only_effects() {
         state.evaluate(&[record(0x84, 0, 0)], frame(0, 1)).unwrap(),
         warning()
     );
-    assert!(state
-        .evaluate(&[record(0x10, 0, 0), record(0xa0, 0, 0)], frame(0, 0))
-        .unwrap()
-        .is_empty());
+    // A virus row cannot be judged without the landscape census.
+    assert_eq!(
+        state.evaluate(&[record(0x10, 0, 0), record(0xa0, 0, 0)], frame(0, 0)),
+        Err(UnsupportedCasualtyRecord {
+            record_index: 1,
+            flags: 0xa0
+        })
+    );
 }
 
 #[test]
@@ -213,10 +216,10 @@ fn ordered_selector_resumes_after_abort_before_a_later_route_using_entry_snapsho
         steps,
         [
             CampaignSelectorStep::DirectText(CampaignCasualtyText::WorldLost),
-            CampaignSelectorStep::AbortCasualties { record_index: 0 },
+            CampaignSelectorStep::AbortRecord { record_index: 0 },
             CampaignSelectorStep::CheckRoute { record_index: 1 },
             CampaignSelectorStep::DirectText(CampaignCasualtyText::WorldLost),
-            CampaignSelectorStep::AbortCasualties { record_index: 2 },
+            CampaignSelectorStep::AbortRecord { record_index: 2 },
             CampaignSelectorStep::Finished,
         ]
     );
@@ -378,4 +381,67 @@ fn aborted_world_without_interior_request_still_visits_normal_routes() {
         Ok(CampaignSelectorStep::CheckRoute { record_index: 1 })
     );
     assert_eq!(state, CampaignCasualtyState::default());
+}
+
+fn row(flags: u32, bucket: u32, virus_limit: i8) -> CampaignRecord {
+    let mut row = record(flags, 0, 0);
+    row.data[0x14..0x18].copy_from_slice(&bucket.to_le_bytes());
+    row.data[0x1a] = virus_limit as u8;
+    row
+}
+
+#[test]
+fn virus_row_warns_then_loses_through_the_cursor() {
+    let records = [row(0xa0, 0, 20)];
+    let mut state = CampaignCasualtyState::default();
+    let mut cursor = CampaignSelectorCursor::new(
+        CampaignCasualtyFrame {
+            virus_percent: Some(20),
+            world_clock: 500,
+            ..frame(0, 0)
+        },
+        CampaignSelectorEntry::default(),
+    );
+    let steps: Vec<_> = (0..6)
+        .map(|_| cursor.next_step(&mut state, &records).unwrap())
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            CampaignSelectorStep::VirusCriticalHint,
+            CampaignSelectorStep::DirectText(CampaignCasualtyText::VirusCritical),
+            CampaignSelectorStep::VirusCriticalSound,
+            CampaignSelectorStep::DirectText(CampaignCasualtyText::VirusWorldLost),
+            CampaignSelectorStep::AbortRecord { record_index: 0 },
+            CampaignSelectorStep::Finished,
+        ]
+    );
+}
+
+#[test]
+fn census_rows_lose_on_an_empty_bucket_and_unknown_rows_stop() {
+    let mut state = CampaignCasualtyState::default();
+    let mut buckets = [0; 14];
+    let at = |capability_buckets| CampaignCasualtyFrame {
+        capability_buckets,
+        ..frame(0, 0)
+    };
+    assert_eq!(
+        state.evaluate(&[row(0x88, 1, 0)], at(buckets)).unwrap(),
+        [CampaignCasualtyAction::AbortWorld { record_index: 0 }]
+    );
+    buckets[1] = 1;
+    assert!(state
+        .evaluate(&[row(0x88, 1, 0)], at(buckets))
+        .unwrap()
+        .is_empty());
+    for (flags, bucket) in [(0x88, 14), (0xc0, 0), (0x81, 0), (0x90, 0)] {
+        assert_eq!(
+            state.evaluate(&[row(0x10, 0, 0), row(flags, bucket, 0)], at(buckets)),
+            Err(UnsupportedCasualtyRecord {
+                record_index: 1,
+                flags
+            })
+        );
+    }
 }

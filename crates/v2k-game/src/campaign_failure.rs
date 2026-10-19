@@ -1,28 +1,52 @@
-//! The native-casualty predicates in campaign selector zero (`0042DD10`).
+//! The abort predicates in campaign selector zero (`0042DD10`).
 //!
-//! Section-13 flag `0x04` compares the current scientist-plus-peasant census
-//! with signed record byte `+0x19`. It is a minimum-survivor boundary, not a
-//! subtraction from the load-time population. Sub-M occupants are already
-//! included in the scientist bucket by `0042E210`.
+//! An abort row (flag `0x80`) runs `0042DEF8..0042E06F`'s predicates in this
+//! order, and the first that fails resumes the scan at the next record
+//! (`0042E074`):
+//!
+//! - `0x02`: peasants (controller `+0x1B0`) at least signed byte `+0x18`;
+//! - `0x04`: the casualty limit. The scientist-plus-peasant census is compared
+//!   with signed byte `+0x19`; it is a minimum-survivor boundary, not a
+//!   subtraction from the load-time population. Sub-M occupants are already
+//!   included in the scientist bucket by `0042E210`;
+//! - `0x08`: `0042E210` bucket `+0x14` (masks `DAT_004CAA30`) is empty;
+//! - `0x20`: `FUN_004366F0`'s landscape virus percentage reaches signed byte
+//!   `+0x1A`, after the critical-level warning.
+//!
+//! Every authored abort row is `0x84`, `0x86`, `0x88` or `0xA0`; any other
+//! bit stops the scan with [`UnsupportedCasualtyRecord`].
 //!
 //! The single-player caller evaluates these predicates after the actor and
 //! contact phases, at the same deferred campaign boundary as Main Base loss.
-//! This module owns authored casualty-abort records (`0x84` / `0x86`) and
-//! selector entry ordering, including the aborted interior's early current-
-//! world return. Marker arrival, virus limits and the systemic `00456960`
-//! body retain their respective owners. No actor is removed by this predicate.
+//! This module also owns selector entry ordering, including the aborted
+//! interior's early current-world return. Marker arrival and the systemic
+//! `00456960` body retain their respective owners. No actor is removed by
+//! these predicates.
 
 use crate::world_complete_results::Fun0042e210CapabilityCensus;
 use v2k_formats::levels::CampaignRecord;
 
-const CASUALTY_ABORT_FLAGS: u32 = 0x84;
+const ABORT_FLAG: u32 = 0x80;
 const MINIMUM_PEASANTS_FLAG: u32 = 0x02;
+const CASUALTY_FLAG: u32 = 0x04;
+const CENSUS_FLAG: u32 = 0x08;
+const VIRUS_FLAG: u32 = 0x20;
+const SUPPORTED_ABORT_FLAGS: u32 =
+    ABORT_FLAG | MINIMUM_PEASANTS_FLAG | CASUALTY_FLAG | CENSUS_FLAG | VIRUS_FLAG;
+/// `0042DFCC`: the warning runs while at most eight points remain.
+const VIRUS_WARNING_POINTS: i32 = 8;
+/// `0042DFEA`: each remaining point adds 20 world ticks between warnings.
+const VIRUS_WARNING_TICKS_PER_POINT: i32 = 20;
 
 /// Direct `00456900` requests; these use the ordinary replaceable text slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CampaignCasualtyText {
     OneMoreLoss,
     WorldLost,
+    /// `Warning: Virus level critical`.
+    VirusCritical,
+    /// `The virus went critical. World lost.`
+    VirusWorldLost,
 }
 
 impl CampaignCasualtyText {
@@ -30,6 +54,8 @@ impl CampaignCasualtyText {
         match self {
             Self::OneMoreLoss => 0xc7,
             Self::WorldLost => 0xd4,
+            Self::VirusCritical => 0xcb,
+            Self::VirusWorldLost => 0xd5,
         }
     }
 }
@@ -37,7 +63,11 @@ impl CampaignCasualtyText {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CampaignCasualtyAction {
     DirectText(CampaignCasualtyText),
-    /// Invoke the shared `00456960` transaction after the preceding D4 text.
+    /// `0042DFD3`: resource event `0x12`, before the warning's own gates.
+    VirusCriticalHint,
+    /// `0042E01D`: the managed non-positional cue that follows text `0xCB`.
+    VirusCriticalSound,
+    /// Invoke the shared `00456960` transaction after the preceding text.
     /// The record's destination dword does not initiate a warp on this path.
     AbortWorld {
         record_index: usize,
@@ -46,9 +76,18 @@ pub enum CampaignCasualtyAction {
 
 /// The selector's entry snapshot. Completion is `0042ED80`'s saved-world bit;
 /// abort is the session `+0x28F` byte returned by `00456CB0`, not timer state 5.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CampaignCasualtyFrame {
     pub census: Fun0042e210CapabilityCensus,
+    /// Every `0042E210` bucket count (controller `+0x178 + 8k`).
+    pub capability_buckets: [i32; 14],
+    /// `FUN_004366F0` over live `DAT_004dc684`; `None` without a loaded grid.
+    pub virus_percent: Option<i32>,
+    /// `FUN_00456DD0`: session `+0x2BC` is nonzero (a stamped completion or
+    /// an unlocked Hive's -1), which silences the virus warning's text.
+    pub results_stamped: bool,
+    /// `DAT_004FED60`, the 50-Hz world clock.
+    pub world_clock: i32,
     pub world_saved: bool,
     pub abort_active: bool,
 }
@@ -59,11 +98,40 @@ pub struct UnsupportedCasualtyRecord {
     pub flags: u32,
 }
 
-/// Controller `+0x1E8`, reset by each `0042E570` world load. A warning sets
-/// this latch even if the text slot declines it because sticky D9 is active.
+/// Controller `+0x1E8` and `+0x1E4`, both reset by each `0042E570` world load.
+/// A warning sets the casualty latch even if the text slot declines it
+/// because sticky D9 is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CampaignCasualtyState {
     warning_issued: bool,
+    /// The world clock of the last virus warning text.
+    virus_warning_clock: i32,
+}
+
+/// Reject an abort row this module cannot evaluate before any of its effects.
+fn unsupported_abort_record(
+    record_index: usize,
+    record: &CampaignRecord,
+    frame: CampaignCasualtyFrame,
+) -> Result<(), UnsupportedCasualtyRecord> {
+    let flags = record.flags() & 0xff;
+    let unsupported = flags & ABORT_FLAG != 0
+        && (flags & !SUPPORTED_ABORT_FLAGS != 0
+            || flags & CENSUS_FLAG != 0 && census_bucket(record).is_none()
+            || flags & VIRUS_FLAG != 0 && frame.virus_percent.is_none());
+    if unsupported {
+        return Err(UnsupportedCasualtyRecord {
+            record_index,
+            flags,
+        });
+    }
+    Ok(())
+}
+
+/// `0042DFA7` indexes the bucket by record dword `+0x14` without a bound.
+fn census_bucket(record: &CampaignRecord) -> Option<usize> {
+    let bucket = u32::from_le_bytes(record.data[0x14..0x18].try_into().unwrap()) as usize;
+    (bucket < 14).then_some(bucket)
 }
 
 impl CampaignCasualtyState {
@@ -78,19 +146,9 @@ impl CampaignCasualtyState {
             return Ok(Vec::new());
         }
 
-        // Preflight the bounded lane before publishing any effects. Mixed
-        // casualty/time/marker/virus predicates cannot be reduced to a pure
-        // population test. Every retail campaign casualty record is 84 or 86.
+        // Preflight every row before publishing any effects.
         for (record_index, record) in records.iter().enumerate() {
-            let flags = record.flags() & 0xff;
-            if flags & CASUALTY_ABORT_FLAGS == CASUALTY_ABORT_FLAGS
-                && flags & !(CASUALTY_ABORT_FLAGS | MINIMUM_PEASANTS_FLAG) != 0
-            {
-                return Err(UnsupportedCasualtyRecord {
-                    record_index,
-                    flags,
-                });
-            }
+            unsupported_abort_record(record_index, record, frame)?;
         }
 
         Ok(records
@@ -100,19 +158,16 @@ impl CampaignCasualtyState {
             .collect())
     }
 
+    /// One preflighted row: [`unsupported_abort_record`] has accepted it.
     fn evaluate_record(
         &mut self,
         record_index: usize,
         record: &CampaignRecord,
         frame: CampaignCasualtyFrame,
     ) -> Vec<CampaignCasualtyAction> {
-        if frame.world_saved || frame.abort_active {
-            return Vec::new();
-        }
-        let survivors = frame.census.cap_0x400.wrapping_add(frame.census.cap_0x800);
         let mut actions = Vec::new();
         let flags = record.flags() & 0xff;
-        if flags & CASUALTY_ABORT_FLAGS != CASUALTY_ABORT_FLAGS {
+        if frame.world_saved || frame.abort_active || flags & ABORT_FLAG == 0 {
             return actions;
         }
         // 0042DF28 precedes the warning as well as the loss comparison.
@@ -121,21 +176,56 @@ impl CampaignCasualtyState {
         {
             return actions;
         }
-        let threshold = i32::from(record.data[0x19] as i8);
-        if survivors == threshold + 1 && !self.warning_issued {
-            self.warning_issued = true;
-            actions.push(CampaignCasualtyAction::DirectText(
-                CampaignCasualtyText::OneMoreLoss,
-            ));
-        }
-        if survivors <= threshold {
-            // 0042DF98 sends D4; 0042E06F invokes the abort. The caller
-            // must preserve that order when delivering this result.
+        if flags & CASUALTY_FLAG != 0 {
+            let survivors = frame.census.cap_0x400.wrapping_add(frame.census.cap_0x800);
+            let threshold = i32::from(record.data[0x19] as i8);
+            if survivors == threshold + 1 && !self.warning_issued {
+                self.warning_issued = true;
+                actions.push(CampaignCasualtyAction::DirectText(
+                    CampaignCasualtyText::OneMoreLoss,
+                ));
+            }
+            if survivors > threshold {
+                return actions;
+            }
+            // 0042DF98 sends D4 before the remaining predicates.
             actions.push(CampaignCasualtyAction::DirectText(
                 CampaignCasualtyText::WorldLost,
             ));
-            actions.push(CampaignCasualtyAction::AbortWorld { record_index });
         }
+        if flags & CENSUS_FLAG != 0 {
+            let bucket = census_bucket(record).expect("preflighted census bucket");
+            if frame.capability_buckets[bucket] > 0 {
+                return actions;
+            }
+        }
+        if flags & VIRUS_FLAG != 0 {
+            let percent = frame.virus_percent.expect("preflighted virus census");
+            let limit = i32::from(record.data[0x1a] as i8);
+            let remaining = limit.wrapping_sub(percent);
+            if remaining <= VIRUS_WARNING_POINTS {
+                actions.push(CampaignCasualtyAction::VirusCriticalHint);
+                let due = frame
+                    .world_clock
+                    .wrapping_sub(remaining.wrapping_mul(VIRUS_WARNING_TICKS_PER_POINT));
+                if !frame.results_stamped && self.virus_warning_clock < due {
+                    actions.push(CampaignCasualtyAction::DirectText(
+                        CampaignCasualtyText::VirusCritical,
+                    ));
+                    actions.push(CampaignCasualtyAction::VirusCriticalSound);
+                    self.virus_warning_clock = frame.world_clock;
+                }
+            }
+            if percent < limit {
+                return actions;
+            }
+            actions.push(CampaignCasualtyAction::DirectText(
+                CampaignCasualtyText::VirusWorldLost,
+            ));
+        }
+        // 0042E06F invokes the abort. The caller must deliver the preceding
+        // text first.
+        actions.push(CampaignCasualtyAction::AbortWorld { record_index });
         actions
     }
 }
@@ -156,8 +246,11 @@ pub struct CampaignSelectorCursor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CampaignSelectorStep {
     DirectText(CampaignCasualtyText),
+    VirusCriticalHint,
+    VirusCriticalSound,
     AbortMainBase,
-    AbortCasualties {
+    /// 42E06F after an abort row's predicates have passed.
+    AbortRecord {
         record_index: usize,
     },
     /// 42DE20..43 returns controller+C4 without scanning authored records.
@@ -212,7 +305,7 @@ impl CampaignSelectorCursor {
             let record_index = self.next_record;
             self.next_record += 1;
             let flags = record.flags() & 0xff; // 42DE91 tests AL.
-            if flags & 0x80 == 0 {
+            if flags & ABORT_FLAG == 0 {
                 // AuthoredCampaignRoute already authenticates all non-abort rows
                 // as plain marker transitions before this world becomes live.
                 return Ok(CampaignSelectorStep::CheckRoute { record_index });
@@ -220,15 +313,9 @@ impl CampaignSelectorCursor {
             if self.frame.world_saved || self.frame.abort_active {
                 continue;
             }
-            if flags & CASUALTY_ABORT_FLAGS != CASUALTY_ABORT_FLAGS {
-                continue;
-            }
-            if flags & !(CASUALTY_ABORT_FLAGS | MINIMUM_PEASANTS_FLAG) != 0 {
+            if let Err(error) = unsupported_abort_record(record_index, record, self.frame) {
                 self.finished = true;
-                return Err(UnsupportedCasualtyRecord {
-                    record_index,
-                    flags,
-                });
+                return Err(error);
             }
             self.pending.extend(
                 state
@@ -238,8 +325,14 @@ impl CampaignSelectorCursor {
                         CampaignCasualtyAction::DirectText(text) => {
                             CampaignSelectorStep::DirectText(text)
                         }
+                        CampaignCasualtyAction::VirusCriticalHint => {
+                            CampaignSelectorStep::VirusCriticalHint
+                        }
+                        CampaignCasualtyAction::VirusCriticalSound => {
+                            CampaignSelectorStep::VirusCriticalSound
+                        }
                         CampaignCasualtyAction::AbortWorld { record_index } => {
-                            CampaignSelectorStep::AbortCasualties { record_index }
+                            CampaignSelectorStep::AbortRecord { record_index }
                         }
                     }),
             );
