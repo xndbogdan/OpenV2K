@@ -24,7 +24,7 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [![RE coverage](https://img.shields.io/badge/RE%20coverage-37.8%25%20code%20%2F%2087.1%25%20notes-orange)](docs/progress/README.md)
 
 Of the **2,382** game functions in retail `V2000.EXE`,
-**900 (37.8%)** are referenced by the port's code and
+**901 (37.8%)** are referenced by the port's code and
 **2,075 (87.1%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 <!-- progress:end -->

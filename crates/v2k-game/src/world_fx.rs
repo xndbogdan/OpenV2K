@@ -302,6 +302,10 @@ pub const FUEL_LOW_SOUND_ID: usize = 0x31;
 pub const HULL_LOW_SOUND_ID: usize = 0x2d;
 /// Centered wrapper gain submitted with the low-hull cue (`0x8000` in Q16).
 pub const HULL_LOW_SOUND_GAIN: f32 = 0.5;
+/// Managed non-positional cue paired with text `0xCB` by selector zero's
+/// virus-limit warning: physical global slot `0xE8 / 4`, parameter block
+/// `004CAB58` (unit gain and rate, centered).
+pub const VIRUS_CRITICAL_SOUND_ID: usize = 0x3a;
 /// Positional cue emitted when `FUN_00445310` begins a VTOL callback empty.
 /// This is global Section-11 sound id 0x31, not entity/particle class 0x31.
 pub const FUEL_EXHAUSTED_SOUND_ID: u16 = 0x31;

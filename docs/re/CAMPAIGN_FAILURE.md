@@ -70,6 +70,58 @@ Sub-M `+0x94` becomes 1, and the singleton selector republishes its task.
 Its replacement owner first ticks on the next frame. Only the already-dying
 Main Base which originated a terminal abort consumes the terminal-self receipt.
 
+## Virus and Census Limits (flags `0x20` and `0x08`)
+
+An abort row runs its predicates in a fixed order, and the first that fails
+resumes the scan at the next record (`0042E074`): minimum peasants (`0x02`),
+the casualty limit (`0x04`), a census bucket (`0x08`), then the virus limit
+(`0x20`). The time gate `0x01` and flag `0x40` (`436720` against byte
+`+0x1B`) are never authored on an abort row; the port stops on them.
+
+**Virus limit.** Flag `0x20` compares `FUN_004366F0`, the landscape
+percentage `100 - floor(0x06400000 / (infected * 99 + 0x00100000))` over the
+live count of terrain cells with type bit `0x10`, with signed byte `+0x1A`:
+
+1. While at most eight points remain (`0042DFCC`), it queues resource event
+   `0x12` (string `0xF2`, `If Virus covers too much of the landscape, the
+   world will be lost`, once per session). Then, unless session `+0x2BC` is
+   nonzero (`456DD0`: a stamped completion, or the -1 an unlocked Hive
+   writes), and only while controller `+0x1E4` is below the world clock minus
+   twenty ticks per remaining point, it queues text `0xCB` (`Warning: Virus
+   level critical`), plays global sound `0x3A` without a position (parameter
+   block `004CAB58`), and stores the clock in `+0x1E4`. The warning repeats
+   faster as the virus closes in: every 160 ticks at eight points, every 20
+   at one. World load clears `+0x1E4` with the casualty latch.
+2. At or above the limit it queues text `0xD5` (`The virus went critical.
+   World lost.`) and runs the shared abort.
+
+Twenty-one worlds author one: 13 (20%), 14 (15%), 15 (25%), 16 (20%),
+17 (40%), 18 (12%), 19 (15%), 20 (20%), 21 (25%), 22 (30%), 24 (40%),
+26 (37%), 31 (28%), 33 (30%), 34 (30%), 35 (55%), 36 (50%), and 37, 38, 39
+and 40 (20% each).
+
+**Census bucket.** Flag `0x08` aborts, without text, when `0042E210`'s
+bucket at record dword `+0x14` is empty: the count at controller
+`+0x178 + 8 * bucket`, whose masks come from `DAT_004CAA30`
+(`0, 0x4000, 0x20, 0x80, 0x04, 0x08, 0x400, 0x800, 0x01, 0x02, 0x10, 0x40,
+0x100, 0x200`). Worlds 37, 38 and 40 author bucket 1, capability `0x4000`;
+each has one Type106 (health 1), so the world is lost when it dies.
+
+**Evidence.** A retail world-36 lab run with the infected count written
+(a tampered run) shows the whole warning. At 42%, eight points from the
+limit, the hint is requested every frame and text `0xCB` lands at clocks
+258, 419, 580 and 741, strictly more than 160 ticks apart; at 46% it lands
+every 81 ticks. At 50% the same frame queues `0xCB`, then `0xD5`, then
+aborts through the record scan (`0042E06F`). Before this the port skipped
+both kinds of row without a log, so no world could be lost to the virus.
+
+An idle player's untampered world 36 is instead lost to its casualty row at
+clock 1857, with the virus at 2%: during that tick one of the 16 Type95s
+(capability `0x800`) leaves the census, leaving 15. The abort then kills
+the power-ups, the Type74 and the Type96 turret through their death styles,
+and sets the Type6 and both Type66s to 10,000,000 health. The port loses
+the same row later, at frame 3291, when its first Type95 is disposed.
+
 ## Level1 failed-world aftermath
 
 Casualty loss and terminal Main Base destruction share `456960 -> 42F1A0`;
