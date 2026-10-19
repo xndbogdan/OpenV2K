@@ -101,8 +101,7 @@ fn construct_world(
 const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (16, 31),
     // Type40 splits into Type56s (class18), which die quietly; Type30 takes
-    // class12. World 45 completes.
-    (17, 72),
+    // class12 and Type72 Change Sea Level. Worlds 17 and 45 complete.
     (18, 73),
     (19, 55),
     // Type14 flyers explode through their class1 terminal, Type15 wasps die
@@ -369,7 +368,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
         );
         assert!(controller.abort_frame_submitted(), "world{world}");
     }
-    assert_eq!(exact_worlds, [13, 14, 15, 28, 30, 39, 44, 45, 48]);
+    assert_eq!(exact_worlds, [13, 14, 15, 17, 28, 30, 39, 44, 45, 48]);
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
         "first incomplete actor matrix changed"
@@ -386,7 +385,8 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     let data = v2k_test_support::retail_dir();
     let mut session = GameSession::init(&data).unwrap();
     session.load_auxiliary_ovl(3, 1).unwrap();
-    session.load_level_by_id(17, 1).unwrap();
+    // A one-factory world whose abort still stops early (world 16, at Type31).
+    session.load_level_by_id(16, 1).unwrap();
     let metadata: Vec<_> = session
         .cache
         .global_entity_model_table()
@@ -405,12 +405,12 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
         })
         .collect();
     let mut fx = WorldFx::new();
-    let mut manager = construct_world(&session, &metadata, 17, &mut fx);
+    let mut manager = construct_world(&session, &metadata, 16, &mut fx);
     let mut tasks = adopt_authored_tasks(&mut manager);
     let mut progress = PlayerCampaignProgress::new();
-    progress.set_current_control_slot(Some(5));
+    progress.set_current_control_slot(Some(4));
     let (mut controller, _) = MainBaseAbortControllerStorage::from_loaded_level(
-        NonZeroU64::new(17).unwrap(),
+        NonZeroU64::new(16).unwrap(),
         session.cache.level_desc().unwrap(),
         false,
         &mut progress,
@@ -419,7 +419,7 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     for stale in [true, false] {
         let before = controller;
         let failure = execute_campaign_abort(
-            MainBaseAbortTransactionId::new(17).unwrap(),
+            MainBaseAbortTransactionId::new(16).unwrap(),
             None,
             &mut controller,
             &mut manager,

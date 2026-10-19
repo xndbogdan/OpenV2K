@@ -30,6 +30,13 @@ pub const LEVEL_ONE_TYPE54_DEATH_BEHAVIOR_CLASS: u8 = 38;
 pub const LEVEL_ONE_TYPE54_INITIAL_STYLE_ADDRESS: u32 = 0x004C_7468;
 pub const LEVEL_ONE_TYPE54_DEATH_STYLE_ADDRESS: u32 = 0x004C_7348;
 pub const LEVEL_ONE_TYPE54_ACCEPTED_SEA_DELTA_RAW: i32 = -168_192;
+/// World 17's three Type72 bodies: Type54's class0/class38 row with model
+/// 1104, mass 1, a running scheduler callback (`+C0` 0x20000) and no
+/// retained basis (0x4000), and an explicit `+88` sea delta.
+pub const TYPE72_ENTITY_TYPE: u32 = 72;
+pub const TYPE72_MODEL_ID: usize = 1104;
+pub const TYPE72_MASS_RAW: u16 = 1;
+pub const TYPE72_INITIALIZER_STATE_RAW: u32 = 0x0002_0027;
 
 /// Authenticate the cumulative Section-12 row used by the bounded adapter.
 ///
@@ -60,6 +67,47 @@ pub(crate) fn exact_level_one_type54_metadata(metadata: &EntityTypeRuntimeMetada
         && metadata.common_mover_topology
             == RetailRuntimeValue::Known(CommonMoverComponentTopology::default())
         && initializer.common_axis_descriptor == Default::default()
+}
+
+/// Type72's row: Type54's choices, class38 alternate, health and null
+/// sounds and components, with its own model, mass and `+C0`.
+pub(crate) fn type72_metadata(metadata: &EntityTypeRuntimeMetadata) -> bool {
+    let Some(initializer) = metadata.initializer.as_ref() else {
+        return false;
+    };
+    initializer.behavior_choices.as_ref()
+        == [BehaviorChoice {
+            weight_rule_id: 1,
+            weight_multiplier: 1,
+            behavior_class_id: u32::from(LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS),
+        }]
+        && initializer.behavior_rule_ref == 1
+        && initializer.alternate_behavior_class_ref
+            == u32::from(LEVEL_ONE_TYPE54_DEATH_BEHAVIOR_CLASS)
+        && initializer.initializer_state_flags_raw == TYPE72_INITIALIZER_STATE_RAW
+        && metadata.model_slots == [TYPE72_MODEL_ID as u16; 4]
+        && metadata.mass_raw == TYPE72_MASS_RAW
+        && metadata.capability_flags == 0
+        && metadata.initial_health_raw == Some(LEVEL_ONE_TYPE54_INITIAL_HEALTH_RAW)
+        && metadata.accepted_hit_presentation_sound_id == RetailRuntimeValue::Known(None)
+        && metadata.death_sound_id == RetailRuntimeValue::Known(None)
+        && metadata.constructor_sound_attachment_id == RetailRuntimeValue::Known(None)
+        && metadata.generic_hit_sound_id == RetailRuntimeValue::Known(None)
+        && metadata.common_mover_topology
+            == RetailRuntimeValue::Known(CommonMoverComponentTopology::default())
+        && initializer.common_axis_descriptor == Default::default()
+}
+
+/// The two class38 rows: Level 1's Type54 and world 17's Type72.
+pub(crate) fn change_sea_level_metadata(
+    entity_type: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> bool {
+    match entity_type {
+        LEVEL_ONE_TYPE54_ENTITY_TYPE => exact_level_one_type54_metadata(metadata),
+        TYPE72_ENTITY_TYPE => type72_metadata(metadata),
+        _ => false,
+    }
 }
 
 /// Runtime networking fact needed by the synchronous scatter helper.

@@ -415,10 +415,16 @@ fn run_callback(
                 .queue_fixed_positional_sound_raw(sound, entity.position_raw());
         }
     }
-    // These admitted class0 profiles omit E640, F70, gravity/drag and infected-ground
+    // These admitted class0 profiles omit E640, gravity/drag and infected-ground
     // damage. This checks the consumed branch bits, not surface position.
-    if effective & (0x10 | 0x4000 | 4 | 8 | 0x800) != 0x4004 {
+    let profile = effective & (0x10 | 0x4000 | 4 | 8 | 0x800);
+    if profile != 0x4004 && profile != 0x0004 {
         return Err(Class0ActorError::Runtime("environment callback profile"));
+    }
+    // 413F70 rebuilds the basis from the Euler words unless 0x4000 keeps it
+    // (Type72's `+C0` clears it).
+    if effective & 0x4000 == 0 {
+        entity.apply_d720_euler_body_basis();
     }
     if effective & 2 != 0 {
         let terrain = frame

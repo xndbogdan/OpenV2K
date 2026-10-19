@@ -21,6 +21,8 @@ mod zero_record;
 pub(crate) use zero_record::NativeType68ZeroRecordConstruction;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod type72_tests;
 pub use live::{
     tick_class0_actor_owner, Class0ActorFrame, Class0ActorOutcome, Class0ActorOwner,
     Class0ActorTick,
@@ -61,8 +63,8 @@ pub(super) fn authenticate_metadata(
             }
             Ok(())
         }
-        54 => {
-            if crate::main_base_type54_abort::exact_level_one_type54_metadata(metadata) {
+        54 | 72 => {
+            if crate::main_base_type54_abort::change_sea_level_metadata(entity_type, metadata) {
                 Ok(())
             } else {
                 Err(Class0ActorError::Metadata)
@@ -357,7 +359,7 @@ pub(super) fn construct_class0_actor(
     // player +0xA2/+0xA4/+0xA6 copy.
     entity.apply_d720_euler_body_basis();
     publish_class0_graph(entity, context);
-    if entity.entity_type == 54 {
+    if matches!(entity.entity_type, 54 | 72) {
         if let Class0SpawnInput::Authored(spawn) = spawn {
             let word = i32::from_le_bytes(
                 spawn.extra[8..12]
