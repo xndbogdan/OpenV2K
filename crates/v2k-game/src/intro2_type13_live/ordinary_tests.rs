@@ -58,7 +58,7 @@ fn ordinary_type13_births_publish_their_native_owner() {
             );
             assert_eq!(
                 authenticate_intro2_type13(entity).map(|admission| admission.spawn_index),
-                Ok(entity.authored_spawn_index.unwrap())
+                Ok(Some(entity.authored_spawn_index.unwrap()))
             );
             assert!(matches!(
                 entity.initial_behavior,

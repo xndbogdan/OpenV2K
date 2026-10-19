@@ -195,8 +195,9 @@ child/list/count/ejection suffix does not run.
 The record reaches the same family constructor as an authored spawn, as a
 birth with no authored index: zero angles, no model override or damage buffer,
 and the row's bit `0x1` as the parameter. The ground families
-([Type76/77](TYPE76_RUNTIME.md), [Type18](TYPE18_RUNTIME.md) and
-[Type38/129](TYPE38_GROUND_SHOOTER.md)) take the body ordinal, then the process
+([Type76/77](TYPE76_RUNTIME.md), [Type18](TYPE18_RUNTIME.md),
+[Type38/129](TYPE38_GROUND_SHOOTER.md) and the Type26 stag beetle,
+[ACTOR_TASK_PROGRAMS.md](ACTOR_TASK_PROGRAMS.md)) take the body ordinal, then the process
 Sub-D allocation, then Sub-A's word, the D4A0 anchor and their initial
 selection over the current live list. The flyers Type15 (wasp), Type87
 (deathwas) and Type108 share one native constructor and the flyer owner of
@@ -212,15 +213,22 @@ beside class 7 (weights 1 and 10) and its own common axis (filter word
 word) and installs the wander Primary alone, without copying the common axis.
 Its style `0x004C7930` masks no `C8` bits and its three hit hooks are `C690`,
 so the flyer owner visits that Primary as it does the class-7 wander and
-reselects over both classes when it expires. Every newborn's task owner
+reselects over both classes when it expires. Type57 (bat) takes its own
+constructor ([INTRO2_TYPE57.md](INTRO2_TYPE57.md)): G's word, the process
+Sub-D, the selection and B6C0's two words. Type5 and Type10 take their
+family's 09A80 ([INTRO2_TYPE10.md](INTRO2_TYPE10.md)) in the same order, as
+does Type13 ([ACTOR_TASK_PROGRAMS.md](ACTOR_TASK_PROGRAMS.md)).
+Every newborn's task owner
 joins the walk in its birth pass; other types keep the row's explicit block.
 
 In retail (lab runs from each world's default arrival, the first minute with an
 idle player) world18's Hive gives birth to a Type77 every 10 s from the arrival
 and a Type14 at 20 s, then every 30 s; world26's to a Type77 every 10 s from
 5 s; world36's to a Type18 a tick after the arrival; world42's to a Type38 two
-ticks after it; world21's to a Type87 at ticks 151, 401 and 653. Type87 is the
-most common Hive birth, in seven of the worlds the cheats reach.
+ticks after it; world21's to a Type87 at ticks 151, 401 and 653; world20's to
+a Type57 at tick 51; world42's to a Type13 at 153; world46's to a Type5 at 251
+and world48's to a Type10 at 252. Type87 is the most common Hive birth, in
+seven of the worlds the cheats reach.
 
 The reset consumes one shared RNG word and is exactly:
 

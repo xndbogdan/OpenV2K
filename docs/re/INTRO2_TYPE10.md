@@ -209,6 +209,12 @@ lease; Intro2's spawns 55/56 still use their own seeds and carry none. The
 generic death, contact, hit and C750 terminal paths read the dying row's own
 type record and attribute its blast and self-collision damage to that row.
 
+A Hive child (Type5 in worlds 42, 46 and 47, Type10 in 39 and 48) runs the
+same 09A80 from the zeroed record: no authored index, zero angles and D4A0's
+placement, then G's word before the process Sub-D allocation, as the flyers'
+births do ([HIVE_WRECK.md](HIVE_WRECK.md)). Its receipt carries the allocation
+lease and no spawn index.
+
 E100 keeps drag bit 8, so worlds 46 (mode 1) and 47 (mode 2) take EC60's
 current-wind branch through the shared effective-8 flyer environment (gravity,
 then EC60 with the post-F70 basis); world 46's wind acts only below its sea.

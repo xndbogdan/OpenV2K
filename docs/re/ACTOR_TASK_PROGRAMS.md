@@ -1237,6 +1237,12 @@ and Class1 custody all authenticate the allocation itself instead of looking
 up spawn 0. Intro2-only paths, such as view-detail publication and spawn-0
 adoption, still require the absence of a receipt.
 
+A Hive child (world 42's Hive gives birth to Type13s from tick 153) runs the
+same birth from the zeroed record: no authored index, zero angles and D4A0's
+placement, then G's word before the process Sub-D allocation, as the other
+Hive families do ([HIVE_WRECK.md](HIVE_WRECK.md)). Its receipt carries the
+lease and no spawn index.
+
 Effective flags 8 keep drag bit 8, and E100 (`FUN_0040E100`) passes the callback
 delta to EC60 (`FUN_0044EC60`) unchanged. Wind mode 0 takes the plain drag
 fallback above. Worlds 46 (mode 1) and 47 (mode 2) take EC60's current-wind
@@ -1300,6 +1306,12 @@ explicit captured Sub-D first-query receipts, and the detached captured class4
 fixture remains separate from production selection. Ordinary Sub-D follows the
 existing deterministic native first-query policy, not a claim about unknown
 retail allocator-origin residue.
+
+A Hive child (worlds 15 and 26) runs the same constructor from the zeroed
+record, as the other ground families do ([HIVE_WRECK.md](HIVE_WRECK.md)): no
+authored index, zero angles, and the row's objective bit as the parameter. Its
+receipt carries the lease and no spawn index. World 26's Hive gives birth to
+one two ticks after the arrival.
 
 Common vtable `004C8A30` sends primary `+14` to `0040DAC0` and infected `+18`
 to `0040DA00`, with a null generic-hit `+30`. Executable style rows `004C7E88`,

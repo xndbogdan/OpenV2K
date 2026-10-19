@@ -58,6 +58,102 @@ pub(crate) fn publish_authored_type13(
     {
         return Err(Error::EntityIdentityMismatch);
     }
+    authenticate_type13_birth(entity, metadata)?;
+    // Type13 Sub-D flags are zero: no classifier query ever reads the cache,
+    // so the process seed is retained but never consulted.
+    if sub_d.descriptor != TYPE13_SEARCH_ATTACK_SUB_D
+        || sub_d.runtime != Type9SubDRuntime::from_constructor()
+        || sub_d.frame_owner.classifier_cache().stagger_counter() != sub_d.seed
+        || constructor_surface_bits & !crate::entity_collision_state::SURFACE_STATE_MASK != 0
+    {
+        return Err(Error::ComponentStorage);
+    }
+    // 104B0 classifies the authored surface at this tick; D4A0 has run.
+    entity.collision.state_flags_at_0x08.overwrite(
+        crate::entity_initializer::CONSTRUCTOR_SURFACE_STATE_MASK,
+        constructor_surface_bits,
+    );
+    // Common type-vtable+30 and 104B0's initial +44 modifier are null.
+    entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
+    entity
+        .collision
+        .pair_callbacks
+        .damage_modifier_identity_context_empty = RetailRuntimeValue::Known(true);
+    entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
+    publish_birth(
+        entity,
+        metadata,
+        Intro2Type13BirthSelection::Weighted,
+        GklCommonMoverRuntime::from_native_constructor(sub_d.runtime, sub_d.frame_owner),
+        next_random,
+    )?;
+    entity.native_type13_allocation = Some(allocation);
+    Ok(Intro2Type13Admission {
+        spawn_index: Some(spawn.index),
+    })
+}
+
+pub(crate) struct NativeType13ConstructionRequest<'a> {
+    pub entity: &'a mut Entity,
+    pub allocation: MainBaseAbortActorLease,
+    pub metadata: &'a EntityTypeRuntimeMetadata,
+}
+
+/// A Hive child from the zeroed record: 09A80 reaches G's word before 203D0's
+/// process Sub-D, then spawn0's K/L and selection.
+pub(crate) fn publish_native_type13(
+    request: NativeType13ConstructionRequest<'_>,
+    world_fx: &mut crate::world_fx::WorldFx,
+) -> Result<Intro2Type13Admission, Intro2Type13PublicationError> {
+    let NativeType13ConstructionRequest {
+        entity,
+        allocation,
+        metadata,
+    } = request;
+    authenticate_native_type13_body(entity, allocation, metadata)?;
+    let word = world_fx.next_shared_retail_random_u16();
+    let sub_d = world_fx.construct_entity_sub_d(TYPE13_SEARCH_ATTACK_SUB_D);
+    // The common type-vtable+30 is null; 104B0 already nulled +44.
+    entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
+    let mut words = std::iter::once(u32::from(word));
+    publish_birth(
+        entity,
+        metadata,
+        Intro2Type13BirthSelection::Weighted,
+        GklCommonMoverRuntime::from_native_constructor(sub_d.runtime, sub_d.frame_owner),
+        &mut || {
+            words
+                .next()
+                .unwrap_or_else(|| u32::from(world_fx.next_shared_retail_random_u16()))
+        },
+    )?;
+    entity.native_type13_allocation = Some(allocation);
+    Ok(Intro2Type13Admission { spawn_index: None })
+}
+
+/// Query/RNG-free admission of a Hive child's body, before 104B0's entry.
+pub(crate) fn authenticate_native_type13_body(
+    entity: &Entity,
+    allocation: MainBaseAbortActorLease,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), Intro2Type13PublicationError> {
+    if entity.authored_spawn_index.is_some()
+        || !entity.active
+        || entity.entity_type != TYPE13_ENTITY_TYPE
+        || entity.id != allocation.entity_id
+        || entity.rotation_heading_pitch_roll_raw() != [0, 0, 0]
+    {
+        return Err(Intro2Type13PublicationError::EntityIdentityMismatch);
+    }
+    authenticate_type13_birth(entity, metadata)
+}
+
+/// The model, metadata and pristine body both births require.
+fn authenticate_type13_birth(
+    entity: &Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), Intro2Type13PublicationError> {
+    use Intro2Type13PublicationError as Error;
     if entity.model_slots != [Some(INTRO2_TYPE13_MODEL_ID); 4]
         || entity.model_index != Some(INTRO2_TYPE13_MODEL_ID)
     {
@@ -85,46 +181,18 @@ pub(crate) fn publish_authored_type13(
     {
         return Err(Error::AlreadyPublished);
     }
-    // Type13 Sub-D flags are zero: no classifier query ever reads the cache,
-    // so the process seed is retained but never consulted.
-    if sub_d.descriptor != TYPE13_SEARCH_ATTACK_SUB_D
-        || sub_d.runtime != Type9SubDRuntime::from_constructor()
-        || sub_d.frame_owner.classifier_cache().stagger_counter() != sub_d.seed
-        || entity.sub_g_06070_runtime
-            != RetailRuntimeValue::Known(Some(SubG06070RuntimeState::pending()))
+    if entity.sub_g_06070_runtime
+        != RetailRuntimeValue::Known(Some(SubG06070RuntimeState::pending()))
         || entity.actor_common_axis_descriptor
             != RetailRuntimeValue::Known(TYPE13_SEARCH_ATTACK_COMMON_AXIS)
         || entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(8)
         || entity.collision.pre_health_damage_buffer_raw != RetailRuntimeValue::Known(0)
         || entity.collision.last_hit_presentation_tick_at_0x34 != RetailRuntimeValue::Known(0)
         || entity.collision.recent_relation_id_at_0x60 != RetailRuntimeValue::Known(None)
-        || constructor_surface_bits & !crate::entity_collision_state::SURFACE_STATE_MASK != 0
     {
         return Err(Error::ComponentStorage);
     }
-    // 104B0 classifies the authored surface at this tick; D4A0 has run.
-    entity.collision.state_flags_at_0x08.overwrite(
-        crate::entity_initializer::CONSTRUCTOR_SURFACE_STATE_MASK,
-        constructor_surface_bits,
-    );
-    // Common type-vtable+30 and 104B0's initial +44 modifier are null.
-    entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
-    entity
-        .collision
-        .pair_callbacks
-        .damage_modifier_identity_context_empty = RetailRuntimeValue::Known(true);
-    entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
-    publish_birth(
-        entity,
-        metadata,
-        Intro2Type13BirthSelection::Weighted,
-        GklCommonMoverRuntime::from_native_constructor(sub_d.runtime, sub_d.frame_owner),
-        next_random,
-    )?;
-    entity.native_type13_allocation = Some(allocation);
-    Ok(Intro2Type13Admission {
-        spawn_index: spawn.index,
-    })
+    Ok(())
 }
 
 /// Entity identity plus, for an ordinary receipt, the issuing generation.

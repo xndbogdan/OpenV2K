@@ -104,14 +104,15 @@ fn authored_type26_all_campaign_births_enter_native_tasks_and_world_motion() {
             let receipt = entity
                 .native_type26_allocation
                 .expect("ordinary allocation receipt");
-            assert_eq!(Some(receipt.spawn_index), entity.authored_spawn_index);
+            assert_eq!(receipt.spawn_index, entity.authored_spawn_index);
             assert!(entity.intro2_type26_sub_d_frame_owner.is_some());
             assert!(
                 matches!(entity.initial_behavior, RetailRuntimeValue::Known(Some(selection)) if matches!(selection.program.class_id, 4 | 26 | 33))
             );
             assert!(entity.actor_task_state(ActorTaskSlot::Primary).is_some());
-            let authored =
-                session.cache.level_desc().unwrap().entities[receipt.spawn_index].position_raw();
+            let authored = session.cache.level_desc().unwrap().entities
+                [receipt.spawn_index.unwrap()]
+            .position_raw();
             assert_eq!(
                 entity.position_raw(),
                 [
@@ -365,7 +366,7 @@ fn authored_type26_static_route_packets_replace_all_eight_native_graphs_without_
                 let receipt = entity
                     .native_type26_allocation
                     .expect("ordinary constructor custody");
-                assert_eq!(Some(receipt.spawn_index), entity.authored_spawn_index);
+                assert_eq!(receipt.spawn_index, entity.authored_spawn_index);
                 assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(5000));
                 assert_eq!(
                     entity.collision.pre_health_damage_buffer_raw,

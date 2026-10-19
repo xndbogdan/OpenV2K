@@ -298,6 +298,12 @@ impl From<crate::entity::NativeHiveNewborn> for SpecializedActorTaskOwner {
     fn from(newborn: crate::entity::NativeHiveNewborn) -> Self {
         match newborn {
             crate::entity::NativeHiveNewborn::Flyer(owner) => Self::Intro2FlyerScheduler(owner),
+            crate::entity::NativeHiveNewborn::Type57(owner) => Self::Intro2Type57(owner),
+            crate::entity::NativeHiveNewborn::Type10Family(owner) => Self::Intro2Type10(owner),
+            crate::entity::NativeHiveNewborn::Type13(owner) => {
+                Self::Intro2Type13SearchAttack(owner)
+            }
+            crate::entity::NativeHiveNewborn::Type26(owner) => Self::Intro2Type26(owner),
             crate::entity::NativeHiveNewborn::Type18(owner) => Self::NativeType18(owner),
             crate::entity::NativeHiveNewborn::Type38Family(owner) => {
                 Self::NativeType38Family(owner)

@@ -1,5 +1,6 @@
-//! Native Intro2 Type57 bat: own DEGKL allocation, class7 Search-and-Attack,
-//! and method24 / class68 fire. Do not borrow Type10's spawn identity.
+//! Native Type57 bat: own DEGKL allocation, class7 Search-and-Attack, and
+//! method24 / class68 fire, for Intro2's authored bat and Hive children. Do
+//! not borrow Type10's spawn identity.
 
 pub mod aim;
 pub mod contact;
@@ -28,7 +29,10 @@ pub use live::{
     tick_intro2_type57, Intro2Type57Block, Intro2Type57Frame, Intro2Type57Outcome,
     Intro2Type57Owner, Intro2Type57Tick,
 };
-pub(crate) use native::{authenticate_metadata, publish_intro2_type57};
+pub(crate) use native::{
+    authenticate_metadata, authenticate_native_type57_body, publish_intro2_type57,
+    publish_native_type57, NativeType57ConstructionRequest,
+};
 
 use crate::{
     common_mover::sub_d::{Type9SubDFrameOwner, Type9SubDRuntime},
@@ -100,7 +104,9 @@ pub const EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Intro2Type57Runtime {
     pub(crate) entity_id: u32,
-    pub(crate) spawn_index: usize,
+    /// Intro2's authored spawn; a Hive child has none and keeps its lease.
+    pub(crate) spawn_index: Option<usize>,
+    pub(crate) allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
     pub(crate) sub_d_runtime: Type9SubDRuntime,
     pub(crate) sub_d_frame_owner: Type9SubDFrameOwner,
     pub(crate) sub_e_runtime: GenericEmitterRuntime,
@@ -133,8 +139,12 @@ pub fn intro2_type57_allocation_authenticates(entity: &Entity) -> bool {
         entity.active
             && entity.id == runtime.entity_id
             && entity.entity_type == 57
-            && entity.authored_spawn_index == Some(runtime.spawn_index)
-            && INTRO2_TYPE57_SPAWN_INDICES.contains(&runtime.spawn_index)
+            && entity.authored_spawn_index == runtime.spawn_index
+            && match (runtime.spawn_index, runtime.allocation) {
+                (Some(spawn_index), None) => INTRO2_TYPE57_SPAWN_INDICES.contains(&spawn_index),
+                (None, Some(allocation)) => allocation.entity_id == entity.id,
+                _ => false,
+            }
             && entity.model_slots == [Some(MODEL); 4]
             && matches!(
                 entity.sub_g_06070_runtime,

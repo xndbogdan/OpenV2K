@@ -44,7 +44,9 @@ mod post_task_basis;
 mod world;
 
 pub(crate) use ordinary::{
-    publish_authored_type13, type13_manager_allocation_authenticates, Type13AuthoredConstruction,
+    authenticate_native_type13_body, publish_authored_type13, publish_native_type13,
+    type13_manager_allocation_authenticates, NativeType13ConstructionRequest,
+    Type13AuthoredConstruction,
 };
 
 pub use world::{
@@ -119,7 +121,8 @@ const INTRO2_TYPE13_CAPTURED_CHOICE_INDEX: usize = 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Intro2Type13Admission {
-    pub spawn_index: usize,
+    /// None for a Hive child, which has no authored record.
+    pub spawn_index: Option<usize>,
 }
 
 /// Native selection and a captured transcript are distinct RNG contracts.
@@ -215,12 +218,14 @@ pub fn authenticate_intro2_type13(
     }
     let spawn_index = match entity.native_type13_allocation {
         Some(lease) if lease.entity_id == entity.id => entity.authored_spawn_index,
-        Some(_) => None,
-        None => entity
-            .authored_spawn_index
-            .filter(|&index| index == INTRO2_TYPE13_SPAWN_INDEX),
-    }
-    .ok_or(Intro2Type13PublicationError::EntityIdentityMismatch)?;
+        Some(_) => return Err(Intro2Type13PublicationError::EntityIdentityMismatch),
+        None => Some(
+            entity
+                .authored_spawn_index
+                .filter(|&index| index == INTRO2_TYPE13_SPAWN_INDEX)
+                .ok_or(Intro2Type13PublicationError::EntityIdentityMismatch)?,
+        ),
+    };
     if entity.model_slots != [Some(INTRO2_TYPE13_MODEL_ID); 4]
         || entity.model_index != Some(INTRO2_TYPE13_MODEL_ID)
     {

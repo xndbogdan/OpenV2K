@@ -653,7 +653,7 @@ impl EntityManager {
                         entity: &mut entity,
                         allocation,
                         metadata,
-                        spawn,
+                        record: super::NativeCreationRecord::authored(spawn),
                         resources,
                         constructor_surface_bits,
                         sub_d,

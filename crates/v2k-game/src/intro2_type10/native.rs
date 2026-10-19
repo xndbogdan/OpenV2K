@@ -104,7 +104,7 @@ pub(crate) fn publish_intro2_type10(
     publish_birth(
         profile,
         entity,
-        spawn_index,
+        Some(spawn_index),
         Type9SubDRuntime::from_constructor(),
         // Source203D0 increments once for each earlier successful D allocation:
         // the normal Intro2 authored prefix supplies own seeds22/23. Flags0
@@ -186,12 +186,73 @@ pub(crate) fn publish_authored_type10_family(
     publish_birth(
         profile,
         entity,
-        spawn.index,
+        Some(spawn.index),
         sub_d.runtime,
         sub_d.frame_owner,
         Some(allocation),
         next_random,
     )
+}
+
+pub(crate) struct NativeType10FamilyConstructionRequest<'a> {
+    pub entity: &'a mut Entity,
+    pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    pub metadata: &'a EntityTypeRuntimeMetadata,
+}
+
+/// A Hive child from the zeroed record: 09A80 reaches G's word before 203D0's
+/// process Sub-D, then the shared AC60/B6C0 tail.
+pub(crate) fn publish_native_type10_family(
+    request: NativeType10FamilyConstructionRequest<'_>,
+    world_fx: &mut crate::world_fx::WorldFx,
+) -> Result<Intro2Type10Publication, Intro2Type10Error> {
+    let NativeType10FamilyConstructionRequest {
+        entity,
+        allocation,
+        metadata,
+    } = request;
+    let profile = authenticate_native_type10_family_body(entity, allocation, metadata)?;
+    let word = world_fx.next_shared_retail_random_u16();
+    let sub_d = world_fx.construct_entity_sub_d(profile.sub_d());
+    // The common type-vtable+30 is null; 104B0 already nulled +44.
+    entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
+    let mut words = std::iter::once(u32::from(word));
+    publish_birth(
+        profile,
+        entity,
+        None,
+        sub_d.runtime,
+        sub_d.frame_owner,
+        Some(allocation),
+        &mut || {
+            words
+                .next()
+                .unwrap_or_else(|| u32::from(world_fx.next_shared_retail_random_u16()))
+        },
+    )
+}
+
+/// Query/RNG-free admission of a Hive child's body, before 104B0's entry.
+pub(crate) fn authenticate_native_type10_family_body(
+    entity: &Entity,
+    allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<Type10Profile, Intro2Type10Error> {
+    let profile =
+        Type10Profile::from_entity_type(entity.entity_type).ok_or(Intro2Type10Error::Identity)?;
+    let model = profile.model();
+    if entity.authored_spawn_index.is_some()
+        || entity.id != allocation.entity_id
+        || !entity.active
+        || entity.model_slots != [Some(model); 4]
+        || entity.model_index != Some(model)
+        || entity.rotation_heading_pitch_roll_raw() != [0, 0, 0]
+    {
+        return Err(Intro2Type10Error::Identity);
+    }
+    authenticate_metadata(profile, metadata)?;
+    authenticate_birth_storage(profile, entity)?;
+    Ok(profile)
 }
 
 fn authenticate_birth_storage(
@@ -231,7 +292,7 @@ fn authenticate_birth_storage(
 fn publish_birth(
     profile: Type10Profile,
     entity: &mut Entity,
-    spawn_index: usize,
+    spawn_index: Option<usize>,
     sub_d_runtime: Type9SubDRuntime,
     sub_d_frame_owner: Type9SubDFrameOwner,
     ordinary_allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
