@@ -70,6 +70,7 @@ fn publish(
             entity: manager.entity_mut(id).unwrap(),
             allocation,
             metadata,
+            authored: None,
         },
         world_fx,
     )
@@ -172,6 +173,7 @@ fn native_wasp_metadata_or_component_mismatch_blocks_before_family_rng_or_tasks(
                     entity,
                     allocation,
                     metadata: &bad_metadata,
+                    authored: None,
                 },
                 &mut world_fx
             )
@@ -309,4 +311,129 @@ fn native_wasp_source_relation_survives_live_class7_visit_without_attachment() {
     assert_eq!(entity.attached_to, None);
     assert_eq!(entity.authored_spawn_index, None);
     assert!(tick.retained_owner.is_some());
+}
+
+/// World 20 authors two ordinary Type15s. The native loop publishes each
+/// through the flyer constructor with its spawn, so the level start adopts
+/// both live flyer owners.
+#[v2k_test_support::retail_test]
+fn ordinary_world_authored_wasps_publish_native_flyer_owners() {
+    let (_session, manager, _fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(20);
+    let wasps: Vec<_> = manager
+        .iter_all()
+        .filter(|entity| entity.entity_type == INTRO2_TYPE15_ENTITY_TYPE)
+        .collect();
+    assert_eq!(wasps.len(), 2);
+    for wasp in &wasps {
+        let owner = wasp
+            .intro2_flyer_frame_owner
+            .expect("native flyer frame owner");
+        assert!(wasp.authored_spawn_index.is_some());
+        assert_eq!(
+            owner.birth_provenance.authored_spawn_index(),
+            wasp.authored_spawn_index
+        );
+        assert!(Intro2FlyerSchedulerOwner::adopt_published(wasp).is_ok());
+    }
+    assert_eq!(
+        crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new()
+            .adopt_intro2_flyers(&manager),
+        2
+    );
+}
+
+/// World 42's four authored Type108s are flyers too: model 1167, emitter
+/// method 24 (class68) and a class-5 choice beside class 7.
+#[v2k_test_support::retail_test]
+fn ordinary_world_type108s_publish_native_flyer_owners() {
+    let (_session, manager, _fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(42);
+    let type108s: Vec<_> = manager
+        .iter_all()
+        .filter(|entity| entity.entity_type == TYPE108_ENTITY_TYPE)
+        .collect();
+    assert_eq!(type108s.len(), 4);
+    for flyer in &type108s {
+        assert_eq!(flyer.model_index, Some(usize::from(TYPE108_MODEL_ID)));
+        assert!(Intro2FlyerSchedulerOwner::adopt_published(flyer).is_ok());
+    }
+}
+
+/// C690 over Type108's choices: a top selector word picks class 5, whose ACD0
+/// graph is Primary alone; its visit is an aimless one, and the next
+/// reselection's low word restores B6C0's acquiring pair.
+#[v2k_test_support::retail_test]
+fn type108_class5_publishes_acd0_visits_aimlessly_and_reselects_class7() {
+    let (session, mut manager, mut world_fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(42);
+    let id = manager
+        .iter_all()
+        .find(|entity| entity.entity_type == TYPE108_ENTITY_TYPE)
+        .unwrap()
+        .id;
+    let metadata = manager
+        .type_runtime_metadata(TYPE108_ENTITY_TYPE)
+        .cloned()
+        .unwrap();
+    let mut words = [0xFFFF_u32, 0].into_iter();
+    assert_eq!(
+        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, &mut || {
+            words.next().unwrap()
+        }),
+        Ok(true)
+    );
+    let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    assert!(intro2_flyer_aimless_graph_authenticates(entity));
+    let owner = Intro2FlyerSchedulerOwner::adopt_published(entity).unwrap();
+    let others: Vec<_> = manager.iter_all().map(|entity| entity.id).collect();
+    for other in others.into_iter().filter(|&other| other != id) {
+        manager
+            .entity_mut(other)
+            .unwrap()
+            .collision
+            .state_flags_at_0x08 = RetailStateWord::exact(0);
+    }
+    let entity = manager.entity_mut(id).unwrap();
+    crate::entity_view_detail::RetailViewDetailContext::from_raw(
+        entity.position_raw().map(i32::from),
+        0,
+        (52, 30),
+    )
+    .publish(
+        entity.position_raw(),
+        &mut entity.collision.state_flags_at_0x08,
+    );
+    let tick = tick_intro2_flyer_scheduler_owner(
+        &mut manager,
+        owner,
+        Intro2FlyerFrame {
+            resources: &session.cache,
+            elapsed_micros: 20_000,
+            global_elapsed_micros: 20_000,
+            retail_tick: 1,
+        },
+        &mut world_fx,
+    );
+    assert!(
+        matches!(
+            tick.outcome,
+            Intro2FlyerSchedulerProductionOutcome::AimlessVisit { .. }
+        ),
+        "{:?}",
+        tick.outcome
+    );
+    let mut words = [0_u32, 0, 0].into_iter();
+    assert_eq!(
+        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, &mut || {
+            words.next().unwrap()
+        }),
+        Ok(true)
+    );
+    let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    assert!(intro2_flyer_acquiring_graph_authenticates(entity));
+    assert_eq!(
+        entity.actor_common_axis_descriptor,
+        RetailRuntimeValue::Known(TYPE108_COMMON_AXIS)
+    );
 }

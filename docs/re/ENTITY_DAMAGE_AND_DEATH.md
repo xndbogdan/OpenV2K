@@ -99,9 +99,11 @@ death synchronously, retiring Search custody while keeping the allocation for
 the deferred splice. Focused regressions cover both real native births, zero
 filter, primary nonlethal/lethal, retired quiet custody and unreplayed blocked
 prefixes. The shared particle router uses this same owner and the caller's
-actual notification context for source46's lethal objective hint. Other
-ordinary15/87 births and11180 static-route delivery remain explicit boundaries. Neither public type
-matching nor a manufactured metadata profile establishes their custody.
+actual notification context for source46's lethal objective hint. Authored
+ordinary-world15/87 births, and Type108's (a flyer of the same family), now
+take the same native constructor, their spawn kept in the birth receipt. 11180 static-route delivery to a flyer remains an
+explicit boundary; neither public type matching nor a manufactured metadata
+profile establishes its custody.
 
 The port's phase machine stops separately at the
 tick write, style dispatch, impact reaction and optional network request,

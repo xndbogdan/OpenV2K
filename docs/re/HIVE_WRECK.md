@@ -198,10 +198,21 @@ and the row's bit `0x1` as the parameter. The ground families
 ([Type76/77](TYPE76_RUNTIME.md), [Type18](TYPE18_RUNTIME.md) and
 [Type38/129](TYPE38_GROUND_SHOOTER.md)) take the body ordinal, then the process
 Sub-D allocation, then Sub-A's word, the D4A0 anchor and their initial
-selection over the current live list. The class7 flyers Type15 (wasp) and
-Type87 (deathwas) share one native constructor and the flyer owner of Intro2's
-authored pair, each with its own row (model 276 or 270, emitter method 30 or
-20). Every newborn's task owner
+selection over the current live list. The flyers Type15 (wasp), Type87
+(deathwas) and Type108 share one native constructor and the flyer owner of
+Intro2's authored pair, each with its own row (model 276, 270 or 1167, emitter
+method 30, 20 or 24). The same constructor publishes the authored flyers of
+ordinary worlds (world20's two wasps, world42's four Type108s) from their
+authored record and the Sub-D the world loop allocated; their birth receipt
+keeps the spawn index, and the level start adopts their owners as it does
+Intro2's. Type108 alone authors a class-5 (`Move About Aimlessly`) choice
+beside class 7 (weights 1 and 10) and its own common axis (filter word
+`0x405`). A class-5 selection publishes `FUN_0040ACD0`: it clears slots 2 and
+1, then `FUN_00402B10(entity, 0, 5000)` runs the Sub-G `06070` branch (one RNG
+word) and installs the wander Primary alone, without copying the common axis.
+Its style `0x004C7930` masks no `C8` bits and its three hit hooks are `C690`,
+so the flyer owner visits that Primary as it does the class-7 wander and
+reselects over both classes when it expires. Every newborn's task owner
 joins the walk in its birth pass; other types keep the row's explicit block.
 
 In retail (lab runs from each world's default arrival, the first minute with an

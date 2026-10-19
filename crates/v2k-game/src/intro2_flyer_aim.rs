@@ -1,8 +1,8 @@
-//! Intro2 wasp/deathwas Aim, using the shared `FUN_00424650` transaction.
+//! Flyer (wasp/deathwas/Type108) Aim, using the shared `FUN_00424650` transaction.
 //!
-//! Their Sub-E descriptors own cadence, spread and sound; methods 30 and 20
-//! select classes 87 and 52. Both use the original ballistic target launch and
-//! inherited-source-velocity drain, independently of the Ptersect method 10.
+//! Their Sub-E descriptors own cadence, spread and sound; methods 30, 20 and 24
+//! select classes 87, 52 and 68. All use the original ballistic target launch
+//! and inherited-source-velocity drain, independently of the Ptersect method 10.
 
 use v2k_formats::collision::ProjectileEmitterDescriptor;
 
@@ -45,6 +45,7 @@ const FLYER_TARGET_ALLOCATION_MAGIC: u64 = 0x464C_5945_5254_4754;
 enum FlyerEmitterProfile {
     Wasp,
     Deathwas,
+    Type108,
 }
 
 impl FlyerEmitterProfile {
@@ -52,9 +53,14 @@ impl FlyerEmitterProfile {
         if !crate::intro2_flyers_live::flyer_identity_authenticates(entity) {
             return None;
         }
-        match entity.entity_type {
+        Self::from_type(entity.entity_type)
+    }
+
+    const fn from_type(entity_type: u32) -> Option<Self> {
+        match entity_type {
             15 => Some(Self::Wasp),
             87 => Some(Self::Deathwas),
+            108 => Some(Self::Type108),
             _ => None,
         }
     }
@@ -63,12 +69,21 @@ impl FlyerEmitterProfile {
         match self {
             Self::Wasp => 30,
             Self::Deathwas => 20,
+            Self::Type108 => 24,
         }
     }
     fn sound(self) -> u16 {
         match self {
             Self::Wasp => 70,
             Self::Deathwas => 92,
+            Self::Type108 => 105,
+        }
+    }
+    /// Sub-E random interval and target-axis tolerance.
+    fn cadence(self) -> (u32, u16) {
+        match self {
+            Self::Wasp | Self::Deathwas => (600_000, 2_560),
+            Self::Type108 => (400_000, 3_072),
         }
     }
     fn table_speed(self) -> i16 {
@@ -94,10 +109,12 @@ impl FlyerEmitterProfile {
     fn accepts(self, descriptor: ProjectileEmitterDescriptor) -> bool {
         descriptor.projectile_method == self.method()
             && descriptor.sound_id == self.sound()
-            && descriptor.random_interval_us == 600_000
+            && (
+                descriptor.random_interval_us,
+                descriptor.target_axis_tolerance_raw,
+            ) == self.cadence()
             && descriptor.spread_raw == 256
             && descriptor.aim_threshold_raw == 4_000
-            && descriptor.target_axis_tolerance_raw == 2_560
             && descriptor.raw_word_at_0x12 == 0
             && descriptor.stochastic_gate_mode == 0
             && descriptor.variable_bindings == [0; 4]
@@ -111,10 +128,8 @@ pub(crate) fn flyer_projectile_descriptor_authenticates(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> bool {
-    let profile = match entity_type {
-        15 => FlyerEmitterProfile::Wasp,
-        87 => FlyerEmitterProfile::Deathwas,
-        _ => return false,
+    let Some(profile) = FlyerEmitterProfile::from_type(entity_type) else {
+        return false;
     };
     matches!(metadata.projectile_emitter_descriptor,
         RetailRuntimeValue::Known(Some(descriptor)) if profile.accepts(descriptor))

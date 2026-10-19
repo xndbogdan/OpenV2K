@@ -265,7 +265,7 @@ pub fn apply_shared_actor_particle_hit(
             entity_type: entity.entity_type,
         });
     }
-    if matches!(entity.entity_type, 15 | 87) && entity.intro2_flyer_frame_owner.is_some() {
+    if matches!(entity.entity_type, 15 | 87 | 108) && entity.intro2_flyer_frame_owner.is_some() {
         return Some(SharedActorImpactOutcome::Flyer(
             crate::intro2_flyer_impact::apply_native_flyer_particle_hit(frame, impact),
         ));

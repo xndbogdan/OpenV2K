@@ -14,13 +14,17 @@ pub(crate) struct NativeFlyerConstructionRequest<'a> {
     pub entity: &'a mut Entity,
     pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
     pub metadata: &'a EntityTypeRuntimeMetadata,
+    /// An ordinary world's authored spawn and the Sub-D its loop allocated;
+    /// a Hive child has neither and allocates its own.
+    pub authored: Option<(usize, crate::common_mover::sub_d::NativeSubDConstruction)>,
 }
 
-/// The two authored B/D/E/G rows: Type15 (wasp) and Type87 (deathwas).
+/// The authored B/D/E/G rows: Type15 (wasp), Type87 (deathwas) and Type108.
 pub(crate) const fn native_flyer_model_id(entity_type: u32) -> Option<u16> {
     match entity_type {
         INTRO2_TYPE15_ENTITY_TYPE => Some(INTRO2_TYPE15_MODEL_ID),
         INTRO2_TYPE87_ENTITY_TYPE => Some(INTRO2_TYPE87_MODEL_ID),
+        TYPE108_ENTITY_TYPE => Some(TYPE108_MODEL_ID),
         _ => None,
     }
 }
@@ -34,7 +38,7 @@ pub(crate) fn authenticate_native_flyer_metadata(
         native_flyer_model_id(entity_type).ok_or(Intro2FlyerPublicationError::MetadataMismatch)?;
     authenticate_flyer_mover_metadata(entity_type, metadata)
         .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
-    authenticate_flyer_choices(metadata)?;
+    authenticate_flyer_choices(entity_type, metadata)?;
     if metadata.model_slots != [model; 4]
         || metadata.mass_raw != 100
         || metadata.capability_flags != 8
@@ -65,9 +69,11 @@ pub(crate) fn publish_native_flyer(
         entity,
         allocation,
         metadata,
+        authored,
     } = request;
+    let authored_spawn_index = authored.map(|(spawn_index, _)| spawn_index);
     authenticate_native_flyer_metadata(entity.entity_type, metadata)?;
-    authenticate_native_flyer_body(entity, allocation, metadata)?;
+    authenticate_native_flyer_body(entity, allocation, metadata, authored_spawn_index)?;
     //09A80 reaches G before D: a successful1B8C0 consumes its word before
     //203D0 advances the independent process byte. Both precede25680/C6B0.
     let descriptor = authenticate_flyer_mover_metadata(entity.entity_type, metadata)
@@ -77,11 +83,17 @@ pub(crate) fn publish_native_flyer(
             descriptor,
             world_fx.next_shared_retail_random_u16(),
         )));
-    let sub_d = world_fx.construct_entity_sub_d(FLYER_SUB_D);
+    let sub_d = match authored {
+        Some((_, sub_d)) => sub_d,
+        None => world_fx.construct_entity_sub_d(FLYER_SUB_D),
+    };
     publish_flyer_behavior_phase(
         entity,
         metadata,
-        FlyerBirthProvenance::NativeFlyer(NativeFlyerBirth { allocation }),
+        FlyerBirthProvenance::NativeFlyer(NativeFlyerBirth {
+            allocation,
+            authored_spawn_index,
+        }),
         sub_d.runtime,
         sub_d.frame_owner,
         &mut || u32::from(world_fx.next_shared_retail_random_u16()),
@@ -94,6 +106,7 @@ pub(crate) fn authenticate_native_flyer_body(
     entity: &Entity,
     allocation: crate::main_base_abort::MainBaseAbortActorLease,
     metadata: &EntityTypeRuntimeMetadata,
+    authored_spawn_index: Option<usize>,
 ) -> Result<(), Intro2FlyerPublicationError> {
     let initial_behavior_supported = match entity.initial_behavior {
         RetailRuntimeValue::Unresolved => true,
@@ -108,7 +121,7 @@ pub(crate) fn authenticate_native_flyer_body(
     };
     if !entity.active
         || entity.id != allocation.entity_id
-        || entity.authored_spawn_index.is_some()
+        || entity.authored_spawn_index != authored_spawn_index
         || entity.intro2_flyer_frame_owner.is_some()
         || entity.intro2_flyer_aim_runtime.is_some()
         || entity.attached_to.is_some()

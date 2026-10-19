@@ -65,6 +65,7 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
     let (_, infected, cured, primary) = [
         (0x004C_7A50, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search acquiring
         (0x004C_7A98, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search pursuing
+        (0x004C_7930, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Move About Aimlessly
         (0x004C_7420, 0, 0, 0),                               // completed quiet death
     ]
     .into_iter()
@@ -84,11 +85,9 @@ pub(crate) fn apply_native_flyer_particle_hit(
     frame: SharedActorImpactFrame<'_>,
     impact: ParticleEntityImpact,
 ) -> NativeFlyerImpactOutcome {
-    if !frame
-        .entities
-        .iter_all()
-        .any(|entity| entity.id == impact.target_entity_id && matches!(entity.entity_type, 15 | 87))
-    {
+    if !frame.entities.iter_all().any(|entity| {
+        entity.id == impact.target_entity_id && matches!(entity.entity_type, 15 | 87 | 108)
+    }) {
         return NativeFlyerImpactOutcome::NotApplicable;
     }
     let mut committed = false;
