@@ -20,6 +20,7 @@ pub mod campaign_transition;
 pub mod chase_camera;
 pub mod chase_target;
 pub mod checked_damage;
+pub mod class0_impact;
 pub mod class0_timer;
 pub mod class49_terminal;
 pub mod cleansing_landscape_owner;

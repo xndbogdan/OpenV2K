@@ -72,6 +72,7 @@ pub enum SharedActorImpactOutcome {
     Type38Family(crate::native_type38::impact::Type38ImpactOutcome),
     RollingBoulder(crate::rolling_boulder::impact::RollingBoulderImpactOutcome),
     PortableRadar(crate::portable_radar::impact::PortableRadarImpactOutcome),
+    Class0(crate::class0_impact::Class0ImpactOutcome),
 }
 
 /// Playing's synchronous particle visit also owns terminal blast resources.
@@ -256,6 +257,12 @@ pub fn apply_playing_actor_particle_hit(
     if entity.entity_type == 71 && entity.native_type47_construction.is_some() {
         return Some(SharedActorImpactOutcome::Insect(
             apply_playing_type47_particle_hit(frame, impact),
+        ));
+    }
+    // A class0 row's lethal class38 changes the level's sea.
+    if frame.entities.native_class0_construction_present(entity.id) {
+        return Some(SharedActorImpactOutcome::Class0(
+            crate::class0_impact::apply_playing_class0_particle_hit(frame, impact),
         ));
     }
     apply_shared_actor_particle_hit(
