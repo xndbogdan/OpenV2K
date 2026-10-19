@@ -199,6 +199,9 @@ fn publish_power_up(
         .pair_callbacks
         .damage_modifier_identity_context_empty = RetailRuntimeValue::Known(true);
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
+    // 12DA0 visits a power-up every frame and leaves +B2 zero; attached
+    // particles add their mass to it later in the frame.
+    entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     Ok(())
 }
 

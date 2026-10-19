@@ -13,6 +13,16 @@ current load tick and authored wave policy. `257F0` retains class23's contact
 style `4C96C0`; the generic damage modifier and type-hit callbacks are null.
 Constructor sound attachment 44 remains owned by the collision/audio state.
 
+Although class23 publishes no task, `FUN_00412DA0` still visits a power-up
+every frame and leaves its `+B2` zero, as for any actor in the walk. A shot
+that sticks to a power-up (world 42's Type108 class68 shots) adds its mass
+there later in the frame. The port's power-ups, authored and factory-born,
+start with `+B2` zero and the frame clears it
+(`EntityManager::clear_power_up_b2`); before, the unresolved word retired
+every particle attached to one. A factory-born power-up also takes the
+identity body basis that `13F70` builds from the request's zero angles, which
+the attached particle follows.
+
 The shared class49 explosion owner authenticates the native allocation,
 metadata, current style and empty task graph before entering `10C10`.
 It releases sound44, applies the ordinary dying prefix and selects alternate49

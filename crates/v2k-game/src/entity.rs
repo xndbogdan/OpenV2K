@@ -6639,7 +6639,10 @@ impl EntityManager {
             position: raw_position_world(request.position_raw),
             heading: 0.0,
             pitch_roll_raw: [0; 2],
-            physical_body_basis_q31: RetailRuntimeValue::Unresolved,
+            // 13F70 builds the basis from the request's zero angles.
+            physical_body_basis_q31: RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(
+                0, 0, 0,
+            )),
             velocity: [0.0; 3],
             surface_lifetime_timer_ms_at_0x48: RetailRuntimeValue::Known(0),
             mass_raw: metadata.mass_raw,
@@ -6647,11 +6650,13 @@ impl EntityManager {
             attached_to: None,
             model_slots,
             model_index: model_for_constructor_state(model_slots, state_flags),
-            collision: EntityCollisionRuntimeState::from_constructor(
-                Some(&metadata),
-                0,
-                state_flags,
-            ),
+            collision: {
+                let mut collision =
+                    EntityCollisionRuntimeState::from_constructor(Some(&metadata), 0, state_flags);
+                // 12DA0 visits a power-up every frame and leaves +B2 zero.
+                collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
+                collision
+            },
             initial_behavior: initializer.initial_behavior,
             current_behavior_context: initializer.current_behavior_context,
             authored_radial_emitter: None,
@@ -8331,6 +8336,19 @@ impl EntityManager {
     pub fn player_mut(&mut self) -> Option<&mut Entity> {
         self.player_id
             .and_then(|pid| self.entities.iter_mut().find(|e| e.id == pid))
+    }
+
+    /// 12DA0 visits every power-up each frame, authored or factory-born, and
+    /// leaves its +B2 zero. The port schedules no task for them, so the frame
+    /// clears it here.
+    pub fn clear_power_up_b2(&mut self) {
+        for entity in self
+            .entities
+            .iter_mut()
+            .filter(|entity| entity.active && entity.entity_type == LEVEL_ONE_TYPE61_ENTITY_TYPE)
+        {
+            entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
+        }
     }
 
     /// Mutable live allocation by id. Integration tests place the player in a
