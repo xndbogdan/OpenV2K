@@ -908,7 +908,7 @@ runs without SDL, so device availability cannot change the process RNG.
 
 **No CD music plays in the frontend menu**, at cold boot or after quitting a
 game. The only creator of the music descriptor (session+0x298) is
-Music_SelectTrack 0x456AF0, called once from game-session level load
+Music_SelectTrack `FUN_00456AF0`, called once from game-session level load
 (FUN_00451710 ← in-game mode init FUN_004515E0). Return-to-frontend
 (FUN_0044FEB0) stops the CD, rewinds the descriptor and frees it.
 
@@ -916,7 +916,9 @@ In-game track selection: world = Section13[level]+0x48 → **track = world+1**
 (worlds 1–6 → tracks 2–7). Overrides by session mode byte +0x296: mode==4 &&
 world!=6 && rand-even → track 8; mode ≤ 2 → track 9. Loop: MCI play
 from position to track end; a 1.5 s poll (FUN_00456A00, countdown at
-session+0x29C) restarts the track when `status cdaudio mode` ≠ "playing".
+session+0x29C, counted down by `FUN_00456A80`) restarts the track when
+`status cdaudio mode` ≠ "playing". `FUN_00456AC0` resumes the track and
+`FUN_00456BA0` stops and frees it.
 Ambient==0 pauses (position saved), results screens pause/resume.
 Overlay-51 occupancy (`004D0AA0`) uses that same cursor so Ambient cannot
 restart the track while the card is up; `FUN_004558A0`'s restore of

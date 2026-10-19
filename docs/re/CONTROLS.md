@@ -281,6 +281,24 @@ The screen text names only keyboard keys: the menu help line
 `<Enter> select, <Escape> back`, the briefing's
 `Press S to Save, Space to Continue`, and `Press Fire`.
 
+### In-play callbacks
+
+The in-play set's callbacks take the session and a key state; most act on a
+press. Debug actions test bits of the session's cheat word `+1C4`.
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00455AB0`, `FUN_00455AD0`, `FUN_00455B10`, `FUN_00455B30`, `FUN_00455B50`, `FUN_00455B70`, `FUN_00455B90`, `FUN_00455BB0` | type cheat digits 1, 2 and 4 to 9 (`FUN_00455BD0`) |
+| `FUN_00455C90` | unless the game is suspended (`004FE60C`), plays menu cue 3 and sets the abort flag `+28D` |
+| `FUN_004564B0` | unless suspended, plays cue 3 and pops a screen (`FUN_0043A9A0`) |
+| `FUN_004565E0` | toggles the Targetter (settings `+34`) |
+| `FUN_00456420`, `FUN_00456440`, `FUN_00456460`, `FUN_00456480` | move the menu cursor up, down, left and right (`FUN_0043C4A0`, `FUN_0043C1E0`, `FUN_0043C6C0`, `FUN_0043C720`) |
+| `FUN_00456590` | steps the session's body selector `+2B0` through 0..3 and gives it to the craft (`FUN_00447C70`) |
+| `FUN_00455DB0` | with cheat bit 1, delivers `[2,3]/[3000,3000]` to the player through checked damage |
+| `FUN_00455E20`, `FUN_00456050` | with cheat bit 2 (the second on key state 2 only), play cue 3 and give the player every Cheats -> Weapons entry, the menu rows whose callback is `FUN_00455F50` |
+| `FUN_00455EB0`, `FUN_00456070`, `FUN_00456100` | with cheat bit 4, give the player power-up operations (`FUN_00413600`, amount above the operation byte): `0x33` with 200000 less a controller word, `0x37` with 40000 less its health, and `0x35` with 100000 |
+| `FUN_004562B0` | clears all six cheat enables (`FUN_00450FC0`) and pops a screen |
+
 ### Original console controller layouts
 
 Five more craft sets (`0x004C4180`, `0x004C41E0`, `0x004C4240`, `0x004C42A0`,

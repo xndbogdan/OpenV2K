@@ -68,10 +68,11 @@ game logic have no counterpart.
 | `00498010..004A7680` | Hardware texture-cache pixel conversion | `004F9260..00508900` | 0.64-0.95 |
 | `004A9570..004AB540` | DirectDraw modes, RGB555/display conversion (`004AA2E0/004AA330`), window procedure | `0050B4A0..0050F830` | 0.71-0.93 |
 | `004AC5D0..004ACE80` | DirectInput wrappers | `0050F950..00510330` | 0.77-1.00 |
-| `0046BA70..0046CB50`, `00438EF0..00439E90` | DirectPlay sessions and kill/host messages | `00492F50..00494230`, `0045C8D0..0045DB20` | 0.70-0.98 |
+| `0046BA70..0046CB50`, `00438EF0..00439E90` | [DirectPlay sessions and kill/host messages](MULTIPLAYER.md) | `00492F50..00494230`, `0045C8D0..0045DB20` | 0.70-0.98 |
 | `00495F30..004960F0` | Microsecond clock (`00495FF0`) and timers | `004A47D0..004A4990` | 0.71-1.00 |
 | `00496130`, `00496460` | CD audio through MCI | `004F57D0`, `004F5DF0` | 0.72-0.85 |
-| `00494EA0`, `00495BC0`, `00495CC0` | AVI playback (Quartz) | `00494A50`, `004F4C10`, `004F4D20` | 0.82-0.87 |
+| `00494EA0` | Movie error text (DirectShow's message) | `00494A50` | 0.87 |
+| `00495BC0`, `00495CC0` | [Main window and command line](PLATFORM_RUNTIME.md#message-pump-and-main-loop) | `004F4C10`, `004F4D20` | 0.83 |
 | `00471030..004711B0` | Error scopes: push, cleanup, raise (`00471150`), pop | `004948A0..00494A00` | 0.85-1.00 |
 | `00471400..004717C0`, `00428EA0..004291A0` | Input poll, event ring and binding sets | `004F0040..004F0200`, `00439AA0..00439DA0` | 0.76-0.88 |
 | `0043A0C0..0043A870` | Object table: generational handles (`FUN_0043A580` resolves) | `00461CE0..00462460` | 0.76-0.93 |
