@@ -1310,6 +1310,18 @@ branch requiring `+0x64 & 0x20` (text `0xDE`) applies. Its runtime flags also
 lack `0x01000000`, excluding the source-type-46 death event 4. Tree-side burn,
 destruction, and audio remain a separate static-object response.
 
+A particle that a hit leaves attached to the player (`FUN_004425D0`) adds its
+mass, `(256 - age) / 4`, to the player's `+B2` on each update and deals its
+damage through the attached-particle packet. `FUN_00412DA0` zeroes `+B2` after
+every controlled-player callback, as for any scheduled actor, so retail's
+player reads 63, 62, 61 while one particle ages and zero otherwise. These are
+the repeated hits of kind -5 that follow a Type76, Type87, Type108, Type122
+or Type38 shot on an idle player: 255 hits a particle, of 22 points each in
+worlds 24, 31, 42 and 46 and of 10 in world 21.
+The port's player starts with `+B2` zero and the controlled-player tick zeroes
+it after the craft's callback; before, the unresolved word retired every
+particle attached to the player.
+
 <a id="delayed-player-wreck-burst-retail-trace-2026-07-22"></a>
 
 ### Player-wreck bursts and sample timing (retail trace, 2026-07-22)

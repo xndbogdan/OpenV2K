@@ -5131,6 +5131,10 @@ impl EntityManager {
                 spawn.initial_damage_buffer_raw,
                 state_flags,
             );
+            if kind == EntityKind::Player {
+                // As the persistent player's: +B2 zero, as 12DA0 leaves it.
+                collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
+            }
             bind_fresh_level1_type17_constructor_surface(
                 &mut collision,
                 construction_provenance,
@@ -5811,6 +5815,9 @@ impl EntityManager {
         let state_flags = initializer.state_flags;
         let player_id = self.allocate_live_entity_id();
         let mut collision = EntityCollisionRuntimeState::from_constructor(metadata, 0, state_flags);
+        // Native allocation policy for the unwritten +B2: zero, as 12DA0
+        // leaves it after every controlled-player callback.
+        collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
         // Type 46's constructor writes +0x44 = FUN_004484A0 on every world.
         // Component/type-hit slots stay the captured nulls; the craft basis
         // is not reconstructed from entity Euler words.
