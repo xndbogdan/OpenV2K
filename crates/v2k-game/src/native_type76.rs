@@ -5,6 +5,8 @@
 //! Trash Furniture 26 (FurnitureNearby) and Search 7 (UnderAttack); Type77
 //! adds Defecate Virus 4 and Move About Aimlessly 5. Each class runs its
 //! existing shared program. Both take class12 (including E370 drowning).
+//! Hive rows give birth to Type77 (worlds 18 and 26) through the same
+//! constructor, from a zeroed record with no authored index.
 
 pub mod aim;
 mod construction;
@@ -216,7 +218,8 @@ impl Type76Row {
 pub struct Type76Runtime {
     pub(crate) row: Type76Row,
     entity_id: u32,
-    pub(crate) spawn_index: usize,
+    /// None for a zeroed (Hive) birth record.
+    pub(crate) spawn_index: Option<usize>,
     anchor_raw: [i16; 3],
     allocation: MainBaseAbortActorLease,
     pub(crate) sub_d_runtime: Type9SubDRuntime,
@@ -373,7 +376,7 @@ pub(crate) fn allocation_authenticates(entity: &Entity) -> bool {
         entity.active
             && entity.id == runtime.entity_id
             && entity.entity_type == runtime.row.entity_type()
-            && entity.authored_spawn_index == Some(runtime.spawn_index)
+            && entity.authored_spawn_index == runtime.spawn_index
             && entity.model_slots == [Some(runtime.row.model()); 4]
             && entity.capability_flags == 8
             && runtime.allocation.entity_id == entity.id

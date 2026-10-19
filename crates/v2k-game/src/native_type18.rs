@@ -99,7 +99,8 @@ const SUB_H_RECORDS: usize = 8;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Type18Runtime {
     entity_id: u32,
-    pub(crate) spawn_index: usize,
+    /// None for a zeroed (Hive) birth record.
+    pub(crate) spawn_index: Option<usize>,
     anchor_raw: [i16; 3],
     allocation: MainBaseAbortActorLease,
     pub(crate) sub_d_runtime: Type9SubDRuntime,
@@ -134,7 +135,7 @@ pub(crate) fn allocation_authenticates(entity: &Entity) -> bool {
         entity.active
             && entity.id == runtime.entity_id
             && entity.entity_type == ENTITY_TYPE
-            && entity.authored_spawn_index == Some(runtime.spawn_index)
+            && entity.authored_spawn_index == runtime.spawn_index
             && entity.model_slots == [Some(MODEL); 4]
             && entity.capability_flags == 8
             && runtime.allocation.entity_id == entity.id

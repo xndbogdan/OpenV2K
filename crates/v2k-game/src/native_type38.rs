@@ -125,7 +125,8 @@ impl Type38Row {
 pub struct Type38Runtime {
     pub(crate) row: Type38Row,
     pub(crate) allocation: MainBaseAbortActorLease,
-    pub(crate) spawn_index: usize,
+    /// None for a zeroed (Hive) birth record.
+    pub(crate) spawn_index: Option<usize>,
     pub(crate) anchor_raw: [i16; 3],
     pub(crate) sub_d_runtime: Type9SubDRuntime,
     pub(crate) sub_d_owner: Type9SubDFrameOwner,
@@ -277,7 +278,7 @@ pub(crate) fn allocation_authenticates(entity: &Entity) -> bool {
             entity.active
                 && entity.entity_type == runtime.row.entity_type()
                 && entity.id == runtime.allocation.entity_id
-                && entity.authored_spawn_index == Some(runtime.spawn_index)
+                && entity.authored_spawn_index == runtime.spawn_index
                 && entity.model_slots == [Some(MODEL); 4]
                 && entity.capability_flags == 8
         })

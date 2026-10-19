@@ -39,12 +39,14 @@ mod hive_runtime;
 mod native_type56_construction;
 mod rolling_boulder_construction;
 pub(crate) use hive_birth_host::{HiveBirthManagerContext, HiveBirthManagerHost};
+pub use hive_child::NativeHiveNewborn;
 pub(crate) use hive_child::{HiveNativeBirthBlock, NativeHiveChildConstructionContext};
 mod instance_body;
 pub use campaign_cargo::{CampaignCargoRestoreContext, CampaignCargoRestoreError};
 pub use campaign_cargo_identity::{
     CampaignCargoControllerState, CampaignCargoIdentity, CampaignCargoIdentityUnresolved,
 };
+pub(crate) use instance_body::NativeCreationRecord;
 use instance_body::{native_instance_body, NativeInstanceBodyRequest};
 mod cargo_runtime;
 mod class0_actor;

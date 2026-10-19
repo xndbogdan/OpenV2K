@@ -294,6 +294,21 @@ enum SpecializedActorTaskOwner {
     NativeWeapon(crate::native_entity_weapons::NativeEntityWeaponOwner),
 }
 
+impl From<crate::entity::NativeHiveNewborn> for SpecializedActorTaskOwner {
+    fn from(newborn: crate::entity::NativeHiveNewborn) -> Self {
+        match newborn {
+            crate::entity::NativeHiveNewborn::Flyer(owner) => Self::Intro2FlyerScheduler(owner),
+            crate::entity::NativeHiveNewborn::Type18(owner) => Self::NativeType18(owner),
+            crate::entity::NativeHiveNewborn::Type38Family(owner) => {
+                Self::NativeType38Family(owner)
+            }
+            crate::entity::NativeHiveNewborn::Type76Family(owner) => {
+                Self::NativeType76Family(owner)
+            }
+        }
+    }
+}
+
 impl SpecializedActorTaskOwner {
     /// Shared allocation identity for Type-9 simulation and presentation.
     fn type9_actor_lease(&self) -> Option<MainBaseAbortActorLease> {
@@ -4448,7 +4463,7 @@ impl SpecializedActorTaskScheduler {
                         hive_pass
                             .newborn_owners
                             .into_iter()
-                            .map(SpecializedActorTaskOwner::Intro2FlyerScheduler),
+                            .map(SpecializedActorTaskOwner::from),
                     );
                 }
             }
@@ -4501,7 +4516,7 @@ impl SpecializedActorTaskScheduler {
                     hive_pass
                         .newborn_owners
                         .into_iter()
-                        .map(SpecializedActorTaskOwner::Intro2FlyerScheduler),
+                        .map(SpecializedActorTaskOwner::from),
                 );
             }
             // External writer hosts receive a fresh suffix at this callback.

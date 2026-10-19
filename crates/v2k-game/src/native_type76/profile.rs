@@ -14,8 +14,11 @@ fn sub_d_state(entity: &Entity) -> Option<NativeGroundSubDState> {
     entity
         .native_type76_runtime
         .map(|runtime| NativeGroundSubDState {
-            origin: shared::NativeGroundAllocationOrigin::Authored {
-                spawn_index: runtime.spawn_index,
+            origin: match runtime.spawn_index {
+                Some(spawn_index) => shared::NativeGroundAllocationOrigin::Authored { spawn_index },
+                None => shared::NativeGroundAllocationOrigin::Dynamic {
+                    allocation: runtime.allocation,
+                },
             },
             runtime: runtime.sub_d_runtime,
             owner: runtime.sub_d_owner,

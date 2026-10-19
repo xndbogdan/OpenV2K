@@ -22,6 +22,53 @@ impl NativeInstanceBodyRequest {
     }
 }
 
+/// The source4C creation-record words a family constructor reads: an authored
+/// Section-13 spawn's, or a zeroed record's (a Hive birth) that carries only
+/// type, position and the objective bit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NativeCreationRecord {
+    pub entity_type: u32,
+    pub authored_spawn_index: Option<usize>,
+    pub position_raw: [i16; 3],
+    pub rotation: [u16; 3],
+    pub param: u32,
+    pub initial_damage_buffer_raw: i32,
+    pub model_overrides: [u32; 4],
+    /// No animation or configuration block.
+    pub plain: bool,
+}
+
+impl NativeCreationRecord {
+    pub(crate) fn authored(spawn: &v2k_formats::levels::EntitySpawn) -> Self {
+        Self {
+            entity_type: spawn.entity_type,
+            authored_spawn_index: Some(spawn.index),
+            position_raw: spawn.position_raw(),
+            rotation: spawn.rotation,
+            param: spawn.param,
+            initial_damage_buffer_raw: spawn.initial_damage_buffer_raw,
+            model_overrides: spawn.model_overrides,
+            plain: !spawn.has_animation
+                && spawn.animation.is_none()
+                && !spawn.has_config
+                && spawn.config.is_none(),
+        }
+    }
+
+    pub(crate) const fn zeroed(request: NativeInstanceBodyRequest) -> Self {
+        Self {
+            entity_type: request.entity_type,
+            authored_spawn_index: None,
+            position_raw: request.position_raw,
+            rotation: [0; 3],
+            param: request.objective as u32,
+            initial_damage_buffer_raw: 0,
+            model_overrides: [0; 4],
+            plain: true,
+        }
+    }
+}
+
 /// Body defaults and intrinsic components, independent from family tasks.
 /// The caller owns the successful Sub-D allocation, family RNG/publication,
 /// current-tick surface bits and any post-D4A0 placement/anchor suffix.

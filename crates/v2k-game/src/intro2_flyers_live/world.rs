@@ -103,7 +103,7 @@ fn preflight_suffix(
         .intro2_flyer_frame_owner
         .map(|owner| owner.birth_provenance)
     {
-        Some(super::FlyerBirthProvenance::NativeType15(_)) => {
+        Some(super::FlyerBirthProvenance::NativeFlyer(_)) => {
             matches!(
                 entity.collision.recent_relation_id_at_0x60,
                 RetailRuntimeValue::Known(_)

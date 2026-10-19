@@ -20,7 +20,7 @@ pub struct HiveComponentProductionContext<'a> {
 }
 
 pub(super) struct HiveComponentProductionPass {
-    pub newborn_owners: Vec<Intro2FlyerSchedulerOwner>,
+    pub newborn_owners: Vec<crate::entity::NativeHiveNewborn>,
     pub terrain_changed: bool,
     pub diagnostics: Vec<String>,
 }

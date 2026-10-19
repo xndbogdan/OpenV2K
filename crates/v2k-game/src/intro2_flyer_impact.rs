@@ -2,7 +2,7 @@
 //!
 //! Search hit hooks reselect the authenticated current B/D/E/G graph before
 //! reaction and filtering. Alternate2 owns quiet death, not a falling corpse.
-//! Native Type15 Hive births retain this same constructor/task custody.
+//! Native Type15/Type87 Hive births retain this same constructor/task custody.
 
 use crate::intro2_flyers_live::{
     authenticate_flyer_mover_metadata, flyer_manager_identity_authenticates, reselect_flyer,

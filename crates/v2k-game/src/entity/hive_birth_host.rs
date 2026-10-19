@@ -2,7 +2,7 @@
 
 use super::{
     EntityConstructionResources, EntityManager, HiveNativeBirthBlock,
-    NativeHiveChildConstructionContext,
+    NativeHiveChildConstructionContext, NativeHiveNewborn,
 };
 use crate::{
     entity_collision_state::RetailRuntimeValue,
@@ -10,7 +10,6 @@ use crate::{
         HiveBirthAttempt, HiveBirthHost, HiveBirthRequest, HiveChildEjection, HiveEjectionGeometry,
         HiveEjectionRequest,
     },
-    intro2_flyers_live::Intro2FlyerSchedulerOwner,
     world_fx::WorldFx,
 };
 use v2k_formats::terrain::GRID_SIZE;
@@ -42,7 +41,7 @@ pub(crate) struct HiveBirthManagerHost<'manager, 'resources> {
     manager: &'manager mut EntityManager,
     context: HiveBirthManagerContext<'resources>,
     world_fx: &'manager mut WorldFx,
-    newborn_owners: Vec<Intro2FlyerSchedulerOwner>,
+    newborn_owners: Vec<NativeHiveNewborn>,
 }
 
 impl<'manager, 'resources> HiveBirthManagerHost<'manager, 'resources> {
@@ -59,7 +58,7 @@ impl<'manager, 'resources> HiveBirthManagerHost<'manager, 'resources> {
         }
     }
 
-    pub(crate) fn take_newborn_owners(&mut self) -> Vec<Intro2FlyerSchedulerOwner> {
+    pub(crate) fn take_newborn_owners(&mut self) -> Vec<NativeHiveNewborn> {
         std::mem::take(&mut self.newborn_owners)
     }
 }
@@ -106,14 +105,9 @@ impl HiveBirthHost for HiveBirthManagerHost<'_, '_> {
                 self.newborn_owners.push(owner);
                 Ok(HiveBirthAttempt::Created(child))
             }
-            Err(
-                block @ HiveNativeBirthBlock::Publication {
-                    committed_constructor_prefix: true,
-                    ..
-                },
-            ) => Ok(HiveBirthAttempt::CommittedPrefixBlock(
-                HiveBirthManagerBlock::Native(block),
-            )),
+            Err(block) if block.committed_constructor_prefix() => Ok(
+                HiveBirthAttempt::CommittedPrefixBlock(HiveBirthManagerBlock::Native(block)),
+            ),
             Err(block) => Err(HiveBirthManagerBlock::Native(block)),
         }
     }
