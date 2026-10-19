@@ -676,10 +676,15 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         });
     }
     let hull_profile = player_hull.profile();
+    // Slot 2 is the infected craft: 104B0 selects it for a player born on an
+    // infected cell (a warp arrival), and type 46 gives it the same model.
+    let live_craft = matches!(
+        player.collision.active_model_slot(),
+        RetailRuntimeValue::Known(slot @ (0 | 2)) if player.model_in_slot(slot) == Some(41)
+    );
     if player.mass_raw != hull_profile.mass_raw
         || player.capability_flags != 5
-        || player.collision.active_model_slot() != RetailRuntimeValue::Known(0)
-        || player.model_in_slot(0) != Some(41)
+        || !live_craft
         || player.collision.damage_profile != RetailRuntimeValue::Known(hull_profile.damage)
         || player
             .collision
@@ -1392,6 +1397,58 @@ mod tests {
             Entity::unresolved_port_entity(u32::MAX, crate::entity::EntityKind::from_type(59), 59);
         unowned.model_slots = [Some(128); 4];
         assert!(!native_weapon_owns_pair_lane(&manager, &unowned));
+    }
+
+    /// World 43's warp arrival is an infected cell: 104B0 gives the player the
+    /// infected craft (slot 2, the same model 41), whose pairs still resolve.
+    /// A dying craft's model is still refused.
+    #[v2k_test_support::retail_test]
+    fn the_infected_craft_from_world43s_arrival_keeps_its_pair_contacts() {
+        let (session, mut manager, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_arrival(
+                43,
+                [15104, 2048, -14592],
+                16384,
+            );
+        let player_id = manager.player().unwrap().id;
+        assert_eq!(
+            manager.player().unwrap().collision.active_model_slot(),
+            RetailRuntimeValue::Known(2)
+        );
+        let mut hull = PlayerHull::default();
+        manager.sync_player_hull_collision_state(&hull);
+        let craft = PlayerCraft::new();
+        let mut scheduler = SpecializedActorTaskScheduler::new();
+        let mut notifications = GameplayNotifications::new();
+        for (slot, refused) in [(2, false), (3, true)] {
+            manager
+                .entity_mut(player_id)
+                .unwrap()
+                .select_active_model_slot(slot)
+                .unwrap();
+            let pass = resolve_player_active_contacts(
+                &mut manager,
+                &session.cache,
+                PlayerActivePairFrame {
+                    resources: &session.cache,
+                    retail_tick: 0,
+                    player_craft: &craft,
+                    player_hull: &mut hull,
+                    scheduler: &mut scheduler,
+                    world_fx: &mut fx,
+                    notifications: &mut notifications,
+                    extra_lives: 3,
+                },
+            );
+            assert_eq!(
+                matches!(
+                    pass,
+                    Err(PlayerActivePairError::PlayerCollisionProfileMismatch)
+                ),
+                refused,
+                "slot{slot}"
+            );
+        }
     }
 
     #[v2k_test_support::retail_test]
