@@ -95,6 +95,8 @@ fn captured_intro2_guard_acquires_type9_then_visits_new_aim_same_pass() {
         Intro2Type47CallbackFrame {
             elapsed_micros: 20_000,
             global_elapsed_micros: 20_000,
+            dispatch_mode:
+                v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
         },
         &mut |_| {
             let word = words
@@ -164,6 +166,8 @@ fn captured_intro2_guard_acquires_type9_then_visits_new_aim_same_pass() {
         Intro2Type47CallbackFrame {
             elapsed_micros: 20_000,
             global_elapsed_micros: 20_000,
+            dispatch_mode:
+                v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
         },
         &mut |_| 1,
     );
@@ -240,6 +244,8 @@ fn intro2_aim_rejects_a_level1_type46_target_after_handoff() {
         Intro2Type47CallbackFrame {
             elapsed_micros: 20_000,
             global_elapsed_micros: 20_000,
+            dispatch_mode:
+                v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
         },
         &mut |_| words.next().unwrap(),
     );
@@ -260,6 +266,8 @@ fn intro2_aim_rejects_a_level1_type46_target_after_handoff() {
         Intro2Type47CallbackFrame {
             elapsed_micros: 20_000,
             global_elapsed_micros: 20_000,
+            dispatch_mode:
+                v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
         },
         &mut |_| 1,
     );
@@ -342,6 +350,8 @@ fn intro2_pursuing_fixture() -> Intro2PursuingFixture {
         Intro2Type47CallbackFrame {
             elapsed_micros: 20_000,
             global_elapsed_micros: 20_000,
+            dispatch_mode:
+                v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
         },
         &mut |_| words.next().unwrap(),
     );
@@ -377,6 +387,8 @@ fn tick_intro2_fixture(
         Intro2Type47CallbackFrame {
             elapsed_micros: elapsed_micros,
             global_elapsed_micros: elapsed_micros,
+            dispatch_mode:
+                v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
         },
         next_random,
     )
@@ -827,6 +839,8 @@ fn captured_intro2_route_publishes_three_guard_anchor_graphs() {
             Intro2Type47CallbackFrame {
                 elapsed_micros: 20_000,
                 global_elapsed_micros: 20_000,
+                dispatch_mode:
+                    v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
             },
             &mut |_| 1,
         );

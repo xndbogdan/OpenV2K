@@ -7658,9 +7658,13 @@ fn run_game(
                     }
                     // Ordinary Type47 newants collide with static objects as
                     // well. The 02CA0 task-hook retarget stays open.
+                    let entity_type = em
+                        .iter_all()
+                        .find(|entity| entity.id == id)
+                        .map_or(0, |entity| entity.entity_type as usize);
                     if let Some(metadata) = session
                         .cache
-                        .global_entity_type(47)
+                        .global_entity_type(entity_type)
                         .map(EntityTypeRuntimeMetadata::from_section12)
                     {
                         use v2k_game::type47_static_contact::{
@@ -7672,6 +7676,15 @@ fn run_game(
                             static_damage: &mut static_damage,
                             world_fx: &mut world_fx,
                             scheduler: &mut specialized_actor_tasks,
+                            notifications: &mut gameplay_notifications,
+                            player: Some(
+                                v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                    hull: &mut player_hull,
+                                    extra_lives: RetailRuntimeValue::Known(
+                                        player_campaign_progress.extra_lives(),
+                                    ),
+                                },
+                            ),
                             retail_tick,
                         };
                         let result =

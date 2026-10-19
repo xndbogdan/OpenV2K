@@ -235,7 +235,7 @@ pub fn resolve_native_actor_descriptor_contact(
             10 | 5 | 80 | 126 => &mut entity.intro2_type10_runtime.as_mut().unwrap().sub_d_runtime,
             57 => &mut entity.intro2_type57_runtime.as_mut().unwrap().sub_d_runtime,
             17 => entity.type17_sub_d_runtime.as_mut().unwrap(),
-            47 => entity.intro2_type47_sub_d_runtime.as_mut().unwrap(),
+            47 | 71 => entity.intro2_type47_sub_d_runtime.as_mut().unwrap(),
             49 => {
                 &mut entity
                     .cleansing_vehicle_runtime
@@ -397,7 +397,7 @@ fn contact_topology(
             10 | 5 | 80 | 126 => entity.intro2_type10_runtime.is_none(),
             57 => entity.intro2_type57_runtime.is_none(),
             17 => entity.type17_sub_d_runtime.is_none(),
-            47 => entity.intro2_type47_sub_d_runtime.is_none(),
+            47 | 71 => entity.intro2_type47_sub_d_runtime.is_none(),
             49 => entity.cleansing_vehicle_runtime.is_none(),
             53 => entity.intro2_type53_runtime.is_none(),
             58 => entity.intro2_type58_runtime.is_none(),
@@ -565,7 +565,7 @@ fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool
             .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates),
         17 => crate::intro2_type17::type17_manager_allocation_authenticates(manager, id),
         22 | 23 | 24 | 62 | 124 => crate::shared_fish::allocation_authenticates(manager, id),
-        47 => crate::shared_type47::type47_manager_allocation_authenticates(manager, id),
+        47 | 71 => crate::shared_type47::type47_manager_allocation_authenticates(manager, id),
         49 => crate::cleansing_vehicle::allocation_authenticates(manager, id),
         53 => crate::intro2_type53::type53_manager_allocation_authenticates(manager, id),
         58 => crate::intro2_type58::type58_manager_allocation_authenticates(manager, id),

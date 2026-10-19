@@ -219,6 +219,40 @@ remaining admission requirements. Corpus regression
 `tests/type47_hive_contact.rs` pins admission, birth miss, overlap
 separation with an untouched hive, and the surviving hostile.
 
+## Type71
+
+Type71's Section-12 record is a Type47 row with other data. It keeps the
+A/B/C/D/E/H/J components, every Sub-A/B/C/D/H/J descriptor, the Guard/Wander
+choices (weights 9/1) and the Sub-H records. It differs in these fields:
+
+- model 273 in all four slots, health 10000 and damage thresholds
+  `[0, 8000, 1000, 0, 200]` (Type47: model 302, 3000, `[0, 2000, 200, 0, 200]`);
+- accepted-hit sound 75 and death sound 62 (Type47: 92 and 75);
+- the Sub-E emitter: method 24 (class 68, speed 2000), interval 500 000 µs,
+  aim threshold 12000, axis tolerance 7680 and sound 105 (Type47: method 30,
+  750 000, 16000, 1536 and sound 70);
+- the common axis: radius 3072 with filter word 3 (Type47: 1792 and 5);
+- `+C0` = 0x39, without Type47's bit 0x2000;
+- alternate class 63, `Auto Pilot` (Type47: class 12).
+
+The 25 authored Type71s stand in worlds 25 and 28.
+
+Bit 0x2000 decides what E870 does on a coarse callback. Type47's skips A800
+and the environment suffix. Type71's runs its tasks under the restricted
+`018A0` dispatch (no Sub-H), then the same suffix as DCA0's, without the
+detailed sound gate.
+
+A lethal hit, a lethal static contact, radial damage and the session abort
+all enter class 63 (`BC90`): BAF0's blast with the ten-particle class-37
+scatter of a non-null Sub-A, then a Type61 built from the gunner's authored
+`+88` payload, then deferred removal. Guard Location's two styles and Wander
+Near Location's have a null `+2C`.
+
+The port's `shared_type47::GunnerRow` carries both rows. The native owner,
+its movers (with the visit's dispatch mode), aim, shot drain and impacts read
+the row, and the Playing hit entry lends class 63 its static world and player.
+The captured Level-1 and Intro2 cohorts stay Type47's.
+
 ## One original model302 draw fixture
 
 The read-only newant draw query

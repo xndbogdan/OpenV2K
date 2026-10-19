@@ -558,6 +558,8 @@ pub fn resolve_intro2_contacts(mut frame: Intro2ContactFrame<'_>) -> Vec<Intro2C
                         static_damage: frame.static_damage,
                         world_fx: frame.world_fx,
                         scheduler: frame.actor_tasks,
+                        notifications: frame.notifications,
+                        player: None,
                         retail_tick: frame.retail_tick,
                     },
                 );

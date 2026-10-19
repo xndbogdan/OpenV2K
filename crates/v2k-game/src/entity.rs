@@ -1154,12 +1154,14 @@ impl BaseFactoryRuntimeState {
 /// census with the same callback pair. The six plasma turret rows retain the
 /// Section12 loader's pair, independently of their live task owner; see
 /// PLASMA_WEAPON_PRESENTATION.md for the type/model census and override audit.
+/// Type71's Section-12 row equals Type47's apart from data words and Sub-E,
+/// so the loader gives it the same pair.
 /// Keeping this as an explicit evidence policy prevents an unobserved type
 /// from acquiring animation merely because its model happens to look similar.
 pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool {
     matches!(
         entity_type,
-        9 | 13 | 17 | 26 | 30 | 40 | 47 | 56 | 61 | 92 | 96 | 97 | 99 | 102 | 103
+        9 | 13 | 17 | 26 | 30 | 40 | 47 | 56 | 61 | 71 | 92 | 96 | 97 | 99 | 102 | 103
     )
 }
 
@@ -4995,6 +4997,7 @@ impl EntityManager {
                             | 66
                             | 125
                             | 68
+                            | 71
                             | 76
                             | 77
                             | 87

@@ -44,6 +44,7 @@ use crate::{
 pub enum Type47StaticDeathBlock {
     Ordinary(Type47CommonDyingPublicationError),
     Intro2(Intro2CommonDyingBlock),
+    Terminal(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -98,6 +99,9 @@ pub struct Type47StaticContactFrame<'a> {
     pub static_damage: &'a mut StaticDamageScheduler,
     pub world_fx: &'a mut WorldFx,
     pub scheduler: &'a mut SpecializedActorTaskScheduler,
+    /// Type71's class63 terminal posts through these; Type47's class12 needs neither.
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    pub player: Option<crate::native_actor_capture::pair::PlayingPlayerContact<'a>>,
     pub retail_tick: u32,
 }
 
@@ -155,9 +159,9 @@ fn run(
         .iter_all()
         .find(|entity| entity.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if entity.entity_type != 47 {
+    let Some(row) = crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type) else {
         return Ok(Type47StaticContactOutcome::Ineligible);
-    }
+    };
     let authenticated = match death {
         Type47StaticDeathKind::Ordinary => type47_manager_allocation_authenticates(manager, id),
         Type47StaticDeathKind::Intro2 => authenticate_intro2_type47(entity, metadata).is_ok(),
@@ -234,7 +238,7 @@ fn run(
     {
         return Ok(Type47StaticContactOutcome::Ineligible);
     }
-    apply_contact(manager, id, frame, death, contact, committed)
+    apply_contact(manager, id, frame, death, row, contact, committed)
         .map(Type47StaticContactOutcome::Applied)
 }
 
@@ -243,6 +247,7 @@ fn apply_contact(
     id: u32,
     frame: &mut Type47StaticContactFrame<'_>,
     death: Type47StaticDeathKind,
+    row: crate::shared_type47::GunnerRow,
     contact: StaticModelContact,
     committed: &mut bool,
 ) -> Result<Type47StaticContactApplied, Type47StaticContactBlock> {
@@ -334,6 +339,31 @@ fn apply_contact(
                     entry: LiveActorDamageEntry::Checked,
                 },
                 |manager, world_fx, _feedback| match death {
+                    // Type71's alternate class 63 (BC90): BAF0, then its Type61.
+                    Type47StaticDeathKind::Ordinary if row.alternate_class() == 63 => {
+                        crate::class49_terminal::run_class49_standard_death(
+                            crate::class49_terminal::Class49TerminalFrame {
+                                entities: manager,
+                                resources: &mut *frame.resources,
+                                world_fx,
+                                static_damage: &mut *frame.static_damage,
+                                notifications: &mut *frame.notifications,
+                                retail_tick: frame.retail_tick,
+                                world: crate::class49_terminal::Class49WorldContext::for_contact(
+                                    &mut *frame.scheduler,
+                                    frame.player.as_mut().map(
+                                        crate::native_actor_capture::pair::PlayingPlayerContact::reborrow,
+                                    ),
+                                ),
+                            },
+                            id,
+                        )
+                        .map(|result| LiveActorDeathResult {
+                            returned_nonzero: result.returned_nonzero,
+                            publication: None,
+                        })
+                        .map_err(|error| Type47StaticDeathBlock::Terminal(Box::new(error)))
+                    }
                     Type47StaticDeathKind::Ordinary => {
                         match publish_fresh_level_one_type47_standard_death(
                             manager,

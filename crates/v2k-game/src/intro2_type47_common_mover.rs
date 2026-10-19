@@ -122,6 +122,7 @@ pub(crate) struct NativeType47MoverFrame<'a> {
     pub terrain: &'a TerrainGrid,
     pub elapsed_micros: u32,
     pub global_elapsed_micros: u32,
+    pub dispatch_mode: CommonMoverDispatchMode,
     pub target: &'a mut WanderNearPrivateState,
     pub tracked_target: RetailRuntimeValue<Option<CommonMoverTrackedTargetSnapshot>>,
 }
@@ -137,15 +138,14 @@ pub(crate) fn run_native_type47_common_mover(
     use crate::intro2_common_mover::{
         run_intro2_common_mover, Intro2CommonMoverBlock, Intro2CommonMoverFrame,
     };
-    crate::intro2_type47_live::authenticate_type47_metadata(frame.metadata)
-        .map_err(|_| Intro2Type47CommonMoverBlock::TypeMetadataUnavailable)?;
-    if !entity
+    let Some(receipt) = entity
         .native_type47_construction
-        .as_ref()
-        .is_some_and(|receipt| receipt.entity_authenticates(entity))
-    {
+        .filter(|receipt| receipt.entity_authenticates(entity))
+    else {
         return Err(Intro2Type47CommonMoverBlock::NativeRuntime("allocation"));
-    }
+    };
+    crate::intro2_type47_live::authenticate_gunner_metadata(receipt.row(), frame.metadata)
+        .map_err(|_| Intro2Type47CommonMoverBlock::TypeMetadataUnavailable)?;
     let (Some(mut sub_d_owner), Some(mut sub_d_runtime)) = (
         entity.intro2_type47_sub_d_frame_owner,
         entity.intro2_type47_sub_d_runtime,
@@ -159,7 +159,7 @@ pub(crate) fn run_native_type47_common_mover(
             topology: FRESH_LEVEL1_ORDINARY_TYPE47_COMPONENT_TOPOLOGY,
             terrain: frame.terrain,
             wave_tick_50hz: None,
-            dispatch_mode: CommonMoverDispatchMode::Normal,
+            dispatch_mode: frame.dispatch_mode,
             elapsed_micros: frame.elapsed_micros,
             global_elapsed_micros: frame.global_elapsed_micros,
             sub_d_runtime: &mut sub_d_runtime,
@@ -634,6 +634,7 @@ mod tests {
                 terrain: session.cache.terrain().unwrap(),
                 elapsed_micros: 20_000,
                 global_elapsed_micros: 31_415,
+                dispatch_mode: CommonMoverDispatchMode::Normal,
                 target: &mut target,
                 tracked_target: RetailRuntimeValue::Known(Some(CommonMoverTrackedTargetSnapshot {
                     state_flags: crate::entity_collision_state::RetailStateWord::exact(4),
@@ -688,6 +689,7 @@ mod tests {
                 terrain: session.cache.terrain().unwrap(),
                 elapsed_micros: 20_000,
                 global_elapsed_micros: 20_000,
+                dispatch_mode: CommonMoverDispatchMode::Normal,
                 target: &mut target,
                 tracked_target: RetailRuntimeValue::Known(None),
             },

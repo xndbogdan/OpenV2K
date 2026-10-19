@@ -97,7 +97,9 @@ fn check_births(
     }
     let mut count = 0;
     for spawn in &session.cache.level_desc().unwrap().entities {
-        if spawn.entity_type == 47 {
+        if let Some(row) =
+            v2k_game::shared_type47::GunnerRow::from_entity_type(u32::from(spawn.entity_type))
+        {
             let entity = manager
                 .iter_all()
                 .find(|entity| entity.authored_spawn_index == Some(spawn.index))
@@ -116,7 +118,7 @@ fn check_births(
             );
             assert_eq!(cache.origin(), RetailRuntimeValue::Unresolved);
             assert_eq!(cache.rows(), [0; 8]);
-            assert_eq!(entity.model_slots, [Some(302); 4]);
+            assert_eq!(entity.model_slots, [Some(row.model()); 4]);
             assert_eq!(
                 entity.rotation_heading_pitch_roll_raw(),
                 spawn.rotation.map(|word| word as i16)
@@ -137,7 +139,10 @@ fn check_births(
                     .bilinear_height_raw(spawn.position_raw()[0], spawn.position_raw()[2])
                     .wrapping_add(50)
             );
-            assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(3000));
+            assert_eq!(
+                entity.collision.health_raw,
+                RetailRuntimeValue::Known(row.initial_health_raw())
+            );
             assert!(Intro2Type47WorldOwner::adopt(manager, entity.id).is_ok());
             assert!(entity.actor_task_state(ActorTaskSlot::Primary).is_some());
             count += 1;
@@ -177,7 +182,11 @@ fn every_authored_gunner_uses_native_construction_and_process_sub_d() {
         }
         fx.clear();
     }
-    assert_eq!(counts, [(13, 3), (14, 1), (15, 2), (31, 2)]);
+    // Type47 in worlds 13/14/15/31; Type71 in worlds 25 and 28.
+    assert_eq!(
+        counts,
+        [(13, 3), (14, 1), (15, 2), (25, 13), (28, 12), (31, 2)]
+    );
 }
 
 #[v2k_test_support::retail_test]

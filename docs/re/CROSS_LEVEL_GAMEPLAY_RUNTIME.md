@@ -189,7 +189,10 @@ three native Intro2 births. Each retains its real Sub-D allocation, authored
 heading, grounded anchor and emitter state through Guard/Wander, acquisition,
 firing, particle/radial hits and shared Class12/abort. Its current manager/task
 boundary replaces the captured first-world and Intro2 identity tables in native
-production; the old adapters remain explicit replay controls.
+production; the old adapters remain explicit replay controls. The 25
+[Type71 gunners](TYPE47_RUNTIME.md#type71) of worlds 25 and 28 share the
+owner with their own row: a method-24 emitter, coarse callbacks that still run
+their tasks, and a class63 death that drops a Type61.
 
 WorldFx now retains the process Sub-D allocation counter alongside the shared
 retail RNG. Every reached descriptor-bearing authored allocation consumes a

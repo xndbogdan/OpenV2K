@@ -34,6 +34,8 @@ pub mod world;
 pub struct Intro2Type47CallbackFrame {
     pub elapsed_micros: u32,
     pub global_elapsed_micros: u32,
+    /// Normal in DCA0's detailed visit, restricted in E870's coarse one.
+    pub dispatch_mode: crate::common_mover::component_dispatch::CommonMoverDispatchMode,
 }
 
 use crate::actor_task_dispatcher::ActorTaskRuntime;
@@ -68,9 +70,9 @@ use crate::intro2_type47_common_mover::{
     NativeType47MoverFrame, INTRO2_TYPE47_TTD_POSITIONS_RAW,
 };
 use crate::ordinary_type47_death_live::{
-    TYPE47_COMMON_DYING_BEHAVIOR_CHOICES, TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR,
-    TYPE47_COMMON_DYING_SUB_A_DESCRIPTOR, TYPE47_COMMON_DYING_SUB_B_DESCRIPTOR,
-    TYPE47_COMMON_DYING_SUB_C_DESCRIPTOR, TYPE47_COMMON_DYING_SUB_H_RECORDS,
+    TYPE47_COMMON_DYING_BEHAVIOR_CHOICES, TYPE47_COMMON_DYING_SUB_A_DESCRIPTOR,
+    TYPE47_COMMON_DYING_SUB_B_DESCRIPTOR, TYPE47_COMMON_DYING_SUB_C_DESCRIPTOR,
+    TYPE47_COMMON_DYING_SUB_H_RECORDS,
 };
 use crate::ordinary_type47_live::{
     bind_intro2_type47_aim_and_fire, tick_intro2_type47_aim_and_fire,
@@ -177,6 +179,15 @@ pub fn authenticate_intro2_type47(
 pub(crate) fn authenticate_type47_metadata(
     metadata: &EntityTypeRuntimeMetadata,
 ) -> Result<(), Intro2Type47PublicationError> {
+    authenticate_gunner_metadata(crate::shared_type47::GunnerRow::Type47, metadata)
+}
+
+/// The gunner rows share components, choices and Sub-H; the axis, `+C0` word
+/// and alternate class are the row's own.
+pub(crate) fn authenticate_gunner_metadata(
+    row: crate::shared_type47::GunnerRow,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), Intro2Type47PublicationError> {
     let Some(initializer) = metadata.initializer.as_ref() else {
         return Err(Intro2Type47PublicationError::MetadataMismatch);
     };
@@ -191,10 +202,10 @@ pub(crate) fn authenticate_type47_metadata(
         || metadata.sub_d_steering_descriptor
             != RetailRuntimeValue::Known(Some(FRESH_LEVEL1_ORDINARY_TYPE47_SUB_D))
         || initializer.behavior_choices.as_ref() != TYPE47_COMMON_DYING_BEHAVIOR_CHOICES
-        || initializer.common_axis_descriptor != TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR
+        || initializer.common_axis_descriptor != row.axis()
         || initializer.behavior_rule_ref != 1
-        || initializer.alternate_behavior_class_ref != 12
-        || initializer.initializer_state_flags_raw != 0x2039
+        || initializer.alternate_behavior_class_ref != row.alternate_class()
+        || initializer.initializer_state_flags_raw != row.initializer_flags()
         || metadata.constructor_sound_attachment_id != RetailRuntimeValue::Known(None)
     {
         return Err(Intro2Type47PublicationError::MetadataMismatch);
@@ -361,6 +372,7 @@ fn evaluate_intro2_type47_entity_common_mover(
                 terrain: terrain.ok_or(Intro2Type47CommonMoverBlock::NativeRuntime("terrain"))?,
                 elapsed_micros: frame.elapsed_micros,
                 global_elapsed_micros: frame.global_elapsed_micros,
+                dispatch_mode: frame.dispatch_mode,
                 target: target_private,
                 tracked_target,
             },
@@ -434,7 +446,7 @@ pub fn tick_intro2_type47_primary(
     let Some(seed) = live_type47_sub_d_seed(entity) else {
         return Err(Intro2Type47PrimaryVisitBlock::EntityIdentityMismatch);
     };
-    if !entity.active || entity.entity_type != INTRO2_TYPE47_ENTITY_TYPE {
+    if !entity.active || !live_gunner_identity(entity) {
         return Err(Intro2Type47PrimaryVisitBlock::EntityIdentityMismatch);
     }
     let Some(task_id) = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary) else {
@@ -728,9 +740,7 @@ pub(crate) fn intro2_type47_cohort_runtime_authenticates(entity: &Entity) -> boo
         return false;
     };
     entity.active
-        && entity.entity_type == INTRO2_TYPE47_ENTITY_TYPE
-        && entity.model_slots == [Some(INTRO2_TYPE47_MODEL_ID); 4]
-        && entity.model_index == Some(INTRO2_TYPE47_MODEL_ID)
+        && live_gunner_identity(entity)
         && entity.intro2_type47_sub_d_frame_owner.is_some()
         && entity.intro2_type47_sub_d_runtime.is_some()
         && entity
@@ -743,6 +753,21 @@ pub(crate) fn intro2_type47_cohort_runtime_authenticates(entity: &Entity) -> boo
                     runtime.authenticates_intro2_cohort(seed)
                 }
             })
+}
+
+/// A native receipt proves its own row; the replay cohorts are Type47.
+fn live_gunner_identity(entity: &Entity) -> bool {
+    match entity.native_type47_construction {
+        Some(receipt) => {
+            receipt.entity_authenticates(entity)
+                && entity.model_index == Some(receipt.row().model())
+        }
+        None => {
+            entity.entity_type == INTRO2_TYPE47_ENTITY_TYPE
+                && entity.model_slots == [Some(INTRO2_TYPE47_MODEL_ID); 4]
+                && entity.model_index == Some(INTRO2_TYPE47_MODEL_ID)
+        }
+    }
 }
 
 /// Scene-independent native identity precedes the explicit replay seed map.
@@ -809,9 +834,7 @@ pub fn tick_intro2_type47_scheduler_owner(
             next_shared_random,
         );
     }
-    let metadata = manager
-        .type_runtime_metadata(INTRO2_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, owner.entity_id());
     let Some(entity) = manager.intro2_type47_entity_mut(owner.entity_id()) else {
         return Intro2Type47SchedulerOwnerTick {
             outcome: Intro2Type47SchedulerProductionOutcome::Dropped {
@@ -926,9 +949,7 @@ fn tick_intro2_guard_acquisition_after_primary(
                 .map(type47_guard_entity_ref)
         })
         .collect::<Vec<GuardLocationEntityRef>>();
-    let metadata = manager
-        .type_runtime_metadata(INTRO2_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, owner.entity_id());
     let Some(entity) = manager.intro2_type47_entity_mut(owner.entity_id()) else {
         return Err(Intro2GuardAcquisitionPassFailure::Dropped(
             Intro2Type47SchedulerProductionDrop::EntityUnavailable,
@@ -1031,9 +1052,7 @@ fn tick_intro2_type47_lone_wander(
     next_shared_random: &mut impl FnMut(&mut WorldFx) -> u32,
 ) -> Intro2Type47SchedulerOwnerTick {
     let entity_id = owner.entity_id();
-    let metadata = manager
-        .type_runtime_metadata(INTRO2_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id);
     let Some(entity) = manager.intro2_type47_entity_mut(entity_id) else {
         return Intro2Type47SchedulerOwnerTick {
             outcome: Intro2Type47SchedulerProductionOutcome::Dropped {
@@ -1416,9 +1435,7 @@ fn apply_intro2_type47_pursuing_c690(
     slot: Type47C690Slot,
     next_shared_random: &mut impl FnMut(&mut WorldFx) -> u32,
 ) -> Result<Type47SchedulerC690Transition, Intro2Type47SchedulerProductionBlock> {
-    let metadata = manager
-        .type_runtime_metadata(INTRO2_TYPE47_ENTITY_TYPE)
-        .cloned()
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id)
         .ok_or(Intro2Type47SchedulerProductionBlock::C690MetadataUnavailable)?;
     let entity = manager
         .iter_all()
@@ -1486,9 +1503,7 @@ fn tick_intro2_type47_pursuing_chase(
     next_shared_random: &mut impl FnMut(&mut WorldFx) -> u32,
 ) -> Result<Intro2Type47ChaseVisit, Intro2Type47SchedulerProductionBlock> {
     let elapsed_micros = frame.elapsed_micros;
-    let metadata = manager
-        .type_runtime_metadata(INTRO2_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id);
     let (target_id, axis, owner_position_raw) = {
         let Some(entity) = manager.iter_all().find(|entity| entity.id == entity_id) else {
             return Err(Intro2Type47SchedulerProductionBlock::ChaseVisitUnavailable);

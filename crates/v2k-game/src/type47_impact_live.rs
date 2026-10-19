@@ -28,8 +28,6 @@ use crate::type47_initial_behavior_live::{
 };
 use crate::world_fx::WorldFx;
 
-const ORDINARY_TYPE47_ENTITY_TYPE: u32 = 47;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type47ImpactLiveOutcome {
     NotApplicable,
@@ -71,7 +69,7 @@ pub fn apply_type47_impact_c690_live(
     world_fx: &mut WorldFx,
     request: Type47ImpactLiveRequest,
 ) -> Result<Type47ImpactLiveOutcome, Type47ImpactLiveError> {
-    let Some(metadata) = manager.type_runtime_metadata(47).cloned() else {
+    let Some(metadata) = crate::shared_type47::gunner_type_metadata(manager, entity_id) else {
         return Ok(Type47ImpactLiveOutcome::NotApplicable);
     };
     apply_type47_impact_c690_live_with_random(
@@ -95,7 +93,8 @@ pub(crate) fn apply_type47_impact_c690_live_with_random(
     let Some(entity) = manager.iter_all().find(|entity| entity.id == entity_id) else {
         return Ok(Type47ImpactLiveOutcome::NotApplicable);
     };
-    if entity.entity_type != ORDINARY_TYPE47_ENTITY_TYPE {
+    let entity_type = entity.entity_type;
+    if crate::shared_type47::GunnerRow::from_entity_type(entity_type).is_none() {
         return Ok(Type47ImpactLiveOutcome::NotApplicable);
     }
     if entity.native_type47_construction.is_some()
@@ -138,7 +137,7 @@ pub(crate) fn apply_type47_impact_c690_live_with_random(
     let planned = plan_type47_impact_c690(
         Type47ImpactC690Request {
             entry: request.entry,
-            entity_type: ORDINARY_TYPE47_ENTITY_TYPE,
+            entity_type,
             current_style,
             choice_list_source,
             state_flags_raw,

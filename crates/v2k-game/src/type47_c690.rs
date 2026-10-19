@@ -42,7 +42,6 @@ pub const TYPE47_GUARD_IMPACT_PLUS_28: u32 = 0x0040_C690;
 pub const TYPE47_C690_SUPPRESS_STATE_BIT: u32 = 0x1000;
 /// `FUN_00416460` / AC60 dying gate: `*(entity+8) >> 0xE & 1`.
 pub const TYPE47_IMPACT_DYING_STATE_BIT: u32 = 0x4000;
-const ORDINARY_TYPE47_ENTITY_TYPE: u32 = 47;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type47C690Slot {
@@ -95,11 +94,12 @@ pub fn plan_type47_scheduler_c690(
     if flags & TYPE47_C690_SUPPRESS_STATE_BIT != 0 {
         return Ok(Type47C690Reselection::SuppressedByEntityState);
     }
-    authenticate_type47_c690_metadata(request.entity_type, request.metadata)
+    let row = authenticate_type47_c690_metadata(request.entity_type, request.metadata)
         .map_err(Type47C690ReselectionBlock::Plan)?;
     let style = authenticate_scheduler_style(request.current_style, request.slot)
         .map_err(Type47C690ReselectionBlock::Plan)?;
     plan_authenticated_type47_c690(
+        row,
         style,
         request.choice_list_source,
         RetailRuntimeValue::Known(flags),
@@ -180,12 +180,13 @@ pub fn plan_type47_impact_c690(
     request: Type47ImpactC690Request<'_>,
     next_random: impl FnMut() -> u32,
 ) -> Result<Option<Type47ImpactC690Outcome>, Type47ImpactC690Error> {
-    authenticate_type47_c690_metadata(request.entity_type, request.metadata)?;
+    let row = authenticate_type47_c690_metadata(request.entity_type, request.metadata)?;
     let style = authenticate_hit_style(request.current_style, request.entry)?;
     if style.impact_callback_address.is_none() {
         return Ok(None);
     }
     plan_authenticated_type47_c690(
+        row,
         style,
         request.choice_list_source,
         request.state_flags_raw,
@@ -197,12 +198,12 @@ pub fn plan_type47_impact_c690(
 fn authenticate_type47_c690_metadata(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
-) -> Result<(), Type47ImpactC690Error> {
-    if entity_type != ORDINARY_TYPE47_ENTITY_TYPE {
-        return Err(Type47ImpactC690Error::WrongEntityType {
+) -> Result<crate::shared_type47::GunnerRow, Type47ImpactC690Error> {
+    let row = crate::shared_type47::GunnerRow::from_entity_type(entity_type).ok_or(
+        Type47ImpactC690Error::WrongEntityType {
             actual: entity_type,
-        });
-    }
+        },
+    )?;
     let initializer = metadata
         .initializer
         .as_ref()
@@ -210,15 +211,16 @@ fn authenticate_type47_c690_metadata(
     if initializer.behavior_choices.as_ref() != TYPE47_COMMON_DYING_BEHAVIOR_CHOICES.as_slice() {
         return Err(Type47ImpactC690Error::UnexpectedBehaviorChoices);
     }
-    if initializer.alternate_behavior_class_ref != TYPE47_COMMON_DYING_BEHAVIOR_CLASS_ID {
+    if initializer.alternate_behavior_class_ref != row.alternate_class() {
         return Err(Type47ImpactC690Error::UnexpectedAlternateClass {
             actual: initializer.alternate_behavior_class_ref,
         });
     }
-    Ok(())
+    Ok(row)
 }
 
 fn plan_authenticated_type47_c690(
+    row: crate::shared_type47::GunnerRow,
     style: BehaviorStyle,
     choice_list_source: RetailRuntimeValue<BehaviorChoiceListSource>,
     state_flags_raw: RetailRuntimeValue<u32>,
@@ -237,6 +239,13 @@ fn plan_authenticated_type47_c690(
         }
     };
     if state_flags & TYPE47_IMPACT_DYING_STATE_BIT != 0 {
+        // Type71's class-63 terminal leaves null hit hooks, so its dying C690
+        // has no owner here.
+        if row != crate::shared_type47::GunnerRow::Type47 {
+            return Err(Type47ImpactC690Error::UnexpectedAlternateClass {
+                actual: row.alternate_class(),
+            });
+        }
         return Ok(Type47ImpactC690Outcome::AlternateCommonDying {
             style,
             behavior_class_id: TYPE47_COMMON_DYING_BEHAVIOR_CLASS_ID,
