@@ -15,8 +15,8 @@ use v2k_game::{
         apply_type54_abort_with_scheduler, MainBaseAbortPublicationCounts,
     },
     main_base_type54_abort::{
-        change_sea_level_delta_raw, MainBaseType54DeathAdvance, MainBaseType54DeathBlock,
-        MainBaseType54DeathOutcome, MainBaseType54NetworkSession, MainBaseType54SeaDeltaSource,
+        change_sea_level_delta_raw, MainBaseType54DeathAdvance, MainBaseType54DeathOutcome,
+        MainBaseType54NetworkSession, MainBaseType54SeaDeltaSource,
         LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW,
     },
     session::GameSession,
@@ -409,7 +409,7 @@ fn campaign_cargo_type74_miss_still_fail_closes() {
 }
 
 #[v2k_test_support::retail_test]
-fn native_type54_nonzero_plus88_constructs_but_abort_fail_closes() {
+fn native_type54_nonzero_plus88_aborts_with_its_shifted_word() {
     let mut world = World::load_with_spawn_edit(13, |level| {
         let spawn = level
             .entities
@@ -433,7 +433,7 @@ fn native_type54_nonzero_plus88_constructs_but_abort_fail_closes() {
         RetailRuntimeValue::Known(MainBaseType54SeaDeltaSource::ExplicitPreShiftWords(1))
     );
     let observation = world.manager.main_base_abort_actor_observation(id).unwrap();
-    let error = world
+    let advance = world
         .manager
         .apply_main_base_abort_type54_death(
             observation.lease,
@@ -442,11 +442,19 @@ fn native_type54_nonzero_plus88_constructs_but_abort_fail_closes() {
             MainBaseType54NetworkSession::SoloNetworkingDisabled,
             &mut world.fx,
         )
-        .expect_err("explicit +0x88 remains unsupported");
-    assert_eq!(
-        error,
-        MainBaseType54DeathBlock::SeaDeltaSourceUnsupported(RetailRuntimeValue::Known(
-            MainBaseType54SeaDeltaSource::ExplicitPreShiftWords(1)
-        ))
+        .expect("405040 takes a nonzero +0x88 as is");
+    let outcome = match advance {
+        MainBaseType54DeathAdvance::Advanced { outcome, .. }
+        | MainBaseType54DeathAdvance::SuccessorUnavailableAfterCommit { outcome } => outcome,
+    };
+    assert!(
+        matches!(
+            outcome,
+            MainBaseType54DeathOutcome::SeaLevelTaskPublished {
+                sea_delta_raw: 0x100,
+                ..
+            }
+        ),
+        "{outcome:?}"
     );
 }

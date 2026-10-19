@@ -918,6 +918,7 @@ pub fn apply_type54_abort_with_scheduler(
         world_fx,
         specialized_tasks,
         publications,
+        LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW,
     )
     .map(|_| ())
     .map_err(|error| {
@@ -939,6 +940,7 @@ fn dispatch_type54_death(
     world_fx: &mut WorldFx,
     specialized_tasks: &mut SpecializedActorTaskScheduler,
     publications: &mut MainBaseAbortPublicationCounts,
+    active_model_extent_raw: u16,
 ) -> Result<DispatchSuccess, DispatchFailure> {
     let id = actor.lease.entity_id;
     let had_class0 = specialized_tasks.take_class0_actor_external_mutation(entities, id);
@@ -946,7 +948,7 @@ fn dispatch_type54_death(
         .apply_main_base_abort_type54_death(
             actor.lease,
             terrain,
-            LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW,
+            active_model_extent_raw,
             MainBaseType54NetworkSession::SoloNetworkingDisabled,
             world_fx,
         )
@@ -1357,14 +1359,34 @@ fn dispatch_ordinary_actor(
                 successor_available,
             })
         }
-        LEVEL_ONE_TYPE54_ENTITY_TYPE => dispatch_type54_death(
-            actor,
-            entities,
-            terrain,
-            world_fx,
-            specialized_tasks,
-            publications,
-        ),
+        LEVEL_ONE_TYPE54_ENTITY_TYPE | crate::main_base_type54_abort::TYPE72_ENTITY_TYPE => {
+            // 40BDC0's burst reads the active model's extent. Type54's model 560
+            // is the authenticated 256; Type72 reads its own from the cache.
+            let extent = if actor.entity_type == LEVEL_ONE_TYPE54_ENTITY_TYPE {
+                LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW
+            } else {
+                entities
+                    .iter_all()
+                    .find(|entity| entity.id == actor.lease.entity_id)
+                    .and_then(|entity| entity.model_index)
+                    .and_then(|model| effects.cache().global_model(model))
+                    .map(|model| model.radius)
+                    .ok_or_else(|| {
+                        callback_error(MainBaseAbortActorCallbackBlock::Type54(
+                            MainBaseType54DeathBlock::ActiveModelMismatch,
+                        ))
+                    })?
+            };
+            dispatch_type54_death(
+                actor,
+                entities,
+                terrain,
+                world_fx,
+                specialized_tasks,
+                publications,
+                extent,
+            )
+        }
         TYPE60_RING_ENTITY_TYPE => {
             let scheduler_owner = specialized_tasks
                 .take_type60_exploding_ring_for_main_base_abort(actor.lease)

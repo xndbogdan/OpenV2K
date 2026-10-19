@@ -1,7 +1,7 @@
 # Shared class-0 flags and weights
 
-This owns ordinary Type52/54/68 and Intro2 Type52 construction, living timer/task custody, Type68
-cargo attachment/release, Type54 Change-Sea-Level abort and generic quiet death. The production owner is
+This owns ordinary Type52/54/68/72 and Intro2 Type52 construction, living timer/task custody, Type68
+cargo attachment/release, Type54/72 Change-Sea-Level abort and generic quiet death. The production owner is
 [`entity/class0_actor`](../../crates/v2k-game/src/entity/class0_actor.rs).
 [Actor Runtime](ACTOR_RUNTIME.md) owns the shared scheduler primitives;
 [Factory System](FACTORY_SYSTEM.md#reactor-mechanic) owns the enclosing Main
@@ -11,23 +11,30 @@ remains open for remaining eligible cargo constructors other than Type68/92/96/9
 ## Canonical records and constructor
 
 Normal-tier ordinary overlays13–49 author 157 Type52 flags, 44 Type68
-weights and one Type54 grock. Intro2 additionally authors twelve Type52 instances through the same
+weights, one Type54 grock and world 17's three Type72s. Intro2 additionally authors twelve Type52 instances through the same
 constructor and task owner. All these authored
 52/68 Euler words and model overrides are zero; Type54's Level-1 record is also
-zero-Euler with zero `+0x88`. Params are normally zero;
+zero-Euler with zero `+0x88`; the Type72s face heading `0x4000` with `+0x88 = 0xB4`. Params are normally zero;
 Type68 level25 spawns64/92 use1, as do the twelve Intro2 flags. The flag's
 priority at spawn+1C is independent from spawn+10's parameter.
 
-| Field | Type52 | Type54 | Type68 |
-|---|---|---|---|
-| Default model slots | `[145;4]`, flag | `[560;4]`, grock | `[81;4]`, weight |
-| Selected model header+08 |200|256|110|
-| Mass / health |1 / 1|100 / 1000|200 / 50000|
-| Capability |`0100`|0|`1040`|
-| Type+C0 policy |`73E7`|`4027`|`27224`|
-| Root / alternate |Always `(1,1,0)` / class2|Always `(1,1,0)` / class38|Always `(1,1,0)` / class2|
-| Optional components A–O |none|none|none|
-| Constructor sound / death sound |none / none|none / none|none /62|
+| Field | Type52 | Type54 | Type68 | Type72 |
+|---|---|---|---|---|
+| Default model slots | `[145;4]`, flag | `[560;4]`, grock | `[81;4]`, weight | `[1104;4]` |
+| Selected model header+08 |200|256|110|272|
+| Mass / health |1 / 1|100 / 1000|200 / 50000|1 / 1000|
+| Capability |`0100`|0|`1040`|0|
+| Type+C0 policy |`73E7`|`4027`|`27224`|`20027`|
+| Root / alternate |Always `(1,1,0)` / class2|Always `(1,1,0)` / class38|Always `(1,1,0)` / class2|Always `(1,1,0)` / class38|
+| Optional components A–O |none|none|none|none|
+| Constructor sound / death sound |none / none|none / none|none /62|none / none|
+
+Type72's `+C0` runs the scheduler callback (`0x20000`) and drops the retained
+basis (`0x4000`), so a detailed visit's DCA0 rebuilds the basis through
+`413F70` before DF70. A coarse visit takes E870's `0x2000` branch instead:
+retail's world-17 Type72s read `0x08468805` at their first visit and
+`0x08428805` after their first coarse callback (motion `0x40000` cleared, no
+DF70 grounding bit).
 
 The full metadata profile is authenticated before publication; model overrides,
 position, angles and parameter remain authored instance inputs. These profiles
@@ -209,4 +216,6 @@ Quiet Type62 constructor/abort is owned with the Type62 native receipt.
 Remaining eligible cargo constructors other than Type68/92/96/97/100, and matched-retail
 Intro2 acceptance, stay open. Factory-born
 Type61 abort is owned with the factory constructor receipt. Native Type54 abort
-is in [Factory System](FACTORY_SYSTEM.md).
+is in [Factory System](FACTORY_SYSTEM.md); Type72 takes the same class38 path.
+`405040` derives the sea delta only from a zero `+0x88`; Type72's nonzero word
+is taken as is, so its delta is `0xB4 << 8`.

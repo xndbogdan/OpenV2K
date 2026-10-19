@@ -5008,6 +5008,7 @@ impl EntityManager {
                             | 125
                             | 68
                             | 71
+                            | 72
                             | 76
                             | 77
                             | 87
@@ -10956,12 +10957,17 @@ impl EntityManager {
         if route != (MainBaseAbortActorRoute::OrdinaryDeath { entity_id }) {
             return Err(MainBaseType54DeathBlock::NotOrdinaryRoute(route));
         }
-        if entity.entity_type != LEVEL_ONE_TYPE54_ENTITY_TYPE {
+        let native_class0 = self.native_class0_construction_present(entity_id);
+        // Only a native class0 receipt admits Type72; the captured spawn-8
+        // adapter stays Level 1's Type54.
+        if entity.entity_type != LEVEL_ONE_TYPE54_ENTITY_TYPE
+            && !(native_class0
+                && entity.entity_type == crate::main_base_type54_abort::TYPE72_ENTITY_TYPE)
+        {
             return Err(MainBaseType54DeathBlock::UnsupportedEntityType {
                 actual: entity.entity_type,
             });
         }
-        let native_class0 = self.native_class0_construction_present(entity_id);
         if native_class0 {
             if !self.native_class0_allocation_authenticates(entity_id) {
                 return Err(MainBaseType54DeathBlock::NativeConstructorReceiptMismatch);
@@ -11024,7 +11030,7 @@ impl EntityManager {
             .type_metadata
             .get(entity.entity_type as usize)
             .ok_or(MainBaseType54DeathBlock::TypeMetadataUnavailable)?;
-        if !exact_level_one_type54_metadata(metadata)
+        if !crate::main_base_type54_abort::change_sea_level_metadata(entity.entity_type, metadata)
             || entity.mass_raw != metadata.mass_raw
             || entity.capability_flags != metadata.capability_flags
             || (!native_class0 && entity.model_slots != [Some(LEVEL_ONE_TYPE54_MODEL_ID); 4])
@@ -11037,13 +11043,12 @@ impl EntityManager {
         if initial_behavior.program.class_id != LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS {
             return Err(MainBaseType54DeathBlock::InitialBehaviorMismatch);
         }
-        if entity.main_base_type54_sea_delta_source
-            != RetailRuntimeValue::Known(MainBaseType54SeaDeltaSource::DeriveFromActorModelAndSea)
-        {
+        let RetailRuntimeValue::Known(sea_delta_source) = entity.main_base_type54_sea_delta_source
+        else {
             return Err(MainBaseType54DeathBlock::SeaDeltaSourceUnsupported(
                 entity.main_base_type54_sea_delta_source,
             ));
-        }
+        };
 
         if native_class0 {
             if !matches!(
@@ -11150,8 +11155,16 @@ impl EntityManager {
         // task preparation consumes no additional RNG or external action.
         entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
         entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
-        let sea_delta_raw =
-            change_sea_level_delta_raw(position_raw[1], active_model_extent_raw, terrain.header[0]);
+        // 405040 derives the delta only from a zero `+88`; a nonzero word is
+        // taken as is. Both are shifted into raw units.
+        let sea_delta_raw = match sea_delta_source {
+            MainBaseType54SeaDeltaSource::DeriveFromActorModelAndSea => change_sea_level_delta_raw(
+                position_raw[1],
+                active_model_extent_raw,
+                terrain.header[0],
+            ),
+            MainBaseType54SeaDeltaSource::ExplicitPreShiftWords(word) => word.wrapping_shl(8),
+        };
         let task_state = MainBaseType54SeaLevelTaskState::new(sea_delta_raw);
         let tick_sequence = task_state.next_tick_sequence();
         let Some(prepared) = allocator.prepare(task_state) else {
@@ -24347,11 +24360,9 @@ mod tests {
     }
 
     #[test]
-    fn type54_unresolved_or_explicit_delta_source_fails_closed_before_mutation() {
-        for source in [
-            RetailRuntimeValue::Unresolved,
-            RetailRuntimeValue::Known(MainBaseType54SeaDeltaSource::ExplicitPreShiftWords(7)),
-        ] {
+    fn type54_unresolved_delta_source_fails_closed_before_mutation() {
+        {
+            let source = RetailRuntimeValue::Unresolved;
             let mut manager = terminal_abort_composition_manager();
             manager.entities[2].main_base_type54_sea_delta_source = source;
             let observation = manager.main_base_abort_actor_observation(3).unwrap();
@@ -24386,6 +24397,38 @@ mod tests {
                 expected_first_rng_word
             );
         }
+    }
+
+    /// 405040 takes a nonzero `+0x88` as is, shifted like the derived delta.
+    #[test]
+    fn type54_explicit_delta_source_publishes_its_shifted_word() {
+        let mut manager = terminal_abort_composition_manager();
+        manager.entities[2].main_base_type54_sea_delta_source =
+            RetailRuntimeValue::Known(MainBaseType54SeaDeltaSource::ExplicitPreShiftWords(7));
+        let observation = manager.main_base_abort_actor_observation(3).unwrap();
+        let advance = manager
+            .apply_main_base_abort_type54_death(
+                observation.lease,
+                &exact_level_one_type54_terrain(),
+                LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW,
+                MainBaseType54NetworkSession::SoloNetworkingDisabled,
+                &mut WorldFx::new(),
+            )
+            .unwrap();
+        let outcome = match advance {
+            MainBaseType54DeathAdvance::Advanced { outcome, .. }
+            | MainBaseType54DeathAdvance::SuccessorUnavailableAfterCommit { outcome } => outcome,
+        };
+        assert!(
+            matches!(
+                outcome,
+                MainBaseType54DeathOutcome::SeaLevelTaskPublished {
+                    sea_delta_raw: 0x700,
+                    ..
+                }
+            ),
+            "{outcome:?}"
+        );
     }
 
     #[test]
