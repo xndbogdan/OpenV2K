@@ -35,6 +35,7 @@ fn type18_abort_takes_class12_once() {
                     notifications: &mut notifications,
                     retail_tick: 400 + pass,
                 },
+                &crate::resource_cache::ResourceCache::new(Vec::new()),
             )
             .unwrap();
             let success = match result {

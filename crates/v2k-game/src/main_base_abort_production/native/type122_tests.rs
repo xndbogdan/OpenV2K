@@ -19,6 +19,7 @@ fn native_abort_type122_uses_its_own_receipt_and_class12_without_reentering_dyin
                 notifications: &mut f.notifications,
                 retail_tick: 400,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .unwrap();
         let success = match result {
@@ -48,6 +49,7 @@ fn native_abort_type122_uses_its_own_receipt_and_class12_without_reentering_dyin
                 notifications: &mut f.notifications,
                 retail_tick: 500,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .unwrap();
         assert!(result.is_ok());

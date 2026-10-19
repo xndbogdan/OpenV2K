@@ -82,6 +82,7 @@ fn worker79_and91_abort_owns_all_nine_native_allocations_once() {
                     notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                     retail_tick: 400,
                 },
+                &crate::resource_cache::ResourceCache::new(Vec::new()),
             )
             .unwrap();
             let success = match result {
@@ -126,7 +127,8 @@ fn worker79_and91_abort_owns_all_nine_native_allocations_once() {
                     extra_lives: crate::entity_collision_state::RetailRuntimeValue::Unresolved,
                     notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                     retail_tick: 401
-                }
+                },
+                &crate::resource_cache::ResourceCache::new(Vec::new()),
             )
             .unwrap()
             .is_ok());
@@ -182,7 +184,8 @@ fn worker79_and91_abort_rejects_foreign_and_parked_custody_without_prefix() {
                     extra_lives: crate::entity_collision_state::RetailRuntimeValue::Unresolved,
                     notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                     retail_tick: 400
-                }
+                },
+                &crate::resource_cache::ResourceCache::new(Vec::new()),
             )
             .unwrap()
             .is_err());

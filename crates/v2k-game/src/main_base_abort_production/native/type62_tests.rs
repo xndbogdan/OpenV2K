@@ -88,6 +88,7 @@ fn assert_fish_abort_contract(world: u32, kind: u32) {
                 notifications: &mut notifications,
                 retail_tick: 5000,
             },
+            &crate::resource_cache::ResourceCache::new(Vec::new()),
         )
         .expect("retained class2 fish selects the native route");
         if invalid.is_some() {
@@ -127,6 +128,7 @@ fn assert_fish_abort_contract(world: u32, kind: u32) {
                     notifications: &mut notifications,
                     retail_tick: 5001,
                 },
+                &crate::resource_cache::ResourceCache::new(Vec::new()),
             )
             .unwrap()
             .is_ok());

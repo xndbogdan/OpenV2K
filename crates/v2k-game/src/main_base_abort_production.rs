@@ -113,6 +113,12 @@ pub enum MainBaseAbortActorDisposition {
     Type16Death,
     /// The native Type94: alternate class12.
     Type94Death,
+    /// The native Type30: alternate class12.
+    Type30Death,
+    /// Type40's class18 split into Type56 children.
+    Type40Death,
+    /// Type27's class18 split into two Type3 boulders.
+    Type27Death,
     /// Ordinary Type10-family rows: alternate class11 publishes Tumble.
     Type10Death,
     Class49Death,
@@ -139,6 +145,7 @@ pub struct MainBaseAbortPublicationCounts {
     pub type18_common_dying: usize,
     pub type28_common_dying: usize,
     pub type76_common_dying: usize,
+    pub type30_common_dying: usize,
     pub type16_common_dying: usize,
     pub type94_common_dying: usize,
     pub type10_tumble: usize,
@@ -148,6 +155,10 @@ pub struct MainBaseAbortPublicationCounts {
     pub appended_type60_actors: usize,
     /// Class63 Type61 drops appended behind the live-list cursor.
     pub appended_type61_actors: usize,
+    /// Type40's class18 Type56 children appended behind the cursor.
+    pub appended_type56_actors: usize,
+    /// Type27's class18 Type3 boulders appended behind the cursor.
+    pub appended_type3_actors: usize,
     /// Deliberate same-family replacement of a stale pre-callback owner. In
     /// particular, the normal spawn-23 Type-66 owner is replaced when its
     /// Primary task is republished by the abort callback.
@@ -169,6 +180,7 @@ impl MainBaseAbortPublicationCounts {
             + self.type18_common_dying
             + self.type28_common_dying
             + self.type76_common_dying
+            + self.type30_common_dying
             + self.type16_common_dying
             + self.type94_common_dying
             + self.type10_tumble
@@ -690,7 +702,8 @@ fn run_actor_phase(
     // (native turrets, cleansing vehicles and Power Ups, or captured/factory
     // Type61). Class1 flowers share the blast prefix but append no ring. A
     // class63 source appends its Type61 behind the cursor, whose own class49
-    // death then appends a ring: two visits. A repeated/cyclic successor must
+    // death then appends a ring: two visits. A native Type40's or Type27's
+    // class18 split appends up to its child count. A repeated/cyclic successor must
     // fail instead of spinning in a speculative world whose eventual rollback
     // would hide the topology bug.
     let actor_visit_limit = entities.iter_all().count().saturating_add(
@@ -699,6 +712,16 @@ fn run_actor_phase(
             .map(|entity| {
                 if entities.is_main_base_type61_constructor_authenticated(entity.id) {
                     return 1;
+                }
+                if crate::native_type40::manager_allocation_authenticates(entities, entity.id) {
+                    return crate::split_and_explode::split_policy(40).1 as usize;
+                }
+                if entity.entity_type == 27
+                    && crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                        entities, entity.id,
+                    )
+                {
+                    return crate::split_and_explode::split_policy(27).1 as usize;
                 }
                 let policy = crate::class49_death::source_profile(entity)
                     .filter(|_| crate::class49_death::allocation_authenticates(entities, entity.id))
@@ -1101,6 +1124,7 @@ fn dispatch_ordinary_actor(
             specialized_tasks,
             publications,
             gameplay,
+            effects.cache(),
         ) {
             return result;
         }

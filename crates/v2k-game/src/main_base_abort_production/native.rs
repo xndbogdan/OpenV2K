@@ -42,6 +42,10 @@ pub enum NativeMainBaseAbortDeathBlock {
     Flyer(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
     Type16(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type94(crate::intro2_common_dying::Intro2CommonDyingBlock),
+    Type30(crate::intro2_common_dying::Intro2CommonDyingBlock),
+    Type40(crate::native_type40::death::Type40DeathBlock),
+    Type56(crate::native_type56::death::Type56DeathBlock),
+    Type27(crate::rolling_boulder::death::RollingBoulderDeathBlock),
 }
 
 pub(super) fn dispatch_native_class49(
@@ -82,7 +86,9 @@ pub(super) fn dispatch_native_class49(
         // tail-appended Type61.
         || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some())
         || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
-        || crate::intro2_type16::type16_auto_pilot_row(entity).is_some();
+        || crate::intro2_type16::type16_auto_pilot_row(entity).is_some()
+        // A Type3 boulder (authored or split from a Type27) enters class1.
+        || (entity.entity_type == 3 && entity.rolling_boulder_runtime.is_some());
     if !admitted {
         return None;
     }
@@ -156,6 +162,24 @@ pub(super) fn dispatch_native_class49(
     })())
 }
 
+/// A native ground death publishes a class12 owner or retires its owner for
+/// the deferred sweep, as the radial callback's publication does.
+fn retire_native_ground_death(
+    specialized_tasks: &mut SpecializedActorTaskScheduler,
+    publication: Option<crate::native_ground_actor::NativeGroundTerminalPublication>,
+) {
+    use crate::{
+        entity::DynamicRadialDeathPublication as Publication,
+        native_ground_actor::NativeGroundTerminalPublication as Terminal,
+    };
+    let publication = match publication {
+        Some(Terminal::CommonDying(owner)) => Publication::Intro2Class12(owner),
+        Some(Terminal::Deferred(receipt)) => Publication::NativeGroundDeferred(receipt),
+        None => return,
+    };
+    specialized_tasks.register_radial_death_publications(&[publication]);
+}
+
 #[derive(Clone, Copy)]
 enum NativeActor {
     MainBase,
@@ -178,6 +202,10 @@ enum NativeActor {
     Flyer,
     Type16,
     Type94,
+    Type30,
+    Type40,
+    Type56,
+    Type27,
 }
 
 pub(super) fn dispatch_native_actor(
@@ -187,6 +215,7 @@ pub(super) fn dispatch_native_actor(
     specialized_tasks: &mut SpecializedActorTaskScheduler,
     publications: &mut MainBaseAbortPublicationCounts,
     gameplay: &mut MainBaseAbortGameplayContext<'_>,
+    resources: &crate::resource_cache::ResourceCache,
 ) -> Option<Result<DispatchSuccess, DispatchFailure>> {
     let entity = entities
         .iter_all()
@@ -235,6 +264,10 @@ pub(super) fn dispatch_native_actor(
         // Type128's class63 Auto Pilot belongs to the class49 dispatch above.
         16 if entity.intro2_type16_runtime.is_some() => NativeActor::Type16,
         94 if entity.intro2_type94_runtime.is_some() => NativeActor::Type94,
+        30 if entity.native_type30_runtime.is_some() => NativeActor::Type30,
+        40 if entity.native_type40_runtime.is_some() => NativeActor::Type40,
+        56 if entity.native_type56_runtime.is_some() => NativeActor::Type56,
+        27 if entity.rolling_boulder_runtime.is_some() => NativeActor::Type27,
         _ => return None,
     };
     Some(dispatch(
@@ -245,9 +278,11 @@ pub(super) fn dispatch_native_actor(
         specialized_tasks,
         publications,
         gameplay,
+        resources,
     ))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn dispatch(
     kind: NativeActor,
     actor: MainBaseAbortActorObservation,
@@ -256,6 +291,7 @@ fn dispatch(
     specialized_tasks: &mut SpecializedActorTaskScheduler,
     publications: &mut MainBaseAbortPublicationCounts,
     gameplay: &mut MainBaseAbortGameplayContext<'_>,
+    resources: &crate::resource_cache::ResourceCache,
 ) -> Result<DispatchSuccess, DispatchFailure> {
     use NativeMainBaseAbortDeathBlock as Block;
     if entities
@@ -361,6 +397,10 @@ fn dispatch(
             | NativeActor::Type10Family
             | NativeActor::Type16
             | NativeActor::Type94
+            | NativeActor::Type30
+            | NativeActor::Type40
+            | NativeActor::Type56
+            | NativeActor::Type27
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
         if !ready {
@@ -416,6 +456,81 @@ fn dispatch(
                 publications.type16_common_dying += 1;
             }
             MainBaseAbortActorDisposition::Type16Death
+        }
+        NativeActor::Type30 => {
+            // 10C10 -> DB80 -> alternate class12, as a lethal hit's publisher.
+            if !crate::native_type30::manager_allocation_authenticates(entities, id) {
+                return Err(block(Block::Type30(
+                    crate::intro2_common_dying::Intro2CommonDyingBlock::UnauthenticatedAllocation,
+                )));
+            }
+            let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type30(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_intro2_common_dying(owner);
+                publications.type30_common_dying += 1;
+            }
+            MainBaseAbortActorDisposition::Type30Death
+        }
+        NativeActor::Type40 => {
+            // 10C10 -> DB80 -> class18: C080's burst, A860, then its Type56
+            // children behind the cursor and the parent's deferred removal.
+            let children = |entities: &EntityManager| {
+                entities
+                    .iter_all()
+                    .filter(|entity| entity.entity_type == 56)
+                    .count()
+            };
+            let before = children(entities);
+            let death = crate::native_type40::death::begin_type40_standard_death(
+                entities,
+                id,
+                crate::native_type40::death::Type40Class18Frame {
+                    resources,
+                    world_fx,
+                    retail_tick: gameplay.retail_tick,
+                    tasks: specialized_tasks,
+                },
+            )
+            .map_err(|error| block(Block::Type40(error)))?;
+            retire_native_ground_death(specialized_tasks, death.publication);
+            publications.appended_type56_actors += children(entities).saturating_sub(before);
+            MainBaseAbortActorDisposition::Type40Death
+        }
+        NativeActor::Type27 => {
+            // 10C10 -> DB80 -> class18: the boulder splits into two Type3s
+            // behind the cursor before its own deferred removal.
+            let children = |entities: &EntityManager| {
+                entities
+                    .iter_all()
+                    .filter(|entity| entity.entity_type == 3)
+                    .count()
+            };
+            let before = children(entities);
+            let death = crate::rolling_boulder::death::begin_rolling_boulder_split(
+                entities,
+                id,
+                crate::rolling_boulder::death::RollingBoulderSplitFrame {
+                    resources,
+                    world_fx,
+                    retail_tick: gameplay.retail_tick,
+                    tasks: specialized_tasks,
+                },
+            )
+            .map_err(|error| block(Block::Type27(error)))?;
+            retire_native_ground_death(specialized_tasks, death.publication);
+            publications.appended_type3_actors += children(entities).saturating_sub(before);
+            MainBaseAbortActorDisposition::Type27Death
+        }
+        NativeActor::Type56 => {
+            // 10C10 -> DB80 -> class2's C470 quiet terminal.
+            let death =
+                crate::native_type56::death::begin_type56_standard_death(entities, id, world_fx)
+                    .map_err(|error| block(Block::Type56(error)))?;
+            retire_native_ground_death(specialized_tasks, death.publication);
+            MainBaseAbortActorDisposition::QuietDeath
         }
         NativeActor::Type94 => {
             // 10C10 -> DB80 -> alternate class12, as a lethal hit's publisher.
@@ -709,6 +824,8 @@ fn block(error: NativeMainBaseAbortDeathBlock) -> DispatchFailure {
     callback_error(MainBaseAbortActorCallbackBlock::Native(error))
 }
 
+#[cfg(test)]
+mod ground_split_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

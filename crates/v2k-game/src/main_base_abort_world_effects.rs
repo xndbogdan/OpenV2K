@@ -199,6 +199,11 @@ pub(crate) struct MainBaseAbortClass49Frame<'a> {
 }
 
 impl<'a> MainBaseAbortWorldEffects<'a> {
+    /// The live level resources, for callbacks that read models or terrain.
+    pub(crate) fn cache(&self) -> &ResourceCache {
+        self.cache
+    }
+
     pub(crate) fn run_class49_standard_death(
         &mut self,
         id: u32,

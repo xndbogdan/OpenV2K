@@ -3,8 +3,8 @@
 `v2k-game::rolling_boulder` owns the authored Type3 and Type27 boulders:
 native construction, both class20 styles and their tasks, the late terrain,
 water and static contacts, hits, player pairs, and both deaths, including
-Type27's split into two Type3 boulders. Other pairs and the Main Base abort
-are still explicit boundaries (see [Port status](#port-status)).
+Type27's split into two Type3 boulders, also inside the Main Base abort. Other
+pairs are still explicit boundaries (see [Port status](#port-status)).
 
 ## Identity
 
@@ -139,5 +139,6 @@ Remaining boundaries, each held rather than approximated:
   in the same frame.
 - Other pairs. Boulder pairs with actors other than the player, and the Hive
   ram (`UnsupportedHiveImpactCounterpart`, [Hive wreck](HIVE_WRECK.md)).
-- The Main Base abort transaction, which still stops at Type27 in worlds
-  27 and 35.
+- In the Main Base abort, Type27 splits through the same class18 path and
+  each Type3 child explodes through class1; worlds 27 and 35 now stop at their
+  class15 Type127 and Type12.
