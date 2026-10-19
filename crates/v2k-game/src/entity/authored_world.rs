@@ -738,7 +738,7 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type17: {error:?}"))?;
             }
-            52 | 54 | 68 | 72 => {
+            52 | 54 | 68 | 72 | 85 | 106 => {
                 if self.native_class0_construction_present(entity.id) {
                     return Err("class0 allocation already published".into());
                 }

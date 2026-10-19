@@ -78,7 +78,7 @@ use crate::type60_exploding_ring_production::Type60ExplodingRingProductionOwner;
 use crate::world_fx::WorldFx;
 
 const MAIN_BASE_ENTITY_TYPE: u32 = 6;
-const QUIET_DEATH_ENTITY_TYPES: [u32; 3] = [52, 62, 68];
+const QUIET_DEATH_ENTITY_TYPES: [u32; 4] = [52, 62, 68, 106];
 
 /// One actor whose exact callback (or callback-free route) completed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1359,9 +1359,11 @@ fn dispatch_ordinary_actor(
                 successor_available,
             })
         }
-        LEVEL_ONE_TYPE54_ENTITY_TYPE | crate::main_base_type54_abort::TYPE72_ENTITY_TYPE => {
+        LEVEL_ONE_TYPE54_ENTITY_TYPE
+        | crate::main_base_type54_abort::TYPE72_ENTITY_TYPE
+        | crate::main_base_type54_abort::TYPE85_ENTITY_TYPE => {
             // 40BDC0's burst reads the active model's extent. Type54's model 560
-            // is the authenticated 256; Type72 reads its own from the cache.
+            // is the authenticated 256; Type72 and Type85 read theirs from the cache.
             let extent = if actor.entity_type == LEVEL_ONE_TYPE54_ENTITY_TYPE {
                 LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW
             } else {
