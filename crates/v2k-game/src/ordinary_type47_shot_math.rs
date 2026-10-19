@@ -11,10 +11,7 @@ use crate::{
         GenericEmitterAppendRequest, GenericEmitterSpeedField, GenericEmitterTargetLaunchRequest,
         GenericEmitterTargetLaunchSolution,
     },
-    projectile_emitter::{
-        FIRST_WORLD_SHOOTER_PROJECTILE_METHOD, FIRST_WORLD_SHOOTER_PROJECTILE_SPEED_RAW,
-        TYPE13_PROJECTILE_METHOD,
-    },
+    projectile_emitter::{FIRST_WORLD_SHOOTER_PROJECTILE_METHOD, TYPE13_PROJECTILE_METHOD},
     targetter::TARGETTER_BALLISTIC_GRAVITY_RAW,
 };
 
@@ -89,6 +86,10 @@ pub(crate) fn normalize_retail_vector_q31(vector: [i32; 3]) -> [i32; 3] {
 /// function preserves provisional normalization, target-velocity lead,
 /// default-method gravity (`FUN_0044EA60` returns 1 for 10 and 30), final
 /// normalization, and the mutated target words used by the next catch-up shot.
+#[cfg(test)]
+use crate::projectile_emitter::FIRST_WORLD_SHOOTER_PROJECTILE_SPEED_RAW;
+
+#[cfg(test)]
 pub(crate) fn resolve_type47_method30_target_launch(
     request: GenericEmitterTargetLaunchRequest,
 ) -> Result<GenericEmitterTargetLaunchSolution, Type47ShotMathError> {
@@ -187,11 +188,20 @@ pub(crate) fn drain_type47_transient_request(
     source_position_raw: [i16; 3],
     source_velocity_raw: [i16; 3],
 ) -> Result<Type47TransientDrainSolution, Type47ShotMathError> {
+    // Type71's method 24 shares method 30's leading-zero row.
+    if !matches!(
+        request.projectile_method,
+        24 | FIRST_WORLD_SHOOTER_PROJECTILE_METHOD
+    ) {
+        return Err(Type47ShotMathError::UnsupportedProjectileMethod {
+            actual: request.projectile_method,
+        });
+    }
     drain_transient_request(
         request,
         source_position_raw,
         source_velocity_raw,
-        FIRST_WORLD_SHOOTER_PROJECTILE_METHOD,
+        request.projectile_method,
     )
 }
 

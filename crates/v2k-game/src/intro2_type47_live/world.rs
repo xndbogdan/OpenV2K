@@ -1,18 +1,21 @@
 //! Shared native and captured Intro2 Type-47 12DA0 / DCA0 / E870 world visit.
 //!
-//! Live styles retain effective 0x2039. E870's 0x2000 branch deliberately
-//! skips A800 and the entire environment/surface suffix, clearing motion.
-//! DCA0 restores that motion gate before tasks and completes its suffix only
-//! after the last newly published task. A partially entered callback cannot
+//! Type47's live styles retain effective 0x2039. E870's 0x2000 branch
+//! deliberately skips A800 and the entire environment/surface suffix, clearing
+//! motion. DCA0 restores that motion gate before tasks and completes its suffix
+//! only after the last newly published task. Type71's 0x39 lacks 0x2000, so
+//! E870 runs its tasks under the restricted dispatch and DCA0's suffix, without
+//! the detailed sound gate. A partially entered callback cannot
 //! become another frame and replay task ages, selector RNG, or impact effects.
 
 use super::{
     intro2_type47_cohort_runtime_authenticates, tick_intro2_type47_scheduler_owner,
     Intro2Type47CallbackFrame, Intro2Type47ChaseVisitResult, Intro2Type47PrimaryVisitResult,
     Intro2Type47SchedulerAdoptionError, Intro2Type47SchedulerOwner,
-    Intro2Type47SchedulerProductionOutcome, INTRO2_TYPE47_ENTITY_TYPE,
+    Intro2Type47SchedulerProductionOutcome,
 };
 use crate::actor_task_owner::{ActorTaskId, ActorTaskSlot};
+use crate::common_mover::component_dispatch::CommonMoverDispatchMode;
 use crate::common_mover::type9_attitude::{
     plan_type9_terrain_attitude_raw, Type9BodyBasis, Type9TerrainAttitudeInput,
 };
@@ -340,7 +343,8 @@ fn effective_flags(entity: &Entity) -> Result<u32, Intro2Type47WorldBlock> {
         _ => return Err(Intro2Type47WorldBlock::UnsupportedStyle),
     };
     let effective = default & !clear;
-    if effective != 0x2039 && effective != 0x28 {
+    // Type47's 0x2039 (0x28 once dying); Type71's 0x39, which no style clears.
+    if !matches!(effective, 0x2039 | 0x28 | 0x39) {
         return Err(Intro2Type47WorldBlock::UnsupportedStyle);
     }
     Ok(effective)
@@ -467,10 +471,8 @@ pub fn tick_intro2_type47_world_owner(
     } else {
         0
     };
-    let metadata = manager
-        .type_runtime_metadata(INTRO2_TYPE47_ENTITY_TYPE)
-        .cloned();
-    if enabled && detailed {
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, id);
+    if enabled && (detailed || flags & 0x2000 == 0) {
         let Some(metadata) = metadata.as_ref() else {
             return blocked(owner, Intro2Type47WorldBlock::UnsupportedMetadata);
         };
@@ -529,11 +531,6 @@ pub fn tick_intro2_type47_world_owner(
             retained_owner: Some(owner),
         };
     }
-    // Authenticated Guard/Wander owns 0x2039, so E870 cannot reach tasks.
-    if !detailed {
-        owner.pending = Some(PendingVisit::capture(entity));
-        return blocked(owner, Intro2Type47WorldBlock::UnsupportedStyle);
-    }
     if flags & 0x2000 != 0 && flags & 0x1000 == 0 {
         entity
             .collision
@@ -543,6 +540,11 @@ pub fn tick_intro2_type47_world_owner(
     let callback_frame = Intro2Type47CallbackFrame {
         elapsed_micros: callback_elapsed_us,
         global_elapsed_micros: frame.global_elapsed_micros,
+        dispatch_mode: if detailed {
+            CommonMoverDispatchMode::Normal
+        } else {
+            CommonMoverDispatchMode::Restricted
+        },
     };
     let tick = tick_intro2_type47_scheduler_owner(
         manager,
@@ -578,6 +580,7 @@ pub fn tick_intro2_type47_world_owner(
         &frame,
         callback_elapsed_us,
         flags,
+        detailed,
         metadata.as_ref().unwrap(),
         next_random,
     ) {
@@ -667,6 +670,7 @@ fn commit_tail(
     frame: &Intro2Type47WorldFrame<'_>,
     dt: u32,
     latched_flags: u32,
+    detailed: bool,
     metadata: &EntityTypeRuntimeMetadata,
     next_random: &mut impl FnMut(&mut WorldFx) -> u32,
 ) -> Result<Option<FreshLevelOneType47CommonDyingOwner>, Intro2Type47WorldBlock> {
@@ -684,15 +688,20 @@ fn commit_tail(
         0x800,
         Intro2Type47WorldBlock::SurfaceStateUnavailable,
     )? != 0;
-    if let Some(sound) = crate::actor_detailed_sound::plan_actor_detailed_sound(
-        crate::actor_detailed_sound::ActorDetailedSoundFrame {
-            type_record: frame.type_record,
-            health_raw: health,
-            visible,
-            callback_elapsed_micros: dt,
-        },
-        &mut || next_random(world_fx),
-    ) {
+    if let Some(sound) = detailed
+        .then(|| {
+            crate::actor_detailed_sound::plan_actor_detailed_sound(
+                crate::actor_detailed_sound::ActorDetailedSoundFrame {
+                    type_record: frame.type_record,
+                    health_raw: health,
+                    visible,
+                    callback_elapsed_micros: dt,
+                },
+                &mut || next_random(world_fx),
+            )
+        })
+        .flatten()
+    {
         world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
     }
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();

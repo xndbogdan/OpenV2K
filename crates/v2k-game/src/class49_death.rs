@@ -82,6 +82,8 @@ pub enum NativeExplosionSourceProfile {
     /// Type14's B/D/G flyer on the native flyer owner, alternate class1.
     /// Type14 or Type39, whose alternate class 1 explodes.
     ExplodingFlyer(u32),
+    /// The Type71 gunner, whose alternate class 63 explodes and drops a Type61.
+    Type71Gunner,
 }
 
 impl NativeExplosionSourceProfile {
@@ -99,6 +101,7 @@ impl NativeExplosionSourceProfile {
             Self::Type38Family(row) => row.entity_type(),
             Self::RollingBoulder => 3,
             Self::ExplodingFlyer(entity_type) => entity_type,
+            Self::Type71Gunner => 71,
         }
     }
 
@@ -151,6 +154,12 @@ impl NativeExplosionSourceProfile {
             }
             Self::RollingBoulder => crate::rolling_boulder::authenticate_metadata(
                 crate::rolling_boulder::RollingBoulderProfile::Small,
+                metadata,
+            )
+            .is_ok(),
+            // The gunner authentication pins Type71's alternate63.
+            Self::Type71Gunner => crate::intro2_type47_live::authenticate_gunner_metadata(
+                crate::shared_type47::GunnerRow::Type71,
                 metadata,
             )
             .is_ok(),
@@ -218,6 +227,11 @@ impl NativeExplosionSourceProfile {
                 style,
                 0x004c_7e88 | 0x004c_7930 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_74f8
             ),
+            // Guard Location's two styles, Wander Near Location and the
+            // fallback: +2C is null in each.
+            Self::Type71Gunner => {
+                matches!(style, 0x004c_7bb8 | 0x004c_7c00 | 0x004c_79c0 | 0x004c_74f8)
+            }
             // Type39: Aimless, Move completion, Search and the fallback.
             Self::ExplodingFlyer(_) => matches!(
                 style,
@@ -256,6 +270,8 @@ impl NativeExplosionSourceProfile {
             Self::RollingBoulder => (10, [16, 16]),
             // Nonnull B takes 40BBB3.
             Self::ExplodingFlyer(_) => (10, [37, 37]),
+            // Nonnull A takes 40BBB3.
+            Self::Type71Gunner => (10, [37, 37]),
         }
     }
 
@@ -273,6 +289,7 @@ impl NativeExplosionSourceProfile {
             Self::Fish124
             | Self::Type10Carrier(_)
             | Self::Type16Carrier(_)
+            | Self::Type71Gunner
             | Self::Type38Family(crate::native_type38::Type38Row::Type129) => {
                 NativeExplosionPolicy::Class63
             }
@@ -307,6 +324,11 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         && crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
     {
         Some(NativeExplosionSourceProfile::RollingBoulder)
+    } else if entity.native_type47_construction.is_some_and(|receipt| {
+        receipt.row() == crate::shared_type47::GunnerRow::Type71
+            && receipt.entity_authenticates(entity)
+    }) {
+        Some(NativeExplosionSourceProfile::Type71Gunner)
     } else if crate::intro2_flyers_live::flyer_explodes(entity.entity_type)
         && crate::intro2_flyers_live::flyer_identity_authenticates(entity)
     {
@@ -372,6 +394,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         }
         Some(NativeExplosionSourceProfile::RollingBoulder) => {
             crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::Type71Gunner) => {
+            crate::shared_type47::type47_manager_allocation_authenticates(manager, id)
         }
         Some(NativeExplosionSourceProfile::ExplodingFlyer(_)) => {
             crate::intro2_flyers_live::flyer_manager_identity_authenticates(manager, id)

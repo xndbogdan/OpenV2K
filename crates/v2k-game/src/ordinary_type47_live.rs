@@ -67,13 +67,10 @@ use crate::{
     hover::HoverBasis,
     ordinary_type47_shot_math::{
         drain_type47_transient_request, evaluate_type47_aim_error,
-        evaluate_type47_forward_half_space, resolve_type47_method30_target_launch,
-        Type47ShotMathError,
+        evaluate_type47_forward_half_space, resolve_ballistic_target_launch, Type47ShotMathError,
     },
-    projectile_emitter::{
-        FIRST_WORLD_SHOOTER_PROJECTILE_METHOD, FIRST_WORLD_SHOOTER_PROJECTILE_SPEED_RAW,
-        FIRST_WORLD_SHOOTER_SOUND_ID,
-    },
+    projectile_emitter::{FIRST_WORLD_SHOOTER_PROJECTILE_METHOD, FIRST_WORLD_SHOOTER_SOUND_ID},
+    shared_type47::GunnerRow,
     world_fx::{DescriptorParticleRequest, ParticleEnvironment, ParticleOwnerAtBirth, WorldFx},
 };
 
@@ -260,8 +257,24 @@ impl OrdinaryType47AimAndFireRuntime {
         metadata: &EntityTypeRuntimeMetadata,
         sub_d_stagger_seed: u8,
     ) -> Option<Self> {
-        let mut runtime = Self::from_authenticated_intro2_metadata(metadata, sub_d_stagger_seed)?;
+        let RetailRuntimeValue::Known(Some(projectile_descriptor)) =
+            metadata.projectile_emitter_descriptor
+        else {
+            return None;
+        };
+        let row = GunnerRow::from_projectile_descriptor(projectile_descriptor)?;
+        let mut runtime = Self::from_authenticated_intro2_metadata(
+            &EntityTypeRuntimeMetadata {
+                projectile_emitter_descriptor: RetailRuntimeValue::Known(Some(
+                    FRESH_LEVEL1_ORDINARY_TYPE47_PROJECTILE_DESCRIPTOR,
+                )),
+                ..metadata.clone()
+            },
+            sub_d_stagger_seed,
+        )?;
         runtime.pursuing_cohort = Type47AimAllocationPolicy::NativeConstruction;
+        runtime.projectile_descriptor = projectile_descriptor;
+        runtime.emitter_runtime = row.emitter_runtime();
         Some(runtime)
     }
 
@@ -295,6 +308,11 @@ impl OrdinaryType47AimAndFireRuntime {
             sub_d_frame_owner: None,
             sub_d_runtime: None,
         })
+    }
+
+    /// The gunner row whose Sub-E payload this runtime retains.
+    pub(crate) fn row(&self) -> Option<GunnerRow> {
+        GunnerRow::from_projectile_descriptor(self.projectile_descriptor)
     }
 
     pub const fn projectile_descriptor(&self) -> ProjectileEmitterDescriptor {
@@ -340,8 +358,11 @@ impl OrdinaryType47AimAndFireRuntime {
         {
             return Err(OrdinaryType47LiveError::DrawEmitterOriginContractMismatch);
         }
+        let row = self
+            .row()
+            .ok_or(OrdinaryType47LiveError::AimAndFireRuntimeContractMismatch)?;
         for (index, shot) in self.transient_shots.iter().enumerate() {
-            if !is_exact_transient_request(source_entity_id, shot.request) {
+            if !is_exact_transient_request(row, source_entity_id, shot.request) {
                 return Err(OrdinaryType47LiveError::MalformedTransientRequest { index });
             }
         }
@@ -473,6 +494,7 @@ pub struct OrdinaryType47AimAndFireOwner {
     task_visit: ActorTaskVisit,
     target_entity_id: u32,
     pursuing_cohort: Type47AimAllocationPolicy,
+    row: GunnerRow,
 }
 
 impl OrdinaryType47AimAndFireOwner {
@@ -587,6 +609,8 @@ fn bind_captured_type47_aim_and_fire(
         task_visit,
         target_entity_id,
         pursuing_cohort,
+        row: GunnerRow::from_entity_type(entity.entity_type)
+            .ok_or(OrdinaryType47LiveError::WrongSourceEntityType)?,
     })
 }
 
@@ -779,19 +803,18 @@ pub fn drain_fresh_level1_ordinary_type47_shots(
     {
         return Err(OrdinaryType47LiveError::UncapturedPursuingSpawn);
     }
-    let (solutions, suppresses_impact_damage) = {
+    let (solutions, suppresses_impact_damage, row, source_entity_type) = {
         let entity = manager
             .iter_all()
             .find(|entity| entity.id == source_entity_id)
             .ok_or(OrdinaryType47LiveError::SourceEntityMissing)?;
-        if entity.entity_type != ORDINARY_TYPE47_ENTITY_TYPE {
-            return Err(OrdinaryType47LiveError::WrongSourceEntityType);
-        }
+        let row = GunnerRow::from_entity_type(entity.entity_type)
+            .ok_or(OrdinaryType47LiveError::WrongSourceEntityType)?;
         let runtime = entity
             .ordinary_type47_aim_and_fire_runtime
             .as_ref()
             .ok_or(OrdinaryType47LiveError::MissingAimAndFireRuntime)?;
-        if !is_exact_runtime_shape(runtime) {
+        if !is_exact_runtime_shape(runtime) || runtime.row() != Some(row) {
             return Err(OrdinaryType47LiveError::AimAndFireRuntimeContractMismatch);
         }
         if runtime.transient_shots.is_empty() {
@@ -812,7 +835,7 @@ pub fn drain_fresh_level1_ordinary_type47_shots(
         };
         let mut solutions = Vec::with_capacity(runtime.transient_shots.len());
         for (index, shot) in runtime.transient_shots.iter().copied().enumerate() {
-            if !is_exact_transient_request(source_entity_id, shot.request) {
+            if !is_exact_transient_request(row, source_entity_id, shot.request) {
                 return Err(OrdinaryType47LiveError::MalformedTransientRequest { index });
             }
             solutions.push(
@@ -825,7 +848,7 @@ pub fn drain_fresh_level1_ordinary_type47_shots(
                 .map_err(OrdinaryType47LiveError::ShotMath)?,
             );
         }
-        (solutions, suppression)
+        (solutions, suppression, row, entity.entity_type)
     };
 
     let queued = {
@@ -844,12 +867,12 @@ pub fn drain_fresh_level1_ordinary_type47_shots(
     for solution in solutions {
         if let Some(slot) = world_fx.materialize_descriptor_particle_request(
             DescriptorParticleRequest {
-                source_class: 87,
+                source_class: row.particle_class(),
                 position_raw: solution.position_raw,
                 velocity_raw: solution.velocity_raw,
                 owner: Some(ParticleOwnerAtBirth {
                     entity_id: source_entity_id,
-                    entity_type: ORDINARY_TYPE47_ENTITY_TYPE as u8,
+                    entity_type: source_entity_type as u8,
                 }),
                 suppresses_impact_damage,
             },
@@ -1098,7 +1121,7 @@ fn handle_type47_generic_action(
         GenericEmitterAction::ResolveTargetLaunch { request, .. } => {
             if request.cached_source.handle != owner.source_entity_id
                 || request.cached_source.allocation_identity != source_allocation_identity
-                || request.projectile_method != FIRST_WORLD_SHOOTER_PROJECTILE_METHOD
+                || request.projectile_method != owner.row.projectile_method()
                 || request.speed_override_raw != 0
                 || request.current_target.is_some_and(|target| {
                     target.handle != owner.target_entity_id
@@ -1109,12 +1132,12 @@ fn handle_type47_generic_action(
                     phase,
                 ));
             }
-            let solution = resolve_type47_method30_target_launch(request)
+            let solution = resolve_ballistic_target_launch(request, owner.row.table_speed_raw())
                 .map_err(OrdinaryType47LiveError::ShotMath)?;
             Ok(GenericEmitterResume::TargetLaunchResolved { phase, solution })
         }
         GenericEmitterAction::AppendTransient { request, .. } => {
-            if !is_exact_transient_request(owner.source_entity_id, request) {
+            if !is_exact_transient_request(owner.row, owner.source_entity_id, request) {
                 return Err(OrdinaryType47LiveError::GenericActionContractMismatch(
                     phase,
                 ));
@@ -1138,8 +1161,7 @@ fn handle_type47_generic_action(
             })
         }
         GenericEmitterAction::CommitTargetCadence { write, .. } => {
-            if write.interval_us
-                != FRESH_LEVEL1_ORDINARY_TYPE47_PROJECTILE_DESCRIPTOR.random_interval_us
+            if write.interval_us != owner.row.projectile_descriptor().random_interval_us
                 || write.cadence_after_raw
                     != write
                         .cadence_before_raw
@@ -1179,7 +1201,8 @@ fn handle_type47_generic_action(
                 .ok_or(OrdinaryType47LiveError::SourceEntityMissing)?;
             authenticate_live_owner(source, owner.task_visit, owner.pursuing_cohort, true)?;
             let expected_position = source.position_raw();
-            if sound_id != u32::from(FIRST_WORLD_SHOOTER_SOUND_ID)
+            let row_sound = owner.row.projectile_descriptor().sound_id;
+            if sound_id != u32::from(row_sound)
                 || source_position_raw != Some(expected_position)
                 || frequency_multiplier_16_16 != 0x0001_0000
                 || volume_multiplier_16_16 != 0x0001_0000
@@ -1188,8 +1211,7 @@ fn handle_type47_generic_action(
                     phase,
                 ));
             }
-            world_fx
-                .queue_fixed_positional_sound_raw(FIRST_WORLD_SHOOTER_SOUND_ID, expected_position);
+            world_fx.queue_fixed_positional_sound_raw(row_sound, expected_position);
             Ok(GenericEmitterResume::Acknowledged { phase })
         }
         GenericEmitterAction::EmitMethod31Rejection { .. }
@@ -1214,8 +1236,11 @@ fn authenticate_live_owner(
     if !entity.active {
         return Err(OrdinaryType47LiveError::SourceInactive);
     }
-    if entity.entity_type != ORDINARY_TYPE47_ENTITY_TYPE {
-        return Err(OrdinaryType47LiveError::WrongSourceEntityType);
+    // Type71 is only ever a native construction; the captured cohorts are Type47.
+    match GunnerRow::from_entity_type(entity.entity_type) {
+        Some(GunnerRow::Type47) => {}
+        Some(_) if pursuing_cohort == Type47AimAllocationPolicy::NativeConstruction => {}
+        _ => return Err(OrdinaryType47LiveError::WrongSourceEntityType),
     }
     let native = entity.native_type47_construction.as_ref();
     // A present native receipt cannot fall back to a captured spawn match.
@@ -1445,22 +1470,26 @@ fn entity_snapshot(entity: &Entity, allocation_identity: u64) -> GenericEmitterE
 }
 
 fn is_exact_runtime_shape(runtime: &OrdinaryType47AimAndFireRuntime) -> bool {
-    runtime.projectile_descriptor == FRESH_LEVEL1_ORDINARY_TYPE47_PROJECTILE_DESCRIPTOR
-        && runtime.component_topology == FRESH_LEVEL1_ORDINARY_TYPE47_COMPONENT_TOPOLOGY
-        && runtime.emitter_runtime
-            == (GenericEmitterRuntime {
-                cadence_raw: runtime.emitter_runtime.cadence_raw,
-                ..FRESH_LEVEL1_ORDINARY_TYPE47_EMITTER_RUNTIME
-            })
+    runtime.row().is_some_and(|row| {
+        runtime.component_topology == FRESH_LEVEL1_ORDINARY_TYPE47_COMPONENT_TOPOLOGY
+            && runtime.emitter_runtime
+                == (GenericEmitterRuntime {
+                    cadence_raw: runtime.emitter_runtime.cadence_raw,
+                    ..row.emitter_runtime()
+                })
+    })
 }
 
-fn is_exact_transient_request(source_entity_id: u32, request: GenericEmitterAppendRequest) -> bool {
+fn is_exact_transient_request(
+    row: GunnerRow,
+    source_entity_id: u32,
+    request: GenericEmitterAppendRequest,
+) -> bool {
     request.source_handle == source_entity_id
         && request.owner_handle == source_entity_id
-        && request.projectile_method == FIRST_WORLD_SHOOTER_PROJECTILE_METHOD
+        && request.projectile_method == row.projectile_method()
         && request.emitter_selector == 0
-        && request.speed_field
-            == GenericEmitterSpeedField::Explicit(FIRST_WORLD_SHOOTER_PROJECTILE_SPEED_RAW as i16)
+        && request.speed_field == GenericEmitterSpeedField::Explicit(row.table_speed_raw())
         && !request.auxiliary
 }
 

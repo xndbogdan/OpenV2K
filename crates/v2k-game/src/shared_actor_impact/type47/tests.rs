@@ -465,3 +465,88 @@ fn native_type47_playing_radial_uses_current_class12_custody_and_rejects_parked_
         }
     }
 }
+
+/// Type71's alternate class 63: a lethal Playing hit runs BC90, BAF0's blast
+/// then a Type61 built from the gunner's authored `+88` payload, and stages
+/// the gunner's removal. The world-less shared entry holds that death.
+#[v2k_test_support::retail_test]
+fn type71_lethal_playing_hit_takes_class63_and_drops_its_power_up() {
+    for playing in [false, true] {
+        let (mut session, mut manager, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(25);
+        let id = manager
+            .iter_all()
+            .find(|entity| entity.entity_type == 71)
+            .unwrap()
+            .id;
+        let mut scheduler = SpecializedActorTaskScheduler::new();
+        assert!(scheduler.adopt_intro2_type47_guards(&manager) > 0);
+        let payload = {
+            let entity = manager.entity_mut(id).unwrap();
+            entity.collision.pre_health_damage_buffer_raw = RetailRuntimeValue::Known(0);
+            entity.collision.health_raw = RetailRuntimeValue::Known(100);
+            entity
+                .auto_pilot_payload_packed
+                .expect("Type71 carries a +88 payload")
+        };
+        let before: std::collections::BTreeSet<u32> =
+            manager.iter_all().map(|entity| entity.id).collect();
+        let hit = impact(id, false, 10_000);
+        if !playing {
+            let outcome = apply_shared_actor_particle_hit(
+                SharedActorImpactFrame {
+                    resources: &session.cache,
+                    entities: &mut manager,
+                    world_fx: &mut fx,
+                    scheduler: &mut scheduler,
+                    notifications: &mut GameplayNotifications::new(),
+                    retail_tick: 600,
+                },
+                hit,
+            );
+            assert!(
+                matches!(
+                    outcome,
+                    Some(SharedActorImpactOutcome::Insect(
+                        NativeType47ImpactOutcome::Blocked {
+                            reason: NativeType47ImpactBlock::Damage(_),
+                            ..
+                        }
+                    ))
+                ),
+                "{outcome:?}"
+            );
+            continue;
+        }
+        let outcome = crate::shared_actor_impact::apply_playing_actor_particle_hit(
+            crate::shared_actor_impact::PlayingActorImpactFrame {
+                extra_lives: RetailRuntimeValue::Unresolved,
+                resources: &mut session.cache,
+                entities: &mut manager,
+                world_fx: &mut fx,
+                scheduler: &mut scheduler,
+                notifications: &mut GameplayNotifications::new(),
+                static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
+                player_hull: &mut crate::player_hull::PlayerHull::default(),
+                retail_tick: 600,
+            },
+            hit,
+        );
+        let Some(SharedActorImpactOutcome::Insect(NativeType47ImpactOutcome::Applied(result))) =
+            outcome
+        else {
+            panic!("{outcome:?}")
+        };
+        assert!(result.filtered_damage_raw > 0);
+        assert!(result.death_publication.is_none());
+        assert!(crate::class49_death::finished_terminal_hit_authenticates(
+            &manager, id
+        ));
+        assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
+        let drop = manager
+            .iter_all()
+            .find(|entity| !before.contains(&entity.id) && entity.entity_type == 61)
+            .expect("class63 drops a Type61");
+        assert_eq!(drop.power_up_payload_packed, Some(payload));
+    }
+}

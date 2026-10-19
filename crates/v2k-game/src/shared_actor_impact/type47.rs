@@ -41,19 +41,91 @@ pub enum NativeType47ImpactOutcome {
     },
 }
 
+/// Playing lends the class63 gunner (Type71) BAF0's mutable static world and
+/// its player. The shared hit frame lends neither, so it holds that lethal hit.
+pub(crate) struct Type47AutoPilotWorld<'a> {
+    pub resources: &'a mut crate::resource_cache::ResourceCache,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub player: crate::native_actor_capture::pair::PlayingPlayerContact<'a>,
+}
+
+enum HitResources<'a> {
+    Shared(&'a crate::resource_cache::ResourceCache),
+    AutoPilot(Type47AutoPilotWorld<'a>),
+}
+
+impl HitResources<'_> {
+    fn cache(&self) -> &crate::resource_cache::ResourceCache {
+        match self {
+            Self::Shared(resources) => resources,
+            Self::AutoPilot(world) => world.resources,
+        }
+    }
+}
+
 pub(crate) fn apply_native_type47_particle_hit(
     frame: SharedActorImpactFrame<'_>,
     impact: ParticleEntityImpact,
 ) -> NativeType47ImpactOutcome {
-    if !frame
-        .entities
-        .iter_all()
-        .any(|entity| entity.id == impact.target_entity_id && entity.entity_type == 47)
-    {
+    apply(
+        frame.entities,
+        HitResources::Shared(frame.resources),
+        frame.world_fx,
+        frame.scheduler,
+        frame.notifications,
+        frame.retail_tick,
+        impact,
+    )
+}
+
+pub(crate) fn apply_playing_native_type47_particle_hit(
+    frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> NativeType47ImpactOutcome {
+    apply(
+        frame.entities,
+        HitResources::AutoPilot(Type47AutoPilotWorld {
+            resources: frame.resources,
+            static_damage: frame.static_damage,
+            player: crate::native_actor_capture::pair::PlayingPlayerContact {
+                hull: frame.player_hull,
+                extra_lives: frame.extra_lives,
+            },
+        }),
+        frame.world_fx,
+        frame.scheduler,
+        frame.notifications,
+        frame.retail_tick,
+        impact,
+    )
+}
+
+fn apply(
+    manager: &mut crate::entity::EntityManager,
+    resources: HitResources<'_>,
+    world_fx: &mut crate::world_fx::WorldFx,
+    scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    notifications: &mut crate::gameplay_notifications::GameplayNotifications,
+    retail_tick: u32,
+    impact: ParticleEntityImpact,
+) -> NativeType47ImpactOutcome {
+    if !manager.iter_all().any(|entity| {
+        entity.id == impact.target_entity_id
+            && crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type).is_some()
+    }) {
         return NativeType47ImpactOutcome::NotApplicable;
     }
     let mut committed = false;
-    match run(frame, impact, &mut committed) {
+    match run(
+        manager,
+        resources,
+        world_fx,
+        scheduler,
+        notifications,
+        retail_tick,
+        impact,
+        &mut committed,
+    ) {
         Ok(result) => NativeType47ImpactOutcome::Applied(result),
         Err(reason) => NativeType47ImpactOutcome::Blocked {
             reason,
@@ -69,27 +141,28 @@ fn state_bits(entity: &Entity, mask: u32) -> Result<u32, NativeType47ImpactBlock
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run(
-    frame: SharedActorImpactFrame<'_>,
+    manager: &mut crate::entity::EntityManager,
+    mut resources: HitResources<'_>,
+    world_fx: &mut crate::world_fx::WorldFx,
+    scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    notifications: &mut crate::gameplay_notifications::GameplayNotifications,
+    retail_tick: u32,
     impact: ParticleEntityImpact,
     committed: &mut bool,
 ) -> Result<LiveActorDamageOutcome<Intro2CommonDyingOwner>, NativeType47ImpactBlock> {
-    let SharedActorImpactFrame {
-        entities: manager,
-        resources,
-        world_fx,
-        scheduler,
-        notifications,
-        retail_tick,
-    } = frame;
     use NativeType47ImpactBlock as Block;
     let id = impact.target_entity_id;
+    let row = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(|entity| crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type))
+        .ok_or(Block::Runtime("gunner row"))?;
     let delivery = impact
         .damage_delivery_record()
         .ok_or(Block::Runtime("particle provenance"))?;
-    let metadata = manager
-        .type_runtime_metadata(47)
-        .cloned()
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, id)
         .ok_or(Block::Runtime("metadata"))?;
     if !type47_manager_allocation_authenticates(manager, id) {
         return Err(Block::Runtime("native allocation"));
@@ -186,7 +259,34 @@ fn run(
                 retail_tick,
             }),
         },
-        |manager, world_fx, _feedback| {
+        |manager, world_fx, feedback| {
+            // Type71's alternate class 63 (BC90): BAF0, then its Type61.
+            if row.alternate_class() == 63 {
+                let (HitResources::AutoPilot(world), Some(feedback)) = (&mut resources, feedback)
+                else {
+                    return Err(Intro2CommonDyingBlock::Runtime("class63 radial owner"));
+                };
+                return crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: &mut *world.resources,
+                        world_fx,
+                        static_damage: &mut *world.static_damage,
+                        notifications: feedback.notifications,
+                        retail_tick: feedback.retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            &mut *scheduler,
+                            Some(world.player.reborrow()),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| Intro2CommonDyingBlock::Terminal(Box::new(error)));
+            }
             publish_intro2_common_standard_death(manager, id, world_fx).map(|owner| {
                 LiveActorDeathResult {
                     returned_nonzero: owner.is_some(),
@@ -225,6 +325,7 @@ fn run(
             let slot = active_model_slot_from_state_flags(flags);
             let model = entity.model_slots[slot].ok_or(Block::Runtime("accepted-hit model"))?;
             let extent = resources
+                .cache()
                 .global_model(model)
                 .ok_or(Block::Runtime("accepted-hit model extent"))?
                 .radius;

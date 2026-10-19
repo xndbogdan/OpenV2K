@@ -136,7 +136,7 @@ impl SpecializedActorTaskScheduler {
                         || crate::class49_death::source_profile(entity).is_some()
                 }
                 17 => entity.intro2_type17_runtime.is_some(),
-                47 => entity.native_type47_construction.is_some(),
+                47 | 71 => entity.native_type47_construction.is_some(),
                 94 => entity.intro2_type94_runtime.is_some(),
                 53 => entity.intro2_type53_runtime.is_some(),
                 58 => entity.intro2_type58_runtime.is_some(),

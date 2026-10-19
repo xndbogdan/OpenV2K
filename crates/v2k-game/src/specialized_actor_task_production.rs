@@ -3032,7 +3032,7 @@ impl SpecializedActorTaskScheduler {
         let Some(entity) = manager.iter_all().find(|entity| entity.id == entity_id) else {
             return false;
         };
-        if entity.entity_type != 47 {
+        if crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type).is_none() {
             return false;
         }
         if crate::actor_task_owner::ActorTaskSlot::IN_RETAIL_TICK_ORDER
@@ -5173,18 +5173,22 @@ impl SpecializedActorTaskScheduler {
                     let tick = {
                         let terrain_collision =
                             TerrainCollisionContext::from_current_level_cache(resources);
-                        let model_id = manager
+                        let gunner = manager
                             .iter_all()
-                            .find(|entity| entity.id == owner.entity_id())
-                            .and_then(|entity| entity.model_index);
-                        let model = model_id.and_then(|id| resources.global_model(id));
+                            .find(|entity| entity.id == owner.entity_id());
+                        let model = gunner
+                            .and_then(|entity| entity.model_index)
+                            .and_then(|id| resources.global_model(id));
+                        let type_record = gunner.and_then(|entity| {
+                            resources.global_entity_type(entity.entity_type as usize)
+                        });
                         let waves_enabled = resources
                             .level_desc()
                             .and_then(|level| level.raw_u32(0x84))
                             .map(|value| value != 0);
                         let frame = terrain_collision
                             .zip(model)
-                            .zip(resources.global_entity_type(47))
+                            .zip(type_record)
                             .zip(waves_enabled)
                             .map(
                                 |(((terrain_collision, model), type_record), waves_enabled)| {

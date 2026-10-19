@@ -119,6 +119,8 @@ fn native_type47_birth_keeps_sub_a_then_selector_and_admits_guard_or_wander() {
             Intro2Type47CallbackFrame {
                 elapsed_micros: 20_000,
                 global_elapsed_micros: 20_000,
+                dispatch_mode:
+                    v2k_game::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
             },
             &mut |_| 1,
         );

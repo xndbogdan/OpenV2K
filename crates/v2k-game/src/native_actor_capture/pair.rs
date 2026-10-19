@@ -337,7 +337,7 @@ fn owns_native_weapon_contact(entity: &Entity) -> bool {
 /// contact-time behavior policies; the visit below reads them live and fails
 /// closed on anything unaudited.
 fn owns_native_gunner_contact(manager: &EntityManager, entity: &Entity) -> bool {
-    entity.entity_type == 47
+    crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type).is_some()
         && entity.native_type47_construction.is_some()
         && crate::shared_type47::type47_manager_allocation_authenticates(manager, entity.id)
 }

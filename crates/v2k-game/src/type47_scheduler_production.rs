@@ -458,11 +458,15 @@ fn type47_pursuing_graph_authenticates(entity: &Entity) -> bool {
 /// contract lets Intro2 reuse the statically identical Guard handoff without
 /// treating its spawns 6/7/8 as Level-1 spawns 11/12/13.
 pub(crate) fn type47_guard_pursuing_graph_contract_authenticates(entity: &Entity) -> bool {
-    let model_admitted = match entity.native_type47_construction.as_ref() {
+    // A native receipt proves its own row; the captured cohorts are Type47.
+    let admitted = match entity.native_type47_construction.as_ref() {
         Some(receipt) => receipt.entity_authenticates(entity),
-        None => entity.model_index == Some(FRESH_LEVEL1_ORDINARY_TYPE47_MODEL_ID),
+        None => {
+            entity.entity_type == ORDINARY_TYPE47_ENTITY_TYPE
+                && entity.model_index == Some(FRESH_LEVEL1_ORDINARY_TYPE47_MODEL_ID)
+        }
     };
-    if entity.entity_type != ORDINARY_TYPE47_ENTITY_TYPE || !model_admitted || !entity.active {
+    if !admitted || !entity.active {
         return false;
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -908,9 +912,7 @@ fn apply_fresh_level1_type47_pursuing_c690(
     slot: Type47C690Slot,
     next_shared_random: &mut impl FnMut(&mut WorldFx) -> u32,
 ) -> Result<Type47SchedulerC690Transition, OrdinaryType47SchedulerProductionBlock> {
-    let metadata = manager
-        .type_runtime_metadata(ORDINARY_TYPE47_ENTITY_TYPE)
-        .cloned()
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id)
         .ok_or(OrdinaryType47SchedulerProductionBlock::C690MetadataUnavailable)?;
     let entity = manager
         .iter_all()
@@ -1007,9 +1009,7 @@ fn tick_type47_wander_near(
     next_shared_random: &mut impl FnMut(&mut WorldFx) -> u32,
 ) -> OrdinaryType47SchedulerOwnerTick {
     let entity_id = owner.entity_id();
-    let metadata = manager
-        .type_runtime_metadata(ORDINARY_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id);
     let Some(entity) = manager.ordinary_type47_entity_mut(entity_id) else {
         return OrdinaryType47SchedulerOwnerTick {
             outcome: OrdinaryType47SchedulerProductionOutcome::Dropped {
@@ -1173,9 +1173,7 @@ fn tick_type47_pursuing_chase(
     Result<Type47ChaseVisit, OrdinaryType47SchedulerProductionBlock>,
     OrdinaryType47SchedulerProductionDrop,
 > {
-    let metadata = manager
-        .type_runtime_metadata(ORDINARY_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id);
     let (target_id, axis, owner_position_raw) = {
         let Some(entity) = manager.iter_all().find(|entity| entity.id == entity_id) else {
             return Err(OrdinaryType47SchedulerProductionDrop::EntityUnavailable);
@@ -1367,9 +1365,7 @@ fn tick_type47_guard_acquisition(
     next_shared_random: &mut impl FnMut(&mut WorldFx) -> u32,
 ) -> OrdinaryType47SchedulerOwnerTick {
     let entity_id = owner.entity_id();
-    let metadata = manager
-        .type_runtime_metadata(ORDINARY_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id);
     let Some(entity) = manager.ordinary_type47_entity_mut(entity_id) else {
         return OrdinaryType47SchedulerOwnerTick {
             outcome: OrdinaryType47SchedulerProductionOutcome::Dropped {
@@ -1459,9 +1455,7 @@ fn tick_type47_guard_acquisition_after_primary(
                 .map(type47_guard_entity_ref)
         })
         .collect::<Vec<_>>();
-    let metadata = manager
-        .type_runtime_metadata(ORDINARY_TYPE47_ENTITY_TYPE)
-        .cloned();
+    let metadata = crate::shared_type47::gunner_type_metadata(manager, entity_id);
     let Some(entity) = manager.ordinary_type47_entity_mut(entity_id) else {
         return Err(Type47GuardAcquisitionPassFailure::Dropped(
             OrdinaryType47SchedulerProductionDrop::EntityUnavailable,
@@ -1772,7 +1766,7 @@ fn apply_type47_chase_mover(
     evaluate_type47_chase_common_mover(
         Type47ChaseMoverRequest {
             entity_id: entity.id,
-            entity_type: ORDINARY_TYPE47_ENTITY_TYPE,
+            entity_type: entity.entity_type,
             metadata,
             position_raw,
             velocity_raw,

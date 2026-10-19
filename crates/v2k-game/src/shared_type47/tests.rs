@@ -317,6 +317,7 @@ fn native_guard_stops_after_mover_block_before_acquisition_rng() {
         Intro2Type47CallbackFrame {
             elapsed_micros: 20_000,
             global_elapsed_micros: 20_000,
+            dispatch_mode: crate::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
         },
         &mut |_| {
             draws += 1;
@@ -360,6 +361,7 @@ fn guard_and_wander_primary_expire_strictly_after_five_seconds_and_visit_new_lat
     let frame = Intro2Type47CallbackFrame {
         elapsed_micros: 20_000,
         global_elapsed_micros: 20_000,
+        dispatch_mode: crate::common_mover::component_dispatch::CommonMoverDispatchMode::Normal,
     };
     // Run actual callbacks to the exact boundary. A1 at every retarget and
     // acquisition gate avoids extra retarget words and acquired entities.
@@ -480,4 +482,226 @@ fn guard_and_wander_primary_expire_strictly_after_five_seconds_and_visit_new_lat
             "C690 must retain progressed Sub-D cache"
         );
     }
+}
+
+/// World 25's authored Type71s take the same native construction with their
+/// own row: model 273, health 10000, axis 3072/3 and the method-24 emitter.
+#[v2k_test_support::retail_test]
+fn type71_rows_publish_through_the_native_gunner_constructor() {
+    let (_session, manager, _fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(25);
+    let type71s: Vec<_> = manager
+        .iter_all()
+        .filter(|entity| entity.entity_type == 71)
+        .collect();
+    assert!(!type71s.is_empty());
+    for gunner in &type71s {
+        let receipt = gunner
+            .native_type47_construction
+            .expect("native gunner receipt");
+        assert_eq!(receipt.row(), GunnerRow::Type71);
+        assert_eq!(gunner.model_index, Some(TYPE71_MODEL_ID));
+        assert_eq!(
+            gunner.collision.health_raw,
+            RetailRuntimeValue::Known(10_000)
+        );
+        assert_eq!(
+            gunner.actor_common_axis_descriptor,
+            RetailRuntimeValue::Known(TYPE71_COMMON_AXIS)
+        );
+        assert_eq!(
+            gunner
+                .ordinary_type47_aim_and_fire_runtime
+                .as_ref()
+                .and_then(|runtime| runtime.row()),
+            Some(GunnerRow::Type71)
+        );
+    }
+    let adopted = crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new()
+        .adopt_intro2_type47_guards(&manager);
+    assert_eq!(adopted, type71s.len());
+}
+
+/// World 25's Type71s through the shared world owner. Detailed visits (DCA0)
+/// and coarse ones, which Type71's `+C0` 0x39 sends through E870's tasks under
+/// the restricted dispatch, never block, and the coarse gunners still move.
+#[v2k_test_support::retail_test]
+fn type71_detailed_and_coarse_visits_run_their_tasks() {
+    use crate::intro2_type47_live::world::Intro2Type47WorldOutcome;
+    use crate::specialized_actor_task_production::{
+        SpecializedActorTaskProductionFrame, SpecializedActorTaskProductionOutcome,
+        SpecializedActorTaskScheduler, SpecializedActorTaskWorld,
+    };
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(25);
+    let ids: Vec<u32> = manager
+        .iter_all()
+        .filter(|entity| entity.entity_type == 71)
+        .map(|entity| entity.id)
+        .collect();
+    // The camera at every even gunner and far from every odd one.
+    for (index, &id) in ids.iter().enumerate() {
+        let entity = manager.entity_mut(id).unwrap();
+        let mut camera = entity.position_raw().map(i32::from);
+        if index % 2 == 1 {
+            camera[0] += 0x4000;
+        }
+        crate::entity_view_detail::RetailViewDetailContext::from_raw(camera, 0, (52, 30)).publish(
+            entity.position_raw(),
+            &mut entity.collision.state_flags_at_0x08,
+        );
+    }
+    let coarse: Vec<u32> = ids.iter().copied().skip(1).step_by(2).collect();
+    let start: Vec<[i16; 3]> = coarse
+        .iter()
+        .map(|&id| {
+            manager
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .unwrap()
+                .position_raw()
+        })
+        .collect();
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    assert_eq!(scheduler.adopt_intro2_type47_guards(&manager), ids.len());
+    let mut notifications = crate::gameplay_notifications::GameplayNotifications::new();
+    let mut static_damage = crate::static_damage::StaticDamageScheduler::new();
+    let mut coarse_tasks = 0;
+    for t in 1..=600u32 {
+        let pass = scheduler.tick(
+            &mut manager,
+            SpecializedActorTaskProductionFrame {
+                world: SpecializedActorTaskWorld::Cinematic,
+                hive_components: None,
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                static_damage: &mut static_damage,
+                elapsed_micros: 20_000,
+                global_elapsed_micros: t * 20_000,
+                retail_tick: 4793 + t,
+                notification_phase:
+                    crate::gameplay_notifications::GameplayNotificationPhase::Playing,
+                main_base_abort_active: false,
+            },
+            &mut notifications,
+        );
+        assert!(pass.block.is_none(), "tick{t}: {:?}", pass.block);
+        for outcome in &pass.outcomes {
+            let SpecializedActorTaskProductionOutcome::Intro2Type47Scheduler(outcome) = outcome
+            else {
+                continue;
+            };
+            assert!(
+                !matches!(
+                    outcome,
+                    Intro2Type47WorldOutcome::Blocked { .. }
+                        | Intro2Type47WorldOutcome::Dropped { .. }
+                ),
+                "tick{t}: {outcome:?}"
+            );
+            if matches!(
+                outcome,
+                Intro2Type47WorldOutcome::Task {
+                    completed: true,
+                    ..
+                }
+            ) && coarse.contains(&outcome.entity_id())
+            {
+                coarse_tasks += 1;
+            }
+        }
+    }
+    assert!(coarse_tasks > 0, "E870 runs the coarse Type71 tasks");
+    assert!(coarse.iter().zip(&start).any(|(&id, &start)| manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .unwrap()
+        .position_raw()
+        != start));
+}
+
+/// A Type71 beside the player acquires it through Guard Location and fires
+/// method 24 (class 68, sound 105) from its Aim And Fire task.
+#[v2k_test_support::retail_test]
+fn type71_fires_method24_class68_shots() {
+    use crate::specialized_actor_task_production::{
+        SpecializedActorTaskProductionFrame, SpecializedActorTaskScheduler,
+        SpecializedActorTaskWorld,
+    };
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(25);
+    let id = manager
+        .iter_all()
+        .find(|entity| entity.entity_type == 71)
+        .unwrap()
+        .id;
+    let gunner = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .unwrap()
+        .position_raw();
+    let player_id = manager.player().unwrap().id;
+    manager.entity_mut(player_id).unwrap().set_position_raw([
+        gunner[0].wrapping_add(700),
+        gunner[1],
+        gunner[2],
+    ]);
+    let entity = manager.entity_mut(id).unwrap();
+    crate::entity_view_detail::RetailViewDetailContext::from_raw(
+        gunner.map(i32::from),
+        0,
+        (52, 30),
+    )
+    .publish(gunner, &mut entity.collision.state_flags_at_0x08);
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    assert!(scheduler.adopt_intro2_type47_guards(&manager) > 0);
+    let mut notifications = crate::gameplay_notifications::GameplayNotifications::new();
+    let mut static_damage = crate::static_damage::StaticDamageScheduler::new();
+    let (mut shots, mut shot_sounds) = (0, 0);
+    for t in 1..=1500u32 {
+        scheduler.tick(
+            &mut manager,
+            SpecializedActorTaskProductionFrame {
+                world: SpecializedActorTaskWorld::Cinematic,
+                hive_components: None,
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                static_damage: &mut static_damage,
+                elapsed_micros: 20_000,
+                global_elapsed_micros: t * 20_000,
+                retail_tick: 4793 + t,
+                notification_phase:
+                    crate::gameplay_notifications::GameplayNotificationPhase::Playing,
+                main_base_abort_active: false,
+            },
+            &mut notifications,
+        );
+        for (source, drained) in crate::ordinary_type47_live::drain_live_ordinary_type47_shot_queues(
+            &mut manager,
+            &mut fx,
+            crate::world_fx::ParticleEnvironment::Dry,
+            4793 + t,
+        ) {
+            if source == id {
+                shots += drained
+                    .expect("a queued Type71 shot drains")
+                    .consumed_requests;
+            }
+        }
+        fx.process_pending();
+        shot_sounds += fx
+            .take_positional_sounds()
+            .iter()
+            .filter(|sound| sound.sound_id == 105)
+            .count();
+    }
+    assert!(shots > 0, "the Type71 fires at the player");
+    assert!(shot_sounds > 0);
+    let owned: Vec<_> = fx
+        .test_particles_in_virgin_birth_order()
+        .into_iter()
+        .filter(|particle| particle.owner_id == Some(id))
+        .collect();
+    assert!(!owned.is_empty());
+    assert!(owned.iter().all(|particle| particle.source_class == 68));
 }

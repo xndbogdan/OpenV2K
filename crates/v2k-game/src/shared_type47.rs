@@ -1,4 +1,4 @@
-//! Native Type47 `104B0 -> 09A80 -> D4A0 -> AC60` construction.
+//! Native Type47 and Type71 `104B0 -> 09A80 -> D4A0 -> AC60` construction.
 //!
 //! The loaded manager owns allocation identity; the process owns Sub-D's seed.
 //! Neither value comes from a captured spawn table. Guard and Wander retain
@@ -20,7 +20,7 @@ use crate::{
         ACTIVE_MODEL_SLOT_HIGH_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT, SURFACE_STATE_MASK,
     },
     intro2_type47_live::{
-        authenticate_type47_metadata, Intro2Type47Admission, Intro2Type47PublicationError,
+        authenticate_gunner_metadata, Intro2Type47Admission, Intro2Type47PublicationError,
         INTRO2_TYPE47_MODEL_ID,
     },
     main_base_abort::MainBaseAbortActorLease,
@@ -29,7 +29,9 @@ use crate::{
         TYPE47_COMMON_DYING_SUB_A_DESCRIPTOR,
     },
     ordinary_type47_live::{
-        OrdinaryType47AimAndFireRuntime, FRESH_LEVEL1_ORDINARY_TYPE47_SUB_H_RECORD_COUNT,
+        OrdinaryType47AimAndFireRuntime, FRESH_LEVEL1_ORDINARY_TYPE47_EMITTER_RUNTIME,
+        FRESH_LEVEL1_ORDINARY_TYPE47_PROJECTILE_DESCRIPTOR,
+        FRESH_LEVEL1_ORDINARY_TYPE47_SUB_H_RECORD_COUNT,
     },
     sub_h_external_frame::SubHRuntimeState,
     type47_initial_behavior_live::{
@@ -38,11 +40,141 @@ use crate::{
         TYPE47_WANDER_BEHAVIOR_CLASS_ID,
     },
 };
+use v2k_formats::collision::{CommonAxisDescriptor, ProjectileEmitterDescriptor};
 use v2k_formats::levels::EntitySpawn;
+
+/// The ordinary Section-12 rows this owner constructs. Type71 shares Type47's
+/// components, choices and task graphs. It differs in data, its method-24
+/// emitter, a `+C0` word without `0x2000` and its alternate class 63.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GunnerRow {
+    Type47,
+    Type71,
+}
+
+pub const TYPE71_MODEL_ID: usize = 273;
+
+pub const TYPE71_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 3072,
+    raw_word_at_0x04: 3,
+};
+
+pub const TYPE71_PROJECTILE_DESCRIPTOR: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    projectile_method: 24,
+    random_interval_us: 500_000,
+    aim_threshold_raw: 12_000,
+    target_axis_tolerance_raw: 7680,
+    sound_id: 105,
+    ..FRESH_LEVEL1_ORDINARY_TYPE47_PROJECTILE_DESCRIPTOR
+};
+
+impl GunnerRow {
+    pub const fn from_entity_type(entity_type: u32) -> Option<Self> {
+        match entity_type {
+            47 => Some(Self::Type47),
+            71 => Some(Self::Type71),
+            _ => None,
+        }
+    }
+
+    pub fn from_projectile_descriptor(descriptor: ProjectileEmitterDescriptor) -> Option<Self> {
+        [Self::Type47, Self::Type71]
+            .into_iter()
+            .find(|row| row.projectile_descriptor() == descriptor)
+    }
+
+    pub const fn entity_type(self) -> u32 {
+        match self {
+            Self::Type47 => 47,
+            Self::Type71 => 71,
+        }
+    }
+
+    pub const fn model(self) -> usize {
+        match self {
+            Self::Type47 => INTRO2_TYPE47_MODEL_ID,
+            Self::Type71 => TYPE71_MODEL_ID,
+        }
+    }
+
+    pub const fn initial_health_raw(self) -> i32 {
+        match self {
+            Self::Type47 => 3000,
+            Self::Type71 => 10_000,
+        }
+    }
+
+    pub const fn axis(self) -> CommonAxisDescriptor {
+        match self {
+            Self::Type47 => TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR,
+            Self::Type71 => TYPE71_COMMON_AXIS,
+        }
+    }
+
+    /// Section-12 `+C0`. Without bit `0x2000`, E870 runs Type71's tasks.
+    pub const fn initializer_flags(self) -> u32 {
+        match self {
+            Self::Type47 => 0x2039,
+            Self::Type71 => 0x39,
+        }
+    }
+
+    /// Class 12 (common dying) or class 63 (`Auto Pilot`).
+    pub const fn alternate_class(self) -> u32 {
+        match self {
+            Self::Type47 => 12,
+            Self::Type71 => 63,
+        }
+    }
+
+    pub const fn projectile_descriptor(self) -> ProjectileEmitterDescriptor {
+        match self {
+            Self::Type47 => FRESH_LEVEL1_ORDINARY_TYPE47_PROJECTILE_DESCRIPTOR,
+            Self::Type71 => TYPE71_PROJECTILE_DESCRIPTOR,
+        }
+    }
+
+    pub const fn projectile_method(self) -> u32 {
+        self.projectile_descriptor().projectile_method
+    }
+
+    /// 20370's zeroed Sub-E words, with the row's method and sound.
+    pub const fn emitter_runtime(self) -> crate::generic_projectile_emitter::GenericEmitterRuntime {
+        crate::generic_projectile_emitter::GenericEmitterRuntime {
+            projectile_method: self.projectile_method(),
+            sound_id: self.projectile_descriptor().sound_id as u32,
+            ..FRESH_LEVEL1_ORDINARY_TYPE47_EMITTER_RUNTIME
+        }
+    }
+
+    /// `FUN_0044EA50`'s table speed for the row's method.
+    pub fn table_speed_raw(self) -> i16 {
+        crate::projectile_emitter::projectile_class_row(self.projectile_method())
+            .expect("gunner methods have retail table rows")
+            .speed_raw as i16
+    }
+
+    pub fn particle_class(self) -> u8 {
+        crate::projectile_emitter::projectile_class_row(self.projectile_method())
+            .expect("gunner methods have retail table rows")
+            .particle_class
+    }
+}
+
+/// A live gunner's own row metadata, Type47's or Type71's.
+pub(crate) fn gunner_type_metadata(
+    manager: &EntityManager,
+    entity_id: u32,
+) -> Option<EntityTypeRuntimeMetadata> {
+    let entity = manager.iter_all().find(|entity| entity.id == entity_id)?;
+    GunnerRow::from_entity_type(entity.entity_type)?;
+    manager.type_runtime_metadata(entity.entity_type).cloned()
+}
 
 /// Immutable birth custody, independent of mutable task, pose and death state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeType47Construction {
+    row: GunnerRow,
     allocation: MainBaseAbortActorLease,
     spawn_index: usize,
     model_slots: [Option<usize>; 4],
@@ -53,11 +185,11 @@ pub struct NativeType47Construction {
 impl NativeType47Construction {
     pub(crate) fn entity_authenticates(self, entity: &Entity) -> bool {
         entity.active
-            && entity.entity_type == 47
+            && entity.entity_type == self.row.entity_type()
             && entity.id == self.allocation.entity_id
             && entity.authored_spawn_index == Some(self.spawn_index)
             && entity.model_slots == self.model_slots
-            && self.model_slots == [Some(INTRO2_TYPE47_MODEL_ID); 4]
+            && self.model_slots == [Some(self.row.model()); 4]
             && entity.capability_flags == 8
             && entity.type47_immutable_anchor_raw_at_0x90
                 == RetailRuntimeValue::Known(self.anchor_raw)
@@ -65,6 +197,10 @@ impl NativeType47Construction {
 
     pub(crate) const fn sub_d_seed(self) -> u8 {
         self.sub_d_seed
+    }
+
+    pub(crate) const fn row(self) -> GunnerRow {
+        self.row
     }
 }
 
@@ -108,11 +244,13 @@ pub(crate) fn publish_authored_type47(
         constructor_surface_bits,
         sub_d,
     } = request;
-    authenticate_type47_metadata(metadata)?;
-    if metadata.model_slots != [INTRO2_TYPE47_MODEL_ID as u16; 4]
+    let row = GunnerRow::from_entity_type(u32::from(spawn.entity_type))
+        .ok_or(Intro2Type47PublicationError::EntityIdentityMismatch)?;
+    authenticate_gunner_metadata(row, metadata)?;
+    if metadata.model_slots != [row.model() as u16; 4]
         || metadata.mass_raw != 100
         || metadata.capability_flags != 8
-        || metadata.initial_health_raw != Some(3000)
+        || metadata.initial_health_raw != Some(row.initial_health_raw())
     {
         return Err(Intro2Type47PublicationError::MetadataMismatch);
     }
@@ -125,13 +263,12 @@ pub(crate) fn publish_authored_type47(
         (model != 0).then_some(model as usize)
     });
     if !entity.active
-        || entity.entity_type != 47
+        || entity.entity_type != row.entity_type()
         || entity.id != allocation.entity_id
-        || spawn.entity_type != 47
         || entity.authored_spawn_index != Some(spawn.index)
         || entity.capability_flags != metadata.capability_flags
         || entity.model_slots != slots
-        || slots != [Some(INTRO2_TYPE47_MODEL_ID); 4]
+        || slots != [Some(row.model()); 4]
         || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
         || spawn.has_animation
         || spawn.animation.is_some()
@@ -152,13 +289,12 @@ pub(crate) fn publish_authored_type47(
     {
         return Err(Intro2Type47PublicationError::AlreadyPublished);
     }
-    if entity.actor_common_axis_descriptor
-        != RetailRuntimeValue::Known(TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR)
+    if entity.actor_common_axis_descriptor != RetailRuntimeValue::Known(row.axis())
         || entity.sub_a_propulsion_runtime
             != RetailRuntimeValue::Known(Some(SubAPropulsionRuntime::pending_constructor_rng(
                 TYPE47_COMMON_DYING_SUB_A_DESCRIPTOR,
             )))
-        || entity.collision.health_raw != RetailRuntimeValue::Known(3000)
+        || entity.collision.health_raw != RetailRuntimeValue::Known(row.initial_health_raw())
         || entity.collision.pre_health_damage_buffer_raw
             != RetailRuntimeValue::Known(spawn.initial_damage_buffer_raw)
         || metadata.sub_d_steering_descriptor != RetailRuntimeValue::Known(Some(sub_d.descriptor))
@@ -220,7 +356,7 @@ pub(crate) fn publish_authored_type47(
     );
     state.overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     entity.collision.state_flags_at_0x08 = state;
-    entity.model_index = Some(INTRO2_TYPE47_MODEL_ID);
+    entity.model_index = Some(row.model());
     entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
     entity
         .collision
@@ -242,6 +378,7 @@ pub(crate) fn publish_authored_type47(
     entity.set_position_raw(anchor_raw);
     entity.type47_immutable_anchor_raw_at_0x90 = RetailRuntimeValue::Known(anchor_raw);
     entity.native_type47_construction = Some(NativeType47Construction {
+        row,
         allocation,
         spawn_index: spawn.index,
         model_slots: slots,

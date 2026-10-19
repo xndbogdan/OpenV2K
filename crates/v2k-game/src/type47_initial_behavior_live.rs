@@ -28,8 +28,7 @@ use crate::{
         GuardLocationSetupRequest, GuardLocationTaskPreparation, GuardLocationTaskRole,
     },
     ordinary_type47_death_live::{
-        TYPE47_COMMON_DYING_BEHAVIOR_CHOICES, TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR,
-        TYPE47_COMMON_DYING_SUB_A_DESCRIPTOR,
+        TYPE47_COMMON_DYING_BEHAVIOR_CHOICES, TYPE47_COMMON_DYING_SUB_A_DESCRIPTOR,
     },
     ordinary_type47_live::{
         FRESH_LEVEL1_ORDINARY_TYPE47_COMPONENT_TOPOLOGY, FRESH_LEVEL1_ORDINARY_TYPE47_MODEL_ID,
@@ -576,11 +575,20 @@ fn validate_common_publication_surface_identity(
             },
         );
     }
-    if entity.entity_type != 47 {
-        return Err(FreshType47InitialBehaviorError::UnexpectedEntityType {
-            actual: entity.entity_type,
-        });
-    }
+    // Type71 is only ever a native construction; the captured cohorts are Type47.
+    let row = match crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type) {
+        Some(row)
+            if row == crate::shared_type47::GunnerRow::Type47
+                || cohort == Type47ReselectionCohort::NativeConstruction =>
+        {
+            row
+        }
+        _ => {
+            return Err(FreshType47InitialBehaviorError::UnexpectedEntityType {
+                actual: entity.entity_type,
+            })
+        }
+    };
     let expected_model = Some(FRESH_LEVEL1_ORDINARY_TYPE47_MODEL_ID);
     if cohort != Type47ReselectionCohort::NativeConstruction
         && entity.model_slots != [expected_model; 4]
@@ -597,8 +605,7 @@ fn validate_common_publication_surface_identity(
     }
 
     match entity.actor_common_axis_descriptor {
-        RetailRuntimeValue::Known(actual)
-            if actual == TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR => {}
+        RetailRuntimeValue::Known(actual) if actual == row.axis() => {}
         RetailRuntimeValue::Known(_) => {
             return Err(FreshType47InitialBehaviorError::UnexpectedActorCommonAxisDescriptor)
         }
@@ -620,7 +627,7 @@ fn validate_common_publication_surface_identity(
         .initializer
         .as_ref()
         .ok_or(FreshType47InitialBehaviorError::MissingInitializer)?;
-    if initializer.common_axis_descriptor != TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR {
+    if initializer.common_axis_descriptor != row.axis() {
         return Err(FreshType47InitialBehaviorError::UnexpectedMetadataCommonAxisDescriptor);
     }
     if initializer.behavior_choices.as_ref() != TYPE47_COMMON_DYING_BEHAVIOR_CHOICES.as_slice() {
@@ -707,7 +714,9 @@ mod tests {
         entity::EntityKind,
         entity_behavior::{ActiveBehaviorStyle, BehaviorChoiceListSource},
         entity_collision_state::{EntityInitializerSpec, RetailStateWord},
-        ordinary_type47_death_live::TYPE47_COMMON_DYING_SUB_H_RECORDS,
+        ordinary_type47_death_live::{
+            TYPE47_COMMON_DYING_COMMON_AXIS_DESCRIPTOR, TYPE47_COMMON_DYING_SUB_H_RECORDS,
+        },
         retail_rng::retail_random_u16,
     };
     use v2k_formats::collision::SubHExternalFrameDescriptor;

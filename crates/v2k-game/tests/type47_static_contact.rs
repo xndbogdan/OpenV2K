@@ -136,6 +136,8 @@ impl OrdinaryFixture {
                 static_damage: &mut self.static_damage,
                 world_fx: &mut self.world_fx,
                 scheduler: &mut self.scheduler,
+                notifications: &mut v2k_game::gameplay_notifications::GameplayNotifications::new(),
+                player: None,
                 retail_tick: 2,
             },
         )
@@ -295,6 +297,8 @@ impl IntroFixture {
                 static_damage: &mut self.static_damage,
                 world_fx: &mut self.world_fx,
                 scheduler: &mut self.scheduler,
+                notifications: &mut v2k_game::gameplay_notifications::GameplayNotifications::new(),
+                player: None,
                 retail_tick: 4794,
             },
         )

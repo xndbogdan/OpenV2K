@@ -66,6 +66,8 @@ pub(super) fn dispatch_native_class49(
         // Ordinary Type13's 10C10 -> DB80 enters alternate class1, BAC0.
         || (entity.entity_type == 13 && entity.native_type13_allocation.is_some())
         // So does the emitter-only Type43's, and the flyers Type14's and Type39's.
+        // The Type71 gunner enters class63: BAF0, then its Type61.
+        || (entity.entity_type == 71 && entity.native_type47_construction.is_some())
         || (entity.entity_type == crate::native_type43::ENTITY_TYPE
             && entity.native_type43_runtime.is_some())
         || (crate::intro2_flyers_live::flyer_explodes(entity.entity_type)

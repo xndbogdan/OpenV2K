@@ -243,6 +243,12 @@ pub fn apply_playing_actor_particle_hit(
             ),
         ));
     }
+    // Type71's lethal class63 blast needs the same Playing world.
+    if entity.entity_type == 71 && entity.native_type47_construction.is_some() {
+        return Some(SharedActorImpactOutcome::Insect(
+            apply_playing_type47_particle_hit(frame, impact),
+        ));
+    }
     apply_shared_actor_particle_hit(
         SharedActorImpactFrame {
             resources: frame.resources,
@@ -254,6 +260,60 @@ pub fn apply_playing_actor_particle_hit(
         },
         impact,
     )
+}
+
+/// The shared gunner custody around the Playing hit, which lends class63
+/// its static world and player.
+fn apply_playing_type47_particle_hit(
+    frame: PlayingActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> type47::NativeType47ImpactOutcome {
+    use crate::intro2_radial::Intro2RadialTaskCustody;
+    use type47::{NativeType47ImpactBlock, NativeType47ImpactOutcome};
+    let PlayingActorImpactFrame {
+        resources,
+        entities,
+        world_fx,
+        scheduler,
+        notifications,
+        static_damage,
+        player_hull,
+        extra_lives,
+        retail_tick,
+    } = frame;
+    let id = impact.target_entity_id;
+    if !crate::shared_type47::type47_manager_allocation_authenticates(entities, id)
+        || !scheduler.prepare_native_actor_mutation(entities, id)
+    {
+        return NativeType47ImpactOutcome::Blocked {
+            reason: NativeType47ImpactBlock::Runtime("completed native allocation/task custody"),
+            committed_prefix: false,
+        };
+    }
+    let result = type47::apply_playing_native_type47_particle_hit(
+        PlayingActorImpactFrame {
+            resources,
+            entities,
+            world_fx,
+            scheduler: &mut *scheduler,
+            notifications,
+            static_damage,
+            player_hull,
+            extra_lives,
+            retail_tick,
+        },
+        impact,
+    );
+    if matches!(
+        result,
+        NativeType47ImpactOutcome::Blocked {
+            committed_prefix: true,
+            ..
+        }
+    ) {
+        scheduler.park_native_type47_external_prefix(id);
+    }
+    result
 }
 
 /// A retained native receipt selects the owner; its adapter validates manager
@@ -340,7 +400,7 @@ pub fn apply_shared_actor_particle_hit(
         }
         66 | 125 if entity.intro2_type66_runtime.is_some() => 66,
         17 if entity.intro2_type17_runtime.is_some() => 17,
-        47 if entity.native_type47_construction.is_some() => 47,
+        47 | 71 if entity.native_type47_construction.is_some() => 47,
         53 if entity.intro2_type53_runtime.is_some() => 53,
         58 if entity.intro2_type58_runtime.is_some() => 58,
         122 if entity.native_type122_runtime.is_some() => 122,
@@ -892,7 +952,7 @@ pub(crate) fn apply_shared_type47_particle_hit(
     use type47::{NativeType47ImpactBlock, NativeType47ImpactOutcome};
     if !frame.entities.iter_all().any(|entity| {
         entity.id == impact.target_entity_id
-            && entity.entity_type == 47
+            && crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type).is_some()
             && entity.native_type47_construction.is_some()
     }) {
         return NativeType47ImpactOutcome::NotApplicable;

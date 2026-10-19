@@ -111,7 +111,6 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (25, 82),
     (26, 109),
     (27, 27),
-    (28, 71),
     // Native class29 turrets now complete; their finished class49 terminals
     // admit the later power-up radial, as 14AE0 does.
     (29, 55),
@@ -363,7 +362,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
         );
         assert!(controller.abort_frame_submitted(), "world{world}");
     }
-    assert_eq!(exact_worlds, [13, 14, 15, 44, 48]);
+    assert_eq!(exact_worlds, [13, 14, 15, 28, 44, 48]);
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
         "first incomplete actor matrix changed"

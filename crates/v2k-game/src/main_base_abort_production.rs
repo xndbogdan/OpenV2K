@@ -688,20 +688,28 @@ fn run_actor_phase(
     // The admitted walk may visit every actor present at entry
     // plus at most one appended Type-60 tail per authenticated class49 source
     // (native turrets, cleansing vehicles and Power Ups, or captured/factory
-    // Type61). Class1 flowers share the blast prefix but append no ring.
-    // A repeated/cyclic successor must
+    // Type61). Class1 flowers share the blast prefix but append no ring. A
+    // class63 source appends its Type61 behind the cursor, whose own class49
+    // death then appends a ring: two visits. A repeated/cyclic successor must
     // fail instead of spinning in a speculative world whose eventual rollback
     // would hide the topology bug.
     let actor_visit_limit = entities.iter_all().count().saturating_add(
         entities
             .iter_all()
-            .filter(|entity| {
-                entities.is_main_base_type61_constructor_authenticated(entity.id)
-                    || (crate::class49_death::source_profile(entity).is_some_and(|profile| {
-                        profile.policy() == crate::class49_death::NativeExplosionPolicy::Class49
-                    }) && crate::class49_death::allocation_authenticates(entities, entity.id))
+            .map(|entity| {
+                if entities.is_main_base_type61_constructor_authenticated(entity.id) {
+                    return 1;
+                }
+                let policy = crate::class49_death::source_profile(entity)
+                    .filter(|_| crate::class49_death::allocation_authenticates(entities, entity.id))
+                    .map(|profile| profile.policy());
+                match policy {
+                    Some(crate::class49_death::NativeExplosionPolicy::Class49) => 1,
+                    Some(crate::class49_death::NativeExplosionPolicy::Class63) => 2,
+                    _ => 0,
+                }
             })
-            .count(),
+            .sum::<usize>(),
     );
     let mut progress = MainBaseAbortProductionProgress::default();
     loop {
