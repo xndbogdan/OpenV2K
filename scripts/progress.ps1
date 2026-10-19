@@ -301,7 +301,11 @@ $gapRows
 ## Omitted
 
 Functions marked ``not-needed`` in [``status.csv``](status.csv) leave the
-denominator:
+denominator, each with its reason: the never-installed
+[Direct3D table](../re/DIRECT3D_TABLE.md), FGDK
+[module glue](../re/PLATFORM_RUNTIME.md#modules), the platform layer
+[the port replaces](../re/PLATFORM_RUNTIME.md#what-the-port-replaces) and
+[census entries that are not routines](../re/SMALL_FUNCTIONS.md#census-artifacts):
 
 | Reason | Functions |
 |---|---:|
@@ -312,17 +316,18 @@ $omittedRows
 - [``retail-functions.csv``](retail-functions.csv) lists every function start in
   the retail executable. It comes from a Ghidra census that combines
   auto-analysis with seeding from callback tables, already-cited addresses and
-  uncovered code gaps. Functions cover 94% of ``.text``, and most of the rest is
-  padding. Everything from the first linker-placed library import stub
-  (``0x004AC5A0``) onward counts as library code.
+  uncovered code gaps, plus seven Direct3D handlers seeded by hand. Functions
+  cover 96% of ``.text``, and most of the rest is padding. Everything from the
+  first linker-placed library import stub (``0x004AC5A0``) onward counts as
+  library code.
 - A function counts as *referenced* when a Rust source file under ``crates/``
   (for code) or a note under ``docs/re/`` cites its start address. A citation
   means the port or the notes deal with that function. It doesn't prove that
   every behavior of the function is reproduced.
 - ``status.csv`` records judgments the citation count can't make:
   ``implemented``, ``approximated``, ``documented`` and ``not-needed``.
-  ``not-needed`` removes a function from the denominator, for example
-  DirectPlay networking or debug-only paths.
+  ``not-needed`` removes a function from the denominator, for example code
+  retail never runs or the platform code SDL replaces.
 - The numbers are regenerated on every commit by the ``.githooks/pre-commit``
   hook. ``scripts/check.ps1`` runs ``scripts/progress.ps1 -Check`` and fails if they are stale.
 "@

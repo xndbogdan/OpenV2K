@@ -59,8 +59,8 @@ The table drives DirectX 5's `IDirect3DDevice2`:
 | `+0x105C` | `FUN_0047CD30` | `FUN_004858B0` | textured triangle, one shade, fog |
 | `+0x1060` | `FUN_0047CFA0` | `FUN_00485F20` | textured triangle, per-vertex shade |
 | `+0x1064` | `FUN_0047D240` | `FUN_00486530` | per-vertex shade and fog |
-| `+0x1068..+0x107C` | six unreachable handlers | unsplit code | no thunk or call site |
-| `+0x1080` | `FUN_0047E150` | unsplit code | flat quad |
+| `+0x1068..+0x107C` | six unreachable handlers | `FUN_00486BA0`, `FUN_004872A0`, `FUN_00487A60`, `FUN_004881F0`, `FUN_00488A80`, `FUN_004891F0` | no thunk or call site |
+| `+0x1080` | `FUN_0047E150` | `FUN_00489A60` | flat quad |
 | `+0x1084` | `FUN_0047E220` | `FUN_0048A040` | fog quad |
 | `+0x1088` | `FUN_0047E490` | `FUN_0048A5A0` | tinted quad |
 | `+0x108C` | `FUN_0047E560` | `FUN_0048A9D0` | lit fog quad |
@@ -79,12 +79,30 @@ The table drives DirectX 5's `IDirect3DDevice2`:
 | `+0x10C0` | `FUN_004804C0` | `FUN_00491EC0` | explicit UVs, per-vertex shade |
 | `+0x10C4` | `FUN_00480790` | `FUN_00492A10` | explicit UVs, per-vertex shade, fog |
 
-The Direct3D handlers for `+0x1068..+0x1080` (`0x00486BA0`, `0x004872A0`,
-`0x00487A60`, `0x004881F0`, `0x00488A80`, `0x004891F0` and `0x00489A60`) are
-only ever stored, never called directly, so the census does not split them
-into functions.
+The Direct3D handlers for `+0x1068..+0x1080` are only ever stored, never
+called directly, so Ghidra's census missed them; they are seeded into it by
+hand.
 
 The Direct3D sprite handler draws a half-additive sprite (material flag
 `0x08`) of at most 256x256 through the textured-quad thunk `FUN_0047AA20`, so
 that it blends. It clips any other sprite to the Graph2D rectangle and blits
 it from its DirectDraw surface (`FUN_004A9EB0`, `FUN_004A9DC0`).
+
+## Omitted from the progress report
+
+Since retail never installs the table, the progress report omits the 59
+functions only it reaches. They are a forward closure from every function
+that two dead sites name: the table-1 branch of `FUN_00480D10`
+(`00480D99..00480FAB`) and the block of `FUN_004A8920` that creates the
+Direct3D device and viewport (`FUN_004AA390`, `004A8B6C..004A8C0C`), which
+`FUN_004A8920` enters only when `FUN_004945E0` passes the mode's table byte
+as 1. The closure follows calls, code references and the function tables they
+name, and keeps out any function that live code or a live table also reaches.
+Besides the handlers it holds the clipping passes (`FUN_00481570`, its four
+edge passes and their shared `FUN_00481C80`), the N-gon and quad helpers
+(`FUN_00483D90`, `FUN_00489DA0`), the scene start `FUN_004AB050`, the sprite
+blit `FUN_004A9DC0`, and the textures and texture pages (`FUN_004A9EB0`,
+`FUN_004AA0E0`, `FUN_004AA140`, `FUN_004A7D30`, `FUN_004A7F10`,
+`FUN_004AA8E0`, `FUN_004AAF80`). The census splits two handlers at values
+of the span-reciprocal table: `0x0048D159` and `0x0048FADE` are the ends of
+`FUN_0048CB90` and `FUN_0048F160` ([census artifacts](SMALL_FUNCTIONS.md#census-artifacts)).

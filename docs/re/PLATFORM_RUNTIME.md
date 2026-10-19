@@ -112,6 +112,10 @@ close), `004D4A18` (`FUN_0046BC60`/`FUN_0046BD00`), `004D4B58`
 (`FUN_004AC110`/`FUN_004AC3D0`), `004D6668` (`FUN_004AC4F0`/`FUN_004AC560`)
 and `004D66E0` (`FUN_004292A0`, no-op close).
 
+The 154 descriptor routines above (each `push descriptor; call open or close`)
+are glue with no behaviour of their own, so the progress report omits them.
+The modules' own pairs, which do the work, stay counted.
+
 ## Cleanup scopes
 
 The error scopes (`FUN_00471030` and its siblings) keep a downward-growing
@@ -238,6 +242,7 @@ MCI's text ("Music: MCI error <...> encountered").
 
 | Routine | Does |
 | --- | --- |
+| `FUN_00496130` | a music error's text: "Music: unknown MCI error number 0x%x encountered" with the error's number |
 | `FUN_004962E0` | allocates an 8-byte track record from its description |
 | `FUN_00496340` | plays a track (`MCI_PLAY` from that track to the next) after stopping any other, and makes it current |
 | `FUN_00496AD0` | stops a track (`MCI_STOP`) and clears the current one |
@@ -286,6 +291,7 @@ source `C:\Coding\FGDK\Code\Windows\DDCaps...` and a line.
 | `FUN_00497870` | releases the device: the normal cooperative level, then `IDirect3D2`, `IDirectDraw2` and DirectDraw |
 | `FUN_004A95C0` | a driver enumeration callback: builds a device for each driver, rates it (`FUN_004A93D0`) and keeps the best |
 | `FUN_004A93D0` | rates a device for a requested mode: one lacking a requested 3D device, or (in a window) whose display depth differs, rates zero |
+| `FUN_004A9570` | the display-mode enumeration callback: flags the mode matching the requested width, height and depth |
 | `FUN_004979B0` | sets the device flags from the command line's `systemmemory` and `emulation` (`004FC2F0`, `004FC2F4`); `FUN_004959C0` applies them |
 | `FUN_00496F70` | handles a lost surface: restores it, and after a restore re-applies the window placement |
 | `FUN_00497000` | turns a DirectDraw or Direct3D result into its text ("Generic Error" ...) |
@@ -340,6 +346,44 @@ The 48 converters of table `004D5F88` each read 8-bit sprite pixels through a
 16-bit colour table and pack them into the destination's channel masks, with
 shifts from the masks' highest bits (`FUN_004576E0`), one per combination of
 sprite flags, destination depth and capability, in table order: `FUN_00497B30`, `FUN_00498010`, `FUN_00498580`, `FUN_00498A70`, `FUN_00499020`, `FUN_00499510`, `FUN_00499AC0`, `FUN_00499FD0`, `FUN_0049A5A0`, `FUN_0049AA90`, `FUN_0049B020`, `FUN_0049B500`, `FUN_0049BAC0`, `FUN_0049BF50`, `FUN_0049C4A0`, `FUN_0049C950`, `FUN_0049CEB0`, `FUN_0049D3A0`, `FUN_0049D920`, `FUN_0049DE20`, `FUN_0049E390`, `FUN_0049E850`, `FUN_0049EDB0`, `FUN_0049F290`, `FUN_0049F860`, `FUN_0049FDA0`, `FUN_004A0370`, `FUN_004A08B0`, `FUN_004A0EA0`, `FUN_004A13F0`, `FUN_004A19F0`, `FUN_004A1F40`, `FUN_004A2560`, `FUN_004A2A80`, `FUN_004A3060`, `FUN_004A3580`, `FUN_004A3B80`, `FUN_004A4090`, `FUN_004A4650`, `FUN_004A4B70`, `FUN_004A5120`, `FUN_004A5630`, `FUN_004A5BC0`, `FUN_004A60F0`, `FUN_004A66E0`, `FUN_004A6BD0`, `FUN_004A7170`, `FUN_004A7680`.
+
+## What the port replaces
+
+The port's SDL window, renderers, audio device and launcher stand where these
+did, so the progress report omits them ([status.csv](../progress/status.csv))
+after a check that none decides anything a player sees or hears beyond its
+own platform:
+
+- **The screen device**, replaced by the port's SDL platform: the DirectDraw
+  device (`FUN_00497570`, `FUN_00497860`, `FUN_004975E0`, `FUN_00497770`,
+  `FUN_00497870`, `FUN_004A95C0`, `FUN_004A93D0`, `FUN_004A9570`), its lost
+  surfaces and result texts (`FUN_00496F70`, `FUN_00496ED0`, `FUN_00497000`),
+  the screens and their buffers (`FUN_004945A0`, `FUN_004945E0`,
+  `FUN_004946B0`, `FUN_004946F0`, `FUN_004A8D50`, `FUN_004A9980`,
+  `FUN_004947A0`, `FUN_004947E0`, `FUN_004A9C20`, `FUN_004A9C90`,
+  `FUN_004A9BD0`, `FUN_004AB110`, `FUN_004A9790`, `FUN_004A9670`,
+  `FUN_00497940`, `FUN_00497990`), and the texture pages, which only
+  Direct3D sprites fill (`FUN_004AB2E0`, `FUN_004A8060`, `FUN_00497A80`,
+  `FUN_004979E0`, `FUN_00497A40`, `FUN_004A9860`, `FUN_004AB170`,
+  `FUN_004A8700`, `FUN_004A87A0`, `FUN_004A7C20` and the 48 converters of
+  table `004D5F88`). What the screen shows is ported from the software
+  raster's fill slots ([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md)); the code
+  only the [Direct3D table](DIRECT3D_TABLE.md) reaches is omitted as dead.
+- **The shell**, replaced by the port's SDL platform and launcher: MCI CD
+  audio (`FUN_00496130`, `FUN_00496180`, `FUN_00496190`, `FUN_004961D0`,
+  `FUN_004962E0`, `FUN_00496310`, `FUN_00496340`, `FUN_00496460`,
+  `FUN_00496730`, `FUN_00496890`, `FUN_00496AD0`, `FUN_00496BF0`,
+  `FUN_00496DD0`; the port plays the same tracks, and the game's own track
+  choice, restart poll and disc check stay counted,
+  [MENU_SYSTEM.md](MENU_SYSTEM.md#music--the-frontend-menu-is-silent)), the
+  message box (`FUN_00496E10`), and the working directory and the
+  `systemmemory`/`emulation` options (`FUN_00495CC0`, `FUN_004979B0`,
+  `FUN_004959C0`; the launcher's settings instead).
+
+The window, its title and pump, activation, the display-mode routines that
+set the full-screen flag the pointer reads (`FUN_004A8C30`, `FUN_004A8D90`),
+the pixel-format listeners and colour tables, the banner movie, sound voices,
+timers, the joystick and the mouse stay counted.
 
 ## Joysticks and the mouse
 

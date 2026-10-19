@@ -323,12 +323,12 @@ Related state flags at `g_rng_state`:
 
 ### OVL Loading Sequence
 
-**Path format** (`FUN_00493654`, string at 0x004D5D50): `"overlay\%dx%dxx.ovl"`
+**Path format** (`FUN_00493640`, string at 0x004D5D50): `"overlay\%dx%dxx.ovl"`
 - First `%d` = variant (0-3), second `%d` = level ID (0-52)
 - Examples: variant 0, level 2 → `0X2XX.OVL`; variant 1, level 14 → `1X14XX.OVL`
 
 **Loading chain:**
-1. `FUN_00493654` — format filename from variant + level ID
+1. `FUN_00493640` — format filename from variant + level ID
 2. `FUN_00493680` — open file (allocates 8-byte handle, builds search path)
 3. `FUN_00493BF0` — section reader: iterates 15 sections sequentially
 4. `FUN_00493CE0` — per-section: reads 4 bytes, verifies against `"abcd"` magic

@@ -9,10 +9,10 @@ and RE notes cite by address (for example `FUN_0042D030`).
 
 | Measure | Functions | Share |
 |---|---:|---:|
-| Game functions in retail `V2000.EXE` | 2,383 | |
-| Marked not needed (excluded below) | 1 | |
-| **Referenced by port code** | **901** | **37.8%** |
-| Referenced by code or RE notes | 2,075 | 87.1% |
+| Game functions in retail `V2000.EXE` | 2,390 | |
+| Marked not needed (excluded below) | 337 | |
+| **Referenced by port code** | **899** | **43.8%** |
+| Referenced by code or RE notes | 1,751 | 85.3% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -22,7 +22,7 @@ Manual statuses from [`status.csv`](status.csv):
 | implemented | 202 |
 | approximated | 6 |
 | documented | 1 |
-| not-needed | 1 |
+| not-needed | 337 |
 
 87 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,24 +41,33 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Platform](../re/PLATFORM_RUNTIME.md) | 458 | 76 | 12 |
-| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 122 | 25 | 43 |
-| [Menu system](../re/MENU_SYSTEM.md) | 111 | 69 | 76 |
-| [Software raster](../re/SOFTWARE_RASTER.md) | 83 | 4 | 54 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 75 | 16 | 2 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 208 | 73 | 11 |
+| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 113 | 25 | 43 |
+| [Menu system](../re/MENU_SYSTEM.md) | 107 | 66 | 76 |
+| [Software raster](../re/SOFTWARE_RASTER.md) | 81 | 4 | 54 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 72 | 16 | 2 |
 | [Controls](../re/CONTROLS.md) | 69 | 31 | 21 |
-| [Direct3d table](../re/DIRECT3D_TABLE.md) | 58 | 8 | 31 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 55 | 28 | 39 |
-| [Hud rendering](../re/HUD_RENDERING.md) | 48 | 38 | 31 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 54 | 27 | 39 |
 | [Render pipeline](../re/RENDER_PIPELINE.md) | 48 | 34 | 112 |
+| [Hud rendering](../re/HUD_RENDERING.md) | 47 | 37 | 31 |
+| [Factory system](../re/FACTORY_SYSTEM.md) | 37 | 33 | 48 |
 
 ## Omitted
 
 Functions marked `not-needed` in [`status.csv`](status.csv) leave the
-denominator:
+denominator, each with its reason: the never-installed
+[Direct3D table](../re/DIRECT3D_TABLE.md), FGDK
+[module glue](../re/PLATFORM_RUNTIME.md#modules), the platform layer
+[the port replaces](../re/PLATFORM_RUNTIME.md#what-the-port-replaces) and
+[census entries that are not routines](../re/SMALL_FUNCTIONS.md#census-artifacts):
 
 | Reason | Functions |
 |---|---:|
+| glue: an FGDK module's open or close thunk (docs/re/PLATFORM_RUNTIME.md#modules) | 154 |
+| replaced: the port's SDL platform (the DirectDraw screen device, its buffers and texture pages; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 85 |
+| dead: retail's Direct3D fill table, never installed (every display mode selects the software table; docs/re/DIRECT3D_TABLE.md) | 59 |
+| not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts) | 21 |
+| replaced: the port's SDL platform (MCI CD audio, the message box, the command line; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 17 |
 | WinMain: protection-library start and stop around the engine main; the port has its own entry point | 1 |
 
 ## Method
@@ -66,16 +75,17 @@ denominator:
 - [`retail-functions.csv`](retail-functions.csv) lists every function start in
   the retail executable. It comes from a Ghidra census that combines
   auto-analysis with seeding from callback tables, already-cited addresses and
-  uncovered code gaps. Functions cover 94% of `.text`, and most of the rest is
-  padding. Everything from the first linker-placed library import stub
-  (`0x004AC5A0`) onward counts as library code.
+  uncovered code gaps, plus seven Direct3D handlers seeded by hand. Functions
+  cover 96% of `.text`, and most of the rest is padding. Everything from the
+  first linker-placed library import stub (`0x004AC5A0`) onward counts as
+  library code.
 - A function counts as *referenced* when a Rust source file under `crates/`
   (for code) or a note under `docs/re/` cites its start address. A citation
   means the port or the notes deal with that function. It doesn't prove that
   every behavior of the function is reproduced.
 - `status.csv` records judgments the citation count can't make:
   `implemented`, `approximated`, `documented` and `not-needed`.
-  `not-needed` removes a function from the denominator, for example
-  DirectPlay networking or debug-only paths.
+  `not-needed` removes a function from the denominator, for example code
+  retail never runs or the platform code SDL replaces.
 - The numbers are regenerated on every commit by the `.githooks/pre-commit`
   hook. `scripts/check.ps1` runs `scripts/progress.ps1 -Check` and fails if they are stale.
