@@ -67,7 +67,7 @@ pub(crate) fn publish_native_flying_standard_death(
             .map_err(NativeFlyingSurfaceDeathBlock::Type57)?,
         15 | 87 | 108 => publish_native_flyer_quiet_death(manager, id, world_fx)?
             .map(NativeFlyingSurfaceDeathPublication::QuietDeath),
-        13 | 14 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
+        13 | 14 | 39 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
         80 | 126 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeAutoPilotContextUnavailable),
         _ => return Err(NativeFlyingSurfaceDeathBlock::Runtime("death type")),
     };

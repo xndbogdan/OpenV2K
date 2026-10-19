@@ -179,7 +179,9 @@ Every death, including world40's `E370` drowning, takes class12.
 The six authored [Type14 flyers](TYPE14_RUNTIME.md) (two each in worlds 20, 26
 and 37) and their Hive births run on the native flyer owner without an
 emitter: Defecate Virus4, Move About Aimlessly5 and Flocking13. They
-explode through class1.
+explode through class1. So do world31's two [Type39 flyers](TYPE39_RUNTIME.md)
+and their Hive births, which shoot (method20) and drive two model variables
+through Sub-K.
 
 The [shared Type47 gunner](TYPE47_RUNTIME.md) extends that construction policy
 to all eight ordinary actors (three in13, one in14, two each in15/31) and the

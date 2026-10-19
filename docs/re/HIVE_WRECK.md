@@ -235,6 +235,11 @@ a B/D/G flyer with no emitter whose choices are Defecate Virus, Move About
 Aimlessly and Flocking. World 18's first Type14 birth lands on retail's tick
 1001, and the next follow every 1500 ticks.
 
+Type39 rows take it too ([TYPE39_RUNTIME.md](TYPE39_RUNTIME.md)): a B/D/E/G/K
+flyer that shoots through method 20, with Type108's two choices. The first
+births land on ticks 1501 (world 19) and 1001 (world 38), a tick before
+retail's 1502 and 1002.
+
 The reset consumes one shared RNG word and is exactly:
 
 ```text

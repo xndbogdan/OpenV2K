@@ -525,7 +525,7 @@ pub fn resolve_intro2_contacts(mut frame: Intro2ContactFrame<'_>) -> Vec<Intro2C
             if blocked {
                 continue;
             }
-        } else if matches!(entity.entity_type, 14 | 15 | 87 | 108) {
+        } else if matches!(entity.entity_type, 14 | 15 | 39 | 87 | 108) {
             let entity_type = entity.entity_type;
             let outcome =
                 crate::intro2_flyer_contacts::resolve_native_flyer_contacts(&mut frame, id);

@@ -900,6 +900,39 @@ fn world18_hive_births_type77_and_type14_through_their_constructors() {
     );
 }
 
+/// Retail (lab, idle player from the default arrival): world19's Hive gives
+/// birth to a Type39 at tick 1502 and world38's at 1002, each through the
+/// B/D/E/G/K flyer constructor.
+#[v2k_test_support::retail_test]
+fn world19_and_world38_hives_birth_type39_through_the_flyer_constructor() {
+    for (level, ticks, retail) in [(19, 1600, 1502), (38, 1100, 1002)] {
+        let (manager, scheduler, births) = hive_world_births(level, ticks);
+        let [birth] = births.as_slice() else {
+            panic!("world{level}: {births:?}");
+        };
+        assert_eq!(birth.1, 39, "world{level}: {births:?}");
+        assert!(birth.0.abs_diff(retail) <= 10, "world{level}: {births:?}");
+        assert!(scheduler
+            .owners
+            .iter()
+            .any(|owner| owner.entity_id() == birth.2));
+        let child = manager
+            .iter_all()
+            .find(|entity| entity.id == birth.2)
+            .unwrap();
+        assert!(crate::intro2_flyers_live::flyer_identity_authenticates(
+            child
+        ));
+        assert!(child.intro2_flyer_aim_runtime.is_some(), "Type39 shoots");
+        assert_eq!(child.authored_spawn_index, None);
+        assert!(
+            scheduler.hive_diagnostics.is_empty(),
+            "world{level}: {:?}",
+            scheduler.hive_diagnostics
+        );
+    }
+}
+
 /// Retail: world36's Hive gives birth to a Type18 one tick after the arrival
 /// and again at tick 1000.
 #[v2k_test_support::retail_test]

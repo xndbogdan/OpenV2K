@@ -9,17 +9,23 @@ use crate::{
     static_damage::StaticDamageScheduler,
 };
 
-/// 170A0's 10C10 reaches world 20's flyer Type14 in its alternate class1
-/// (BAC0): the shared blast/radial terminal with no Type60 ring, then
-/// deferred removal.
+/// 170A0's 10C10 reaches world 20's flyer Type14 and world 31's Type39 in
+/// their alternate class1 (BAC0): the shared blast/radial terminal with no
+/// Type60 ring, then deferred removal.
 #[v2k_test_support::retail_test]
-fn type14_abort_explodes_through_its_class1_terminal() {
+fn exploding_flyer_abort_explodes_through_its_class1_terminal() {
+    for (level, entity_type) in [(20, 14), (31, 39)] {
+        abort_explodes(level, entity_type);
+    }
+}
+
+fn abort_explodes(level: u32, entity_type: u32) {
     let (mut session, mut manager, mut fx) =
-        crate::native_type122::construction_tests::native_fixture_with_player(20);
+        crate::native_type122::construction_tests::native_fixture_with_player(level);
     manager.cleanup_pending_actor_deferred_destroys();
     let id = manager
         .iter_all()
-        .find(|entity| entity.entity_type == crate::intro2_flyers_live::TYPE14_ENTITY_TYPE)
+        .find(|entity| entity.entity_type == entity_type)
         .unwrap()
         .id;
     // Lift the source clear of every other actor; the radial stays real.
@@ -51,10 +57,10 @@ fn type14_abort_explodes_through_its_class1_terminal() {
         },
         &mut publications,
     )
-    .expect("an owned Type14 is a native class1 terminal");
+    .expect("an owned exploding flyer is a native class1 terminal");
     let result = match result {
         Ok(result) => result,
-        Err(error) => panic!("{:?}", error.callback_error),
+        Err(error) => panic!("world{level}: {:?}", error.callback_error),
     };
     assert_eq!(
         result.disposition,

@@ -6953,7 +6953,7 @@ fn prepare_intro2_radial_actor_mutation(
                 if owner.entity_id() == entity_id && owner.completed_contact_boundary(manager))
             });
     }
-    if entity.entity_type == crate::intro2_flyers_live::TYPE14_ENTITY_TYPE
+    if crate::intro2_flyers_live::flyer_explodes(entity.entity_type)
         && entity.intro2_flyer_frame_owner.is_some()
     {
         // A completed class1 corpse keeps only its Finished receipt until the sweep.

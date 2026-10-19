@@ -438,6 +438,113 @@ fn type108_class5_publishes_acd0_visits_aimlessly_and_reselects_class7() {
     );
 }
 
+/// World 31 authors two Type39s: B/D/E/G/K flyers (model 287) that shoot
+/// through method 20 but author no sound 11; Sub-K starts at zero.
+#[v2k_test_support::retail_test]
+fn ordinary_world_type39s_publish_native_flyer_owners() {
+    let (_session, manager, _fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(31);
+    let type39s: Vec<_> = manager
+        .iter_all()
+        .filter(|entity| entity.entity_type == TYPE39_ENTITY_TYPE)
+        .collect();
+    assert_eq!(type39s.len(), 2);
+    for flyer in &type39s {
+        assert_eq!(flyer.model_index, Some(usize::from(TYPE39_MODEL_ID)));
+        assert!(flyer.intro2_flyer_aim_runtime.is_some());
+        assert_eq!(
+            flyer.collision.constructor_sound_attachment_id_at_0x8c,
+            RetailRuntimeValue::Known(None)
+        );
+        let owner = flyer.intro2_flyer_frame_owner.unwrap();
+        assert_eq!(
+            (owner.sub_k_smoothed_raw, owner.sub_k_output_raw),
+            (0, [0; 2])
+        );
+        assert!(
+            intro2_flyer_aimless_graph_authenticates(flyer)
+                || intro2_flyer_acquiring_graph_authenticates(flyer)
+        );
+        assert!(Intro2FlyerSchedulerOwner::adopt_published(flyer).is_ok());
+    }
+}
+
+/// A visible Type39's detailed visits run DCA0's sound gate, which plays its
+/// healthy sound 71 (period 0.5 s), and publish Sub-K to model variables 2
+/// and 3. Coarse visits have no gate.
+#[v2k_test_support::retail_test]
+fn type39_detailed_visits_buzz_and_publish_sub_k() {
+    for detailed in [true, false] {
+        let (session, mut manager, mut world_fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(31);
+        let id = manager
+            .iter_all()
+            .find(|entity| entity.entity_type == TYPE39_ENTITY_TYPE)
+            .unwrap()
+            .id;
+        // The camera at the flyer grants detailed visits; far away, coarse ones.
+        let entity = manager.entity_mut(id).unwrap();
+        let mut camera = entity.position_raw().map(i32::from);
+        if !detailed {
+            camera[0] += 0x4000;
+        }
+        crate::entity_view_detail::RetailViewDetailContext::from_raw(camera, 0, (52, 30)).publish(
+            entity.position_raw(),
+            &mut entity.collision.state_flags_at_0x08,
+        );
+        entity.collision.state_flags_at_0x08.overwrite(0x800, 0x800);
+        let mut owner = Intro2FlyerSchedulerOwner::adopt_published(
+            manager.iter_all().find(|e| e.id == id).unwrap(),
+        )
+        .unwrap();
+        let mut buzzes = 0;
+        for tick in 1..=300 {
+            let result = tick_intro2_flyer_scheduler_owner(
+                &mut manager,
+                owner,
+                Intro2FlyerFrame {
+                    resources: &session.cache,
+                    elapsed_micros: 20_000,
+                    global_elapsed_micros: tick * 20_000,
+                    retail_tick: tick,
+                },
+                &mut world_fx,
+            );
+            assert!(
+                !matches!(
+                    result.outcome,
+                    Intro2FlyerSchedulerProductionOutcome::Blocked { .. }
+                        | Intro2FlyerSchedulerProductionOutcome::Dropped { .. }
+                ),
+                "tick {tick}: {:?}",
+                result.outcome
+            );
+            owner = result.retained_owner.unwrap();
+            world_fx.process_pending();
+            buzzes += world_fx
+                .take_positional_sounds()
+                .iter()
+                .filter(|sound| sound.sound_id == 71)
+                .count();
+        }
+        let entity = manager.iter_all().find(|e| e.id == id).unwrap();
+        let k = entity.intro2_flyer_frame_owner.unwrap().sub_k_output_raw;
+        let vars = entity.presentation_anim_vars(300);
+        assert_eq!(
+            [vars.dynamic[2], vars.dynamic[3]],
+            k.map(i32::from),
+            "24450 binds K to variables 2 and 3"
+        );
+        if detailed {
+            assert!(buzzes > 0);
+            assert_ne!(k, [0; 2], "detailed visits run K");
+        } else {
+            assert_eq!(buzzes, 0);
+            assert_eq!(k, [0; 2], "the restricted dispatch skips K");
+        }
+    }
+}
+
 fn first_type14(manager: &EntityManager) -> u32 {
     manager
         .iter_all()

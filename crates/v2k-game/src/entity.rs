@@ -2145,6 +2145,11 @@ impl Entity {
         }
         if let Some(flyer) = &self.intro2_flyer_frame_owner {
             vars.dynamic[1] = flyer.wing_var1;
+            if let Some(selectors) = crate::intro2_flyers_live::flyer_sub_k(flyer.entity_type) {
+                for (selector, value) in selectors.into_iter().zip(flyer.sub_k_output_raw) {
+                    vars.dynamic[usize::from(selector)] = i32::from(value);
+                }
+            }
         }
         vars
     }
@@ -4077,7 +4082,7 @@ impl EntityManager {
                         context.retail_tick,
                         level_desc.raw_u32(0x84)? != 0,
                     )
-                } else if matches!(spawn.entity_type, 13 | 10 | 57 | 15 | 87 | 108 | 14) {
+                } else if matches!(spawn.entity_type, 13 | 10 | 57 | 15 | 87 | 108 | 14 | 39) {
                     crate::entity_initializer::constructor_surface_bits_without_wave(
                         position, terrain,
                     )
@@ -4976,6 +4981,7 @@ impl EntityManager {
                             | 28
                             | 30
                             | 38
+                            | 39
                             | 40
                             | 43
                             | 47
