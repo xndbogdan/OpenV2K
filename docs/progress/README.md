@@ -12,7 +12,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Game functions in retail `V2000.EXE` | 2,383 | |
 | Marked not needed (excluded below) | 1 | |
 | **Referenced by port code** | **900** | **37.8%** |
-| Referenced by code or RE notes | 1,488 | 62.5% |
+| Referenced by code or RE notes | 2,075 | 87.1% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -24,7 +24,7 @@ Manual statuses from [`status.csv`](status.csv):
 | documented | 1 |
 | not-needed | 1 |
 
-82 `FUN_` citations don't match a retail function
+87 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
 
 ## Method

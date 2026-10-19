@@ -638,7 +638,8 @@ The player controller owns 32 fixed 24-byte descriptors at `+0x2A8`.
 `DAT_004CDC08`..`DAT_004CDE48` for the matching 24-byte master, takes the first
 slot that is empty or already holds that selector, copies that master when
 empty, and stores `max(previous,incoming)` under the routine's signed
-comparisons. Level-1 factory payload `0x0001F412` is selector `0x12` with stored
+comparisons. `FUN_00448420` returns the slot holding a given selector, or
+null after all 32. Level-1 factory payload `0x0001F412` is selector `0x12` with stored
 amount 500 (table record 20). Its descriptor grants infinite ammunition: 500
 controls acquisition/auto-selection, not a finite shot budget. It auto-selects only when the incoming amount is strictly greater
 than the previous amount. A valid duplicate is nevertheless accepted and its
