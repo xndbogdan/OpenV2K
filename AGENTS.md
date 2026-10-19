@@ -126,10 +126,19 @@ are handed off.
 
 ## Commit & Pull Request Guidelines
 
-Never commit directly to `main` or `staging`. Work on a branch and open the
-pull request against `staging` (`gh pr create --base staging`). CI does not run
-on pull requests, so run `scripts/check.ps1` locally before asking for a
-merge, and state the result in the pull request.
+Never commit directly to `main`. Work on a branch. A complete feature may land
+on `staging` directly as one commit:
+
+1. Rebase it on `origin/staging` and squash it.
+2. Run `scripts/check.ps1`.
+3. Fast-forward `staging` to it (`git push origin HEAD:staging`).
+
+Its message summarizes the change as a pull request would. Never commit
+half-finished work to `staging`: it stays on its branch, or goes through a
+pull request against `staging` (`gh pr create --base staging`), as does work
+that should be reviewed first. CI does not run on pull requests, so run
+`scripts/check.ps1` locally before asking for a merge, and state the result in
+the pull request.
 
 `main` only takes milestones: a pull request from `staging` into `main` that
 bumps `crates/v2k-game`'s version. GitHub Actions workflows run only when
