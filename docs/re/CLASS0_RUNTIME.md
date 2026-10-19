@@ -1,7 +1,7 @@
 # Shared class-0 flags and weights
 
 This owns ordinary Type52/54/68/72/85/106 and Intro2 Type52 construction, living timer/task custody, Type68
-cargo attachment/release, Type54/72/85 Change-Sea-Level abort and generic quiet death. The production owner is
+cargo attachment/release, Type54/72/85 Change-Sea-Level abort and lethal hits, and generic quiet death. The production owner is
 [`entity/class0_actor`](../../crates/v2k-game/src/entity/class0_actor.rs).
 [Actor Runtime](ACTOR_RUNTIME.md) owns the shared scheduler primitives;
 [Factory System](FACTORY_SYSTEM.md#reactor-mechanic) owns the enclosing Main
@@ -204,6 +204,26 @@ master motion and invokes release again, with its own selector word and task.
 Null attachment between those releases preserves the newly selected timer.
 Task replacement is transferred to the scheduler under the same allocation.
 
+## Hits
+
+[`class0_impact`](../../crates/v2k-game/src/class0_impact.rs) owns Playing's
+particle hits on native class0 bodies. Class0's style `4C7468` has null
+`+20/+24/+28` and the rows keep vtable `4C8A30`, whose `+30` is null, so a hit
+is `10EB0`'s stamp (or `11250/11320`'s model prefix), `11030`'s jolt and
+`15040 -> 14E90`, with no reselection. `11030` moves only a detailed body
+(`0x04000000`) that `0x08000000` doesn't hold: Level 1's grock (state
+`0x00428805`) can be jolted, with its three spin words; Type72 and Type85,
+holding `0x08000000`, never are. Flags, weights, Type106 and gates have zero
+multipliers, so a shot only stamps them.
+
+A lethal hit on Type54, Type72 or Type85 runs `10C10`'s class38 Change Sea
+Level, the same transaction as the Main Base abort's: the class0 owner
+retires, the burst runs and the sea-level task takes the delta. A tampered
+retail run (the lab's direct `00414E90` call of 2000 damage on Level 1's grock,
+handle `04B30001`, at pass 1300) reads state `0x0042C005` and health 0 after
+the hit, and the sea word `0xFFFCB100` falls to `0xFFFA2000` (delta `-168192`)
+in 690 paced updates, through pass 1989. The port matches each of these.
+
 ## Quiet death and remaining boundaries
 
 Native52/68 abort admission authenticates their construction receipt and
@@ -217,7 +237,8 @@ Attached cargo retains the separate callback-free relation route. Type93's
 abnormal teardown marks its child without invoking this normal release path.
 
 Regression coverage lives in `tests/shared_world_construction.rs` and
-`entity/class0_actor/{tests,live/tests,cargo_tests,later_world_tests}.rs`, with abort controls in
+`entity/class0_actor/{tests,live/tests,cargo_tests,later_world_tests}.rs` and
+`class0_impact/tests.rs`, with abort controls in
 `entity/class0_abort_tests.rs`. It distinguishes corpus publication from
 controlled callback-enabled timers, fractional grounding, model/angle/parameter
 variation, wave policy, RNG ordering, pending and stale custody, and release.
