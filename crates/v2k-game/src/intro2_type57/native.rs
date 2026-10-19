@@ -1,4 +1,5 @@
-//! Own Type57 104B0/09A80 allocations, then AC60 -> B6C0 publication.
+//! Own Type57 104B0/09A80 allocations, then AC60 -> B6C0 publication, for
+//! Intro2's authored bat and a Hive child's zero record.
 
 use super::*;
 use crate::{
@@ -96,6 +97,74 @@ pub(crate) fn publish_intro2_type57(
         return Err(Intro2Type57Error::Identity);
     }
     authenticate_metadata(metadata)?;
+    authenticate_constructor_body(entity)?;
+    publish_type57_constructor(
+        entity,
+        Some(1),
+        None,
+        Type9SubDRuntime::from_constructor(),
+        Type9SubDFrameOwner::pending_constructor_origin(0x01),
+        next_random,
+    )
+}
+
+pub(crate) struct NativeType57ConstructionRequest<'a> {
+    pub entity: &'a mut Entity,
+    pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    pub metadata: &'a EntityTypeRuntimeMetadata,
+}
+
+/// A Hive child's zero record: no authored index and zero angles. 09A80
+/// reaches G's 1B8C0 word before D's process allocation, as for the flyers.
+pub(crate) fn publish_native_type57(
+    request: NativeType57ConstructionRequest<'_>,
+    world_fx: &mut crate::world_fx::WorldFx,
+) -> Result<Intro2Type57Publication, Intro2Type57Error> {
+    let NativeType57ConstructionRequest {
+        entity,
+        allocation,
+        metadata,
+    } = request;
+    authenticate_native_type57_body(entity, allocation, metadata)?;
+    let word = world_fx.next_shared_retail_random_u16();
+    let sub_d = world_fx.construct_entity_sub_d(SUB_D);
+    let mut words = std::iter::once(u32::from(word));
+    publish_type57_constructor(
+        entity,
+        None,
+        Some(allocation),
+        sub_d.runtime,
+        sub_d.frame_owner,
+        &mut || {
+            words
+                .next()
+                .unwrap_or_else(|| u32::from(world_fx.next_shared_retail_random_u16()))
+        },
+    )
+}
+
+/// Query/RNG-free admission of a Hive child's body, before 104B0's entry.
+pub(crate) fn authenticate_native_type57_body(
+    entity: &Entity,
+    allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), Intro2Type57Error> {
+    if entity.authored_spawn_index.is_some()
+        || entity.id != allocation.entity_id
+        || !entity.active
+        || entity.entity_type != 57
+        || entity.model_slots != [Some(MODEL); 4]
+        || entity.model_index != Some(MODEL)
+        || entity.rotation_heading_pitch_roll_raw() != [0, 0, 0]
+    {
+        return Err(Intro2Type57Error::Identity);
+    }
+    authenticate_metadata(metadata)?;
+    authenticate_constructor_body(entity)
+}
+
+/// 104B0's body as both births leave it: no runtime, task or context yet.
+fn authenticate_constructor_body(entity: &Entity) -> Result<(), Intro2Type57Error> {
     if entity.intro2_type57_runtime.is_some()
         || entity.current_behavior_context != RetailRuntimeValue::Unresolved
         || ActorTaskSlot::IN_RETAIL_TICK_ORDER
@@ -121,15 +190,27 @@ pub(crate) fn publish_intro2_type57(
     {
         return Err(Intro2Type57Error::ComponentStorage);
     }
+    Ok(())
+}
 
+/// 1B8C0's G word, the runtime, then AC60's selection and B6C0's two words.
+fn publish_type57_constructor(
+    entity: &mut Entity,
+    spawn_index: Option<usize>,
+    allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
+    sub_d_runtime: Type9SubDRuntime,
+    sub_d_frame_owner: Type9SubDFrameOwner,
+    next_random: &mut impl FnMut() -> u32,
+) -> Result<Intro2Type57Publication, Intro2Type57Error> {
     entity.sub_g_06070_runtime = RetailRuntimeValue::Known(Some(
         SubG06070RuntimeState::from_1b8c0_constructor(&SUB_G, next_random() as u16),
     ));
     entity.intro2_type57_runtime = Some(Intro2Type57Runtime {
         entity_id: entity.id,
-        spawn_index: 1,
-        sub_d_runtime: Type9SubDRuntime::from_constructor(),
-        sub_d_frame_owner: Type9SubDFrameOwner::pending_constructor_origin(0x01),
+        spawn_index,
+        allocation,
+        sub_d_runtime,
+        sub_d_frame_owner,
         sub_e_runtime: GenericEmitterRuntime {
             joint_bindings: [None; 2],
             projectile_method: 24,

@@ -3,7 +3,13 @@
 This document owns the native profile required by authored spawn1, runtime
 entity2, Type57, model122 `bat`. Native construction, class7 Search-and-Attack, dormant B2 clear, method24 / particle68 / sound93 fire,
 incoming Type13 class38 hits, alternate11 Tumble Out Of Sky, tumble contact, and terminal explosion
-are implemented. Shared task and damage contracts remain in
+are implemented. The same constructor serves Hive children: from the zeroed
+record (no authored index, zero angles) it consumes G's `1B8C0` word, then the
+process Sub-D allocation, then the selection word and B6C0's two task words;
+the runtime keeps the allocation lease in place of the spawn. World20's Hive
+gives birth to one at tick 51 and then every 10 s, as retail's does (lab:
+51, 551, 1051, 1552, 2054; port 51, 550, 1052, 1554, 2054). Shared task and
+damage contracts remain in
 [ACTOR_RUNTIME.md](ACTOR_RUNTIME.md) and
 [ENTITY_DAMAGE_AND_DEATH.md](ENTITY_DAMAGE_AND_DEATH.md). Whole-scene acceptance
 belongs to objective08.

@@ -917,6 +917,76 @@ fn world42_hive_births_type38_through_the_shared_constructor() {
     );
 }
 
+/// Retail: world20's Hive gives birth to a Type57 (bat) at tick 51 and then
+/// every 10 s, through Type57's own constructor.
+#[v2k_test_support::retail_test]
+fn world20_hive_births_type57_through_its_own_constructor() {
+    let (manager, scheduler, births) = hive_world_births(20, 60);
+    let type57: Vec<_> = births.iter().filter(|birth| birth.1 == 57).collect();
+    assert_eq!(type57.len(), 1, "{births:?}");
+    assert_eq!(type57[0].0, 51, "retail's tick too");
+    assert_hive_child(&manager, &scheduler, type57[0].2, |manager, id| {
+        manager
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .is_some_and(crate::intro2_type57::intro2_type57_allocation_authenticates)
+    });
+}
+
+/// Retail (lab): world26's Hive gives birth to a Type26 (stag beetle) at tick
+/// 2, through the shared ground constructor from the zeroed record.
+#[v2k_test_support::retail_test]
+fn world26_hive_births_type26_through_its_constructor() {
+    let (manager, scheduler, births) = hive_world_births(26, 10);
+    let type26: Vec<_> = births.iter().filter(|birth| birth.1 == 26).collect();
+    assert_eq!(type26.len(), 1, "{births:?}");
+    assert!(type26[0].0 <= 2, "{births:?}");
+    assert_hive_child(
+        &manager,
+        &scheduler,
+        type26[0].2,
+        crate::intro2_type26_defecate_virus::type26_manager_allocation_authenticates,
+    );
+}
+
+/// Retail (lab): world42's Hive gives birth to a Type13 at tick 153, through
+/// Type13's 09A80.
+#[v2k_test_support::retail_test]
+fn world42_hive_births_type13_through_its_constructor() {
+    let (manager, scheduler, births) = hive_world_births(42, 160);
+    let type13: Vec<_> = births.iter().filter(|birth| birth.1 == 13).collect();
+    assert_eq!(type13.len(), 1, "{births:?}");
+    assert_eq!(type13[0].0, 151, "retail's coarse-gated visit lands on 153");
+    assert_hive_child(
+        &manager,
+        &scheduler,
+        type13[0].2,
+        crate::intro2_type13_live::type13_manager_allocation_authenticates,
+    );
+}
+
+/// Retail (lab, from the state Skip to World carries over): world46's Hive
+/// gives birth to a Type5 at tick 251 and world48's to a Type10 at 252 (251
+/// here, as world47's Type108), both through the Type10 family's shared 09A80.
+#[v2k_test_support::retail_test]
+fn hive_births_type5_and_type10_through_the_type10_family_constructor() {
+    for (level, entity_type, tick) in [(46, 5, 251), (48, 10, 251)] {
+        let (manager, scheduler, births) = hive_world_births(level, 260);
+        let born: Vec<_> = births
+            .iter()
+            .filter(|birth| birth.1 == entity_type)
+            .collect();
+        assert_eq!(born.len(), 1, "world{level}: {births:?}");
+        assert_eq!(born[0].0, tick, "world{level}");
+        assert_hive_child(
+            &manager,
+            &scheduler,
+            born[0].2,
+            crate::intro2_type10::type10_manager_allocation_authenticates,
+        );
+    }
+}
+
 /// Retail: world21's Hive gives birth to a Type87 (deathwas) at ticks 151, 401
 /// and 653, through the same class7 flyer constructor as the Type15 Wasp.
 #[v2k_test_support::retail_test]

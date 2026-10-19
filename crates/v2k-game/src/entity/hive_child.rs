@@ -14,18 +14,26 @@ use crate::{
 };
 
 /// A Hive child's task owner, appended to the scheduler in the birth's pass.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum NativeHiveNewborn {
     Flyer(Intro2FlyerSchedulerOwner),
+    Type57(crate::intro2_type57::Intro2Type57Owner),
+    Type10Family(crate::intro2_type10::Intro2Type10Owner),
+    Type13(crate::intro2_type13_live::Intro2Type13WorldOwner),
+    Type26(crate::intro2_type26_defecate_virus::Intro2Type26WorldOwner),
     Type18(Type18Owner),
     Type38Family(Type38FamilyOwner),
     Type76Family(Type76FamilyOwner),
 }
 
 impl NativeHiveNewborn {
-    pub fn entity_id(self) -> u32 {
+    pub fn entity_id(&self) -> u32 {
         match self {
             Self::Flyer(owner) => owner.entity_id(),
+            Self::Type57(owner) => owner.entity_id(),
+            Self::Type10Family(owner) => owner.entity_id(),
+            Self::Type13(owner) => owner.entity_id(),
+            Self::Type26(owner) => owner.entity_id(),
             Self::Type18(owner) => owner.entity_id(),
             Self::Type38Family(owner) => owner.entity_id(),
             Self::Type76Family(owner) => owner.entity_id(),
@@ -37,6 +45,7 @@ impl NativeHiveNewborn {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum HiveGroundFamily {
     Type18,
+    Type26,
     Type38(Type38Row),
     Type76(Type76Row),
 }
@@ -45,6 +54,7 @@ impl HiveGroundFamily {
     fn from_entity_type(entity_type: u32) -> Option<Self> {
         match entity_type {
             18 => Some(Self::Type18),
+            26 => Some(Self::Type26),
             _ => Type38Row::from_entity_type(entity_type)
                 .map(Self::Type38)
                 .or_else(|| Type76Row::from_entity_type(entity_type).map(Self::Type76)),
@@ -55,6 +65,7 @@ impl HiveGroundFamily {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HiveGroundFamilyError {
     Type18(Type18Error),
+    Type26(crate::intro2_type26_defecate_virus::Intro2Type26DefecateVirusPublicationError),
     Type38(Type38Block),
     Type76(Type76Error),
 }
@@ -87,6 +98,23 @@ pub enum HiveNativeBirthBlock {
     /// entry: a committed prefix, as `Publication`.
     GroundConstruction(HiveGroundFamilyError),
     GroundAdoption(NativeGroundActorBlock),
+    /// Type57's metadata or body refused before104B0 entry.
+    Type57Metadata(crate::intro2_type57::Intro2Type57Error),
+    /// Type57's construction failed after104B0 entry: a committed prefix.
+    Type57Construction(crate::intro2_type57::Intro2Type57Error),
+    Type57Adoption(crate::intro2_type57::Intro2Type57Block),
+    /// A Type10-family metadata or body refused before 104B0 entry.
+    Type10FamilyMetadata(crate::intro2_type10::Intro2Type10Error),
+    /// A Type10-family construction failed after 104B0 entry: a committed prefix.
+    Type10FamilyConstruction(crate::intro2_type10::Intro2Type10Error),
+    Type10FamilyAdoption(crate::intro2_type10::Intro2Type10Block),
+    /// Type13's metadata or body refused before 104B0 entry.
+    Type13Metadata(crate::intro2_type13_live::Intro2Type13PublicationError),
+    /// Type13's construction failed after 104B0 entry: a committed prefix.
+    Type13Construction(crate::intro2_type13_live::Intro2Type13PublicationError),
+    Type13Adoption(crate::intro2_type13_live::Intro2Type13SchedulerAdoptionError),
+    /// Type26's task adoption failed after 104B0 entry: a committed prefix.
+    Type26Adoption(crate::intro2_type26_defecate_virus::Intro2Type26WorldBlock),
 }
 
 impl HiveNativeBirthBlock {
@@ -99,6 +127,13 @@ impl HiveNativeBirthBlock {
                 ..
             } | Self::GroundConstruction(_)
                 | Self::GroundAdoption(_)
+                | Self::Type57Construction(_)
+                | Self::Type57Adoption(_)
+                | Self::Type10FamilyConstruction(_)
+                | Self::Type10FamilyAdoption(_)
+                | Self::Type13Construction(_)
+                | Self::Type13Adoption(_)
+                | Self::Type26Adoption(_)
         )
     }
 }
@@ -112,6 +147,21 @@ impl EntityManager {
     ) -> Result<NativeHiveNewborn, HiveNativeBirthBlock> {
         if let Some(family) = HiveGroundFamily::from_entity_type(request.entity_type) {
             return self.append_native_hive_ground_actor(family, request, context, world_fx);
+        }
+        if request.entity_type == 57 {
+            return self
+                .append_native_hive_type57(request, context, world_fx)
+                .map(NativeHiveNewborn::Type57);
+        }
+        if request.entity_type == crate::intro2_type13_live::TYPE13_ENTITY_TYPE {
+            return self
+                .append_native_hive_type13(request, context, world_fx)
+                .map(NativeHiveNewborn::Type13);
+        }
+        if crate::intro2_type10::Type10Profile::from_entity_type(request.entity_type).is_some() {
+            return self
+                .append_native_hive_type10_family(request, context, world_fx)
+                .map(NativeHiveNewborn::Type10Family);
         }
         if crate::intro2_flyers_live::native_flyer_model_id(request.entity_type).is_none() {
             return Err(HiveNativeBirthBlock::UnsupportedEntityType {
@@ -143,6 +193,11 @@ impl EntityManager {
         match family {
             HiveGroundFamily::Type18 => crate::native_type18::authenticate_metadata(&metadata)
                 .map_err(HiveGroundFamilyError::Type18),
+            HiveGroundFamily::Type26 => {
+                crate::intro2_type26_defecate_virus::authenticate_metadata(&metadata)
+                    .map(drop)
+                    .map_err(HiveGroundFamilyError::Type26)
+            }
             HiveGroundFamily::Type38(row) => {
                 crate::native_type38::authenticate_metadata(row, &metadata)
                     .map_err(HiveGroundFamilyError::Type38)
@@ -215,6 +270,22 @@ impl EntityManager {
             )
             .map(drop)
             .map_err(HiveGroundFamilyError::Type18),
+            HiveGroundFamily::Type26 => {
+                crate::intro2_type26_defecate_virus::publish_authored_type26(
+                    crate::intro2_type26_defecate_virus::Type26AuthoredConstruction {
+                        entity: &mut entity,
+                        allocation,
+                        metadata: &metadata,
+                        record,
+                        resources,
+                        constructor_surface_bits,
+                        sub_d,
+                    },
+                    next_random,
+                )
+                .map(drop)
+                .map_err(HiveGroundFamilyError::Type26)
+            }
             HiveGroundFamily::Type38(_) => crate::native_type38::publish_authored_type38(
                 crate::native_type38::Type38AuthoredConstructionRequest {
                     entity: &mut entity,
@@ -250,15 +321,21 @@ impl EntityManager {
         assert_eq!(self.allocate_live_entity_id(), id);
         self.append_live_entity(entity);
         match family {
-            HiveGroundFamily::Type18 => Type18Owner::adopt(self, id).map(NativeHiveNewborn::Type18),
-            HiveGroundFamily::Type38(_) => {
-                Type38FamilyOwner::adopt(self, id).map(NativeHiveNewborn::Type38Family)
+            HiveGroundFamily::Type18 => Type18Owner::adopt(self, id)
+                .map(NativeHiveNewborn::Type18)
+                .map_err(HiveNativeBirthBlock::GroundAdoption),
+            HiveGroundFamily::Type26 => {
+                crate::intro2_type26_defecate_virus::Intro2Type26WorldOwner::adopt(self, id)
+                    .map(NativeHiveNewborn::Type26)
+                    .map_err(HiveNativeBirthBlock::Type26Adoption)
             }
-            HiveGroundFamily::Type76(_) => {
-                Type76FamilyOwner::adopt(self, id).map(NativeHiveNewborn::Type76Family)
-            }
+            HiveGroundFamily::Type38(_) => Type38FamilyOwner::adopt(self, id)
+                .map(NativeHiveNewborn::Type38Family)
+                .map_err(HiveNativeBirthBlock::GroundAdoption),
+            HiveGroundFamily::Type76(_) => Type76FamilyOwner::adopt(self, id)
+                .map(NativeHiveNewborn::Type76Family)
+                .map_err(HiveNativeBirthBlock::GroundAdoption),
         }
-        .map_err(HiveNativeBirthBlock::GroundAdoption)
     }
 
     fn append_native_hive_flyer(
@@ -373,6 +450,184 @@ impl EntityManager {
         // +60, FIFO/count, ejection and scheduler same-walk registration are
         // the1BEB0 caller's successive phases, not constructor side effects.
         Ok(owner)
+    }
+
+    /// The intrinsic body of a Sub-G family's child, staged as the flyers'
+    /// without publishing it or advancing the process owner: the constructor
+    /// surface, then D4A0's placement. B4 stays unresolved until 104B0's entry.
+    fn stage_native_hive_body(
+        &self,
+        request: HiveBirthRequest,
+        context: &NativeHiveChildConstructionContext<'_>,
+    ) -> Result<
+        (
+            Entity,
+            crate::main_base_abort::MainBaseAbortActorLease,
+            EntityTypeRuntimeMetadata,
+        ),
+        HiveNativeBirthBlock,
+    > {
+        let metadata = self
+            .type_metadata
+            .get(request.entity_type as usize)
+            .ok_or(HiveNativeBirthBlock::Runtime("native Hive child metadata"))?
+            .clone();
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err(HiveNativeBirthBlock::Runtime("native body stamp lineage"));
+        }
+        let terrain = context
+            .resources
+            .terrain
+            .filter(|terrain| {
+                terrain.cells.len()
+                    == v2k_formats::terrain::GRID_SIZE * v2k_formats::terrain::GRID_SIZE
+            })
+            .ok_or(HiveNativeBirthBlock::Runtime(
+                "native Hive child complete terrain",
+            ))?;
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            request.position_raw,
+            terrain,
+            context.retail_tick,
+            context.waves_enabled,
+        )
+        .ok_or(HiveNativeBirthBlock::Runtime(
+            "native Hive child constructor surface",
+        ))?;
+        let id = self.next_entity_id;
+        if id == 0 || self.entities.iter().any(|entity| entity.id == id) {
+            return Err(HiveNativeBirthBlock::Runtime(
+                "native Hive child allocation handle",
+            ));
+        }
+        let mut entity = native_instance_body(
+            id,
+            RetailRuntimeValue::Unresolved,
+            &metadata,
+            terrain,
+            NativeInstanceBodyRequest {
+                entity_type: request.entity_type,
+                position_raw: request.position_raw,
+                objective: request.objective,
+            },
+        );
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(SURFACE_STATE_MASK, constructor_surface_bits);
+        let radius = match entity.collision.active_model_slot() {
+            RetailRuntimeValue::Known(slot) => entity
+                .model_in_slot(slot)
+                .and_then(|id| {
+                    context
+                        .resources
+                        .model_extent_raw
+                        .and_then(|lookup| lookup(id))
+                })
+                .map(|radius| radius as i16),
+            RetailRuntimeValue::Unresolved => None,
+        };
+        let RetailRuntimeValue::Known(position) =
+            crate::entity_initializer::constructor_position_raw(
+                &metadata,
+                request.position_raw,
+                Some(terrain),
+                radius,
+            )
+        else {
+            return Err(HiveNativeBirthBlock::Runtime(
+                "native Hive child D4A0 placement",
+            ));
+        };
+        entity.set_position_raw(position);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        Ok((entity, allocation, metadata))
+    }
+
+    /// The zeroed record through Type57's own constructor.
+    fn append_native_hive_type57(
+        &mut self,
+        request: HiveBirthRequest,
+        context: NativeHiveChildConstructionContext<'_>,
+        world_fx: &mut WorldFx,
+    ) -> Result<crate::intro2_type57::Intro2Type57Owner, HiveNativeBirthBlock> {
+        let (mut entity, allocation, metadata) = self.stage_native_hive_body(request, &context)?;
+        crate::intro2_type57::authenticate_native_type57_body(&entity, allocation, &metadata)
+            .map_err(HiveNativeBirthBlock::Type57Metadata)?;
+        entity.construction_stamp_at_0xb4 = self.begin_common_body_attempt();
+        crate::intro2_type57::publish_native_type57(
+            crate::intro2_type57::NativeType57ConstructionRequest {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+            },
+            world_fx,
+        )
+        .map_err(HiveNativeBirthBlock::Type57Construction)?;
+        let id = entity.id;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        crate::intro2_type57::Intro2Type57Owner::adopt(self, id)
+            .map_err(HiveNativeBirthBlock::Type57Adoption)
+    }
+
+    /// The zeroed record through the Type10 family's shared 09A80.
+    fn append_native_hive_type10_family(
+        &mut self,
+        request: HiveBirthRequest,
+        context: NativeHiveChildConstructionContext<'_>,
+        world_fx: &mut WorldFx,
+    ) -> Result<crate::intro2_type10::Intro2Type10Owner, HiveNativeBirthBlock> {
+        let (mut entity, allocation, metadata) = self.stage_native_hive_body(request, &context)?;
+        crate::intro2_type10::authenticate_native_type10_family_body(
+            &entity, allocation, &metadata,
+        )
+        .map_err(HiveNativeBirthBlock::Type10FamilyMetadata)?;
+        entity.construction_stamp_at_0xb4 = self.begin_common_body_attempt();
+        crate::intro2_type10::publish_native_type10_family(
+            crate::intro2_type10::NativeType10FamilyConstructionRequest {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+            },
+            world_fx,
+        )
+        .map_err(HiveNativeBirthBlock::Type10FamilyConstruction)?;
+        let id = entity.id;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        crate::intro2_type10::Intro2Type10Owner::adopt(self, id)
+            .map_err(HiveNativeBirthBlock::Type10FamilyAdoption)
+    }
+
+    /// The zeroed record through Type13's 09A80.
+    fn append_native_hive_type13(
+        &mut self,
+        request: HiveBirthRequest,
+        context: NativeHiveChildConstructionContext<'_>,
+        world_fx: &mut WorldFx,
+    ) -> Result<crate::intro2_type13_live::Intro2Type13WorldOwner, HiveNativeBirthBlock> {
+        let (mut entity, allocation, metadata) = self.stage_native_hive_body(request, &context)?;
+        crate::intro2_type13_live::authenticate_native_type13_body(&entity, allocation, &metadata)
+            .map_err(HiveNativeBirthBlock::Type13Metadata)?;
+        entity.construction_stamp_at_0xb4 = self.begin_common_body_attempt();
+        crate::intro2_type13_live::publish_native_type13(
+            crate::intro2_type13_live::NativeType13ConstructionRequest {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+            },
+            world_fx,
+        )
+        .map_err(HiveNativeBirthBlock::Type13Construction)?;
+        let id = entity.id;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        crate::intro2_type13_live::Intro2Type13WorldOwner::adopt_entity(self, id)
+            .map_err(HiveNativeBirthBlock::Type13Adoption)
     }
 }
 

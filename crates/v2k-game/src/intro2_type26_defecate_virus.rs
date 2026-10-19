@@ -202,7 +202,7 @@ pub(crate) fn intro2_type26_allocation_authenticates(entity: &Entity) -> bool {
         && match entity.native_type26_allocation {
             Some(receipt) => {
                 receipt.allocation.entity_id == entity.id
-                    && entity.authored_spawn_index == Some(receipt.spawn_index)
+                    && entity.authored_spawn_index == receipt.spawn_index
             }
             None => entity
                 .authored_spawn_index
@@ -220,7 +220,8 @@ pub(crate) fn intro2_type26_allocation_authenticates(entity: &Entity) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NativeType26Allocation {
     allocation: crate::main_base_abort::MainBaseAbortActorLease,
-    spawn_index: usize,
+    /// None for a Hive child, which has no authored record.
+    spawn_index: Option<usize>,
 }
 
 pub(crate) fn type26_manager_allocation_authenticates(

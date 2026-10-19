@@ -30,7 +30,8 @@ pub use live::{
     Intro2Type10Owner, Intro2Type10Tick,
 };
 pub(crate) use native::{
-    authenticate_metadata, publish_authored_type10_family, publish_intro2_type10,
+    authenticate_metadata, authenticate_native_type10_family_body, publish_authored_type10_family,
+    publish_intro2_type10, publish_native_type10_family, NativeType10FamilyConstructionRequest,
     Type10AuthoredConstruction,
 };
 
@@ -234,7 +235,8 @@ impl Type10Profile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Intro2Type10Runtime {
     pub(crate) entity_id: u32,
-    pub(crate) spawn_index: usize,
+    /// None for a Hive child, which has no authored record.
+    pub(crate) spawn_index: Option<usize>,
     pub(crate) profile: Type10Profile,
     /// Ordinary 104B0 receipt; Intro2 spawns 55/56 carry none.
     pub(crate) ordinary_allocation: Option<MainBaseAbortActorLease>,
@@ -270,13 +272,14 @@ pub(crate) fn intro2_type10_allocation_authenticates(entity: &Entity) -> bool {
         entity.active
             && entity.id == runtime.entity_id
             && entity.entity_type == runtime.profile.entity_type()
-            && entity.authored_spawn_index == Some(runtime.spawn_index)
-            && match runtime.ordinary_allocation {
-                Some(lease) => lease.entity_id == entity.id,
-                None => {
+            && entity.authored_spawn_index == runtime.spawn_index
+            && match (runtime.spawn_index, runtime.ordinary_allocation) {
+                (_, Some(lease)) => lease.entity_id == entity.id,
+                (Some(spawn), None) => {
                     runtime.profile == Type10Profile::Type10
-                        && INTRO2_TYPE10_SPAWN_INDICES.contains(&runtime.spawn_index)
+                        && INTRO2_TYPE10_SPAWN_INDICES.contains(&spawn)
                 }
+                (None, None) => false,
             }
             && entity.model_slots == [Some(runtime.profile.model()); 4]
             && matches!(

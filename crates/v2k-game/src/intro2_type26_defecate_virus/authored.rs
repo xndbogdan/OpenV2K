@@ -1,22 +1,23 @@
-//! Ordinary Type26 stag beetles use 104B0/09A80/D4A0 and the current process RNG.
+//! Ordinary Type26 stag beetles use 104B0/09A80/D4A0 and the current process RNG,
+//! from an authored record or a Hive's zeroed one.
 
 use super::*;
 use crate::{
     common_mover::{sub_d::NativeSubDConstruction, SubAPropulsionRuntime},
     entity::EntityConstructionResources,
+    entity::NativeCreationRecord,
     entity_behavior::translate_state_policy,
     entity_collision_state::{
         RetailStateWord, ACTIVE_MODEL_SLOT_HIGH_STATE_BIT, SURFACE_STATE_MASK,
     },
     main_base_abort::MainBaseAbortActorLease,
 };
-use v2k_formats::levels::EntitySpawn;
 
 pub(crate) struct Type26AuthoredConstruction<'a> {
     pub entity: &'a mut Entity,
     pub allocation: MainBaseAbortActorLease,
     pub metadata: &'a EntityTypeRuntimeMetadata,
-    pub spawn: &'a EntitySpawn,
+    pub record: NativeCreationRecord,
     pub resources: EntityConstructionResources<'a>,
     pub constructor_surface_bits: u32,
     pub sub_d: NativeSubDConstruction,
@@ -31,7 +32,7 @@ pub(crate) fn publish_authored_type26(
         entity,
         allocation,
         metadata,
-        spawn,
+        record,
         resources,
         constructor_surface_bits,
         sub_d,
@@ -44,20 +45,17 @@ pub(crate) fn publish_authored_type26(
     }
     if !entity.active
         || entity.entity_type != 26
-        || spawn.entity_type != 26
+        || record.entity_type != 26
         || entity.id != allocation.entity_id
-        || entity.authored_spawn_index != Some(spawn.index)
+        || entity.authored_spawn_index != record.authored_spawn_index
         || entity.capability_flags != 8
         || entity.model_slots != [Some(267); 4]
-        || spawn
+        || record
             .model_overrides
             .iter()
             .any(|model| !matches!(*model, 0 | 267))
-        || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
-        || spawn.has_animation
-        || spawn.animation.is_some()
-        || spawn.has_config
-        || spawn.config.is_some()
+        || entity.rotation_heading_pitch_roll_raw() != record.rotation.map(|word| word as i16)
+        || !record.plain
     {
         return Err(Error::EntityIdentityMismatch);
     }
@@ -78,7 +76,7 @@ pub(crate) fn publish_authored_type26(
         )))
         || entity.collision.health_raw != RetailRuntimeValue::Known(5000)
         || entity.collision.pre_health_damage_buffer_raw
-            != RetailRuntimeValue::Known(spawn.initial_damage_buffer_raw)
+            != RetailRuntimeValue::Known(record.initial_damage_buffer_raw)
         || entity.actor_common_axis_descriptor
             != RetailRuntimeValue::Known(
                 metadata
@@ -96,13 +94,13 @@ pub(crate) fn publish_authored_type26(
     }
     let terrain = resources.terrain.ok_or(Error::TerrainUnavailable)?;
     let objects = resources.terrain_objects.ok_or(Error::TerrainUnavailable)?;
-    let [x, _, z] = spawn.position_raw();
+    let [x, _, z] = record.position_raw;
     let cell = terrain
         .cell(usize::from(x as u16 >> 8), usize::from(z as u16 >> 8))
         .ok_or(Error::TerrainUnavailable)?;
     // 104B0 domain/default setup precedes D4A0 and the weighted initializer.
     let mut state =
-        RetailStateWord::exact(0x0607_8801 | if spawn.param != 0 { 0x0100_0000 } else { 0 });
+        RetailStateWord::exact(0x0607_8801 | if record.param != 0 { 0x0100_0000 } else { 0 });
     state.overwrite(SURFACE_STATE_MASK, constructor_surface_bits);
     state.overwrite(
         ACTIVE_MODEL_SLOT_HIGH_STATE_BIT,
@@ -130,7 +128,7 @@ pub(crate) fn publish_authored_type26(
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
     entity.native_type26_allocation = Some(NativeType26Allocation {
         allocation,
-        spawn_index: spawn.index,
+        spawn_index: record.authored_spawn_index,
     });
     native::publish_retained_birth(
         entity,
