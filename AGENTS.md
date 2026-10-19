@@ -68,7 +68,9 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
   copy their install's two files into the folder.
 - `--start` takes `{"level": 13}`, optionally with a raw `"position": [x, y,
   z]` and `"heading"`, or `{"save": "Slot02"}`, a copy of a native save
-  beside the state file.
+  beside the state file. With a position it also takes the raw `"velocity":
+  [x, y, z]` and body `"attitude": [pitch, roll]`; retail's Skip to World
+  keeps the player's position, velocity and attitude.
 - `--input-replay` takes `[{"frame": 10, "key": "Space", "pressed": true}]`
   with SDL key names. Frames count from 1, as `--frames` and
   `--snapshot-at FRAME:PATH` do.
@@ -76,7 +78,8 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
   as fast as they draw, and the same arguments give the same frames and logs.
   Take pixel evidence with `--renderer software`.
 - `--event-log` writes JSON lines: each frame's state, level, delta and world
-  tick; the player's position, velocity, heading, mode and health; and the
+  tick; the player's position, velocity, heading, attitude (pitch, roll),
+  mode and health; and the
   entities that appeared (`spawn`) or went (`dispose`).
 - `--actor-log FILE` writes every live entity each frame, one JSON line a
   frame: `[id, type, x, y, z, health, detailed]`, with health and the

@@ -103,7 +103,9 @@ pub fn parse_fixed_step(text: &str) -> Result<u32, String> {
 /// `--start STATE.json`: where gameplay begins, skipping the intro and menus.
 /// Either `save` (a native save file such as a copy of `Slot02`) or `level`
 /// (a global overlay id: 13 is the first world), optionally with the
-/// player's raw world `position` `[x, y, z]` and `heading` (0..65535).
+/// player's raw world `position` `[x, y, z]` and `heading` (0..65535), and
+/// with that position its raw `velocity` `[x, y, z]` and body `attitude`
+/// `[pitch, roll]`: retail keeps all of them across Skip to World.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct StartState {
@@ -111,6 +113,8 @@ pub struct StartState {
     pub level: Option<u32>,
     pub position: Option<[i16; 3]>,
     pub heading: Option<u16>,
+    pub velocity: Option<[i16; 3]>,
+    pub attitude: Option<[i16; 2]>,
 }
 
 impl StartState {
@@ -133,11 +137,21 @@ impl StartState {
         match (&self.save, self.level) {
             (Some(_), Some(_)) => Err("start state: give either save or level".into()),
             (None, None) => Err("start state: give save or level".into()),
-            (Some(_), None) if self.position.is_some() || self.heading.is_some() => {
-                Err("start state: a save holds its own position and heading".into())
+            (Some(_), None)
+                if self.position.is_some()
+                    || self.heading.is_some()
+                    || self.velocity.is_some()
+                    || self.attitude.is_some() =>
+            {
+                Err("start state: a save holds its own pose".into())
             }
-            (None, Some(_)) if self.heading.is_some() && self.position.is_none() => {
-                Err("start state: a heading needs a position".into())
+            (None, Some(_))
+                if self.position.is_none()
+                    && (self.heading.is_some()
+                        || self.velocity.is_some()
+                        || self.attitude.is_some()) =>
+            {
+                Err("start state: a heading, velocity or attitude needs a position".into())
             }
             _ => Ok(()),
         }
@@ -211,6 +225,8 @@ pub struct PlayerLine {
     pub position: [i16; 3],
     pub velocity: [i16; 3],
     pub heading: u16,
+    /// Body pitch and roll words.
+    pub attitude: [i16; 2],
     pub mode: &'static str,
     pub health: i32,
 }
@@ -435,6 +451,37 @@ mod tests {
         assert!(StartState {
             level: Some(13),
             heading: Some(1),
+            ..StartState::default()
+        }
+        .validate()
+        .is_err());
+        assert!(StartState {
+            velocity: Some([2, 10, -129]),
+            attitude: Some([251, -12]),
+            ..level
+        }
+        .validate()
+        .is_ok());
+        for motion in [
+            StartState {
+                velocity: Some([0, 0, 1]),
+                ..StartState::default()
+            },
+            StartState {
+                attitude: Some([1, 0]),
+                ..StartState::default()
+            },
+        ] {
+            assert!(StartState {
+                level: Some(13),
+                ..motion
+            }
+            .validate()
+            .is_err());
+        }
+        assert!(StartState {
+            save: Some("Slot02".into()),
+            attitude: Some([1, 0]),
             ..StartState::default()
         }
         .validate()
