@@ -159,6 +159,8 @@ pub struct ProbeRun {
     pub input: InputReplay,
     pub start: Option<StartState>,
     pub event_log: Option<EventLog>,
+    /// `--actor-log`: every live entity each frame, in the event log's format.
+    pub actor_log: Option<EventLog>,
     pub entities: EntityCensus,
 }
 
@@ -277,6 +279,24 @@ impl EventLog {
         }))
     }
 
+    /// Every live entity at the end of a frame: `[id, type, x, y, z, health,
+    /// detailed]`, health and the detailed state bit null while unresolved.
+    pub fn actors(
+        &mut self,
+        frame: u64,
+        tick: u32,
+        actors: impl Iterator<Item = (u32, u32, [i16; 3], Option<i32>, Option<bool>)>,
+    ) -> std::io::Result<()> {
+        let rows: Vec<_> = actors
+            .map(|(id, entity_type, [x, y, z], health, detailed)| {
+                serde_json::json!([id, entity_type, x, y, z, health, detailed])
+            })
+            .collect();
+        self.line(&serde_json::json!({
+            "frame": frame, "ev": "actors", "tick": tick, "actors": rows,
+        }))
+    }
+
     pub fn flush(&mut self) -> std::io::Result<()> {
         self.out.flush()
     }
@@ -361,6 +381,34 @@ mod tests {
         assert!(census
             .update([(2, 46, [6, 6, 6]), (7, 17, [9, 9, 9])].into_iter())
             .is_empty());
+    }
+
+    #[test]
+    fn actor_lines_hold_every_entity_with_unresolved_fields_null() {
+        let path = std::env::temp_dir().join(format!("v2k-actor-log-{}.jsonl", std::process::id()));
+        let mut log = EventLog::create(&path).unwrap();
+        log.actors(
+            3,
+            2,
+            [
+                (1, 46, [1, -2, 3], Some(40_000), Some(true)),
+                (7, 77, [4, 5, 6], None, None),
+            ]
+            .into_iter(),
+        )
+        .unwrap();
+        log.flush().unwrap();
+        drop(log);
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        let line: serde_json::Value = serde_json::from_str(text.lines().nth(1).unwrap()).unwrap();
+        assert_eq!(
+            line,
+            serde_json::json!({
+                "frame": 3, "ev": "actors", "tick": 2,
+                "actors": [[1, 46, 1, -2, 3, 40000, true], [7, 77, 4, 5, 6, null, null]],
+            })
+        );
     }
 
     #[test]

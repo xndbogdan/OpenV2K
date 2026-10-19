@@ -78,6 +78,9 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
 - `--event-log` writes JSON lines: each frame's state, level, delta and world
   tick; the player's position, velocity, heading, mode and health; and the
   entities that appeared (`spawn`) or went (`dispose`).
+- `--actor-log FILE` writes every live entity each frame, one JSON line a
+  frame: `[id, type, x, y, z, health, detailed]`, with health and the
+  detailed-update state bit null while unresolved.
 - `scripts/level-sweep.ps1` plays every world this way and lists each one's
   notable log lines; `-Baseline TAG` compares with an earlier sweep.
 
