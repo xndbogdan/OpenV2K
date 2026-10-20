@@ -133,6 +133,7 @@ pub enum ActorTaskRuntimeFamily {
     AttractAttentionTargetRoute,
     CapturePeoplePursuit,
     FishTargetRoute,
+    SharkAttack,
     CleansingLandscape,
     TerrainCleansing,
     CaptureBeaconAcquisition,
@@ -184,6 +185,8 @@ pub enum ActorTaskRuntime {
     CapturePeoplePursuit(SharedTargetRouteTaskState),
     /// Class13 variant1 shares 03650/03780 with its own C690 transition owner.
     FishTargetRoute(SharedTargetRouteTaskState),
+    /// Class69's direct 01020 Primary: Type25's prey, phase and target record.
+    SharkAttack(crate::shark_attack::SharkAttackTaskState),
     CleansingLandscape(crate::cleansing_vehicle::tasks::CleansingMovementTaskState),
     TerrainCleansing(DefecateVirusTerrainTaskState),
     /// Class9 carrying search 402190/4021B0 has no task-private storage.
@@ -254,6 +257,7 @@ impl ActorTaskRuntime {
             }
             Self::CapturePeoplePursuit(_) => ActorTaskRuntimeFamily::CapturePeoplePursuit,
             Self::FishTargetRoute(_) => ActorTaskRuntimeFamily::FishTargetRoute,
+            Self::SharkAttack(_) => ActorTaskRuntimeFamily::SharkAttack,
             Self::CleansingLandscape(_) => ActorTaskRuntimeFamily::CleansingLandscape,
             Self::TerrainCleansing(_) => ActorTaskRuntimeFamily::TerrainCleansing,
             Self::CaptureBeaconAcquisition => ActorTaskRuntimeFamily::CaptureBeaconAcquisition,
@@ -1790,6 +1794,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::FishTargetRoute(_)) => {
                 Some(ActorTaskRuntimeFamily::FishTargetRoute)
             }
+            Some(ActorTaskRuntime::SharkAttack(_)) => Some(ActorTaskRuntimeFamily::SharkAttack),
             Some(ActorTaskRuntime::CleansingLandscape(_)) => {
                 Some(ActorTaskRuntimeFamily::CleansingLandscape)
             }
@@ -1876,6 +1881,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             }
             ActorTaskRuntime::CapturePeoplePursuit(_)
             | ActorTaskRuntime::FishTargetRoute(_)
+            | ActorTaskRuntime::SharkAttack(_)
             | ActorTaskRuntime::CleansingLandscape(_)
             | ActorTaskRuntime::TerrainCleansing(_)
             | ActorTaskRuntime::CaptureBeaconAcquisition
@@ -2015,6 +2021,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             }
             ActorTaskRuntimeFamily::CapturePeoplePursuit
             | ActorTaskRuntimeFamily::FishTargetRoute
+            | ActorTaskRuntimeFamily::SharkAttack
             | ActorTaskRuntimeFamily::CleansingLandscape
             | ActorTaskRuntimeFamily::TerrainCleansing
             | ActorTaskRuntimeFamily::CaptureBeaconAcquisition

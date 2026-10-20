@@ -336,7 +336,7 @@ fn commit_plan(
             28 => &mut entity.native_type28_runtime.as_mut().unwrap().sub_d_runtime,
             76 | 77 => &mut entity.native_type76_runtime.as_mut().unwrap().sub_d_runtime,
             94 => &mut entity.intro2_type94_runtime.as_mut().unwrap().sub_d_runtime,
-            22 | 23 | 24 | 62 | 124 => {
+            22 | 23 | 24 | 62 | 124 | 25 => {
                 &mut entity.shared_fish_runtime.as_mut().unwrap().sub_d_runtime
             }
             _ => unreachable!("Sub-I path has no Sub-D reversal write"),
@@ -608,7 +608,7 @@ fn contact_topology(
             28 => entity.native_type28_runtime.is_none(),
             76 | 77 => entity.native_type76_runtime.is_none(),
             94 => entity.intro2_type94_runtime.is_none(),
-            22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_none(),
+            22 | 23 | 24 | 62 | 124 | 25 => entity.shared_fish_runtime.is_none(),
             _ => true,
         }
     {
@@ -772,7 +772,7 @@ fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool
             .find(|entity| entity.id == id)
             .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates),
         17 => crate::intro2_type17::type17_manager_allocation_authenticates(manager, id),
-        22 | 23 | 24 | 62 | 124 => crate::shared_fish::allocation_authenticates(manager, id),
+        22 | 23 | 24 | 62 | 124 | 25 => crate::shared_fish::allocation_authenticates(manager, id),
         47 | 71 => crate::shared_type47::type47_manager_allocation_authenticates(manager, id),
         49 => crate::cleansing_vehicle::allocation_authenticates(manager, id),
         53 => crate::intro2_type53::type53_manager_allocation_authenticates(manager, id),

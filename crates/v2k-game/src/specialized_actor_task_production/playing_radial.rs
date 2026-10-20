@@ -149,7 +149,7 @@ impl SpecializedActorTaskScheduler {
                 31 | 105 => entity.native_type31_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
                 66 | 82 | 125 => entity.intro2_type66_runtime.is_some(),
-                22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_some(),
+                22 | 23 | 24 | 62 | 124 | 25 => entity.shared_fish_runtime.is_some(),
                 3 | 27 => entity.rolling_boulder_runtime.is_some(),
                 // Mass 1 takes no 14AE0 impulse; its zero multipliers filter
                 // every packet.
@@ -402,7 +402,7 @@ impl DynamicRadialLiveCallbacks for PlayingNativeCallbacks<'_> {
                 )
                 .map(|result| {
                     if result.publication.is_some() {
-                        self.scheduler.retire_shared_fish(id);
+                        self.scheduler.retire_shared_fish(entities, id);
                     }
                     crate::live_actor_checked_damage::LiveActorDeathResult {
                         returned_nonzero: result.returned_nonzero,

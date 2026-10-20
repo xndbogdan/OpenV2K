@@ -1,7 +1,7 @@
 //! Real-data coverage for the bounded player/active-solid adapter.
 
 use v2k_formats::models::CollisionModelPool;
-use v2k_game::active_pair::{ActivePairUnresolved, PairCandidateDisposition};
+use v2k_game::active_pair::PairCandidateDisposition;
 use v2k_game::actor_task_dispatcher::ActorTaskRuntime;
 use v2k_game::actor_task_owner::ActorTaskSlot;
 use v2k_game::damage::{DamageDeliveryRecord, EntityHitEntry, PRIMARY_PROJECTILE_DAMAGE_PACKET};
@@ -1174,7 +1174,7 @@ fn authored_hive_lethal_hit_fails_closed_while_the_level_one_cohort_lives() {
 }
 
 #[v2k_test_support::retail_test]
-fn live_cargo_makes_the_player_damage_modifier_fail_closed() {
+fn live_cargo_leaves_the_player_damage_modifier_an_identity() {
     let (mut session, mut manager) = level_one().expect("retail fixture");
     let weight = entity_at_spawn(&manager, 5);
     let weight_id = weight.id;
@@ -1192,11 +1192,11 @@ fn live_cargo_makes_the_player_damage_modifier_fail_closed() {
         RetailRuntimeValue::Known(mass) if mass > 0
     ));
 
+    // FUN_004484A0 walks the controller's +220 owned list, never Sub-J
+    // cargo: retail's world-22 ballast takes none of a shark's bite.
     let craft = install_base_damage_impact(&mut manager);
-    let before = commit_snapshot(&manager);
     let mut hull = PlayerHull::default();
-    let hull_before = hull;
-    let error = resolve_player_active_contacts(
+    resolve_player_active_contacts(
         &mut manager,
         PlayerActivePairFrame {
             resources: &mut session.cache,
@@ -1210,14 +1210,7 @@ fn live_cargo_makes_the_player_damage_modifier_fail_closed() {
             extra_lives: 0,
         },
     )
-    .expect_err("nonempty modifier context must not be treated as identity");
-
-    assert!(matches!(
-        error,
-        PlayerActivePairError::Core(ActivePairUnresolved::Callback { .. })
-    ));
-    assert_eq!(commit_snapshot(&manager), before);
-    assert_eq!(hull, hull_before);
+    .expect("cargo does not enter the modifier's owned list");
 }
 
 #[v2k_test_support::retail_test]

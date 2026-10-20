@@ -117,15 +117,19 @@ fn native_fish_contact_reverses_d_and_f_without_a_speed_rng_or_animation_ticks()
                 .unwrap()
                 .id;
             let metadata = f.entities.type_runtime_metadata(kind).unwrap().clone();
-            let selection =
-                crate::shared_fish_tasks::select_behavior(&metadata, &mut || selection_word)
-                    .unwrap();
+            let selection = crate::shared_fish_tasks::select_behavior(
+                &metadata,
+                Default::default(),
+                &mut || selection_word,
+            )
+            .unwrap();
             let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection).unwrap();
             crate::shared_fish_tasks::publish_selection(
                 f.entities.entity_mut(id).unwrap(),
                 &metadata,
                 selection,
                 context,
+                &mut || panic!("fish initializers draw no word"),
             )
             .unwrap();
             if route {
@@ -325,7 +329,7 @@ fn a_class63_fish_corpse_keeps_its_task_descriptor_hook_until_the_sweep() {
     assert!(claim_class49_terminal(&mut f.entities, &receipt));
     finish_class49_terminal(&mut f.entities, receipt, &mut f.session.cache, &mut f.fx).unwrap();
     // The terminal's scheduler finish retires the living owner.
-    f.scheduler.retire_shared_fish(id);
+    f.scheduler.retire_shared_fish(&f.entities, id);
     assert!(!f.scheduler.prepare_native_actor_mutation(&f.entities, id));
     let task_id = actor(&f.entities, id)
         .unwrap()

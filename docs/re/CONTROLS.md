@@ -400,7 +400,7 @@ when the craft's controller lookup (`FUN_00443AF0`) succeeds:
 | `FUN_00448280` | Hover/VTOL terrain strike | `vibration × (inward − 0x200) / 15` |
 | `FUN_00447AF0` | dying bounce on terrain or water | the same |
 | `FUN_00447C90` | static-object contact | the same |
-| `FUN_00447D70` | pair contact with a body that is not a pickup (no capability `0xC00`) | `vibration × (d − 0x200) / 45`, `d` the integer root (`FUN_00457730`) of the two positions' wrapped squared distance, its low word compared as a signed short |
+| `FUN_00447D70` | pair contact with a body that is not a pickup (no capability `0xC00`) | `vibration × (d − 0x200) / 45`, `d` the integer root (`FUN_00457730`) of the two velocities' (`+9C..+A0`) squared difference, its low word compared as a signed short |
 | `FUN_004484A0` | the craft's damage modifier, on every filtered hit (`FUN_00415040`, `FUN_00414E10`), dying or not | `vibration × (damage − 2000) / 15` |
 
 `inward` is the speed into the contact normal (the Q12 dot product, negated),

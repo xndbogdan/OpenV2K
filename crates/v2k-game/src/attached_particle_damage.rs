@@ -227,7 +227,7 @@ pub fn apply_attached_particle_damage(
             Ok(outcome) => outcome.death_publication.is_some(),
             Err(error) => error.death_publication.is_some(),
         } {
-            frame.scheduler.retire_shared_fish(id);
+            frame.scheduler.retire_shared_fish(frame.entities, id);
         }
         return result
             .map(|outcome| outcome.filtered_damage_raw)

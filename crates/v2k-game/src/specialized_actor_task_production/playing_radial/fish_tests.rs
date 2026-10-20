@@ -235,7 +235,7 @@ fn playing_radial_fish_requires_live_scheduler_and_pending_prefix_custody_before
             .id;
         isolate(&mut f, id);
         match invalid {
-            0 => f.scheduler.retire_shared_fish(id),
+            0 => f.scheduler.retire_shared_fish(&f.manager, id),
             1 => {
                 f.manager
                     .entity_mut(id)

@@ -1,4 +1,5 @@
-//! Native fish ACD0/AD10/B640 graphs and C7D0/AF50 target handoff.
+//! Native fish ACD0/AD10/B640 graphs and C7D0/AF50 target handoff, and the
+//! shark's 40D2D0 Shark Attack.
 //!
 //! Task algorithms remain in their shared detached owners. This module joins
 //! them to the fish's B/D/F allocation, preserving source slot order, the
@@ -64,27 +65,61 @@ impl<E> FishTaskError<E> {
     }
 }
 
-/// All authenticated fish choices are Always; AC60 consumes exactly one word.
+/// 425680's world rules. Fish choices are all Always; the shark adds
+/// PlayerNearby. Neither evaluation draws a word.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct FishRules {
+    pub player_nearby: bool,
+}
+
+impl FishRules {
+    /// PlayerNearby: 22C10 over `candidates` for capability bit0 within the
+    /// body's live strict axis.
+    pub(crate) fn evaluate<'a>(
+        entity: &Entity,
+        candidates: impl Iterator<Item = &'a Entity>,
+    ) -> Result<Self, FishTaskError> {
+        if !crate::shared_fish::is_shark(entity.entity_type) {
+            return Ok(Self::default());
+        }
+        let RetailRuntimeValue::Known(axis) = entity.actor_common_axis_descriptor else {
+            return Err(FishTaskError::Runtime("shark PlayerNearby axis"));
+        };
+        let candidates: Vec<_> = candidates.filter(|e| e.active).map(candidate).collect();
+        let selection = acquisition::select_guard_location_candidate(GuardLocationCandidateRequest {
+            owner: candidate(entity),
+            candidates_in_intrusive_order: &candidates,
+            search_context: GuardLocationSearchContext::new(
+                WrappedAxisRange::from_raw(axis.strict_axis_limit_raw),
+                crate::guard_location_owner::acquisition::GuardLocationCandidateFilter::CapabilityMask(
+                    std::num::NonZeroU32::new(1).unwrap(),
+                ),
+            ),
+        })
+        .map_err(FishTaskError::Acquisition)?;
+        Ok(Self {
+            player_nearby: matches!(selection, GuardLocationCandidateSelection::Selected(_)),
+        })
+    }
+}
+
+/// AC60 over the authenticated choices; it consumes exactly one word.
 pub(crate) fn select_behavior(
     metadata: &EntityTypeRuntimeMetadata,
+    rules: FishRules,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<BehaviorSelection, FishTaskError> {
     let initializer = metadata
         .initializer
         .as_ref()
         .ok_or(FishTaskError::Metadata)?;
-    if initializer
-        .behavior_choices
-        .iter()
-        .any(|choice| choice.weight_rule_id != 1 || !matches!(choice.behavior_class_id, 5 | 6 | 13))
-    {
-        return Err(FishTaskError::Metadata);
-    }
+    crate::shared_fish::authenticate_metadata(metadata).map_err(|_| FishTaskError::Metadata)?;
     select_initial_behavior(
         &initializer.behavior_choices,
-        |rule| {
-            debug_assert_eq!(rule, BehaviorWeightRule::Always);
-            1
+        |rule| match rule {
+            BehaviorWeightRule::Always => 1,
+            BehaviorWeightRule::PlayerNearby => i32::from(rules.player_nearby),
+            _ => unreachable!("authenticated swimmer rules"),
         },
         next_random,
     )
@@ -117,10 +152,16 @@ pub(crate) fn publish_selection(
     metadata: &EntityTypeRuntimeMetadata,
     selection: BehaviorSelection,
     context: BehaviorContextRuntime,
+    next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), FishTaskError> {
-    publish_selection_with(entity, metadata, selection, context, |runtime| {
-        Ok(PreparedActorTask::new(runtime))
-    })
+    publish_selection_with(
+        entity,
+        metadata,
+        selection,
+        context,
+        |runtime| Ok(PreparedActorTask::new(runtime)),
+        next_random,
+    )
 }
 
 fn publish_selection_with(
@@ -131,9 +172,11 @@ fn publish_selection_with(
     mut prepare: impl FnMut(
         ActorTaskRuntime,
     ) -> Result<PreparedActorTask<ActorTaskRuntime>, FishTaskError>,
+    next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), FishTaskError> {
     let class = selection.program.class_id;
-    if !matches!(class, 5 | 6 | 13)
+    let shark = crate::shared_fish::is_shark(entity.entity_type);
+    if !(matches!(class, 5 | 6) || class == if shark { 69 } else { 13 })
         || context.descriptor() != BehaviorDescriptorIdentity::Named(selection.program)
         || context.style_table_index_raw_at_0x10() != 0
         || entity.shared_fish_runtime.is_none()
@@ -152,6 +195,25 @@ fn publish_selection_with(
         .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     let position = entity.position_raw();
     let result = (|| {
+        if class == 69 {
+            // 40D2D0 clears slot1 then slot2; 56D0 builds the Primary through
+            // 01020 directly, without 06070's Sub-F reset. 5D50 draws twice.
+            let RetailRuntimeValue::Known(Some(f)) = metadata.sub_f_swimming_descriptor else {
+                return Err(FishTaskError::Metadata);
+            };
+            entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+            entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+            let state = crate::shark_attack::SharkAttackTaskState::new(
+                position,
+                f.target_speed_base_raw,
+                next_random,
+            );
+            let prepared = prepare(ActorTaskRuntime::SharkAttack(state))?;
+            entity
+                .actor_tasks
+                .replace_prepared(ActorTaskSlot::Primary, prepared);
+            return Ok(());
+        }
         // B640 copies only authored common-axis +4 before clearing slot2.
         if class == 13 {
             let RetailRuntimeValue::Known(mut axis) = entity.actor_common_axis_descriptor else {
@@ -188,10 +250,12 @@ fn publish_selection_with(
 }
 
 pub(crate) fn reselect_after_task_result(
-    entity: &mut Entity,
+    manager: &mut EntityManager,
+    id: u32,
     metadata: &EntityTypeRuntimeMetadata,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), FishTaskError> {
+    let entity = manager.entity_mut(id).ok_or(FishTaskError::Allocation)?;
     // 416410's suppression read precedes C690/416460's dying-state read.
     // A known-set suppression bit must not require unrelated bit evidence.
     let RetailRuntimeValue::Known(suppressed) = entity.collision.state_flags_at_0x08.masked(0x1000)
@@ -201,16 +265,23 @@ pub(crate) fn reselect_after_task_result(
     if suppressed != 0 {
         return Ok(());
     }
-    reselect_behavior(entity, metadata, next_random)
+    reselect_behavior(manager, id, metadata, next_random)
 }
 
 /// Direct C690/AC60 entry from a style callback. Unlike task-result dispatch,
 /// this does not first call416410 or suppress selection for attachment bit1000.
 pub(crate) fn reselect_behavior(
-    entity: &mut Entity,
+    manager: &mut EntityManager,
+    id: u32,
     metadata: &EntityTypeRuntimeMetadata,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), FishTaskError> {
+    let entity = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .ok_or(FishTaskError::Allocation)?;
+    let rules = FishRules::evaluate(entity, manager.iter_all())?;
+    let entity = manager.entity_mut(id).ok_or(FishTaskError::Allocation)?;
     let RetailRuntimeValue::Known(flags) =
         entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)
     else {
@@ -222,11 +293,11 @@ pub(crate) fn reselect_behavior(
     let RetailRuntimeValue::Known(Some(previous)) = entity.current_behavior_context else {
         return Err(FishTaskError::Graph);
     };
-    let selection = select_behavior(metadata, next_random)?;
+    let selection = select_behavior(metadata, rules, next_random)?;
     let context = previous
         .reselect_named_type_default(selection.program, 0, selection.program.initial_style)
         .ok_or(FishTaskError::Graph)?;
-    publish_selection(entity, metadata, selection, context)
+    publish_selection(entity, metadata, selection, context, next_random)
 }
 
 fn candidate(entity: &Entity) -> GuardLocationEntityRef {
@@ -374,6 +445,9 @@ pub(crate) struct FishTaskFrame {
     pub elapsed_micros: u32,
     pub dispatch_mode: CommonMoverDispatchMode,
     pub immutable_anchor_raw: [i16; 3],
+    /// Static sea and the signed height of the body's cell, read by 5760.
+    pub sea_level_raw: i16,
+    pub cell_height_raw: i8,
 }
 
 /// Returns whether the surviving task requests its style+00 C690. The caller
@@ -503,8 +577,94 @@ where
         Some(ActorTaskRuntime::FishTargetRoute(_)) => {
             tick_route(manager, frame, visit, next_random, mover)
         }
+        Some(ActorTaskRuntime::SharkAttack(_)) => {
+            if program.class_id != 69 || context.style_table_index_raw_at_0x10() != 0 {
+                return Err(FishTaskError::Graph);
+            }
+            tick_shark(manager, frame, visit, next_random, mover)
+        }
         _ => Err(FishTaskError::Graph),
     }
+}
+
+/// 5760 around the mover. Its tag-9C00 result reaches the style's null +04,
+/// so this never requests C690. Record words [10]/[11] are the target
+/// record's untouched zeros: the period sound never plays.
+fn tick_shark<R, E>(
+    manager: &mut EntityManager,
+    frame: FishTaskFrame,
+    visit: ActorTaskVisit,
+    next_random: &mut R,
+    mut mover: impl FnMut(
+        &mut Entity,
+        &mut WanderNearPrivateState,
+        RetailRuntimeValue<Option<CommonMoverTrackedTargetSnapshot>>,
+        &mut R,
+    ) -> Result<bool, E>,
+) -> Result<bool, FishTaskError<E>>
+where
+    R: FnMut() -> u32,
+{
+    // 14920's list from its head; handles resolve through 3A580.
+    let live: Vec<(u32, u32, [i16; 3])> = manager
+        .retail_live_order_ids()
+        .filter_map(|id| manager.iter_all().find(|e| e.id == id && e.active))
+        .map(|e| (e.id, e.capability_flags, e.position_raw()))
+        .collect();
+    let entity = manager
+        .entity_mut(frame.entity_id)
+        .ok_or(FishTaskError::Allocation)?;
+    let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
+        return Err(FishTaskError::Runtime("shark basis"));
+    };
+    let body = crate::shark_attack::SharkBody {
+        position_raw: entity.position_raw(),
+        velocity_raw: entity.velocity_raw(),
+        forward_q31: basis.forward,
+    };
+    let (write, mut target) = entity
+        .actor_tasks
+        .begin_exact_visit_with(visit, |runtime| {
+            let ActorTaskRuntime::SharkAttack(task) = runtime else {
+                unreachable!()
+            };
+            let write = task.before_mover(
+                body,
+                frame.elapsed_micros,
+                frame.sea_level_raw,
+                frame.cell_height_raw,
+                &live,
+                |id| live.iter().find(|e| e.0 == id).map(|e| e.2),
+                &mut *next_random,
+            );
+            (write, *task.target())
+        })
+        .ok_or(FishTaskError::Graph)?;
+    let fish = entity
+        .shared_fish_runtime
+        .as_mut()
+        .ok_or(FishTaskError::Allocation)?;
+    fish.sub_f.follow_target_mode_raw = u8::from(write.follow_target);
+    if let Some(clearance) = write.clearance_raw {
+        fish.sub_f.clearance_raw = clearance;
+    }
+    fish.sub_f.target_speed_raw = write.target_speed_raw;
+    let moved = mover(
+        entity,
+        &mut target,
+        RetailRuntimeValue::Known(None),
+        next_random,
+    );
+    if let Some(ActorTaskRuntime::SharkAttack(task)) =
+        entity.actor_tasks.task_state_mut(visit.task_id)
+    {
+        *task.target_mut() = target;
+    }
+    if !entity.actor_tasks.finish_exact_visit(visit) {
+        return Ok(false);
+    }
+    moved.map_err(FishTaskError::Mover)?;
+    Ok(false)
 }
 
 fn mover_return(moved: bool) -> WanderNearCommonMoverReturn {

@@ -329,6 +329,19 @@ fn owns_native_weapon_contact(entity: &Entity) -> bool {
     entity.native_entity_weapon_runtime.is_some()
 }
 
+/// The player and a native shark: class69's 5E10 hook bites through this
+/// lane. Other shark pairs stay with their existing subsystem.
+fn is_native_shark_player_pair(manager: &EntityManager, first: &Entity, second: &Entity) -> bool {
+    let player = manager.player().map(|player| player.id);
+    [(first, second), (second, first)]
+        .into_iter()
+        .any(|(shark, other)| {
+            crate::shared_fish::is_shark(shark.entity_type)
+                && shark.shared_fish_runtime.is_some()
+                && Some(other.id) == player
+        })
+}
+
 /// Native gunner side of the gunner/hive separation pair.
 ///
 /// Bounded to native Type47 construction (ordinary worlds share this receipt
@@ -474,7 +487,8 @@ fn resolve(
         let pair_weapon = [subject, candidate]
             .into_iter()
             .any(owns_native_weapon_contact);
-        if player == Some(id) && !pair_weapon {
+        let pair_shark = is_native_shark_player_pair(frame.entities, subject, candidate);
+        if player == Some(id) && !pair_weapon && !pair_shark {
             continue;
         }
         let pair_captors = [subject, candidate]
@@ -489,6 +503,7 @@ fn resolve(
             && !is_native_gunner_hive_pair(frame.entities, subject, candidate)
             && !pair_type58
             && !pair_weapon
+            && !pair_shark
             && !is_native_insect_factory_pair(frame.entities, subject, candidate)
             && !is_native_type9_peer_pair(subject, candidate)
             && !is_native_type40_person_pair(subject, candidate)
@@ -599,7 +614,25 @@ fn resolve(
         // replaced the victim by None, and C6B0 installed a new captor Primary.
         for (owner, opposite) in [(id, candidate_id), (candidate_id, id)] {
             for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
-                let result = component(frame, owner, opposite, slot, committed)?;
+                let result =
+                    if crate::shared_fish::shark_contact::owns_shark_hook(frame, owner, slot) {
+                        let result = crate::shared_fish::shark_contact::resolve_shark_pair_hook(
+                            frame,
+                            owner,
+                            opposite,
+                            slot,
+                            playing_player.as_mut().map(PlayingPlayerContact::reborrow),
+                        )
+                        .map_err(|error| {
+                            *committed |= error.committed_prefix;
+                            NativeCaptorPairBlock::Component(error)
+                        })?;
+                        *committed |=
+                            matches!(result, NativeCaptorPairComponentResult::Applied { .. });
+                        result
+                    } else {
+                        component(frame, owner, opposite, slot, committed)?
+                    };
                 visit.stages.push(NativeCaptorPairStage::Component {
                     owner,
                     slot,
@@ -681,25 +714,34 @@ fn behavior(
         .entities
         .player()
         .is_some_and(|player| player.id == owner)
-        && owns_native_weapon_contact(actor(frame.entities, opposite)?)
+        && (owns_native_weapon_contact(actor(frame.entities, opposite)?)
+            || is_native_shark_player_pair(
+                frame.entities,
+                entity,
+                actor(frame.entities, opposite)?,
+            ))
     {
         //447D70: the actual local controller bound to this player satisfies
-        //43AF0. Capability40 excludes the c00 consumable branch, leaving the
-        //two bodies' distance feedback. It neither changes body/task state
-        //nor returns an A300 physics suppression.
-        let weapon = actor(frame.entities, opposite)?;
+        //43AF0. A weapon's capability40 and a shark's 8 exclude the c00
+        //consumable branch, leaving the two bodies' relative-speed feedback.
+        //It neither changes body/task state nor returns an A300 suppression.
+        let body = actor(frame.entities, opposite)?;
+        let capability = if owns_native_weapon_contact(body) {
+            0x40
+        } else {
+            8
+        };
         if playing_player.is_none()
             || entity.capability_flags & 1 == 0
-            || weapon.capability_flags != 0x40
+            || body.capability_flags != capability
         {
             return Err(NativeCaptorPairBlock::Runtime(
                 "local player weapon pair controller",
             ));
         }
-        if let Some(strength_raw) = crate::pad_vibration::pair_contact_strength(
-            entity.position_raw(),
-            weapon.position_raw(),
-        ) {
+        if let Some(strength_raw) =
+            crate::pad_vibration::pair_contact_strength(entity.velocity_raw(), body.velocity_raw())
+        {
             crate::pad_vibration::submit(strength_raw);
         }
         return Ok(NativeCaptorPairBehaviorResult::Null);
@@ -1040,6 +1082,12 @@ fn physical(
     let weapon_pair = [id, candidate]
         .into_iter()
         .any(|id| actor(frame.entities, id).is_ok_and(owns_native_weapon_contact));
+    // The shark lane's player is lent with the Playing world like a weapon's.
+    let shark_pair = is_native_shark_player_pair(
+        frame.entities,
+        actor(frame.entities, id)?,
+        actor(frame.entities, candidate)?,
+    );
     let plan = plan_active_pair_response_and_damage_cap(
         active_pair_body_from_entity(actor(frame.entities, id)?, frame.resources),
         active_pair_body_from_entity(actor(frame.entities, candidate)?, frame.resources),
@@ -1051,7 +1099,7 @@ fn physical(
         if (current.position_raw() != body.position_raw
             || current.velocity_raw() != body.velocity_raw)
             && !requires_body_custody(current)
-            && !(weapon_pair
+            && !((weapon_pair || shark_pair)
                 && frame
                     .entities
                     .player()
@@ -1085,7 +1133,7 @@ fn physical(
                 source_entity_type_raw: source_type,
                 owner_handle: source,
             };
-            if weapon_pair {
+            if weapon_pair || shark_pair {
                 apply_native_pair_checked_damage(
                     frame,
                     target,

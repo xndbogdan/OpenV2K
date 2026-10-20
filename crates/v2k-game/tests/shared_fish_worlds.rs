@@ -19,16 +19,23 @@ use v2k_game::{
 // Discover the neutral swimming population from its authored component and
 // behavior records. A production type list must not also define test coverage:
 // that hid Type23 and the first world's Type62 zebrafsh from the old census.
+/// The neutral fish and the Type25 shark share the native B/D/F owner.
 fn is_authored_neutral_swimmer(metadata: &EntityTypeRuntimeMetadata) -> bool {
     matches!(
         metadata.sub_f_swimming_descriptor,
         RetailRuntimeValue::Known(Some(_))
     ) && metadata.initializer.as_ref().is_some_and(|initializer| {
-        initializer.initializer_state_flags_raw & 0x2000 != 0
+        let neutral = initializer.initializer_state_flags_raw & 0x2000 != 0
             && !initializer.behavior_choices.is_empty()
             && initializer.behavior_choices.iter().all(|choice| {
                 choice.weight_rule_id == 1 && matches!(choice.behavior_class_id, 5 | 6 | 13)
-            })
+            });
+        let shark = initializer
+            .behavior_choices
+            .iter()
+            .map(|c| (c.weight_rule_id, c.weight_multiplier, c.behavior_class_id))
+            .eq([(1, 1, 6), (6, 40, 69), (1, 6, 5)]);
+        neutral || shark
     })
 }
 
@@ -132,10 +139,11 @@ fn every_ordinary_world_publishes_and_runs_its_native_fish() {
             (13, 3),
             (14, 3),
             (18, 4),
-            (22, 11),
-            (23, 43),
+            // Worlds 22, 23 and 34 add their three, two and one sharks.
+            (22, 14),
+            (23, 45),
             (30, 20),
-            (34, 19),
+            (34, 20),
             (36, 11)
         ]
     );

@@ -29,7 +29,7 @@ pub(super) struct FishMoverFrame<'a> {
 pub(super) fn run(
     entity: &mut Entity,
     frame: FishMoverFrame<'_>,
-    target: &mut WanderNearPrivateState,
+    mut target: Option<&mut WanderNearPrivateState>,
     tracked_target: RetailRuntimeValue<Option<CommonMoverTrackedTargetSnapshot>>,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<bool, Block> {
@@ -82,14 +82,15 @@ pub(super) fn run(
                     sub_a_descriptor: None,
                     sub_b_descriptor: Some(b),
                     sub_c_descriptor: None,
-                    sub_d_descriptor: Some(CommonMoverPreludeSubD {
+                    // Class12's null target skips the prelude and Sub-D.
+                    sub_d_descriptor: target.is_some().then_some(CommonMoverPreludeSubD {
                         steering_divisor_raw: d.steering_divisor_raw,
                         couple_yaw_into_roll: d.couple_yaw_into_roll_raw != 0,
                     }),
-                    target_resource_context_present: true,
+                    target_resource_context_present: target.is_some(),
                 },
                 initial_snapshot: snapshot,
-                target_private: Some(*target),
+                target_private: target.as_deref().copied(),
                 tracked_target,
             },
             next_random,
@@ -101,7 +102,9 @@ pub(super) fn run(
                 CommonMoverFramePoll::ReturnOne => return Ok(true),
                 CommonMoverFramePoll::Blocked(reason) => return Err(Block::Mover(reason)),
                 CommonMoverFramePoll::Action(CommonMoverFrameAction::CommitTargetPrelude(plan)) => {
-                    *target = plan.target_state;
+                    **target
+                        .as_mut()
+                        .ok_or(Block::Runtime("fish prelude without target"))? = plan.target_state;
                     snapshot.heading_raw = plan.heading_raw;
                     snapshot.roll_raw = plan.roll_raw;
                     if let Some(write) = plan.sub_d_reversal_write {
@@ -280,7 +283,7 @@ mod tests {
                         global_elapsed_micros,
                         active_model_extent_raw: extent,
                     },
-                    &mut private,
+                    Some(&mut private),
                     RetailRuntimeValue::Known(None),
                     &mut || panic!("static fish mover consumes no RNG")
                 ),

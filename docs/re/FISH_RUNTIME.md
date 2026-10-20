@@ -2,6 +2,7 @@
 
 Types22,23,24,62,124 share B/D/F components and authored neutral swimming tasks.
 Types23/62 are `zebrafsh`, with environment2004;22/24/124 use200C.
+The hostile [Type25 shark](TYPE25_SHARK.md) shares this owner with `0xC`.
 The aquatic resource catalog is overlay11; Reef is gameplay23 and Cistern30.
 Zebra Type62 uses common model38 and occurs in13/14/18/36. Its former
 constructor-only path classified it as furniture, omitted Sub-F construction

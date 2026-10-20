@@ -55,7 +55,14 @@ fn force_class(
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection).unwrap();
     let entity = manager.entity_mut(id).unwrap();
     let entity_type = entity.entity_type as usize;
-    publish_selection(entity, &metadata[entity_type], selection, context).unwrap();
+    publish_selection(
+        entity,
+        &metadata[entity_type],
+        selection,
+        context,
+        &mut || panic!("fish initializers draw no word"),
+    )
+    .unwrap();
 }
 
 fn frame(id: u32, elapsed_micros: u32) -> FishTaskFrame {
@@ -64,6 +71,8 @@ fn frame(id: u32, elapsed_micros: u32) -> FishTaskFrame {
         elapsed_micros,
         dispatch_mode: CommonMoverDispatchMode::Normal,
         immutable_anchor_raw: [100, -200, 300],
+        sea_level_raw: 0,
+        cell_height_raw: 0,
     }
 }
 
@@ -73,7 +82,7 @@ fn authored_selection_uses_one_word_and_all_initial_graphs_reset_only_sub_f() {
     for (kind, last_class) in [(22, 5), (24, 5), (124, 6)] {
         for (word, expected) in [(0, 13), (65535, last_class)] {
             let mut calls = 0;
-            let selected = select_behavior(&metadata[kind], &mut || {
+            let selected = select_behavior(&metadata[kind], FishRules::default(), &mut || {
                 calls += 1;
                 word
             })
@@ -322,14 +331,21 @@ fn failed_second_flocking_allocation_keeps_sub_f_reset_before_outer_fallback() {
     };
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection).unwrap();
     let mut allocations = 0;
-    let result = publish_selection_with(entity, &metadata[22], selection, context, |runtime| {
-        allocations += 1;
-        if allocations == 2 {
-            Err(FishTaskError::Runtime("allocation failure"))
-        } else {
-            Ok(PreparedActorTask::new(runtime))
-        }
-    });
+    let result = publish_selection_with(
+        entity,
+        &metadata[22],
+        selection,
+        context,
+        |runtime| {
+            allocations += 1;
+            if allocations == 2 {
+                Err(FishTaskError::Runtime("allocation failure"))
+            } else {
+                Ok(PreparedActorTask::new(runtime))
+            }
+        },
+        &mut || panic!("fish initializers draw no word"),
+    );
     assert_eq!(result, Err(FishTaskError::Runtime("allocation failure")));
     assert_eq!(
         entity
@@ -365,23 +381,29 @@ fn target_loss_skips_mover_then_c690_preserves_context_target_and_one_selector_w
     let retained_state = entity.collision.state_flags_at_0x08;
     entity.collision.state_flags_at_0x08 =
         crate::entity_collision_state::RetailStateWord::from_known_bits(0x1000, 0x1000);
-    reselect_after_task_result(entity, &metadata[22], &mut || {
+    reselect_after_task_result(&mut manager, id, &metadata[22], &mut || {
         panic!("suppression precedes dying read")
     })
     .unwrap();
+    let entity = manager.entity_mut(id).unwrap();
     entity.collision.state_flags_at_0x08 = retained_state;
     entity
         .collision
         .state_flags_at_0x08
         .overwrite(0x5000, 0x1000);
-    reselect_after_task_result(entity, &metadata[22], &mut || panic!("suppressed")).unwrap();
+    reselect_after_task_result(&mut manager, id, &metadata[22], &mut || {
+        panic!("suppressed")
+    })
+    .unwrap();
+    let entity = manager.entity_mut(id).unwrap();
     entity.collision.state_flags_at_0x08.overwrite(0x5000, 0);
     let mut draws = 0;
-    reselect_after_task_result(entity, &metadata[22], &mut || {
+    reselect_after_task_result(&mut manager, id, &metadata[22], &mut || {
         draws += 1;
         65535
     })
     .unwrap();
+    let entity = manager.entity_mut(id).unwrap();
     assert_eq!(draws, 1);
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         panic!()

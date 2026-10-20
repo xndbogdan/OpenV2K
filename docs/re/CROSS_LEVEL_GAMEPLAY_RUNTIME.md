@@ -198,6 +198,13 @@ children their class18 split births share the
 Virus4 and Move About Aimlessly5. Type31's `C080` births eight Type105s inline,
 as Type40's births Type56s; a Type105 has no H and dies quietly through class2.
 
+The six authored [Type25 sharks](TYPE25_SHARK.md) (worlds22, 23 and34) and
+world34's Hive births share the fish owner without its `0x2000` environment
+bit, so they hunt on coarse visits too. PlayerNearby draws class69 Shark
+Attack, which rings the player, attacks and bites through its pair hook
+(`FUN_00405E10`: 8,000 scaled by the frame). They die by class12 on the same
+owner; the abort walk of worlds23 and34 now passes them.
+
 The nineteen ordinary [Type18 insects](TYPE18_RUNTIME.md) (worlds16, 21-23,
 30, 33, 34 and36) run on the ground host with Type122's capture and class12
 death. Their root mixes Defecate Virus4, Capture9, Search7, Follow Beacons33

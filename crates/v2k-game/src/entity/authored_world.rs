@@ -261,7 +261,7 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type49: {error:?}"))?;
             }
-            22 | 23 | 24 | 62 | 124 => {
+            22 | 23 | 24 | 62 | 124 | 25 => {
                 let sub_d = sub_d.ok_or("missing fish Sub-D allocation")?;
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(
@@ -276,7 +276,8 @@ impl EntityManager {
                         entity: &mut entity,
                         allocation,
                         metadata,
-                        spawn,
+                        record: super::NativeCreationRecord::authored(spawn),
+                        preceding: &self.entities,
                         resources,
                         constructor_surface_bits,
                         sub_d,

@@ -3,13 +3,19 @@
 //! Types22/23/24/62/124 differ through Section12 descriptors and weighted choices.
 //! Their native allocation retains process Sub-D history and Sub-F RNG before
 //! selection. Authored coordinates and model selectors remain instance data.
+//! Type25 sharks share the B/D/F allocation without the 2000 environment
+//! bit, so their coarse visits run tasks; they add class69 Shark Attack.
 
 #[cfg(test)]
 mod auto_pilot_tests;
 pub(crate) mod death;
+mod dying;
 pub mod impact;
 mod live;
 mod mover;
+pub(crate) mod shark_contact;
+#[cfg(test)]
+mod shark_tests;
 mod surface;
 #[cfg(test)]
 mod tests;
@@ -34,7 +40,6 @@ use crate::{
     },
     main_base_abort::MainBaseAbortActorLease,
 };
-use v2k_formats::levels::EntitySpawn;
 
 pub(crate) const TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
     sub_b: true,
@@ -54,17 +59,37 @@ pub(crate) const TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTo
     sub_o: false,
 };
 
-/// Neutral B/D/F fish whose authored task graphs are owned here. Hostile
-/// swimmers have distinct attack and death programs and are not admitted.
+/// B/D/F swimmers whose authored task graphs are owned here: the neutral
+/// fish and the Type25 shark. Other hostile swimmers are not admitted.
 pub(crate) const fn is_shared_fish_type(entity_type: u32) -> bool {
-    matches!(entity_type, 22 | 23 | 24 | 62 | 124)
+    matches!(entity_type, 22 | 23 | 24 | 62 | 124 | 25)
+}
+
+/// Type25: C8 `0xC`, Wander x1, PlayerNearby x40 Shark Attack, Retarget x6,
+/// alternate class12.
+pub(crate) const fn is_shark(entity_type: u32) -> bool {
+    entity_type == 25
+}
+
+const SHARK_CHOICES: [(u32, u32, u32); 3] = [(1, 1, 6), (6, 40, 69), (1, 6, 5)];
+
+fn is_shark_row(init: &crate::entity_collision_state::EntityInitializerSpec) -> bool {
+    init.initializer_state_flags_raw == 0xc
+        && init.behavior_rule_ref == 1
+        && init.alternate_behavior_class_ref == 12
+        && init
+            .behavior_choices
+            .iter()
+            .map(|c| (c.weight_rule_id, c.weight_multiplier, c.behavior_class_id))
+            .eq(SHARK_CHOICES)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SharedFishRuntime {
     pub(crate) allocation: MainBaseAbortActorLease,
     pub(crate) entity_type: u32,
-    pub(crate) spawn_index: usize,
+    /// None for a Hive birth's zeroed record.
+    pub(crate) spawn_index: Option<usize>,
     pub(crate) model_slots: [Option<usize>; 4],
     pub(crate) immutable_anchor_raw: [i16; 3],
     pub(crate) sub_d_runtime: Type9SubDRuntime,
@@ -82,7 +107,7 @@ pub(crate) struct SharedFishRuntime {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum SharedFishError {
+pub enum SharedFishError {
     Allocation,
     Metadata,
     AlreadyPublished,
@@ -111,12 +136,13 @@ pub(crate) fn authenticate_metadata(
             metadata.sub_d_steering_descriptor,
             RetailRuntimeValue::Known(Some(_))
         )
-        || !matches!(init.initializer_state_flags_raw, 0x2004 | 0x200c)
-        || init.behavior_choices.is_empty()
-        || init
-            .behavior_choices
-            .iter()
-            .any(|c| c.weight_rule_id != 1 || !matches!(c.behavior_class_id, 5 | 6 | 13))
+        || !(is_shark_row(init)
+            || matches!(init.initializer_state_flags_raw, 0x2004 | 0x200c)
+                && !init.behavior_choices.is_empty()
+                && init
+                    .behavior_choices
+                    .iter()
+                    .all(|c| c.weight_rule_id == 1 && matches!(c.behavior_class_id, 5 | 6 | 13)))
         || variable_count >= 64
         || f.variable_selectors
             .iter()
@@ -126,6 +152,16 @@ pub(crate) fn authenticate_metadata(
         return Err(SharedFishError::Metadata);
     }
     Ok(())
+}
+
+/// The owner a shark's class12 publication leaves to tick.
+pub(crate) fn dying_shark_owner(manager: &EntityManager, id: u32) -> Option<SharedFishOwner> {
+    manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .is_some_and(dying::dying_graph)
+        .then(|| SharedFishOwner::adopt(manager, id).ok())
+        .flatten()
 }
 
 pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool {
@@ -138,7 +174,7 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
     entity.active
         && is_shared_fish_type(entity.entity_type)
         && entity.entity_type == runtime.entity_type
-        && entity.authored_spawn_index == Some(runtime.spawn_index)
+        && entity.authored_spawn_index == runtime.spawn_index
         && entity.model_slots == runtime.model_slots
         && manager
             .main_base_abort_actor_observation(id)
@@ -149,7 +185,10 @@ pub(crate) struct FishAuthoredConstruction<'a> {
     pub entity: &'a mut Entity,
     pub allocation: MainBaseAbortActorLease,
     pub metadata: &'a EntityTypeRuntimeMetadata,
-    pub spawn: &'a EntitySpawn,
+    /// An authored spawn, or a Hive birth's zeroed record.
+    pub record: crate::entity::NativeCreationRecord,
+    /// Earlier live allocations: PlayerNearby's birth candidates.
+    pub preceding: &'a [Entity],
     pub resources: EntityConstructionResources<'a>,
     pub constructor_surface_bits: u32,
     pub sub_d: NativeSubDConstruction,
@@ -163,7 +202,8 @@ pub(crate) fn publish_authored_fish(
         entity,
         allocation,
         metadata,
-        spawn,
+        record: spawn,
+        preceding,
         resources,
         constructor_surface_bits,
         sub_d,
@@ -181,14 +221,11 @@ pub(crate) fn publish_authored_fish(
         || !is_shared_fish_type(entity.entity_type)
         || entity.entity_type != spawn.entity_type
         || entity.id != allocation.entity_id
-        || entity.authored_spawn_index != Some(spawn.index)
+        || entity.authored_spawn_index != spawn.authored_spawn_index
         || entity.model_slots != model_slots
         || entity.capability_flags != metadata.capability_flags
         || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|w| w as i16)
-        || spawn.has_animation
-        || spawn.animation.is_some()
-        || spawn.has_config
-        || spawn.config.is_some()
+        || !spawn.plain
     {
         return Err(SharedFishError::Allocation);
     }
@@ -210,7 +247,7 @@ pub(crate) fn publish_authored_fish(
     let terrain = resources
         .terrain
         .ok_or(SharedFishError::Runtime("constructor terrain"))?;
-    let [x, _, z] = spawn.position_raw();
+    let [x, _, z] = spawn.position_raw;
     let cell = terrain
         .cell(usize::from(x as u16 >> 8), usize::from(z as u16 >> 8))
         .ok_or(SharedFishError::Runtime("constructor cell"))?;
@@ -246,13 +283,13 @@ pub(crate) fn publish_authored_fish(
     };
     let sub_f =
         SubFSwimmingRuntime::construct(f, next_random, &mut |selector| Some(selector as usize));
-    entity.set_position_raw(spawn.position_raw());
+    entity.set_position_raw(spawn.position_raw);
     entity.shared_fish_runtime = Some(SharedFishRuntime {
         allocation,
         entity_type: entity.entity_type,
-        spawn_index: spawn.index,
+        spawn_index: spawn.authored_spawn_index,
         model_slots: entity.model_slots,
-        immutable_anchor_raw: spawn.position_raw(),
+        immutable_anchor_raw: spawn.position_raw,
         sub_d_runtime: sub_d.runtime,
         sub_d_owner: sub_d.frame_owner,
         sub_f,
@@ -260,11 +297,14 @@ pub(crate) fn publish_authored_fish(
         quiet_death_context: None,
         impact_prefix_pending: false,
     });
-    let selection = crate::shared_fish_tasks::select_behavior(metadata, next_random)
+    // 425680 reads PlayerNearby over the earlier allocations; no word.
+    let rules = crate::shared_fish_tasks::FishRules::evaluate(entity, preceding.iter())
+        .map_err(|_| SharedFishError::Graph)?;
+    let selection = crate::shared_fish_tasks::select_behavior(metadata, rules, next_random)
         .map_err(|_| SharedFishError::Graph)?;
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(SharedFishError::Graph)?;
-    crate::shared_fish_tasks::publish_selection(entity, metadata, selection, context)
+    crate::shared_fish_tasks::publish_selection(entity, metadata, selection, context, next_random)
         .map_err(|_| SharedFishError::Graph)?;
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
