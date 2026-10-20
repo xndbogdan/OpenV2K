@@ -1,7 +1,9 @@
 # Shared class-0 flags and weights
 
 This owns ordinary Type52/54/68/72/85/106 and Intro2 Type52 construction, living timer/task custody, Type68
-cargo attachment/release, Type54/72/85 Change-Sea-Level abort and lethal hits, and generic quiet death. The production owner is
+cargo attachment/release, Type54/72/85 Change-Sea-Level abort and lethal hits, and generic quiet death,
+and the [rows outside class0](#rows-outside-class0-type50-type89-and-type118) on the same constructor:
+Type50's Die When Moved, Type89's flood and Type118's Geyser. The production owner is
 [`entity/class0_actor`](../../crates/v2k-game/src/entity/class0_actor.rs).
 [Actor Runtime](ACTOR_RUNTIME.md) owns the shared scheduler primitives;
 [Factory System](FACTORY_SYSTEM.md#reactor-mechanic) owns the enclosing Main
@@ -223,6 +225,70 @@ retail run (the lab's direct `00414E90` call of 2000 damage on Level 1's grock,
 handle `04B30001`, at pass 1300) reads state `0x0042C005` and health 0 after
 the hit, and the sea word `0xFFFCB100` falls to `0xFFFA2000` (delta `-168192`)
 in 690 paced updates, through pass 1989. The port matches each of these.
+
+## Rows outside class0: Type50, Type89 and Type118
+
+Three rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
+draw, the `+88` sea word) but not its living program. One owner runs all
+their visits, through the same `12DA0` prefix and DCA0/E870 tail.
+
+| Field | Type50 | Type89 | Type118 |
+|---|---|---|---|
+| Worlds | 16, 40 | 21 (two) | 40 (two) |
+| Default model slots | `[647;4]` | `[0;4]` | `[676;4]` |
+| Mass / health | 100 / 1000 | 1000 / 1000 | 1000 / 1000 |
+| Type+C0 | `4067` | `21A7` | `20027` |
+| Root / alternate | Always `(1,1,36)`, rule3 / class38 | Always `(1,1,38)` / class1 | Always `(1,1,0)` / class65 |
+| Authored `+88` | world16 -1068, world40 0 | 3249 | 1000 |
+
+**Type50, Die When Moved.** `FUN_0040B980` clears T then S and
+`FUN_00404A20` publishes a Primary without timeout; `FUN_00401350/FUN_004012E0`
+copy the body's position into its record. `FUN_00404AA0` acts only on DCA0's
+detailed visits (`FUN_0040E870` passes 1): it compares the record with `+96`,
+stores the current position and calls `FUN_00410C10` once
+`dx*dx + dy*dy + dz*dz` (wrapping 32-bit) exceeds 0x100, a move past 16 units.
+The alternate class38 then changes the sea: world 40's zero word takes the
+derived delta down to the plug's bottom, world 16's -1068 is taken as is.
+Retail's world-40 Type50 reads `(23040, -3840, 24576)` and `0x00468805` at its
+first visit.
+
+**Type89, the flood.** Class38 runs from birth: `FUN_0040BDC0` clears `0x800`,
+`FUN_00440950` bursts at the grounded body (model 0's header+08 is 0), S and T
+clear and `FUN_00405040` publishes the Primary with `3249 << 8`. With `0x800`
+clear, `FUN_00411400` never reclassifies the body, so the constructor's detail
+bits keep every visit detailed and `FUN_00405160` steps the sea each 20-ms
+tick: two rising half steps of 122 raw. Retail's world 21 reads the sea at
+-1035008 on arrival and -1027932 29 ticks later, 24400 every 100 ticks, until
+its casualty loss 1774 ticks in; the abort explodes both Type89s through
+class1 (`FUN_0040BAC0`), which ends the rise. The port's sea matches tick for
+tick. A finished task stages the body's removal (`FUN_00410B70`).
+
+**Type118, the Geyser.** It lives in class0 until `FUN_00410C10` selects its
+direct alternate class65: `FUN_0040C500` clears T then S and `FUN_00407BC0`
+publishes a Primary without timeout whose word is `+88 << 8` (or the body's
+height over the sea, with no model extent). Style `0x004C7540` has no
+callbacks or policy words, so unlike class0 its effective `0x20027` lacks
+`0x2000` and coarse visits run E870's walk too. `FUN_00407CA0`:
+
+- a detailed visit sprays class-13 particles, one per started 30 ms of
+  callback time, each drawing X, Y and Z velocity steps and a Y position step
+  (four RNG words) that accumulate over the visit; class 13 has a no-op update
+  and collision mode 0, so it flies straight for 30 ticks;
+- every visit then runs `FUN_00407DF0` over the live list: a body above the
+  geyser, within `dy/2 + 50` of its axis and under 1200 units up, gains
+  `((2000 - dy) * 4 * (dt << 13)) >> 31` on its Y velocity word (the player
+  too; a selected Type9 acknowledges the write as it does a radial impulse's);
+- `FUN_004013A0` finally moves the sea while the word lasts. The geyser never
+  removes its body.
+
+Retail's world-40 Type118s read `(25856, -3296, 23552)` and
+`(10752, -2848, 30208)` with `0x08468805` at their first visit.
+
+Hits reach all three through `class0_impact`: classes 36 and 38 have null
+hit callbacks, like class0. A lethal hit, like the Main Base abort, runs
+class38 for Type50, class1 for Type89 and the Geyser for Type118. Regression
+coverage is in `entity/class0_actor/sea_level_tests.rs`, `die_when_moved.rs`
+and `geyser.rs`.
 
 ## Quiet death and remaining boundaries
 

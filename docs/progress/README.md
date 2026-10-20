@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,390 | |
 | Marked not needed (excluded below) | 353 | |
-| **Referenced by port code** | **989** | **48.6%** |
+| **Referenced by port code** | **994** | **48.8%** |
 | Referenced by code or RE notes | 2,037 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -44,7 +44,7 @@ Where the code's references are thinnest:
 | [Platform](../re/PLATFORM_RUNTIME.md) | 153 | 23 | 10 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 130 | 6 | 49 |
 | [Menu system](../re/MENU_SYSTEM.md) | 111 | 31 | 77 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 88 | 16 | 62 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 83 | 16 | 64 |
 | [Software raster](../re/SOFTWARE_RASTER.md) | 81 | 3 | 56 |
 | [Controls](../re/CONTROLS.md) | 78 | 17 | 24 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 63 | 17 | 87 |

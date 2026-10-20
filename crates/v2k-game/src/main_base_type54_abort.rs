@@ -32,8 +32,12 @@ pub const LEVEL_ONE_TYPE54_DEATH_STYLE_ADDRESS: u32 = 0x004C_7348;
 pub const LEVEL_ONE_TYPE54_ACCEPTED_SEA_DELTA_RAW: i32 = -168_192;
 pub const TYPE72_ENTITY_TYPE: u32 = 72;
 pub const TYPE85_ENTITY_TYPE: u32 = 85;
+pub const TYPE50_ENTITY_TYPE: u32 = 50;
+pub const TYPE89_ENTITY_TYPE: u32 = 89;
+pub const TYPE118_ENTITY_TYPE: u32 = 118;
 
-/// A class0 row whose alternate is class38 Change Sea Level.
+/// A class0-constructor row whose program moves the sea: class38 Change Sea
+/// Level (its alternate or its living program) or class65 Geyser.
 #[derive(Clone, Copy)]
 struct SeaLevelRow {
     entity_type: u32,
@@ -43,12 +47,19 @@ struct SeaLevelRow {
     health_raw: i32,
     initializer_state_flags_raw: u32,
     behavior_rule_ref: u32,
+    /// The class of the singleton Always choice.
+    living_class: u32,
+    alternate_class: u32,
 }
 
 /// Level 1's Type54, world 17's Type72 (a running callback, no retained
-/// basis) and world 43's Type85. Every row has the singleton Always class0
-/// choice, null sounds and components and a default axis.
-const SEA_LEVEL_ROWS: [SeaLevelRow; 3] = [
+/// basis) and world 43's Type85 live in class0. Type50 (worlds 16 and 40)
+/// lives in class36 Die When Moved; all four change the sea when they die.
+/// The two Type89s of world 21 (Flood) run class38 from birth and explode
+/// through class1. World 40's two Type118s live in class0 and die into the
+/// class65 Geyser. Every row has null sounds and components and a default
+/// axis.
+const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
     SeaLevelRow {
         entity_type: LEVEL_ONE_TYPE54_ENTITY_TYPE,
         model: LEVEL_ONE_TYPE54_MODEL_ID as u16,
@@ -57,6 +68,8 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 3] = [
         health_raw: LEVEL_ONE_TYPE54_INITIAL_HEALTH_RAW,
         initializer_state_flags_raw: LEVEL_ONE_TYPE54_INITIALIZER_STATE_RAW,
         behavior_rule_ref: 1,
+        living_class: 0,
+        alternate_class: 38,
     },
     SeaLevelRow {
         entity_type: TYPE72_ENTITY_TYPE,
@@ -66,6 +79,8 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 3] = [
         health_raw: 1_000,
         initializer_state_flags_raw: 0x0002_0027,
         behavior_rule_ref: 1,
+        living_class: 0,
+        alternate_class: 38,
     },
     SeaLevelRow {
         entity_type: TYPE85_ENTITY_TYPE,
@@ -75,39 +90,97 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 3] = [
         health_raw: 500,
         initializer_state_flags_raw: 0x0002_4127,
         behavior_rule_ref: 3,
+        living_class: 0,
+        alternate_class: 38,
+    },
+    SeaLevelRow {
+        entity_type: TYPE50_ENTITY_TYPE,
+        model: 647,
+        mass_raw: 100,
+        capability_flags: 0,
+        health_raw: 1_000,
+        initializer_state_flags_raw: 0x0000_4067,
+        behavior_rule_ref: 3,
+        living_class: 36,
+        alternate_class: 38,
+    },
+    SeaLevelRow {
+        entity_type: TYPE89_ENTITY_TYPE,
+        model: 0,
+        mass_raw: 1_000,
+        capability_flags: 0,
+        health_raw: 1_000,
+        initializer_state_flags_raw: 0x0000_21A7,
+        behavior_rule_ref: 1,
+        living_class: 38,
+        alternate_class: 1,
+    },
+    SeaLevelRow {
+        entity_type: TYPE118_ENTITY_TYPE,
+        model: 676,
+        mass_raw: 1_000,
+        capability_flags: 0,
+        health_raw: 1_000,
+        initializer_state_flags_raw: 0x0002_0027,
+        behavior_rule_ref: 1,
+        living_class: 0,
+        alternate_class: 65,
     },
 ];
 
+/// A row whose death enters class38 Change Sea Level.
 pub(crate) fn is_change_sea_level_type(entity_type: u32) -> bool {
     SEA_LEVEL_ROWS
         .iter()
-        .any(|row| row.entity_type == entity_type)
+        .any(|row| row.entity_type == entity_type && row.alternate_class == 38)
 }
 
-/// Authenticate a class38 row. Model extent is Section-8 data and is
-/// supplied and checked separately at the live call site.
+/// Authenticate a row whose alternate is class38. Model extent is Section-8
+/// data and is supplied and checked separately at the live call site.
 pub(crate) fn change_sea_level_metadata(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> bool {
-    let Some(row) = SEA_LEVEL_ROWS
+    sea_level_row_metadata(entity_type, metadata).is_some_and(|row| row.alternate_class == 38)
+}
+
+/// Authenticate Type89's row, which runs class38 from birth.
+pub(crate) fn living_change_sea_level_metadata(
+    entity_type: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> bool {
+    sea_level_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 38)
+}
+
+/// Authenticate Type118's row, whose alternate is the class65 Geyser.
+pub(crate) fn geyser_metadata(entity_type: u32, metadata: &EntityTypeRuntimeMetadata) -> bool {
+    sea_level_row_metadata(entity_type, metadata).is_some_and(|row| row.alternate_class == 65)
+}
+
+/// The living class of an authenticated row: 0, 36 or 38.
+pub(crate) fn sea_level_row_living_class(entity_type: u32) -> Option<u32> {
+    SEA_LEVEL_ROWS
         .iter()
         .find(|row| row.entity_type == entity_type)
-    else {
-        return false;
-    };
-    let Some(initializer) = metadata.initializer.as_ref() else {
-        return false;
-    };
-    initializer.behavior_choices.as_ref()
+        .map(|row| row.living_class)
+}
+
+fn sea_level_row_metadata(
+    entity_type: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Option<SeaLevelRow> {
+    let row = *SEA_LEVEL_ROWS
+        .iter()
+        .find(|row| row.entity_type == entity_type)?;
+    let initializer = metadata.initializer.as_ref()?;
+    (initializer.behavior_choices.as_ref()
         == [BehaviorChoice {
             weight_rule_id: 1,
             weight_multiplier: 1,
-            behavior_class_id: u32::from(LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS),
+            behavior_class_id: row.living_class,
         }]
         && initializer.behavior_rule_ref == row.behavior_rule_ref
-        && initializer.alternate_behavior_class_ref
-            == u32::from(LEVEL_ONE_TYPE54_DEATH_BEHAVIOR_CLASS)
+        && initializer.alternate_behavior_class_ref == row.alternate_class
         && initializer.initializer_state_flags_raw == row.initializer_state_flags_raw
         && metadata.model_slots == [row.model; 4]
         && metadata.mass_raw == row.mass_raw
@@ -119,7 +192,8 @@ pub(crate) fn change_sea_level_metadata(
         && metadata.generic_hit_sound_id == RetailRuntimeValue::Known(None)
         && metadata.common_mover_topology
             == RetailRuntimeValue::Known(CommonMoverComponentTopology::default())
-        && initializer.common_axis_descriptor == Default::default()
+        && initializer.common_axis_descriptor == Default::default())
+    .then_some(row)
 }
 
 /// Authenticate the cumulative Section-12 row used by the bounded adapter.

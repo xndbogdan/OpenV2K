@@ -101,8 +101,8 @@ fn construct_world(
 // permitting arbitrary failure. Closing one requires updating this evidence
 // matrix; every earlier actor must continue to execute or roll back correctly.
 const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
-    // Type31s split into Type105s (class18), which die quietly.
-    (16, 50),
+    // World 16 completes: its Type31s split into Type105s (class18), which
+    // die quietly, and its Type50 dies into class38's Change Sea Level.
     // Type40 splits into Type56s (class18), which die quietly; Type30 takes
     // class12 and Type72 Change Sea Level. Worlds 17 and 45 complete.
     (18, 73),
@@ -110,8 +110,9 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // Type14 flyers explode through their class1 terminal, Type15 wasps die
     // quietly through class2, and Type16 and Type94 enter class12.
     (20, 29),
-    // Native Type18/28 take Type122's captor class12 abort death.
-    (21, 89),
+    // Native Type18/28 take Type122's captor class12 abort death; Flood's
+    // Type89s leave class38 for their class1 explosion.
+    (21, 74),
     (22, 41),
     // Native22/23/24 fish now execute the existing class2 quiet terminal;
     // Reef's next unsupported callback is its Type25 actor.
@@ -135,8 +136,9 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (36, 74),
     // World 37 completes: its Type106 dies quietly through class2.
     (38, 82),
-    // Type125 factories share Type66's class39 owner.
-    (40, 50),
+    // Type125 factories share Type66's class39 owner; Type50 dies into
+    // class38's Change Sea Level and the Type118s into class65 Geysers.
+    (40, 121),
     // World 41 completes: its Type35 launchers republish their class7
     // alternate on the dying body.
     // Type108 flyers die quietly and the Type83 radar through class49;
@@ -376,7 +378,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     }
     assert_eq!(
         exact_worlds,
-        [13, 14, 15, 17, 19, 27, 28, 29, 30, 35, 37, 39, 41, 44, 45, 48]
+        [13, 14, 15, 16, 17, 19, 27, 28, 29, 30, 35, 37, 39, 41, 44, 45, 48]
     );
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
@@ -394,8 +396,8 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     let data = v2k_test_support::retail_dir();
     let mut session = GameSession::init(&data).unwrap();
     session.load_auxiliary_ovl(3, 1).unwrap();
-    // A one-factory world whose abort still stops early (world 16, at Type31).
-    session.load_level_by_id(16, 1).unwrap();
+    // A one-factory world whose abort still stops early (world 21, at Type74).
+    session.load_level_by_id(21, 1).unwrap();
     let metadata: Vec<_> = session
         .cache
         .global_entity_model_table()
@@ -414,12 +416,12 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
         })
         .collect();
     let mut fx = WorldFx::new();
-    let mut manager = construct_world(&session, &metadata, 16, &mut fx);
+    let mut manager = construct_world(&session, &metadata, 21, &mut fx);
     let mut tasks = adopt_authored_tasks(&mut manager);
     let mut progress = PlayerCampaignProgress::new();
-    progress.set_current_control_slot(Some(4));
+    progress.set_current_control_slot(Some(9));
     let (mut controller, _) = MainBaseAbortControllerStorage::from_loaded_level(
-        NonZeroU64::new(16).unwrap(),
+        NonZeroU64::new(21).unwrap(),
         session.cache.level_desc().unwrap(),
         false,
         &mut progress,
@@ -428,7 +430,7 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     for stale in [true, false] {
         let before = controller;
         let failure = execute_campaign_abort(
-            MainBaseAbortTransactionId::new(16).unwrap(),
+            MainBaseAbortTransactionId::new(21).unwrap(),
             None,
             &mut controller,
             &mut manager,

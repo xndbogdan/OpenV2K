@@ -78,7 +78,7 @@ impl World {
             &mut self.manager,
             owner,
             Class0ActorFrame {
-                resources: &self.session.cache,
+                resources: &mut self.session.cache,
                 world_fx: &mut self.fx,
                 elapsed_micros,
                 retail_tick: 77,
@@ -104,13 +104,15 @@ impl World {
             owner,
             &metadata,
             &mut Class0ActorFrame {
-                resources: &self.session.cache,
+                resources: &mut self.session.cache,
                 world_fx: &mut self.fx,
                 elapsed_micros: dt,
                 retail_tick: 77,
             },
             dt,
             detailed,
+            &mut None,
+            &mut None,
         )
         .unwrap();
     }

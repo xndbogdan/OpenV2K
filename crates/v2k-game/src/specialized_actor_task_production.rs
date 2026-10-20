@@ -5990,22 +5990,45 @@ impl SpecializedActorTaskScheduler {
                     ));
                 }
                 SpecializedActorTaskOwner::Class0Actor(owner) => {
+                    let sea_before = resources.level_terrain().map(|terrain| terrain.header[0]);
                     let tick = crate::entity::tick_class0_actor_owner(
                         manager,
                         owner,
                         crate::entity::Class0ActorFrame {
-                            resources,
+                            resources: &mut *resources,
                             world_fx,
                             elapsed_micros,
                             retail_tick,
                         },
                     );
+                    sea_level_changed |=
+                        resources.level_terrain().map(|terrain| terrain.header[0]) != sea_before;
+                    let mut outcome = tick.outcome;
                     if let Some(owner) = tick.retained_owner {
                         retained.push(SpecializedActorTaskOwner::Class0Actor(owner));
                     }
-                    outcomes.push(SpecializedActorTaskProductionOutcome::Class0Actor(
-                        tick.outcome,
-                    ));
+                    // Type50's Die When Moved death: class38 runs from the next pass.
+                    if let Some(receipt) = tick.sea_level_receipt {
+                        retained.push(SpecializedActorTaskOwner::MainBaseType54SeaLevel(receipt));
+                    }
+                    if let Some(lift) = tick.geyser_lift {
+                        if apply_geyser_lift(manager, &mut pending, &mut retained, lift).is_err() {
+                            // Every earlier body took its word; stop the geyser here.
+                            contact_prefix::park_native_contact_prefix(
+                                &mut retained,
+                                manager,
+                                lift.geyser_id,
+                            );
+                            outcome = crate::entity::Class0ActorOutcome::Blocked {
+                                entity_id: lift.geyser_id,
+                                reason: crate::entity::Class0ActorError::Runtime(
+                                    "geyser lift custody",
+                                ),
+                                prefix_committed: true,
+                            };
+                        }
+                    }
+                    outcomes.push(SpecializedActorTaskProductionOutcome::Class0Actor(outcome));
                 }
                 // The first saturation of 405610 mutates the shared radar raster.
                 SpecializedActorTaskOwner::PortableRadar(owner) => {
@@ -7155,6 +7178,15 @@ fn prepare_intro2_radial_actor_mutation(
                     });
         }
     }
+    // Type89's class1 takes its class0 visit's completed custody.
+    if crate::class49_death::source_profile(entity)
+        == Some(crate::class49_death::NativeExplosionSourceProfile::Type89)
+    {
+        let current = crate::entity::Class0ActorOwner::adopt(manager, entity_id);
+        return owners.iter().any(|owner| {
+            matches!(owner, SpecializedActorTaskOwner::Class0Actor(owner) if current == Ok(*owner))
+        });
+    }
     if crate::class49_death::intro2_type13_explosion_source_authenticates(entity) {
         return crate::actor_task_owner::ActorTaskSlot::IN_RETAIL_TICK_ORDER
             .into_iter()
@@ -7534,6 +7566,62 @@ fn park_type47_external_prefix(owners: &mut [SpecializedActorTaskOwner], id: u32
     }
 }
 
+/// 07CA0's 07DF0 walk: every live body above the geyser gains its lift on
+/// the Y velocity word. A selected Type9 acknowledges the write as it does a
+/// radial impulse's; one that cannot stops the walk at its handle.
+fn apply_geyser_lift(
+    manager: &mut EntityManager,
+    pending: &mut [SpecializedActorTaskOwner],
+    retained: &mut [SpecializedActorTaskOwner],
+    lift: crate::entity::GeyserLift,
+) -> Result<(), u32> {
+    for id in manager.retail_live_order_ids().collect::<Vec<_>>() {
+        if id == lift.geyser_id {
+            continue;
+        }
+        let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
+        let Some(add) = crate::geyser::geyser_lift_raw(
+            lift.position_raw,
+            entity.position_raw(),
+            lift.elapsed_micros,
+        ) else {
+            continue;
+        };
+        let mut velocity = entity.velocity_raw();
+        velocity[1] = velocity[1].wrapping_add(add);
+        if velocity == entity.velocity_raw() {
+            continue;
+        }
+        if entity.entity_type == 9 && entity.ordinary_type9_selected_component_runtime.is_some() {
+            let owner = pending
+                .iter_mut()
+                .chain(retained.iter_mut())
+                .find(|owner| owner.entity_id() == id)
+                .ok_or(id)?;
+            let accepted = match owner {
+                SpecializedActorTaskOwner::OrdinaryType9Wander(owner) => {
+                    owner.acknowledge_planned_radial_velocity(manager, velocity)
+                }
+                SpecializedActorTaskOwner::OrdinaryType9GoToJob(owner) => {
+                    owner.acknowledge_planned_radial_velocity(manager, velocity)
+                }
+                SpecializedActorTaskOwner::OrdinaryType9RunAway(owner) => {
+                    owner.acknowledge_planned_radial_velocity(manager, velocity)
+                }
+                SpecializedActorTaskOwner::OrdinaryType9AttractAttention(owner) => {
+                    owner.acknowledge_planned_radial_velocity(manager, velocity)
+                }
+                _ => false,
+            };
+            if !accepted {
+                return Err(id);
+            }
+        }
+        manager.entity_mut(id).unwrap().set_velocity_raw(velocity);
+    }
+    Ok(())
+}
+
 fn park_class49_terminal_owner(
     owners: &mut Vec<SpecializedActorTaskOwner>,
     manager: &EntityManager,
@@ -7550,7 +7638,9 @@ fn park_class49_terminal_owner(
                 || crate::native_type38::allocation_authenticates(entity)
                 || crate::portable_radar::allocation_authenticates(entity)
                 || entity.rolling_boulder_runtime.is_some()
-                || crate::class49_death::intro2_type13_explosion_source_authenticates(entity))
+                || crate::class49_death::intro2_type13_explosion_source_authenticates(entity)
+                || crate::class49_death::source_profile(entity)
+                    == Some(crate::class49_death::NativeExplosionSourceProfile::Type89))
     }) {
         contact_prefix::park_native_contact_prefix(owners, manager, id);
         return;

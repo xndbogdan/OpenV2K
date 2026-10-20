@@ -3,9 +3,13 @@
 //! The living timeout consumes the type's singleton selector word. Factory
 //! wrecks retain their separate dying no-draw reselection owner. The manager
 //! retains a committed-prefix marker so an interrupted visit cannot be adopted
-//! afresh or silently discarded by Main Base abort.
+//! afresh or silently discarded by Main Base abort. Type50's visits run
+//! class36's Die When Moved Primary instead; its death inside the callback
+//! hands the class38 Change Sea Level task to its own owner. Type89's visits
+//! run that class38 task from birth, moving the level's sea. A dead Type118
+//! keeps this owner for its class65 Geyser.
 
-use super::{authenticate_metadata, reselect_class0_actor, Class0ActorError};
+use super::{authenticate_metadata, living_class, reselect_class0_actor, Class0ActorError};
 use crate::{
     actor_task_dispatcher::ActorTaskRuntime,
     actor_task_owner::{ActorTaskId, ActorTaskSlot, ActorTaskVisit},
@@ -19,7 +23,8 @@ use crate::{
     entity::{commit_common_master_motion, Entity, EntityManager},
     entity_behavior::{audited_behavior_program, BehaviorChoiceListSource, BehaviorContextRuntime},
     entity_collision_state::{
-        EntityTypeRuntimeMetadata, RetailRuntimeValue, DYING_STATE_BIT, REMOTE_OWNED_STATE_BIT,
+        EntityTypeRuntimeMetadata, RetailRuntimeValue, DEFERRED_DESTROY_PENDING_STATE_BIT,
+        DYING_STATE_BIT, REMOTE_OWNED_STATE_BIT,
     },
     entity_scheduler::*,
     main_base_abort::MainBaseAbortActorLease,
@@ -56,16 +61,17 @@ impl Class0ActorOwner {
             .iter_all()
             .find(|entity| entity.id == id)
             .ok_or(Class0ActorError::Allocation)?;
-        let program = audited_behavior_program(0).ok_or(Class0ActorError::Graph)?;
         let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
             return Err(Class0ActorError::Graph);
         };
+        let living = current_class(entity.entity_type, context);
+        let program = audited_behavior_program(living).ok_or(Class0ActorError::Graph)?;
         if context.active_style().style_address() != program.initial_style.frame_address
             || context.choice_list_source()
                 != RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeDefault)
             || context.target_handle_at_0x08() != RetailRuntimeValue::Known(None)
             || context.auxiliary_word_at_0x0c() != RetailRuntimeValue::Known(0)
-            || bits(entity, DYING_STATE_BIT)? != 0
+            || bits(entity, DYING_STATE_BIT)? != if living == 65 { DYING_STATE_BIT } else { 0 }
         {
             return Err(Class0ActorError::Graph);
         }
@@ -80,9 +86,14 @@ impl Class0ActorOwner {
         if !wrapper.alive
             || wrapper.in_callback
             || !matches!(
-                entity.actor_tasks.task_state(primary),
-                Some(ActorTaskRuntime::Class0Timer(_))
+                (living, entity.actor_tasks.task_state(primary)),
+                (0, Some(ActorTaskRuntime::Class0Timer(_)))
+                    | (36, Some(ActorTaskRuntime::DieWhenMoved(_)))
+                    | (38, Some(ActorTaskRuntime::ChangeSeaLevel(_)))
+                    | (65, Some(ActorTaskRuntime::Geyser(_)))
             )
+            // A finished class38 has staged its removal.
+            || (living == 38 && bits(entity, DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0)
             || entity
                 .actor_tasks
                 .task_in_slot(ActorTaskSlot::Secondary)
@@ -106,8 +117,32 @@ impl Class0ActorOwner {
     }
 }
 
+/// The program an allocation runs now: its living class, or class65 once a
+/// Type118 has died into its Geyser.
+fn current_class(entity_type: u32, context: BehaviorContextRuntime) -> u32 {
+    // Class65's style 4C7540 carries no callbacks or policy words.
+    let geyser = crate::entity_behavior::behavior_program(65).expect("class65 program");
+    if entity_type == crate::main_base_type54_abort::TYPE118_ENTITY_TYPE
+        && context.active_style().style_address() == geyser.initial_style.frame_address
+    {
+        65
+    } else {
+        living_class(entity_type)
+    }
+}
+
+/// 07CA0's 07DF0 walk over the live list, which the scheduler applies right
+/// after this visit at the position and time the task saw.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GeyserLift {
+    pub geyser_id: u32,
+    pub position_raw: [i16; 3],
+    pub elapsed_micros: u32,
+}
+
 pub struct Class0ActorFrame<'a> {
-    pub resources: &'a ResourceCache,
+    /// Mutable for Type89's class38, which moves the Section-10 sea word.
+    pub resources: &'a mut ResourceCache,
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
@@ -152,6 +187,10 @@ impl Class0ActorOutcome {
 pub struct Class0ActorTick {
     pub outcome: Class0ActorOutcome,
     pub retained_owner: Option<Class0ActorOwner>,
+    /// The class38 Primary a Die When Moved death published in this visit.
+    pub sea_level_receipt: Option<crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt>,
+    /// A Geyser visit's lift of the bodies above it.
+    pub geyser_lift: Option<GeyserLift>,
 }
 
 pub fn tick_class0_actor_owner(
@@ -168,27 +207,43 @@ pub fn tick_class0_actor_owner(
         return Class0ActorTick {
             outcome: Class0ActorOutcome::Dropped { entity_id: id },
             retained_owner: None,
+            sea_level_receipt: None,
+            geyser_lift: None,
         };
     }
     if manager.native_class0_has_pending_prefix(id) {
         return Class0ActorTick {
             outcome: Class0ActorOutcome::Pending { entity_id: id },
             retained_owner: Some(owner),
+            sea_level_receipt: None,
+            geyser_lift: None,
         };
     }
     if Class0ActorOwner::adopt(manager, id) != Ok(owner) {
         return Class0ActorTick {
             outcome: Class0ActorOutcome::Dropped { entity_id: id },
             retained_owner: None,
+            sea_level_receipt: None,
+            geyser_lift: None,
         };
     }
-    let result = run_frame(manager, owner, &mut frame);
+    let mut sea_level_receipt = None;
+    let mut geyser_lift = None;
+    let result = run_frame(
+        manager,
+        owner,
+        &mut frame,
+        &mut sea_level_receipt,
+        &mut geyser_lift,
+    );
     match result {
         Ok(outcome) => {
             manager.set_native_class0_pending_prefix(id, false);
             Class0ActorTick {
                 outcome,
                 retained_owner: Class0ActorOwner::adopt(manager, id).ok(),
+                sea_level_receipt,
+                geyser_lift,
             }
         }
         Err(reason) => Class0ActorTick {
@@ -197,7 +252,10 @@ pub fn tick_class0_actor_owner(
                 reason,
                 prefix_committed: manager.native_class0_has_pending_prefix(id),
             },
-            retained_owner: Some(owner),
+            // A committed death already retired the living owner.
+            retained_owner: sea_level_receipt.is_none().then_some(owner),
+            sea_level_receipt,
+            geyser_lift: None,
         },
     }
 }
@@ -213,6 +271,10 @@ fn run_frame(
     manager: &mut EntityManager,
     owner: Class0ActorOwner,
     frame: &mut Class0ActorFrame<'_>,
+    sea_level_receipt: &mut Option<
+        crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt,
+    >,
+    geyser_lift: &mut Option<GeyserLift>,
 ) -> Result<Class0ActorOutcome, Class0ActorError> {
     let id = owner.entity_id();
     let entity = manager
@@ -279,7 +341,16 @@ fn run_frame(
             return Err(Class0ActorError::Runtime("callback B2"));
         };
         entity.mass_raw = mass;
-        run_callback(manager, owner, &metadata, frame, dt, detailed)?;
+        run_callback(
+            manager,
+            owner,
+            &metadata,
+            frame,
+            dt,
+            detailed,
+            sea_level_receipt,
+            geyser_lift,
+        )?;
     }
     let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
     commit_common_scheduler_post_callback(&mut entity.collision);
@@ -307,6 +378,55 @@ fn run_frame(
         detailed,
         callback_elapsed_micros: dt,
     })
+}
+
+fn metadata_type(manager: &EntityManager, id: u32) -> Result<u32, Class0ActorError> {
+    manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .map(|entity| entity.entity_type)
+        .ok_or(Class0ActorError::Allocation)
+}
+
+/// 04AA0's 10C10: Type50's alternate class38 changes the sea. The visit's
+/// committed-prefix marker is lifted only for the installer's own check.
+fn die_when_moved_death(
+    manager: &mut EntityManager,
+    owner: Class0ActorOwner,
+    frame: &mut Class0ActorFrame<'_>,
+) -> Result<crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt, Class0ActorError> {
+    use crate::main_base_type54_abort::{
+        MainBaseType54DeathAdvance, MainBaseType54DeathOutcome, MainBaseType54NetworkSession,
+    };
+    let id = owner.entity_id();
+    // 40BDC0's burst and 05040's derived delta read the active model's extent.
+    let extent = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(|entity| entity.model_index)
+        .and_then(|model| frame.resources.global_model(model))
+        .map(|model| model.radius)
+        .ok_or(Class0ActorError::Runtime("Die When Moved model extent"))?;
+    let terrain = frame
+        .resources
+        .level_terrain()
+        .ok_or(Class0ActorError::Runtime("terrain"))?;
+    manager.set_native_class0_pending_prefix(id, false);
+    let advance = manager.apply_main_base_abort_type54_death(
+        owner.allocation(),
+        terrain,
+        extent,
+        MainBaseType54NetworkSession::SoloNetworkingDisabled,
+        frame.world_fx,
+    );
+    manager.set_native_class0_pending_prefix(id, true);
+    let advance = advance.map_err(|_| Class0ActorError::Runtime("Die When Moved death"))?;
+    let (MainBaseType54DeathAdvance::Advanced { outcome, .. }
+    | MainBaseType54DeathAdvance::SuccessorUnavailableAfterCommit { outcome }) = advance;
+    match outcome {
+        MainBaseType54DeathOutcome::SeaLevelTaskPublished { tick_receipt, .. } => Ok(tick_receipt),
+        _ => Err(Class0ActorError::Runtime("Die When Moved class38 task")),
+    }
 }
 
 fn resolve_relation_prefix(manager: &mut EntityManager, id: u32) -> Result<(), Class0ActorError> {
@@ -343,9 +463,15 @@ fn run_callback(
     frame: &mut Class0ActorFrame<'_>,
     dt: u32,
     detailed: bool,
+    sea_level_receipt: &mut Option<
+        crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt,
+    >,
+    geyser_lift: &mut Option<GeyserLift>,
 ) -> Result<(), Class0ActorError> {
     let id = owner.entity_id();
-    let program = audited_behavior_program(0).ok_or(Class0ActorError::Graph)?;
+    let program =
+        audited_behavior_program(current_class(metadata_type(manager, id)?, owner.context))
+            .ok_or(Class0ActorError::Graph)?;
     let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
     let RetailRuntimeValue::Known(default_flags) = entity.collision.default_state_flags_at_0xc8
     else {
@@ -371,26 +497,138 @@ fn run_callback(
             .state_flags_at_0x08
             .overwrite(0x40000, 0x40000);
     }
-    let Some(ActorTaskRuntime::Class0Timer(task)) =
-        entity.actor_tasks.task_state_mut(owner.primary)
-    else {
-        return Err(Class0ActorError::Graph);
-    };
-    let expired = task.advance_prefix(dt);
     let visit = ActorTaskVisit {
         slot: ActorTaskSlot::Primary,
         task_id: owner.primary,
     };
-    entity
-        .actor_tasks
-        .begin_exact_visit_with(visit, |_| ())
-        .ok_or(Class0ActorError::Graph)?;
-    let survived = entity.actor_tasks.finish_exact_visit(visit);
-    if survived && expired && bits(entity, 0x1000)? == 0 {
-        reselect_class0_actor(entity, metadata, &mut || {
-            u32::from(frame.world_fx.next_shared_retail_random_u16())
-        })?;
+    match entity.actor_tasks.task_state_mut(owner.primary) {
+        Some(ActorTaskRuntime::Class0Timer(task)) => {
+            let expired = task.advance_prefix(dt);
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            let survived = entity.actor_tasks.finish_exact_visit(visit);
+            if survived && expired && bits(entity, 0x1000)? == 0 {
+                reselect_class0_actor(entity, metadata, &mut || {
+                    u32::from(frame.world_fx.next_shared_retail_random_u16())
+                })?;
+            }
+        }
+        Some(ActorTaskRuntime::ChangeSeaLevel(task)) => {
+            task.accumulate_elapsed_prefix(dt);
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            // 05160 ignores the coarse argument: every callback moves the sea.
+            let terrain = frame
+                .resources
+                .level_terrain_mut()
+                .ok_or(Class0ActorError::Runtime("terrain"))?;
+            let complete = match entity.actor_tasks.exact_callback_state_mut(visit) {
+                Some(ActorTaskRuntime::ChangeSeaLevel(state)) => {
+                    let complete = state.tick_transition(terrain, dt);
+                    if !complete {
+                        state.advance_tick_sequence();
+                    }
+                    complete
+                }
+                _ => return Err(Class0ActorError::Graph),
+            };
+            if complete {
+                // 10B70 stages the removal inside 05160's callback.
+                entity.mark_actor_deferred_destroy_pending();
+                manager.queue_actor_deferred_destroy(id);
+            }
+            let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+        }
+        Some(ActorTaskRuntime::Geyser(task)) => {
+            task.advance_prefix(dt);
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            let position = entity.position_raw();
+            let remote = bits(entity, REMOTE_OWNED_STATE_BIT)? != 0;
+            // 07CA0 sprays only when DCA0 passes 0; E870 skips 0x2000 rows.
+            if detailed {
+                let spray = crate::geyser::geyser_spray(position, dt, &mut || {
+                    frame.world_fx.next_shared_retail_random_u16()
+                });
+                let environment = crate::world_fx::ParticleEnvironment::Terrain(
+                    crate::world_fx::TerrainCollisionContext::from_current_level_cache(
+                        frame.resources,
+                    )
+                    .ok_or(Class0ActorError::Runtime("particle terrain context"))?,
+                );
+                for particle in spray {
+                    frame.world_fx.materialize_descriptor_particle_request(
+                        crate::world_fx::DescriptorParticleRequest {
+                            source_class: crate::geyser::GEYSER_SPRAY_PARTICLE_CLASS,
+                            position_raw: particle.position_raw,
+                            velocity_raw: particle.velocity_raw,
+                            owner: Some(crate::world_fx::ParticleOwnerAtBirth {
+                                entity_id: id,
+                                entity_type: crate::main_base_type54_abort::TYPE118_ENTITY_TYPE
+                                    as u8,
+                            }),
+                            suppresses_impact_damage: remote,
+                        },
+                        environment,
+                        frame.retail_tick,
+                    );
+                }
+            }
+            *geyser_lift = Some(GeyserLift {
+                geyser_id: id,
+                position_raw: position,
+                elapsed_micros: dt,
+            });
+            let terrain = frame
+                .resources
+                .level_terrain_mut()
+                .ok_or(Class0ActorError::Runtime("terrain"))?;
+            let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+            match entity.actor_tasks.exact_callback_state_mut(visit) {
+                Some(ActorTaskRuntime::Geyser(state)) => state.step_sea(terrain, dt),
+                _ => return Err(Class0ActorError::Graph),
+            }
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+        }
+        Some(ActorTaskRuntime::DieWhenMoved(task)) => {
+            task.advance_prefix(dt);
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            // DCA0 passes 0 and E870 passes 1; 04AA0 acts only on 0.
+            let position = entity.position_raw();
+            let moved = detailed
+                && match entity.actor_tasks.exact_callback_state_mut(visit) {
+                    Some(ActorTaskRuntime::DieWhenMoved(task)) => {
+                        task.record_detailed_visit(position)
+                    }
+                    _ => return Err(Class0ActorError::Graph),
+                };
+            // 10C10 runs inside the callback and replaces this Primary; its
+            // wrapper retires on unwind. Retiring it first is the same order
+            // of every observable effect.
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+            if moved {
+                *sea_level_receipt = Some(die_when_moved_death(manager, owner, frame)?);
+            }
+        }
+        _ => return Err(Class0ActorError::Graph),
     }
+    let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
     if detailed {
         let record = frame
             .resources

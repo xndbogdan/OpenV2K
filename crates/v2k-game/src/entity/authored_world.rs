@@ -796,7 +796,7 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type17: {error:?}"))?;
             }
-            52 | 54 | 68 | 72 | 85 | 106 => {
+            50 | 52 | 54 | 68 | 72 | 85 | 89 | 106 | 118 => {
                 if self.native_class0_construction_present(entity.id) {
                     return Err("class0 allocation already published".into());
                 }
@@ -820,6 +820,26 @@ impl EntityManager {
                     &mut || u32::from(world_fx.next_shared_retail_random_u16()),
                 )
                 .map_err(|error| format!("class0: {error:?}"))?;
+                if super::class0_actor::living_class(entity.entity_type) == 38 {
+                    // 40BDC0 reads the active model's header+08: model 0 for Type89.
+                    let slot = match entity.collision.active_model_slot() {
+                        RetailRuntimeValue::Known(slot) => usize::from(slot),
+                        RetailRuntimeValue::Unresolved => {
+                            return Err("class38 active model slot".into())
+                        }
+                    };
+                    let extent = resources
+                        .model_extent_raw
+                        .and_then(|lookup| lookup(entity.model_slots[slot].unwrap_or(0)))
+                        .ok_or("class38 model header08")?;
+                    super::class0_actor::initialize_living_change_sea_level(
+                        &mut entity,
+                        extent,
+                        terrain,
+                        world_fx,
+                    )
+                    .map_err(|error| format!("class38: {error:?}"))?;
+                }
                 self.append_live_entity(entity);
                 self.native_class0_actors
                     .insert(allocation.entity_id, runtime);

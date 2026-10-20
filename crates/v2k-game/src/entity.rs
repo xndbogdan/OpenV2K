@@ -52,9 +52,10 @@ pub(crate) use instance_body::NativeCreationRecord;
 use instance_body::{native_instance_body, NativeInstanceBodyRequest};
 mod cargo_runtime;
 mod class0_actor;
+pub(crate) use class0_actor::{living_class as class0_living_class, Class0GeyserDeath};
 pub use class0_actor::{
     tick_class0_actor_owner, Class0ActorError, Class0ActorFrame, Class0ActorOutcome,
-    Class0ActorOwner, Class0ActorTick,
+    Class0ActorOwner, Class0ActorTick, GeyserLift,
 };
 #[cfg(test)]
 mod class0_abort_tests;
@@ -3632,9 +3633,10 @@ fn native_class0_quiet_death_tasks_are_locally_releasable(entity: &Entity) -> bo
     let Some(primary) = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary) else {
         return false;
     };
+    // Type50's living Primary is class36's Die When Moved, not the timer.
     matches!(
         entity.actor_tasks.task_state(primary),
-        Some(ActorTaskRuntime::Class0Timer(_))
+        Some(ActorTaskRuntime::Class0Timer(_) | ActorTaskRuntime::DieWhenMoved(_))
     ) && entity.actor_tasks.wrapper_flags(primary)
         == Some(crate::actor_task_owner::ActorTaskWrapperFlags {
             alive: true,
@@ -3660,16 +3662,20 @@ impl MainBaseType54PrimaryTaskAllocator for HostMainBaseType54PrimaryTaskAllocat
     }
 }
 
+/// The living class is class0 for Type54/72/85 and class36 for Type50;
+/// neither style has a death callback.
 fn authenticate_fresh_level_one_type54_context(
     context: BehaviorContextRuntime,
+    living_class: u32,
 ) -> Option<BehaviorContextRuntime> {
-    let initial_program = behavior_program(u32::from(LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS))?;
+    let initial_program = behavior_program(living_class)?;
     let death_program = behavior_program(u32::from(LEVEL_ONE_TYPE54_DEATH_BEHAVIOR_CLASS))?;
     if context.choice_list_source()
         != RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeDefault)
         || context.descriptor() != BehaviorDescriptorIdentity::Named(initial_program)
         || context.active_style() != ActiveBehaviorStyle::Audited(initial_program.initial_style)
-        || context.active_style().style_address() != LEVEL_ONE_TYPE54_INITIAL_STYLE_ADDRESS
+        || (living_class == u32::from(LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS)
+            && context.active_style().style_address() != LEVEL_ONE_TYPE54_INITIAL_STYLE_ADDRESS)
         || context.active_style().death_callback_policy() != DeathCallbackPolicy::None
         || death_program.initial_style.frame_address
             != crate::main_base_type54_abort::LEVEL_ONE_TYPE54_DEATH_STYLE_ADDRESS
@@ -5060,6 +5066,7 @@ impl EntityManager {
                             | 43
                             | 47
                             | 49
+                            | 50
                             | 52
                             | 53
                             | 54
@@ -5091,7 +5098,9 @@ impl EntityManager {
                             | 80
                             | 83
                             | 85
+                            | 89
                             | 106
+                            | 118
                             | 119
                             | 122
                             | 123
@@ -11216,7 +11225,10 @@ impl EntityManager {
         let RetailRuntimeValue::Known(Some(initial_behavior)) = entity.initial_behavior else {
             return Err(MainBaseType54DeathBlock::InitialBehaviorMismatch);
         };
-        if initial_behavior.program.class_id != LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS {
+        let living_class =
+            crate::main_base_type54_abort::sea_level_row_living_class(entity.entity_type)
+                .ok_or(MainBaseType54DeathBlock::InitialBehaviorMismatch)?;
+        if u32::from(initial_behavior.program.class_id) != living_class {
             return Err(MainBaseType54DeathBlock::InitialBehaviorMismatch);
         }
         let RetailRuntimeValue::Known(sea_delta_source) = entity.main_base_type54_sea_delta_source
@@ -11274,7 +11286,7 @@ impl EntityManager {
                 return Err(MainBaseType54DeathBlock::CurrentBehaviorContextMismatch)
             }
         };
-        let selected_context = authenticate_fresh_level_one_type54_context(context)
+        let selected_context = authenticate_fresh_level_one_type54_context(context, living_class)
             .ok_or(MainBaseType54DeathBlock::CurrentBehaviorContextMismatch)?;
         if native_class0
             && (context.target_handle_at_0x08() != RetailRuntimeValue::Known(None)

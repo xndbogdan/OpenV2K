@@ -130,6 +130,8 @@ pub enum MainBaseAbortActorDisposition {
     Type60RingDeath,
     Type61Death,
     Type66Death,
+    /// Type118's direct alternate class65 Geyser keeps the class0 owner.
+    GeyserDeath,
 }
 
 /// New owners published synchronously by actor callbacks and adopted for the
@@ -238,6 +240,7 @@ pub enum MainBaseAbortActorCallbackBlock {
     Type17(MainBaseType17DeathBlock),
     Type47(MainBaseType47DeathBlock),
     Type54(MainBaseType54DeathBlock),
+    Geyser(crate::entity::Class0ActorError),
     Type60Custody(Type60ExplodingRingCustodyTakeBlock),
     Type60(MainBaseType60RingDeathBlock),
     Type61(MainBaseType61DeathBlock),
@@ -1372,9 +1375,11 @@ fn dispatch_ordinary_actor(
         }
         LEVEL_ONE_TYPE54_ENTITY_TYPE
         | crate::main_base_type54_abort::TYPE72_ENTITY_TYPE
-        | crate::main_base_type54_abort::TYPE85_ENTITY_TYPE => {
+        | crate::main_base_type54_abort::TYPE85_ENTITY_TYPE
+        | crate::main_base_type54_abort::TYPE50_ENTITY_TYPE => {
             // 40BDC0's burst reads the active model's extent. Type54's model 560
-            // is the authenticated 256; Type72 and Type85 read theirs from the cache.
+            // is the authenticated 256; Type72, Type85 and Type50 read theirs
+            // from the cache.
             let extent = if actor.entity_type == LEVEL_ONE_TYPE54_ENTITY_TYPE {
                 LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW
             } else {
@@ -1399,6 +1404,31 @@ fn dispatch_ordinary_actor(
                 publications,
                 extent,
             )
+        }
+        crate::main_base_type54_abort::TYPE118_ENTITY_TYPE => {
+            let id = actor.lease.entity_id;
+            if !specialized_tasks.take_class0_actor_external_mutation(entities, id) {
+                return Err(callback_error(MainBaseAbortActorCallbackBlock::Geyser(
+                    crate::entity::Class0ActorError::Allocation,
+                )));
+            }
+            let death = entities.apply_class0_geyser_death(id, terrain);
+            // The living graph after a no-op or failure, else the Geyser.
+            if let Ok(owner) = Class0ActorOwner::adopt(entities, id) {
+                specialized_tasks.register_class0_actor(owner);
+            }
+            death
+                .map_err(|error| callback_error(MainBaseAbortActorCallbackBlock::Geyser(error)))?;
+            let (successor, successor_available) =
+                match entities.main_base_abort_successor_after_callback(id) {
+                    Ok(next_actor) => (next_actor, true),
+                    Err(()) => (None, false),
+                };
+            Ok(DispatchSuccess {
+                disposition: MainBaseAbortActorDisposition::GeyserDeath,
+                successor,
+                successor_available,
+            })
         }
         TYPE60_RING_ENTITY_TYPE => {
             let scheduler_owner = specialized_tasks
