@@ -18,7 +18,12 @@ impl ModelVertexResolver for LiveOwner {
     fn admit_face_raw(&self, _: [i32; 3], normal: [i32; 3]) -> bool {
         normal[0] <= 0
     }
-    fn resolve_external_frame_raw(&self, slot: u16, _: [i16; 3]) -> Option<ResolvedModelSlot> {
+    fn resolve_external_frame_raw(
+        &self,
+        slot: u16,
+        _: [i16; 3],
+        _: &mut dyn FnMut(u16) -> Option<ResolvedModelSlot>,
+    ) -> Option<ResolvedModelSlot> {
         if let Some(value) = self.cache.borrow().get(&slot).copied() {
             return Some(value);
         }

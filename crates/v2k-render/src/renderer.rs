@@ -450,8 +450,8 @@ fn linear_depth_fade_amount(view_depth: f32, near: f32, far: f32) -> f32 {
 /// returns an already world-space point which the vertex handler transforms
 /// directly into view space. Callback ownership differs between entity, menu,
 /// and static-terrain contexts, so callers must opt into a recovered policy.
-// The 16-slot retail selector table is the authored shape; Copy submission
-// beats an indirection per draw.
+// The retail selector table is the authored shape; Copy submission beats an
+// indirection per draw.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ExternalFrameMode {
@@ -462,8 +462,12 @@ pub enum ExternalFrameMode {
     WorldPoint([f32; 3]),
     /// `FUN_0041D360` per-selector world point. The type-14 X operand is the
     /// authored selector; a missing slot keeps the raw operands.
-    SelectorWorldPoints([Option<[f32; 3]>; 16]),
+    SelectorWorldPoints([Option<[f32; 3]>; EXTERNAL_FRAME_SELECTORS]),
 }
+
+/// `FUN_0041D360`'s selectors: the primary, then the secondary endpoint of
+/// each of at most 16 Sub-H records.
+pub const EXTERNAL_FRAME_SELECTORS: usize = 32;
 
 /// Retail interpretation of type-13 model vertices for this draw context.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

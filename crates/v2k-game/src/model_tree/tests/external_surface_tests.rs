@@ -251,7 +251,9 @@ fn recursive_live_shadow_warms_only_the_submitted_limb_and_backfaces_do_not_reso
 
 #[test]
 fn native_live_normal_gate_uses_wrapping_raw_plane_and_strict_sign() {
-    let callback = |_| panic!("a normal gate cannot invoke a vertex callback");
+    let callback = |_, _: &mut dyn FnMut(u16) -> Option<[i32; 3]>| {
+        panic!("a normal gate cannot invoke a vertex callback")
+    };
     let mut resolver = WorldModelVertexResolver {
         surface: None,
         native_context: None,
@@ -417,7 +419,7 @@ fn native_shadow_consumes_the_cached_view_quantization_without_changing_direct_w
             GRID_SIZE * GRID_SIZE
         ],
     };
-    let callback = |_| {
+    let callback = |_, _: &mut dyn FnMut(u16) -> Option<[i32; 3]>| {
         Some(external_frame::ActorExternalSlotPoint {
             draw_world: [1.0 / 256.0, 100.0 / 256.0, 1.0 / 256.0],
             native_world_raw: [1, 100, 1],
@@ -482,7 +484,7 @@ fn native_callback_rebases_all_words_to_viewport_image_before_q31_projection() {
         records: vec![[14, 0, 0, 0]],
         ..ModelEntry::default()
     };
-    let callback = |_| {
+    let callback = |_, _: &mut dyn FnMut(u16) -> Option<[i32; 3]>| {
         Some(external_frame::ActorExternalSlotPoint {
             draw_world: [128.03125, -128.03125, 384.03125],
             native_world_raw: [-32760, 32760, -32760],
@@ -507,7 +509,9 @@ fn native_callback_rebases_all_words_to_viewport_image_before_q31_projection() {
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
     };
-    let point = resolver.resolve_external_frame_raw(0, [0; 3]).unwrap();
+    let point = resolver
+        .resolve_external_frame_raw(0, [0; 3], &mut |_| None)
+        .unwrap();
     assert_eq!(
         point.native_view_point,
         Some([16, -16, 16]),

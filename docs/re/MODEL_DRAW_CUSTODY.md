@@ -121,17 +121,24 @@ live ownership drops the dependent primitive; intrinsic/collision readers
 retain their parameter representation without actor callback side effects.
 
 `D360 -> 41E310` also consumes the current node's resolved VIEW slot for
-Sub-H A/B/C anchors. In an authenticated native root draw, the shared plain
-slot resolver retains the tf0 handler's mirror-after-Q31-shift ordering and
-then inverse-projects through viewport columns before narrowing to world
-words. Direct physical-body rotation is not an equivalent shortcut: the
+Sub-H A/B/C anchors. `FUN_0041E310` reads the drawing context's own slot
+cache (`ctx+0`, records at `ctx+0x88`) and computes a cold slot through the
+type-flag table, so a child node's limbs use that child's slots and an anchor
+may be any generator: the crab's legs live in its child `crabrotate` (model
+32; the root `crab`, model 31, has one record), each `icecurly` segment
+(models 1042/1044/1046) has its own legs, and `fireecto`'s (model 1171) A
+anchors are tf5 midpoints. In an authenticated native draw the tf14 callback
+therefore resolves A/B/C through the node's canonical slot walk, whose tf0
+leaves retain the tf0 handler's mirror-after-Q31-shift ordering, and then
+inverse-projects through viewport columns before narrowing to world words.
+`FUN_0041D360` takes selectors up to twice the record count (`41D39A`):
+Type30's ten records reach selector 19, so the selector table holds 32. Direct physical-body rotation is not an equivalent shortcut: the
 VIEW round trip contributes independent integer rounding. Physical body
 axes still belong to DF20's terrain constraint and the secondary Q12 basis.
 `sub_h_external_frame::tests` pins twelve genuine tick 952 model 302 A/C cache
 points and all six before/after H records using the reached captured terrain
 patch; out-of-patch probes fail explicitly. Free/intrinsic compatibility is
-unchanged. A transformed child frame with the retained root record table
-cannot by itself establish child-local Sub-H vertex-reference custody.
+unchanged: without a native frame it still reads the root's tf0 records.
 
 Authenticated native surface callbacks retain a separate
 `ResolvedModelSlot::native_view_point`. The canonical interpreter decorates

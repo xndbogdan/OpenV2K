@@ -40,6 +40,8 @@ struct CorpusDraw<'a> {
     viewport: NativeWorldViewport,
     native: bool,
     sub_h_type: Option<usize>,
+    /// Leave the Sub-H records cold, so every anchor is read at draw time.
+    cold_sub_h: bool,
 }
 
 fn draw_corpus(cache: &ResourceCache, request: CorpusDraw<'_>) -> RecordingRenderer {
@@ -65,7 +67,8 @@ fn draw_corpus(cache: &ResourceCache, request: CorpusDraw<'_>) -> RecordingRende
     let mut runtime = SubHRuntimeState::new(descriptor.records.len()).unwrap();
     // Actual authored Sub-H descriptors consume explicit settled caches. This
     // fixture verifies complete presentation, independently of endpoint motion.
-    for (index, record) in runtime.records_mut().iter_mut().enumerate() {
+    let settled = if request.cold_sub_h { 0 } else { usize::MAX };
+    for (index, record) in runtime.records_mut().iter_mut().enumerate().take(settled) {
         record.flags_raw = 7;
         record.primary_raw = [
             ORIGIN[0] + 128 + index as i16 * 128,
@@ -294,6 +297,7 @@ fn complete_player4_keeps_the_common_hull_and_footprint_across_native_loadouts()
                         viewport: viewport(view_case),
                         native: true,
                         sub_h_type: None,
+                        cold_sub_h: false,
                     },
                 );
                 verify_geometry(&draw);
@@ -423,6 +427,7 @@ fn complete_retail_native_models_preserve_body_edges_and_billboards_with_shared_
                         viewport: viewport(view_case),
                         native: false,
                         sub_h_type,
+                        cold_sub_h: false,
                     },
                 );
                 let native = draw_corpus(
@@ -433,6 +438,7 @@ fn complete_retail_native_models_preserve_body_edges_and_billboards_with_shared_
                         viewport: viewport(view_case),
                         native: true,
                         sub_h_type,
+                        cold_sub_h: false,
                     },
                 );
                 verify_geometry(&native);
@@ -462,6 +468,30 @@ fn complete_retail_native_models_preserve_body_edges_and_billboards_with_shared_
             }
         }
     }
+}
+
+/// `FUN_0041E310` reads Sub-H anchors from the drawing node's own slots: the
+/// crab root (model 31) has one record, and Type28's legs live in its child
+/// `crabrotate` (model 32), whose eight records reach selectors 0..15.
+#[v2k_test_support::retail_test]
+fn cold_child_node_limbs_read_their_own_slots() {
+    let session = corpus();
+    let draw = draw_corpus(
+        &session.cache,
+        CorpusDraw {
+            model_id: 31,
+            vars: &AnimVars::default(),
+            viewport: viewport(0),
+            native: true,
+            sub_h_type: Some(28),
+            cold_sub_h: true,
+        },
+    );
+    verify_geometry(&draw);
+    let crab = session.cache.global_model(32).unwrap();
+    let legs = crab.records.iter().filter(|record| record[0] == 14).count();
+    assert_eq!(legs, 16);
+    assert!(draw.bodies.iter().any(|body| body.edges.len() >= legs));
 }
 
 #[v2k_test_support::retail_test]

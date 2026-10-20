@@ -8,6 +8,7 @@ use v2k_formats::models::{ModelFaceCull, ModelFaceVertices, ModelVertexProjectio
 use v2k_formats::terrain::TerrainGrid;
 use v2k_render::{
     authored_face_plane_visible, ExternalFrameMode, ModelTransform, WorldSurfaceProjection,
+    EXTERNAL_FRAME_SELECTORS,
 };
 
 #[derive(Clone, Copy)]
@@ -115,10 +116,12 @@ impl ModelTreeExternalFrame<'_> {
         }
     }
 
+    /// `node_view` reads one slot of the node being drawn as native VIEW words.
     pub(super) fn resolve_parameter_world(
         &mut self,
         parameters: [i16; 3],
         surface: Option<WorldSurfaceProjection<'_>>,
+        node_view: &mut dyn FnMut(u16) -> Option<[i32; 3]>,
     ) -> Option<ActorExternalSlotPoint> {
         if let Self::Emitter(presentation) = self {
             let point = presentation.emitter.resolve(0, parameters).ok()??;
@@ -147,15 +150,20 @@ impl ModelTreeExternalFrame<'_> {
             waves_enabled: surface.waves_enabled(),
             policy: presentation.runtime.surface_policy(),
         });
-        let draw_world = presentation
-            .resolve([selector], |x, z| {
-                sampler
-                    .as_ref()
-                    .map_or(0, |surface| surface.sample_raw(x, z))
-            })?
-            .get(selector as usize)
-            .copied()
-            .flatten()?;
+        let height = |x, z| {
+            sampler
+                .as_ref()
+                .map_or(0, |surface| surface.sample_raw(x, z))
+        };
+        let draw_world = if presentation.native_context.is_some() {
+            presentation.resolve_node_selector(selector, node_view, height)?
+        } else {
+            presentation
+                .resolve([selector], height)?
+                .get(selector as usize)
+                .copied()
+                .flatten()?
+        };
         let record = presentation.runtime.records()[binding.record_index];
         let raw = match binding.endpoint {
             crate::sub_h_external_frame::SubHEndpoint::Primary => record.primary_raw,
@@ -395,7 +403,7 @@ impl ModelTreeExternalFrame<'_> {
                     presentation.publish(world);
                     world
                 };
-                let mut points = [None; 16];
+                let mut points = [None; EXTERNAL_FRAME_SELECTORS];
                 points[0] = Some(world);
                 ExternalFrameMode::SelectorWorldPoints(points)
             }
@@ -625,7 +633,7 @@ mod tests {
     fn fixed_external_frames_keep_legacy_submission_without_a_live_surface_context() {
         let model = ModelEntry::default();
         let geometry = ModelNodeGeometry::from_static(&model);
-        let mut points = [None; 16];
+        let mut points = [None; EXTERNAL_FRAME_SELECTORS];
         points[4] = Some([1.0, 2.0, 3.0]);
         for frame in [
             ExternalFrameMode::Raw,

@@ -45,6 +45,7 @@ impl ModelVertexResolver for NativeOwner {
         &self,
         slot: u16,
         parameters: [i16; 3],
+        _: &mut dyn FnMut(u16) -> Option<ResolvedModelSlot>,
     ) -> Option<ResolvedModelSlot> {
         self.external_calls.borrow_mut().push(slot);
         let mut result = ResolvedModelSlot::clear(parameters.map(f64::from));
@@ -93,6 +94,44 @@ fn native_midpoint_uses_projected_and_external_dependency_caches_once() {
     assert_eq!(*owner.external_calls.borrow(), [0]);
     assert_eq!(*owner.leaf_calls.borrow(), [4]);
     assert!(owner.failures.borrow().is_empty());
+}
+
+/// 41E310: a tf14 owner reads any slot of the node being drawn through the
+/// walk's own cache, a generated one included.
+#[test]
+fn external_owner_reads_generated_slots_of_the_drawing_node() {
+    struct NodeSlotOwner;
+    impl ModelVertexResolver for NodeSlotOwner {
+        fn resolve_vertex_raw(
+            &self,
+            _: ModelVertexKind,
+            source: ResolvedModelSlot,
+        ) -> Option<ResolvedModelSlot> {
+            Some(source)
+        }
+        fn owns_external_frame_slots(&self) -> bool {
+            true
+        }
+        fn resolve_external_frame_raw(
+            &self,
+            _: u16,
+            parameters: [i16; 3],
+            node_slots: &mut dyn FnMut(u16) -> Option<ResolvedModelSlot>,
+        ) -> Option<ResolvedModelSlot> {
+            node_slots(parameters[0] as u16)
+        }
+    }
+    let records = [[0, 10, 0, 0], [0, 30, 0, 0], [5, 1, 0, 2], [14, 4, 0, 0]];
+    let vars = AnimVars::default();
+    let owner = NodeSlotOwner;
+    let mut slots =
+        SlotResolver::with_linked(&records, &vars, None).with_vertex_resolver(Some(&owner));
+    let mut stats = StreamStats::default();
+    assert_eq!(
+        slots.resolve(6, &mut stats).unwrap().position_raw,
+        [20.0, 0.0, 0.0]
+    );
+    assert!(slots.cache.get(&4).is_some_and(Option::is_some));
 }
 
 #[test]

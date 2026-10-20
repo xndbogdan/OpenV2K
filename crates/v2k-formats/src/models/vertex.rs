@@ -204,10 +204,13 @@ pub trait ModelVertexResolver {
 
     /// Optional owner of tf14's authored callback parameters. Ordinary intrinsic
     /// decoding retains its raw-parameter fallback when unimplemented.
+    /// `node_slots` resolves any slot of the node being drawn through this
+    /// walk's own cache, as `FUN_0041E310` reads the drawing context's.
     fn resolve_external_frame_raw(
         &self,
         _slot: u16,
         _parameters: [i16; 3],
+        _node_slots: &mut dyn FnMut(u16) -> Option<ResolvedModelSlot>,
     ) -> Option<ResolvedModelSlot> {
         None
     }
@@ -652,7 +655,10 @@ impl<'a> SlotResolver<'a> {
                 14 => {
                     count(stats, "external_frame");
                     if let Some(resolver) = self.vertex_resolver {
-                        let point = resolver.resolve_external_frame_raw(slot, [a, b, c]);
+                        let point =
+                            resolver.resolve_external_frame_raw(slot, [a, b, c], &mut |source| {
+                                self.resolve(source, stats)
+                            });
                         if point.is_some() || resolver.owns_external_frame_slots() {
                             return point;
                         }

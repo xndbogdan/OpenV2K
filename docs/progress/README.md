@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 202 |
+| implemented | 203 |
 | approximated | 6 |
 | documented | 1 |
 | not-needed | 337 |
@@ -45,7 +45,7 @@ Where the code's references are thinnest:
 | [Menu system](../re/MENU_SYSTEM.md) | 141 | 42 | 80 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 130 | 6 | 49 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 119 | 17 | 5 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 89 | 16 | 63 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 89 | 16 | 61 |
 | [Software raster](../re/SOFTWARE_RASTER.md) | 81 | 3 | 56 |
 | [Controls](../re/CONTROLS.md) | 80 | 17 | 22 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 53 | 6 | 62 |
