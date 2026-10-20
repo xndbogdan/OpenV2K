@@ -184,6 +184,12 @@ first eligible candidate to Search's Chase and Aim, while UnderAttack weighs
 Search in after a hit. Type55 tumbles and Type81 drops its Type61; worlds19
 and29 now lose with every actor's death, and world32's Hive births Type81.
 
+The three Type31 virus slugs (two in world16, one in world31) and the Type105
+children their class18 split births share the
+[slug owner](TYPE31_VIRUS_SLUG.md) on the ground host: Run Away10, Defecate
+Virus4 and Move About Aimlessly5. Type31's `C080` births eight Type105s inline,
+as Type40's births Type56s; a Type105 has no H and dies quietly through class2.
+
 The nineteen ordinary [Type18 insects](TYPE18_RUNTIME.md) (worlds16, 21-23,
 30, 33, 34 and36) run on the ground host with Type122's capture and class12
 death. Their root mixes Defecate Virus4, Capture9, Search7, Follow Beacons33

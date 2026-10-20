@@ -340,6 +340,7 @@ mod tests {
             native_type38_aim_runtime: None,
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
+            native_type31_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,

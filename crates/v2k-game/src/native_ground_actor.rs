@@ -79,6 +79,11 @@ pub trait NativeGroundTaskCustody: crate::intro2_type17::capture::CaptureTaskCus
         &mut self,
         owner: crate::native_type56::Type56Owner,
     ) -> Result<(), &'static str>;
+    /// Type31's class18 Type105 child, as Type40's Type56.
+    fn register_split_type105_child(
+        &mut self,
+        owner: crate::native_type31::Type105Owner,
+    ) -> Result<(), &'static str>;
     /// Type27's class18 Type3 child, published before the next launch draw.
     fn register_split_rolling_boulder_child(
         &mut self,

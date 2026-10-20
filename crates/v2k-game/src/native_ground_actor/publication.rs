@@ -22,9 +22,9 @@ use crate::{
     trash_furniture::TrashFurnitureTargetHeightPolicy,
 };
 
-/// Publish one selected class on an A/H-bearing allocation. Each `06070`
-/// suffix draws its own words; none rebuilds a component. A failed
-/// initializer publishes the descriptor fallback and returns false.
+/// Publish one selected class on an A-bearing allocation, with or without H.
+/// Each `06070` suffix draws its own words; none rebuilds a component. A
+/// failed initializer publishes the descriptor fallback and returns false.
 pub(crate) fn publish_shared_root_class(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
@@ -80,8 +80,14 @@ pub(crate) fn publish_shared_root_class(
     let RetailRuntimeValue::Known(Some(sub_a)) = sub_a_propulsion_runtime else {
         return false;
     };
-    let RetailRuntimeValue::Known(Some(sub_h)) = sub_h_external_frame_runtime else {
-        return false;
+    // 06070 writes H only for a type that owns one: an H-less row's suffix
+    // is A alone, so its allocation must have no H either.
+    let owns_h = matches!(metadata.common_mover_topology,
+        RetailRuntimeValue::Known(topology) if topology.sub_h);
+    let mut sub_h = match sub_h_external_frame_runtime {
+        RetailRuntimeValue::Known(Some(h)) if owns_h => Some(h),
+        RetailRuntimeValue::Known(None) if !owns_h => None,
+        _ => return false,
     };
     let succeeded = if class == 4 {
         apply_defecate_virus_setup_with_component_suffix(
@@ -101,7 +107,9 @@ pub(crate) fn publish_shared_root_class(
                 Ok(
                     prepared.apply_suffix(&mut *next_random, |effect| match effect {
                         SharedGenericConstructorEffect::WriteSubHState08 { value } => {
-                            sub_h.set_enabled(value != 0)
+                            if let Some(h) = sub_h.as_deref_mut() {
+                                h.set_enabled(value != 0)
+                            }
                         }
                         SharedGenericConstructorEffect::WriteSubADirection {
                             direction_multiplier,
@@ -118,7 +126,9 @@ pub(crate) fn publish_shared_root_class(
     } else {
         let mut apply = |effect| match effect {
             SharedGenericConstructorEffect::WriteSubHState08 { value } => {
-                sub_h.set_enabled(value != 0)
+                if let Some(h) = sub_h.as_deref_mut() {
+                    h.set_enabled(value != 0)
+                }
             }
             SharedGenericConstructorEffect::WriteSubADirection {
                 direction_multiplier,

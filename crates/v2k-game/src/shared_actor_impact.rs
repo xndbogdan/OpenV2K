@@ -58,6 +58,7 @@ pub enum SharedActorImpactOutcome {
     Type30(Type30ImpactOutcome),
     Type40(Type40ImpactOutcome),
     Type56(crate::native_type56::impact::Type56ImpactOutcome),
+    Type31Family(crate::native_type31::impact::Type31ImpactOutcome),
     Type123(NativeType123ImpactOutcome),
     Type86(NativeType86ImpactOutcome),
     Fish(SharedFishImpactOutcome),
@@ -104,6 +105,7 @@ fn static_route_target_owned(entity: &crate::entity::Entity) -> bool {
         30 => entity.native_type30_runtime.is_some(),
         40 => entity.native_type40_runtime.is_some(),
         56 => entity.native_type56_runtime.is_some(),
+        31 | 105 => entity.native_type31_runtime.is_some(),
         type_id => {
             crate::shared_fish::is_shared_fish_type(type_id) && entity.shared_fish_runtime.is_some()
         }
@@ -435,6 +437,7 @@ pub fn apply_shared_actor_particle_hit(
         30 if entity.native_type30_runtime.is_some() => 30,
         40 if entity.native_type40_runtime.is_some() => 40,
         56 if entity.native_type56_runtime.is_some() => 56,
+        31 | 105 if entity.native_type31_runtime.is_some() => 31,
         123 if entity.native_type123_runtime.is_some() => 123,
         type_id
             if NativeFourChoiceProfile::from_entity_type(type_id).is_some()
@@ -474,6 +477,11 @@ pub fn apply_shared_actor_particle_hit(
     if family == 56 {
         return Some(SharedActorImpactOutcome::Type56(
             apply_shared_type56_particle_hit(frame, impact),
+        ));
+    }
+    if family == 31 {
+        return Some(SharedActorImpactOutcome::Type31Family(
+            apply_shared_type31_family_particle_hit(frame, impact),
         ));
     }
     if family == 53 {
@@ -912,6 +920,49 @@ pub(crate) fn apply_shared_type56_particle_hit(
     if matches!(
         result,
         Type56ImpactOutcome::Blocked {
+            committed_prefix: true,
+            ..
+        }
+    ) {
+        frame
+            .scheduler
+            .park_native_contact_prefix(frame.entities, id);
+    }
+    result
+}
+
+pub(crate) fn apply_shared_type31_family_particle_hit(
+    frame: SharedActorImpactFrame<'_>,
+    impact: ParticleEntityImpact,
+) -> crate::native_type31::impact::Type31ImpactOutcome {
+    use crate::intro2_radial::Intro2RadialTaskCustody;
+    use crate::native_type31::impact::{Type31ImpactBlock, Type31ImpactOutcome};
+    let id = impact.target_entity_id;
+    if !crate::native_type31::manager_allocation_authenticates(frame.entities, id)
+        || (!crate::native_type31::death::finished_terminal_authenticates(frame.entities, id)
+            && !frame
+                .scheduler
+                .prepare_native_actor_mutation(frame.entities, id))
+    {
+        return Type31ImpactOutcome::Blocked {
+            reason: Type31ImpactBlock::Runtime("completed native allocation/task custody"),
+            committed_prefix: false,
+        };
+    }
+    let result = crate::native_type31::impact::apply_type31_family_particle_hit(
+        SharedActorImpactFrame {
+            entities: frame.entities,
+            resources: frame.resources,
+            world_fx: frame.world_fx,
+            scheduler: &mut *frame.scheduler,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+        },
+        impact,
+    );
+    if matches!(
+        result,
+        Type31ImpactOutcome::Blocked {
             committed_prefix: true,
             ..
         }

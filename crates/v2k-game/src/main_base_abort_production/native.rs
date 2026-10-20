@@ -44,6 +44,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     Type94(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type30(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type40(crate::native_type40::death::Type40DeathBlock),
+    Type31(crate::native_type31::death::Type31DeathBlock),
     Type56(crate::native_type56::death::Type56DeathBlock),
     Type27(crate::rolling_boulder::death::RollingBoulderDeathBlock),
     Type35(crate::native_type43::Type43Error),
@@ -211,6 +212,8 @@ enum NativeActor {
     Type30,
     Type40,
     Type56,
+    Type31,
+    Type105,
     Type27,
     Type35,
 }
@@ -274,6 +277,8 @@ pub(super) fn dispatch_native_actor(
         30 if entity.native_type30_runtime.is_some() => NativeActor::Type30,
         40 if entity.native_type40_runtime.is_some() => NativeActor::Type40,
         56 if entity.native_type56_runtime.is_some() => NativeActor::Type56,
+        31 if entity.native_type31_runtime.is_some() => NativeActor::Type31,
+        105 if entity.native_type31_runtime.is_some() => NativeActor::Type105,
         27 if entity.rolling_boulder_runtime.is_some() => NativeActor::Type27,
         crate::native_type43::TYPE35_ENTITY_TYPE if entity.native_type43_runtime.is_some() => {
             NativeActor::Type35
@@ -410,6 +415,8 @@ fn dispatch(
             | NativeActor::Type30
             | NativeActor::Type40
             | NativeActor::Type56
+            | NativeActor::Type31
+            | NativeActor::Type105
             | NativeActor::Type27
             | NativeActor::Type35
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
@@ -509,6 +516,38 @@ fn dispatch(
             retire_native_ground_death(specialized_tasks, death.publication);
             publications.appended_type56_actors += children(entities).saturating_sub(before);
             MainBaseAbortActorDisposition::Type40Death
+        }
+        NativeActor::Type31 => {
+            // 10C10 -> DB80 -> class18: C080's burst, A860, then eight Type105
+            // children behind the cursor and the parent's deferred removal.
+            let children = |entities: &EntityManager| {
+                entities
+                    .iter_all()
+                    .filter(|entity| entity.entity_type == 105)
+                    .count()
+            };
+            let before = children(entities);
+            let death = crate::native_type31::death::begin_type31_standard_death(
+                entities,
+                id,
+                crate::native_type31::death::Type31Class18Frame {
+                    resources,
+                    world_fx,
+                    retail_tick: gameplay.retail_tick,
+                    tasks: specialized_tasks,
+                },
+            )
+            .map_err(|error| block(Block::Type31(error)))?;
+            retire_native_ground_death(specialized_tasks, death.publication);
+            publications.appended_type105_actors += children(entities).saturating_sub(before);
+            MainBaseAbortActorDisposition::Type31Death
+        }
+        NativeActor::Type105 => {
+            // 10C10 -> DB80 -> class2's C470 quiet terminal.
+            let death = crate::native_type31::death::begin_type105_standard_death(entities, id)
+                .map_err(|error| block(Block::Type31(error)))?;
+            retire_native_ground_death(specialized_tasks, death.publication);
+            MainBaseAbortActorDisposition::QuietDeath
         }
         NativeActor::Type27 => {
             // 10C10 -> DB80 -> class18: the boulder splits into two Type3s

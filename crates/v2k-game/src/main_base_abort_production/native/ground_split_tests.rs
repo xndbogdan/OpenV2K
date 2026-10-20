@@ -90,6 +90,52 @@ fn type40_abort_splits_into_type56s_that_die_quietly() {
     }
 }
 
+/// 170A0's 10C10 takes Type31 to class18: C080 appends its eight Type105
+/// children behind the cursor, which then die quietly through class2.
+#[v2k_test_support::retail_test]
+fn type31_abort_splits_into_type105s_that_die_quietly() {
+    for level in [16, 31] {
+        let (session, mut entities, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(level);
+        let mut tasks = SpecializedActorTaskScheduler::new();
+        assert!(tasks.adopt_type31_family(&entities) > 0);
+        let mut publications = MainBaseAbortPublicationCounts::default();
+        let parents = ids(&entities, 31);
+        for &id in &parents {
+            assert_eq!(
+                abort_visit(
+                    &mut entities,
+                    &mut fx,
+                    &mut tasks,
+                    &mut publications,
+                    &session.cache,
+                    id
+                ),
+                MainBaseAbortActorDisposition::Type31Death
+            );
+            assert!(entities.pending_actor_deferred_destroy_ids().contains(&id));
+            assert_eq!(tasks.family_for(id), None);
+        }
+        let children = ids(&entities, 105);
+        assert_eq!(children.len(), 8 * parents.len(), "world{level}");
+        assert_eq!(publications.appended_type105_actors, 8 * parents.len());
+        for id in children {
+            assert_eq!(
+                abort_visit(
+                    &mut entities,
+                    &mut fx,
+                    &mut tasks,
+                    &mut publications,
+                    &session.cache,
+                    id
+                ),
+                MainBaseAbortActorDisposition::QuietDeath
+            );
+            assert!(entities.pending_actor_deferred_destroy_ids().contains(&id));
+        }
+    }
+}
+
 /// Type30's 10C10 takes class12 once, as a lethal hit's publisher does.
 #[v2k_test_support::retail_test]
 fn type30_abort_takes_class12_once() {

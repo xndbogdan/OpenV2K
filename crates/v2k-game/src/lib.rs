@@ -161,6 +161,7 @@ pub mod native_type123;
 pub mod native_type18;
 pub mod native_type28;
 pub mod native_type30;
+pub mod native_type31;
 pub mod native_type38;
 pub mod native_type40;
 pub mod native_type43;

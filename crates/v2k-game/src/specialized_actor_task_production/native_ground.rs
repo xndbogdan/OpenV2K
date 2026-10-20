@@ -26,6 +26,24 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for SpecializedActorTas
         Ok(())
     }
 
+    fn register_split_type105_child(
+        &mut self,
+        owner: crate::native_type31::Type105Owner,
+    ) -> Result<(), &'static str> {
+        if self
+            .owners
+            .iter()
+            .any(|present| present.entity_id() == owner.entity_id())
+        {
+            return Err("split child already owns a task");
+        }
+        self.owners
+            .push(SpecializedActorTaskOwner::NativeType31Family(
+                crate::native_type31::Type31FamilyOwner::Type105(owner),
+            ));
+        Ok(())
+    }
+
     fn register_split_rolling_boulder_child(
         &mut self,
         owner: RollingBoulderOwner,
@@ -59,6 +77,26 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for Intro2RadialCursorC
         // not contain it. Keep its owner in the actual unvisited storage.
         self.pending
             .push(SpecializedActorTaskOwner::NativeType56(owner));
+        Ok(())
+    }
+
+    fn register_split_type105_child(
+        &mut self,
+        owner: crate::native_type31::Type105Owner,
+    ) -> Result<(), &'static str> {
+        if self
+            .pending
+            .iter()
+            .chain(self.retained.iter())
+            .any(|present| present.entity_id() == owner.entity_id())
+        {
+            return Err("split child already owns a cursor task");
+        }
+        // As for Type56: the appended child is visited later in this pass.
+        self.pending
+            .push(SpecializedActorTaskOwner::NativeType31Family(
+                crate::native_type31::Type31FamilyOwner::Type105(owner),
+            ));
         Ok(())
     }
 
