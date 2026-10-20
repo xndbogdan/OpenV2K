@@ -82,6 +82,9 @@ pub(super) fn dispatch_native_class49(
         // Type38 (class1) and the Type129 carriers (class63).
         || (crate::native_type38::Type38Row::from_entity_type(entity.entity_type).is_some()
             && entity.native_type38_runtime.is_some())
+        // Type12 (class1) and the Type127 carriers (class63).
+        || (crate::native_type12::Type12Row::from_entity_type(entity.entity_type).is_some()
+            && entity.native_type12_runtime.is_some())
         // Type124 and the Type80/126 carriers enter class63, BC90: BAF0 then a
         // tail-appended Type61.
         || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some())
@@ -855,6 +858,8 @@ mod ring_custody_tests;
 mod type124_tests;
 #[cfg(test)]
 mod type128_tests;
+#[cfg(test)]
+mod type12_tests;
 #[cfg(test)]
 mod type13_tests;
 #[cfg(test)]

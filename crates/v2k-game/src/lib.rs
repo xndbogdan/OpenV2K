@@ -155,6 +155,7 @@ pub mod native_entity_weapons;
 pub mod native_flying_surface_contact;
 pub mod native_ground_actor;
 pub mod native_model_frame;
+pub mod native_type12;
 pub mod native_type122;
 pub mod native_type123;
 pub mod native_type18;

@@ -799,7 +799,9 @@ mod tests {
         let geometry = geometry_snapshot(COMPLETE_TERRAIN_CELL_COUNT);
         let mut live_terrain = terrain(COMPLETE_TERRAIN_CELL_COUNT);
         cell_mut(&mut live_terrain, cell).attribute = 5;
-        let mut cache = cache_with_static_level(live_terrain, &[(5, 5)]);
+        // Every retail kind 0..31 is admitted; only a kind past the table is
+        // unsupported.
+        let mut cache = cache_with_static_level(live_terrain, &[(5, 32)]);
         let mut scheduler = StaticDamageScheduler::new();
         let mut effects =
             MainBaseAbortWorldEffects::new(&geometry, &mut cache, &mut scheduler).unwrap();
@@ -816,7 +818,7 @@ mod tests {
             Some(MainBaseType61StaticRadialPreflightBlock::UnsupportedKind {
                 cell,
                 attribute: 5,
-                kind_index: 5,
+                kind_index: 32,
             })
         );
         assert!(effects.static_radial_outcomes().is_empty());
@@ -830,7 +832,7 @@ mod tests {
             cell_mut(&mut live_terrain, corner).height = 127;
         }
         cell_mut(&mut live_terrain, cell).attribute = 5;
-        let mut cache = cache_with_static_level(live_terrain, &[(5, 5)]);
+        let mut cache = cache_with_static_level(live_terrain, &[(5, 32)]);
         let geometry = snapshot_main_base_abort_terrain_geometry(&cache).unwrap();
         let mut scheduler = StaticDamageScheduler::new();
         let mut effects =

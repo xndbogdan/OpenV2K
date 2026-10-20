@@ -81,6 +81,14 @@ Already-burned kind4 still halves severity and can draw chance RNG, then returns
 without another mutation. Primary F800 damage yields severity3000 and burns
 deterministically; the ballistic2500 packet filters to zero.
 
+Every null-program kind takes this branch. `FUN_00427950` reads only a
+record's profile (`+00`), gate (`+04`) and program pointer (`+08`), so kinds
+2, 4, 5-7, 12-26, 30 and 31 are admitted with their own profile and gate.
+Kinds 22-26 share profile `004C9BB0` and gate 8000 and differ only in `+24`,
+which the damage path never reads; kinds 5-7, 12-20 and 31 share kind2's
+profile and zero gate. World 35's Type12s reach kind 24 while trashing
+buildings.
+
 The scheduler returns an explicit `ImmediateBurn` result for this admitted
 null-program branch. Intro2 and Playing's mutable particle hosts invoke the
 shared burn listener at the callback boundary, after committing the bit and

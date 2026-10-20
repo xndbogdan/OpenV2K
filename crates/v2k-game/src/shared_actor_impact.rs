@@ -70,6 +70,7 @@ pub enum SharedActorImpactOutcome {
     Type10(crate::intro2_type10::impact::Intro2Type10ImpactOutcome),
     Type43(crate::native_type43::impact::Type43ImpactOutcome),
     Type38Family(crate::native_type38::impact::Type38ImpactOutcome),
+    Type12Family(crate::native_type12::impact::Type12ImpactOutcome),
     RollingBoulder(crate::rolling_boulder::impact::RollingBoulderImpactOutcome),
     PortableRadar(crate::portable_radar::impact::PortableRadarImpactOutcome),
     Class0(crate::class0_impact::Class0ImpactOutcome),
@@ -185,6 +186,14 @@ pub fn apply_playing_actor_particle_hit(
     {
         return Some(SharedActorImpactOutcome::Type38Family(
             crate::native_type38::impact::apply_playing_type38_family_particle_hit(frame, impact),
+        ));
+    }
+    // Type12/127's lethal class1/class63 blasts need the same Playing world.
+    if crate::native_type12::Type12Row::from_entity_type(entity.entity_type).is_some()
+        && entity.native_type12_runtime.is_some()
+    {
+        return Some(SharedActorImpactOutcome::Type12Family(
+            crate::native_type12::impact::apply_playing_type12_family_particle_hit(frame, impact),
         ));
     }
     // A flyer's lethal class1 blast (Type14, Type39) needs the same Playing world.

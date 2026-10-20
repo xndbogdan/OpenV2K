@@ -25,7 +25,7 @@ ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 
 Of the **2,053** game functions in retail `V2000.EXE` the port
 covers ([337 omitted](docs/progress/README.md#omitted)),
-**903 (44.0%)** are referenced by the port's code and
+**904 (44.0%)** are referenced by the port's code and
 **2,053 (100.0%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 
@@ -72,10 +72,6 @@ The launcher's Options choose its layout:
   right stick moving the camera.
 - **Console original**: the PlayStation release's bindings on every screen.
 - **PC original**: as on the 1998 PC release, a pad only flies the craft.
-
-With Remastered or Console original, a pad vibrates as the PlayStation's did
-when the craft hits the ground, buildings or other bodies, and when it takes
-damage. The PC release had no vibration, so PC original keeps the pad still.
 
 Without the launcher, pass `--controller-layout pc-original`,
 `console-original` or `remastered`, or set `controller_layout` in

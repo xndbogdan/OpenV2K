@@ -512,6 +512,7 @@ pub(crate) fn prepare_native_actor_damage_mutation(
     let native_type56_valid = crate::native_type56::manager_allocation_authenticates(manager, id);
     let native_type43_valid = crate::native_type43::manager_allocation_authenticates(manager, id);
     let native_type38_valid = crate::native_type38::manager_allocation_authenticates(manager, id);
+    let native_type12_valid = crate::native_type12::manager_allocation_authenticates(manager, id);
     let native_cleansing_valid = crate::cleansing_vehicle::allocation_authenticates(manager, id);
     let native_gun_turret_valid =
         crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(manager, id);
@@ -562,6 +563,7 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         || entity.native_type56_runtime.is_some()
         || entity.native_type43_runtime.is_some()
         || entity.native_type38_runtime.is_some()
+        || entity.native_type12_runtime.is_some()
         || entity.portable_radar_runtime.is_some()
         || entity.intro2_type94_runtime.is_some()
         || entity.native_type47_construction.is_some()
@@ -616,6 +618,8 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         native_type43_valid
     } else if entity.native_type38_runtime.is_some() {
         native_type38_valid
+    } else if entity.native_type12_runtime.is_some() {
+        native_type12_valid
     } else if entity.portable_radar_runtime.is_some() {
         crate::portable_radar::manager_allocation_authenticates(manager, id)
     } else if entity.intro2_type94_runtime.is_some() {

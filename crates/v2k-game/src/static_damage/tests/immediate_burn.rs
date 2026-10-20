@@ -54,8 +54,9 @@ fn kind2_exact_descriptor_filters_both_slots_before_its_zero_chance_gate() {
         );
     }
     assert_eq!(scheduler.active_program_count(), 0);
-    // Similar catalogue rows remain unadmitted; this is exactly kind2.
-    assert!(!static_damage_kind_is_admitted(5));
+    // Every null-program row shares kind2's immediate path; kind5 also
+    // shares its zero-multiplier profile.
+    assert!(static_damage_kind_is_admitted(5));
 }
 
 #[test]

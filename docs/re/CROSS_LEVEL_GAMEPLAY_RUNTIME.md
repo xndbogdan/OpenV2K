@@ -162,6 +162,13 @@ World46's three Type119 walkers join that owner as a third row: armour only
 channel 3 reaches, the generic crush, Always class5/class7 and four legs whose
 completed strides play sound90 at a drawn rate.
 
+The eight Type12s (worlds31/35) and the 25 Type127 carriers (world27) share
+the [building-trasher owner](TYPE12_BUILDING_TRASHER.md): Follow Beacons33,
+Search7, a J-less Capture9 that kills the people it touches, and Trash
+Buildings15, which is Trash Furniture's `B7C0` program with kind filter 3.
+They die by class1 and class63; worlds27 and35 now lose with every actor's
+death.
+
 The nineteen ordinary [Type18 insects](TYPE18_RUNTIME.md) (worlds16, 21-23,
 30, 33, 34 and36) run on the ground host with Type122's capture and class12
 death. Their root mixes Defecate Virus4, Capture9, Search7, Follow Beacons33

@@ -784,6 +784,8 @@ fn resolve(
             profile.entity_type,
             13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38 | 129 | 119
                 | 77
+                | 12
+                | 127
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -791,15 +793,17 @@ fn resolve(
         || (matches!(profile.entity_type, 15 | 87 | 108)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
-        || (matches!(profile.entity_type, 13 | 14 | 39 | 43 | 38 | 119)
+        || (matches!(profile.entity_type, 13 | 14 | 39 | 43 | 38 | 119 | 12)
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
-        || (matches!(profile.entity_type, 80 | 126 | 128 | 129)
+        || (matches!(profile.entity_type, 80 | 126 | 128 | 129 | 127)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (matches!(profile.entity_type, 26 | 18 | 28 | 76 | 77)
             && context.active_style().style_address() == 0x4c7738)
+        || (matches!(profile.entity_type, 12 | 127)
+            && context.active_style().style_address() == 0x4c76f0)
         || (crate::native_type30::allocation_authenticates(entity)
             && matches!(context.active_style().style_address(), 0x4c7930 | 0x4c7738))
         // Type28's class10 Run Away shares Type56's acquiring and fleeing styles.
@@ -978,7 +982,7 @@ fn apply_contact(
         0x4c7ed0 => profile.default_flags & !0x2015,
         0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c7ff0 | 0x4c8038 | 0x4c7b28 | 0x4c7b70 | 0x4c8080
         | 0x4c80c8 | 0x4c8110 | 0x4c8158 | 0x4c7e88 | 0x4c7930 | 0x4c7738 | 0x4c74f8 | 0x4c7420
-        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 => profile.default_flags,
+        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 | 0x4c76f0 => profile.default_flags,
         0x4c7978 => (profile.default_flags | 0x80) & !2,
         0x4c78a0 | 0x4c78e8 if matches!(profile.entity_type, 3 | 27) => {
             crate::rolling_boulder::current_style(entity)
@@ -1179,8 +1183,17 @@ fn contact_task_hook(
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87 | 108) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
-        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 14 | 39 | 43 | 38 | 119) => {
+        (0x4c7150, None, None)
+            if matches!(entity.entity_type, 13 | 14 | 39 | 43 | 38 | 119 | 12) =>
+        {
             Ok(NativeGroundStaticTaskHook::Null)
+        }
+        // Class15's style runs Trash Furniture's B7C0 with kind3 and holds
+        // the same C890 at +1C.
+        (0x4c76f0, Some(Task::TrashFurniture(_)), None)
+            if crate::native_type12::allocation_authenticates(entity) =>
+        {
+            Ok(NativeGroundStaticTaskHook::Furniture)
         }
         // Type14's Flocking: 02B10's and 03650's Primary hook 02CA0; the
         // 01F80 search keeps 05FF0's null hook.
@@ -1211,6 +1224,11 @@ fn contact_task_hook(
             Some(Task::CapturePeoplePursuit(task)) => Ok(
                 NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
             ),
+            Some(Task::FollowBeaconsFollowing(task)) => Ok(
+                NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
+            ),
+            // 401CA0's furniture task leaves +20 null.
+            Some(Task::TrashFurniture(_)) => Ok(NativeGroundStaticTaskHook::Null),
             _ => Err(Block::Runtime("contact task graph")),
         },
         (0x4c7b28, Some(Task::SharedRetarget(task)), Some(Task::FollowBeaconAcquisition(_))) => Ok(
@@ -1382,6 +1400,48 @@ fn reselect_after_furniture_contact(
         let owner = crate::native_type28::Type28Owner::adopt(frame.entities, id)
             .map_err(|_| Block::Runtime("Type28 post-static owner"))?;
         frame.actor_tasks.register_type28(owner);
+        return Ok(());
+    }
+    let type12_row = frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(crate::native_type12::type12_row);
+    if let Some(row) = type12_row {
+        // Class15's C890 reselects the whole root, rule9 included.
+        let result = match row {
+            crate::native_type12::Type12Row::Type12 => {
+                super::behavior::reselect::<crate::native_type12::profile::Type12Profile>(
+                    frame.entities,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(frame.resources),
+                    super::behavior::ReselectionEntry::Impact,
+                )
+            }
+            crate::native_type12::Type12Row::Type127 => {
+                super::behavior::reselect::<crate::native_type12::profile::Type127Profile>(
+                    frame.entities,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(frame.resources),
+                    super::behavior::ReselectionEntry::Impact,
+                )
+            }
+        };
+        if result.is_err() {
+            if let Ok(owner) =
+                crate::native_type12::Type12FamilyOwner::adopt_blocked_prefix(frame.entities, id)
+            {
+                frame.actor_tasks.register_type12_family(owner);
+            }
+            return Err(Block::Runtime("Type12-family static C690 suffix"));
+        }
+        let owner = crate::native_type12::Type12FamilyOwner::adopt(frame.entities, id)
+            .map_err(|_| Block::Runtime("Type12-family post-static owner"))?;
+        frame.actor_tasks.register_type12_family(owner);
         return Ok(());
     }
     if crate::native_type30::manager_allocation_authenticates(frame.entities, id) {

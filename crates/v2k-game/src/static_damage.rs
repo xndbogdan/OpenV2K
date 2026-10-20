@@ -65,7 +65,6 @@ const KIND_0_DAMAGE_PROFILE_VA: u32 = 0x004C_9BE8;
 const KIND_0_TIMED_PROGRAM_VA: u32 = 0x004C_9918;
 const KIND_0_RADIAL_TEMPLATE_VA: u32 = 0x004C_9898;
 const KIND_1_DAMAGE_PROFILE_VA: u32 = 0x004C_9C20;
-const KIND_2_DAMAGE_PROFILE_VA: u32 = 0x004C_9C58;
 const KIND_3_DAMAGE_PROFILE_VA: u32 = 0x004C_9CC8;
 const KIND_8_DAMAGE_PROFILE_VA: u32 = 0x004C_9D38;
 const KIND_9_DAMAGE_PROFILE_VA: u32 = 0x004C_9C90;
@@ -358,12 +357,25 @@ struct AdmittedStaticCatalog {
 
 fn admitted_static_catalog(kind_index: u32) -> Option<AdmittedStaticCatalog> {
     let descriptor = static_kind_descriptor(kind_index)?;
+    // 427950 reads only the record's profile, gate and program pointer. A
+    // null program is an authored choice, not missing evidence: 427AC4
+    // branches to 427AF8/4337E0's immediate burn for every such kind (2, 4,
+    // 5-7, 12-26, 30, 31). Kind2's zero gate follows the nonpositive-severity
+    // return, so no accepted damage can enter the chance division or consume
+    // RNG; a zero gate with positive severity skips the chance roll. Kind22
+    // participates in the completed-world Hive initializer's static radial.
+    if descriptor.timed_program_va() == 0 {
+        let profile = static_damage_profile(descriptor.damage_profile_va())?.decoded();
+        return Some(AdmittedStaticCatalog {
+            profile,
+            chance_gate_raw: descriptor.chance_gate_raw(),
+            program_va: 0,
+        });
+    }
     let expected = match kind_index {
         KIND_0_STATIC_OBJECT => (KIND_0_DAMAGE_PROFILE_VA, KIND_0_TIMED_PROGRAM_VA),
         KIND_1_STATIC_OBJECT => (KIND_1_DAMAGE_PROFILE_VA, SIMPLE_DESTRUCTION_PROGRAM_VA),
-        KIND_2_STATIC_OBJECT => (KIND_2_DAMAGE_PROFILE_VA, 0),
         KIND_3_STATIC_OBJECT => (KIND_3_DAMAGE_PROFILE_VA, LAYERED_DESTRUCTION_PROGRAM_VA),
-        KIND_4_STATIC_OBJECT => (KIND_27_DAMAGE_PROFILE_VA, 0),
         KIND_8_STATIC_OBJECT => (KIND_8_DAMAGE_PROFILE_VA, SIMPLE_DESTRUCTION_PROGRAM_VA),
         KIND_9_STATIC_OBJECT => (KIND_9_DAMAGE_PROFILE_VA, KIND_9_TIMED_PROGRAM_VA),
         KIND_10_STATIC_OBJECT => (
@@ -371,7 +383,6 @@ fn admitted_static_catalog(kind_index: u32) -> Option<AdmittedStaticCatalog> {
             LAYERED_DESTRUCTION_NO_RADIAL_PROGRAM_VA,
         ),
         KIND_11_STATIC_OBJECT => (KIND_11_DAMAGE_PROFILE_VA, LAYERED_DESTRUCTION_PROGRAM_VA),
-        KIND_22_STATIC_OBJECT => (0x004C_9BB0, 0),
         KIND_27_STATIC_OBJECT => (KIND_27_DAMAGE_PROFILE_VA, KIND_27_TIMED_PROGRAM_VA),
         KIND_28_STATIC_OBJECT => (KIND_11_DAMAGE_PROFILE_VA, KIND_0_TIMED_PROGRAM_VA),
         KIND_29_STATIC_OBJECT => (KIND_29_DAMAGE_PROFILE_VA, KIND_29_TIMED_PROGRAM_VA),
@@ -392,24 +403,6 @@ fn admitted_static_catalog(kind_index: u32) -> Option<AdmittedStaticCatalog> {
         return None;
     }
     let profile = static_damage_profile(descriptor.damage_profile_va())?.decoded();
-    // The null pointer is an authored program choice, not missing evidence:
-    //427AC4 branches to427AF8/4337E0. Kinds2/4/22 have authored null programs;
-    //22 participates in the completed-world Hive initializer's static radial.
-    let immediate_gate = match kind_index {
-        // Kind2's zero gate follows the nonpositive-severity return, so no
-        // accepted damage can enter the chance division or consume RNG.
-        KIND_2_STATIC_OBJECT => Some(0),
-        KIND_4_STATIC_OBJECT => Some(500),
-        KIND_22_STATIC_OBJECT => Some(8_000),
-        _ => None,
-    };
-    if let Some(gate) = immediate_gate {
-        return (descriptor.chance_gate_raw() == gate).then_some(AdmittedStaticCatalog {
-            profile,
-            chance_gate_raw: descriptor.chance_gate_raw(),
-            program_va: 0,
-        });
-    }
     let program = static_program(descriptor.timed_program_va())?;
     let records = program.records();
     if records.is_empty()
@@ -1257,16 +1250,18 @@ mod tests {
             KIND_0_RADIAL_TEMPLATE
         );
 
+        // Kind5's null program takes kind2's immediate path: its zero gate
+        // skips the chance roll and the severity burns the cell at once.
         let mut scheduler = StaticDamageScheduler::new();
-        let mut rng = || panic!("unsupported kinds must not draw RNG");
-        assert_eq!(
+        let mut rng = || panic!("a zero gate must not draw RNG");
+        assert!(matches!(
             scheduler.submit_hit(
                 target([1, 1], 5, 0, 0, 100),
                 DamagePacket::collision(5_000),
                 &mut rng,
             ),
-            StaticDamageOutcome::UnsupportedKind { kind_index: 5 }
-        );
+            StaticDamageOutcome::ImmediateBurn { sample: None, .. }
+        ));
         assert_eq!(scheduler.active_program_count(), 0);
     }
 
@@ -1764,10 +1759,18 @@ mod tests {
             KIND_27_STATIC_OBJECT,
             KIND_28_STATIC_OBJECT,
             KIND_29_STATIC_OBJECT,
+            // Every null-program row: 4, 5-7, 12-26, 30 and 31.
+            4,
+            5,
+            7,
+            21,
+            24,
+            30,
+            31,
         ] {
             assert!(static_damage_kind_is_admitted(kind), "kind {kind}");
         }
-        for kind in [5, u32::MAX] {
+        for kind in [32, u32::MAX] {
             assert!(!static_damage_kind_is_admitted(kind), "kind {kind}");
         }
     }
