@@ -436,6 +436,7 @@ impl crate::models::ModelVertexResolver for ConstructorOrderResolver {
         &self,
         slot: u16,
         _: [i16; 3],
+        _: &mut dyn FnMut(u16) -> Option<crate::models::ResolvedModelSlot>,
     ) -> Option<crate::models::ResolvedModelSlot> {
         let mut point = crate::models::ResolvedModelSlot::clear([10.0, 20.0, 512.0]);
         if self.surface_band && slot == self.clipped_slot {
@@ -611,6 +612,7 @@ impl crate::models::ModelVertexResolver for MissingEndpointResolver {
         &self,
         _: u16,
         _: [i16; 3],
+        _: &mut dyn FnMut(u16) -> Option<crate::models::ResolvedModelSlot>,
     ) -> Option<crate::models::ResolvedModelSlot> {
         Some(crate::models::ResolvedModelSlot::clear([10., 20., 512.]))
     }

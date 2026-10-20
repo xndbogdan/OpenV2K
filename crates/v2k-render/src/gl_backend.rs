@@ -22,7 +22,8 @@ use crate::renderer::{
     ModelBillboardDraw, ModelDepthFade, ModelDepthPolicy, ModelDraw, ModelNearClip,
     ModelOverlayKind, ModelSurfaceResolution, OverlayDepthPolicy, RenderScene, RenderViewport,
     Renderer, SpriteFog, TextureId, ViewPinMode, WorldSprite, WorldSpriteBlend,
-    WorldSurfaceProjection, FRONTEND_MODEL_UNITS_PER_VIEW, HALF_ADDITIVE_ALPHA,
+    WorldSurfaceProjection, EXTERNAL_FRAME_SELECTORS, FRONTEND_MODEL_UNITS_PER_VIEW,
+    HALF_ADDITIVE_ALPHA,
 };
 use crate::terrain_footprint::{TerrainFootprint, TerrainScan};
 
@@ -3539,7 +3540,7 @@ fn type14_selector_world(
         ExternalFrameMode::WorldPoint(world) => Some(world),
         ExternalFrameMode::SelectorWorldPoints(points) => {
             let selector = authored[0] as i32;
-            (0..16)
+            (0..EXTERNAL_FRAME_SELECTORS as i32)
                 .contains(&selector)
                 .then(|| points[selector as usize])
                 .flatten()
@@ -3589,7 +3590,7 @@ fn apply_external_frame_operands(
         }
         ExternalFrameMode::SelectorWorldPoints(points) => {
             let selector = raw[0] as i32;
-            if (0..16).contains(&selector) {
+            if (0..EXTERNAL_FRAME_SELECTORS as i32).contains(&selector) {
                 if let Some(world) = points[selector as usize] {
                     world_point_as_raw_local(world, orientation, position, extra_scale)
                 } else {
@@ -5110,8 +5111,8 @@ mod tests {
     use crate::config::ScalingMode;
     use crate::renderer::{
         ExternalFrameMode, ModelDepthFade, ModelOverlayKind, RenderScene, TextureId, ViewPinMode,
-        WorldSprite, WorldSpriteBlend, WorldSurfaceProjection, HALF_ADDITIVE_ALPHA,
-        RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
+        WorldSprite, WorldSpriteBlend, WorldSurfaceProjection, EXTERNAL_FRAME_SELECTORS,
+        HALF_ADDITIVE_ALPHA, RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW,
     };
     use v2k_formats::models::{
         ModelFaceCullPlane, ModelFaceShading, ModelSlotClip, ModelSurfaceOrigin,
@@ -6006,7 +6007,7 @@ mod tests {
     fn type14_selector_world_points_reexpress_as_raw_local() {
         let orientation = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
         let position = [10.0, 2.0, 4.0];
-        let mut points = [None; 16];
+        let mut points = [None; EXTERNAL_FRAME_SELECTORS];
         points[8] = Some([11.0, 2.0, 5.0]);
         let local = apply_external_frame_operands(
             [8.0, 0.0, 0.0],
@@ -6030,7 +6031,7 @@ mod tests {
     fn type14_edge_endpoint_uses_callback_world_without_model_basis() {
         let orientation = [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]];
         let position = [10.0, 2.0, 4.0];
-        let mut points = [None; 16];
+        let mut points = [None; EXTERNAL_FRAME_SELECTORS];
         points[6] = Some([11.0, 2.5, 5.0]);
         let vertices = [[6.0_f64, 0.0, 0.0]];
         let flags = [14_i16];

@@ -15,6 +15,7 @@ use crate::actor_external_frame_fallback::ActorExternalFrameFallback;
 use v2k_formats::collision::{SubHExternalFrameDescriptor, SubHExternalFrameRecord};
 use v2k_formats::fixed_math::{retail_integer_sqrt, retail_sine_q15};
 use v2k_formats::terrain::{wave_surface_raw, TerrainGrid};
+use v2k_render::EXTERNAL_FRAME_SELECTORS;
 
 pub const MAX_SUB_H_RECORDS: usize = 16;
 pub const COMPLETION_SOUND_VOLUME_16_16: u32 = 0x1_0000;
@@ -240,13 +241,13 @@ pub fn resolve_selector_world_points(
     origin_world: [f32; 3],
     body_axes_q31: Option<[[i32; 3]; 3]>,
     mut effective_height_raw: impl FnMut(i16, i16) -> i16,
-) -> Option<[Option<[f32; 3]>; 16]> {
+) -> Option<[Option<[f32; 3]>; EXTERNAL_FRAME_SELECTORS]> {
     if descriptor.records.len() != runtime.records().len() {
         return None;
     }
     let model_axes = body_axes_q31.map_or_else(identity_model_axes, model_axes_from_q31);
     let mut phase_records = runtime.records().to_vec();
-    let mut points = [None; 16];
+    let mut points = [None; EXTERNAL_FRAME_SELECTORS];
     for (record_index, authored) in descriptor.records.iter().enumerate() {
         let resolve_vertex = |role: SubHVertexRole| {
             let slot = match role {
@@ -281,7 +282,7 @@ pub fn resolve_selector_world_points(
         ) else {
             continue;
         };
-        if record_index < 16 {
+        if record_index < EXTERNAL_FRAME_SELECTORS {
             points[record_index] = Some(endpoint_as_draw_world(origin_world, origin_raw, primary));
         }
         let Ok(secondary) = resolve_geometry_endpoint(
@@ -296,7 +297,7 @@ pub fn resolve_selector_world_points(
             continue;
         };
         let secondary_selector = record_index + descriptor.records.len();
-        if secondary_selector < 16 {
+        if secondary_selector < EXTERNAL_FRAME_SELECTORS {
             points[secondary_selector] =
                 Some(endpoint_as_draw_world(origin_world, origin_raw, secondary));
         }
@@ -396,11 +397,11 @@ impl SubHPresentation<'_> {
         &mut self,
         selectors: impl IntoIterator<Item = i32>,
         mut effective_height_raw: impl FnMut(i16, i16) -> i16,
-    ) -> Option<[Option<[f32; 3]>; 16]> {
+    ) -> Option<[Option<[f32; 3]>; EXTERNAL_FRAME_SELECTORS]> {
         if self.descriptor.records.len() != self.runtime.records.len() {
             return None;
         }
-        let mut points = [None; 16];
+        let mut points = [None; EXTERNAL_FRAME_SELECTORS];
         let model_axes = self
             .body_axes_q31
             .map_or_else(identity_model_axes, model_axes_from_q31);
@@ -449,6 +450,49 @@ impl SubHPresentation<'_> {
             }
         }
         Some(points)
+    }
+
+    /// One selector of the node being drawn under its native frame.
+    /// `FUN_0041E310` reads each vertex ref from the drawing context's own
+    /// slot cache (`ctx+0`, computed through the type-flag table when cold),
+    /// so a child node's limbs use that child's slots, of any type flag, and
+    /// selectors run to twice the record count.
+    pub fn resolve_node_selector(
+        &mut self,
+        selector: i32,
+        node_view: &mut dyn FnMut(u16) -> Option<[i32; 3]>,
+        mut effective_height_raw: impl FnMut(i16, i16) -> i16,
+    ) -> Option<[f32; 3]> {
+        if self.descriptor.records.len() != self.runtime.records.len() {
+            return None;
+        }
+        let binding = selector_binding(selector, self.runtime.records.len())?;
+        let viewport = self.native_context.as_ref()?.1;
+        let authored = self.descriptor.records[binding.record_index];
+        let request = SubHGeometryRequest {
+            endpoint: binding.endpoint,
+            enabled: self.runtime.is_enabled(),
+            axis_mode_raw: authored.axis_mode_raw,
+            model_axes_raw: self
+                .body_axes_q31
+                .map_or_else(identity_model_axes, model_axes_from_q31),
+        };
+        let endpoint = resolve_geometry_endpoint(
+            &mut self.runtime.records[binding.record_index],
+            request,
+            |role| {
+                let slot = authored.vertex_refs[match role {
+                    SubHVertexRole::AnchorA => 0,
+                    SubHVertexRole::BendB => 1,
+                    SubHVertexRole::EndpointC => 2,
+                }];
+                let view = node_view(slot)?;
+                Some(viewport.view_point_to_world(view).map(|value| value as i16))
+            },
+            &mut effective_height_raw,
+        )
+        .ok()?;
+        Some(self.endpoint_as_presentation_world(endpoint))
     }
 }
 
@@ -2126,6 +2170,60 @@ mod tests {
     }
 
     #[test]
+    fn native_node_selector_reads_the_drawing_node_slots_past_sixteen() {
+        use crate::native_model_frame::{NativeModelFrame, NativeWorldViewport};
+        // 41D39A maps selectors count..2*count onto the secondary endpoint and
+        // 41E310 reads each ref from the drawing context's own slot cache, so
+        // the empty root records below are never consulted.
+        let axes = [[i32::MAX, 0, 0], [0, i32::MAX, 0], [0, 0, i32::MAX]];
+        let viewport = NativeWorldViewport {
+            origin_raw: [0; 3],
+            axes_q31: axes,
+            identity: true,
+        };
+        let mut authored = vec![authored_record(0, [0; 4]); 10];
+        authored[6].vertex_refs = [32, 34, 36];
+        let descriptor = descriptor(None, authored);
+        let mut runtime = SubHRuntimeState::new(10).unwrap();
+        runtime.set_enabled(false);
+        let mut reads = Vec::new();
+        let mut node_view = |slot: u16| {
+            reads.push(slot);
+            match slot {
+                32 => Some([0, 0, 0]),
+                34 => Some([0, 100, 0]),
+                36 => Some([100, 100, 0]),
+                _ => None,
+            }
+        };
+        let mut presentation = SubHPresentation {
+            runtime: &mut runtime,
+            descriptor: &descriptor,
+            model_records: &[],
+            retail_tick: 0,
+            origin_raw: [0; 3],
+            origin_world: [0.0; 3],
+            body_axes_q31: Some(axes),
+            native_context: Some((
+                NativeModelFrame::from_actor(viewport, [0; 3], axes),
+                viewport,
+            )),
+            fallback: None,
+            emitter: None,
+        };
+        assert!(presentation
+            .resolve_node_selector(16, &mut node_view, |_, _| 0)
+            .is_some());
+        assert_eq!(
+            presentation.resolve_node_selector(20, &mut node_view, |_, _| 0),
+            None
+        );
+        drop(presentation);
+        assert_eq!(runtime.records()[6].primary_raw, [100, 100, 0]);
+        assert!(!reads.is_empty() && reads.iter().all(|slot| [32, 34, 36].contains(slot)));
+    }
+
+    #[test]
     fn presentation_commits_only_the_requested_endpoint_and_record() {
         let authored = SubHExternalFrameRecord {
             vertex_refs: [0, 2, 4],
@@ -2175,7 +2273,7 @@ mod tests {
         }
         .resolve([], |_, _| panic!("no selected geometry"))
         .unwrap();
-        assert_eq!(points, [None; 16]);
+        assert_eq!(points, [None; EXTERNAL_FRAME_SELECTORS]);
         assert_eq!(runtime, before);
     }
 

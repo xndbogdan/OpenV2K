@@ -42,7 +42,13 @@ struct WorldModelVertexResolver<'a> {
     )>,
     native_edges_required: bool,
     model: &'a ModelEntry,
-    external_owner: Option<&'a dyn Fn([i16; 3]) -> Option<external_frame::ActorExternalSlotPoint>>,
+    /// The tf14 callback; its second argument reads a current-node slot's VIEW.
+    external_owner: Option<
+        &'a dyn Fn(
+            [i16; 3],
+            &mut dyn FnMut(u16) -> Option<[i32; 3]>,
+        ) -> Option<external_frame::ActorExternalSlotPoint>,
+    >,
     external_points: RefCell<HashMap<u16, Option<external_frame::ActorExternalSlotPoint>>>,
     native_vertex_failures: RefCell<Vec<ModelNativeVertexFailure>>,
 }
@@ -218,13 +224,16 @@ impl ModelVertexResolver for WorldModelVertexResolver<'_> {
         &self,
         slot: u16,
         parameters: [i16; 3],
+        node_slots: &mut dyn FnMut(u16) -> Option<ResolvedModelSlot>,
     ) -> Option<ResolvedModelSlot> {
         let owner = self.external_owner?;
         let cached = self.external_points.borrow().get(&slot).copied();
         let world = if let Some(point) = cached {
             point
         } else {
-            let point = owner(parameters);
+            let point = owner(parameters, &mut |source| {
+                node_slots(source)?.native_view_point
+            });
             self.external_points.borrow_mut().insert(slot, point);
             point
         }?;
@@ -1593,10 +1602,10 @@ impl<'a> ModelTreeRenderer<'a> {
         let native_view = self.external_frame.native_view_selection();
         let native_context = self.external_frame.native_context();
         let owner = RefCell::new(&mut self.external_frame);
-        let resolve_external = |parameters| {
+        let resolve_external = |parameters, node_view: &mut dyn FnMut(u16) -> Option<[i32; 3]>| {
             owner
                 .borrow_mut()
-                .resolve_parameter_world(parameters, self.world_surface)
+                .resolve_parameter_world(parameters, self.world_surface, node_view)
         };
         let world_vertex =
             (self.view_pin == ViewPinMode::WorldSurface).then_some(WorldModelVertexResolver {

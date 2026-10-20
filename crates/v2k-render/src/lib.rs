@@ -40,7 +40,7 @@ pub use renderer::{
     ModelPainterNode, ModelTransform, NativeModelFogPass, NativePalette, NativeParticle,
     NativeParticleShadow, NativeSprite, NativeTexels, OverlayDepthPolicy, RenderBackend,
     RenderScene, Renderer, SpriteFog, TextureId, ViewPinMode, WorldModelFog, WorldSprite,
-    WorldSpriteBlend, WorldSurfaceProjection, HALF_ADDITIVE_ALPHA,
+    WorldSpriteBlend, WorldSurfaceProjection, EXTERNAL_FRAME_SELECTORS, HALF_ADDITIVE_ALPHA,
 };
 pub use sound::{
     original_positional_mix, LoopingVoiceParams, PositionalMix, SoundListener, SoundManager,

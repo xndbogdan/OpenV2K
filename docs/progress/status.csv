@@ -548,3 +548,4 @@ address,status,note
 0x00493654,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
 0x004956D7,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
 0x00496EA6,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
+0x0041E310,implemented,Sub-H anchor read from the drawing node's own slot cache, any type flag (docs/re/MODEL_DRAW_CUSTODY.md)

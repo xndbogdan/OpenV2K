@@ -100,6 +100,7 @@ impl ModelVertexResolver for MarkerCallback<'_> {
         &self,
         _slot: u16,
         parameters: [i16; 3],
+        _: &mut dyn FnMut(u16) -> Option<ResolvedModelSlot>,
     ) -> Option<ResolvedModelSlot> {
         if parameters[0] != 0 || self.model.records.get(usize::from(self.marker_slot >> 1))?[0] != 0
         {
