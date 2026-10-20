@@ -1254,6 +1254,7 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || crate::native_type30::allocation_authenticates(entity)
         || crate::native_type40::allocation_authenticates(entity)
         || crate::native_type56::allocation_authenticates(entity)
+        || crate::native_type31::allocation_authenticates(entity)
         || crate::intro2_type94::intro2_type94_allocation_authenticates(entity)
         || matches!(
             entity.actor_task_state(ActorTaskSlot::Primary),
@@ -1273,6 +1274,8 @@ fn apply_pair_checked_damage(
         && crate::native_type40::manager_allocation_authenticates(frame.entities, target))
         || (kind == 56
             && crate::native_type56::manager_allocation_authenticates(frame.entities, target))
+        || (matches!(kind, 31 | 105)
+            && crate::native_type31::manager_allocation_authenticates(frame.entities, target))
     {
         return apply_native_pair_checked_damage(
             frame,

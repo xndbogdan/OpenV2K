@@ -53,7 +53,7 @@ const ABCDEHJ_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopol
     ..ABCDHJ_TOPOLOGY
 };
 
-const ABCDEH_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
+pub(crate) const ABCDEH_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
     sub_j: false,
     ..ABCDEHJ_TOPOLOGY
 };
@@ -61,6 +61,11 @@ const ABCD_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology
     sub_h: false,
     sub_j: false,
     ..ABCDHJ_TOPOLOGY
+};
+/// Type105 owns E without H; 01430 dispatches neither E nor a missing H.
+pub(crate) const ABCDE_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
+    sub_e: true,
+    ..ABCD_TOPOLOGY
 };
 pub(crate) const ABCDEHKL_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
     sub_k: true,
@@ -113,7 +118,12 @@ pub(crate) fn run_intro2_common_mover(
     let metadata = frame.metadata;
     if !matches!(
         frame.topology,
-        ABCDHJ_TOPOLOGY | ABCDEHJ_TOPOLOGY | ABCDEH_TOPOLOGY | ABCD_TOPOLOGY | ABCDEHKL_TOPOLOGY
+        ABCDHJ_TOPOLOGY
+            | ABCDEHJ_TOPOLOGY
+            | ABCDEH_TOPOLOGY
+            | ABCD_TOPOLOGY
+            | ABCDE_TOPOLOGY
+            | ABCDEHKL_TOPOLOGY
     ) || metadata.common_mover_topology != RetailRuntimeValue::Known(frame.topology)
     {
         return Err(Block::UnsupportedTopology);

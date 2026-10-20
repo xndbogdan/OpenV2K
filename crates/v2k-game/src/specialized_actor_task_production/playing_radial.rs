@@ -146,6 +146,7 @@ impl SpecializedActorTaskScheduler {
                 76 | 77 => entity.native_type76_runtime.is_some(),
                 30 => entity.native_type30_runtime.is_some(),
                 40 => entity.native_type40_runtime.is_some(),
+                31 | 105 => entity.native_type31_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
                 66 | 125 => entity.intro2_type66_runtime.is_some(),
                 22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_some(),
@@ -207,6 +208,7 @@ impl SpecializedActorTaskScheduler {
                                         || entity.native_type76_runtime.is_some()
                                         || entity.native_type30_runtime.is_some()
                                         || entity.native_type40_runtime.is_some()
+                                        || entity.native_type31_runtime.is_some()
                                         || entity.native_type56_runtime.is_some()
                                         || entity.native_type43_runtime.is_some()
                                         || entity.native_type38_runtime.is_some()
@@ -445,6 +447,21 @@ impl DynamicRadialLiveCallbacks for PlayingNativeCallbacks<'_> {
                 )
                 .map_err(crate::entity::DynamicRadialLiveBlockReason::RollingBoulder),
             );
+        }
+        if kind == 31 && crate::native_type31::manager_allocation_authenticates(entities, id) {
+            return Some(crate::native_type31::death::begin_type31_standard_death(
+                entities, id, crate::native_type31::death::Type31Class18Frame {
+                    resources: self.resources, world_fx, retail_tick, tasks: self.scheduler,
+                },
+            ).map(|result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                returned_nonzero: result.returned_nonzero,
+                publication: result.publication.map(|terminal| match terminal {
+                    crate::native_ground_actor::NativeGroundTerminalPublication::CommonDying(owner) =>
+                        crate::entity::DynamicRadialDeathPublication::Intro2Class12(owner),
+                    crate::native_ground_actor::NativeGroundTerminalPublication::Deferred(receipt) =>
+                        crate::entity::DynamicRadialDeathPublication::NativeGroundDeferred(receipt),
+                }),
+            }).map_err(crate::entity::DynamicRadialLiveBlockReason::NativeType31));
         }
         if kind == 40 && crate::native_type40::manager_allocation_authenticates(entities, id) {
             return Some(crate::native_type40::death::begin_type40_standard_death(

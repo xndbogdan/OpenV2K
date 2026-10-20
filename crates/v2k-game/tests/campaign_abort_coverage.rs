@@ -44,6 +44,7 @@ fn adopt_authored_tasks(manager: &mut EntityManager) -> SpecializedActorTaskSche
     tasks.adopt_type43(manager);
     tasks.adopt_type38_family(manager);
     tasks.adopt_type12_family(manager);
+    tasks.adopt_type31_family(manager);
     tasks.adopt_shared_fish(manager);
     tasks.adopt_cleansing_vehicle(manager);
     tasks.adopt_intro2_type16(manager);
@@ -100,7 +101,8 @@ fn construct_world(
 // permitting arbitrary failure. Closing one requires updating this evidence
 // matrix; every earlier actor must continue to execute or roll back correctly.
 const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
-    (16, 31),
+    // Type31s split into Type105s (class18), which die quietly.
+    (16, 50),
     // Type40 splits into Type56s (class18), which die quietly; Type30 takes
     // class12 and Type72 Change Sea Level. Worlds 17 and 45 complete.
     (18, 73),

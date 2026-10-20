@@ -308,6 +308,12 @@ impl shared::NativeGroundTaskCustody for RejectChildPublication {
     ) -> Result<(), &'static str> {
         Err("test rejects child publication after its genuine constructor")
     }
+    fn register_split_type105_child(
+        &mut self,
+        _: crate::native_type31::Type105Owner,
+    ) -> Result<(), &'static str> {
+        Err("test rejects child publication after its genuine constructor")
+    }
     fn register_split_rolling_boulder_child(
         &mut self,
         _: crate::rolling_boulder::RollingBoulderOwner,

@@ -120,6 +120,8 @@ Implemented:
   (the rolling task turns it, so no authored pitch/roll applies). The response
   pushes them, and a resting boulder's style1 `+18` (`40C730`) reinstalls
   rolling style0 inside the walk, before 411760's damage;
+- late actor pairs: both Primaries' task `+18` is the null `05FF0` leaves,
+  so the walk's component stage passes a boulder under its completed owner;
 - both deaths from hits and from Playing or cinematic blasts;
 - a Type27 split from a lethal collision;
 - corpse contacts and hits.

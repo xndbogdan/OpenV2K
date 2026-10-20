@@ -128,6 +128,19 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::NativeType56)
         }
+        105 if crate::native_type31::manager_allocation_authenticates(manager, id) => {
+            crate::native_type31::death::begin_type105_standard_death(manager, id)
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: result.publication.map(|terminal| match terminal {
+                        crate::native_ground_actor::NativeGroundTerminalPublication::CommonDying(owner) =>
+                            DynamicRadialDeathPublication::Intro2Class12(owner),
+                        crate::native_ground_actor::NativeGroundTerminalPublication::Deferred(receipt) =>
+                            DynamicRadialDeathPublication::NativeGroundDeferred(receipt),
+                    }),
+                })
+                .map_err(DynamicRadialLiveBlockReason::NativeType31)
+        }
         6 if crate::main_base_runtime::main_base_manager_allocation_authenticates(manager, id) => {
             crate::main_base_runtime::publish_main_base_standard_death(manager, id, world_fx)
                 .map(|result| LiveActorDeathResult {

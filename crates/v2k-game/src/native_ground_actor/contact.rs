@@ -778,7 +778,7 @@ fn resolve(
             | 0x4c80c8
             | 0x4c8110
             | 0x4c8158
-    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18 | 77 | 14)
+    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18 | 77 | 14 | 31 | 105)
         && context.active_style().style_address() == 0x4c7e88)
         // Type14's Flocking search and route rows have null contact hooks.
         || (profile.entity_type == 14
@@ -791,6 +791,8 @@ fn resolve(
                 | 77
                 | 12
                 | 127
+                | 31
+                | 105
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -817,7 +819,7 @@ fn resolve(
         // Type28's class10 Run Away shares Type56's acquiring and fleeing styles.
         || (profile.entity_type == 28
             && matches!(context.active_style().style_address(), 0x4c7618 | 0x4c7660))
-        || (profile.entity_type == 56
+        || (matches!(profile.entity_type, 56 | 31 | 105)
             && matches!(
                 context.active_style().style_address(),
                 0x4c7618 | 0x4c7660 | 0x4c74f8

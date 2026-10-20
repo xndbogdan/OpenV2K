@@ -303,6 +303,21 @@ impl crate::entity::DynamicRadialLiveCallbacks for Intro2RadialCallbacks<'_> {
                 .map_err(crate::entity::DynamicRadialLiveBlockReason::RollingBoulder),
             );
         }
+        if kind == 31 && crate::native_type31::manager_allocation_authenticates(entities, id) {
+            return Some(crate::native_type31::death::begin_type31_standard_death(
+                entities, id, crate::native_type31::death::Type31Class18Frame {
+                    resources: self.resources, world_fx, retail_tick, tasks: self.actor_tasks,
+                },
+            ).map(|result| crate::live_actor_checked_damage::LiveActorDeathResult {
+                returned_nonzero: result.returned_nonzero,
+                publication: result.publication.map(|terminal| match terminal {
+                    crate::native_ground_actor::NativeGroundTerminalPublication::CommonDying(owner) =>
+                        crate::entity::DynamicRadialDeathPublication::Intro2Class12(owner),
+                    crate::native_ground_actor::NativeGroundTerminalPublication::Deferred(receipt) =>
+                        crate::entity::DynamicRadialDeathPublication::NativeGroundDeferred(receipt),
+                }),
+            }).map_err(crate::entity::DynamicRadialLiveBlockReason::NativeType31));
+        }
         if kind == 40 && crate::native_type40::manager_allocation_authenticates(entities, id) {
             return Some(crate::native_type40::death::begin_type40_standard_death(
                 entities, id, crate::native_type40::death::Type40Class18Frame {

@@ -36,6 +36,7 @@ mod gate_helpers;
 mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
+mod native_type105_construction;
 mod native_type56_construction;
 pub mod network_body;
 mod rolling_boulder_construction;
@@ -1566,6 +1567,7 @@ pub struct Entity {
     /// Native ordinary Type12/Type127 components and queued Aim transactions.
     pub native_type12_runtime: Option<crate::native_type12::Type12Runtime>,
     pub native_type12_aim_runtime: Option<crate::native_type12::aim::Type12AimRuntime>,
+    pub native_type31_runtime: Option<crate::native_type31::Type31Runtime>,
     /// Ordinary Type18's authored allocation and its method20 shot FIFO.
     pub native_type18_runtime: Option<crate::native_type18::Type18Runtime>,
     pub native_type18_aim_runtime: Option<crate::native_type18::aim::Type18AimRuntime>,
@@ -1762,6 +1764,7 @@ impl Entity {
             native_type38_aim_runtime: self.native_type38_aim_runtime.clone(),
             native_type12_runtime: self.native_type12_runtime.clone(),
             native_type12_aim_runtime: self.native_type12_aim_runtime.clone(),
+            native_type31_runtime: self.native_type31_runtime,
             native_type18_runtime: self.native_type18_runtime,
             native_type18_aim_runtime: self.native_type18_aim_runtime.clone(),
             native_type28_runtime: self.native_type28_runtime,
@@ -1882,6 +1885,7 @@ impl Entity {
             native_type38_aim_runtime: None,
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
+            native_type31_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
@@ -3183,6 +3187,7 @@ fn build_type93_materialiser_entity(
         native_type38_aim_runtime: None,
         native_type12_runtime: None,
         native_type12_aim_runtime: None,
+        native_type31_runtime: None,
         native_type18_runtime: None,
         native_type18_aim_runtime: None,
         native_type28_runtime: None,
@@ -5039,6 +5044,7 @@ impl EntityManager {
                             | 27
                             | 28
                             | 30
+                            | 31
                             | 35
                             | 38
                             | 39
@@ -5509,6 +5515,7 @@ impl EntityManager {
                 native_type38_aim_runtime: None,
                 native_type12_runtime: None,
                 native_type12_aim_runtime: None,
+                native_type31_runtime: None,
                 native_type18_runtime: None,
                 native_type18_aim_runtime: None,
                 native_type28_runtime: None,
@@ -5991,6 +5998,7 @@ impl EntityManager {
             native_type38_aim_runtime: None,
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
+            native_type31_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
@@ -6804,6 +6812,7 @@ impl EntityManager {
             native_type38_aim_runtime: None,
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
+            native_type31_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
@@ -8294,6 +8303,7 @@ impl EntityManager {
             native_type38_aim_runtime: None,
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
+            native_type31_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,

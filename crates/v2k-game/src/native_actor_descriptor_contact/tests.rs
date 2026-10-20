@@ -429,3 +429,49 @@ fn live_and_dying_hive_templates_have_null_contact_without_target_or_rng_reads()
         assert_eq!(next_word(&fixture), rng);
     }
 }
+
+/// A rolling boulder's Primary (00404580 or 404B40, both through 05FF0) has
+/// a null task+18: the late walk passes it once its owner lends custody.
+#[v2k_test_support::retail_test]
+fn rolling_boulder_primary_has_a_null_contact_under_its_owner() {
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(27);
+    let boulder = entities
+        .iter_all()
+        .find(|entity| entity.entity_type == 27)
+        .unwrap()
+        .id;
+    let opposite = entities.player().unwrap().id;
+    let mut static_damage = crate::static_damage::StaticDamageScheduler::new();
+    let mut notifications = crate::gameplay_notifications::GameplayNotifications::new();
+    let mut scheduler =
+        crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new();
+    let mut visit = |scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+                     entities: &mut EntityManager| {
+        resolve_native_actor_descriptor_contact(
+            &mut Intro2ContactFrame {
+                entities,
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                static_damage: &mut static_damage,
+                notifications: &mut notifications,
+                retail_tick: 600,
+                actor_tasks: scheduler,
+            },
+            boulder,
+            opposite,
+            ActorTaskSlot::Primary,
+        )
+    };
+    assert_eq!(
+        visit(&mut scheduler, &mut entities).map_err(|block| block.reason),
+        Err(NativeDescriptorContactError::Runtime(
+            "completed native boulder contact owner"
+        ))
+    );
+    assert!(scheduler.adopt_rolling_boulders(&entities) > 0);
+    assert_eq!(
+        visit(&mut scheduler, &mut entities),
+        Ok(NativeDescriptorContactOutcome::Null)
+    );
+}

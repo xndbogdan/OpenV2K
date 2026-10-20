@@ -4367,6 +4367,7 @@ fn run_game(
                 specialized_actor_tasks.adopt_type43(&em);
                 specialized_actor_tasks.adopt_type38_family(&em);
                 specialized_actor_tasks.adopt_type12_family(&em);
+                specialized_actor_tasks.adopt_type31_family(&em);
                 specialized_actor_tasks.adopt_shared_fish(&em);
                 specialized_actor_tasks.adopt_cleansing_vehicle(&em);
                 specialized_actor_tasks.adopt_intro2_type16(&em);
@@ -4739,6 +4740,9 @@ fn run_game(
                             )
                             | SpecializedActorTaskProductionOutcome::NativeType12Family(
                                 v2k_game::native_type12::Type12Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType31Family(
+                                v2k_game::native_type31::Type31Outcome::Blocked { .. },
                             )
                             | SpecializedActorTaskProductionOutcome::SharedFish(
                                 v2k_game::shared_fish::SharedFishOutcome::Blocked { .. },
@@ -8326,6 +8330,22 @@ fn run_game(
                             log!("Ordinary Type56 {id} static contact: {result:?}");
                         }
                         if matches!(result, Type56ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type31::contact::{
+                            resolve_type31_family_static_contact, Type31ContactOutcome,
+                        };
+                        let result = resolve_type31_family_static_contact(&mut contact_frame, id);
+                        if !matches!(
+                            result,
+                            Type31ContactOutcome::Ineligible | Type31ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type31-family {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type31ContactOutcome::Blocked { .. }) {
                             continue;
                         }
                     }

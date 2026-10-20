@@ -117,6 +117,8 @@ pub enum MainBaseAbortActorDisposition {
     Type30Death,
     /// Type40's class18 split into Type56 children.
     Type40Death,
+    /// Type31's class18 split into Type105 children.
+    Type31Death,
     /// Type27's class18 split into two Type3 boulders.
     Type27Death,
     /// Type35's dying body republishes its class7 alternate.
@@ -159,6 +161,8 @@ pub struct MainBaseAbortPublicationCounts {
     pub appended_type61_actors: usize,
     /// Type40's class18 Type56 children appended behind the cursor.
     pub appended_type56_actors: usize,
+    /// Type31's class18 Type105 children appended behind the cursor.
+    pub appended_type105_actors: usize,
     /// Type27's class18 Type3 boulders appended behind the cursor.
     pub appended_type3_actors: usize,
     /// Deliberate same-family replacement of a stale pre-callback owner. In
@@ -704,8 +708,8 @@ fn run_actor_phase(
     // (native turrets, cleansing vehicles and Power Ups, or captured/factory
     // Type61). Class1 flowers share the blast prefix but append no ring. A
     // class63 source appends its Type61 behind the cursor, whose own class49
-    // death then appends a ring: two visits. A native Type40's or Type27's
-    // class18 split appends up to its child count. A repeated/cyclic successor must
+    // death then appends a ring: two visits. A native Type40's, Type31's or
+    // Type27's class18 split appends up to its child count. A repeated/cyclic successor must
     // fail instead of spinning in a speculative world whose eventual rollback
     // would hide the topology bug.
     let actor_visit_limit = entities.iter_all().count().saturating_add(
@@ -717,6 +721,11 @@ fn run_actor_phase(
                 }
                 if crate::native_type40::manager_allocation_authenticates(entities, entity.id) {
                     return crate::split_and_explode::split_policy(40).1 as usize;
+                }
+                if entity.entity_type == 31
+                    && crate::native_type31::manager_allocation_authenticates(entities, entity.id)
+                {
+                    return crate::split_and_explode::split_policy(31).1 as usize;
                 }
                 if entity.entity_type == 27
                     && crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
