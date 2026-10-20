@@ -8638,6 +8638,7 @@ impl EntityManager {
         resolved_subject: &ActivePairBody,
         resolved_candidates: &[ActivePairBody],
         descriptor_plans: &[Type9DescriptorContactPlan],
+        native_descriptor_plans: &[crate::native_actor_descriptor_contact::NativeDescriptorContactSlotPlan],
         scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
         world_fx: &mut crate::world_fx::WorldFx,
         notifications: &mut crate::gameplay_notifications::GameplayNotifications,
@@ -8722,6 +8723,18 @@ impl EntityManager {
                 return Err(PlayerActivePairError::TopologyChangedBeforeCommit);
             }
             descriptor_ids.push(entity_id);
+        }
+        for plan in native_descriptor_plans {
+            if !snapshot_ids.contains(&plan.entity_id) {
+                return Err(PlayerActivePairError::TopologyChangedBeforeCommit);
+            }
+            if !crate::native_actor_descriptor_contact::slot_plan_still_holds(
+                &*self, scheduler, plan,
+            ) {
+                return Err(PlayerActivePairError::TaskCustodyUnavailable {
+                    entity_id: plan.entity_id,
+                });
+            }
         }
         // A boulder this pass moves, damages or wakes needs its completed
         // owner (or finished terminal); a woken one is still resting style1.
@@ -8926,6 +8939,12 @@ impl EntityManager {
                     .expect("prevalidated distinct descriptor-contact plan became stale")
             })
             .collect::<Vec<_>>();
+        for plan in native_descriptor_plans {
+            crate::native_actor_descriptor_contact::commit_slot_plan(self, scheduler, plan)
+                .map_err(|_| PlayerActivePairError::TaskCustodyUnavailable {
+                    entity_id: plan.entity_id,
+                })?;
+        }
 
         let mut apply = |original: &ActivePairBody, resolved: &ActivePairBody| {
             let entity = self

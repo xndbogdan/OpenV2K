@@ -7,13 +7,14 @@
 
 use crate::{
     actor_task_dispatcher::{ActorTaskRuntime, ActorTaskRuntimeFamily},
-    actor_task_owner::{ActorTaskSlot, ActorTaskWrapperFlags},
+    actor_task_owner::{ActorTaskId, ActorTaskSlot, ActorTaskWrapperFlags},
     common_mover::target_prelude::{
         CommonMoverPreludeSubA, CommonMoverPreludeSubD, CommonMoverTargetPreludeTopology,
     },
     descriptor_contact::{
         plan_descriptor_contact, DescriptorContactBlock, DescriptorContactOutcome,
-        DescriptorContactRequest, DescriptorContactSourceSnapshot, DescriptorContactTargetSnapshot,
+        DescriptorContactPlan, DescriptorContactRequest, DescriptorContactSourceSnapshot,
+        DescriptorContactTargetSnapshot,
     },
     entity::{Entity, EntityManager},
     entity_collision_state::{EntityTypeRuntimeMetadata, RetailRuntimeValue},
@@ -21,6 +22,7 @@ use crate::{
     intro2_radial::Intro2RadialTaskCustody,
     intro2_type8::NativeWorkerProfile,
     native_type86::NativeFourChoiceProfile,
+    specialized_actor_task_production::SpecializedActorTaskScheduler,
     wander_near_location::WanderNearPrivateState,
 };
 
@@ -66,9 +68,53 @@ pub fn resolve_native_actor_descriptor_contact(
     slot: ActorTaskSlot,
 ) -> Result<NativeDescriptorContactOutcome, NativeDescriptorContactBlock> {
     use NativeDescriptorContactError as Error;
-    let entity = actor(frame.entities, id)?;
-    let Some(task_id) = entity.actor_tasks.task_in_slot(slot) else {
+    let SlotAdmission::Descriptor { task_id, private } =
+        admit_slot(frame.entities, frame.actor_tasks, id, slot)?
+    else {
         return Ok(NativeDescriptorContactOutcome::Null);
+    };
+    let entity = actor(frame.entities, id)?;
+    let source = descriptor_source(entity)?;
+    let target = DescriptorContactTargetSnapshot {
+        entity_id: opposite,
+        position_raw: actor(frame.entities, opposite)?.position_raw(),
+    };
+    if !ahead(source, target) {
+        return Ok(NativeDescriptorContactOutcome::Behind);
+    }
+    let metadata = frame
+        .entities
+        .type_runtime_metadata(entity.entity_type)
+        .ok_or(Error::Runtime("descriptor metadata"))?;
+    let topology = contact_topology(entity, metadata)?;
+    let plan = plan_ahead(source, target, private, topology, || {
+        u32::from(frame.world_fx.next_shared_retail_random_u16())
+    })?;
+    commit_plan(frame.entities, frame.actor_tasks, id, task_id, &plan)?;
+    Ok(NativeDescriptorContactOutcome::Applied {
+        rng_draws: plan.effect.rng_draw_count,
+    })
+}
+
+/// One current A900 slot, classified under the late walk's custody.
+enum SlotAdmission {
+    Null,
+    Descriptor {
+        task_id: ActorTaskId,
+        private: WanderNearPrivateState,
+    },
+}
+
+fn admit_slot(
+    entities: &EntityManager,
+    tasks: &mut SpecializedActorTaskScheduler,
+    id: u32,
+    slot: ActorTaskSlot,
+) -> Result<SlotAdmission, NativeDescriptorContactError> {
+    use NativeDescriptorContactError as Error;
+    let entity = actor(entities, id)?;
+    let Some(task_id) = entity.actor_tasks.task_in_slot(slot) else {
+        return Ok(SlotAdmission::Null);
     };
     if entity.actor_tasks.wrapper_flags(task_id)
         != Some(ActorTaskWrapperFlags {
@@ -76,7 +122,7 @@ pub fn resolve_native_actor_descriptor_contact(
             in_callback: false,
         })
     {
-        return Err(Error::Runtime("completed component wrapper").into());
+        return Err(Error::Runtime("completed component wrapper"));
     }
     let task = entity
         .actor_tasks
@@ -86,7 +132,7 @@ pub fn resolve_native_actor_descriptor_contact(
         //404580,403840,4069E0 and401F80 all retain05FF0's null+18.
         //Only the constructor lease and completed current owner establish
         //this program; a coincidental task enum cannot authorize it.
-        if !native_weapon_contact_owner_authenticates(frame.entities, frame.actor_tasks, id)
+        if !native_weapon_contact_owner_authenticates(entities, tasks, id)
             || !matches!(
                 task,
                 ActorTaskRuntime::BoulderRolling(_)
@@ -95,81 +141,82 @@ pub fn resolve_native_actor_descriptor_contact(
                     | ActorTaskRuntime::GuardLocationAcquisition(_)
             )
         {
-            return Err(Error::Runtime("completed native weapon contact owner").into());
+            return Err(Error::Runtime("completed native weapon contact owner"));
         }
-        return Ok(NativeDescriptorContactOutcome::Null);
+        return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::Intro2GunTurret(_)) {
         //4086D0 writes the template+18 null explicitly at408721. A native
         //receipt and completed current Class29 graph authorize that null;
         //a task enum by itself does not confer body mutation custody.
         if !crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(
-            frame.entities,
-            id,
+            entities, id,
         ) || !crate::intro2_gun_turret::task::graph_authenticates(entity)
-            || !frame
-                .actor_tasks
-                .prepare_native_actor_mutation(frame.entities, id)
+            || !tasks.prepare_native_actor_mutation(entities, id)
         {
-            return Err(Error::Runtime("completed native turret contact owner").into());
+            return Err(Error::Runtime("completed native turret contact owner"));
         }
-        return Ok(NativeDescriptorContactOutcome::Null);
+        return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::TumbleOutOfSky(_)) {
         //04360/Class11 retains05FF0's null task+18.
-        if !native_insect_allocation_authenticates(frame.entities, id)
-            || !completed_contact_owner(frame.entities, frame.actor_tasks, id)
+        if !native_insect_allocation_authenticates(entities, id)
+            || !completed_contact_owner(entities, tasks, id)
         {
-            return Err(Error::Runtime("completed native Tumble contact owner").into());
+            return Err(Error::Runtime("completed native Tumble contact owner"));
         }
-        return Ok(NativeDescriptorContactOutcome::Null);
+        return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::WorkingFactory(_)) {
         //25BD0 retains01020's template+18 null. Only the native Factory
         //receipt and its completed owner authenticate that task layout.
         if !crate::intro2_type66::intro2_type66_allocation_authenticates(entity)
-            || !frame
-                .actor_tasks
-                .prepare_native_actor_mutation(frame.entities, id)
+            || !tasks.prepare_native_actor_mutation(entities, id)
         {
-            return Err(Error::Runtime("completed native Factory contact owner").into());
+            return Err(Error::Runtime("completed native Factory contact owner"));
         }
-        return Ok(NativeDescriptorContactOutcome::Null);
+        return Ok(SlotAdmission::Null);
     }
     if task_has_null_contact(task) {
-        return Ok(NativeDescriptorContactOutcome::Null);
+        return Ok(SlotAdmission::Null);
     }
     if !task_has_descriptor_contact(task) {
         return Err(Error::UnsupportedTask {
             entity_id: id,
             slot,
             family: task.family(),
-        }
-        .into());
+        });
     }
-    let kind = entity.entity_type;
-    if !allocation_authenticates(frame.entities, id, kind) {
-        return Err(Error::Runtime("native descriptor allocation").into());
+    let private = private_state(task).expect("known descriptor task");
+    if !allocation_authenticates(entities, id, entity.entity_type) {
+        return Err(Error::Runtime("native descriptor allocation"));
     }
-    if !completed_contact_owner(frame.entities, frame.actor_tasks, id) {
-        return Err(Error::Runtime("completed descriptor owner").into());
+    if !completed_contact_owner(entities, tasks, id) {
+        return Err(Error::Runtime("completed descriptor owner"));
     }
-    let entity = actor(frame.entities, id)?;
+    Ok(SlotAdmission::Descriptor { task_id, private })
+}
+
+fn descriptor_source(
+    entity: &Entity,
+) -> Result<DescriptorContactSourceSnapshot, NativeDescriptorContactError> {
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
-        return Err(Error::Runtime("descriptor physical basis").into());
+        return Err(NativeDescriptorContactError::Runtime(
+            "descriptor physical basis",
+        ));
     };
     let [heading, _, roll] = entity.rotation_heading_pitch_roll_raw();
-    let source = DescriptorContactSourceSnapshot {
-        entity_id: id,
+    Ok(DescriptorContactSourceSnapshot {
+        entity_id: entity.id,
         position_raw: entity.position_raw(),
         forward_q31: basis.forward,
         heading_raw: heading as u16,
         roll_raw: roll as u16,
-    };
-    let target = DescriptorContactTargetSnapshot {
-        entity_id: opposite,
-        position_raw: actor(frame.entities, opposite)?.position_raw(),
-    };
+    })
+}
+
+/// 02DA0's signed forward half-space, which precedes every descriptor read.
+fn ahead(source: DescriptorContactSourceSnapshot, target: DescriptorContactTargetSnapshot) -> bool {
     match plan_descriptor_contact(
         DescriptorContactRequest {
             source: RetailRuntimeValue::Known(source),
@@ -179,32 +226,44 @@ pub fn resolve_native_actor_descriptor_contact(
         },
         || unreachable!("02DA0 half-space consumes no RNG"),
     ) {
-        Ok(DescriptorContactOutcome::Miss(_)) => return Ok(NativeDescriptorContactOutcome::Behind),
-        Err(DescriptorContactBlock::UnresolvedPrivateState) => {}
+        Ok(DescriptorContactOutcome::Miss(_)) => false,
+        Err(DescriptorContactBlock::UnresolvedPrivateState) => true,
         _ => unreachable!("known source/target half-space gate"),
     }
+}
 
-    let private = private_state(entity.actor_tasks.task_state(task_id).unwrap())
-        .expect("known descriptor task");
-    let metadata = frame
-        .entities
-        .type_runtime_metadata(kind)
-        .ok_or(Error::Runtime("descriptor metadata"))?;
-    let topology = contact_topology(entity, metadata)?;
-    let plan = plan_descriptor_contact(
+fn plan_ahead(
+    source: DescriptorContactSourceSnapshot,
+    target: DescriptorContactTargetSnapshot,
+    private: WanderNearPrivateState,
+    topology: CommonMoverTargetPreludeTopology,
+    next_random: impl FnMut() -> u32,
+) -> Result<DescriptorContactPlan, NativeDescriptorContactError> {
+    match plan_descriptor_contact(
         DescriptorContactRequest {
             source: RetailRuntimeValue::Known(source),
             target: RetailRuntimeValue::Known(target),
             private_state: RetailRuntimeValue::Known(private),
             topology: RetailRuntimeValue::Known(topology),
         },
-        || u32::from(frame.world_fx.next_shared_retail_random_u16()),
+        next_random,
     )
-    .map_err(Error::Descriptor)?;
-    let DescriptorContactOutcome::Apply(plan) = plan else {
-        unreachable!("same accepted half-space")
-    };
-    let entity = frame.entities.entity_mut(id).unwrap();
+    .map_err(NativeDescriptorContactError::Descriptor)?
+    {
+        DescriptorContactOutcome::Apply(plan) => Ok(plan),
+        DescriptorContactOutcome::Miss(_) => unreachable!("same accepted half-space"),
+    }
+}
+
+fn commit_plan(
+    entities: &mut EntityManager,
+    tasks: &mut SpecializedActorTaskScheduler,
+    id: u32,
+    task_id: ActorTaskId,
+    plan: &DescriptorContactPlan,
+) -> Result<(), NativeDescriptorContactBlock> {
+    let entity = entities.entity_mut(id).unwrap();
+    let kind = entity.entity_type;
     commit_private(
         entity.actor_tasks.task_state_mut(task_id).unwrap(),
         plan.effect.target_state,
@@ -287,20 +346,140 @@ pub fn resolve_native_actor_descriptor_contact(
     ]);
     // 401A20's Sub-I branch changes heading and propagates direction through
     // 019C0. It does not call 208C0, advance animation or rebuild the basis.
-    if kind == 47
-        && !frame
-            .actor_tasks
-            .finish_native_type47_external_mutation(frame.entities, id)
-    {
-        frame.actor_tasks.park_native_type47_external_prefix(id);
+    if kind == 47 && !tasks.finish_native_type47_external_mutation(entities, id) {
+        tasks.park_native_type47_external_prefix(id);
         return Err(NativeDescriptorContactBlock {
-            reason: Error::Runtime("completed Type47 descriptor suffix"),
+            reason: NativeDescriptorContactError::Runtime("completed Type47 descriptor suffix"),
             committed_prefix: true,
         });
     }
-    Ok(NativeDescriptorContactOutcome::Applied {
-        rng_draws: plan.effect.rng_draw_count,
-    })
+    Ok(())
+}
+
+/// A native actor's current A900 slots, read before the player's pair pass
+/// under the late walk's custody. The pass plans each slot's 02DA0 at its
+/// component callback, where the shared RNG is drawn, and commits after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NativeDescriptorContactSource {
+    entity_id: u32,
+    slots: [Option<(ActorTaskId, WanderNearPrivateState)>; 3],
+    source: Result<DescriptorContactSourceSnapshot, NativeDescriptorContactError>,
+    topology: Result<CommonMoverTargetPreludeTopology, NativeDescriptorContactError>,
+}
+
+/// One slot's staged 02DA0 effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct NativeDescriptorContactSlotPlan {
+    pub(crate) entity_id: u32,
+    task_id: ActorTaskId,
+    plan: DescriptorContactPlan,
+}
+
+impl NativeDescriptorContactSource {
+    pub(crate) fn capture(
+        entities: &EntityManager,
+        tasks: &mut SpecializedActorTaskScheduler,
+        id: u32,
+    ) -> Result<Self, NativeDescriptorContactError> {
+        let mut slots = [None; 3];
+        for (index, slot) in ActorTaskSlot::IN_RETAIL_TICK_ORDER.into_iter().enumerate() {
+            if let SlotAdmission::Descriptor { task_id, private } =
+                admit_slot(entities, tasks, id, slot)?
+            {
+                slots[index] = Some((task_id, private));
+            }
+        }
+        let entity = actor(entities, id)?;
+        let topology = entities
+            .type_runtime_metadata(entity.entity_type)
+            .ok_or(NativeDescriptorContactError::Runtime("descriptor metadata"))
+            .and_then(|metadata| contact_topology(entity, metadata));
+        Ok(Self {
+            entity_id: id,
+            slots,
+            source: descriptor_source(entity),
+            topology,
+        })
+    }
+
+    /// Run every slot's 02DA0 against `target` in A900 order. A slot reads
+    /// the heading, roll and Sub-A runtime the previous slot's 01A20 wrote.
+    pub(crate) fn plan(
+        &self,
+        target: DescriptorContactTargetSnapshot,
+        next_random: &mut impl FnMut() -> u32,
+    ) -> Result<Vec<NativeDescriptorContactSlotPlan>, NativeDescriptorContactError> {
+        let mut plans = Vec::new();
+        let mut chained: Option<(
+            DescriptorContactSourceSnapshot,
+            CommonMoverTargetPreludeTopology,
+        )> = None;
+        for (task_id, private) in self.slots.into_iter().flatten() {
+            let source = match chained {
+                Some((source, _)) => source,
+                None => self.source?,
+            };
+            if !ahead(source, target) {
+                continue;
+            }
+            let topology = match chained {
+                Some((_, topology)) => topology,
+                None => self.topology?,
+            };
+            let plan = plan_ahead(source, target, private, topology, &mut *next_random)?;
+            let mut next_topology = topology;
+            if let (Some(sub_a), Some(runtime)) =
+                (next_topology.sub_a.as_mut(), plan.effect.sub_a_runtime)
+            {
+                sub_a.runtime = runtime;
+            }
+            chained = Some((
+                DescriptorContactSourceSnapshot {
+                    heading_raw: plan.effect.heading_raw,
+                    roll_raw: plan.effect.roll_raw,
+                    ..source
+                },
+                next_topology,
+            ));
+            plans.push(NativeDescriptorContactSlotPlan {
+                entity_id: self.entity_id,
+                task_id,
+                plan,
+            });
+        }
+        Ok(plans)
+    }
+}
+
+/// Recheck a staged plan's owner and task immediately before the pass commits.
+pub(crate) fn slot_plan_still_holds(
+    entities: &EntityManager,
+    tasks: &mut SpecializedActorTaskScheduler,
+    plan: &NativeDescriptorContactSlotPlan,
+) -> bool {
+    let Ok(entity) = actor(entities, plan.entity_id) else {
+        return false;
+    };
+    entity.actor_tasks.wrapper_flags(plan.task_id)
+        == Some(ActorTaskWrapperFlags {
+            alive: true,
+            in_callback: false,
+        })
+        && entity
+            .actor_tasks
+            .task_state(plan.task_id)
+            .and_then(private_state)
+            == Some(plan.plan.expected_private_state)
+        && allocation_authenticates(entities, plan.entity_id, entity.entity_type)
+        && completed_contact_owner(entities, tasks, plan.entity_id)
+}
+
+pub(crate) fn commit_slot_plan(
+    entities: &mut EntityManager,
+    tasks: &mut SpecializedActorTaskScheduler,
+    plan: &NativeDescriptorContactSlotPlan,
+) -> Result<(), NativeDescriptorContactBlock> {
+    commit_plan(entities, tasks, plan.entity_id, plan.task_id, &plan.plan)
 }
 
 /// Resolve only the component shapes whose retained allocations this adapter
@@ -702,6 +881,8 @@ mod fish_tests;
 mod pair_tests;
 #[cfg(test)]
 mod people_tests;
+#[cfg(test)]
+mod player_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

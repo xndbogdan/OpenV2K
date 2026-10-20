@@ -64,7 +64,13 @@ actual task's private state without replacing its graph or borrowing a captured
 identity. Player-as-candidate Type17 pairs now enter the player adapter, and
 player-as-subject `02DA0` Apply writes the authenticated no-Sub-I descriptor
 plan; unauthenticated Type17 component contact fails closed as
-`Type17DescriptorContact`. Lethal player-pair packets to a native Type17 stage
+`Type17DescriptorContact`. Every other native actor's `02DA0` slots join the
+same pass: the adapter reads each current A900 slot under the late walk's
+allocation and completed-owner custody before the pass, plans each slot at its
+component callback, where `01A20` draws the shared RNG and a later slot reads
+the heading, roll and Sub-A runtime the earlier one wrote, and commits after
+the body checks. An owner or task the late walk would refuse fails closed as
+`NativeDescriptorContact`. Lethal player-pair packets to a native Type17 stage
 a commit-time dispatch and complete through the shared capture-path 15040 and
 standard death instead of failing the solid pass; a lethal subject packet
 re-enters the player's own checked-damage terminal, so the ram can wreck the
