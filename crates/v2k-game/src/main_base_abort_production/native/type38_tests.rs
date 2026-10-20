@@ -10,7 +10,7 @@ use crate::{
     static_damage::StaticDamageScheduler,
 };
 
-/// 170A0's 10C10 reaches each row's alternate: Type38's class1 (BAF0, then
+/// 170A0's 10C10 reaches each row's alternate: Type38's and Type119's class1 (BAF0, then
 /// BAC0 stages removal with nothing appended) and Type129's class63 (BAF0,
 /// then the authored Type61 is tail-appended behind the cursor).
 #[v2k_test_support::retail_test]
@@ -19,6 +19,7 @@ fn type38_family_abort_runs_class1_and_class63() {
         (41, Type38Row::Type129),
         (42, Type38Row::Type38),
         (43, Type38Row::Type38),
+        (46, Type38Row::Type119),
     ] {
         let (mut session, mut manager, mut fx) =
             crate::native_type122::construction_tests::native_fixture_with_player(level);
@@ -68,7 +69,7 @@ fn type38_family_abort_runs_class1_and_class63() {
             &manager, id
         ));
         match row {
-            Type38Row::Type38 => {
+            Type38Row::Type38 | Type38Row::Type119 => {
                 assert_eq!(publications.appended_type61_actors, 0, "world{level}");
                 assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
             }

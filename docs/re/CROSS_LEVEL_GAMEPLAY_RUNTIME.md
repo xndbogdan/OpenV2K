@@ -158,6 +158,9 @@ own K/L bank binding run under the real scheduler. Lethal hits, radials, the
 static walk, pair lanes and the abort take class1 (Type38) or class63 with the
 authored Type61 drop (Type129). Drowning (`E370`) fails closed until the surface
 step can lend the terminal its world.
+World46's three Type119 walkers join that owner as a third row: armour only
+channel 3 reaches, the generic crush, Always class5/class7 and four legs whose
+completed strides play sound90 at a drawn rate.
 
 The nineteen ordinary [Type18 insects](TYPE18_RUNTIME.md) (worlds16, 21-23,
 30, 33, 34 and36) run on the ground host with Type122's capture and class12

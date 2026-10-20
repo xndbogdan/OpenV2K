@@ -19,12 +19,22 @@ use crate::{
     world_fx::{BallisticDamageRequest, ParticleEntityImpact},
 };
 
-/// Every authored row: Type129 in world 41, Type38 in worlds 42 and 43.
-const WORLDS: [(u32, Type38Row); 3] = [
+/// Every authored row: Type129 in world 41, Type38 in worlds 42 and 43,
+/// Type119 in world 46.
+const WORLDS: [(u32, Type38Row); 4] = [
     (41, Type38Row::Type129),
     (42, Type38Row::Type38),
     (43, Type38Row::Type38),
+    (46, Type38Row::Type119),
 ];
+
+fn row_index(row: Type38Row) -> usize {
+    match row {
+        Type38Row::Type38 => 0,
+        Type38Row::Type129 => 1,
+        Type38Row::Type119 => 2,
+    }
+}
 
 fn ids(manager: &EntityManager, row: Type38Row) -> Vec<u32> {
     manager
@@ -105,14 +115,14 @@ fn assert_no_block(
 
 #[v2k_test_support::retail_test]
 fn type38_family_births_publish_their_rows_on_the_ground_host() {
-    let mut births = [0; 2];
+    let mut births = [0; 3];
     for (level, row) in WORLDS {
         let (session, manager, _) = crate::intro2_gun_turret::authored_tests::fixture(level);
         let ids = ids(&manager, row);
         assert!(!ids.is_empty(), "world{level}");
         let level_desc = session.cache.level_desc().unwrap();
         for &id in &ids {
-            births[usize::from(row == Type38Row::Type129)] += 1;
+            births[row_index(row)] += 1;
             let entity = entity(&manager, id);
             assert!(manager_allocation_authenticates(&manager, id));
             assert_eq!(type38_row(entity), Some(row));
@@ -130,7 +140,7 @@ fn type38_family_births_publish_their_rows_on_the_ground_host() {
             assert_eq!(
                 profile.policy(),
                 match row {
-                    Type38Row::Type38 => NativeExplosionPolicy::Class1,
+                    Type38Row::Type38 | Type38Row::Type119 => NativeExplosionPolicy::Class1,
                     Type38Row::Type129 => NativeExplosionPolicy::Class63,
                 }
             );
@@ -149,7 +159,7 @@ fn type38_family_births_publish_their_rows_on_the_ground_host() {
             "world{level}"
         );
     }
-    assert_eq!(births, [10, 25]);
+    assert_eq!(births, [10, 25, 3]);
 }
 
 /// Ten seconds under the real scheduler and the late static walk.
@@ -266,6 +276,12 @@ fn a_nearby_player_draws_type38_fire() {
 }
 
 fn lethal_hit(id: u32) -> ParticleEntityImpact {
+    lethal_row_hit(id, Type38Row::Type38)
+}
+
+/// Type119's armour multiplies every channel but 3 by zero.
+fn lethal_row_hit(id: u32, row: Type38Row) -> ParticleEntityImpact {
+    let channel = if row == Type38Row::Type119 { 3 } else { 2 };
     ParticleEntityImpact {
         source_particle_class: 16,
         impact_position_argument_va: 0,
@@ -274,7 +290,7 @@ fn lethal_hit(id: u32) -> ParticleEntityImpact {
         velocity_raw: [0, 0, 8192],
         damage: Some(BallisticDamageRequest {
             packet: DamagePacket {
-                channels: [2, 0],
+                channels: [channel, 0],
                 amounts_raw: [1_000_000, 0],
             },
             source_entity_type_at_birth: Some(34),
@@ -315,7 +331,7 @@ fn lethal_playing_hits_run_class1_and_class63() {
                 player_hull: &mut hull,
                 retail_tick: 600,
             },
-            lethal_hit(id),
+            lethal_row_hit(id, row),
         );
         assert!(
             matches!(
@@ -334,7 +350,7 @@ fn lethal_playing_hits_run_class1_and_class63() {
             .actor_tasks
             .task_in_slot(ActorTaskSlot::Primary);
         match row {
-            Type38Row::Type38 => {
+            Type38Row::Type38 | Type38Row::Type119 => {
                 assert_eq!(style(&manager, id), 0x004c_7150);
                 assert!(primary.is_none(), "BAC0 runs A860");
             }
@@ -444,4 +460,80 @@ fn rows_differ_in_four_words() {
     assert_eq!(Type38Row::Type129.axis().raw_word_at_0x04, 3073);
     assert_eq!(Type38Row::Type38.alternate_behavior_class(), 1);
     assert_eq!(Type38Row::Type129.alternate_behavior_class(), 63);
+    assert_eq!(Type38Row::Type119.alternate_behavior_class(), 1);
+    assert_eq!(Type38Row::Type119.default_flags(), 0x439);
+    assert_eq!(Type38Row::Type119.sub_h_records(), 4);
+}
+
+/// Type119's four legs step under 41D120: each completed step draws one word
+/// and queues sound 90 at full gain with rate `0xE000 + (word & 0xFFFF) / 4`.
+#[v2k_test_support::retail_test]
+fn type119_steps_play_sound_90_at_a_drawn_rate() {
+    let (mut session, mut manager, mut fx) = crate::intro2_gun_turret::authored_tests::fixture(46);
+    let ids = ids(&manager, Type38Row::Type119);
+    assert_eq!(ids.len(), 3);
+    activate(&mut manager, &ids);
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    assert_eq!(tasks.adopt_type38_family(&manager), ids.len());
+    let mut static_damage = StaticDamageScheduler::new();
+    let mut notifications = GameplayNotifications::new();
+    let mut steps = Vec::new();
+    for t in 1..=500u32 {
+        let pass = tick(
+            &mut tasks,
+            &mut manager,
+            &mut session,
+            &mut fx,
+            &mut static_damage,
+            &mut notifications,
+            t,
+        );
+        assert_no_block(&pass, &format!("tick{t}"));
+        // D360 resolves the legs only when the model is drawn: stand in for
+        // the draw's live writeback so 41D0A0 can start strides.
+        for &id in &ids {
+            draw_sub_h(&session, &mut manager, id);
+        }
+        fx.process_pending();
+        steps.extend(
+            fx.take_positional_sounds()
+                .into_iter()
+                .filter(|sound| sound.sound_id == 90),
+        );
+    }
+    assert!(steps.len() >= 3, "only {} steps", steps.len());
+    assert!(steps
+        .iter()
+        .all(|sound| (0xe000..=0xe000 + 0x3fff).contains(&sound.frequency_q16)));
+    // The draws differ: the pitch is not a fixed rate.
+    assert!(steps
+        .windows(2)
+        .any(|pair| pair[0].frequency_q16 != pair[1].frequency_q16));
+}
+
+fn draw_sub_h(session: &crate::session::GameSession, manager: &mut EntityManager, id: u32) {
+    let metadata = manager.type_runtime_metadata(119).cloned().unwrap();
+    let RetailRuntimeValue::Known(Some(descriptor)) = metadata.sub_h_external_frame_descriptor
+    else {
+        panic!("Type119 Sub-H");
+    };
+    let model = session.cache.global_model(1161).unwrap();
+    let terrain = session.cache.terrain().unwrap();
+    let entity = manager.entity_mut(id).unwrap();
+    let origin = entity.position_raw();
+    let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
+        panic!("basis");
+    };
+    let RetailRuntimeValue::Known(Some(runtime)) = &mut entity.sub_h_external_frame_runtime else {
+        panic!("Sub-H runtime");
+    };
+    crate::sub_h_external_frame::commit_sub_h_geometry(
+        runtime,
+        &descriptor,
+        &model.records,
+        origin,
+        Some([basis.lateral, basis.up, basis.forward]),
+        |x, z| terrain.bilinear_height_raw(x, z),
+    )
+    .unwrap();
 }

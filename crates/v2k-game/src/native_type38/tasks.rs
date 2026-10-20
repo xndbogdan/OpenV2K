@@ -13,11 +13,12 @@ use crate::{
 };
 
 pub(super) fn select(
+    row: Type38Row,
     player_nearby: bool,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<BehaviorSelection, Type38Block> {
     select_initial_behavior(
-        &CHOICES,
+        row.choices(),
         |rule| match rule {
             BehaviorWeightRule::Always => 1,
             BehaviorWeightRule::PlayerNearby => i32::from(player_nearby),
@@ -46,13 +47,22 @@ pub(super) fn emitter_constructor(row: Type38Row) -> GenericEmitterRuntime {
 }
 
 pub(super) fn initializer_storage_authenticates(entity: &Entity) -> bool {
+    let Some(row) = entity
+        .native_type38_runtime
+        .as_ref()
+        .map(|runtime| runtime.row)
+        .or_else(|| Type38Row::from_entity_type(entity.entity_type))
+    else {
+        return false;
+    };
     matches!(
         entity.actor_common_axis_descriptor,
         RetailRuntimeValue::Known(_)
     ) && matches!(
         entity.sub_a_propulsion_runtime,
         RetailRuntimeValue::Known(Some(_))
-    ) && matches!(&entity.sub_h_external_frame_runtime, RetailRuntimeValue::Known(Some(h)) if h.records().len() == 8)
+    ) && matches!(&entity.sub_h_external_frame_runtime,
+        RetailRuntimeValue::Known(Some(h)) if h.records().len() == row.sub_h_records())
 }
 
 /// ACD0/B6C0 initialize tasks only. Reselection never reconstructs the

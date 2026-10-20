@@ -254,6 +254,7 @@ fn type30_task_reselection_retains_nonzero_native_kl_bank_emitter_and_transient_
             kl_components: Some(&mut runtime.kl_components),
             target: None,
             tracked_target: RetailRuntimeValue::Known(None),
+            sub_h_completion_sounds: false,
         },
         &mut || panic!("NULL target component phase draws no RNG"),
     )

@@ -249,6 +249,18 @@ pub const NATIVE_TYPE38_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     reserved_at_0x0b: 0,
 };
 
+/// Ordinary Type119 (world 46): the same path with divisor64, probes800/300
+/// and flags13.
+pub const NATIVE_TYPE119_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 64,
+    couple_yaw_into_roll_raw: 0,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 800,
+    lateral_probe_raw: 300,
+    classifier_flags: 0x13,
+    reserved_at_0x0b: 0,
+};
+
 /// Ordinary Type18 (eight worlds): the no-pitch 1F660 path with divisor40,
 /// probes350/256 and flags10, the steepness arm alone (no water or object).
 pub const NATIVE_TYPE18_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
@@ -346,6 +358,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | INTRO2_TYPE58_SUB_D
             | NATIVE_TYPE30_SUB_D
             | NATIVE_TYPE38_SUB_D
+            | NATIVE_TYPE119_SUB_D
             | NATIVE_TYPE18_SUB_D
             | NATIVE_TYPE28_SUB_D
             | INTRO2_TYPE10_SUB_D

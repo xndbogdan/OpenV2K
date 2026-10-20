@@ -1,4 +1,4 @@
-//! Sealed Type38/Type129 receipts over the shared ground task/mover/hit host.
+//! Sealed Type38/Type129/Type119 receipts over the shared ground task/mover/hit host.
 
 use super::*;
 use crate::{
@@ -79,10 +79,10 @@ macro_rules! type38_profile {
             const ENTITY_TYPE: u32 = $row.entity_type();
             const CAPTURE_POLICY: shared::NativeCapturePolicy =
                 shared::NativeCapturePolicy::NoCapture;
-            const DEFAULT_FLAGS: u32 = DEFAULT_FLAGS;
+            const DEFAULT_FLAGS: u32 = $row.default_flags();
             const TOPOLOGY: crate::entity_collision_state::CommonMoverComponentTopology = TOPOLOGY;
             const AXIS: CommonAxisDescriptor = $row.axis();
-            const CHOICES: &'static [BehaviorChoice] = &CHOICES;
+            const CHOICES: &'static [BehaviorChoice] = $row.choices();
             const LIVING_CLASSES: &'static [u8] = &[5, 7];
             const TERMINAL_DEATH: bool = true;
             fn register_owner(
@@ -211,3 +211,4 @@ macro_rules! type38_profile {
 
 type38_profile!(Type38Profile, Type38Row::Type38, Type38);
 type38_profile!(Type129Profile, Type38Row::Type129, Type129);
+type38_profile!(Type119Profile, Type38Row::Type119, Type119);

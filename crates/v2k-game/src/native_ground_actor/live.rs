@@ -595,6 +595,7 @@ fn run_frame<P: NativeGroundActorProfile>(
             frame.world_fx,
         )?
     };
+    flush_sub_h_completion_sounds(manager, id, frame.world_fx);
     if changed {
         super::behavior::reselect::<P>(
             manager,
@@ -743,6 +744,24 @@ pub(crate) fn tick_primary<P: NativeGroundActorProfile>(
         shared_retarget_after_unwind(visit, prefix, result),
         SharedRetargetPostUnwind::Transition(_)
     ))
+}
+
+/// The primary's 01430 ran 41D120, whose completed steps queued their sounds
+/// before anything later in the visit.
+fn flush_sub_h_completion_sounds(manager: &mut EntityManager, id: u32, world_fx: &mut WorldFx) {
+    let Some(entity) = manager.entity_mut(id) else {
+        return;
+    };
+    let RetailRuntimeValue::Known(Some(h)) = &mut entity.sub_h_external_frame_runtime else {
+        return;
+    };
+    for sound in h.take_completion_sounds() {
+        world_fx.queue_fixed_positional_sound_raw_at_rate(
+            sound.sound_id,
+            sound.position_raw,
+            sound.rate_q16,
+        );
+    }
 }
 
 pub(crate) fn bits(entity: &Entity, mask: u32) -> Result<u32, NativeGroundActorBlock> {

@@ -25,6 +25,7 @@ use crate::entity_collision_state::{
     CommonMoverComponentTopology, EntityTypeRuntimeMetadata, RetailRuntimeValue,
 };
 use crate::hover::HoverLiftConfig;
+use crate::sub_h_external_frame::{completion_sound_pitch_16_16, SubHCompletionSound};
 use crate::wander_near_location::WanderNearPrivateState;
 use v2k_formats::terrain::TerrainGrid;
 
@@ -84,6 +85,9 @@ pub(crate) struct Intro2CommonMoverFrame<'a> {
     /// Retail's target-private pointer. Class12 passes a true null pointer.
     pub target: Option<&'a mut WanderNearPrivateState>,
     pub tracked_target: RetailRuntimeValue<Option<CommonMoverTrackedTargetSnapshot>>,
+    /// The caller drains Sub-H step sounds after the visit's task callback.
+    /// Without such an owner a completed step with a sound stays an error.
+    pub sub_h_completion_sounds: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -176,7 +180,7 @@ pub(crate) fn run_intro2_common_mover(
             target_private: frame.target.as_deref().copied(),
             tracked_target: frame.tracked_target,
         },
-        next_random,
+        &mut *next_random,
     )
     .map_err(Block::Mover)?;
     for _ in 0..24 {
@@ -283,8 +287,17 @@ pub(crate) fn run_intro2_common_mover(
                 let cues = runtime
                     .update(h, frame.elapsed_micros as i32)
                     .map_err(Block::SubH)?;
-                if !cues.is_empty() {
+                if !cues.is_empty() && !frame.sub_h_completion_sounds {
                     return Err(Block::Runtime("unexpected Sub-H cue"));
+                }
+                // 41D120: one word per completed step with a sound, then
+                // 44F450 at the body's position (unchanged inside 01430).
+                for cue in cues {
+                    runtime.push_completion_sound(SubHCompletionSound {
+                        sound_id: cue.sound_id,
+                        position_raw: snapshot.position_raw,
+                        rate_q16: completion_sound_pitch_16_16(next_random()),
+                    });
                 }
                 CommonMoverFrameResume::ComponentReturned {
                     phase: CommonMoverDispatchPhase::SubH,

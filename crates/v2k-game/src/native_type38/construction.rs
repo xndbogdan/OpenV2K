@@ -55,7 +55,7 @@ pub(crate) fn publish_authored_type38(
         || entity.authored_spawn_index != record.authored_spawn_index
         || entity.capability_flags != metadata.capability_flags
         || entity.model_slots != slots
-        || slots != [Some(MODEL); 4]
+        || slots != [Some(row.model()); 4]
         || entity.rotation_heading_pitch_roll_raw() != record.rotation.map(|word| word as i16)
         || !record.plain
     {
@@ -92,7 +92,7 @@ pub(crate) fn publish_authored_type38(
             != RetailRuntimeValue::Known(Some(SubAPropulsionRuntime::pending_constructor_rng(a)))
         || !tasks::initializer_storage_authenticates(entity)
         || entity.sub_j_attachment_runtime != RetailRuntimeValue::Known(None)
-        || entity.collision.health_raw != RetailRuntimeValue::Known(HEALTH)
+        || entity.collision.health_raw != RetailRuntimeValue::Known(row.health())
         || entity.collision.pre_health_damage_buffer_raw
             != RetailRuntimeValue::Known(record.initial_damage_buffer_raw)
         || entity.collision.last_hit_presentation_tick_at_0x34 != RetailRuntimeValue::Known(0)
@@ -132,10 +132,10 @@ pub(crate) fn publish_authored_type38(
             0
         },
     );
-    let policy = translate_state_policy(DEFAULT_FLAGS);
+    let policy = translate_state_policy(row.default_flags());
     state.overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     entity.collision.state_flags_at_0x08 = state;
-    entity.model_index = Some(MODEL);
+    entity.model_index = Some(row.model());
     // Common 104B0 +44 and the type-vtable +30 are both null.
     entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
     entity
@@ -170,7 +170,8 @@ fn publish_birth(
         unreachable!()
     };
     let row = runtime.row;
-    let h = SubHRuntimeState::new(8).map_err(|_| Type38Block::ComponentStorage)?;
+    let h =
+        SubHRuntimeState::new(row.sub_h_records()).map_err(|_| Type38Block::ComponentStorage)?;
     let a = SubAPropulsionRuntime::from_20450_constructor(a, next_random() as u16);
     entity.set_position_raw(runtime.anchor_raw);
     entity.sub_h_external_frame_runtime = RetailRuntimeValue::Known(Some(h));
@@ -188,13 +189,15 @@ fn publish_birth(
         .map(shared::candidate)
         .collect();
     // Only rule 6 reads candidate state: PlayerNearby within the strict axis.
+    // Type119 weighs both classes Always and never reads it.
     let player_nearby = match row {
         Type38Row::Type38 => shared::nearby::<profile::Type38Profile>(owner, &candidates, 1),
         Type38Row::Type129 => shared::nearby::<profile::Type129Profile>(owner, &candidates, 1),
+        Type38Row::Type119 => Ok(false),
     }
     .map_err(Type38Block::Ground)?;
     let mut selector_word = 0;
-    let selection = tasks::select(player_nearby, &mut || {
+    let selection = tasks::select(row, player_nearby, &mut || {
         selector_word = next_random();
         selector_word
     })?;

@@ -75,7 +75,7 @@ pub enum NativeExplosionSourceProfile {
     Type16Carrier(crate::intro2_type16::Type16Row),
     /// Ordinary emitter-only Type43 shooters, alternate class1.
     Type43,
-    /// Ordinary ground shooters: Type38 takes class1, Type129 class63.
+    /// Ordinary ground shooters: Type38 and Type119 take class1, Type129 class63.
     Type38Family(crate::native_type38::Type38Row),
     /// Type3 Rolling Boulder; its alternate is class1. Type27 splits instead.
     RollingBoulder,
@@ -291,6 +291,7 @@ impl NativeExplosionSourceProfile {
             | Self::Intro2Type13
             | Self::Type43
             | Self::Type38Family(crate::native_type38::Type38Row::Type38)
+            | Self::Type38Family(crate::native_type38::Type38Row::Type119)
             | Self::RollingBoulder
             | Self::ExplodingFlyer(_)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {

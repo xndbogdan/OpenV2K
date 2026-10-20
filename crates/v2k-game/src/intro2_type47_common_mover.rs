@@ -167,6 +167,7 @@ pub(crate) fn run_native_type47_common_mover(
             kl_components: None,
             target: Some(frame.target),
             tracked_target: frame.tracked_target,
+            sub_h_completion_sounds: false,
         },
         next_random,
     );

@@ -983,6 +983,16 @@ impl fmt::Display for SubHUpdateError {
 
 impl std::error::Error for SubHUpdateError {}
 
+/// One completed step's `FUN_0044F450` request: full gain at the entity's
+/// `+0x96` position and the pitch drawn in `FUN_0041D120`. The mover holds it
+/// until the visit's owner reaches the sound queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubHCompletionSound {
+    pub sound_id: u16,
+    pub position_raw: [i16; 3],
+    pub rate_q16: u32,
+}
+
 /// Retail Sub-H runtime state detached from its still-unowned live adapters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SubHRuntimeState {
@@ -990,6 +1000,7 @@ pub struct SubHRuntimeState {
     enabled: bool,
     surface_policy: SubHSurfacePolicy,
     records: Vec<SubHPhaseRecord>,
+    completion_sounds: Vec<SubHCompletionSound>,
 }
 
 impl SubHRuntimeState {
@@ -1004,7 +1015,18 @@ impl SubHRuntimeState {
             enabled: true,
             surface_policy: SubHSurfacePolicy::Terrain,
             records: vec![SubHPhaseRecord::default(); record_count],
+            completion_sounds: Vec::new(),
         })
+    }
+
+    /// Hold a completed step's sound request for the visit's owner.
+    pub fn push_completion_sound(&mut self, sound: SubHCompletionSound) {
+        self.completion_sounds.push(sound);
+    }
+
+    /// The step sounds requested since the last call, in request order.
+    pub fn take_completion_sounds(&mut self) -> Vec<SubHCompletionSound> {
+        std::mem::take(&mut self.completion_sounds)
     }
 
     pub fn cursor(&self) -> usize {

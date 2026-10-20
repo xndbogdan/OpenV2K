@@ -59,6 +59,7 @@ pub(super) fn run_retained_kl_mover(
             kl_components: Some(&mut runtime.kl_components),
             target: None,
             tracked_target: RetailRuntimeValue::Known(None),
+            sub_h_completion_sounds: false,
         },
         &mut || panic!("class12 NULL target cannot enter target RNG"),
     );
