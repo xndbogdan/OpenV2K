@@ -17,16 +17,19 @@ The first world, **Level 1**, is playable. That includes the retail frontend
 (intro, menu ring, New Game / Load / settings), native save loading and campaign
 checkpoints. Later worlds load, but many actors still lack their recovered
 behavior. The main open work is shared actor tasks, movement and lifecycle
-ownership. [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
+ownership. Network play, retail's deathmatch for up to eight players, runs
+between port machines over the port's own transport; its held parts are in
+[`docs/re/MULTIPLAYER.md`](docs/re/MULTIPLAYER.md#the-port).
+[`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-44.0%25%20code%20%2F%20100.0%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-48.2%25%20code%20%2F%20100.0%25%20notes-orange)](docs/progress/README.md)
 
-Of the **2,053** game functions in retail `V2000.EXE` the port
-covers ([337 omitted](docs/progress/README.md#omitted)),
-**904 (44.0%)** are referenced by the port's code and
-**2,053 (100.0%)** by its code or RE notes.
+Of the **2,037** game functions in retail `V2000.EXE` the port
+covers ([353 omitted](docs/progress/README.md#omitted)),
+**981 (48.2%)** are referenced by the port's code and
+**2,037 (100.0%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 
 [![Map of the retail functions by RE note and state](docs/progress/treemap.svg)](docs/progress/README.md#map)

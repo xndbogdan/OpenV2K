@@ -13,6 +13,8 @@ mod diagnostic_console;
 mod launcher;
 mod launcher_startup;
 mod live_display;
+mod network_play;
+use network_play::{advance_network_world, report_held, NetworkWorldFrame};
 mod probe;
 use v2k_game::{launcher_preferences, setup};
 mod paused_gameplay;
@@ -111,7 +113,7 @@ use v2k_game::main_base_type66_production::MainBaseType66ProductionOutcome;
 use v2k_game::main_base_type9_production::MainBaseType9ExplodingProductionOutcome;
 use v2k_game::menu::{compute_carousel_layout, scale_rgba, tint_rgba};
 use v2k_game::menu_billboard::{MenuBillboardLayout, MenuBillboardPose, MenuBillboardRect};
-use v2k_game::menu_data::SettingId;
+use v2k_game::menu_data::{self, SettingId};
 use v2k_game::menu_engine::MenuInput;
 use v2k_game::model_tree::{
     linked_model_named_tips, model_is_camera_facing_actor, ModelSceneLight as MenuSceneLight,
@@ -1979,6 +1981,62 @@ fn run_game(
         }};
     }
 
+    // A network game in progress (FUN_0046BED0 to FUN_0046BFC0).
+    let mut network_game: Option<v2k_game::network::game::NetworkGame> = None;
+    // Damage the particle pass dealt peers' bodies this frame (kind 9).
+    let mut network_damage: Vec<(u32, u16, u16)> = Vec::new();
+    let mut network_join_wait = false;
+    // A test run's first network entry point, in place of FUN_00451AF0's.
+    let mut network_test_entry = None;
+    // The frontend's network screens: the session search with the sessions
+    // it listed and the tick it last ran (`004DCEA8`), the address typed
+    // into the prompt, the screen last seen, and the arena keys 1-6 forced
+    // (`DAT_004DB228`).
+    let mut network_search: Option<v2k_game::network::transport::SessionSearch> = None;
+    let mut network_sessions: Vec<v2k_game::network::transport::SessionInfo> = Vec::new();
+    let mut network_search_tick: Option<u32> = None;
+    let mut network_address = String::new();
+    let mut network_screen: Option<u32> = None;
+    let mut network_arena: Option<u8> = None;
+    if let Some(network) = probe
+        .start
+        .as_ref()
+        .and_then(|start| start.network.as_ref())
+    {
+        network_test_entry =
+            network
+                .position
+                .map(|position_raw| v2k_game::entity::AuthoredPlayerArrival {
+                    position_raw,
+                    heading_raw: network.heading.unwrap_or(0x4000),
+                });
+        let (session_name, player_name) = v2k_game::network::arena::local_names();
+        let tables = v2k_game::network::arena::line_tables_for(&session.cache, data_dir);
+        let port = network
+            .port
+            .unwrap_or(v2k_game::network::transport::DEFAULT_PORT);
+        if network.host {
+            network_game = Some(v2k_game::network::game::NetworkGame::host(
+                &session_name,
+                &player_name,
+                port,
+                tables,
+            )?);
+        } else {
+            let target = v2k_game::network::transport::SearchTarget::parse(
+                &network.join.clone().unwrap_or_default(),
+            )?;
+            let info = v2k_game::network::arena::find_session(target)?;
+            log!("Network: joining {} at {}", info.name, info.address);
+            network_game = Some(v2k_game::network::game::NetworkGame::join(
+                &info,
+                &player_name,
+                tables,
+            )?);
+            network_join_wait = true;
+        }
+    }
+
     // --start: the first load's level, purpose and the player's pose.
     let mut start_arrival = None;
     let mut start_motion = None;
@@ -2001,6 +2059,22 @@ fn run_game(
             (save.level_id, purpose)
         }
         Some(probe::StartState {
+            network: Some(network),
+            ..
+        }) => {
+            // FUN_0044F650 mode 7 on the host; a client's world comes from
+            // the host's stamp while it waits in the frontend.
+            let mut random = WorldFx::new();
+            let world = v2k_game::network::arena::host_world(
+                network.arena,
+                u32::from(random.next_shared_retail_random_u16()),
+            );
+            (
+                u32::from(world + v2k_game::network::arena::OVERLAY_OFFSET),
+                LoadingPurpose::Network { host: true },
+            )
+        }
+        Some(probe::StartState {
             level: Some(level),
             position,
             heading,
@@ -2017,7 +2091,9 @@ fn run_game(
         }
         _ => (level_id, LoadingPurpose::Normal),
     };
-    let mut state = if enter_world_immediately {
+    let mut state = if network_join_wait {
+        GameState::Menu(make_menu!())
+    } else if enter_world_immediately {
         eprintln!("Debug boot: loading overlay {level_id}, skipping intro and menu");
         GameState::Loading {
             level_id,
@@ -2306,6 +2382,12 @@ fn run_game(
         let mut retail_tick = retail_clock.current();
         frames_done += 1;
         last_frame_delta_micros = elapsed_micros;
+        // FUN_0046C600's receive thread and FUN_0046BD80's one-second timer
+        // run whatever the game's mode.
+        if let Some(net) = network_game.as_mut() {
+            net.poll(Instant::now());
+            net.advance_timer(uncapped_elapsed_micros);
+        }
 
         // Process events — behavior depends on game state
         let mut events = Vec::new();
@@ -2490,6 +2572,27 @@ fn run_game(
                             let alt = keys_down.contains(&Keycode::LAlt)
                                 || keys_down.contains(&Keycode::RAlt);
 
+                            // FUN_0042D240..D290: keys 1-6 force the arena
+                            // the next hosted game plays (DAT_004DB228). Keys
+                            // typed into the address prompt went to
+                            // DirectPlay's dialog instead.
+                            let typing =
+                                shell.engine.current_va() == Some(menu_data::ADDRESS_PROMPT);
+                            if let Some(arena) = [
+                                Keycode::Num1,
+                                Keycode::Num2,
+                                Keycode::Num3,
+                                Keycode::Num4,
+                                Keycode::Num5,
+                                Keycode::Num6,
+                            ]
+                            .iter()
+                            .position(|key| key == kc)
+                            .filter(|_| !typing)
+                            {
+                                network_arena = Some(arena as u8 + 1);
+                            }
+
                             // Mode-level key combos (original key slots at
                             // 0x4C05A0 fire regardless of the screen-engine tick):
                             match *kc {
@@ -2517,7 +2620,73 @@ fn run_game(
                                 continue;
                             }
 
-                            if !menu_is_paused {
+                            // The address prompt standing in for DirectPlay's
+                            // TCP/IP dialog: Return searches that address.
+                            if shell.engine.current_va() == Some(menu_data::ADDRESS_PROMPT) {
+                                let ctx = MenuCtx {
+                                    cache: &session.cache,
+                                    config: &config,
+                                    saves: Some(&save_manager),
+                                    display_modes: &display_modes,
+                                };
+                                let name = kc.name();
+                                match *kc {
+                                    Keycode::Return | Keycode::KpEnter => {
+                                        match v2k_game::network::transport::SearchTarget::parse(
+                                            &network_address,
+                                        )
+                                        .and_then(v2k_game::network::transport::SessionSearch::new)
+                                        {
+                                            Ok(search) => {
+                                                network_search = Some(search);
+                                                shell.engine.pop();
+                                                shell.open_screen(menu_data::SESSIONS, &ctx);
+                                            }
+                                            Err(error) => {
+                                                eprintln!("Network: {error}");
+                                                shell_events.push(ShellEvent::Sound(2));
+                                            }
+                                        }
+                                        continue;
+                                    }
+                                    Keycode::Backspace => {
+                                        network_address.pop();
+                                    }
+                                    Keycode::Semicolon => network_address.push(':'),
+                                    _ if name.len() == 1
+                                        && name.chars().all(|c| {
+                                            c.is_ascii_alphanumeric() || c == '.' || c == '-'
+                                        }) =>
+                                    {
+                                        network_address.push_str(&name.to_ascii_lowercase());
+                                    }
+                                    _ => {}
+                                }
+                                // shortcut: the prompt keeps 40 characters, enough
+                                // for a host name or an address with its port.
+                                network_address.truncate(40);
+                                shell.set_rows(
+                                    menu_data::ADDRESS_PROMPT,
+                                    1,
+                                    1,
+                                    &[network_address.clone()],
+                                    &ctx,
+                                );
+                                if *kc != Keycode::Escape {
+                                    continue;
+                                }
+                            }
+
+                            let on_network_screen = matches!(
+                                shell.engine.current_va(),
+                                Some(
+                                    menu_data::NETWORK
+                                        | menu_data::SESSIONS
+                                        | menu_data::JOIN_WAIT
+                                        | menu_data::START_WAIT
+                                )
+                            );
+                            if !menu_is_paused && !on_network_screen {
                                 // Direct save-slot quick-load (keys 1-3 → slots
                                 // 0-2; the original's keys 1-6 arm DAT_004DB228 for
                                 // a direct-slot game start). Empty slot = no-op blip.
@@ -2889,6 +3058,109 @@ fn run_game(
                         ShellEvent::CheatGranted(code) => {
                             log!("Cheat granted: {:#x} (gameplay wiring pending)", code);
                         }
+                        ShellEvent::NetworkConnection => {
+                            // FUN_0043CEB0; the address prompt stands in for
+                            // the dialog the search then raised.
+                            let ctx = MenuCtx {
+                                cache: &session.cache,
+                                config: &config,
+                                saves: Some(&save_manager),
+                                display_modes: &display_modes,
+                            };
+                            shell.set_rows(
+                                menu_data::ADDRESS_PROMPT,
+                                1,
+                                1,
+                                &[network_address.clone()],
+                                &ctx,
+                            );
+                            shell.open_screen(menu_data::ADDRESS_PROMPT, &ctx);
+                        }
+                        ShellEvent::NetworkHost => {
+                            // FUN_0043CD50: open a new session, then mode 7
+                            // in the forced or a random arena (FUN_0042CF40,
+                            // FUN_0044F650). An open session refuses another.
+                            let (session_name, player_name) =
+                                v2k_game::network::arena::local_names();
+                            let hosted = match network_game {
+                                Some(_) => Err("a session is already open".to_string()),
+                                None => v2k_game::network::game::NetworkGame::host(
+                                    &session_name,
+                                    &player_name,
+                                    v2k_game::network::transport::DEFAULT_PORT,
+                                    v2k_game::network::arena::line_tables_for(
+                                        &session.cache,
+                                        data_dir,
+                                    ),
+                                )
+                                .map_err(|error| error.to_string()),
+                            };
+                            match hosted {
+                                Ok(net) => {
+                                    network_game = Some(net);
+                                    network_search = None;
+                                    let world = v2k_game::network::arena::host_world(
+                                        network_arena.take(),
+                                        u32::from(world_fx.next_shared_retail_random_u16()),
+                                    );
+                                    log!("Network: hosting {session_name} in world {world}");
+                                    next_state = Some(GameState::Loading {
+                                        level_id: u32::from(
+                                            world + v2k_game::network::arena::OVERLAY_OFFSET,
+                                        ),
+                                        purpose: LoadingPurpose::Network { host: true },
+                                    });
+                                }
+                                Err(error) => {
+                                    eprintln!("Network: hosting failed: {error}");
+                                    GlobalSoundRuntime::new(
+                                        &session.cache,
+                                        &mut world_fx,
+                                        sound_manager.as_mut(),
+                                    )
+                                    .play_global_sound(2);
+                                }
+                            }
+                        }
+                        ShellEvent::NetworkJoin(row) => {
+                            // FUN_0043CD00: open the listed session, then wait.
+                            let (_, player_name) = v2k_game::network::arena::local_names();
+                            let joined = match (network_game.is_some(), network_sessions.get(row)) {
+                                (false, Some(info)) => v2k_game::network::game::NetworkGame::join(
+                                    info,
+                                    &player_name,
+                                    v2k_game::network::arena::line_tables_for(
+                                        &session.cache,
+                                        data_dir,
+                                    ),
+                                )
+                                .map_err(|error| error.to_string()),
+                                (true, _) => Err("a session is already open".to_string()),
+                                (false, None) => Err(format!("no session in row {row}")),
+                            };
+                            match joined {
+                                Ok(net) => {
+                                    log!("Network: joined {}", net.session_name());
+                                    network_game = Some(net);
+                                    let ctx = MenuCtx {
+                                        cache: &session.cache,
+                                        config: &config,
+                                        saves: Some(&save_manager),
+                                        display_modes: &display_modes,
+                                    };
+                                    shell.open_screen(menu_data::JOIN_WAIT, &ctx);
+                                }
+                                Err(error) => {
+                                    eprintln!("Network: joining failed: {error}");
+                                    GlobalSoundRuntime::new(
+                                        &session.cache,
+                                        &mut world_fx,
+                                        sound_manager.as_mut(),
+                                    )
+                                    .play_global_sound(2);
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -3041,7 +3313,92 @@ fn run_game(
                     });
                 }
 
+                // The network screens' callbacks: the session list's open
+                // (FUN_0043D0D0) and its search each 50 ticks (FUN_0043CF90),
+                // the ring's close (FUN_0042CED0), and a client's waits
+                // (FUN_0043D210 drawing "Please Wait", FUN_0043C7F0).
+                if !menu_is_paused && next_state.is_none() {
+                    let screen = shell.engine.current_va();
+                    let opened = screen != network_screen;
+                    network_screen = screen;
+                    let ctx = MenuCtx {
+                        cache: &session.cache,
+                        config: &config,
+                        saves: Some(&save_manager),
+                        display_modes: &display_modes,
+                    };
+                    match screen {
+                        Some(menu_data::SESSIONS) => {
+                            if opened {
+                                network_search_tick = None;
+                                network_sessions.clear();
+                                shell.set_rows(menu_data::SESSIONS, 1, 8, &[], &ctx);
+                            }
+                            if network_search_tick
+                                .is_none_or(|tick| retail_tick.abs_diff(tick) > 50)
+                            {
+                                network_search_tick = Some(retail_tick);
+                                if let Some(search) = network_search.as_mut() {
+                                    // FUN_0043CFD0 keeps eight sessions.
+                                    network_sessions = search.refresh(Instant::now());
+                                    network_sessions.truncate(8);
+                                    let prefix =
+                                        session.cache.global_string(20).unwrap_or_default();
+                                    let rows: Vec<String> = network_sessions
+                                        .iter()
+                                        .map(|info| format!("{prefix}{}", info.name))
+                                        .collect();
+                                    shell.set_rows(menu_data::SESSIONS, 1, 8, &rows, &ctx);
+                                }
+                            }
+                        }
+                        Some(menu_data::MAIN_RING) if opened && !network_join_wait => {
+                            network_search = None;
+                            if let Some(net) = network_game.take() {
+                                log!("Network: back at the ring, the session closes");
+                                net.close();
+                            }
+                        }
+                        _ => {}
+                    }
+                    if let Some(net) = network_game.as_mut().filter(|net| !net.is_host()) {
+                        let (name, initials) =
+                            v2k_game::network::arena::profile_names(net.local_slot());
+                        let waiting_for_world = match screen {
+                            Some(menu_data::JOIN_WAIT) => {
+                                net.frontend_frame((&name, &initials));
+                                let reveal = shell.list_row_typewriter_elapsed_ms(1) * 100.0;
+                                if reveal >= 32767.0 && net.local_slot() != 0 {
+                                    shell.open_screen(menu_data::START_WAIT, &ctx);
+                                }
+                                false
+                            }
+                            Some(menu_data::START_WAIT) => true,
+                            // --start's join skips the screens.
+                            _ => network_join_wait,
+                        };
+                        if waiting_for_world {
+                            net.host_world = 0;
+                            net.frontend_frame((&name, &initials));
+                            if net.host_world != 0 {
+                                log!("Network: the host plays world {}", net.host_world);
+                                network_join_wait = false;
+                                next_state = Some(GameState::Loading {
+                                    level_id: u32::from(
+                                        net.host_world + v2k_game::network::arena::OVERLAY_OFFSET,
+                                    ),
+                                    purpose: LoadingPurpose::Network { host: false },
+                                });
+                            }
+                        }
+                    }
+                }
+
                 if let Some(ns) = next_state {
+                    // FUN_0042CF40: every game start clears the forced arena.
+                    if !menu_is_paused && matches!(ns, GameState::Loading { .. }) {
+                        network_arena = None;
+                    }
                     if menu_is_paused {
                         paused_world_frame = None;
                         paused_gameplay_scene = None;
@@ -3051,6 +3408,11 @@ fn run_game(
             }
 
             GameState::ReturningToFrontend => {
+                // FUN_0044FEB0: leaving a network game stops its session.
+                if let Some(net) = network_game.take() {
+                    net.close();
+                    world_fx.set_network_particles(false);
+                }
                 post_intro_world_cover = None;
                 log!("Returning to menu...");
                 retail_clock.reset();
@@ -3279,6 +3641,12 @@ fn run_game(
                 // --start's pose, for the first load only.
                 let direct_world_arrival = start_arrival.take().or(direct_world_arrival);
                 current_level_id = Some(lid);
+                if matches!(purpose, LoadingPurpose::Network { .. }) {
+                    // FUN_00451AF0 in a network game.
+                    weapon_inventory = WeaponInventory::network_entry();
+                    player_capabilities = PlayerCapabilities::network_entry();
+                    player_craft.fuel_raw = v2k_game::weapon_inventory::NETWORK_ENTRY_FUEL_RAW;
+                }
                 if let Some(restore) = native_restore {
                     // Mode6 restores these controller owners before42E570's
                     // world initialization and before any pickup/death event.
@@ -3488,7 +3856,26 @@ fn run_game(
                         )
                         .map_err(|error| format!("captured Intro2 publication: {error:?}"))
                     } else if purpose.uses_authored_world_publication(lid) {
+                        // FUN_0042E570: a network client builds no authored bodies.
+                        let client_level =
+                            matches!(purpose, LoadingPurpose::Network { host: false }).then(|| {
+                                let mut level = level_desc.clone();
+                                level.entities.clear();
+                                level
+                            });
+                        let level_desc = client_level.as_ref().unwrap_or(level_desc);
+                        let network_entry = matches!(purpose, LoadingPurpose::Network { .. })
+                            .then(|| {
+                                network_test_entry.or_else(|| {
+                                    v2k_game::network::arena::entry_arrival(
+                                        &session.cache,
+                                        &mut || world_fx.next_shared_retail_random_u16(),
+                                    )
+                                })
+                            })
+                            .flatten();
                         let player_arrival = match &purpose {
+                            LoadingPurpose::Network { .. } => network_entry,
                             LoadingPurpose::CampaignWarp {
                                 arrival_position_raw,
                                 arrival_heading_raw,
@@ -4099,6 +4486,16 @@ fn run_game(
                     }
                     LoadingPurpose::NativeSave { .. }
                     | LoadingPurpose::PortableCompatibilityPreview { .. } => GameState::Playing,
+                    LoadingPurpose::Network { .. } => {
+                        if let Some(manager) = entity_manager.as_mut() {
+                            manager.set_network_player_hits(true);
+                            manager.raise_player_cargo_capacity_to(
+                                v2k_game::weapon_inventory::NETWORK_ENTRY_CARGO_CAPACITY,
+                            );
+                        }
+                        world_fx.set_network_particles(true);
+                        GameState::Playing
+                    }
                     LoadingPurpose::Normal => GameState::Playing,
                 };
                 // Loading is synchronous. Its wall time is neither a retail
@@ -5049,7 +5446,9 @@ fn run_game(
                     .iter()
                     .any(|event| matches!(event, GameEvent::KeyDown(Keycode::M)))
                     && !keys_down.contains(&Keycode::M);
-                let open_map = open_map_key || pad_actions.contains(&PadAction::OpenMap);
+                // FUN_00456610: a network game has no map.
+                let open_map = (open_map_key || pad_actions.contains(&PadAction::OpenMap))
+                    && network_game.is_none();
                 if open_map && !events.iter().any(|event| matches!(event, GameEvent::Quit)) {
                     if let (Some(radar), Some(entities), Some(terrain)) = (
                         gameplay_radar.as_mut(),
@@ -5085,11 +5484,40 @@ fn run_game(
                 // Resolve mode changes before borrowing or ticking any live
                 // world state. Escape owns only a pause shell; the entity
                 // manager, current level cache, effects and audio remain live.
-                match gameplay_interruption(
+                let mut interruption = gameplay_interruption(
                     std::mem::take(&mut return_to_frontend_pending),
                     &events,
                     &pad_actions,
-                ) {
+                );
+                if network_game.is_some() && interruption == Some(GameplayInterruption::Pause) {
+                    // Shift as it stood when Escape went down this frame.
+                    let mut shift = keys_down.contains(&Keycode::LShift)
+                        || keys_down.contains(&Keycode::RShift);
+                    for event in &events {
+                        match event {
+                            GameEvent::KeyDown(Keycode::LShift | Keycode::RShift) => shift = true,
+                            GameEvent::KeyDown(Keycode::Escape) => break,
+                            _ => {}
+                        }
+                    }
+                    if shift {
+                        // FUN_00455C90: menu cue 3 and the abort flag +28D,
+                        // which FUN_0044FE20 turns into FUN_0044FEB0.
+                        GlobalSoundRuntime::new(
+                            &session.cache,
+                            &mut world_fx,
+                            sound_manager.as_mut(),
+                        )
+                        .play_global_sound(3);
+                        interruption = Some(GameplayInterruption::ReturnToFrontend);
+                    } else {
+                        // FUN_00455D60 then FUN_0044F600: the network pause
+                        // keeps the world running under menu mask 1.
+                        report_held("the pause menu over the running world".into());
+                        interruption = None;
+                    }
+                }
+                match interruption {
                     Some(GameplayInterruption::QuitApplication) => break 'main_loop,
                     Some(GameplayInterruption::ReturnToFrontend) => {
                         state = GameState::ReturningToFrontend;
@@ -5424,6 +5852,58 @@ fn run_game(
                 // on the following controlled visit.
                 if player_death.is_active() {
                     match player_death.advance_micros(elapsed_micros) {
+                        PlayerDeathTick::ExpiredNow { .. } if network_game.is_some() => {
+                            // FUN_00450980 then FUN_00451AF0: a network player
+                            // re-enters the same world at a random point.
+                            report_held(
+                                "a dying network player's power-up drops (FUN_00447280)".into(),
+                            );
+                            em.remove_player_and_attached_entities();
+                            let metadata = session
+                                .cache
+                                .global_entity_type(46)
+                                .map(EntityTypeRuntimeMetadata::from_section12);
+                            // --start's network position holds for every entry.
+                            if let Some(arrival) = network_test_entry.or_else(|| {
+                                v2k_game::network::arena::entry_arrival(&session.cache, &mut || {
+                                    world_fx.next_shared_retail_random_u16()
+                                })
+                            }) {
+                                em.place_or_spawn_player_at_campaign_arrival(
+                                    metadata.as_ref(),
+                                    arrival.position_raw,
+                                    arrival.heading_raw,
+                                    session.cache.terrain(),
+                                );
+                                if let Err(error) = em.construct_player_propulsion(&mut world_fx) {
+                                    eprintln!("Network re-entry blocked: {error}");
+                                }
+                            }
+                            player_hull = PlayerHull::new(
+                                session
+                                    .cache
+                                    .global_entity_type(46)
+                                    .map(HullDamageProfile::from_type_record)
+                                    .unwrap_or(PLAYER_TYPE_46_HULL_PROFILE),
+                            );
+                            em.sync_player_hull_collision_state(&player_hull);
+                            player_death = PlayerDeathLifecycle::default();
+                            weapon_inventory = WeaponInventory::network_entry();
+                            player_capabilities = PlayerCapabilities::network_entry();
+                            player_craft.fuel_raw =
+                                v2k_game::weapon_inventory::NETWORK_ENTRY_FUEL_RAW;
+                            em.raise_player_cargo_capacity_to(
+                                v2k_game::weapon_inventory::NETWORK_ENTRY_CARGO_CAPACITY,
+                            );
+                            sync_player_weapon_callback(&mut player_craft, &weapon_inventory);
+                            if let Some(player) = em.player() {
+                                targetter.rebind_owner(player.id);
+                                if !targetter.is_active() {
+                                    targetter.install();
+                                }
+                            }
+                            has_player = em.player().is_some();
+                        }
                         PlayerDeathTick::ExpiredNow { .. } => {
                             em.remove_player_and_attached_entities();
                             has_player = false;
@@ -6671,6 +7151,27 @@ fn run_game(
                             );
                             return ParticleCollisionCacheRefresh::Unchanged;
                         };
+                        // FUN_00415040's filter, then FUN_00414E90's first
+                        // branch: a peer's body takes the damage on its
+                        // owner's machine (kind 9).
+                        if let Some(target) = em
+                            .network_entity(entity_impact.target_entity_id)
+                            .filter(|target| target.is_network_remote())
+                        {
+                            if let (Some(delivery), RetailRuntimeValue::Known(profile)) =
+                                (entity_impact.damage_delivery_record(), target.collision.damage_profile)
+                            {
+                                let amount = delivery.packet.filtered_raw_with_ratio(Some(&profile), 0, 0);
+                                if amount > 0 {
+                                    network_damage.push((
+                                        target.id,
+                                        amount.min(0xFFFF) as u16,
+                                        delivery.source_entity_type_raw as u16,
+                                    ));
+                                }
+                            }
+                            return ParticleCollisionCacheRefresh::Unchanged;
+                        }
                         let cleansing = v2k_game::cleansing_vehicle::impact::apply_cleansing_vehicle_particle_hit(
                             v2k_game::cleansing_vehicle::impact::CleansingVehicleImpactFrame {
                                 extra_lives: RetailRuntimeValue::Known(player_campaign_progress.extra_lives()),
@@ -7802,8 +8303,11 @@ fn run_game(
                     }
                     let factory_ids: Vec<_> = em
                         .iter()
+                        // A peer's factory runs on its owner's machine
+                        // (FUN_00412DA0 runs no callbacks for it).
                         .filter(|entity| {
                             v2k_game::intro2_type66::is_working_factory_type(entity.entity_type)
+                                && !entity.is_network_remote()
                         })
                         .map(|entity| entity.id)
                         .collect();
@@ -8330,6 +8834,35 @@ fn run_game(
                 // traversal. Materialize their deferred records now so they
                 // present at age zero this frame without entering that pass.
                 world_fx.process_pending();
+                // FUN_00450CC0, after the gameplay frame.
+                if let Some(net) = network_game.as_mut() {
+                    let outcome = advance_network_world(
+                        net,
+                        NetworkWorldFrame {
+                            em,
+                            world_fx: &mut world_fx,
+                            cache: &session.cache,
+                            hull: &mut player_hull,
+                            notifications: &mut gameplay_notifications,
+                            extra_lives: player_campaign_progress.extra_lives(),
+                            craft: &player_craft,
+                            world: current_level_id.map_or(0, |id| {
+                                (id - u32::from(v2k_game::network::arena::OVERLAY_OFFSET)) as u16
+                            }),
+                            elapsed_micros,
+                            retail_tick,
+                            damage: &mut network_damage,
+                        },
+                    );
+                    if outcome.winner_flash {
+                        main_base_level_abort.outer_frame_sequence.request();
+                    }
+                    if outcome.abort {
+                        log!("Network: the session ended; leaving the game");
+                        state = GameState::ReturningToFrontend;
+                    }
+                }
+
                 gameplay_overlay_frame = GameplayOverlayFrame {
                     full_frame_sprite: prepared_full_frame_sprite
                         .as_ref()
@@ -8381,6 +8914,10 @@ fn run_game(
                         },
                     },
                 ));
+
+                if let (Some(net), Some(fonts)) = (network_game.as_ref(), menu_fonts.as_ref()) {
+                    network_play::draw_name_tags(&mut *renderer, fonts, &camera, em, net);
+                }
 
                 // The retail queue sorts positive world depth ahead of the
                 // sequence's key zero, then submits radar/HUD later. Preserve
@@ -8511,6 +9048,16 @@ fn run_game(
                             gameplay_overlay_frame
                                 .notifications
                                 .extend(notification_presentation.lines);
+                            if let Some(net) = network_game.as_mut() {
+                                network_play::draw_network_hud(
+                                    &mut *renderer,
+                                    fonts,
+                                    &session.cache,
+                                    net,
+                                    retail_tick,
+                                    elapsed_micros,
+                                );
+                            }
                         }
                     }
                     if world_complete_results.has_hive_statistics() {

@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,390 | |
-| Marked not needed (excluded below) | 337 | |
-| **Referenced by port code** | **904** | **44.0%** |
-| Referenced by code or RE notes | 2,053 | 100.0% |
+| Marked not needed (excluded below) | 353 | |
+| **Referenced by port code** | **981** | **48.2%** |
+| Referenced by code or RE notes | 2,037 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -22,9 +22,9 @@ Manual statuses from [`status.csv`](status.csv):
 | implemented | 205 |
 | approximated | 6 |
 | documented | 1 |
-| not-needed | 337 |
+| not-needed | 353 |
 
-87 `FUN_` citations don't match a retail function
+88 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
 
 ## Map
@@ -41,15 +41,15 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Platform](../re/PLATFORM_RUNTIME.md) | 157 | 25 | 8 |
-| [Menu system](../re/MENU_SYSTEM.md) | 141 | 42 | 80 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 154 | 23 | 10 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 130 | 6 | 49 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 119 | 17 | 5 |
+| [Menu system](../re/MENU_SYSTEM.md) | 124 | 36 | 77 |
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 88 | 16 | 61 |
 | [Software raster](../re/SOFTWARE_RASTER.md) | 81 | 3 | 56 |
-| [Controls](../re/CONTROLS.md) | 79 | 17 | 23 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 51 | 6 | 64 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 37 | 10 | 38 |
+| [Controls](../re/CONTROLS.md) | 78 | 17 | 24 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 56 | 13 | 82 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 48 | 6 | 62 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 37 | 10 | 37 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 32 | 8 | 26 |
 
 ## Omitted
@@ -68,6 +68,21 @@ denominator, each with its reason: the never-installed
 | dead: retail's Direct3D fill table, never installed (every display mode selects the software table; docs/re/DIRECT3D_TABLE.md) | 59 |
 | not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts) | 21 |
 | replaced: the port's SDL platform (MCI CD audio, the message box, the command line; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 17 |
+| replaced: the port's UDP transport (DirectPlay 3's connection enumeration; docs/re/MULTIPLAYER.md#the-port) | 2 |
+| replaced: the port's UDP transport (DirectPlay 3's COM and event setup; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's COM and event teardown; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's connection initialization; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's enumeration buffers; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's lobby launch; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's object creation; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's receive calls; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's receive thread; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's send call; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's session close; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's session creation; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's session enumeration; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's session join; docs/re/MULTIPLAYER.md#the-port) | 1 |
+| replaced: the port's UDP transport (DirectPlay 3's session reset; docs/re/MULTIPLAYER.md#the-port) | 1 |
 | WinMain: protection-library start and stop around the engine main; the port has its own entry point | 1 |
 
 ## Method

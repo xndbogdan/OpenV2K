@@ -413,6 +413,16 @@ impl WeaponInventory {
         }
     }
 
+    /// `FUN_00451AF0` in a network game: slot zero's selector becomes 0x12,
+    /// the Chain Gun with infinite ammunition, over the new-game slots.
+    pub fn network_entry() -> Self {
+        let mut inventory = Self::new();
+        if let Some(chain_gun) = master_descriptor(NETWORK_ENTRY_SELECTOR) {
+            inventory.slots[0] = chain_gun;
+        }
+        inventory
+    }
+
     /// Restore 32 inventory slots from the 0x248-byte native retail save state
     /// payload matching `FUN_00443560`.
     pub fn restore_from_native_payload(payload: &[u8; 0x248]) -> Option<Self> {
@@ -659,6 +669,15 @@ impl PlayerCapabilities {
             turbo: flags & 2 != 0,
         }
     }
+    /// `FUN_00451AF0` in a network game sets profile `+123` bit 0: every
+    /// network player has the Targetter.
+    pub const fn network_entry() -> Self {
+        Self {
+            targetter: true,
+            turbo: false,
+        }
+    }
+
     pub const fn has_targetter(&self) -> bool {
         self.targetter
     }
@@ -709,6 +728,13 @@ pub enum TurboAcquisition {
     AlreadyAcquired,
     RejectedUnsupportedSelector,
 }
+
+/// The Chain Gun (Infinite Ammo) selector a network player enters with.
+pub const NETWORK_ENTRY_SELECTOR: u8 = 0x12;
+/// `FUN_00451AF0` in a network game: fuel `+4C` is half the full tank.
+pub const NETWORK_ENTRY_FUEL_RAW: i32 = 100_000;
+/// `FUN_00451AF0` in a network game: cargo capacity `+15D`.
+pub const NETWORK_ENTRY_CARGO_CAPACITY: usize = 2;
 
 fn master_descriptor(selector: u8) -> Option<WeaponDescriptor> {
     if selector >= WEAPON_SELECTOR_LIMIT {

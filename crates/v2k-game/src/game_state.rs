@@ -63,6 +63,10 @@ pub enum LoadingPurpose {
         arrival_position_raw: [i16; 3],
         arrival_heading_raw: u16,
     },
+    /// `FUN_0044F650` mode 7: a network game's arena. Only the host builds
+    /// the authored bodies (`FUN_0042E570`); every player enters at a random
+    /// point (`FUN_00451AF0`).
+    Network { host: bool },
 }
 
 impl LoadingPurpose {
@@ -76,6 +80,7 @@ impl LoadingPurpose {
                     | Self::NativeSave { .. }
                     | Self::ResumePostIntro { .. }
                     | Self::CampaignWarp { .. }
+                    | Self::Network { .. }
             )
     }
 }
@@ -220,6 +225,12 @@ pub enum ShellEvent {
     SettingChanged(SettingId, u32),
     /// Cheat granted (0x3E7xx weapon code) — gameplay wiring pending.
     CheatGranted(u32),
+    /// `FUN_0043CEB0`: the connection row was chosen.
+    NetworkConnection,
+    /// `FUN_0043CD50`: "Host session on this machine".
+    NetworkHost,
+    /// `FUN_0043CD00`: the session in this row of the list.
+    NetworkJoin(usize),
 }
 
 /// Pose inputs written by Klaus's `FUN_0042C090` callback before that same
@@ -1241,6 +1252,30 @@ impl MenuShell {
         }
     }
 
+    /// `FUN_0043A8A0` from a network callback: a deeper screen shows at once
+    /// (no fly at this depth) and starts its typewriter again.
+    pub fn open_screen(&mut self, va: u32, ctx: &MenuCtx) {
+        if self.engine.push(va) {
+            self.ms_open = 0.0;
+            self.list_top = 0;
+            self.list_scroll = 0.0;
+            self.refresh(ctx);
+        }
+    }
+
+    /// Replace the network rows of `va` (see [`MenuEngine::set_rows`]).
+    pub fn set_rows(
+        &mut self,
+        va: u32,
+        first: usize,
+        count: usize,
+        rows: &[String],
+        ctx: &MenuCtx,
+    ) {
+        self.engine.set_rows(va, first, count, rows);
+        self.refresh(ctx);
+    }
+
     /// Rebuild the view model (after input or external changes).
     pub fn refresh(&mut self, ctx: &MenuCtx) {
         // A Display change or another monitor changes the Resolution row.
@@ -1440,6 +1475,9 @@ impl MenuShell {
                     });
                 }
                 MenuCommand::GrantCheat(code) => events.push(ShellEvent::CheatGranted(code)),
+                MenuCommand::NetworkConnection => events.push(ShellEvent::NetworkConnection),
+                MenuCommand::NetworkHost => events.push(ShellEvent::NetworkHost),
+                MenuCommand::NetworkJoin(row) => events.push(ShellEvent::NetworkJoin(row as usize)),
                 // Engine-side memory-card slot flow is superseded by the
                 // overlay; world cheats await gameplay wiring.
                 MenuCommand::SaveSlotPicked

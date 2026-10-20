@@ -115,6 +115,27 @@ pub struct StartState {
     pub heading: Option<u16>,
     pub velocity: Option<[i16; 3]>,
     pub attitude: Option<[i16; 2]>,
+    /// A network game instead of a save or level.
+    pub network: Option<NetworkStart>,
+}
+
+/// `{"network": {"host": true, "arena": 1}}` hosts a session on this machine
+/// and enters arena 1..=6 (the frontend's keys 1-6; without one, as retail,
+/// one of the first five at random); `{"network": {"join": "HOST"}}` searches
+/// HOST (blank: the local network) and joins the first session found, then
+/// waits for the host's world. `port` overrides the session port; a raw
+/// `position` [x, y, z] and `heading` replace the random entry point of every
+/// entry, the first and each one after a death.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NetworkStart {
+    #[serde(default)]
+    pub host: bool,
+    pub arena: Option<u8>,
+    pub join: Option<String>,
+    pub port: Option<u16>,
+    pub position: Option<[i16; 3]>,
+    pub heading: Option<u16>,
 }
 
 impl StartState {
@@ -134,6 +155,15 @@ impl StartState {
     }
 
     fn validate(&self) -> Result<(), String> {
+        if let Some(network) = &self.network {
+            if self.save.is_some() || self.level.is_some() || self.position.is_some() {
+                return Err("start state: a network game takes no save, level or pose".into());
+            }
+            if network.host == network.join.is_some() {
+                return Err("start state: a network game either hosts or joins".into());
+            }
+            return Ok(());
+        }
         match (&self.save, self.level) {
             (Some(_), Some(_)) => Err("start state: give either save or level".into()),
             (None, None) => Err("start state: give save or level".into()),

@@ -169,6 +169,7 @@ pub(crate) mod native_type61;
 pub mod native_type76;
 pub mod native_type86;
 pub mod native_world_surface;
+pub mod network;
 pub mod opening;
 pub mod ordinary_type47_death_live;
 pub mod ordinary_type47_live;

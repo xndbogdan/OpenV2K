@@ -70,7 +70,14 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
   z]` and `"heading"`, or `{"save": "Slot02"}`, a copy of a native save
   beside the state file. With a position it also takes the raw `"velocity":
   [x, y, z]` and body `"attitude": [pitch, roll]`; retail's Skip to World
-  keeps the player's position, velocity and attitude.
+  keeps the player's position, velocity and attitude. `{"network": {"host":
+  true, "arena": 6}}` hosts a network game (arena 1-6, else a random one) and
+  `{"network": {"join": "127.0.0.1"}}` joins the first session found there
+  (blank searches the local network). A host takes a `"port"`, which a joiner
+  names in its address (`"127.0.0.1:47700"`); both take a raw `"position"`
+  and `"heading"` for every entry. Run each player as its
+  own process with its own `--settings` folder; a `Host.txt` in the
+  `--data-dir` sets the frag limit.
 - `--input-replay` takes `[{"frame": 10, "key": "Space", "pressed": true}]`
   with SDL key names. Frames count from 1, as `--frames` and
   `--snapshot-at FRAME:PATH` do.

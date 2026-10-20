@@ -36,8 +36,17 @@ pub const DISPLAY: u32 = 0x4C14D0;
 pub const SOUNDS: u32 = 0x4C12F0;
 /// Control settings (Absolute Mode/Sensitivity/Joystick/Self Righting).
 pub const CONTROLS: u32 = 0x4C13D0;
-/// Network session screen (multipc prop target).
+/// Network connections screen (multipc prop target).
 pub const NETWORK: u32 = 0x4C11D0;
+/// The session list: "Host session on this machine", then up to eight
+/// sessions a search found.
+pub const SESSIONS: u32 = 0x4C1198;
+/// A client's wait after joining, until it knows its slot.
+pub const JOIN_WAIT: u32 = 0x4C10F0;
+/// A client's wait for the host's world.
+pub const START_WAIT: u32 = 0x4C1160;
+/// Port-owned: DirectPlay's TCP/IP address dialog has no screen record.
+pub const ADDRESS_PROMPT: u32 = 1;
 /// Save/load entry screen ("Accessing Memory Card", slopt prop target).
 pub const MEMCARD_ACCESS: u32 = 0x4C1740;
 /// Occupied-save confirmation ("Overwrite game?", Yes/No).
@@ -180,9 +189,10 @@ pub enum DrawKind {
     SaveSlotText { string_id: u32 },
     /// FUN_0043BB20 — column/list row text (resolution rows, lobby lists).
     ColumnText { string_id: u32 },
-    /// FUN_0043CF30 — dynamic text from a runtime buffer (player name).
+    /// FUN_0043CF30 — a session row: string 20 and the session's name,
+    /// filled at run time into the item's label.
     DynamicText,
-    /// FUN_0043CEF0 — network session list row.
+    /// FUN_0043CEF0 — a connection row.
     NetworkText { string_id: u32 },
     /// FUN_004510C0 / FUN_00452020 — player-status / results rows.
     StatusText { string_id: u32 },
@@ -230,9 +240,11 @@ pub enum SelectAction {
     LoadSlot,
     /// FUN_0043CB20 — fire advances the cursor (message screens).
     AdvanceCursor,
-    /// FUN_0043CD00 — join network session.
-    NetworkJoin,
-    /// FUN_0043CEB0 — host network session.
+    /// FUN_0043CD00 — join the session in row `session` of the list.
+    NetworkJoin { session: u32 },
+    /// FUN_0043CEB0 — initialize a connection, then list its sessions.
+    NetworkConnection,
+    /// FUN_0043CD50 — host a session on this machine and start its game.
     NetworkHost,
     /// FUN_0043B870 — open the memory-card access flow (save entry).
     OpenMemoryCard,
@@ -412,8 +424,9 @@ fn classify_select(it: &RawItem) -> SelectAction {
         0x43BF30 => SelectAction::SaveSlot,
         0x43BFC0 => SelectAction::LoadSlot,
         0x43CB20 => SelectAction::AdvanceCursor,
-        0x43CD00 => SelectAction::NetworkJoin,
-        0x43CEB0 => SelectAction::NetworkHost,
+        0x43CD00 => SelectAction::NetworkJoin { session: it.arg1 },
+        0x43CEB0 => SelectAction::NetworkConnection,
+        0x43CD50 => SelectAction::NetworkHost,
         0x43B870 => SelectAction::OpenMemoryCard,
         0x43B8A0 => SelectAction::SaveProgress,
         0x43B900 => SelectAction::FormatCard,
@@ -525,44 +538,54 @@ impl MenuTree {
             );
         }
 
-        // Intentional release policy: multiplayer is not implemented in the
-        // port. Replace the runtime session placeholders, keeping the retail
-        // screen id, panel and transition route; never edit the reference JSON.
+        // FUN_0043D110 fills a row per DirectPlay connection; the port has
+        // one, its own transport (never edit the reference JSON).
         if let Some(network) = screens.get_mut(&NETWORK) {
-            network.items = vec![
-                ItemDef {
-                    visibility: VIS_FRONTEND,
-                    available: false,
-                    draw: DrawKind::PortText {
-                        text: "Not available yet",
-                    },
-                    select: SelectAction::None,
-                    arg1: 0,
-                    arg2: 0,
-                    label: None,
-                },
-                ItemDef {
-                    visibility: VIS_FRONTEND,
-                    available: true,
-                    draw: DrawKind::PortText { text: "Back" },
-                    select: SelectAction::Back,
-                    arg1: 0,
-                    arg2: 0,
-                    label: None,
-                },
-            ];
-            network.groups = vec![RowGroup {
-                flags: 0x08,
-                window_rows: 2,
-                count: 2,
-            }];
+            if let Some(row) = network.items.first_mut() {
+                row.draw = DrawKind::PortText {
+                    text: crate::network::transport::CONNECTION_NAME,
+                };
+            }
         }
+        // DirectPlay's TCP/IP dialog asked for the host's address when the
+        // session search began; blank searches the local network.
+        let prompt_row = |draw| ItemDef {
+            visibility: VIS_FRONTEND,
+            available: true,
+            draw,
+            select: SelectAction::None,
+            arg1: 0,
+            arg2: 0,
+            label: None,
+        };
+        screens.insert(
+            ADDRESS_PROMPT,
+            ScreenDef {
+                va: ADDRESS_PROMPT,
+                flags: 0x11,
+                groups: vec![RowGroup {
+                    flags: 0x08,
+                    window_rows: 2,
+                    count: 2,
+                }],
+                items: vec![
+                    prompt_row(DrawKind::PortText {
+                        text: "Host address (blank: local network)",
+                    }),
+                    prompt_row(DrawKind::DynamicText),
+                ],
+            },
+        );
 
         Self { screens }
     }
 
     pub fn screen(&self, va: u32) -> Option<&ScreenDef> {
         self.screens.get(&va)
+    }
+
+    pub(crate) fn screen_mut(&mut self, va: u32) -> Option<&mut ScreenDef> {
+        self.screens.get_mut(&va)
     }
 
     pub fn len(&self) -> usize {

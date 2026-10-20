@@ -1003,8 +1003,8 @@ fn sound_volume_bar_uses_original_row_width_hint() {
 }
 
 #[v2k_test_support::retail_test]
-fn network_shows_disabled_notice_and_only_back_is_interactive() {
-    use v2k_game::menu_data::{MAIN_RING, NETWORK};
+fn network_lists_the_connection_then_hosting_and_sessions() {
+    use v2k_game::menu_data::{MAIN_RING, NETWORK, SESSIONS};
     use v2k_game::menu_engine::{MenuCommand, MenuInput};
 
     let session = session_with_high_menu_pools();
@@ -1015,55 +1015,70 @@ fn network_shows_disabled_notice_and_only_back_is_interactive() {
         saves: None,
         display_modes: &v2k_render::DisplayModes::default(),
     };
+    let rows = |shell: &MenuShell| {
+        shell
+            .view()
+            .items
+            .iter()
+            .map(|row| (row.label.clone(), row.selectable))
+            .collect::<Vec<_>>()
+    };
 
-    for back_input in [MenuInput::Select, MenuInput::Back] {
-        let mut shell = MenuShell::new_frontend(&ctx, false);
-        // Up from New Game reaches Network through the normal ring route.
-        shell.engine.handle(MenuInput::Up);
-        assert!(shell
-            .engine
-            .handle(MenuInput::Select)
-            .contains(&MenuCommand::ScreenPushed(NETWORK)));
-        shell.refresh(&ctx);
+    let mut shell = MenuShell::new_frontend(&ctx, false);
+    // Up from New Game reaches Network through the normal ring route.
+    shell.engine.handle(MenuInput::Up);
+    assert!(shell
+        .engine
+        .handle(MenuInput::Select)
+        .contains(&MenuCommand::ScreenPushed(NETWORK)));
+    shell.refresh(&ctx);
+    // FUN_0043D110's one row: the port's connection.
+    assert_eq!(
+        rows(&shell),
+        [("Internet TCP/IP Connection".to_string(), true)]
+    );
+    assert_eq!(
+        shell.engine.handle(MenuInput::Select),
+        [MenuCommand::NetworkConnection]
+    );
 
-        let view = shell.view();
-        assert_eq!(
-            view.items
-                .iter()
-                .map(|row| (row.label.as_str(), row.selectable, row.enabled))
-                .collect::<Vec<_>>(),
-            [("Not available yet", false, false), ("Back", true, true)]
-        );
-        assert_eq!(view.selected, 1);
-        assert_eq!(shell.list_window_rows(), 2);
-        assert!(view.has_backdrop_panel);
-        let groups = &shell.engine.current().unwrap().groups;
-        assert_eq!(groups.len(), 1);
-        assert_eq!(groups[0].count, 2);
-        assert_ne!(groups[0].flags & 0x08, 0);
+    // The session list: hosting, then the sessions a search found.
+    shell.open_screen(SESSIONS, &ctx);
+    let host = session.cache.global_string(21).unwrap().to_string();
+    assert_eq!(rows(&shell), [(host.clone(), true)]);
+    assert_eq!(
+        shell.engine.handle(MenuInput::Select),
+        [MenuCommand::NetworkHost]
+    );
+    let prefix = session
+        .cache
+        .global_string(20)
+        .unwrap_or_default()
+        .to_string();
+    let found = [format!("{prefix}ALPHA"), format!("{prefix}BETA")];
+    shell.set_rows(SESSIONS, 1, 8, &found, &ctx);
+    assert_eq!(
+        rows(&shell),
+        [
+            (host.clone(), true),
+            (found[0].clone(), true),
+            (found[1].clone(), true)
+        ]
+    );
+    shell.engine.handle(MenuInput::Down);
+    shell.engine.handle(MenuInput::Down);
+    assert_eq!(
+        shell.engine.handle(MenuInput::Select),
+        [MenuCommand::NetworkJoin(1)]
+    );
+    // A search that lost the selected session moves the cursor home.
+    shell.set_rows(SESSIONS, 1, 8, &found[..1], &ctx);
+    assert_eq!(shell.engine.selected(), 0);
 
-        for direction in [
-            MenuInput::Up,
-            MenuInput::Down,
-            MenuInput::Left,
-            MenuInput::Right,
-        ] {
-            assert!(shell.engine.handle(direction).is_empty());
-            assert_eq!(shell.engine.selected(), 1);
-        }
-
-        assert_eq!(
-            shell.engine.handle(back_input),
-            [
-                MenuCommand::PlaySound(3),
-                MenuCommand::ScreenPopped,
-                MenuCommand::IntroSequenceCommand(1),
-            ]
-        );
-        shell.refresh(&ctx);
-        assert_eq!(shell.engine.current_va(), Some(MAIN_RING));
-        assert_eq!(shell.view().items[shell.view().selected].label, "Network");
-    }
+    shell.engine.handle(MenuInput::Back);
+    assert_eq!(shell.engine.current_va(), Some(NETWORK));
+    shell.engine.handle(MenuInput::Back);
+    assert_eq!(shell.engine.current_va(), Some(MAIN_RING));
 }
 
 #[v2k_test_support::retail_test]
