@@ -26,6 +26,15 @@ const MODEL1131_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
     sub_k: Some([4, 3]),
     sub_l: Some([1, 2, 64, 31, 160, 15]),
 };
+/// Model 684 (Type12/Type127): an 82-word bank. K writes its last two words,
+/// past the 63 a model operand can address, and L words 2/1.
+const MODEL684_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
+    sub_g: None,
+    sub_k: Some([81, 82]),
+    sub_l: Some([2, 1, 244, 1, 120, 5]),
+};
+/// Model operands address callback values through six bits.
+const MODEL_ADDRESSABLE_VARIABLES: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Intro2KlConstructionError {
@@ -42,7 +51,8 @@ pub enum Intro2KlConstructionError {
 pub struct Intro2KlComponents {
     sub_k_selectors: [u8; 2],
     sub_l_descriptor: [u8; 6],
-    model_variables_raw: [i16; 4],
+    /// The type's `+0x110` words, zeroed by 09A80.
+    model_variables_raw: Vec<i16>,
     sub_k_smoothed_raw: i32,
     sub_l_target_raw: [i16; 3],
     sub_l_exact_raw: i32,
@@ -55,11 +65,11 @@ impl Intro2KlComponents {
     pub(crate) fn from_native_constructor(
         metadata: &EntityTypeRuntimeMetadata,
     ) -> Result<Self, Intro2KlConstructionError> {
-        let (sub_k_selectors, sub_l_descriptor) = Self::authenticate_profile(metadata)?;
+        let (sub_k_selectors, sub_l_descriptor, count) = Self::authenticate_profile(metadata)?;
         Ok(Self {
             sub_k_selectors,
             sub_l_descriptor,
-            model_variables_raw: [0; 4],
+            model_variables_raw: vec![0; count],
             sub_k_smoothed_raw: 0,
             sub_l_target_raw: [0; 3],
             sub_l_exact_raw: 0,
@@ -68,40 +78,54 @@ impl Intro2KlComponents {
 
     fn authenticate_profile(
         metadata: &EntityTypeRuntimeMetadata,
-    ) -> Result<([u8; 2], [u8; 6]), Intro2KlConstructionError> {
+    ) -> Result<([u8; 2], [u8; 6], usize), Intro2KlConstructionError> {
         if metadata.common_mover_topology != RetailRuntimeValue::Known(super::ABCDEHKL_TOPOLOGY) {
             return Err(Intro2KlConstructionError::ComponentTopology);
         }
-        if metadata.model_variable_count_raw != RetailRuntimeValue::Known(4) {
+        let RetailRuntimeValue::Known(count) = metadata.model_variable_count_raw else {
+            return Err(Intro2KlConstructionError::VariableCount);
+        };
+        let expected = match metadata.common_mover_gkl_payloads {
+            RetailRuntimeValue::Known(payloads)
+                if payloads == TYPE30_PAYLOADS || payloads == MODEL1131_PAYLOADS =>
+            {
+                4
+            }
+            RetailRuntimeValue::Known(payloads) if payloads == MODEL684_PAYLOADS => 82,
+            _ => return Err(Intro2KlConstructionError::ComponentDescriptors),
+        };
+        if count != expected {
             return Err(Intro2KlConstructionError::VariableCount);
         }
         match metadata.common_mover_gkl_payloads {
-            RetailRuntimeValue::Known(
-                payloads @ CommonMoverGklPayloads {
-                    sub_g: None,
-                    sub_k: Some(sub_k),
-                    sub_l: Some(sub_l),
-                },
-            ) if payloads == TYPE30_PAYLOADS || payloads == MODEL1131_PAYLOADS => {
-                Ok((sub_k, sub_l))
-            }
+            RetailRuntimeValue::Known(CommonMoverGklPayloads {
+                sub_g: None,
+                sub_k: Some(sub_k),
+                sub_l: Some(sub_l),
+            }) => Ok((sub_k, sub_l, count as usize)),
             _ => Err(Intro2KlConstructionError::ComponentDescriptors),
         }
     }
 
     pub(crate) fn authenticates(&self, metadata: &EntityTypeRuntimeMetadata) -> bool {
-        Self::authenticate_profile(metadata) == Ok((self.sub_k_selectors, self.sub_l_descriptor))
+        Self::authenticate_profile(metadata)
+            == Ok((
+                self.sub_k_selectors,
+                self.sub_l_descriptor,
+                self.model_variables_raw.len(),
+            ))
     }
 
     #[cfg(test)]
-    pub(crate) const fn model_variables_raw(&self) -> &[i16; 4] {
+    pub(crate) fn model_variables_raw(&self) -> &[i16] {
         &self.model_variables_raw
     }
 
     /// D320/D350 use one-based bank selectors; selector0 remains the world
-    /// clock and is deliberately outside this allocation.
+    /// clock and is deliberately outside this allocation. A model reads only
+    /// the selectors its six-bit operands reach.
     pub(crate) fn publish_model_variables(&self, vars: &mut AnimVars) {
-        for (selector, value) in (1..=4).zip(self.model_variables_raw) {
+        for (selector, &value) in (1..MODEL_ADDRESSABLE_VARIABLES).zip(&self.model_variables_raw) {
             vars.dynamic[selector] = i32::from(value);
         }
     }

@@ -47,6 +47,7 @@ pub(crate) enum Intro2CaptureProfile {
     Type40,
     Type18,
     Type28,
+    Type12Family,
 }
 impl Intro2CaptureProfile {
     fn authenticates(self, entity: &Entity) -> bool {
@@ -59,6 +60,7 @@ impl Intro2CaptureProfile {
             Self::Type40 => crate::native_type40::allocation_authenticates(entity),
             Self::Type18 => crate::native_type18::allocation_authenticates(entity),
             Self::Type28 => crate::native_type28::allocation_authenticates(entity),
+            Self::Type12Family => crate::native_type12::allocation_authenticates(entity),
         }
     }
 }

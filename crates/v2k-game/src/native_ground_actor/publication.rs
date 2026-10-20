@@ -1,7 +1,7 @@
 //! AC60's class initializers for ground rows whose root is built only from
 //! the shared programs: Defecate Virus `B9E0`, Move About Aimlessly `ACD0`,
-//! Search/Capture/Run Away `B6C0`, Follow Beacons `B740` and Trash Furniture
-//! `B7C0`.
+//! Search/Capture/Run Away `B6C0`, Follow Beacons `B740`, and Trash Furniture
+//! and Trash Buildings `B7C0` (style arguments -1 and 3).
 
 use super::*;
 use crate::{
@@ -34,7 +34,7 @@ pub(crate) fn publish_shared_root_class(
     next_random: &mut impl FnMut() -> u32,
 ) -> bool {
     let class = selection.program.class_id;
-    if !matches!(class, 4 | 5 | 7 | 9 | 10 | 26 | 33) {
+    if !matches!(class, 4 | 5 | 7 | 9 | 10 | 15 | 26 | 33) {
         return false;
     }
     let RetailRuntimeValue::Known(lifetime) = metadata.terrain_contact_task_lifetime_ms else {
@@ -54,12 +54,13 @@ pub(crate) fn publish_shared_root_class(
         axis.raw_word_at_0x04 = authored_axis.raw_word_at_0x04;
         entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(axis);
     }
-    if class == 26 {
+    if matches!(class, 15 | 26) {
         // Type26/58's source policy: a failed scan's target Y fails closed.
+        // Class15's style hands B7C0 kind3 (buildings), class26's -1 (any).
         let succeeded = crate::trash_furniture::publish_trash_furniture(
             entity,
             metadata,
-            -1,
+            if class == 15 { 3 } else { -1 },
             TrashFurnitureTargetHeightPolicy::SourceUnresolved,
             next_random,
         )

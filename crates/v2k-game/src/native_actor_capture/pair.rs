@@ -418,14 +418,15 @@ fn is_native_type9_peer_pair(first: &Entity, second: &Entity) -> bool {
 }
 
 fn is_native_type40_person_pair(first: &Entity, second: &Entity) -> bool {
-    // Type40 owns C910 with a true absent J; it is not a Type17/122 captor.
-    // Select by its receipt, then authenticate both completed body owners in
-    // resolve before geometry callbacks or physical mutation.
+    // Type40 and the Type12 family own C910 with a true absent J; they are
+    // not Type17/122 captors. Select by receipt, then authenticate both
+    // completed body owners in resolve before geometry callbacks or physical
+    // mutation.
     [(first, second), (second, first)]
         .into_iter()
         .any(|(actor, person)| {
-            actor.entity_type == 40
-                && actor.native_type40_runtime.is_some()
+            ((actor.entity_type == 40 && actor.native_type40_runtime.is_some())
+                || (matches!(actor.entity_type, 12 | 127) && actor.native_type12_runtime.is_some()))
                 && person.capability_flags & 0xc00 != 0
         })
 }
@@ -749,11 +750,17 @@ fn behavior(
         {
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
-        PairContactCallbackPolicy::CapturePeople if entity.entity_type == 40 => {
-            if !crate::native_type40::manager_allocation_authenticates(frame.entities, owner)
+        PairContactCallbackPolicy::CapturePeople if matches!(entity.entity_type, 40 | 12 | 127) => {
+            let custody = if entity.entity_type == 40 {
+                crate::native_type40::manager_allocation_authenticates(frame.entities, owner)
+                    && crate::native_type40::Type40Owner::adopt(frame.entities, owner).is_ok()
+            } else {
+                crate::native_type12::manager_allocation_authenticates(frame.entities, owner)
+                    && crate::native_type12::Type12FamilyOwner::adopt(frame.entities, owner).is_ok()
+            };
+            if !custody
                 || style != 0x4c8038
                 || entity.sub_j_attachment_runtime != RetailRuntimeValue::Known(None)
-                || crate::native_type40::Type40Owner::adopt(frame.entities, owner).is_err()
             {
                 return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
             }
@@ -1227,6 +1234,7 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || entity.intro2_gun_turret_runtime.is_some()
         || entity.native_type43_runtime.is_some()
         || entity.native_type38_runtime.is_some()
+        || entity.native_type12_runtime.is_some()
         || crate::intro2_type16::intro2_type16_allocation_authenticates(entity)
         || entity.shared_fish_runtime.is_some()
         || entity.cleansing_vehicle_runtime.is_some()
@@ -1456,7 +1464,8 @@ fn apply_pair_checked_damage(
                 }))
                 || (entity.entity_type == crate::native_type43::ENTITY_TYPE
                     && crate::native_type43::allocation_authenticates(entity))
-                || crate::native_type38::type38_row(entity).is_some())
+                || crate::native_type38::type38_row(entity).is_some()
+                || crate::native_type12::type12_row(entity).is_some())
     }) {
         return apply_terminal_pair_checked_damage(
             frame,

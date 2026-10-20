@@ -3943,6 +3943,7 @@ fn run_game(
                 specialized_actor_tasks.adopt_type56(&em);
                 specialized_actor_tasks.adopt_type43(&em);
                 specialized_actor_tasks.adopt_type38_family(&em);
+                specialized_actor_tasks.adopt_type12_family(&em);
                 specialized_actor_tasks.adopt_shared_fish(&em);
                 specialized_actor_tasks.adopt_cleansing_vehicle(&em);
                 specialized_actor_tasks.adopt_intro2_type16(&em);
@@ -4302,6 +4303,9 @@ fn run_game(
                             )
                             | SpecializedActorTaskProductionOutcome::NativeType38Family(
                                 v2k_game::native_type38::Type38Outcome::Blocked { .. },
+                            )
+                            | SpecializedActorTaskProductionOutcome::NativeType12Family(
+                                v2k_game::native_type12::Type12Outcome::Blocked { .. },
                             )
                             | SpecializedActorTaskProductionOutcome::SharedFish(
                                 v2k_game::shared_fish::SharedFishOutcome::Blocked { .. },
@@ -7592,6 +7596,31 @@ fn run_game(
                             log!("Ordinary Type38-family {id} static contact: {result:?}");
                         }
                         if matches!(result, Type38ContactOutcome::Blocked { .. }) {
+                            continue;
+                        }
+                    }
+                    // D920 static callbacks precede this subject's pair walk.
+                    {
+                        use v2k_game::native_type12::contact::{
+                            resolve_type12_family_static_contact, Type12ContactOutcome,
+                        };
+                        let result = resolve_type12_family_static_contact(
+                            &mut contact_frame,
+                            id,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        if !matches!(
+                            result,
+                            Type12ContactOutcome::Ineligible | Type12ContactOutcome::Miss
+                        ) {
+                            log!("Ordinary Type12-family {id} static contact: {result:?}");
+                        }
+                        if matches!(result, Type12ContactOutcome::Blocked { .. }) {
                             continue;
                         }
                     }

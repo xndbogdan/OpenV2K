@@ -538,6 +538,32 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
             }
+            // Type12 and its Type127 carriers share one ground-host owner.
+            12 | 127 => {
+                let sub_d = sub_d.ok_or("missing Type12-family Sub-D allocation")?;
+                let constructor_surface_bits =
+                    crate::entity_initializer::constructor_surface_bits_at_tick(
+                        spawn.position_raw(),
+                        terrain,
+                        retail_tick,
+                        waves_enabled,
+                    )
+                    .ok_or("Type12-family constructor surface")?;
+                crate::native_type12::publish_native_type12(
+                    crate::native_type12::NativeType12ConstructionRequest {
+                        entity: &mut entity,
+                        allocation,
+                        metadata,
+                        record: super::NativeCreationRecord::authored(spawn),
+                        preceding: &self.entities,
+                        resources,
+                        constructor_surface_bits,
+                        sub_d,
+                    },
+                    &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                )
+                .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
+            }
             // Type38, its Type129 carriers and Type119 share one ground-host owner.
             38 | 129 | 119 => {
                 let sub_d = sub_d.ok_or("missing Type38-family Sub-D allocation")?;

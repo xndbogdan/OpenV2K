@@ -18,8 +18,8 @@ pub(crate) fn effective_flags<P: NativeGroundActorProfile>(
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Graph);
     };
-    // Follow/Capture, Class5 row4C7930 and Furniture26 row4C7738 have
-    // zero +34/+38 masks; Search clears21080/80. These source masks
+    // Follow/Capture, Class5 row4C7930, Furniture26 row4C7738 and
+    // Buildings15 row4C76F0 have zero +34/+38 masks; Search clears21080/80. These source masks
     // preserve each admitted profile's own authored C8. Class5 row4C7978
     // instead sets80/clears2 and is not this ordinary living task graph.
     let carrying = P::CAPTURE_POLICY == NativeCapturePolicy::Transport
@@ -38,6 +38,7 @@ pub(crate) fn effective_flags<P: NativeGroundActorProfile>(
                 | 0x4c7660
                 | 0x4c7930
                 | 0x4c7738
+                | 0x4c76f0
         )
     {
         return Err(Block::Runtime("effective style flags"));

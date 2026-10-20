@@ -105,6 +105,14 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     } else {
         false
     };
+    let buildings = if needs(BehaviorWeightRule::BuildingsNearby) {
+        buildings_nearby(
+            entity,
+            resources.ok_or(Block::Runtime("buildings selector resources"))?,
+        )?
+    } else {
+        false
+    };
     let selection = select_initial_behavior(
         P::CHOICES,
         |rule| match rule {
@@ -113,6 +121,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
             BehaviorWeightRule::PeopleNearby => i32::from(people),
             BehaviorWeightRule::PlayerNearby => i32::from(player),
             BehaviorWeightRule::FurnitureNearby => i32::from(furniture),
+            BehaviorWeightRule::BuildingsNearby => i32::from(buildings),
             _ => unreachable!(),
         },
         || u32::from(world_fx.next_shared_retail_random_u16()),
@@ -155,6 +164,30 @@ pub(crate) fn furniture_nearby(
         entity.position_raw(),
         axis.strict_axis_limit_raw / 4,
         -1,
+    )
+    .is_some())
+}
+
+/// `425680`'s rule9 (`FUN_004166B0`): a kind3 terrain object within the
+/// entity's full current strict axis. The scan draws no RNG.
+pub(crate) fn buildings_nearby(
+    entity: &Entity,
+    resources: &crate::resource_cache::ResourceCache,
+) -> Result<bool, NativeGroundActorBlock> {
+    let RetailRuntimeValue::Known(axis) = entity.actor_common_axis_descriptor else {
+        return Err(NativeGroundActorBlock::Runtime("buildings selector axis"));
+    };
+    let terrain = resources
+        .level_terrain()
+        .ok_or(NativeGroundActorBlock::Runtime(
+            "buildings selector terrain",
+        ))?;
+    Ok(crate::trash_furniture::find_furniture(
+        terrain,
+        resources.terrain_objects(),
+        entity.position_raw(),
+        axis.strict_axis_limit_raw,
+        3,
     )
     .is_some())
 }

@@ -77,6 +77,8 @@ pub enum NativeExplosionSourceProfile {
     Type43,
     /// Ordinary ground shooters: Type38 and Type119 take class1, Type129 class63.
     Type38Family(crate::native_type38::Type38Row),
+    /// Ordinary building-trashers: Type12 takes class1, Type127 class63.
+    Type12Family(crate::native_type12::Type12Row),
     /// Type3 Rolling Boulder; its alternate is class1. Type27 splits instead.
     RollingBoulder,
     /// Type14's B/D/G flyer on the native flyer owner, alternate class1.
@@ -101,6 +103,7 @@ impl NativeExplosionSourceProfile {
             Self::Type16Carrier(row) => row.entity_type(),
             Self::Type43 => crate::native_type43::ENTITY_TYPE,
             Self::Type38Family(row) => row.entity_type(),
+            Self::Type12Family(row) => row.entity_type(),
             Self::RollingBoulder => 3,
             Self::ExplodingFlyer(entity_type) => entity_type,
             Self::Type71Gunner => 71,
@@ -154,6 +157,9 @@ impl NativeExplosionSourceProfile {
             // The row's own authentication pins its alternate class.
             Self::Type38Family(row) => {
                 crate::native_type38::authenticate_metadata(row, metadata).is_ok()
+            }
+            Self::Type12Family(row) => {
+                crate::native_type12::authenticate_metadata(row, metadata).is_ok()
             }
             Self::RollingBoulder => crate::rolling_boulder::authenticate_metadata(
                 crate::rolling_boulder::RollingBoulderProfile::Small,
@@ -225,6 +231,21 @@ impl NativeExplosionSourceProfile {
                 style,
                 0x004c_7930 | 0x004c_7978 | 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8
             ),
+            // Follow Beacons, Search, Capture's people pursuit, Trash
+            // Buildings and the fallback: +2C null. Without a J the carrying
+            // Capture variants are never reached.
+            Self::Type12Family(_) => matches!(
+                style,
+                0x004c_7b28
+                    | 0x004c_7b70
+                    | 0x004c_7a50
+                    | 0x004c_7a98
+                    | 0x004c_7ae0
+                    | 0x004c_7ff0
+                    | 0x004c_8038
+                    | 0x004c_76f0
+                    | 0x004c_74f8
+            ),
             // Both class20 styles have a null +2C.
             Self::RollingBoulder => matches!(style, 0x004c_78a0 | 0x004c_78e8),
             // Defecate Virus, Aimless, both Flocking styles and the fallback.
@@ -272,6 +293,8 @@ impl NativeExplosionSourceProfile {
             Self::Type43 => (10, [16, 16]),
             // Nonnull A takes 40BBB3.
             Self::Type38Family(_) => (10, [37, 37]),
+            // Nonnull A takes 40BBB3.
+            Self::Type12Family(_) => (10, [37, 37]),
             // No A/B/N/G, no capability40, neither type49 nor 112..115:
             // the 40BB9C default keeps count10 with class16.
             Self::RollingBoulder => (10, [16, 16]),
@@ -292,6 +315,7 @@ impl NativeExplosionSourceProfile {
             | Self::Type43
             | Self::Type38Family(crate::native_type38::Type38Row::Type38)
             | Self::Type38Family(crate::native_type38::Type38Row::Type119)
+            | Self::Type12Family(crate::native_type12::Type12Row::Type12)
             | Self::RollingBoulder
             | Self::ExplodingFlyer(_)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
@@ -301,7 +325,8 @@ impl NativeExplosionSourceProfile {
             | Self::Type10Carrier(_)
             | Self::Type16Carrier(_)
             | Self::Type71Gunner
-            | Self::Type38Family(crate::native_type38::Type38Row::Type129) => {
+            | Self::Type38Family(crate::native_type38::Type38Row::Type129)
+            | Self::Type12Family(crate::native_type12::Type12Row::Type127) => {
                 NativeExplosionPolicy::Class63
             }
             _ => NativeExplosionPolicy::Class49,
@@ -331,6 +356,8 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::Type43)
     } else if let Some(row) = crate::native_type38::type38_row(entity) {
         Some(NativeExplosionSourceProfile::Type38Family(row))
+    } else if let Some(row) = crate::native_type12::type12_row(entity) {
+        Some(NativeExplosionSourceProfile::Type12Family(row))
     } else if entity.entity_type == 3
         && crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
     {
@@ -404,6 +431,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         }
         Some(NativeExplosionSourceProfile::Type38Family(_)) => {
             crate::native_type38::manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::Type12Family(_)) => {
+            crate::native_type12::manager_allocation_authenticates(manager, id)
         }
         Some(NativeExplosionSourceProfile::RollingBoulder) => {
             crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
