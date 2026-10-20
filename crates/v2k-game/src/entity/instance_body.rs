@@ -104,7 +104,16 @@ pub(crate) fn native_instance_body(
         entity_type,
         authored_follow_beacon_priority_raw: None,
         power_up_payload_packed: None,
-        auto_pilot_payload_packed: None,
+        // The zeroed record's +20 reaches +88: such a class63 carrier (a Hive
+        // child) drops a zero payload.
+        auto_pilot_payload_packed: metadata
+            .initializer
+            .as_ref()
+            .is_some_and(|initializer| {
+                initializer.alternate_behavior_class_ref
+                    == u32::from(crate::entity_behavior::AUTO_PILOT_BEHAVIOR_PROGRAM.class_id)
+            })
+            .then_some(0),
         factory_type61_birth_provenance: None,
         type60_construction_provenance: None,
         main_base_type54_sea_delta_source: RetailRuntimeValue::Unresolved,

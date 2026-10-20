@@ -1,4 +1,5 @@
-//! Own Type10 104B0/09A80 allocations, then AC60 -> B6C0 publication.
+//! Own Type10 104B0/09A80 allocations, then AC60 -> B6C0 (Search) or B5A0
+//! (Guard Location) publication.
 
 use super::*;
 use crate::{
@@ -30,14 +31,15 @@ pub(crate) fn authenticate_metadata(
     let Some(initializer) = &metadata.initializer else {
         return Err(Intro2Type10Error::Metadata);
     };
+    let (hit_sound, death_sound) = profile.hit_and_death_sounds();
     if metadata.model_slots != [profile.model() as u16; 4]
         || metadata.mass_raw != 100
         || metadata.capability_flags != 8
-        || metadata.initial_health_raw != Some(32_000)
+        || metadata.initial_health_raw != Some(profile.initial_health_raw())
         || metadata.damage_profile
             != Some(DamageProfile {
                 thresholds_raw: profile.damage_thresholds_raw(),
-                multipliers_q8: [0, 256, 256, 0, 750, 512, 0],
+                multipliers_q8: profile.damage_multipliers_q8(),
             })
         || metadata.common_mover_topology != RetailRuntimeValue::Known(TOPOLOGY)
         || metadata.common_mover_gkl_payloads
@@ -58,10 +60,10 @@ pub(crate) fn authenticate_metadata(
         || metadata.status_component_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_n_payload.is_some()
         || metadata.constructor_sound_attachment_id != RetailRuntimeValue::Known(None)
-        || metadata.accepted_hit_presentation_sound_id != RetailRuntimeValue::Known(None)
+        || metadata.accepted_hit_presentation_sound_id != RetailRuntimeValue::Known(hit_sound)
         || metadata.infected_model_presentation_sound_id != RetailRuntimeValue::Known(None)
         || metadata.generic_hit_sound_id != RetailRuntimeValue::Known(None)
-        || metadata.death_sound_id != RetailRuntimeValue::Known(None)
+        || metadata.death_sound_id != RetailRuntimeValue::Known(death_sound)
         || metadata.target_warning_sound_id != RetailRuntimeValue::Known(None)
         || metadata.terrain_contact_task_lifetime_ms != RetailRuntimeValue::Known(0)
         || !matches!(metadata.common_world_effects, RetailRuntimeValue::Known(profile)
@@ -70,7 +72,7 @@ pub(crate) fn authenticate_metadata(
                 && profile.low_health_effect_words == [0, 0, 0])
         || initializer.initializer_state_flags_raw != 8
         || initializer.common_axis_descriptor != profile.axis()
-        || initializer.behavior_choices.as_ref() != INITIAL_CHOICES
+        || initializer.behavior_choices.as_ref() != profile.choices()
         || initializer.behavior_rule_ref != 1
         || initializer.alternate_behavior_class_ref != profile.alternate_behavior_class()
     {
@@ -267,19 +269,24 @@ fn authenticate_birth_storage(
     {
         return Err(Intro2Type10Error::AlreadyPublished);
     }
-    let expected = BehaviorSelection {
-        choice_index: 0,
-        program: behavior_program(7).ok_or(Intro2Type10Error::Selection)?,
+    // A weighted list's selection is runtime-dependent until AC60.
+    let expected = match profile.choices() {
+        [only] => RetailRuntimeValue::Known(Some(BehaviorSelection {
+            choice_index: 0,
+            program: behavior_program(only.behavior_class_id)
+                .ok_or(Intro2Type10Error::Selection)?,
+        })),
+        _ => RetailRuntimeValue::Unresolved,
     };
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
-    if entity.initial_behavior != RetailRuntimeValue::Known(Some(expected))
+    if entity.initial_behavior != expected
         || entity.actor_common_axis_descriptor != RetailRuntimeValue::Known(profile.axis())
         || entity.sub_g_06070_runtime
             != RetailRuntimeValue::Known(Some(SubG06070RuntimeState::pending()))
         || entity.physical_body_basis_q31
             != RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(heading, pitch, roll))
         || entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(8)
-        || entity.collision.health_raw != RetailRuntimeValue::Known(32_000)
+        || entity.collision.health_raw != RetailRuntimeValue::Known(profile.initial_health_raw())
         || entity.collision.pre_health_damage_buffer_raw != RetailRuntimeValue::Known(0)
         || entity.collision.last_hit_presentation_tick_at_0x34 != RetailRuntimeValue::Known(0)
     {
@@ -329,12 +336,14 @@ fn publish_birth(
         sub_l_target_raw: [0; 3],
         sub_l_exact_raw: 0,
         sub_l_output_raw: [0; 2],
+        anchor_raw: entity.position_raw(),
     });
     // D4A0 bit20 is absent: retain authored Y and incoming full Euler basis.
     // Explicit native policy for the unwritten transient B2 heap residue,
     // once at birth. Reselection preserves every later contribution.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
-    let (selection, selector_word) = select(next_random)?;
+    // A newborn's +34 is zero, so rule2's recent-hit window cannot hold.
+    let (selection, selector_word) = select(profile, false, next_random)?;
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(Intro2Type10Error::Selection)?;
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
@@ -347,13 +356,19 @@ fn publish_birth(
 }
 
 fn select(
+    profile: Type10Profile,
+    under_attack: bool,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(BehaviorSelection, u32), Intro2Type10Error> {
     let mut selector_word = 0;
     // 425680 consumes a word even for the singleton Always list.
     let selection = select_initial_behavior(
-        &INITIAL_CHOICES,
-        |rule| i32::from(rule == BehaviorWeightRule::Always),
+        profile.choices(),
+        |rule| match rule {
+            BehaviorWeightRule::Always => 1,
+            BehaviorWeightRule::UnderAttack => i32::from(under_attack),
+            _ => unreachable!("authenticated Type10-family rule list"),
+        },
         || {
             selector_word = next_random();
             selector_word
@@ -364,11 +379,31 @@ fn select(
     Ok((selection, selector_word))
 }
 
+/// 425680's rule2, read only when the row's list holds it: a hit stamped
+/// `+34` within the last 250 ticks, once the clock has passed 249.
+fn under_attack(
+    profile: Type10Profile,
+    entity: &Entity,
+    tick: u32,
+) -> Result<bool, Intro2Type10Error> {
+    if !profile.choices().iter().any(|choice| {
+        BehaviorWeightRule::from_raw(choice.weight_rule_id) == Some(BehaviorWeightRule::UnderAttack)
+    }) {
+        return Ok(false);
+    }
+    let RetailRuntimeValue::Known(last_hit) = entity.collision.last_hit_presentation_tick_at_0x34
+    else {
+        return Err(Intro2Type10Error::ComponentStorage);
+    };
+    Ok(tick.wrapping_sub(last_hit) < 250 && (tick as i32) > 249)
+}
+
 /// Living C690/AC60 reentry; caller owns task-result suppression and completed
 /// task custody. The allocated behavior context and DEGKL state survive.
 pub(super) fn reselect_acquiring(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
+    tick: u32,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<Intro2Type10Publication, Intro2Type10Error> {
     let profile = type10_profile(entity).ok_or(Intro2Type10Error::Identity)?;
@@ -380,8 +415,8 @@ pub(super) fn reselect_acquiring(
     let RetailRuntimeValue::Known(Some(previous)) = entity.current_behavior_context else {
         return Err(Intro2Type10Error::Selection);
     };
-    let program = behavior_program(7).ok_or(Intro2Type10Error::Selection)?;
-    if previous.descriptor() != BehaviorDescriptorIdentity::Named(program)
+    if !matches!(previous.descriptor(), BehaviorDescriptorIdentity::Named(program)
+            if profile.choices().iter().any(|choice| choice.behavior_class_id == u32::from(program.class_id)))
         || previous.choice_list_source()
             != RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeDefault)
         || !matches!(
@@ -391,15 +426,15 @@ pub(super) fn reselect_acquiring(
     {
         return Err(Intro2Type10Error::ComponentStorage);
     }
-    // This canonical program/style exists before selector consumption.
+    let under_attack = under_attack(profile, entity, tick)?;
+    let (selection, selector_word) = select(profile, under_attack, next_random)?;
     let context = previous
         .reselect_named_type_default(
-            program,
-            program.initial_style_table_index_raw,
-            program.initial_style,
+            selection.program,
+            selection.program.initial_style_table_index_raw,
+            selection.program.initial_style,
         )
         .ok_or(Intro2Type10Error::Selection)?;
-    let (selection, selector_word) = select(next_random)?;
     let initialized = publish_acquiring(profile, entity, selection, context, next_random);
     Ok(Intro2Type10Publication {
         selection,
@@ -425,6 +460,7 @@ fn publish_acquiring(
         unreachable!("native Type10 initializer preflight retains its axis allocation")
     };
     // 40B707 copies only live axis+4. A changed strict radius survives C690.
+    // B5A0 makes the same copy before its own two tasks.
     axis.raw_word_at_0x04 = profile.axis().raw_word_at_0x04;
     entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(axis);
     let position = entity.position_raw();
@@ -436,6 +472,22 @@ fn publish_acquiring(
     let RetailRuntimeValue::Known(Some(sub_g)) = sub_g_06070_runtime else {
         unreachable!("native Type10 initializer preflight retains G")
     };
+    if selection.program.class_id == 32 {
+        let result = super::guard::apply_setup(actor_tasks, axis, position, |prepared| {
+            let word = next_random() as u16;
+            sub_g.apply_shared_06070_sub_g_branch(
+                profile.sub_g_randomized_target_base() + i32::from(word >> 8),
+                0,
+            );
+            prepared
+        });
+        if result.is_err() {
+            entity.publish_behavior_initializer_failure_fallback(context);
+            return false;
+        }
+        return true;
+    }
+    debug_assert_eq!(selection.program.class_id, 7);
     let result = apply_search_attack_task_setup(
         actor_tasks,
         SearchAttackTaskSetupRequest::Acquiring,

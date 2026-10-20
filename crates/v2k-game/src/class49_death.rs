@@ -206,10 +206,12 @@ impl NativeExplosionSourceProfile {
             }
             // Aimless, Wander and both Flocking variants: all four +2C are null.
             Self::Fish124 => matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40),
-            // Search acquiring, pursuing, completion and the fallback: +2C null.
-            Self::Type10Carrier(_) => {
-                matches!(style, 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8)
-            }
+            // Search acquiring, pursuing, completion, both Guard styles and the
+            // fallback: +2C null.
+            Self::Type10Carrier(_) => matches!(
+                style,
+                0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_7bb8 | 0x004c_7c00 | 0x004c_74f8
+            ),
             // Aimless, Defecate Virus, Search and people pursuit: +2C null. The
             // four carrying Capture variants own D040's release instead.
             Self::Type16Carrier(_) => matches!(

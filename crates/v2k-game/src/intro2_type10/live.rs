@@ -74,7 +74,12 @@ impl Intro2Type10Owner {
         else {
             return Err(Intro2Type10Block::Graph);
         };
-        if program.class_id != 7 {
+        if !type10_profile(entity).is_some_and(|profile| {
+            profile
+                .choices()
+                .iter()
+                .any(|choice| choice.behavior_class_id == u32::from(program.class_id))
+        }) {
             return Err(Intro2Type10Block::Graph);
         }
         let allocation = manager
@@ -319,10 +324,7 @@ fn run_frame(
         .resources
         .level_terrain()
         .ok_or(Block::Runtime("terrain"))?;
-    let chasing = matches!(
-        entity.actor_task_state(ActorTaskSlot::Primary),
-        Some(ActorTaskRuntime::ChaseTarget(_))
-    );
+    let primary = entity.actor_task_state(ActorTaskSlot::Primary).copied();
     let mover_frame = super::mover::MoverFrame {
         metadata: &metadata,
         terrain,
@@ -336,13 +338,17 @@ fn run_frame(
         global_elapsed_micros: frame.elapsed_micros,
         retail_tick: frame.retail_tick,
     };
-    let changed = if chasing {
-        super::search::tick_primary(manager, id, mover_frame, frame.world_fx)?
-    } else {
-        tick_retarget_primary(entity, mover_frame, frame.world_fx)?
+    let changed = match primary {
+        Some(ActorTaskRuntime::ChaseTarget(_)) => {
+            super::search::tick_primary(manager, id, mover_frame, frame.world_fx)?
+        }
+        Some(ActorTaskRuntime::OrdinaryType9Wander(_)) => {
+            super::guard::tick_wander_primary(entity, mover_frame, frame.world_fx)?
+        }
+        _ => tick_retarget_primary(entity, mover_frame, frame.world_fx)?,
     };
     if changed {
-        reselect(manager, id, &metadata, frame.world_fx)?;
+        reselect(manager, id, &metadata, frame.retail_tick, frame.world_fx)?;
     }
     let current = manager
         .iter_all()
@@ -357,10 +363,15 @@ fn run_frame(
         else {
             return Err(Block::Graph);
         };
-        if program.class_id != 7 {
-            return Err(Block::Graph);
+        match program.class_id {
+            7 => {
+                super::search::acquire(manager, id, dt, frame.world_fx)?;
+            }
+            32 => {
+                super::guard::acquire(manager, id, &metadata, frame.world_fx)?;
+            }
+            _ => return Err(Block::Graph),
         }
-        super::search::acquire(manager, id, dt, frame.world_fx)?;
     }
 
     // The cursor reads slot2 after acquisition/reselection. A newborn Aim
@@ -385,7 +396,7 @@ fn run_frame(
                 outcome.resolution.outcome,
                 crate::aim_and_fire::AimAndFireFrameOutcome::RequestOwnerTransition { .. }
             ) {
-                reselect(manager, id, &metadata, frame.world_fx)?;
+                reselect(manager, id, &metadata, frame.retail_tick, frame.world_fx)?;
             }
         }
         Some(_) => return Err(Block::Graph),
@@ -475,6 +486,7 @@ fn reselect(
     manager: &mut EntityManager,
     id: u32,
     metadata: &crate::entity_collision_state::EntityTypeRuntimeMetadata,
+    tick: u32,
     world_fx: &mut WorldFx,
 ) -> Result<(), Intro2Type10Block> {
     let entity = manager
@@ -483,7 +495,7 @@ fn reselect(
     if bits(entity, 0x1000)? != 0 {
         return Ok(());
     }
-    super::native::reselect_acquiring(entity, metadata, &mut || {
+    super::native::reselect_acquiring(entity, metadata, tick, &mut || {
         u32::from(world_fx.next_shared_retail_random_u16())
     })
     .and_then(|publication| {

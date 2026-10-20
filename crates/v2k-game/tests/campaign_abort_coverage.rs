@@ -104,7 +104,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // Type40 splits into Type56s (class18), which die quietly; Type30 takes
     // class12 and Type72 Change Sea Level. Worlds 17 and 45 complete.
     (18, 73),
-    (19, 55),
+    // World 19 completes: its Type55 guard takes class11 Tumble.
     // Type14 flyers explode through their class1 terminal, Type15 wasps die
     // quietly through class2, and Type16 and Type94 enter class12.
     (20, 29),
@@ -120,11 +120,13 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // Type27 boulders split into Type3s (class18), which explode (class1);
     // world 27 completes with its Type127 carriers' class63.
     // Native class29 turrets now complete; their finished class49 terminals
-    // admit the later power-up radial, as 14AE0 does.
-    (29, 55),
+    // admit the later power-up radial, as 14AE0 does. World 29's Type55
+    // guards take class11 Tumble, and it completes.
     // Worlds 30 and 39 complete: their Type83 radars take class49.
     (31, 107),
-    (32, 55),
+    // World 32's Type55 guards take class11 Tumble; its next is the
+    // Type82 factory row.
+    (32, 82),
     (33, 20),
     (34, 25),
     // World 35 completes: its Type12s explode through class1.
@@ -371,7 +373,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     }
     assert_eq!(
         exact_worlds,
-        [13, 14, 15, 17, 27, 28, 30, 35, 37, 39, 44, 45, 48]
+        [13, 14, 15, 17, 19, 27, 28, 29, 30, 35, 37, 39, 44, 45, 48]
     );
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,

@@ -567,3 +567,6 @@ address,status,note
 0x0046C660,not-needed,replaced: the port's UDP transport (DirectPlay 3's session close; docs/re/MULTIPLAYER.md#the-port)
 0x0046CA30,not-needed,replaced: the port's UDP transport (DirectPlay 3's enumeration buffers; docs/re/MULTIPLAYER.md#the-port)
 0x0046BE80,not-needed,replaced: the port's UDP transport (DirectPlay 3's session reset; docs/re/MULTIPLAYER.md#the-port)
+0x0040B5A0,implemented,Guard Location initializer for the Type47 gunners and the Type55/81 guards (docs/re/INTRO2_TYPE10.md)
+0x00401FB0,implemented,Guard Location first-eligible candidate search (docs/re/GUARD_LOCATION_TASK.md)
+0x00402EB0,implemented,Wander Near Location anchor retarget and shared mover (docs/re/GUARD_LOCATION_TASK.md)

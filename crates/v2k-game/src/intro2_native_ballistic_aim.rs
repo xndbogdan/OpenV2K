@@ -50,6 +50,9 @@ pub(crate) enum NativeBallisticProfileId {
     /// Ordinary Type80/126 carriers on the Type10 owner: Type10's override.
     Type80,
     Type126,
+    /// Ordinary Type55 guards and Type81 carriers: method 10 at table speed.
+    Type55,
+    Type81,
     /// Ordinary emitter-only Type43 shooters: method 10 at Type10's override.
     Type43,
     /// Ordinary Type38 ground shooters, the silent Type129 carriers and the
@@ -83,6 +86,8 @@ impl NativeBallisticProfileId {
             | Self::Type5
             | Self::Type80
             | Self::Type126
+            | Self::Type55
+            | Self::Type81
             | Self::Type43
             | Self::Type38
             | Self::Type129
@@ -110,6 +115,8 @@ impl NativeBallisticProfileId {
             | Self::Type12
             | Self::Type127 => 1500,
             Self::Type5
+            | Self::Type55
+            | Self::Type81
             | Self::Type16
             | Self::Type128
             | Self::Type58
@@ -142,8 +149,8 @@ impl NativeBallisticProfileId {
     }
     const fn sound(self) -> u16 {
         match self {
-            Self::Type40 | Self::Type128 => 0,
-            Self::Type10 | Self::Type5 | Self::Type80 => 81,
+            Self::Type40 | Self::Type128 | Self::Type81 => 0,
+            Self::Type10 | Self::Type5 | Self::Type80 | Self::Type55 => 81,
             Self::Type126 => 82,
             Self::Type43 => 68,
             Self::Type38 => 82,
@@ -166,6 +173,8 @@ impl NativeBallisticProfileId {
             Self::Type5 => 0x5459_5030_3553_5243,
             Self::Type80 => 0x5459_5038_3053_5243,
             Self::Type126 => 0x5459_3132_3653_5243,
+            Self::Type55 => 0x5459_5035_3553_5243,
+            Self::Type81 => 0x5459_5038_3153_5243,
             Self::Type43 => 0x5459_5034_3353_5243,
             Self::Type38 => 0x5459_5033_3853_5243,
             Self::Type129 => 0x5459_3132_3953_5243,
@@ -192,6 +201,8 @@ impl NativeBallisticProfileId {
             Self::Type5 => 0x5459_5030_3554_4754,
             Self::Type80 => 0x5459_5038_3054_4754,
             Self::Type126 => 0x5459_3132_3654_4754,
+            Self::Type55 => 0x5459_5035_3554_4754,
+            Self::Type81 => 0x5459_5038_3154_4754,
             Self::Type43 => 0x5459_5034_3354_4754,
             Self::Type38 => 0x5459_5033_3854_4754,
             Self::Type129 => 0x5459_3132_3954_4754,
@@ -217,6 +228,8 @@ impl NativeBallisticProfileId {
             Self::Type10 => (300_000, 128, 44, 12_000, 3840),
             Self::Type5 => (300_000, 512, 48, 40_000, 5120),
             Self::Type80 | Self::Type126 => (300_000, 128, 44, 24_000, 5120),
+            Self::Type55 => (600_000, 256, 46, 24_000, 5120),
+            Self::Type81 => (600_000, 256, 46, 24_000, 7680),
             Self::Type43 => (300_000, 1024, 0, 65_535, 7680),
             Self::Type38 | Self::Type129 => (600_000, 256, 122, 4000, 5120),
             Self::Type119 => (800_000, 256, 48, 8000, 3840),
@@ -626,6 +639,8 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
                     | NativeBallisticProfileId::Type5
                     | NativeBallisticProfileId::Type80
                     | NativeBallisticProfileId::Type126
+                    | NativeBallisticProfileId::Type55
+                    | NativeBallisticProfileId::Type81
                     | NativeBallisticProfileId::Type43
                     | NativeBallisticProfileId::Type38
                     | NativeBallisticProfileId::Type129
@@ -680,6 +695,8 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
             | NativeBallisticProfileId::Type5
             | NativeBallisticProfileId::Type80
             | NativeBallisticProfileId::Type126
+            | NativeBallisticProfileId::Type55
+            | NativeBallisticProfileId::Type81
             | NativeBallisticProfileId::Type43
             | NativeBallisticProfileId::Type38
             | NativeBallisticProfileId::Type129
