@@ -192,6 +192,7 @@ fn intro2_common_mover_turn_retains_all_nine_pitched_matrix_words_for_c_a_b() {
                 kl_components: None,
                 target: Some(&mut target),
                 tracked_target: RetailRuntimeValue::Known(None),
+                sub_h_completion_sounds: false,
             },
             &mut || {
                 draws += 1;
@@ -283,6 +284,7 @@ fn intro2_common_mover_restricted_mode_skips_h_but_keeps_the_same_force_tail() {
                     kl_components: None,
                     target: Some(&mut target),
                     tracked_target: RetailRuntimeValue::Known(None),
+                    sub_h_completion_sounds: false,
                 },
                 &mut || panic!("unexpected RNG")
             )

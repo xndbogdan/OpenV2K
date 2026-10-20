@@ -12,7 +12,13 @@ use crate::{
 
 #[v2k_test_support::retail_test]
 fn type38_family_lethal_pair_runs_the_row_terminal() {
-    for (level, row) in [(41, Type38Row::Type129), (42, Type38Row::Type38)] {
+    for (level, row) in [
+        (41, Type38Row::Type129),
+        (42, Type38Row::Type38),
+        (46, Type38Row::Type119),
+    ] {
+        // Type119's armour takes only channel 3.
+        let channel = if row == Type38Row::Type119 { 3 } else { 2 };
         let (mut session, mut entities, mut fx) =
             crate::native_type122::construction_tests::native_fixture_with_player(level);
         entities.cleanup_pending_actor_deferred_destroys();
@@ -41,7 +47,7 @@ fn type38_family_lethal_pair_runs_the_row_terminal() {
             target,
             DamageDeliveryRecord {
                 packet: DamagePacket {
-                    channels: [2, 0],
+                    channels: [channel, 0],
                     amounts_raw: [1_000_000, 0],
                 },
                 source_entity_type_raw: 34,
@@ -64,7 +70,7 @@ fn type38_family_lethal_pair_runs_the_row_terminal() {
             .map(|entity| entity.power_up_payload_packed)
             .collect();
         match row {
-            Type38Row::Type38 => {
+            Type38Row::Type38 | Type38Row::Type119 => {
                 assert!(drops.is_empty());
                 assert!(entities
                     .pending_actor_deferred_destroy_ids()
@@ -87,7 +93,7 @@ fn type38_family_lethal_pair_runs_the_row_terminal() {
             target,
             DamageDeliveryRecord {
                 packet: DamagePacket {
-                    channels: [2, 0],
+                    channels: [channel, 0],
                     amounts_raw: [1_000_000, 0],
                 },
                 source_entity_type_raw: 34,

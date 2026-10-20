@@ -53,6 +53,7 @@ pub(crate) fn run<P: NativeGroundActorProfile>(
             kl_components: kl_components.as_mut(),
             target: Some(target),
             tracked_target,
+            sub_h_completion_sounds: true,
         },
         next_random,
     );

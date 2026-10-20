@@ -67,6 +67,7 @@ an emitter or rebuilds the incoming body matrix.
 | Living Type15/87 | Authored initializer word | Own Search hook and null style+1C; actual alternate2 C470 death |
 | Ordinary Type43 |2003B| No generic crush; Search/Pursuit style+1C is null; class1 death |
 | Ordinary Type38/129 |39| No generic crush; Aimless/Search/Pursuit style+1C is null; class1/class63 death |
+| Ordinary Type119 |439| Generic crush; Aimless/Search/Pursuit style+1C is null; class1 death |
 
 Type10's common-axis descriptor contains0xC85; that descriptor word is not
 its collision policy. Constructor C8 is8, as for Type57/13. The adapter reads

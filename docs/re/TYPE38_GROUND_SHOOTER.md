@@ -1,7 +1,8 @@
-# Type38 and Type129 ground shooters
+# Type38, Type129 and Type119 ground shooters
 
 This document owns the ten ordinary Type38 rows (worlds 42 and 43), the 25
-Type129 rows (world 41) and their shared native owner,
+Type129 rows (world 41), the three Type119 walkers (world 46) and their shared
+native owner,
 [`native_type38`](../../crates/v2k-game/src/native_type38.rs). Both run on the
 shared ground host that also carries
 [Type30](ALPINE_INSECTS.md#native-type30-owner). Static contact is in
@@ -51,6 +52,44 @@ Both masks hold the player's `0x1` and `0x400/0x800`. Type38's also holds
 `0x20` and `0x04`, so it can select the Type6 Main Base (`0x20`) and twenty
 other types that Type129 ignores.
 
+### Type119
+
+Type119 (model 1161, three rows in world 46) has the same component shape and
+classes, and its own data:
+
+| Field | Type119 |
+|---|---|
+| Mass / health | 500 / 20000 |
+| Damage thresholds | `[0, 10000, 5000, 25000, 200, 0, 0]` |
+| Damage multipliers (Q8) | `[0, 0, 0, 256, 0, 0, 0]`: only channel 3 hurts it |
+| `+C0` default flags | `0x439`: `D920` runs the generic crush |
+| Axis | 3840, `+04` `0xC05` |
+| Choices | Always ×1 class5, Always ×1 class7 |
+| Emitter | method 10, 800000 µs, spread 256, aim threshold 8000, speed 1500, tolerance 3840, `+12` 48, sound 82 |
+| Sounds | no death, hit or target-warning sound |
+| Surface | selectors `[1, 0]`, 2000 ms |
+| K / L | `[3,4]` / `[2,1,64,31,160,15]`, Type30's binding |
+
+- **A:** acceleration 1500, correction −3000, target speed 350.
+- **B:** both rates 10000.
+- **C:** clearance 75, lift range 50, otherwise Type38's.
+- **D:** divisor 64, probes 800/300, classifier `0x13`.
+- **H:** four legs with phase rate `0x10000000`, vertex triples `[24,26,28]`,
+  `[25,27,29]`, `[28,32,34]` and `[29,33,35]`, stepping in diagonal pairs
+  (records 0/3 wait on 1/2 and the reverse). The descriptor's `+02` is sound
+  90: when a record's phase completes, `41D120` draws one word and queues sound
+  90 at the body's position, full gain, at rate `0xE000 + (word & 0xFFFF)/4`.
+
+Both of its choices are Always, so its birth draws no PlayerNearby evidence.
+Its alternate is class1, as Type38's.
+
+A leg only starts a stride after `D360` resolves it, and `D360` is the model
+draw's external-frame callback (`6ECF0 -> 0D350 -> 0A9F0`). A walker that is
+never drawn keeps its legs at rest and plays no steps, in retail and in the
+port. The common mover holds each step's sound with its drawn rate until the
+ground host's visit leaves the Primary callback, then queues it before
+anything later in the visit.
+
 ## Birth
 
 The shared ground host's authored entry runs `104B0/09A80/D4A0`, as for Type30:
@@ -83,7 +122,7 @@ keeps each admitted model's selectors and admits only these two shapes.
 
 Aim fires through the native ballistic FIFO
 ([`intro2_native_ballistic_aim`](../../crates/v2k-game/src/intro2_native_ballistic_aim.rs),
-profiles `Type38` and `Type129`). Type129's shots are silent.
+profiles `Type38`, `Type129` and `Type119`). Type129's shots are silent.
 
 ## Hits and death
 
@@ -91,7 +130,8 @@ profiles `Type38` and `Type129`). Type129's shots are silent.
   which reselects class5 or class7 and keeps every component.
 - **Lethal hit.** Lethal damage publishes the row's alternate on the shared
   class49 terminal:
-  - Type38: `BAC0` clears every task and stages removal (corpse `4C7150`).
+  - Type38 and Type119: `BAC0` clears every task and stages removal (corpse
+    `4C7150`).
   - Type129: `BC90` keeps the living tasks and drops the Type61 authored in
     the carrier's `+88` at its position (corpse `4C7198`).
 - **Death burst.** `BAF0`'s scatter takes the nonnull-A branch at `40BBB3`:
@@ -125,12 +165,13 @@ does. The fix is to split the surface step around its lifecycle callback.
 [`native_type38/tests.rs`](../../crates/v2k-game/src/native_type38/tests.rs)
 covers:
 
-- all 35 births, their rows, graphs and source profiles;
-- ten-second cohorts in worlds 41, 42 and 43 under the real scheduler and the
-  late static walk;
+- all 38 births, their rows, graphs and source profiles;
+- ten-second cohorts in worlds 41, 42, 43 and 46 under the real scheduler and
+  the late static walk;
+- Type119's step sound 90 at drawn rates, with the draw's `D360` writeback;
 - method10 shots after a player comes near;
-- lethal Playing hits: class1 for Type38, class63 with the Type61 drop for
-  Type129, then the corpse's static walk;
+- lethal Playing hits: class1 for Type38 and Type119 (a channel-3 packet), class63
+  with the Type61 drop for Type129, then the corpse's static walk;
 - a nonlethal hit's `C690` reselection.
 
 Elsewhere:
@@ -141,7 +182,7 @@ Elsewhere:
   runs a lethal pair delivery through each row's terminal, then pairs the
   finished corpse without replaying it;
 - [the abort test](../../crates/v2k-game/src/main_base_abort_production/native/type38_tests.rs)
-  checks both deaths in worlds 41, 42 and 43.
+  checks the deaths in worlds 41, 42, 43 and 46.
 
 Headless 60-second runs of worlds 41, 42 and 43 completed with no blocked
 owner. In world 42 a Type38 took thirty 500-point particle hits from other

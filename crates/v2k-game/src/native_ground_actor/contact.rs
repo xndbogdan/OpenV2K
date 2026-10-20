@@ -782,7 +782,8 @@ fn resolve(
             && matches!(context.active_style().style_address(), 0x4c7df8 | 0x4c7e40))
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38 | 129 | 77
+            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38 | 129 | 119
+                | 77
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -790,7 +791,7 @@ fn resolve(
         || (matches!(profile.entity_type, 15 | 87 | 108)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
-        || (matches!(profile.entity_type, 13 | 14 | 39 | 43 | 38)
+        || (matches!(profile.entity_type, 13 | 14 | 39 | 43 | 38 | 119)
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
@@ -1178,7 +1179,7 @@ fn contact_task_hook(
         (0x4c7420, None, None) if matches!(entity.entity_type, 15 | 87 | 108) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
-        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 14 | 39 | 43 | 38) => {
+        (0x4c7150, None, None) if matches!(entity.entity_type, 13 | 14 | 39 | 43 | 38 | 119) => {
             Ok(NativeGroundStaticTaskHook::Null)
         }
         // Type14's Flocking: 02B10's and 03650's Primary hook 02CA0; the

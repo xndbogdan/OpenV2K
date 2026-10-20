@@ -101,6 +101,7 @@ impl Fixture {
                 kl_components: Some(&mut self.kl),
                 target,
                 tracked_target: RetailRuntimeValue::Known(None),
+                sub_h_completion_sounds: false,
             },
             &mut || panic!("these phase inputs cannot consume RNG"),
         )
@@ -336,6 +337,7 @@ fn type30_kl_missing_bank_rejects_before_target_or_body_mutation() {
                 kl_components: None,
                 target: Some(&mut target),
                 tracked_target: RetailRuntimeValue::Known(None),
+                sub_h_completion_sounds: false,
             },
             &mut || panic!("bank rejection precedes RNG"),
         ),

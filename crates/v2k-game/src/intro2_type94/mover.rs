@@ -51,6 +51,7 @@ pub(super) fn run(
             kl_components: None,
             target: Some(target),
             tracked_target,
+            sub_h_completion_sounds: false,
         },
         next_random,
     );
