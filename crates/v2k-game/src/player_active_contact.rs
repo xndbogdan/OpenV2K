@@ -474,8 +474,8 @@ impl<P: CollisionModelPool + ?Sized> ActivePairOracle<()> for PlayerPairOracle<'
             match evaluate_behavior_callback(
                 &owner,
                 &opposite,
-                request.owner.position_raw,
-                request.opposite.position_raw,
+                request.owner.velocity_raw,
+                request.opposite.velocity_raw,
                 &mut self.feedback,
             ) {
                 BehaviorDecision::Continue => PairBehaviorCallbackOutcome::Null,
@@ -1386,8 +1386,8 @@ fn component_callbacks_are_noop(callbacks: EntityPairCallbackRuntimeState) -> bo
 fn evaluate_behavior_callback(
     owner: &RuntimePairSnapshot,
     opposite: &RuntimePairSnapshot,
-    owner_position_raw: [i16; 3],
-    opposite_position_raw: [i16; 3],
+    owner_velocity_raw: [i16; 3],
+    opposite_velocity_raw: [i16; 3],
     feedback: &mut Vec<i32>,
 ) -> BehaviorDecision {
     let policy = match owner.behavior_context {
@@ -1414,8 +1414,8 @@ fn evaluate_behavior_callback(
             }
             if opposite.capability_flags & CONSUMABLE_TARGET_CAPABILITIES == 0 {
                 feedback.extend(crate::pad_vibration::pair_contact_strength(
-                    owner_position_raw,
-                    opposite_position_raw,
+                    owner_velocity_raw,
+                    opposite_velocity_raw,
                 ));
             }
             BehaviorDecision::Continue

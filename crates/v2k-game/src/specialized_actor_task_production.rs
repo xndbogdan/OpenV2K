@@ -313,6 +313,7 @@ impl From<crate::entity::NativeHiveNewborn> for SpecializedActorTaskOwner {
             }
             crate::entity::NativeHiveNewborn::Type26(owner) => Self::Intro2Type26(owner),
             crate::entity::NativeHiveNewborn::Type18(owner) => Self::NativeType18(owner),
+            crate::entity::NativeHiveNewborn::SharedFish(owner) => Self::SharedFish(owner),
             crate::entity::NativeHiveNewborn::Type38Family(owner) => {
                 Self::NativeType38Family(owner)
             }
@@ -2258,7 +2259,12 @@ impl SpecializedActorTaskScheduler {
                 .push(SpecializedActorTaskOwner::SharedFish(owner));
         }
     }
-    pub(crate) fn retire_shared_fish(&mut self, entity_id: u32) {
+    /// A fish's quiet death or class63 retires its owner; the shark's class12
+    /// keeps ticking under its fresh dying receipt.
+    pub(crate) fn retire_shared_fish(&mut self, manager: &EntityManager, entity_id: u32) {
+        if let Some(owner) = crate::shared_fish::dying_shark_owner(manager, entity_id) {
+            return self.register_shared_fish(owner);
+        }
         self.owners.retain(|owner| {
             !matches!(owner, SpecializedActorTaskOwner::SharedFish(owner)
                 if owner.entity_id() == entity_id)

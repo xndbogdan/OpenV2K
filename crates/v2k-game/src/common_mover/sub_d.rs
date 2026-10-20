@@ -303,6 +303,18 @@ pub const NATIVE_TYPE28_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     reserved_at_0x0b: 0,
 };
 
+/// Type25's shark: divisor96, roll coupling, probes1024/256 and the
+/// steepness-only flags10 of Type18/28.
+pub const TYPE25_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 96,
+    couple_yaw_into_roll_raw: 1,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 1024,
+    lateral_probe_raw: 256,
+    classifier_flags: 0x10,
+    reserved_at_0x0b: 0,
+};
+
 /// Type94's exact authored descriptor equals Type58's steering/probe values.
 /// Its independent constructor/first-query receipt below is not interchangeable.
 pub const INTRO2_TYPE94_SUB_D: SubDSteeringDescriptor = INTRO2_TYPE58_SUB_D;
@@ -384,6 +396,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | INTRO2_TYPE10_SUB_D
             | SHARED_FISH_SUB_D
             | TYPE62_SUB_D
+            | TYPE25_SUB_D
             | CLEANSING_VEHICLE_SUB_D
             | FLYER_SUB_D
             | TYPE14_SUB_D

@@ -274,7 +274,7 @@ pub(super) fn dispatch_native_actor(
         {
             NativeActor::Type10Family
         }
-        22 | 23 | 24 | 62 if entity.shared_fish_runtime.is_some() => NativeActor::SharedFish,
+        22 | 23 | 24 | 62 | 25 if entity.shared_fish_runtime.is_some() => NativeActor::SharedFish,
         // Type14's alternate class1 belongs to the class49 dispatch above.
         15 | 87 | 108 if entity.intro2_flyer_frame_owner.is_some() => NativeActor::Flyer,
         // Type128's class63 Auto Pilot belongs to the class49 dispatch above.
@@ -648,9 +648,13 @@ fn dispatch(
             )
             .map_err(|error| block(Block::Fish(error)))?;
             if death.publication.is_some() {
-                specialized_tasks.retire_shared_fish(id);
+                specialized_tasks.retire_shared_fish(entities, id);
             }
-            MainBaseAbortActorDisposition::QuietDeath
+            if crate::shared_fish::is_shark(actor.entity_type) {
+                MainBaseAbortActorDisposition::Type25Death
+            } else {
+                MainBaseAbortActorDisposition::QuietDeath
+            }
         }
         NativeActor::Type122 => {
             let owner = crate::native_actor_capture::publish_native_captor_standard_death(

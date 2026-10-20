@@ -1624,14 +1624,16 @@ mod tests {
     }
 
     #[test]
-    fn unresolved_player_sub_j_context_aborts_before_radial_mutation() {
+    fn a_nonempty_controller_owned_list_aborts_before_radial_mutation() {
         let mut player = entity(0, [64, 0, 0], 10_000);
         player.kind = EntityKind::Player;
         player.entity_type = PLAYER_ENTITY_TYPE;
         player.collision.pair_callbacks = EntityPairCallbackRuntimeState::audited_player();
+        // 4484A0 never reads Sub-J cargo; only the controller's +220 list.
         player.sub_j_attachment_runtime = RetailRuntimeValue::Unresolved;
         let mut manager = manager(vec![player]);
         manager.player_id = Some(0);
+        manager.auxiliary_owned_ids.push(9);
         let velocity_before = manager.entities[0].velocity_raw();
         let collision_before = manager.entities[0].collision.clone();
         let mut hull = PlayerHull::default();
@@ -1646,9 +1648,7 @@ mod tests {
             ),
             DynamicRadialDamageOutcome::Aborted(DynamicRadialUnresolved {
                 target_id: 0,
-                reason: DynamicRadialUnresolvedReason::MissingRuntimeField(
-                    DynamicRadialRuntimeField::DamageModifierContext,
-                ),
+                reason: DynamicRadialUnresolvedReason::PlayerDamageModifierContextNotEmpty,
             })
         );
         assert_eq!(manager.entities[0].velocity_raw(), velocity_before);

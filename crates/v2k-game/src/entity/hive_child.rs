@@ -26,6 +26,7 @@ pub enum NativeHiveNewborn {
     Type76Family(Type76FamilyOwner),
     Worker(crate::intro2_type8::Intro2Type8Owner),
     Type94(crate::intro2_type94::Intro2Type94Owner),
+    SharedFish(crate::shared_fish::SharedFishOwner),
 }
 
 impl NativeHiveNewborn {
@@ -41,6 +42,7 @@ impl NativeHiveNewborn {
             Self::Type76Family(owner) => owner.entity_id(),
             Self::Worker(owner) => owner.entity_id(),
             Self::Type94(owner) => owner.entity_id(),
+            Self::SharedFish(owner) => owner.entity_id(),
         }
     }
 }
@@ -129,6 +131,11 @@ pub enum HiveNativeBirthBlock {
     /// Type94's construction failed after 104B0 entry: a committed prefix.
     Type94Construction(crate::intro2_type94::Intro2Type94Error),
     Type94Adoption(crate::intro2_type94::Intro2Type94Block),
+    /// A swimmer's metadata refused before 104B0 entry.
+    SwimmerMetadata(crate::shared_fish::SharedFishError),
+    /// A swimmer's construction failed after 104B0 entry: a committed prefix.
+    SwimmerConstruction(crate::shared_fish::SharedFishError),
+    SwimmerAdoption(crate::shared_fish::SharedFishBlock),
 }
 
 impl HiveNativeBirthBlock {
@@ -151,6 +158,8 @@ impl HiveNativeBirthBlock {
                 | Self::WorkerConstruction(_)
                 | Self::Type94Construction(_)
                 | Self::Type94Adoption(_)
+                | Self::SwimmerConstruction(_)
+                | Self::SwimmerAdoption(_)
         )
     }
 }
@@ -174,6 +183,11 @@ impl EntityManager {
             return self
                 .append_native_hive_type94(request, context, world_fx)
                 .map(NativeHiveNewborn::Type94);
+        }
+        if crate::shared_fish::is_shark(request.entity_type) {
+            return self
+                .append_native_hive_swimmer(request, context, world_fx)
+                .map(NativeHiveNewborn::SharedFish);
         }
         if crate::intro2_type8::NativeWorkerProfile::from_entity_type(request.entity_type).is_some()
         {
@@ -364,6 +378,84 @@ impl EntityManager {
                 .map(NativeHiveNewborn::Type76Family)
                 .map_err(HiveNativeBirthBlock::GroundAdoption),
         }
+    }
+
+    /// The zeroed record through the B/D/F constructor: 104B0's body ordinal,
+    /// 09A80's process Sub-D, Sub-F's words, then AC60 over the live list.
+    fn append_native_hive_swimmer(
+        &mut self,
+        request: HiveBirthRequest,
+        context: NativeHiveChildConstructionContext<'_>,
+        world_fx: &mut WorldFx,
+    ) -> Result<crate::shared_fish::SharedFishOwner, HiveNativeBirthBlock> {
+        let metadata = self
+            .type_metadata
+            .get(request.entity_type as usize)
+            .ok_or(HiveNativeBirthBlock::Runtime("native swimmer metadata"))?
+            .clone();
+        crate::shared_fish::authenticate_metadata(&metadata)
+            .map_err(HiveNativeBirthBlock::SwimmerMetadata)?;
+        let RetailRuntimeValue::Known(Some(descriptor)) = metadata.sub_d_steering_descriptor else {
+            return Err(HiveNativeBirthBlock::Runtime("native swimmer Sub-D"));
+        };
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err(HiveNativeBirthBlock::Runtime("native body stamp lineage"));
+        }
+        let terrain = context
+            .resources
+            .terrain
+            .filter(|terrain| {
+                terrain.cells.len()
+                    == v2k_formats::terrain::GRID_SIZE * v2k_formats::terrain::GRID_SIZE
+            })
+            .ok_or(HiveNativeBirthBlock::Runtime(
+                "native swimmer complete terrain",
+            ))?;
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            request.position_raw,
+            terrain,
+            context.retail_tick,
+            context.waves_enabled,
+        )
+        .ok_or(HiveNativeBirthBlock::Runtime(
+            "native swimmer constructor surface",
+        ))?;
+        let id = self.next_entity_id;
+        if id == 0 || self.entities.iter().any(|entity| entity.id == id) {
+            return Err(HiveNativeBirthBlock::Runtime(
+                "native swimmer allocation handle",
+            ));
+        }
+        let body = NativeInstanceBodyRequest {
+            entity_type: request.entity_type,
+            position_raw: request.position_raw,
+            objective: request.objective,
+        };
+        let stamp = self.begin_common_body_attempt();
+        let sub_d = world_fx.construct_entity_sub_d(descriptor);
+        let mut entity = native_instance_body(id, stamp, &metadata, terrain, body);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        crate::shared_fish::publish_authored_fish(
+            crate::shared_fish::FishAuthoredConstruction {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+                record: NativeCreationRecord::zeroed(body),
+                preceding: &self.entities,
+                resources: context.resources,
+                constructor_surface_bits,
+                sub_d,
+            },
+            &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+        )
+        .map_err(HiveNativeBirthBlock::SwimmerConstruction)?;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        crate::shared_fish::SharedFishOwner::adopt(self, id)
+            .map_err(HiveNativeBirthBlock::SwimmerAdoption)
     }
 
     /// A worker's zeroed record through its shared constructor: 104B0's body

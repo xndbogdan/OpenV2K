@@ -48,7 +48,8 @@ pub(super) fn fixture(level_id: u32) -> (GameSession, EntityManager, WorldFx) {
 
 #[v2k_test_support::retail_test]
 fn native_fish_preserve_instance_identity_and_publish_all_authored_families() {
-    for (world, count) in [(13, 3), (23, 43), (30, 20)] {
+    // World23's two sharks (spawns15/16) share the owner.
+    for (world, count) in [(13, 3), (23, 45), (30, 20)] {
         let (session, mut manager, _fx) = fixture(world);
         let ids: Vec<_> = manager
             .iter_all()
@@ -63,7 +64,7 @@ fn native_fish_preserve_instance_identity_and_publish_all_authored_families() {
             assert!(allocation_authenticates(&manager, id));
             let entity = manager.entity_mut(id).unwrap();
             let runtime = entity.shared_fish_runtime.as_ref().unwrap();
-            let spawn = &session.cache.level_desc().unwrap().entities[runtime.spawn_index];
+            let spawn = &session.cache.level_desc().unwrap().entities[runtime.spawn_index.unwrap()];
             assert_eq!(entity.position_raw(), spawn.position_raw());
             assert_eq!(runtime.immutable_anchor_raw, spawn.position_raw());
             assert_eq!(
@@ -74,7 +75,10 @@ fn native_fish_preserve_instance_identity_and_publish_all_authored_families() {
             let RetailRuntimeValue::Known(Some(selection)) = entity.initial_behavior else {
                 panic!("native selection")
             };
-            assert!(matches!(selection.program.class_id, 5 | 6 | 13));
+            assert!(matches!(
+                (is_shark(entity.entity_type), selection.program.class_id),
+                (_, 5 | 6) | (false, 13) | (true, 69)
+            ));
             assert!(entity.actor_task_state(ActorTaskSlot::Primary).is_some());
         }
     }
@@ -153,7 +157,8 @@ fn native_constructor_consumes_sub_f_draws_before_choice_and_keeps_authored_inst
                 entity: e,
                 allocation,
                 metadata: row,
-                spawn: &spawn,
+                record: crate::entity::NativeCreationRecord::authored(&spawn),
+                preceding: &[],
                 resources: EntityConstructionResources {
                     terrain: session.cache.terrain(),
                     terrain_objects: session.cache.terrain_objects(),
@@ -268,6 +273,10 @@ fn detailed_fish_swim_then_coarse_parking_preserves_tasks_pose_and_animation() {
         let mut parked = Vec::new();
         for id in ids {
             let e = manager.entity_mut(id).unwrap();
+            // The shark's C has no 2000: its coarse visits still run tasks.
+            if is_shark(e.entity_type) {
+                continue;
+            }
             e.collision.state_flags_at_0x08.overwrite(0x0200_0000, 0);
             parked.push((
                 id,

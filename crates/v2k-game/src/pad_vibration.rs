@@ -53,8 +53,8 @@ pub fn damage_strength(filtered_damage_raw: i32) -> Option<i32> {
 }
 
 /// `FUN_00447D70`'s feedback when the craft touches a body that is not a
-/// pickup: `min(0xFF, vibration × (distance − 0x200) / 45)`, from the retail
-/// integer root of the two positions' wrapped squared distance.
+/// pickup: `min(0xFF, vibration × (speed − 0x200) / 45)`, from the retail
+/// integer root of the squared difference of the two velocities (`+9C..A0`).
 pub fn pair_contact_strength(craft_raw: [i16; 3], body_raw: [i16; 3]) -> Option<i32> {
     let squared = (0..3).fold(0_i32, |sum, axis| {
         let delta = i32::from(craft_raw[axis].wrapping_sub(body_raw[axis]));

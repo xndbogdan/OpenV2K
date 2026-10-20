@@ -655,13 +655,16 @@ callback rather than being relabeled as class 1.
 Type 46 installs a nontrivial modifier at `0x004484A0`: an active linked type-63
 entity receives the packet and zeros damage to the player; otherwise the packet
 is propagated through the controller's linked-entity list with temporary
-`0x8000` activation before the original filtered amount is returned. This link
-contract is part of radial delivery, not optional presentation.
+`0x8000` activation before the original filtered amount is returned. The list
+is the controller's `+220` owned list, not the body's Sub-J cargo: retail's
+world-22 arrival carries a Type68 ballast in Sub-J, and a shark's bite then
+reaches only the player. This link contract is part of radial delivery, not
+optional presentation.
 
 The bounded port integration now shares this arithmetic between the static and
 dynamic domains, runs static children first, then preflights the complete
 creation-order dynamic pass before committing anything from it. Retained null
-modifiers and type-hit callbacks, the empty-cargo type-46 identity case, player
+modifiers and type-hit callbacks, the empty-list type-46 identity case, player
 hull death, and Base/Factory progressive death are admitted. An in-range remote
 owner, unresolved callback/modifier, nonempty type-46 link context, or unsupported
 lethal lifecycle discards the entire dynamic plan including impulse and audio;

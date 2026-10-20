@@ -2184,6 +2184,9 @@ pub struct WorldFx {
     /// Eight-frame process-global particle-density governor. Level teardown
     /// clears live effects but deliberately does not reset this state.
     frame_pacing: ParticleFramePacing,
+    /// DAT_004D04E4: this frame's capped simulation delta, read by callbacks
+    /// outside the actor tick (the shark's bite).
+    global_elapsed_micros: u32,
     /// Live diagnostics counters; never simulated state.
     splash_path_counters: SplashPathCounters,
     /// A network game's sends from these effects, in call order. `None`
@@ -2269,6 +2272,7 @@ impl WorldFx {
             direction_cursor: self.direction_cursor,
             last_retail_tick: self.last_retail_tick,
             frame_pacing: self.frame_pacing.clone(),
+            global_elapsed_micros: self.global_elapsed_micros,
             splash_path_counters: self.splash_path_counters,
             network_sends: self.network_sends.clone(),
         }
@@ -2406,6 +2410,34 @@ impl WorldFx {
         );
         self.network_sends = sending;
         slot
+    }
+
+    /// Publish DAT_004D04E4 for the frame.
+    pub fn set_global_elapsed_micros(&mut self, elapsed_micros: u32) {
+        self.global_elapsed_micros = elapsed_micros;
+    }
+
+    pub fn global_elapsed_micros(&self) -> u32 {
+        self.global_elapsed_micros
+    }
+
+    /// Class69's `5E10` bubble through `440A60`: the bitten body's position,
+    /// the shark's velocity, its handle and its state sign.
+    pub fn emit_shark_bite_particle_raw(
+        &mut self,
+        position_raw: [i16; 3],
+        velocity_raw: [i16; 3],
+        owner_id: u32,
+        owner_sign: bool,
+    ) {
+        let mut burst = single_descriptor_particle_burst(
+            raw_position_to_world(position_raw),
+            crate::shark_attack::BITE_PARTICLE_CLASS,
+            velocity_raw.map(i32::from),
+            Some(owner_id),
+        );
+        burst.particles[0].suppresses_impact_damage = owner_sign;
+        self.materialize_particle_burst(burst);
     }
 
     /// Read and reset the splash-path diagnostics counters, snapshotting the

@@ -167,6 +167,13 @@ pub(crate) fn begin_shared_fish_standard_death(
         .type_runtime_metadata(entity.entity_type)
         .ok_or(Block::Metadata)?;
     super::authenticate_metadata(metadata).map_err(|_| Block::Metadata)?;
+    // Type25's alternate is class12, which keeps its owner ticking.
+    if super::is_shark(entity.entity_type) {
+        if !scheduler.shared_fish_completed_owner(manager, id) {
+            return Err(Block::Runtime("completed native allocation/task custody"));
+        }
+        return super::dying::publish_shark_death(manager, id, fx);
+    }
     let initializer = metadata.initializer.as_ref().ok_or(Block::Metadata)?;
     if !matches!(entity.entity_type, 22 | 23 | 24 | 62)
         || initializer.alternate_behavior_class_ref != 2

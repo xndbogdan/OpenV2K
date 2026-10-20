@@ -64,7 +64,7 @@ fn assert_fish_abort_contract(world: u32, kind: u32) {
                     .unwrap()
                     .impact_prefix_pending = true;
             }
-            Some(InvalidCustody::MissingScheduler) => scheduler.retire_shared_fish(id),
+            Some(InvalidCustody::MissingScheduler) => scheduler.retire_shared_fish(&manager, id),
             None => {}
         }
         let entity = manager.entity_mut(id).unwrap();

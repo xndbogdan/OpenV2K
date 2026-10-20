@@ -252,6 +252,7 @@ pub(crate) mod shared_fish_tasks;
 pub mod shared_retarget_mover;
 pub mod shared_target_route;
 pub mod shared_type47;
+pub mod shark_attack;
 pub mod sky;
 pub mod sound11_warble;
 pub mod specialized_actor_task_production;

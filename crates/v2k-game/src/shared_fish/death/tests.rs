@@ -112,7 +112,8 @@ fn absent_stale_executing_and_parked_owners_reject_before_death_writes() {
                 // scheduler's earlier context/slot receipt.
                 let metadata = manager.type_runtime_metadata(22).unwrap().clone();
                 crate::shared_fish_tasks::reselect_after_task_result(
-                    manager.entity_mut(id).unwrap(),
+                    &mut manager,
+                    id,
                     &metadata,
                     &mut || 0,
                 )

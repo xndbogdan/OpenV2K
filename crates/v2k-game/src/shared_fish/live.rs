@@ -73,8 +73,9 @@ impl SharedFishOwner {
         };
         if !matches!(
             (program.class_id, context.style_table_index_raw_at_0x10()),
-            (5 | 6, 0) | (13, 0 | 1)
-        ) {
+            (5 | 6 | 69, 0) | (13, 0 | 1)
+        ) && !super::dying::dying_graph(entity)
+        {
             return Err(SharedFishBlock::Graph);
         }
         let allocation = manager
@@ -235,6 +236,9 @@ fn run_frame(
         .iter_all()
         .find(|entity| entity.id == id)
         .ok_or(Block::Allocation)?;
+    if super::dying::dying_graph(entity) {
+        return super::dying::run_frame(manager, id, frame, prefix_committed);
+    }
     let state = bits(
         entity,
         REMOTE_OWNED_STATE_BIT
@@ -287,19 +291,27 @@ fn run_frame(
     entity.mass_raw = mass;
     // PE DCA0/E870 latch entry effective flags before tasks. Every admitted
     // fish style preserves2004/200C; Wander's21000 clear mask clears neither.
-    effective_flags(entity)?;
-    if !detailed {
+    let environment = effective_flags(entity)? & 0x2000 != 0;
+    if !detailed && environment {
         // 40E8AF ->40E9C0: environment2000 skips A800 AND the complete outer
         // tail. Stored velocity, task clocks, F state and basis remain parked.
         entity.collision.state_flags_at_0x08.overwrite(0x40000, 0);
         commit_motion(entity, dt)?;
         return Ok(advanced);
     }
-    // 40DCFC..40DD06: detailed2000&&!1000 enables master motion before A800.
-    entity
-        .collision
-        .state_flags_at_0x08
-        .overwrite(0x40000, 0x40000);
+    if environment {
+        // 40DCFC..40DD06: detailed2000&&!1000 enables master motion before A800.
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(0x40000, 0x40000);
+    }
+    // The shark's C (no 2000) runs A800 on coarse visits too, in mode1 (F only).
+    let mode = if detailed {
+        CommonMoverDispatchMode::Normal
+    } else {
+        CommonMoverDispatchMode::Restricted
+    };
     let terrain = frame
         .resources
         .level_terrain()
@@ -314,6 +326,11 @@ fn run_frame(
         .as_ref()
         .ok_or(Block::Allocation)?
         .immutable_anchor_raw;
+    let [x, _, z] = entity.position_raw();
+    let cell_height_raw = terrain
+        .cell(usize::from(x as u16 >> 8), usize::from(z as u16 >> 8))
+        .ok_or(Block::Runtime("fish cell"))?
+        .height as i8;
     {
         let mut next_random = || u32::from(frame.world_fx.next_shared_retail_random_u16());
         let changed = tasks::tick_primary(
@@ -321,8 +338,10 @@ fn run_frame(
             FishTaskFrame {
                 entity_id: id,
                 elapsed_micros: dt,
-                dispatch_mode: CommonMoverDispatchMode::Normal,
+                dispatch_mode: mode,
                 immutable_anchor_raw,
+                sea_level_raw: terrain.sea_level_raw(),
+                cell_height_raw,
             },
             &mut next_random,
             |entity, target, tracked_target, random| {
@@ -331,12 +350,12 @@ fn run_frame(
                     super::mover::FishMoverFrame {
                         metadata: &metadata,
                         terrain,
-                        dispatch_mode: CommonMoverDispatchMode::Normal,
+                        dispatch_mode: mode,
                         elapsed_micros: dt,
                         global_elapsed_micros: frame.global_elapsed_micros,
                         active_model_extent_raw,
                     },
-                    target,
+                    Some(target),
                     tracked_target,
                     random,
                 )
@@ -344,12 +363,8 @@ fn run_frame(
         )
         .map_err(map_task)?;
         if changed {
-            tasks::reselect_after_task_result(
-                manager.entity_mut(id).ok_or(Block::Allocation)?,
-                &metadata,
-                &mut next_random,
-            )
-            .map_err(map_plain_task)?;
+            tasks::reselect_after_task_result(manager, id, &metadata, &mut next_random)
+                .map_err(map_plain_task)?;
         }
         // Read Secondary after Primary and C690. C7D0 may install a new
         // Primary; that new task waits for the next actor visit.
@@ -374,12 +389,12 @@ fn run_frame(
             return Err(Block::Graph);
         }
     }
-    finish_detailed(manager, id, &metadata, &mut frame, dt)?;
+    finish(manager, id, &metadata, &mut frame, dt, detailed)?;
     Ok(advanced)
 }
 
 fn effective_flags(entity: &Entity) -> Result<u32, SharedFishBlock> {
-    let RetailRuntimeValue::Known(flags @ (0x2004 | 0x200c)) =
+    let RetailRuntimeValue::Known(flags @ (0x2004 | 0x200c | 0xc)) =
         entity.collision.default_state_flags_at_0xc8
     else {
         return Err(SharedFishBlock::Runtime("fish default environment"));
@@ -389,21 +404,24 @@ fn effective_flags(entity: &Entity) -> Result<u32, SharedFishBlock> {
     };
     // PE styles5/6/13: +34=0; +38=0 except Wander21000. Neither policy
     // changes these defaults. Zebra fish omit E100's independent drag bit8.
-    if !matches!(
-        context.active_style().style_address(),
-        0x4c7930 | 0x4c79c0 | 0x4c7df8 | 0x4c7e40
-    ) {
+    // The shark's C keeps 4 and 8; Shark Attack's 4C7D20 has zero masks.
+    let style = context.active_style().style_address();
+    if !matches!(style, 0x4c7930 | 0x4c79c0 | 0x4c7df8 | 0x4c7e40)
+        && !(flags == 0xc && style == 0x4c7d20)
+    {
         return Err(SharedFishBlock::Graph);
     }
     Ok(flags)
 }
 
-fn finish_detailed(
+/// DCA0's (detailed) or E870's (coarse) tail; only DCA0 has the sound.
+fn finish(
     manager: &mut EntityManager,
     id: u32,
     metadata: &EntityTypeRuntimeMetadata,
     frame: &mut SharedFishFrame<'_>,
     dt: u32,
+    detailed: bool,
 ) -> Result<(), SharedFishBlock> {
     use SharedFishBlock as Block;
     let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
@@ -414,15 +432,21 @@ fn finish_detailed(
     let RetailRuntimeValue::Known(health_raw) = entity.collision.health_raw else {
         return Err(Block::Runtime("fish detailed health"));
     };
-    if let Some(sound) = crate::actor_detailed_sound::plan_actor_detailed_sound(
-        crate::actor_detailed_sound::ActorDetailedSoundFrame {
-            type_record: record,
-            health_raw,
-            visible: bits(entity, 0x800)? != 0,
-            callback_elapsed_micros: dt,
-        },
-        &mut || u32::from(frame.world_fx.next_shared_retail_random_u16()),
-    ) {
+    let visible = bits(entity, 0x800)? != 0;
+    if let Some(sound) = detailed
+        .then(|| {
+            crate::actor_detailed_sound::plan_actor_detailed_sound(
+                crate::actor_detailed_sound::ActorDetailedSoundFrame {
+                    type_record: record,
+                    health_raw,
+                    visible,
+                    callback_elapsed_micros: dt,
+                },
+                &mut || u32::from(frame.world_fx.next_shared_retail_random_u16()),
+            )
+        })
+        .flatten()
+    {
         frame
             .world_fx
             .queue_networked_positional_sound_raw(sound, entity.position_raw());
@@ -456,7 +480,7 @@ fn finish_detailed(
 
 /// E100's bit8-gated44EC60 call. Types23/62 never enter this callback;
 /// Sub-F's own velocity damping remains in the preceding component update.
-fn apply_environment(
+pub(super) fn apply_environment(
     manager: &mut EntityManager,
     id: u32,
     frame: &SharedFishFrame<'_>,
@@ -529,7 +553,7 @@ pub(super) fn bits(entity: &Entity, mask: u32) -> Result<u32, SharedFishBlock> {
     }
 }
 
-fn commit_motion(entity: &mut Entity, dt: u32) -> Result<(), SharedFishBlock> {
+pub(super) fn commit_motion(entity: &mut Entity, dt: u32) -> Result<(), SharedFishBlock> {
     let state = bits(entity, COMMON_MASTER_MOTION_REQUIRED_STATE_MASK)?;
     let motion = plan_common_master_motion(entity.position_raw(), entity.velocity_raw(), state, dt);
     commit_common_scheduler_post_callback(&mut entity.collision);
@@ -576,7 +600,7 @@ mod tests {
             );
             entity.mass_raw = 0;
             entity.set_velocity_raw([101, -29, 73]);
-            let result = finish_detailed(
+            let result = finish(
                 &mut manager,
                 id,
                 &metadata,
@@ -588,6 +612,7 @@ mod tests {
                     retail_tick: 1001,
                 },
                 20_000,
+                true,
             );
             if has_drag {
                 assert_eq!(

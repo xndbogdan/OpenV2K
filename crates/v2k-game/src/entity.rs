@@ -5053,6 +5053,7 @@ impl EntityManager {
                             | 22
                             | 23
                             | 24
+                            | 25
                             | 26
                             | 27
                             | 28
@@ -7773,16 +7774,14 @@ impl EntityManager {
         &self.pending_power_up_destroy_ids
     }
 
-    /// Whether the controller-owned attachment list consumed by the player's
-    /// `FUN_004484A0` damage modifier is currently empty.
+    /// Whether the controller's `+220` owned list, which the player's
+    /// `FUN_004484A0` damage modifier walks, is currently empty. Sub-J cargo,
+    /// such as an arrival's Type68 ballast, is a separate list it never reads.
     pub(crate) fn player_pair_damage_modifier_context_empty(&self) -> RetailRuntimeValue<bool> {
-        match self.player().map(|player| &player.sub_j_attachment_runtime) {
-            Some(RetailRuntimeValue::Known(Some(runtime))) => {
-                RetailRuntimeValue::Known(runtime.is_empty())
-            }
-            Some(RetailRuntimeValue::Known(None)) => RetailRuntimeValue::Known(true),
-            Some(RetailRuntimeValue::Unresolved) | None => RetailRuntimeValue::Unresolved,
+        if self.player().is_none() {
+            return RetailRuntimeValue::Unresolved;
         }
+        RetailRuntimeValue::Known(self.auxiliary_owned_ids.is_empty())
     }
 
     /// Run retail's deferred type-61 splice explicitly.

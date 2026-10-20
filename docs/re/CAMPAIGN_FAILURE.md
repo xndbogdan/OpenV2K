@@ -277,16 +277,17 @@ retail skips those actors.
 | First unsupported entity type | Global OVLs |
 |---|---|
 | 20 | 33 |
-| 25 | 23, 34 |
 | 29 | 20, 24 |
 | 33 | 43 |
 | 36 | 42, 46 |
+| 37 | 23 |
 | 41 | 22 |
 | 73 | 18 |
 | 74 | 21, 36 |
 | 107 | 31 |
 | 109 | 26 |
 | 110 | 47 |
+| 117 | 34 |
 | 121 | 40 |
 
 Thus exact fresh-world actor cleanup is complete for ten of the 21 casualty

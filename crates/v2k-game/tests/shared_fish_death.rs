@@ -69,9 +69,10 @@ fn infected_then_primary_hits_preserve_every_authored_fish_death_policy() {
                 .filter(|entity| matches!(entity.entity_type, 22 | 23 | 24 | 62))
                 .map(|entity| entity.id)
                 .collect();
+            // Type124's class63 carriers and the Type25 sharks keep ticking.
             let survivors: Vec<_> = manager
                 .iter_all()
-                .filter(|entity| entity.entity_type == 124)
+                .filter(|entity| matches!(entity.entity_type, 124 | 25))
                 .map(|entity| entity.id)
                 .collect();
             assert!(!victims.is_empty());
@@ -239,5 +240,5 @@ fn infected_then_primary_hits_preserve_every_authored_fish_death_policy() {
         }
     }
     eprintln!("fish death (entry, world, class2, class63) census: {census:?}");
-    assert_eq!(census.iter().map(|row| row.2 + row.3).sum::<usize>(), 228);
+    assert_eq!(census.iter().map(|row| row.2 + row.3).sum::<usize>(), 240);
 }

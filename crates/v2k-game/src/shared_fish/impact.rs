@@ -288,11 +288,12 @@ fn run(
     let ActiveBehaviorStyle::Audited(style) = context.active_style() else {
         return Err(Block::Runtime("hit style"));
     };
-    // PE tables4C7930/79C0/7DF8/7E40: +20,+24 and+28 are40C690.
-    // This direct style call omits task-result dispatch's416410 suppression.
+    // PE tables4C7930/79C0/7DF8/7E40 and the shark's 4C7D20: +20,+24 and
+    // +28 are40C690. This direct style call omits task-result dispatch's
+    // 416410 suppression.
     match style.frame_address {
-        0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 => {
-            crate::shared_fish_tasks::reselect_behavior(entity, &metadata, &mut || {
+        0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7d20 => {
+            crate::shared_fish_tasks::reselect_behavior(manager, id, &metadata, &mut || {
                 u32::from(world_fx.next_shared_retail_random_u16())
             })
             .map_err(|_| Block::Runtime("hit C690 selection"))?;
@@ -303,6 +304,11 @@ fn run(
         address
             if completed_death
                 && address == crate::entity_behavior::QUIET_DEATH_STYLE.frame_address => {}
+        // The dying shark's class12 style has a null +28.
+        address
+            if super::dying::dying_graph(manager.iter_all().find(|e| e.id == id).unwrap())
+                && address == crate::actor_death::COMMON_ACTOR_DYING_ACTIVE_STYLE.frame_address => {
+        }
         // Class63's style is zero apart from its +40 initializer.
         address
             if finished_auto_pilot
@@ -387,12 +393,12 @@ fn run(
     .map_err(|error| {
         *committed |= error.committed_prefix;
         if error.death_publication.is_some() {
-            scheduler.retire_shared_fish(id);
+            scheduler.retire_shared_fish(manager, id);
         }
         Block::Damage(error)
     })?;
     if checked.death_publication.is_some() {
-        scheduler.retire_shared_fish(id);
+        scheduler.retire_shared_fish(manager, id);
     }
     // 10EB0's accepted-hit suffix follows damage/death. The retail fish have
     // capability0 and sound+80 zero; keep those independent runtime checks.
@@ -517,6 +523,7 @@ mod tests {
                 &metadata,
                 selection,
                 context,
+                &mut || panic!("fish initializers draw no word"),
             )
             .unwrap();
             if acquired {

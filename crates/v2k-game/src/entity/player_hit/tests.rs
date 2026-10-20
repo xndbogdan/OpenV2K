@@ -771,18 +771,8 @@ fn unresolved_style_or_controller_links_block_before_prefix_sound_and_rng() {
                 | IMPACT_REACTION_ENABLED_STATE_BIT,
         );
         if links {
-            let descriptor = SubJAttachmentDescriptor {
-                reserved_at_0x01: 0,
-                slots: vec![SubJAttachmentSlotDescriptor {
-                    policy_word_raw: 0,
-                    local_offset_raw: [0; 3],
-                }]
-                .into_boxed_slice(),
-            };
-            let mut list = SubJAttachmentRuntime::from_descriptor(&descriptor).unwrap();
-            list.append(8).unwrap();
-            manager.player_mut().unwrap().sub_j_attachment_runtime =
-                RetailRuntimeValue::Known(Some(list));
+            // 4484A0 walks the controller's +220 owned list.
+            manager.auxiliary_owned_ids.push(8);
         } else {
             manager.player_mut().unwrap().current_behavior_context = RetailRuntimeValue::Unresolved;
         }

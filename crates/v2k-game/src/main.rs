@@ -4552,6 +4552,7 @@ fn run_game(
                 // frontend/AVI/loading paths. It sees the raw wall duration
                 // before the simulation clock's independent 125 ms clamp.
                 world_fx.advance_frame_pacing(uncapped_elapsed_micros);
+                world_fx.set_global_elapsed_micros(elapsed_micros);
                 let mut skip = false;
                 for event in &events {
                     match event {
@@ -5785,6 +5786,7 @@ fn run_game(
                     }
                 }
                 world_fx.advance_frame_pacing(uncapped_elapsed_micros);
+                world_fx.set_global_elapsed_micros(elapsed_micros);
                 if entity_manager
                     .as_ref()
                     .and_then(EntityManager::player)
