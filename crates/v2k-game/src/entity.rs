@@ -37,6 +37,7 @@ mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
 mod native_type56_construction;
+pub mod network_body;
 mod rolling_boulder_construction;
 pub(crate) use hive_birth_host::{HiveBirthManagerContext, HiveBirthManagerHost};
 pub use hive_child::NativeHiveNewborn;
@@ -1556,6 +1557,9 @@ pub struct Entity {
     pub native_type43_aim_runtime: Option<crate::native_type43::aim::Type43AimRuntime>,
     /// Native Type83 Portable Radar allocation and its Sub-K word 1.
     pub portable_radar_runtime: Option<crate::portable_radar::PortableRadarRuntime>,
+    /// A peer's body in a network game (state bit 31): what its sync
+    /// records publish. Local bodies keep `None`.
+    pub(crate) network_body: Option<Box<network_body::NetworkBody>>,
     /// Native ordinary Type38/Type129 components and queued Aim transactions.
     pub native_type38_runtime: Option<crate::native_type38::Type38Runtime>,
     pub native_type38_aim_runtime: Option<crate::native_type38::aim::Type38AimRuntime>,
@@ -1752,6 +1756,7 @@ impl Entity {
             native_type40_aim_runtime: self.native_type40_aim_runtime.clone(),
             native_type43_runtime: self.native_type43_runtime,
             portable_radar_runtime: self.portable_radar_runtime,
+            network_body: self.network_body.clone(),
             native_type43_aim_runtime: self.native_type43_aim_runtime.clone(),
             native_type38_runtime: self.native_type38_runtime.clone(),
             native_type38_aim_runtime: self.native_type38_aim_runtime.clone(),
@@ -1871,6 +1876,7 @@ impl Entity {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             portable_radar_runtime: None,
+            network_body: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -2167,6 +2173,13 @@ impl Entity {
                 for (selector, value) in selectors.into_iter().zip(flyer.sub_k_output_raw) {
                     vars.dynamic[usize::from(selector)] = i32::from(value);
                 }
+            }
+        }
+        if let Some(body) = self.network_body.as_deref() {
+            // A peer's body shows the model variables its owner sent,
+            // selectors from 1 in order.
+            for (output, value) in vars.dynamic[1..].iter_mut().zip(&body.model_variables) {
+                *output = i32::from(*value);
             }
         }
         vars
@@ -2654,6 +2667,9 @@ pub struct EntityManager {
     pending_actor_deferred_destroy_ids: Vec<u32>,
     player_id: Option<u32>,
     player_dying_contact_runtime: Option<player_hit::PlayerDyingContactRuntime>,
+    /// In a network game, each damage the local player took
+    /// (`FUN_00414E90`'s kill and hit reports). `None` outside one.
+    pub(crate) network_player_hits: Option<Vec<network_body::PlayerHitReport>>,
     /// Fresh 443 constructor initializes controller+6C to invalid; takeover
     /// 446D70 must own any future non-null replacement, independently of cargo.
     player_pending_replacement_handle: RetailRuntimeValue<Option<u32>>,
@@ -3158,6 +3174,7 @@ fn build_type93_materialiser_entity(
         native_type40_aim_runtime: None,
         native_type43_runtime: None,
         portable_radar_runtime: None,
+        network_body: None,
         native_type43_aim_runtime: None,
         native_type38_runtime: None,
         native_type38_aim_runtime: None,
@@ -3791,6 +3808,7 @@ impl EntityManager {
             pending_actor_deferred_destroy_ids: self.pending_actor_deferred_destroy_ids.clone(),
             player_id: self.player_id,
             player_dying_contact_runtime: self.player_dying_contact_runtime,
+            network_player_hits: self.network_player_hits.clone(),
             player_pending_replacement_handle: self.player_pending_replacement_handle,
             next_entity_id: self.next_entity_id,
             type_primary_models: self.type_primary_models.clone(),
@@ -4840,6 +4858,7 @@ impl EntityManager {
             pending_actor_deferred_destroy_ids: Vec::new(),
             player_id: None,
             player_dying_contact_runtime: None,
+            network_player_hits: None,
             player_pending_replacement_handle: RetailRuntimeValue::Known(None),
             next_entity_id: 1,
             type_primary_models: type_metadata
@@ -5476,6 +5495,7 @@ impl EntityManager {
                 native_type40_aim_runtime: None,
                 native_type43_runtime: None,
                 portable_radar_runtime: None,
+                network_body: None,
                 native_type43_aim_runtime: None,
                 native_type38_runtime: None,
                 native_type38_aim_runtime: None,
@@ -5957,6 +5977,7 @@ impl EntityManager {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             portable_radar_runtime: None,
+            network_body: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -6769,6 +6790,7 @@ impl EntityManager {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             portable_radar_runtime: None,
+            network_body: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -8245,6 +8267,7 @@ impl EntityManager {
             native_type40_aim_runtime: None,
             native_type43_runtime: None,
             portable_radar_runtime: None,
+            network_body: None,
             native_type43_aim_runtime: None,
             native_type38_runtime: None,
             native_type38_aim_runtime: None,
@@ -12667,6 +12690,7 @@ impl EntityManager {
             pending_actor_deferred_destroy_ids: Vec::new(),
             player_id,
             player_dying_contact_runtime: None,
+            network_player_hits: None,
             player_pending_replacement_handle: RetailRuntimeValue::Known(None),
             next_entity_id,
             type_primary_models: Vec::new(),

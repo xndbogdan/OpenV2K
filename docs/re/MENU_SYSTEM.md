@@ -1109,16 +1109,16 @@ window where the old one was (a full-screen game stays on its display). At start
 only the backend can fail, so OpenGL falls back to Software unless
 `--renderer` forced a choice, and the backend that started is saved.
 
-### Port Network availability
+### Port Network screens
 
-The port intentionally replaces `0x4C11D0`'s runtime session placeholders with
-two frontend rows: disabled literal text `Not available yet` and selectable
-`Back`. Back starts selected; direction inputs skip the notice, and selecting
-Back or pressing Escape uses the normal screen pop and Klaus return command.
-The native panel/typewriter policy and Network ring route remain in use.
-This is a release policy while multiplayer is unimplemented, not a recovered
-retail lobby. The extracted screen JSON remains unchanged for future networking
-work.
+`0x4C11D0`, `0x4C1198`, `0x4C10F0` and `0x4C1160` run as retail's network
+screens ([MULTIPLAYER.md](MULTIPLAYER.md#the-frontend)). The port fills the
+one connection row with its own transport and inserts a port-owned address
+prompt (screen id 1) between that row and the session list, standing in for
+DirectPlay's TCP/IP dialog; the extracted screen JSON is unchanged. Keys 1-6
+force the hosted arena on every frontend screen as retail's do, except while
+the prompt takes typing; the port's quick-load on 1-3 stays, except on the
+network screens.
 
 ### Complete frontend audit (runtime-confirmed 2026-07-17)
 

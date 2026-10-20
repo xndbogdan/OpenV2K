@@ -2186,6 +2186,23 @@ pub struct WorldFx {
     frame_pacing: ParticleFramePacing,
     /// Live diagnostics counters; never simulated state.
     splash_path_counters: SplashPathCounters,
+    /// A network game's kind-1 sends: `FUN_00440A60` sends each local birth
+    /// of a class whose descriptor flags hold 2. `None` outside one.
+    network_particles: Option<Vec<NetworkParticleBirth>>,
+    /// A network game's `FUN_00440950` ran: its kind-2 send is held.
+    network_burst_unsent: bool,
+}
+
+/// A particle request as `FUN_00440A60` receives it: position and velocity
+/// words before the class's Y biases, the owner, the class and the network
+/// byte (0 here, 2 when it came from a peer).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NetworkParticleBirth {
+    pub source_class: u8,
+    pub position_raw: [i16; 3],
+    pub velocity_raw: [i16; 3],
+    pub owner_id: Option<u32>,
+    pub owner_entity_type: u8,
 }
 
 impl InfectionEvolutionEffects for WorldFx {
@@ -2237,7 +2254,85 @@ impl WorldFx {
             last_retail_tick: self.last_retail_tick,
             frame_pacing: self.frame_pacing.clone(),
             splash_path_counters: self.splash_path_counters,
+            network_particles: self.network_particles.clone(),
+            network_burst_unsent: self.network_burst_unsent,
         }
+    }
+
+    /// Start or stop sending replicated particle births.
+    pub fn set_network_particles(&mut self, enabled: bool) {
+        self.network_particles = enabled.then(Vec::new);
+    }
+
+    /// Whether a burst's kind-2 send was due since the last call.
+    pub fn take_network_burst_unsent(&mut self) -> bool {
+        std::mem::take(&mut self.network_burst_unsent)
+    }
+
+    /// The births to send since the last call.
+    pub fn take_network_particles(&mut self) -> Vec<NetworkParticleBirth> {
+        self.network_particles
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+
+    /// `FUN_00439FB0` -> `FUN_00440A60` with network byte 2: a peer's
+    /// particle, its damage suppressed (`+1D` bit 0), not sent on again.
+    pub fn materialize_network_particle(
+        &mut self,
+        birth: NetworkParticleBirth,
+        environment: ParticleEnvironment<'_>,
+        retail_tick: u32,
+    ) -> Option<usize> {
+        let descriptor = particle_descriptor(birth.source_class)?;
+        let mut position_raw = birth.position_raw;
+        position_raw[1] = position_raw[1].wrapping_add(descriptor.spawn_position_y_bias_raw());
+        let mut velocity_words = birth.velocity_raw;
+        velocity_words[1] = velocity_words[1].wrapping_add(descriptor.spawn_velocity_y_bias_raw());
+        // A peer's request is untrusted: only a class with frames, or an
+        // invisible one (no frame list, as the class-19 probe), is born.
+        let frame = match particle_frame(birth.source_class, 0) {
+            Some(frame) => frame,
+            None if descriptor.frame_list_va() == 0 && descriptor.frame_count() == 0 => {
+                ParticleFrame {
+                    sprite_id: 0,
+                    middle_raw: 0,
+                    scale_raw: 0,
+                }
+            }
+            None => return None,
+        };
+        let spawn = ParticleSpawn {
+            sprite_id: frame.sprite_id,
+            source_class: birth.source_class,
+            offset: [0.0; 3],
+            presentation_offset: [0.0; 3],
+            velocity: raw_velocity_to_world(velocity_words.map(i32::from)),
+            owner_id: birth.owner_id,
+            attached_owner_handle: None,
+            attached_offset_raw: [0; 3],
+            source_entity_type_at_birth: Some(birth.owner_entity_type),
+            suppresses_impact_damage: true,
+            lifetime_ticks: descriptor.lifetime_ticks(),
+            collision_radius_raw: descriptor.collision_radius_raw(),
+            frame_middle_raw: frame.middle_raw,
+            frame_scale_raw: frame.scale_raw,
+            animation_rate_raw: descriptor.animation_rate_raw(),
+            draw_scale_raw: descriptor.draw_scale_raw(),
+            size_jitter_divisor_raw: descriptor.size_jitter_divisor_raw(),
+        };
+        let sending = self.network_particles.take();
+        let slot = self.materialize_particle_spawn_with_birth_context(
+            raw_position_to_world(position_raw),
+            spawn,
+            Some(ParticleBirthContext {
+                environment,
+                retail_tick,
+            }),
+        );
+        self.network_particles = sending;
+        slot
     }
 
     /// Read and reset the splash-path diagnostics counters, snapshotting the
@@ -3083,6 +3178,7 @@ impl WorldFx {
         owner_entity_id: u32,
         source_entity_type_at_birth: Option<u8>,
     ) {
+        self.network_burst_unsent |= self.network_particles.is_some();
         let mut sound_position_raw = position_raw;
         if sea_level_raw.is_none_or(|sea_level| sea_level < position_raw[1]) {
             self.materialize_owned_descriptor_particle_raw(
@@ -3385,7 +3481,31 @@ impl WorldFx {
                 context.retail_tick,
             );
         }
-        self.particles.allocate(particle)
+        let slot = self.particles.allocate(particle)?;
+        if let (Some(sending), Some(descriptor)) = (
+            self.network_particles.as_mut(),
+            particle_descriptor(particle.source_class),
+        ) {
+            // A suppressed birth (network byte nonzero) is never sent.
+            if descriptor.flags() & 0x02 != 0 && !particle.suppresses_impact_damage {
+                let mut position_raw = world_position_to_raw(particle.position);
+                position_raw[1] =
+                    position_raw[1].wrapping_sub(descriptor.spawn_position_y_bias_raw());
+                let mut velocity_raw = particle
+                    .velocity
+                    .map(|v| world_velocity_component_to_raw(v) as i16);
+                velocity_raw[1] =
+                    velocity_raw[1].wrapping_sub(descriptor.spawn_velocity_y_bias_raw());
+                sending.push(NetworkParticleBirth {
+                    source_class: particle.source_class,
+                    position_raw,
+                    velocity_raw,
+                    owner_id: particle.owner_id,
+                    owner_entity_type: particle.source_entity_type_at_birth.unwrap_or(0),
+                });
+            }
+        }
+        Some(slot)
     }
 
     fn materialize_meteor_impact(

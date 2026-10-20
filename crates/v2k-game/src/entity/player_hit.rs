@@ -14,6 +14,12 @@ use crate::world_fx::ParticleEntityImpact;
 pub enum PlayerDamageEntry {
     Checked,
     Unchecked,
+    /// `FUN_00417E10` -> `FUN_00414E90`: an amount a peer already checked
+    /// (kind 9), applied without the packet's filter or the checked bit.
+    Network {
+        amount: u16,
+        attacker_slot: u8,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -156,6 +162,10 @@ pub(super) enum PlayerDamagePlan {
         position_raw: [i16; 3],
         death: Option<PlayerDyingPlan>,
         player_kill_hint: bool,
+        /// `FUN_00414E90`'s third and fourth arguments: the attacker's type
+        /// and, for a peer's damage, its slot (`None`: this machine's).
+        source_entity_type_raw: u32,
+        attacker_slot: Option<u8>,
     },
 }
 
@@ -449,12 +459,17 @@ impl EntityManager {
         {
             return Ok(PlayerDamagePlan::Ineligible);
         }
-        let profile = known(collision.damage_profile, "damage profile")?;
-        let filtered = request.delivery.packet.filtered_raw_with_ratio(
-            Some(&profile),
-            request.ratio_numerator,
-            request.ratio_denominator,
-        );
+        let filtered = match request.entry {
+            PlayerDamageEntry::Network { amount, .. } => i32::from(amount),
+            PlayerDamageEntry::Checked | PlayerDamageEntry::Unchecked => {
+                let profile = known(collision.damage_profile, "damage profile")?;
+                request.delivery.packet.filtered_raw_with_ratio(
+                    Some(&profile),
+                    request.ratio_numerator,
+                    request.ratio_denominator,
+                )
+            }
+        };
         if filtered == 0 {
             if request.entry == PlayerDamageEntry::Checked
                 && request
@@ -465,10 +480,12 @@ impl EntityManager {
             }
             return Ok(PlayerDamagePlan::FilteredOut);
         }
-        match known(
-            collision.pair_callbacks.damage_modifier_address,
-            "damage modifier",
-        )? {
+        let modifier = if matches!(request.entry, PlayerDamageEntry::Network { .. }) {
+            RetailRuntimeValue::Known(None)
+        } else {
+            collision.pair_callbacks.damage_modifier_address
+        };
+        match known(modifier, "damage modifier")? {
             None => {}
             Some(0x0044_84A0) => match self.player_pair_damage_modifier_context_empty() {
                 RetailRuntimeValue::Known(true) => {}
@@ -570,6 +587,11 @@ impl EntityManager {
             position_raw,
             death,
             player_kill_hint,
+            source_entity_type_raw: request.delivery.source_entity_type_raw,
+            attacker_slot: match request.entry {
+                PlayerDamageEntry::Network { attacker_slot, .. } => Some(attacker_slot),
+                PlayerDamageEntry::Checked | PlayerDamageEntry::Unchecked => None,
+            },
         })
     }
 
@@ -614,6 +636,8 @@ impl EntityManager {
                 position_raw,
                 death,
                 player_kill_hint,
+                source_entity_type_raw,
+                attacker_slot,
             } => {
                 crate::pad_vibration::submit_player_damage(filtered_damage_raw);
                 let dying = transition.stage == GenericEntityDamageStage::DeathDispatchRequired;
@@ -646,6 +670,13 @@ impl EntityManager {
                 }
                 if player_kill_hint {
                     notifications.queue_player_kill(retail_tick as i32);
+                }
+                if let Some(hits) = self.network_player_hits.as_mut() {
+                    hits.push(super::network_body::PlayerHitReport {
+                        lethal: dying,
+                        attacker_type: source_entity_type_raw,
+                        attacker_slot,
+                    });
                 }
                 PlayerCheckedDamageOutcome::Applied {
                     filtered_damage_raw,

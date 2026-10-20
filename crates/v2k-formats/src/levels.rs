@@ -218,7 +218,7 @@ impl LevelFogPlanes {
 }
 
 /// A parsed level descriptor from Section 13.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LevelDescriptor {
     /// Exact authored 0xD0-byte descriptor header before pointer relocation.
     /// Unclassified level/render/behavior parameters remain available for

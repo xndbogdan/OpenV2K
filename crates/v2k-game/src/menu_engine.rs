@@ -120,6 +120,12 @@ pub enum MenuCommand {
     GrantCheat(u32),
     /// Cheat-menu world action (skip/complete world), by callback address.
     CheatWorld(u32),
+    /// FUN_0043CEB0: initialize the connection and list its sessions.
+    NetworkConnection,
+    /// FUN_0043CD50: host a session and start its game.
+    NetworkHost,
+    /// FUN_0043CD00: join the session in this row of the list.
+    NetworkJoin(u32),
 }
 
 // ── Engine ──────────────────────────────────────────────────────────────────
@@ -217,6 +223,36 @@ impl MenuEngine {
             true
         } else {
             false
+        }
+    }
+
+    /// `FUN_0043D110` / `FUN_0043CFD0` and their clears (`FUN_0043D1B0`,
+    /// `FUN_0043D070`): `count` rows from `first` show one line each of
+    /// `rows` (item flags `|4 &~8`), the rest hide (`&~4 |8`).
+    pub fn set_rows(&mut self, va: u32, first: usize, count: usize, rows: &[String]) {
+        // Item flag bit 3: the row is out of the frontend's list.
+        const HIDDEN: u32 = 8;
+        let Some(screen) = self.tree.screen_mut(va) else {
+            return;
+        };
+        for (index, item) in screen.items.iter_mut().skip(first).take(count).enumerate() {
+            match rows.get(index) {
+                Some(text) => {
+                    item.visibility = (item.visibility | VIS_FRONTEND) & !HIDDEN;
+                    item.label = Some(text.clone());
+                }
+                None => {
+                    item.visibility = (item.visibility & !VIS_FRONTEND) | HIDDEN;
+                    item.label = None;
+                }
+            }
+        }
+        let mask = self.vis_mask;
+        if let (Some(slot), Some(screen)) = (self.stack.last_mut(), self.tree.screen(va)) {
+            let selected = screen.items.get(slot.sel);
+            if slot.screen == va && !selected.is_some_and(|item| item_is_enabled(item, mask)) {
+                slot.sel = first_selectable(screen, mask);
+            }
         }
     }
 
@@ -411,10 +447,11 @@ impl MenuEngine {
                 cmds
             }
 
-            // Network stubs: acknowledge without effect.
-            SelectAction::NetworkJoin | SelectAction::NetworkHost | SelectAction::FormatCard => {
-                vec![MenuCommand::PlaySound(0)]
-            }
+            // The network rows play no sound unless they fail (sound 2).
+            SelectAction::NetworkConnection => vec![MenuCommand::NetworkConnection],
+            SelectAction::NetworkHost => vec![MenuCommand::NetworkHost],
+            SelectAction::NetworkJoin { session } => vec![MenuCommand::NetworkJoin(session)],
+            SelectAction::FormatCard => vec![MenuCommand::PlaySound(0)],
         }
     }
 }
