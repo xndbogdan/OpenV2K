@@ -326,9 +326,10 @@ The [contact regressions](../../crates/v2k-game/src/native_entity_weapons/contac
 exercise real normal-tier Alpine constructors, model programs, native static
 objects, opposite weapon callbacks, hard-water task transfer and Playing hull
 delivery. These source-backed checks do not establish complete retail visual/
-audio acceptance or every possible opposing actor pair. The
-existing no-haptics presentation boundary remains explicit; guided missiles
-and mines require their own native owners.
+audio acceptance or every possible opposing actor pair. The craft's
+`447D70` contact feedback reaches the pad driver
+([console vibration](CONTROLS.md#console-vibration)); guided missiles and mines
+require their own native owners.
 
 ### Native Type30 owner
 

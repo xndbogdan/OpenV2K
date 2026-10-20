@@ -592,6 +592,8 @@ impl EntityManager {
                 buffer_after,
                 position_raw,
             } => {
+                // 4484A0's feedback precedes 14E90's dying test.
+                crate::pad_vibration::submit_player_damage(filtered_damage_raw);
                 self.entities[index].collision.pre_health_damage_buffer_raw =
                     RetailRuntimeValue::Known(buffer_after);
                 hull.pre_health_damage_buffer_raw = buffer_after;
@@ -613,6 +615,7 @@ impl EntityManager {
                 death,
                 player_kill_hint,
             } => {
+                crate::pad_vibration::submit_player_damage(filtered_damage_raw);
                 let dying = transition.stage == GenericEntityDamageStage::DeathDispatchRequired;
                 let entity = &mut self.entities[index];
                 let health = if dying {

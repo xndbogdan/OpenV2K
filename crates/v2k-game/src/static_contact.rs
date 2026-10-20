@@ -19,7 +19,7 @@ use crate::player_contact_style::{
 use crate::player_hull::{HullDamageOutcome, PlayerHull};
 use crate::static_damage::{StaticCraterOutcome, StaticDamageScheduler};
 use crate::static_kind_catalog::static_kind_descriptor;
-use crate::terrain_contact::PlayerTerrainUnsupportedHaptic;
+use crate::terrain_contact::PlayerContactHaptic;
 use v2k_formats::anim_frames::TerrainObjectTable;
 use v2k_formats::models::{
     AnimVars, CollisionModelPool, ModelCollisionError, ModelCollisionHit, ModelEntry,
@@ -130,7 +130,7 @@ pub enum PlayerStaticStyleCallbackOutcome {
     ControllerMismatch,
     Completed {
         normal_velocity_raw: i32,
-        unsupported_haptic: Option<PlayerTerrainUnsupportedHaptic>,
+        haptic: Option<PlayerContactHaptic>,
         kind9_destruction: Option<PlayerStaticDestructionOutcome>,
     },
 }
@@ -314,11 +314,14 @@ fn apply_player_static_style_callback(
     if frame.request.controlled_entity_handle != Some(frame.request.entity_handle) {
         return Ok(PlayerStaticStyleCallbackOutcome::ControllerMismatch);
     }
-    let (normal_velocity_raw, unsupported_haptic) = player_contact_haptic(
+    let (normal_velocity_raw, haptic) = player_contact_haptic(
         contact.normal_q12,
         velocity_raw,
         frame.request.haptic_scale_raw,
     );
+    if let Some(haptic) = haptic {
+        crate::pad_vibration::submit(haptic.strength_raw);
+    }
     // 447C90 invokes 427B20 only for descriptor kind 9. It does not use the
     // dying +208 burst latch or change VY. Pickup/task work precedes this hook;
     // the shared 11760 physical response follows it.
@@ -344,7 +347,7 @@ fn apply_player_static_style_callback(
     };
     Ok(PlayerStaticStyleCallbackOutcome::Completed {
         normal_velocity_raw,
-        unsupported_haptic,
+        haptic,
         kind9_destruction,
     })
 }
@@ -1180,14 +1183,14 @@ mod tests {
             .unwrap();
             let PlayerStaticStyleCallbackOutcome::Completed {
                 normal_velocity_raw,
-                unsupported_haptic,
+                haptic,
                 kind9_destruction,
             } = outcome.style_callback
             else {
                 panic!("authenticated C90")
             };
             assert_eq!(normal_velocity_raw, -1000);
-            assert_eq!(unsupported_haptic.unwrap().strength_raw, 255);
+            assert_eq!(haptic.unwrap().strength_raw, 255);
             assert_eq!(
                 kind9_destruction,
                 Some(PlayerStaticDestructionOutcome::Started)
@@ -1235,7 +1238,7 @@ mod tests {
             assert!(matches!(
                 second.style_callback,
                 PlayerStaticStyleCallbackOutcome::Completed {
-                    unsupported_haptic: None,
+                    haptic: None,
                     kind9_destruction: Some(PlayerStaticDestructionOutcome::Duplicate),
                     ..
                 }

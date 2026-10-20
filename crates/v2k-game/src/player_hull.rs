@@ -206,13 +206,16 @@ impl PlayerHull {
     /// Apply generic retail damage after packet filtering.
     ///
     /// Non-positive values are ignored because the collision profile never
-    /// produces healing. Buffer consumption precedes the DYING check exactly
-    /// as it does in `FUN_00414E90`; lethal hull damage is then clamped to zero
-    /// by `FUN_00410C10` and raises the dying state once.
+    /// produces healing. `FUN_00415040` first hands the amount to the craft's
+    /// modifier `FUN_004484A0`, whose feedback runs even on a dying craft.
+    /// Buffer consumption precedes the DYING check exactly as it does in
+    /// `FUN_00414E90`; lethal hull damage is then clamped to zero by
+    /// `FUN_00410C10` and raises the dying state once.
     pub fn apply_damage_raw(&mut self, damage_raw: i32) -> HullDamageOutcome {
         if damage_raw <= 0 {
             return HullDamageOutcome::default();
         }
+        crate::pad_vibration::submit_player_damage(damage_raw);
 
         let absorbed_by_buffer_raw = if self.pre_health_damage_buffer_raw > 0 {
             let absorbed = self.pre_health_damage_buffer_raw.min(damage_raw);

@@ -683,16 +683,23 @@ fn behavior(
         && owns_native_weapon_contact(actor(frame.entities, opposite)?)
     {
         //447D70: the actual local controller bound to this player satisfies
-        //43AF0. Capability40 excludes the c00 consumable branch; only the
-        //existing no-haptics presentation boundary can remain. It neither
-        //changes body/task state nor returns an A300 physics suppression.
+        //43AF0. Capability40 excludes the c00 consumable branch, leaving the
+        //two bodies' distance feedback. It neither changes body/task state
+        //nor returns an A300 physics suppression.
+        let weapon = actor(frame.entities, opposite)?;
         if playing_player.is_none()
             || entity.capability_flags & 1 == 0
-            || actor(frame.entities, opposite)?.capability_flags != 0x40
+            || weapon.capability_flags != 0x40
         {
             return Err(NativeCaptorPairBlock::Runtime(
                 "local player weapon pair controller",
             ));
+        }
+        if let Some(strength_raw) = crate::pad_vibration::pair_contact_strength(
+            entity.position_raw(),
+            weapon.position_raw(),
+        ) {
+            crate::pad_vibration::submit(strength_raw);
         }
         return Ok(NativeCaptorPairBehaviorResult::Null);
     }

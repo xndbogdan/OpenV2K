@@ -244,12 +244,10 @@ not clamp pitch, alter lift, or suppress the common response. That style suffix
 is now live too. It authenticates the current controller, class-24 descriptor,
 and actual Hover/VTOL mode, then projects the pre-response velocity onto the Q12 contact
 normal with wrapping 32-bit accumulation, and enters feedback only when the
-inward speed is strictly greater than `0x200`. The port has no force-feedback
-backend, but retains the exact staged strength
-`min(0xFF, vibration * (inward - 0x200) / 15)` as an unsupported-presentation
-result rather than suppressing later gameplay. How the PlayStation release
-turns these strengths into DualShock vibration is in
-[CONTROLS](CONTROLS.md#console-vibration).
+inward speed is strictly greater than `0x200`. It then submits
+`min(0xFF, vibration * (inward - 0x200) / 15)`, which a pad playing a console
+layout turns into vibration as the PlayStation release does
+([CONTROLS](CONTROLS.md#console-vibration)).
 
 The same callback samples the nearest wrapped X-major terrain cell with
 `(u16(position) + 0x80) >> 8`, maps `terrain_type & 7` through the active

@@ -10,7 +10,7 @@ use crate::entity_behavior::{
     BehaviorDescriptorIdentity,
 };
 use crate::entity_collision_state::RetailRuntimeValue;
-use crate::terrain_contact::PlayerTerrainUnsupportedHaptic;
+use crate::terrain_contact::PlayerContactHaptic;
 use crate::world_fx::WorldFx;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +41,7 @@ pub enum PlayerContactStyleBlock {
 pub struct PlayerDyingSurfaceContactOutcome {
     pub controller_matched: bool,
     pub normal_velocity_raw: i32,
-    pub unsupported_haptic: Option<PlayerTerrainUnsupportedHaptic>,
+    pub haptic: Option<PlayerContactHaptic>,
     pub wreck_burst_emitted: bool,
     pub next_burst_retail_tick: Option<i32>,
 }
@@ -87,7 +87,7 @@ pub fn player_contact_haptic(
     normal_q12: [i16; 3],
     velocity_raw: [i16; 3],
     scale_raw: i32,
-) -> (i32, Option<PlayerTerrainUnsupportedHaptic>) {
+) -> (i32, Option<PlayerContactHaptic>) {
     let dot = i32::from(normal_q12[1])
         .wrapping_mul(i32::from(velocity_raw[1]))
         .wrapping_add(i32::from(normal_q12[2]).wrapping_mul(i32::from(velocity_raw[2])))
@@ -96,7 +96,7 @@ pub fn player_contact_haptic(
     let inward = dot.wrapping_neg();
     (
         dot,
-        (inward > 512).then(|| PlayerTerrainUnsupportedHaptic {
+        (inward > 512).then(|| PlayerContactHaptic {
             inward_speed_raw: inward,
             haptic_scale_raw: scale_raw,
             strength_raw: (scale_raw.wrapping_mul(inward.wrapping_sub(512)) / 15).min(255),
@@ -126,8 +126,12 @@ pub fn apply_player_dying_surface_contact(
     {
         return Err(PlayerContactStyleBlock::MissingDyingControllerRuntime);
     }
-    let (normal_velocity_raw, unsupported_haptic) =
+    let (normal_velocity_raw, haptic) =
         player_contact_haptic(normal_q12, *velocity_raw, frame.request.haptic_scale_raw);
+    let haptic = matched.then_some(haptic).flatten();
+    if let Some(haptic) = haptic {
+        crate::pad_vibration::submit(haptic.strength_raw);
+    }
     let wreck_burst_emitted = matched
         && frame
             .runtime
@@ -146,7 +150,7 @@ pub fn apply_player_dying_surface_contact(
     Ok(PlayerDyingSurfaceContactOutcome {
         controller_matched: matched,
         normal_velocity_raw,
-        unsupported_haptic: matched.then_some(unsupported_haptic).flatten(),
+        haptic,
         wreck_burst_emitted,
         next_burst_retail_tick: matched.then(|| {
             frame

@@ -170,8 +170,7 @@ use v2k_game::specialized_actor_task_production::{
     SpecializedActorTaskScheduler,
 };
 use v2k_game::static_contact::{
-    resolve_player_static_contact, PlayerStaticStyleCallbackFrame,
-    PlayerStaticStyleCallbackOutcome, StaticPickupOutcome,
+    resolve_player_static_contact, PlayerStaticStyleCallbackFrame, StaticPickupOutcome,
 };
 use v2k_game::static_damage::{
     scan_static_radial, StaticDamageAction, StaticDamageOutcome, StaticDamageScheduler,
@@ -1766,6 +1765,7 @@ fn run_game(
             .unwrap_or(config.controller_layout),
     );
     log!("Controller layout: {}", pad_bindings.layout().label());
+    let mut pad_vibration = v2k_game::pad_vibration::PadVibration::default();
     // The port's fixes for retail bugs: saved, or overridden for this run.
     let mut port_fixes = config.fixes;
     if let Some(enabled) = overrides.beam_commands {
@@ -2344,6 +2344,14 @@ fn run_game(
                 other => events.push(other),
             }
         }
+
+        // The console pad driver's polls since the last frame run the pad's
+        // small motor. Under the PC layout a pad is a WinMM joystick, whose
+        // output hook is retail's no-op.
+        let pad_motor = pad_vibration.advance(frame_delta_micros);
+        game_window.set_pad_small_motor(
+            pad_motor && pad_bindings.layout() != ControllerLayout::PcOriginal,
+        );
 
         // V2000 reads the mouse only during play and hides the pointer over a
         // full-screen game, menus included. The port also captures it in play
@@ -5704,16 +5712,6 @@ fn run_game(
                         if let Some(result) = terrain_contact_result.flatten() {
                             match result {
                                 Ok(Some(outcome)) => {
-                                    let haptic=match outcome.style_callback {
-                                        v2k_game::terrain_contact::PlayerTerrainStyleCallbackOutcome::PlayerControl(style)=>style.unsupported_haptic,
-                                        v2k_game::terrain_contact::PlayerTerrainStyleCallbackOutcome::DyingBounce(style)=>style.unsupported_haptic,
-                                        _=>None,
-                                    };
-                                    if let Some(haptic) = haptic {
-                                        eprintln!(
-                                            "Player terrain haptic backend is unowned: {haptic:?}"
-                                        );
-                                    }
                                     if outcome.hull_damage.health_lost_raw > 0 {
                                         log!(
                                             "Hull: terrain impact {} damage {} health {}",
@@ -5920,15 +5918,6 @@ fn run_game(
                     if let Some(result) = contact_result {
                         match result {
                             Ok(Some(outcome)) => {
-                                if let PlayerStaticStyleCallbackOutcome::Completed {
-                                    unsupported_haptic: Some(haptic),
-                                    ..
-                                } = outcome.style_callback
-                                {
-                                    eprintln!(
-                                        "Player static haptic backend is unowned: {haptic:?}"
-                                    );
-                                }
                                 campaign_warp
                                     .observe_player_static_contact(outcome.contact, retail_tick);
                                 if outcome.hull_damage.health_lost_raw > 0 {
@@ -7836,42 +7825,44 @@ fn run_game(
                 // only after every reached callback and model program
                 // resolves. Stateful or remote paths remain a fail-closed
                 // boundary for that solid subsystem.
-                let active_pair_pass_succeeded = if !player_active_solid_pass_required(
-                    current_level_id,
-                ) {
-                    // Intro2 / no-world: keep the Power-Up path available
-                    // without a recovered solid census.
-                    true
-                } else if !player_hull.dying {
-                    match em.resolve_player_active_contacts(
-                        &session.cache,
-                        v2k_game::player_active_contact::PlayerActivePairFrame {
-                            resources: &session.cache,
-                            retail_tick: retail_tick,
-                            player_craft: &player_craft,
-                            player_hull: &mut player_hull,
-                            scheduler: &mut specialized_actor_tasks,
-                            world_fx: &mut world_fx,
-                            notifications: &mut gameplay_notifications,
-                            extra_lives: player_campaign_progress.extra_lives(),
-                        },
-                    ) {
-                        Ok(PlayerActivePairPass {
-                            core,
-                            unsupported_presentation,
-                            sounds,
-                            descriptor_contacts,
-                        }) => {
-                            for sound in sounds {
-                                world_fx.queue_fixed_positional_sound_raw(
-                                    sound.sound_id,
-                                    sound.position_raw,
-                                );
-                            }
-                            if !descriptor_contacts.is_empty() {
-                                log!("Player descriptor contacts: {descriptor_contacts:?}");
-                            }
-                            if core.dispositions.iter().any(|disposition| {
+                let active_pair_pass_succeeded =
+                    if !player_active_solid_pass_required(current_level_id) {
+                        // Intro2 / no-world: keep the Power-Up path available
+                        // without a recovered solid census.
+                        true
+                    } else if !player_hull.dying {
+                        match em.resolve_player_active_contacts(
+                            &session.cache,
+                            v2k_game::player_active_contact::PlayerActivePairFrame {
+                                resources: &session.cache,
+                                retail_tick: retail_tick,
+                                player_craft: &player_craft,
+                                player_hull: &mut player_hull,
+                                scheduler: &mut specialized_actor_tasks,
+                                world_fx: &mut world_fx,
+                                notifications: &mut gameplay_notifications,
+                                extra_lives: player_campaign_progress.extra_lives(),
+                            },
+                        ) {
+                            Ok(PlayerActivePairPass {
+                                core,
+                                feedback,
+                                sounds,
+                                descriptor_contacts,
+                            }) => {
+                                for strength_raw in feedback {
+                                    v2k_game::pad_vibration::submit(strength_raw);
+                                }
+                                for sound in sounds {
+                                    world_fx.queue_fixed_positional_sound_raw(
+                                        sound.sound_id,
+                                        sound.position_raw,
+                                    );
+                                }
+                                if !descriptor_contacts.is_empty() {
+                                    log!("Player descriptor contacts: {descriptor_contacts:?}");
+                                }
+                                if core.dispositions.iter().any(|disposition| {
                                 matches!(
                                     disposition,
                                     v2k_game::active_pair::PairCandidateDisposition::Resolved { .. }
@@ -7879,25 +7870,20 @@ fn run_game(
                             }) {
                                 log!("Player active contacts: {:?}", core.dispositions);
                             }
-                            if !unsupported_presentation.is_empty() {
-                                log!(
-                                    "Unsupported player contact presentation: {unsupported_presentation:?}"
-                                );
+                                true
                             }
-                            true
+                            Err(error) if !active_pair_contact_error_reported => {
+                                eprintln!(
+                                    "Player active contact stopped at unresolved data: {error:?}"
+                                );
+                                active_pair_contact_error_reported = true;
+                                false
+                            }
+                            Err(_) => false,
                         }
-                        Err(error) if !active_pair_contact_error_reported => {
-                            eprintln!(
-                                "Player active contact stopped at unresolved data: {error:?}"
-                            );
-                            active_pair_contact_error_reported = true;
-                            false
-                        }
-                        Err(_) => false,
-                    }
-                } else {
-                    false
-                };
+                    } else {
+                        false
+                    };
 
                 // 10C10 can run in the early physical or late particle/pair
                 // phase. Its constructor is synchronous; this idempotent

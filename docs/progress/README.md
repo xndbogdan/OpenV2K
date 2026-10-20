@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,390 | |
 | Marked not needed (excluded below) | 337 | |
-| **Referenced by port code** | **899** | **43.8%** |
+| **Referenced by port code** | **903** | **44.0%** |
 | Referenced by code or RE notes | 2,053 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 203 |
+| implemented | 205 |
 | approximated | 6 |
 | documented | 1 |
 | not-needed | 337 |
@@ -41,14 +41,14 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Platform](../re/PLATFORM_RUNTIME.md) | 158 | 25 | 8 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 157 | 25 | 8 |
 | [Menu system](../re/MENU_SYSTEM.md) | 141 | 42 | 80 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 130 | 6 | 49 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 119 | 17 | 5 |
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 89 | 16 | 61 |
 | [Software raster](../re/SOFTWARE_RASTER.md) | 81 | 3 | 56 |
-| [Controls](../re/CONTROLS.md) | 80 | 17 | 22 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 53 | 6 | 62 |
+| [Controls](../re/CONTROLS.md) | 79 | 17 | 23 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 51 | 6 | 64 |
 | [Loading transitions](../re/LOADING_TRANSITIONS.md) | 37 | 10 | 38 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 32 | 8 | 26 |
 
