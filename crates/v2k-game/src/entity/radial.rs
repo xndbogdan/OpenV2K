@@ -146,6 +146,8 @@ struct PlannedEntityMutation {
 pub(crate) struct DynamicRadialDamagePlan {
     mutations: Vec<PlannedEntityMutation>,
     player_hull_after: Option<PlayerHull>,
+    /// The filtered amount the player's modifier `4484A0` receives.
+    player_feedback_damage_raw: Option<i32>,
     accepted_targets: usize,
     sounds: Vec<DynamicRadialSound>,
 }
@@ -327,9 +329,13 @@ impl EntityManager {
         let DynamicRadialDamagePlan {
             mutations,
             player_hull_after,
+            player_feedback_damage_raw,
             accepted_targets,
             sounds,
         } = plan;
+        if let Some(damage_raw) = player_feedback_damage_raw {
+            crate::pad_vibration::submit_player_damage(damage_raw);
+        }
 
         // The planner performs no callbacks or topology changes, so these
         // identities must still match when the atomic commit begins.
@@ -379,6 +385,7 @@ fn plan_dynamic_radial_damage<'a>(
     let mut plan = DynamicRadialDamagePlan {
         mutations: Vec::new(),
         player_hull_after: player_hull,
+        player_feedback_damage_raw: None,
         accepted_targets: 0,
         sounds: Vec::new(),
     };
@@ -494,6 +501,9 @@ fn plan_dynamic_radial_damage<'a>(
             player_id,
             player_modifier_context_empty,
         )?;
+        if player_id == Some(target.id) {
+            plan.player_feedback_damage_raw = Some(filtered_damage_raw);
+        }
         admit_type_hit_callback(target.id, collision_before)?;
         require_local_ownership(target.id, collision_before)?;
 

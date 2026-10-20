@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::time::Instant;
 
 use sdl2::controller::{Axis, Button, GameController};
 use sdl2::event::Event;
@@ -210,6 +211,8 @@ struct Controllers {
     joysticks: JoystickSubsystem,
     open: Vec<OpenController>,
     routing: Routing,
+    /// The small-motor state last sent, and when.
+    motor: Option<(bool, Instant)>,
 }
 
 /// Each routed change as the game's pad event.
@@ -228,6 +231,7 @@ impl Controllers {
             joysticks: sdl.joystick()?,
             open: Vec::new(),
             routing: Routing::default(),
+            motor: None,
         })
     }
 
@@ -285,6 +289,30 @@ impl Controllers {
             .active()
             .and_then(|active| self.open.iter().find(|open| open.instance_id() == active))
             .or_else(|| self.open.first())
+    }
+
+    /// Run or stop the sampled pad's small motor: the console pad's on/off
+    /// actuator, SDL's high-frequency rumble at full speed (the nearest SDL
+    /// equivalent; the DualShock motor has no speed control). SDL ends a rumble
+    /// after its duration, so a running motor is renewed before that.
+    fn set_small_motor(&mut self, on: bool) {
+        const HOLD_MS: u32 = 100;
+        let now = Instant::now();
+        if self.motor.is_some_and(|(was_on, sent)| {
+            was_on == on && (!on || now.duration_since(sent).as_millis() < u128::from(HOLD_MS / 2))
+        }) {
+            return;
+        }
+        self.motor = Some((on, now));
+        let active = self.sampled().map(OpenController::instance_id);
+        if let Some(OpenController::Pad(pad)) = self
+            .open
+            .iter_mut()
+            .find(|open| Some(open.instance_id()) == active)
+        {
+            // A pad without motors refuses; it simply stays still.
+            let _ = pad.set_rumble(0, if on { u16::MAX } else { 0 }, HOLD_MS);
+        }
     }
 
     /// Open device `index` once; SDL announces every device present at
@@ -688,6 +716,14 @@ impl GameWindow {
             .as_ref()?
             .sampled()
             .map(OpenController::sample)
+    }
+
+    /// Run or stop the active pad's small motor. Plain joysticks have none,
+    /// and a hidden run opens no controller.
+    pub fn set_pad_small_motor(&mut self, on: bool) {
+        if let Some(controllers) = self.controllers.as_mut() {
+            controllers.set_small_motor(on);
+        }
     }
 }
 

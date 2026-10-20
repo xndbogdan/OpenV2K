@@ -259,11 +259,8 @@ impl PlayerSurfaceContactFrame<'_> {
         );
         self.water_style_outcome = Some(result);
         match result {
-            Ok(outcome) => {
+            Ok(_) => {
                 player.set_motion_raw(player.position_raw(), velocity);
-                if let Some(haptic) = outcome.unsupported_haptic {
-                    eprintln!("Player dying water haptic backend is unowned: {haptic:?}");
-                }
                 true
             }
             Err(block) => {

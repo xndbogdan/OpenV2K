@@ -392,23 +392,53 @@ they select is not traced. The PC keeps the row hidden (flags 0), with the
 setting at `+0x40`, default 15. Five craft contact callbacks submit a strength
 scaled by the setting and clamped to `0xFF` (console `0x80077D50`,
 `0x80077EDC`, `0x800781E0`, `0x800786B8` and `0x80078884`; PC `0x00447B9F`,
-`0x00447D35`, `0x00447F4F`, `0x0044832B` and `0x00448513`). The Hover/VTOL
-terrain strike (`FUN_00448280`), for example, sends
-`min(0xFF, vibration × (inward − 0x200) / 15)`. Submission walks the output
-bindings (PC `FUN_00471460`, console `0x800D5B10`) to each bound device's
-output hook (PC `FUN_00494DE0`, console `0x800A6A10`). The PC's keyboard,
-mouse and WinMM joysticks have no motor, so its strengths go nowhere.
+`0x00447D35`, `0x00447F4F`, `0x0044832B` and `0x00448513`). Each runs only
+when the craft's controller lookup (`FUN_00443AF0`) succeeds:
+
+| Callback | When | Strength |
+|---|---|---|
+| `FUN_00448280` | Hover/VTOL terrain strike | `vibration × (inward − 0x200) / 15` |
+| `FUN_00447AF0` | dying bounce on terrain or water | the same |
+| `FUN_00447C90` | static-object contact | the same |
+| `FUN_00447D70` | pair contact with a body that is not a pickup (no capability `0xC00`) | `vibration × (d − 0x200) / 45`, `d` the integer root (`FUN_00457730`) of the two positions' wrapped squared distance, its low word compared as a signed short |
+| `FUN_004484A0` | the craft's damage modifier, on every filtered hit (`FUN_00415040`, `FUN_00414E10`), dying or not | `vibration × (damage − 2000) / 15` |
+
+`inward` is the speed into the contact normal (the Q12 dot product, negated),
+and each strength must exceed its `0x200` or 2000 floor; all are clamped to
+`0xFF`. The damage modifier also covers collision damage, which the common
+response (`FUN_004141D0`) delivers through `FUN_00415040`, and the terrain
+strike's selector-7 burn. Submission walks the output bindings (PC
+`FUN_00471460`, console `0x800D5B10`) to each bound device's output hook (PC
+`FUN_00494DE0`, console `0x800A6A10`). The PC registers its keyboard
+(`0x004D4B68`), mouse (`0x004D6640`), WinMM joysticks (`0x004D6610`) and the
+device at `0x004D6900` without an output hook, so `FUN_00494C90` installs the
+zero-return `FUN_00438050` and the PC's strengths go nowhere.
 
 On the console the pad's output routine (`0x800D090C`) stores the strength as
-that pad's level. The driver gives libpad a two-byte actuator buffer per pad
-(`PadSetAct`) and aligns the actuators on DualShock-class pads in libpad's
-stable state, resending every 25 polls. Each 8-ms poll turns the small motor
-on when the level is at least `0x20, 0x60, 0xC0, 0x40, 0xA0, 0x80, 0xE0`
-indexed by the video frame mod 7 (`0x800EE848`): a level of `0xE0` or more
-runs it every frame, and each `0x20` below that drops one frame in seven. The
-poll then multiplies the level by 15/16 (`(level × 15) >> 4`), so a
+that pad's level (a byte store, so the last submission wins). The driver gives
+libpad a two-byte actuator buffer per pad (`PadSetAct`) and aligns the
+actuators on DualShock-class pads in libpad's stable state, resending every 25
+polls. Each 8-ms poll turns the small motor on when the level is at least
+`0x20, 0x60, 0xC0, 0x40, 0xA0, 0x80, 0xE0` indexed by the video frame mod 7
+(`0x800EE848`; the frame count `0x800F1598` is advanced by the vertical-blank
+callback `0x800DC79C`, 50 times a second on the PAL release): a level of `0xE0`
+or more runs it every frame, and each `0x20` below that drops one frame in
+seven. The poll then multiplies the level by 15/16 (`(level × 15) >> 4`), so a
 full-strength hit buzzes for 30 polls, 240 ms, thinning out as it fades. The
 large-motor byte is never written.
+
+**Port.** A pad playing the Console original or Remastered layout is a
+console pad, so it vibrates as the PlayStation's does
+([`pad_vibration.rs`](../../crates/v2k-game/src/pad_vibration.rs)): every
+callback above submits its strength, and a driver with the console's level,
+8-ms polls, 50-Hz pattern and 15/16 fade runs the pad's small motor. Under the
+PC original layout a pad is a WinMM joystick, which has no output hook, so it
+stays still, as do plain joysticks under any layout. The vibration scale is the
+PC's hidden `+0x40`, 15, since the PC shows and saves no Vibration row. Two
+approximations: the motor is SDL's high-frequency (small) rumble at full speed,
+the nearest SDL has to the DualShock's fixed-speed motor; and the port runs the
+polls once a frame and sends the last poll's motor state, where the console
+updates the pad on every poll.
 
 ## Binding sets and devices (STATIC)
 
@@ -589,5 +619,6 @@ the cheat digits, N on the briefing, or the debug keys (the port uses F11 and
 F12 for its own camera and debug window). With the PC original layout a pad
 works only in flight, through the PC joystick path. The Console original and
 [Remastered](#port-controller-layouts) layouts bind every screen the port
-has, the right-stick camera included. Not ported: the console's other five
-Controller Config layouts, the pause on removal and vibration.
+has, the right-stick camera included, and their pads vibrate as the console's
+do ([console vibration](#console-vibration)). Not ported: the console's other
+five Controller Config layouts and the pause on removal.

@@ -1258,8 +1258,8 @@ sound and pickup precede `00447C90`; kind9 enters existing `427B20 ->28720`
 destruction before `11760`, with no wreck burst, RNG or `VY=1000` write. The
 callback matrix is Player Control frames0..4 `448280/NULL/00447C90`, frame5
 `447AF0/447AF0/00447C90`, and frame6 all NULL; alternate class25 authenticates
-exactly frame5. The current force-feedback backend remains unowned: the port
-reports each reached command and retains its exact strength. Native Level1
+exactly frame5. Each reached feedback command submits its exact strength to
+the pad driver ([console vibration](CONTROLS.md#console-vibration)). Native Level1
 controls exercise real player-model terrain geometry, material death ordering,
 water throttle/response ordering and both living/dying static kind9 contacts.
 

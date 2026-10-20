@@ -64,18 +64,6 @@ const CONSUMABLE_TARGET_CAPABILITIES: u32 = 0x0c00;
 const LIFTER_TARGET_CAPABILITY: u32 = 0x0400;
 const MAIN_BASE_TARGET_CAPABILITY: u32 = 0x0800;
 const HIVE_IMPACT_CAPABILITY: u32 = 0x2000;
-const PLAYER_FORCE_FEEDBACK_DISTANCE_RAW: i32 = 0x200;
-
-/// Presentation which retail may submit from the normal player callback but
-/// which has no equivalent on the port's no-haptics backend.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlayerActivePairUnsupportedPresentation {
-    DistanceForceFeedback {
-        player_id: u32,
-        candidate_id: u32,
-        distance_squared_raw: i32,
-    },
-}
 
 /// Generic-hit audio staged inside the pure callback ordering and exposed
 /// only after the complete solid-contact transaction commits.
@@ -90,7 +78,9 @@ pub struct PlayerActivePairSound {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerActivePairPass {
     pub core: ActivePairPass<()>,
-    pub unsupported_presentation: Vec<PlayerActivePairUnsupportedPresentation>,
+    /// Force-feedback strengths in callback order: `447D70`'s contact and the
+    /// craft modifier `4484A0`'s damage. The caller submits them.
+    pub feedback: Vec<i32>,
     pub sounds: Vec<PlayerActivePairSound>,
     /// Positive descriptor effects which committed with the same body pass.
     /// Lazy rear-half-space misses are complete no-ops and are not listed.
@@ -347,7 +337,7 @@ fn apply_type17_descriptor_plan(entity: &mut Entity, plan: Type17DescriptorConta
 struct PlayerPairOracle<'a, P: CollisionModelPool + ?Sized> {
     model_pool: &'a P,
     runtime: Vec<RuntimePairSnapshot>,
-    unsupported_presentation: Vec<PlayerActivePairUnsupportedPresentation>,
+    feedback: Vec<i32>,
     sounds: Vec<PlayerActivePairSound>,
     descriptor_contact_plans: Vec<Type9DescriptorContactPlan>,
     type17_descriptor_plans: Vec<Type17DescriptorContactPlan>,
@@ -460,7 +450,7 @@ impl<P: CollisionModelPool + ?Sized> ActivePairOracle<()> for PlayerPairOracle<'
                 &opposite,
                 request.owner.position_raw,
                 request.opposite.position_raw,
-                &mut self.unsupported_presentation,
+                &mut self.feedback,
             ) {
                 BehaviorDecision::Continue => PairBehaviorCallbackOutcome::Null,
                 BehaviorDecision::Unresolved => PairBehaviorCallbackOutcome::Unresolved,
@@ -564,7 +554,18 @@ impl<P: CollisionModelPool + ?Sized> ActivePairOracle<()> for PlayerPairOracle<'
         &mut self,
         request: PairDamageModifierRequest<'_>,
     ) -> PairDamageModifierResult {
-        let outcome = damage_modifier_outcome(self.runtime(request.body.id));
+        let runtime = self.runtime(request.body.id);
+        let outcome = damage_modifier_outcome(runtime);
+        if outcome == PairDamageModifierOutcome::Identity
+            && runtime.is_some_and(|runtime| {
+                runtime.pair_callbacks.damage_modifier_address
+                    == RetailRuntimeValue::Known(Some(0x0044_84A0))
+            })
+        {
+            self.feedback.extend(crate::pad_vibration::damage_strength(
+                request.filtered_damage_raw,
+            ));
+        }
         PairDamageModifierResult {
             outcome,
             remaining_chain: PairRemainingChainOutcome::Preserved,
@@ -763,7 +764,7 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
     let mut oracle = PlayerPairOracle {
         model_pool,
         runtime,
-        unsupported_presentation: Vec::new(),
+        feedback: Vec::new(),
         sounds: Vec::new(),
         descriptor_contact_plans: Vec::new(),
         type17_descriptor_plans: Vec::new(),
@@ -886,7 +887,7 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
 
     Ok(PlayerActivePairPass {
         core,
-        unsupported_presentation: oracle.unsupported_presentation,
+        feedback: oracle.feedback,
         sounds: oracle.sounds,
         descriptor_contacts,
     })
@@ -1213,7 +1214,7 @@ fn evaluate_behavior_callback(
     opposite: &RuntimePairSnapshot,
     owner_position_raw: [i16; 3],
     opposite_position_raw: [i16; 3],
-    unsupported_presentation: &mut Vec<PlayerActivePairUnsupportedPresentation>,
+    feedback: &mut Vec<i32>,
 ) -> BehaviorDecision {
     let policy = match owner.behavior_context {
         RetailRuntimeValue::Known(None) => PairContactCallbackPolicy::None,
@@ -1238,19 +1239,10 @@ fn evaluate_behavior_callback(
                 };
             }
             if opposite.capability_flags & CONSUMABLE_TARGET_CAPABILITIES == 0 {
-                let distance_squared_raw =
-                    squared_wrapping_distance_raw(owner_position_raw, opposite_position_raw);
-                if distance_squared_raw
-                    > PLAYER_FORCE_FEEDBACK_DISTANCE_RAW * PLAYER_FORCE_FEEDBACK_DISTANCE_RAW
-                {
-                    unsupported_presentation.push(
-                        PlayerActivePairUnsupportedPresentation::DistanceForceFeedback {
-                            player_id: owner.id,
-                            candidate_id: opposite.id,
-                            distance_squared_raw,
-                        },
-                    );
-                }
+                feedback.extend(crate::pad_vibration::pair_contact_strength(
+                    owner_position_raw,
+                    opposite_position_raw,
+                ));
             }
             BehaviorDecision::Continue
         }
@@ -1290,13 +1282,6 @@ fn evaluate_behavior_callback(
         PairContactCallbackPolicy::PowerUp => BehaviorDecision::Unresolved,
         PairContactCallbackPolicy::UnknownAddress(_) => BehaviorDecision::Unresolved,
     }
-}
-
-fn squared_wrapping_distance_raw(first: [i16; 3], second: [i16; 3]) -> i32 {
-    (0..3).fold(0_i32, |sum, axis| {
-        let delta = i32::from(first[axis].wrapping_sub(second[axis]));
-        sum.wrapping_add(delta.wrapping_mul(delta))
-    })
 }
 
 #[cfg(test)]

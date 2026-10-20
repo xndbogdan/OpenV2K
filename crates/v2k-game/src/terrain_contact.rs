@@ -35,11 +35,9 @@ pub const PLAYER_CONTROL_HOVER_STYLE_ADDRESS: u32 = 0x004C_D940;
 pub const PLAYER_CONTROL_VTOL_STYLE_ADDRESS: u32 = 0x004C_D988;
 /// Shared bare-terrain callback at style slot `+0x10` in both exact styles.
 pub const PLAYER_CONTROL_TERRAIN_CALLBACK_ADDRESS: u32 = 0x0044_8280;
-/// Retail's default settings dword at `FUN_0043C7C0() + 0x40`.
-///
-/// The port has no force-feedback backend or setting yet. Retaining the
-/// authored scale in the request still exposes the exact strength that would
-/// have been submitted instead of silently discarding the callback branch.
+/// Retail's default settings dword at `FUN_0043C7C0() + 0x40`, the vibration
+/// scale. The PC never shows or saves it (the console's Vibration row), so it
+/// stays 15.
 pub const DEFAULT_PLAYER_TERRAIN_HAPTIC_SCALE_RAW: i32 = 15;
 const PLAYER_TERRAIN_HAPTIC_INWARD_THRESHOLD_RAW: i32 = 0x200;
 const PLAYER_TERRAIN_HAPTIC_STRENGTH_MAX_RAW: i32 = 0xff;
@@ -82,7 +80,7 @@ pub struct PlayerTerrainStyleCallbackRequest {
     pub controlled_entity_handle: Option<u32>,
     /// Runtime table built by [`v2k_formats::levels::LevelDescriptor::ground_response_selectors`].
     pub ground_response_selectors: [u8; 8],
-    /// Settings dword multiplied into the unsupported force-feedback request.
+    /// Settings dword multiplied into the force-feedback strength.
     pub haptic_scale_raw: i32,
 }
 
@@ -97,11 +95,10 @@ impl From<PlayerTerrainStyleCallbackRequest> for PlayerTerrainStyleCallback<'_> 
     }
 }
 
-/// Force-feedback command which retail submits for a sufficiently fast inward
-/// terrain strike. The port deliberately reports it without pretending that
-/// its current input backend can play the effect.
+/// Force-feedback strength which retail submits for a sufficiently fast inward
+/// strike; [`crate::pad_vibration`] plays it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PlayerTerrainUnsupportedHaptic {
+pub struct PlayerContactHaptic {
     pub inward_speed_raw: i32,
     pub haptic_scale_raw: i32,
     pub strength_raw: i32,
@@ -115,7 +112,7 @@ pub struct PlayerControlTerrainStyleOutcome {
     pub style_address: u32,
     /// Q12 normal dot signed-8.8 velocity before the common response.
     pub normal_velocity_raw: i32,
-    pub unsupported_haptic: Option<PlayerTerrainUnsupportedHaptic>,
+    pub haptic: Option<PlayerContactHaptic>,
     /// Low-three-bit terrain material from the nearest wrapped X-major cell.
     pub material_code: u8,
     pub response_selector: u8,
@@ -364,17 +361,19 @@ fn apply_player_terrain_style_callback(
 
     let normal_velocity_raw = q12_dot(contact.normal_q12, velocity_raw);
     let inward_speed_raw = normal_velocity_raw.wrapping_neg();
-    let unsupported_haptic =
-        (inward_speed_raw > PLAYER_TERRAIN_HAPTIC_INWARD_THRESHOLD_RAW).then(|| {
-            let strength_raw = request.haptic_scale_raw.wrapping_mul(
-                inward_speed_raw.wrapping_sub(PLAYER_TERRAIN_HAPTIC_INWARD_THRESHOLD_RAW),
-            ) / 15;
-            PlayerTerrainUnsupportedHaptic {
-                inward_speed_raw,
-                haptic_scale_raw: request.haptic_scale_raw,
-                strength_raw: strength_raw.min(PLAYER_TERRAIN_HAPTIC_STRENGTH_MAX_RAW),
-            }
-        });
+    let haptic = (inward_speed_raw > PLAYER_TERRAIN_HAPTIC_INWARD_THRESHOLD_RAW).then(|| {
+        let strength_raw = request.haptic_scale_raw.wrapping_mul(
+            inward_speed_raw.wrapping_sub(PLAYER_TERRAIN_HAPTIC_INWARD_THRESHOLD_RAW),
+        ) / 15;
+        PlayerContactHaptic {
+            inward_speed_raw,
+            haptic_scale_raw: request.haptic_scale_raw,
+            strength_raw: strength_raw.min(PLAYER_TERRAIN_HAPTIC_STRENGTH_MAX_RAW),
+        }
+    });
+    if let Some(haptic) = haptic {
+        crate::pad_vibration::submit(haptic.strength_raw);
+    }
 
     let material_code = nearest_cell_material_code(terrain, position_raw[0], position_raw[2]);
     let response_selector = request.ground_response_selectors[usize::from(material_code)];
@@ -395,7 +394,7 @@ fn apply_player_terrain_style_callback(
         vehicle_mode: request.vehicle_mode,
         style_address: player_control_style_address(request.vehicle_mode),
         normal_velocity_raw,
-        unsupported_haptic,
+        haptic,
         material_code,
         response_selector,
         damage_delivery,
@@ -594,7 +593,7 @@ mod tests {
             panic!("exact Player Control style must be admitted");
         };
         assert_eq!(below_threshold.normal_velocity_raw, -0x1ff);
-        assert_eq!(below_threshold.unsupported_haptic, None);
+        assert_eq!(below_threshold.haptic, None);
 
         let at_threshold = apply_player_terrain_style_callback(
             &terrain,
@@ -608,7 +607,7 @@ mod tests {
             panic!("exact Player Control style must be admitted");
         };
         assert_eq!(at_threshold.normal_velocity_raw, -0x200);
-        assert_eq!(at_threshold.unsupported_haptic, None);
+        assert_eq!(at_threshold.haptic, None);
 
         let one_above = apply_player_terrain_style_callback(
             &terrain,
@@ -622,8 +621,8 @@ mod tests {
             panic!("exact Player Control style must be admitted");
         };
         assert_eq!(
-            one_above.unsupported_haptic,
-            Some(PlayerTerrainUnsupportedHaptic {
+            one_above.haptic,
+            Some(PlayerContactHaptic {
                 inward_speed_raw: 0x201,
                 haptic_scale_raw: 15,
                 strength_raw: 1,
@@ -641,7 +640,7 @@ mod tests {
         let PlayerTerrainStyleCallbackOutcome::PlayerControl(capped) = capped else {
             panic!("exact Player Control style must be admitted");
         };
-        assert_eq!(capped.unsupported_haptic.unwrap().strength_raw, 0xff);
+        assert_eq!(capped.haptic.unwrap().strength_raw, 0xff);
     }
 
     #[test]

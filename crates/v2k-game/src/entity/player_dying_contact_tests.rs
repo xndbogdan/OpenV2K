@@ -113,7 +113,7 @@ fn level1_dying_terrain_uses_real_entry_model_and_hook_velocity_for_the_physical
         !callback.wreck_burst_emitted,
         "equal signed latch does not emit"
     );
-    assert_eq!(callback.unsupported_haptic.unwrap().strength_raw, 255);
+    assert_eq!(callback.haptic.unwrap().strength_raw, 255);
     let outcome = continuation.finish(&mut position, &mut velocity, &mut hull);
     assert_eq!(outcome.velocity_before_raw, [321, -2048, -456]);
     assert_eq!(outcome.velocity_after_raw, [321, 1000, -456]);
@@ -156,7 +156,7 @@ fn dying_surface_strict_latch_reseed_controller_mismatch_and_blocked_prefix() {
     )
     .unwrap();
     assert!(first.wreck_burst_emitted);
-    assert_eq!(first.unsupported_haptic.unwrap().strength_raw, 1);
+    assert_eq!(first.haptic.unwrap().strength_raw, 1);
     assert_eq!(velocity, [7, 1000, 9]);
     assert_ne!(before, rng(&mut fx));
     let after = rng(&mut fx);
@@ -194,7 +194,7 @@ fn dying_surface_strict_latch_reseed_controller_mismatch_and_blocked_prefix() {
     )
     .unwrap();
     assert!(!mismatch.controller_matched);
-    assert_eq!(mismatch.unsupported_haptic, None);
+    assert_eq!(mismatch.haptic, None);
     assert_eq!(velocity, [7, 1000, 9]);
     assert_eq!(after, rng(&mut fx));
     let mut missing = None;
@@ -461,7 +461,7 @@ fn native_dying_water_hook_precedes_selector7_suppression_and_common_surface_bur
             callback.normal_velocity_raw, -520,
             "water retains129B0 normal0x7fff throughAF0's >>12"
         );
-        assert_eq!(callback.unsupported_haptic.unwrap().strength_raw, 8);
+        assert_eq!(callback.haptic.unwrap().strength_raw, 8);
         assert!(!callback.wreck_burst_emitted);
         assert_eq!(*contacts.world_fx.entity_construction_state().0, before);
         assert!(contacts.commit_runtime(&mut manager));

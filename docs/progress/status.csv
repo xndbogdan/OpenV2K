@@ -212,6 +212,8 @@ address,status,note
 0x0042D5D0,implemented,Alt+Enter stores Full Screen == 0 and rebuilds the display (crates/v2k-game/src/main.rs)
 0x0043CCD0,implemented,Display row spinner; the port adds Borderless as a third value (crates/v2k-game/src/menu_data.rs)
 0x00494720,approximated,display restart after the window is restored; SDL sets the full-screen mode again (docs/re/MENU_SYSTEM.md)
+0x00471460,implemented,feedback strength submission to the bound device; the active pad keeps the last strength as its level (crates/v2k-game/src/pad_vibration.rs)
+0x00494DE0,implemented,device output hook; every PC device has the no-op 00438050 so only a pad playing a console layout vibrates (docs/re/CONTROLS.md)
 0x00480A60,not-needed,dead: retail's Direct3D fill table, never installed (every display mode selects the software table; docs/re/DIRECT3D_TABLE.md)
 0x00480A90,not-needed,dead: retail's Direct3D fill table, never installed (every display mode selects the software table; docs/re/DIRECT3D_TABLE.md)
 0x00480CF0,not-needed,dead: retail's Direct3D fill table, never installed (every display mode selects the software table; docs/re/DIRECT3D_TABLE.md)

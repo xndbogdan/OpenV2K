@@ -212,6 +212,7 @@ pub mod ordinary_type9_wander_production;
 mod oriented_model_contact;
 pub mod overlay_51_backdrop;
 pub mod pad_layout;
+pub mod pad_vibration;
 pub mod particle_descriptors;
 pub mod player;
 pub mod player_active_contact;
