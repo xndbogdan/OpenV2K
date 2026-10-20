@@ -175,6 +175,13 @@ Buildings15, which is Trash Furniture's `B7C0` program with kind filter 3.
 They die by class1 and class63; worlds27 and35 now lose with every actor's
 death.
 
+The nine Type55 guards (worlds19, 29 and32) and three Type81 carriers
+(world38) join the [Type10 owner](INTRO2_TYPE10.md#ordinary-type55-guards-and-type81-carriers):
+Always class32 Guard Location wanders around the `+90` anchor and hands the
+first eligible candidate to Search's Chase and Aim, while UnderAttack weighs
+Search in after a hit. Type55 tumbles and Type81 drops its Type61; worlds19
+and29 now lose with every actor's death, and world32's Hive births Type81.
+
 The nineteen ordinary [Type18 insects](TYPE18_RUNTIME.md) (worlds16, 21-23,
 30, 33, 34 and36) run on the ground host with Type122's capture and class12
 death. Their root mixes Defecate Virus4, Capture9, Search7, Follow Beacons33

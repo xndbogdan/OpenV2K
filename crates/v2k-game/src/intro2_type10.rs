@@ -3,10 +3,13 @@
 //! Ordinary Type5 rows share this owner through [`Type10Profile`]: the same
 //! components, choice, K/L bindings, mass, health and sounds, with their own
 //! model, damage thresholds, Sub-D divisor, two Sub-G words, emitter and axis.
+//! The Type55/Type81 guards add UnderAttack Search beside Always class32
+//! Guard Location ([`guard`]), with their own health, multipliers and sounds.
 
 pub mod aim;
 pub mod contact;
 pub mod death;
+mod guard;
 pub mod impact;
 mod live;
 mod mover;
@@ -16,6 +19,8 @@ mod world;
 
 #[cfg(test)]
 mod carrier_tests;
+#[cfg(test)]
+mod guard_tests;
 #[cfg(test)]
 mod live_tests;
 #[cfg(test)]
@@ -145,6 +150,53 @@ pub const TYPE126_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
     raw_word_at_0x04: 1,
 };
 
+/// Guards Type55 (worlds 19/29/32) and the Type81 carriers (world 38): model
+/// 1028 with Type5's Sub-D and G words.
+pub const TYPE55_MODEL: usize = 1028;
+pub const TYPE55_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 0x1400,
+    raw_word_at_0x04: 0x0c05,
+};
+pub const TYPE81_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 0x1400,
+    raw_word_at_0x04: 1,
+};
+pub const TYPE55_EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    random_interval_us: 600_000,
+    spread_raw: 256,
+    aim_threshold_raw: 24_000,
+    speed_override_raw: 0,
+    target_axis_tolerance_raw: 5120,
+    raw_word_at_0x12: 46,
+    ..EMITTER
+};
+/// Type81 fires silently with a wider aim tolerance.
+pub const TYPE81_EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    target_axis_tolerance_raw: 7680,
+    sound_id: 0,
+    ..TYPE55_EMITTER
+};
+/// UnderAttack Search, then Always Guard Location; Type81 weighs Search 4.
+pub const TYPE55_CHOICES: [BehaviorChoice; 2] = [
+    BehaviorChoice {
+        weight_rule_id: 2,
+        weight_multiplier: 1,
+        behavior_class_id: 7,
+    },
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 1,
+        behavior_class_id: 32,
+    },
+];
+pub const TYPE81_CHOICES: [BehaviorChoice; 2] = [
+    BehaviorChoice {
+        weight_multiplier: 4,
+        ..TYPE55_CHOICES[0]
+    },
+    TYPE55_CHOICES[1],
+];
+
 /// Section-12 rows sharing this D/E/G/K/L Search And Attack owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type10Profile {
@@ -156,6 +208,10 @@ pub enum Type10Profile {
     Type80,
     /// Ordinary-world Type126 power-up carriers.
     Type126,
+    /// Ordinary-world Type55 guards.
+    Type55,
+    /// Ordinary-world Type81 guarding power-up carriers.
+    Type81,
 }
 
 impl Type10Profile {
@@ -165,6 +221,8 @@ impl Type10Profile {
             5 => Some(Self::Type5),
             80 => Some(Self::Type80),
             126 => Some(Self::Type126),
+            55 => Some(Self::Type55),
+            81 => Some(Self::Type81),
             _ => None,
         }
     }
@@ -174,12 +232,15 @@ impl Type10Profile {
             Self::Type5 => 5,
             Self::Type80 => 80,
             Self::Type126 => 126,
+            Self::Type55 => 55,
+            Self::Type81 => 81,
         }
     }
     pub const fn model(self) -> usize {
         match self {
             Self::Type10 | Self::Type80 | Self::Type126 => MODEL,
             Self::Type5 => TYPE5_MODEL,
+            Self::Type55 | Self::Type81 => TYPE55_MODEL,
         }
     }
     pub const fn axis(self) -> CommonAxisDescriptor {
@@ -187,18 +248,20 @@ impl Type10Profile {
             Self::Type10 | Self::Type80 => AXIS,
             Self::Type5 => TYPE5_AXIS,
             Self::Type126 => TYPE126_AXIS,
+            Self::Type55 => TYPE55_AXIS,
+            Self::Type81 => TYPE81_AXIS,
         }
     }
     pub const fn sub_d(self) -> SubDSteeringDescriptor {
         match self {
             Self::Type10 | Self::Type80 | Self::Type126 => SUB_D,
-            Self::Type5 => crate::common_mover::sub_d::FLYER_SUB_D,
+            Self::Type5 | Self::Type55 | Self::Type81 => crate::common_mover::sub_d::FLYER_SUB_D,
         }
     }
     pub const fn sub_g(self) -> &'static [u8; 104] {
         match self {
             Self::Type10 => &SUB_G,
-            Self::Type5 => &TYPE5_SUB_G,
+            Self::Type5 | Self::Type55 | Self::Type81 => &TYPE5_SUB_G,
             Self::Type80 | Self::Type126 => &CARRIER_SUB_G,
         }
     }
@@ -208,19 +271,50 @@ impl Type10Profile {
             Self::Type5 => TYPE5_EMITTER,
             Self::Type80 => TYPE80_EMITTER,
             Self::Type126 => TYPE126_EMITTER,
+            Self::Type55 => TYPE55_EMITTER,
+            Self::Type81 => TYPE81_EMITTER,
         }
     }
     pub const fn damage_thresholds_raw(self) -> [i32; 7] {
         match self {
             Self::Type10 | Self::Type80 | Self::Type126 => [0, 9000, 2200, 0, 200, 0, 0],
             Self::Type5 => [0, 2000, 1800, 0, 200, 0, 0],
+            Self::Type55 => [0, 8000, 2500, 0, 200, 0, 0],
+            Self::Type81 => [0, 2000, 200, 2000, 200, 0, 0],
         }
     }
-    /// AC60's direct alternate: Tumble for 10/5, Auto Pilot for the carriers.
+    pub const fn damage_multipliers_q8(self) -> [i32; 7] {
+        match self {
+            Self::Type55 => [0, 256, 256, 512, 128, 0, 0],
+            Self::Type81 => [0, 256, 256, 128, 128, 0, 0],
+            _ => [0, 256, 256, 0, 750, 512, 0],
+        }
+    }
+    pub const fn initial_health_raw(self) -> i32 {
+        match self {
+            Self::Type55 => 10_000,
+            _ => 32_000,
+        }
+    }
+    /// Section-12 accepted-hit and death sounds; only Type81 authors them.
+    pub const fn hit_and_death_sounds(self) -> (Option<u16>, Option<u16>) {
+        match self {
+            Self::Type81 => (Some(82), Some(87)),
+            _ => (None, None),
+        }
+    }
+    pub const fn choices(self) -> &'static [BehaviorChoice] {
+        match self {
+            Self::Type55 => &TYPE55_CHOICES,
+            Self::Type81 => &TYPE81_CHOICES,
+            _ => &INITIAL_CHOICES,
+        }
+    }
+    /// AC60's direct alternate: Tumble for 10/5/55, Auto Pilot for the carriers.
     pub const fn alternate_behavior_class(self) -> u32 {
         match self {
-            Self::Type10 | Self::Type5 => 11,
-            Self::Type80 | Self::Type126 => 63,
+            Self::Type10 | Self::Type5 | Self::Type55 => 11,
+            Self::Type80 | Self::Type126 | Self::Type81 => 63,
         }
     }
     /// G payload +0C: B6C0's 06070 randomized target base (700 for both).
@@ -248,6 +342,9 @@ pub struct Intro2Type10Runtime {
     pub(crate) sub_l_target_raw: [i16; 3],
     pub(crate) sub_l_exact_raw: i32,
     pub(crate) sub_l_output_raw: [i16; 2],
+    /// Entity `+0x90`: 104B0's copy of the construction position. Flags 8
+    /// skip D4A0's grounding branch, so Guard wanders around this point.
+    pub(crate) anchor_raw: [i16; 3],
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

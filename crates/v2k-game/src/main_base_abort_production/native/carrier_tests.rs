@@ -9,12 +9,13 @@ use crate::{
     static_damage::StaticDamageScheduler,
 };
 
-/// 170A0's 10C10 reaches the Type80/126 carriers' alternate class63 (BC90),
-/// never their Type10 owner's class11 Tumble: BAF0, then the authored Type61
-/// is tail-appended and the carrier keeps its Search tasks until the sweep.
+/// 170A0's 10C10 reaches the Type80/126/81 carriers' alternate class63
+/// (BC90), never their Type10 owner's class11 Tumble: BAF0, then the authored
+/// Type61 is tail-appended and the carrier keeps its Search or Guard tasks
+/// until the sweep.
 #[v2k_test_support::retail_test]
-fn type80_126_abort_drops_their_power_ups_through_class63() {
-    for (level, entity_type) in [(39, 80), (25, 126)] {
+fn type80_126_81_abort_drops_their_power_ups_through_class63() {
+    for (level, entity_type) in [(39, 80), (25, 126), (38, 81)] {
         let (mut session, mut manager, mut fx) =
             crate::native_type122::construction_tests::native_fixture_with_player(level);
         manager.cleanup_pending_actor_deferred_destroys();

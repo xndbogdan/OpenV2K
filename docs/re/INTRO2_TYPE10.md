@@ -2,7 +2,8 @@
 
 This document owns the Type10 actors at authored spawns 55 and 56: native
 construction, Search and Attack, fire emission, and Tumble To Death. Ordinary
-Type5 rows share the same owner through a row profile (see the last section). Shared
+Type5, Type80/126, Type55 and Type81 rows share the same owner through a row
+profile (see the last sections). Shared
 task dispatch and component arithmetic remain in [ACTOR_RUNTIME.md](ACTOR_RUNTIME.md);
 damage ownership remains in [ENTITY_DAMAGE_AND_DEATH.md](ENTITY_DAMAGE_AND_DEATH.md).
 The factory's native damage and lifecycle are described in
@@ -290,3 +291,74 @@ reach the corpse:
 
 The [abort test](../../crates/v2k-game/src/main_base_abort_production/native/carrier_tests.rs)
 checks class63 in place of Tumble in both worlds.
+
+## Ordinary Type55 guards and Type81 carriers
+
+Type55 (one row in world 19, five in 29, three in 32) and Type81 (three in
+world 38) fly model 1028 with Type5's Sub-D and G words and Type10's K/L. Their
+lists weigh UnderAttack Search beside Always class32 Guard Location:
+
+| Field | Type55 | Type81 |
+|---|---|---|
+| Health | 10000 | 32000 |
+| Damage thresholds | `[0, 8000, 2500, 0, 200, 0, 0]` | `[0, 2000, 200, 2000, 200, 0, 0]` |
+| Multipliers (Q8) | `[0, 256, 256, 512, 128, 0, 0]` | `[0, 256, 256, 128, 128, 0, 0]` |
+| Accepted-hit / death sound | none | 82 / 87 |
+| Axis / `+04` | 5120 / `0xC05` | 5120 / 1 |
+| Emitter | method 10, 600000 µs, spread 256, threshold 24000, table speed, tolerance 5120, sound 81, `+12` 46 | Type55's, tolerance 7680, silent |
+| Choices | UnderAttack ×1 class7, Always ×1 class32 | UnderAttack ×4 class7, Always ×1 class32 |
+| Alternate | class11 Tumble | class63 Auto Pilot |
+
+- **Birth.** Rule 2 holds when `tick - +34 < 250` once the clock has passed
+  249. A newborn's `+34` is zero, so the window cannot hold: `25680` draws
+  its word and takes Guard Location.
+- **Guard Location.** `FUN_0040B5A0` has `B6C0`'s shape. It copies the type's
+  axis `+04`, clears slot 2, then builds slot 1's `FUN_00401F80` search and
+  slot 0's 5000-ms `FUN_00402E20` wander, each through `06070` and its one
+  Sub-G word. `02E20` installs `02B10`'s hooks (`02DA0` pair, `02CA0` static),
+  so the Primary takes the shared contact redirects.
+- **Wander.** `FUN_00402EB0` draws one word and, one time in 64, two more for
+  a target within ±1024 on X and Z of the immutable `+90` anchor, keeping its
+  Y. `104B0` copies `+96` into `+90`, and these rows' default flags (8) skip
+  `D4A0`'s grounding branch, so the anchor is the authored or Hive-birth
+  position.
+- **Acquisition.** `FUN_00401FB0` draws one word. On its one-in-four gate,
+  `22C10` takes the first eligible live candidate inside the strict cube under
+  the axis filter. `C7D0` stores it at context `+08`, and `C6B0` publishes
+  style `4C7C00`, whose `+34/+38` are zero. `ADE0` then installs Search's
+  Chase and Aim, so pursuit runs Search's own tasks.
+- **Hooks.** Both Guard styles hold `C690` at `+20/+24/+28` and null contact,
+  water and death hooks.
+- **Reselection.** `C690` reselects over both classes and reads rule 2 from
+  `+34`. A hit stamps `+34` first, so it can tip a guard into Search.
+- **Death.** Type55's lethal entries publish Tumble. Type81's run class63:
+  `BC90` keeps the guard's tasks and drops the authored Type61.
+- **Hive births.** World 32's Hive authors a normal-session Type81 row (30 s,
+  then 20 s with 10 s jitter, four at most) beside a failed-world Type39 row.
+  `1BEB0`'s zeroed record leaves `+20` zero, so a Hive-born Type81 drops a
+  zero payload.
+
+[Guard tests](../../crates/v2k-game/src/intro2_type10/guard_tests.rs) cover:
+
+- the twelve births and their selection, anchor and source profiles;
+- twenty-second cohorts in all four worlds under the scheduler and late
+  contacts, with every anchor retarget inside ±1024;
+- rule 2's window;
+- a Type81 taking the player into Chase and Aim;
+- Tumble and class63 deaths.
+
+The [abort tests](../../crates/v2k-game/src/main_base_abort_production/native/type5_tests.rs)
+add Type55's Tumble and Type81's class63. A
+[Hive test](../../crates/v2k-game/src/specialized_actor_task_production/hive/tests.rs)
+checks world 32's Type81 birth.
+
+Retail lab runs (`compare.py`, idle player after Skip to World):
+
+- **World 38.** The three Type81s leave their anchors as retail's do until
+  their random targets part (82 ticks). Retail's guards later take terrain
+  contacts (`004141D0`) the port's paths do not reach.
+- **World 32.** Retail loses the world at tick 1091, before the Type81 row
+  matures, and its Hive then births failed-world Type39s. The port, whose
+  Type32 and Type82 rows are not native yet, does not lose it, so its Type81
+  births at 30 s have no retail counterpart in this run. Before the loss, both
+  sides' Type55s take terrain, pair and Type99 turret hits.

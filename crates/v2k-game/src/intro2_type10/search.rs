@@ -18,8 +18,9 @@ use crate::{
     world_fx::WorldFx,
 };
 
-/// ADE0 publishes Chase and Aim against the same target. The E callback belongs
-/// to the later Tertiary visit, including on the pass that acquired the target.
+/// ADE0 publishes Chase and Aim against the same target, for Search's
+/// `4C7A98` and Guard's `4C7C00` alike. The E callback belongs to the later
+/// Tertiary visit, including on the pass that acquired the target.
 pub(super) fn pursuing_graph_authenticates(entity: &Entity) -> bool {
     if !intro2_type10_allocation_authenticates(entity) {
         return false;
@@ -27,7 +28,10 @@ pub(super) fn pursuing_graph_authenticates(entity: &Entity) -> bool {
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return false;
     };
-    if context.active_style().style_address() != 0x004c_7a98 {
+    if !matches!(
+        context.active_style().style_address(),
+        0x004c_7a98 | 0x004c_7c00
+    ) {
         return false;
     }
     let RetailRuntimeValue::Known(Some(target)) = context.target_handle_at_0x08() else {

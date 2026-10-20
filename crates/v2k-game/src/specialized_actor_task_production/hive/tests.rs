@@ -1064,3 +1064,29 @@ fn world21_hive_births_type87_through_the_flyer_constructor() {
         RetailRuntimeValue::Known(0x0100_0000)
     );
 }
+
+/// World32's Hive authors a normal-session Type81 row (30 s, then 20 s with
+/// 10 s jitter) beside a failed-world Type39 row. The child takes the Type10
+/// family's 09A80 from the zeroed record: Guard Location around its birth
+/// point, and the record's zero `+20` as its class63 payload.
+#[v2k_test_support::retail_test]
+fn world32_hive_births_type81_through_the_type10_family_constructor() {
+    let (manager, scheduler, births) = hive_world_births(32, 1510);
+    let born: Vec<_> = births.iter().filter(|birth| birth.1 == 81).collect();
+    assert_eq!(born.len(), 1, "{births:?}");
+    assert_eq!(born[0].0, 1501);
+    let id = born[0].2;
+    assert_hive_child(
+        &manager,
+        &scheduler,
+        id,
+        crate::intro2_type10::type10_manager_allocation_authenticates,
+    );
+    let child = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    assert_eq!(child.auto_pilot_payload_packed, Some(0));
+    assert!(matches!(
+        child.current_behavior_context,
+        RetailRuntimeValue::Known(Some(context))
+            if context.active_style().style_address() == 0x004c_7bb8
+    ));
+}

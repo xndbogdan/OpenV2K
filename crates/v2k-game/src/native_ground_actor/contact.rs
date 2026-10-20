@@ -520,7 +520,10 @@ fn resolve_flying_static_contact_entry(
         return NativeGroundContactOutcome::Ineligible;
     };
     let kind = entity.entity_type;
-    if !matches!(kind, 13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 57) {
+    if !matches!(
+        kind,
+        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57
+    ) {
         return NativeGroundContactOutcome::Ineligible;
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -555,7 +558,7 @@ fn resolve_flying_static_contact_entry(
                 .find(|entity| entity.id == id)
                 .is_some_and(|entity| match entity.entity_type {
                     13 => crate::intro2_type13_live::authenticate_intro2_type13(entity).is_ok(),
-                    10 | 5 | 80 | 126 => {
+                    10 | 5 | 80 | 126 | 55 | 81 => {
                         crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
                     }
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
@@ -582,12 +585,12 @@ fn resolve_flying_static_contact_entry(
                         || (!tasks.intro2_type13_has_pending_prefix(id)
                             && tasks.intro2_type13_completed_owner(manager, id))
                 }
-                10 | 5 => {
+                10 | 5 | 55 => {
                     !tasks.intro2_type10_has_pending_prefix(id)
                         && tasks.intro2_type10_completed_owner(manager, id)
                 }
                 // A finished class63 corpse keeps its tasks until 14990.
-                80 | 126 => {
+                80 | 126 | 81 => {
                     crate::class49_death::finished_terminal_hit_authenticates(manager, id)
                         || (!tasks.intro2_type10_has_pending_prefix(id)
                             && tasks.intro2_type10_completed_owner(manager, id))
@@ -782,7 +785,9 @@ fn resolve(
             && matches!(context.active_style().style_address(), 0x4c7df8 | 0x4c7e40))
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38 | 129 | 119
+            13 | 10 | 5 | 80 | 126 | 55 | 81 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38
+                | 129
+                | 119
                 | 77
                 | 12
                 | 127
@@ -797,7 +802,10 @@ fn resolve(
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
-        || (matches!(profile.entity_type, 80 | 126 | 128 | 129 | 127)
+        // Guard Location's search and pursuit styles hold null contact hooks.
+        || (matches!(profile.entity_type, 55 | 81)
+            && matches!(context.active_style().style_address(), 0x4c7bb8 | 0x4c7c00))
+        || (matches!(profile.entity_type, 80 | 126 | 81 | 128 | 129 | 127)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (matches!(profile.entity_type, 26 | 18 | 28 | 76 | 77)
@@ -934,6 +942,9 @@ fn apply_contact(
             ActorTaskRuntime::SharedRetarget(task) => {
                 task.apply_static_contact_private_state(plan.private_state_after)
             }
+            ActorTaskRuntime::OrdinaryType9Wander(task) => {
+                task.replace_private_state(plan.private_state_after)
+            }
             ActorTaskRuntime::DefecateVirusWander(task) => {
                 *task = crate::defecate_virus::DefecateVirusWanderTaskState::from_parts(
                     plan.private_state_after,
@@ -982,7 +993,9 @@ fn apply_contact(
         0x4c7ed0 => profile.default_flags & !0x2015,
         0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c7ff0 | 0x4c8038 | 0x4c7b28 | 0x4c7b70 | 0x4c8080
         | 0x4c80c8 | 0x4c8110 | 0x4c8158 | 0x4c7e88 | 0x4c7930 | 0x4c7738 | 0x4c74f8 | 0x4c7420
-        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 | 0x4c76f0 => profile.default_flags,
+        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 | 0x4c76f0 | 0x4c7bb8 | 0x4c7c00 => {
+            profile.default_flags
+        }
         0x4c7978 => (profile.default_flags | 0x80) & !2,
         0x4c78a0 | 0x4c78e8 if matches!(profile.entity_type, 3 | 27) => {
             crate::rolling_boulder::current_style(entity)
@@ -1227,6 +1240,10 @@ fn contact_task_hook(
             Some(Task::FollowBeaconsFollowing(task)) => Ok(
                 NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
             ),
+            // A Type81 guard keeps 02E20's anchor wander.
+            Some(Task::OrdinaryType9Wander(task)) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            )),
             // 401CA0's furniture task leaves +20 null.
             Some(Task::TrashFurniture(_)) => Ok(NativeGroundStaticTaskHook::Null),
             _ => Err(Block::Runtime("contact task graph")),
@@ -1259,9 +1276,18 @@ fn contact_task_hook(
         (0x4c7660, Some(Task::RunAway(task)), None) => Ok(
             NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
         ),
-        (0x4c7a98, Some(Task::ChaseTarget(task)), None) => Ok(
+        (0x4c7a98 | 0x4c7c00, Some(Task::ChaseTarget(task)), None) => Ok(
             NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
         ),
+        // Guard's 02E20 installs 02B10's hooks: 02CA0 at the Primary's +20;
+        // 01F80's search keeps 05FF0's null hook.
+        (
+            0x4c7bb8,
+            Some(Task::OrdinaryType9Wander(task)),
+            Some(Task::GuardLocationAcquisition(_)),
+        ) => Ok(NativeGroundStaticTaskHook::WanderPrivate(
+            task.private_state(),
+        )),
         (0x4c7ed0, Some(Task::CommonDying(_)), None)
             if entity.collision.state_flags_at_0x08.masked(0x4000)
                 == RetailRuntimeValue::Known(0x4000) =>

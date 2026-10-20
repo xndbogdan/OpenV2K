@@ -57,7 +57,7 @@ pub(crate) fn publish_native_flying_standard_death(
         .ok_or(NativeFlyingSurfaceDeathBlock::Runtime("death allocation"))?
         .entity_type;
     let publication = match entity_type {
-        10 | 5 => {
+        10 | 5 | 55 => {
             crate::intro2_type10::death::publish_intro2_type10_standard_death(manager, id, world_fx)
                 .map(|owner| owner.map(NativeFlyingSurfaceDeathPublication::Type10))
                 .map_err(NativeFlyingSurfaceDeathBlock::Type10)?
@@ -68,7 +68,9 @@ pub(crate) fn publish_native_flying_standard_death(
         15 | 87 | 108 => publish_native_flyer_quiet_death(manager, id, world_fx)?
             .map(NativeFlyingSurfaceDeathPublication::QuietDeath),
         13 | 14 | 39 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
-        80 | 126 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeAutoPilotContextUnavailable),
+        80 | 126 | 81 => {
+            return Err(NativeFlyingSurfaceDeathBlock::RuntimeAutoPilotContextUnavailable)
+        }
         _ => return Err(NativeFlyingSurfaceDeathBlock::Runtime("death type")),
     };
     Ok(LiveActorDeathResult {
@@ -281,7 +283,7 @@ fn resolve(
         .iter_all()
         .find(|e| e.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if !entity.active || !matches!(entity.entity_type, 13 | 10 | 5 | 80 | 126 | 57) {
+    if !entity.active || !matches!(entity.entity_type, 13 | 10 | 5 | 80 | 126 | 55 | 81 | 57) {
         return Ok(FlyingSurfaceContactOutcome::Ineligible);
     }
     let entity_type = entity.entity_type;
@@ -322,7 +324,14 @@ fn resolve(
     let finished = crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id);
     let null_hooks = matches!(
         style,
-        0x004c7a50 | 0x004c7a98 | 0x004c7ae0 | 0x004c7930 | 0x004c7978 | 0x004c74f8
+        0x004c7a50
+            | 0x004c7a98
+            | 0x004c7ae0
+            | 0x004c7bb8
+            | 0x004c7c00
+            | 0x004c7930
+            | 0x004c7978
+            | 0x004c74f8
     ) || (finished && matches!(style, 0x004c7150 | 0x004c7198));
     if !null_hooks {
         return Err(Block::Runtime("unaudited solid/water style hooks"));
@@ -332,7 +341,7 @@ fn resolve(
         .type_runtime_metadata(entity_type)
         .ok_or(Block::Runtime("metadata"))?;
     let (allocation, pending, completed) = match entity_type {
-        10 | 5 | 80 | 126 => {
+        10 | 5 | 80 | 126 | 55 | 81 => {
             let profile = crate::intro2_type10::Type10Profile::from_entity_type(entity_type)
                 .expect("matched Type10-family row");
             crate::intro2_type10::authenticate_metadata(profile, metadata)
@@ -401,7 +410,7 @@ fn resolve(
             }
             let mut playing = playing;
             match entity_type {
-                10 | 5 | 80 | 126 => {
+                10 | 5 | 80 | 126 | 55 | 81 => {
                     let owner = Intro2Type10TumbleOwner::adopt(frame.entities, id)
                         .map_err(NativeFlyingSurfaceDeathBlock::Type10)?;
                     crate::intro2_type10::contact::terminal_callback(

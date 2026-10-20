@@ -7834,7 +7834,10 @@ fn run_game(
                         .iter_all()
                         .find(|entity| entity.id == id)
                         .is_some_and(|entity| {
-                            matches!(entity.entity_type, 5 | 10 | 13 | 15 | 80 | 87 | 126)
+                            matches!(
+                                entity.entity_type,
+                                5 | 10 | 13 | 15 | 55 | 80 | 81 | 87 | 126
+                            )
                         });
                     if native_flyer {
                         use v2k_game::{

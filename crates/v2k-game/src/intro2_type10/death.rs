@@ -176,7 +176,7 @@ pub fn publish_intro2_type10_standard_death(
     // alternate styles. An arbitrary null-looking foreign style is not admitted.
     if !matches!(
         context.active_style().style_address(),
-        0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c74f8
+        0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c7bb8 | 0x4c7c00 | 0x4c74f8
     ) {
         return Err(Block::Runtime("unaudited death style"));
     }

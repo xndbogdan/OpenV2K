@@ -19,13 +19,14 @@ pub(super) fn effective_flags(entity: &Entity) -> Result<u32, Intro2Type10Block>
     if entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(8)
         || !matches!(
             context.active_style().style_address(),
-            0x4c7a50 | 0x4c7a98 | 0x4c7f60 | 0x4c7fa8
+            0x4c7a50 | 0x4c7a98 | 0x4c7bb8 | 0x4c7c00 | 0x4c7f60 | 0x4c7fa8
         )
     {
         return Err(Intro2Type10Block::Runtime("effective style flags"));
     }
     // Class7's clears21080/80 and class11's clears95/11 all preserve
-    // authored bit8; every one of these styles has a zero enable mask.
+    // authored bit8; Guard's two styles clear nothing. Every one of these
+    // styles has a zero enable mask.
     Ok(8)
 }
 

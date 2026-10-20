@@ -249,7 +249,7 @@ fn native_type10_reselection_preserves_mutable_components_context_and_pose() {
     let basis = entity.physical_body_basis_q31();
     let birth_selection = entity.initial_behavior;
     let mut draws = 0;
-    let publication = reselect_acquiring(entity, &metadata[10], &mut || {
+    let publication = reselect_acquiring(entity, &metadata[10], 600, &mut || {
         draws += 1;
         [0x8000, 0xaa00, 0xbb00][draws - 1]
     })
@@ -396,10 +396,12 @@ fn native_type10_reselection_rejects_unowned_or_dying_inputs_before_selector() {
             entity.current_behavior_context,
             ActorTaskSlot::IN_RETAIL_TICK_ORDER.map(|slot| entity.actor_tasks.task_in_slot(slot)),
         );
-        assert!(reselect_acquiring(entity, &metadata[10], &mut || panic!(
-            "invalid reentry must not draw"
-        ))
-        .is_err());
+        assert!(
+            reselect_acquiring(entity, &metadata[10], 600, &mut || panic!(
+                "invalid reentry must not draw"
+            ))
+            .is_err()
+        );
         assert_eq!(
             before,
             (

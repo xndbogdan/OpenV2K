@@ -1,7 +1,8 @@
 //! Native Type10 hits: 10EB0/11250/11320 -> DAC0/DA00/DA60 -> 11030 -> 15040.
 //!
-//! Both Search styles authenticate C690 independently at +20/+28; Search
-//! completion, fallback and the two Tumble styles have null hit callbacks.
+//! Both Search and both Guard styles authenticate C690 independently at
+//! +20/+28; Search completion, fallback and the two Tumble styles have null
+//! hit callbacks.
 //! Lethal checked damage publishes the exact alternate11 owner synchronously.
 
 use super::{intro2_type10_allocation_authenticates, Intro2Type10Block, Intro2Type10Owner};
@@ -60,6 +61,8 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
     let (_, infected, cured, primary) = [
         (0x004C_7A50, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search acquiring
         (0x004C_7A98, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search Chase/Aim
+        (0x004C_7BB8, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Guard searching
+        (0x004C_7C00, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Guard Chase/Aim
         (0x004C_7AE0, 0, 0, 0),                               // Search completion
         (0x004C_7F60, 0, 0, 0),                               // tumble class11
         (0x004C_7FA8, 0, 0, 0),                               // tumble terminal
@@ -278,6 +281,7 @@ fn run(
             let reselected = super::native::reselect_acquiring(
                 manager.entity_mut(id).unwrap(),
                 &metadata,
+                retail_tick,
                 &mut || u32::from(world_fx.next_shared_retail_random_u16()),
             )
             .and_then(|publication| {

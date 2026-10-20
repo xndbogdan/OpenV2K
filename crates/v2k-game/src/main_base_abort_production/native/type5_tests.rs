@@ -5,16 +5,17 @@ use crate::{
     native_type122::construction_tests::native_fixture_with_player,
 };
 
-/// 170A0's 10C10 reaches the ordinary Type5 receipt: DB80 selects alternate
-/// class11 and C660 publishes the falling Tumble, replacing the Search owner.
-/// A repeat visit sees the dying body and publishes nothing further.
+/// 170A0's 10C10 reaches the ordinary Type5 and Type55 receipts: DB80 selects
+/// alternate class11 and C660 publishes the falling Tumble, replacing the
+/// Search or Guard owner. A repeat visit sees the dying body and publishes
+/// nothing further.
 #[v2k_test_support::retail_test]
-fn ordinary_type5_abort_publishes_its_class11_tumble_once() {
-    for level in [42, 46, 47] {
+fn ordinary_type5_and_type55_abort_publishes_their_class11_tumble_once() {
+    for (level, entity_type) in [(42, 5), (46, 5), (47, 5), (19, 55), (29, 55), (32, 55)] {
         let (_, mut manager, mut fx) = native_fixture_with_player(level);
         let id = manager
             .iter_all()
-            .find(|entity| entity.entity_type == 5)
+            .find(|entity| entity.entity_type == entity_type)
             .unwrap()
             .id;
         let mut tasks = SpecializedActorTaskScheduler::new();
@@ -39,7 +40,7 @@ fn ordinary_type5_abort_publishes_its_class11_tumble_once() {
                     },
                     &crate::resource_cache::ResourceCache::new(Vec::new()),
                 )
-                .expect("ordinary Type5 is a native abort actor")
+                .expect("ordinary Type5/55 is a native abort actor")
                 .unwrap_or_else(|failure| panic!("world{level}: {:?}", failure.callback_error))
             };
         let result = dispatch(&mut manager, &mut tasks, &mut publications);
