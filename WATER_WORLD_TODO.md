@@ -301,19 +301,16 @@ paired underwater retail/port recording: confirm the small whole-world wobble
 affects opaque geometry and billboards together, begins only below the sea
 plane, and does not leak into the HUD or the following menu frame.
 
-### 2. Flood mechanic — runtime rising sea — medium (RE + behavior system)
-The "Change Sea Level" AI behavior (`FUN_004013A0`) writes the Section 10 sea
-word directly each tick; since the port re-reads `sea_level_world_y()` every
-frame, mutating it makes rendering + physics flood automatically. The exact
-integer transition primitive is now ported (`behavior::SeaLevelTransition`),
-including the original half-speed rise/full-speed fall asymmetry. **Blocker:**
-the activation path derives its target from an entity/model bottom and stores
-the remaining delta in a behavior traversal record; it is not the factory's
-Section-13 config blob. Connect it only with the native destruction/behavior
-dispatcher. The name-table descriptor at 0x4C8980 is a pair of callback-record
-pointers; its first pointer merely spells `HsL` in little-endian bytes and is
-not an argument signature. Levels: Flood (21), WChannel (45). Do NOT fake the
-trigger.
+### 2. Flood mechanic — runtime rising sea — ✅ done
+The "Change Sea Level" behavior (`FUN_004013A0`) writes the Section 10 sea
+word directly each tick; the port re-reads `sea_level_world_y()` every frame,
+so rendering and physics follow. Flood's (21) two Type89s run class38 from
+birth and raise the sea 244 raw a 20-ms tick, as retail's do; Type50's Die
+When Moved and Type118's Geyser move it on their deaths, and Type54/72/85 on
+theirs. See [Class0 runtime](docs/re/CLASS0_RUNTIME.md#rows-outside-class0-type50-type89-and-type118).
+The name-table descriptor at 0x4C8980 is a pair of callback-record pointers;
+its first pointer merely spells `HsL` in little-endian bytes and is not an
+argument signature.
 
 ### 3. Non-player float behavior — large; blocked on common mover/type-vtable scheduler
 ✅ **Spawn placement corrected:** Section 13 stores signed 8.8 fixed X/Y in

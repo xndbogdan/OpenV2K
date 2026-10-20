@@ -3,7 +3,10 @@
 //! These instances use current Section12/13 records in ordinary worlds and Intro2.
 //! Type52/68 quiet death, Type54 Change-Sea-Level abort and Type111 gates authenticate the
 //! same constructor receipt; captured Level1 coordinates, model numbers and
-//! task omissions do not.
+//! task omissions do not. Two rows on the same constructor live in another
+//! single-task program: Type50 in class36 Die When Moved, Type89 in class38
+//! Change Sea Level. Type118's death leaves its allocation running the
+//! class65 Geyser.
 
 use super::*;
 use crate::{
@@ -22,10 +25,12 @@ pub(crate) use zero_record::NativeType68ZeroRecordConstruction;
 #[cfg(test)]
 mod later_world_tests;
 #[cfg(test)]
+mod sea_level_tests;
+#[cfg(test)]
 mod tests;
 pub use live::{
     tick_class0_actor_owner, Class0ActorFrame, Class0ActorOutcome, Class0ActorOwner,
-    Class0ActorTick,
+    Class0ActorTick, GeyserLift,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,8 +68,25 @@ pub(super) fn authenticate_metadata(
             }
             Ok(())
         }
-        54 | 72 | 85 => {
+        50 | 54 | 72 | 85 => {
             if crate::main_base_type54_abort::change_sea_level_metadata(entity_type, metadata) {
+                Ok(())
+            } else {
+                Err(Class0ActorError::Metadata)
+            }
+        }
+        89 => {
+            if crate::main_base_type54_abort::living_change_sea_level_metadata(
+                entity_type,
+                metadata,
+            ) {
+                Ok(())
+            } else {
+                Err(Class0ActorError::Metadata)
+            }
+        }
+        118 => {
+            if crate::main_base_type54_abort::geyser_metadata(entity_type, metadata) {
                 Ok(())
             } else {
                 Err(Class0ActorError::Metadata)
@@ -138,6 +160,196 @@ fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
         && choice.weight_rule_id == 1
         && choice.weight_multiplier == 1
         && choice.behavior_class_id == 0
+}
+
+/// The class of a row's singleton Always choice: class36 for Type50,
+/// class38 for Type89, class0 for every other row.
+pub(crate) fn living_class(entity_type: u32) -> u32 {
+    crate::main_base_type54_abort::sea_level_row_living_class(entity_type).unwrap_or(0)
+}
+
+/// AC60's initializer for the row's living program. Class38's 40BDC0 needs
+/// the world for its burst and Primary; [`initialize_living_change_sea_level`]
+/// completes it after its state edit here.
+fn publish_living_graph(entity: &mut Entity, context: BehaviorContextRuntime, living_class: u32) {
+    match living_class {
+        0 => publish_class0_graph(entity, context),
+        _ => {
+            let program = behavior_program(living_class).expect("living program");
+            entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
+            let policy = initial_behavior_state_policy(program);
+            entity
+                .collision
+                .state_flags_at_0x08
+                .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
+            if living_class == 36 {
+                // 40B980 clears T then S; 04A20's 01350/012E0 copies the
+                // position into the Primary's record. No 06070 component runs.
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::DieWhenMoved(
+                        crate::die_when_moved::DieWhenMovedTaskState::new(entity.position_raw()),
+                    )),
+                );
+            }
+        }
+    }
+}
+
+/// The rest of class38's 40BDC0 on a body born into it (Type89): 440950's
+/// burst at the body, the S and T clears, then 405040's Primary with the
+/// `+88` word (or the derived height when it is zero) as its sea delta.
+pub(super) fn initialize_living_change_sea_level(
+    entity: &mut Entity,
+    active_model_extent_raw: u16,
+    terrain: &TerrainGrid,
+    world_fx: &mut WorldFx,
+) -> Result<(), Class0ActorError> {
+    use crate::main_base_type54_abort::{
+        change_sea_level_delta_raw, MainBaseType54SeaDeltaSource, MainBaseType54SeaLevelTaskState,
+    };
+    let RetailRuntimeValue::Known(source) = entity.main_base_type54_sea_delta_source else {
+        return Err(Class0ActorError::Runtime("sea delta source"));
+    };
+    if living_class(entity.entity_type) != 38
+        || ActorTaskSlot::IN_RETAIL_TICK_ORDER
+            .into_iter()
+            .any(|slot| entity.actor_task_state(slot).is_some())
+    {
+        return Err(Class0ActorError::Graph);
+    }
+    let position_raw = entity.position_raw();
+    // 40BDC0 takes 440950 for every type but 0x55 (Type85).
+    world_fx.emit_scatter_surface_burst_raw(
+        position_raw,
+        active_model_extent_raw,
+        Some((terrain.header[0] >> 8) as i16),
+        entity.id,
+    );
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+    let sea_delta_raw = match source {
+        MainBaseType54SeaDeltaSource::DeriveFromActorModelAndSea => {
+            change_sea_level_delta_raw(position_raw[1], active_model_extent_raw, terrain.header[0])
+        }
+        MainBaseType54SeaDeltaSource::ExplicitPreShiftWords(word) => word.wrapping_shl(8),
+    };
+    entity.actor_tasks.replace_prepared(
+        ActorTaskSlot::Primary,
+        PreparedActorTask::new(ActorTaskRuntime::ChangeSeaLevel(
+            MainBaseType54SeaLevelTaskState::new(sea_delta_raw),
+        )),
+    );
+    Ok(())
+}
+
+/// What 10C10 did to a Type118.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Class0GeyserDeath {
+    /// Remote-owned or already dying: 10C10 returned at its entry.
+    NoOp,
+    Published {
+        sea_delta_raw: i32,
+    },
+}
+
+impl EntityManager {
+    /// 10C10 on a living Type118: health zero and dying (no death sound or
+    /// attachment), class0's null death callback, then DB80's direct
+    /// alternate class65. 40C500 clears T then S and 07BC0 publishes the
+    /// Geyser Primary with its sea delta. The caller owns scheduler custody.
+    pub(crate) fn apply_class0_geyser_death(
+        &mut self,
+        id: u32,
+        terrain: &TerrainGrid,
+    ) -> Result<Class0GeyserDeath, Class0ActorError> {
+        if !self.native_class0_allocation_authenticates(id)
+            || self.native_class0_has_pending_prefix(id)
+        {
+            return Err(Class0ActorError::Allocation);
+        }
+        let metadata = self
+            .type_metadata
+            .get(crate::main_base_type54_abort::TYPE118_ENTITY_TYPE as usize)
+            .cloned()
+            .ok_or(Class0ActorError::Metadata)?;
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .ok_or(Class0ActorError::Allocation)?;
+        if entity.entity_type != crate::main_base_type54_abort::TYPE118_ENTITY_TYPE {
+            return Err(Class0ActorError::Metadata);
+        }
+        authenticate_metadata(entity.entity_type, &metadata)?;
+        let route = classify_main_base_abort_actor(MainBaseAbortActorFacts {
+            entity_id: id,
+            entity_type: entity.entity_type,
+            capability_flags: entity.capability_flags,
+            state_flags: entity
+                .collision
+                .state_flags_at_0x08
+                .masked(ORDINARY_DEATH_STATE_SKIP_MASK),
+        });
+        if route != (MainBaseAbortActorRoute::OrdinaryDeath { entity_id: id }) {
+            return Err(Class0ActorError::Runtime("not an ordinary death"));
+        }
+        match entity
+            .collision
+            .state_flags_at_0x08
+            .masked(REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT)
+        {
+            RetailRuntimeValue::Known(0) => {}
+            RetailRuntimeValue::Known(_) => return Ok(Class0GeyserDeath::NoOp),
+            RetailRuntimeValue::Unresolved => {
+                return Err(Class0ActorError::Runtime("generic death entry"))
+            }
+        }
+        let RetailRuntimeValue::Known(source) = entity.main_base_type54_sea_delta_source else {
+            return Err(Class0ActorError::Runtime("sea delta source"));
+        };
+        let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+            return Err(Class0ActorError::Graph);
+        };
+        let living = behavior_program(0).ok_or(Class0ActorError::Graph)?;
+        let geyser = behavior_program(65).ok_or(Class0ActorError::Graph)?;
+        if context.active_style().style_address() != living.initial_style.frame_address
+            || context.active_style().death_callback_policy() != DeathCallbackPolicy::None
+            || !native_class0_quiet_death_tasks_are_locally_releasable(entity)
+        {
+            return Err(Class0ActorError::Graph);
+        }
+        let selected = context
+            .reselect_audited_type_default(geyser, 0, geyser.initial_style)
+            .ok_or(Class0ActorError::Graph)?;
+        let sea_delta_raw = crate::geyser::geyser_sea_delta_raw(
+            match source {
+                crate::main_base_type54_abort::MainBaseType54SeaDeltaSource::ExplicitPreShiftWords(
+                    word,
+                ) => word,
+                crate::main_base_type54_abort::MainBaseType54SeaDeltaSource::DeriveFromActorModelAndSea => 0,
+            },
+            entity.position_raw()[1],
+            terrain.header[0],
+        );
+        entity.collision.health_raw = RetailRuntimeValue::Known(0);
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
+        entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));
+        entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+        entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+        entity.actor_tasks.replace_prepared(
+            ActorTaskSlot::Primary,
+            PreparedActorTask::new(ActorTaskRuntime::Geyser(
+                crate::geyser::GeyserTaskState::new(sea_delta_raw),
+            )),
+        );
+        Ok(Class0GeyserDeath::Published { sea_delta_raw })
+    }
 }
 
 fn publish_class0_graph(entity: &mut Entity, context: BehaviorContextRuntime) {
@@ -296,8 +508,13 @@ pub(super) fn construct_class0_actor(
         .initializer
         .as_ref()
         .ok_or(Class0ActorError::Metadata)?;
+    let living_class = living_class(entity.entity_type);
     let initial_selection = match entity.initial_behavior {
-        RetailRuntimeValue::Known(Some(selection)) if selection.program.class_id == 0 => selection,
+        RetailRuntimeValue::Known(Some(selection))
+            if u32::from(selection.program.class_id) == living_class =>
+        {
+            selection
+        }
         _ => return Err(Class0ActorError::Metadata),
     };
     let resolution = resolve_entity_initializer_with_selected_behavior(
@@ -358,8 +575,8 @@ pub(super) fn construct_class0_actor(
     // D720/13F70 retains the spawn Euler-derived basis, including 0x38's
     // player +0xA2/+0xA4/+0xA6 copy.
     entity.apply_d720_euler_body_basis();
-    publish_class0_graph(entity, context);
-    if matches!(entity.entity_type, 54 | 72 | 85) {
+    publish_living_graph(entity, context, living_class);
+    if matches!(entity.entity_type, 50 | 54 | 72 | 85 | 89 | 118) {
         if let Class0SpawnInput::Authored(spawn) = spawn {
             let word = i32::from_le_bytes(
                 spawn.extra[8..12]

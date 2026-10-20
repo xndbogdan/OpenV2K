@@ -88,6 +88,8 @@ pub enum NativeExplosionSourceProfile {
     Type71Gunner,
     /// Type83, whose class49 A860 runs the radar's 4055C0 after the radial.
     PortableRadar,
+    /// Type89 on the class0 constructor, born into class38; alternate class1.
+    Type89,
 }
 
 impl NativeExplosionSourceProfile {
@@ -108,6 +110,7 @@ impl NativeExplosionSourceProfile {
             Self::ExplodingFlyer(entity_type) => entity_type,
             Self::Type71Gunner => 71,
             Self::PortableRadar => crate::portable_radar::ENTITY_TYPE,
+            Self::Type89 => crate::main_base_type54_abort::TYPE89_ENTITY_TYPE,
         }
     }
 
@@ -179,6 +182,11 @@ impl NativeExplosionSourceProfile {
             }
             // The row's authentication pins alternate49.
             Self::PortableRadar => crate::portable_radar::authenticate_metadata(metadata).is_ok(),
+            // The row pins alternate1.
+            Self::Type89 => crate::main_base_type54_abort::living_change_sea_level_metadata(
+                crate::main_base_type54_abort::TYPE89_ENTITY_TYPE,
+                metadata,
+            ),
         }
     }
 
@@ -260,6 +268,8 @@ impl NativeExplosionSourceProfile {
             ),
             // Class60's only style: +2C is null.
             Self::PortableRadar => style == crate::portable_radar::STYLE,
+            // Class38's only style: +2C is null.
+            Self::Type89 => style == 0x004c_7348,
         }
     }
 
@@ -304,7 +314,7 @@ impl NativeExplosionSourceProfile {
             Self::Type71Gunner => (10, [37, 37]),
             // No A/B/N/G, no capability40, neither type49 nor 112..115:
             // 40BB9C keeps ten particles of class16.
-            Self::PortableRadar => (10, [16, 16]),
+            Self::PortableRadar | Self::Type89 => (10, [16, 16]),
         }
     }
 
@@ -319,6 +329,7 @@ impl NativeExplosionSourceProfile {
             | Self::Type12Family(crate::native_type12::Type12Row::Type12)
             | Self::RollingBoulder
             | Self::ExplodingFlyer(_)
+            | Self::Type89
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
                 NativeExplosionPolicy::Class1
@@ -377,6 +388,9 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         ))
     } else if crate::portable_radar::allocation_authenticates(entity) {
         Some(NativeExplosionSourceProfile::PortableRadar)
+    } else if entity.entity_type == crate::main_base_type54_abort::TYPE89_ENTITY_TYPE {
+        // The manager's class0 receipt authenticates the allocation.
+        Some(NativeExplosionSourceProfile::Type89)
     } else {
         crate::intro2_type16::type16_auto_pilot_row(entity)
             .map(NativeExplosionSourceProfile::Type16Carrier)
@@ -448,6 +462,9 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
         }
         Some(NativeExplosionSourceProfile::PortableRadar) => {
             crate::portable_radar::manager_allocation_authenticates(manager, id)
+        }
+        Some(NativeExplosionSourceProfile::Type89) => {
+            manager.native_class0_allocation_authenticates(id)
         }
         None => false,
     }
@@ -681,7 +698,12 @@ pub fn begin_class49_standard_death(
     let flags = state_bits(entity, 0x8000_6000)?;
     let slot =
         crate::entity_collision_state::active_model_slot_from_state_flags(flags | DYING_STATE_BIT);
-    let extent = entity.model_slots[slot]
+    // Type89's slots hold model 0, whose header+08 BAF0 reads all the same.
+    let model = match (entity.model_slots[slot], profile) {
+        (None, NativeExplosionSourceProfile::Type89) => Some(0),
+        (model, _) => model,
+    };
+    let extent = model
         .and_then(|model| resources.global_model(model))
         .ok_or(Block::Metadata)?
         .radius;
