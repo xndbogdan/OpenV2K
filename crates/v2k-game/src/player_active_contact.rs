@@ -7,7 +7,9 @@
 //! atomically.
 //! It is intentionally local-player-only: remote ownership, unknown callback
 //! state, unauthenticated descriptor-component effects, topology changes, and
-//! death transitions without a native owner stop before mutation. A lethal
+//! death transitions without a native owner stop before mutation. Native
+//! actors' 02DA0 component callbacks plan at the callback, drawing the shared
+//! RNG there, and commit with the body pass. A lethal
 //! candidate packet to a native Type17 stages a commit-time dispatch through
 //! the shared capture-path death owner; a lethal subject packet re-enters the
 //! player's own checked-damage terminal instead.
@@ -42,6 +44,9 @@ use crate::entity_collision_state::{
     PairOrientationPolicy, RetailRuntimeValue, DYING_STATE_BIT, PAIR_COLLISION_ENABLED_STATE_BIT,
 };
 use crate::gameplay_notifications::GameplayNotifications;
+use crate::native_actor_descriptor_contact::{
+    NativeDescriptorContactError, NativeDescriptorContactSlotPlan, NativeDescriptorContactSource,
+};
 use crate::oriented_model_contact::{oriented_model_pair_narrow_phase, OrientedModelPairProbe};
 use crate::player::PlayerCraft;
 use crate::player_hull::PlayerHull;
@@ -117,6 +122,13 @@ pub enum PlayerActivePairError {
     RollingBoulderPair {
         entity_id: u32,
     },
+    /// A native actor's 02DA0 component callback was reached but its owner,
+    /// task or descriptor shape is not one the late contact walk admits.
+    NativeDescriptorContact {
+        entity_id: u32,
+        entity_type: u32,
+        reason: NativeDescriptorContactError,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +143,8 @@ struct RuntimePairSnapshot {
     anim_vars: AnimVars,
     type9_descriptor_contact_owner: Option<Type9DescriptorContactOwner>,
     type17_descriptor_contact_owner: Option<Type17DescriptorContactOwner>,
+    native_descriptor_source:
+        Option<Result<NativeDescriptorContactSource, NativeDescriptorContactError>>,
 }
 
 impl RuntimePairSnapshot {
@@ -140,6 +154,9 @@ impl RuntimePairSnapshot {
         anim_vars: AnimVars,
         type9_descriptor_contact_owner: Option<Type9DescriptorContactOwner>,
         type17_descriptor_contact_owner: Option<Type17DescriptorContactOwner>,
+        native_descriptor_source: Option<
+            Result<NativeDescriptorContactSource, NativeDescriptorContactError>,
+        >,
     ) -> Self {
         Self {
             id: entity.id,
@@ -152,6 +169,7 @@ impl RuntimePairSnapshot {
             anim_vars,
             type9_descriptor_contact_owner,
             type17_descriptor_contact_owner,
+            native_descriptor_source,
         }
     }
 }
@@ -341,7 +359,8 @@ struct PlayerPairOracle<'a, P: CollisionModelPool + ?Sized> {
     sounds: Vec<PlayerActivePairSound>,
     descriptor_contact_plans: Vec<Type9DescriptorContactPlan>,
     type17_descriptor_plans: Vec<Type17DescriptorContactPlan>,
-    type17_block: Option<PlayerActivePairError>,
+    native_descriptor_plans: Vec<NativeDescriptorContactSlotPlan>,
+    component_block: Option<PlayerActivePairError>,
     /// Resting boulders whose style1 +18 (40C730) ran during the pass.
     rolling_boulder_wakes: Vec<u32>,
     world_fx: &'a mut WorldFx,
@@ -487,18 +506,43 @@ impl<P: CollisionModelPool + ?Sized> ActivePairOracle<()> for PlayerPairOracle<'
                             return PairComponentCallbackOutcome::Completed;
                         }
                         Err(error) => {
-                            self.type17_block = Some(error);
+                            self.component_block = Some(error);
                             return PairComponentCallbackOutcome::Unresolved;
                         }
                     }
                 }
                 if owner.entity_type == 17 {
-                    self.type17_block = Some(PlayerActivePairError::Type17DescriptorContact {
+                    self.component_block = Some(PlayerActivePairError::Type17DescriptorContact {
                         entity_id: owner.id,
                         entity_type: owner.entity_type,
                         spawn_index: owner.spawn_index,
                     });
                     return PairComponentCallbackOutcome::Unresolved;
+                }
+                if let Some(source) = owner.native_descriptor_source {
+                    let target = DescriptorContactTargetSnapshot {
+                        entity_id: request.opposite.id,
+                        position_raw: request.opposite.position_raw,
+                    };
+                    return match source.and_then(|source| {
+                        source.plan(target, &mut || {
+                            u32::from(self.world_fx.next_shared_retail_random_u16())
+                        })
+                    }) {
+                        Ok(plans) => {
+                            self.native_descriptor_plans.extend(plans);
+                            PairComponentCallbackOutcome::Completed
+                        }
+                        Err(reason) => {
+                            self.component_block =
+                                Some(PlayerActivePairError::NativeDescriptorContact {
+                                    entity_id: owner.id,
+                                    entity_type: owner.entity_type,
+                                    reason,
+                                });
+                            PairComponentCallbackOutcome::Unresolved
+                        }
+                    };
                 }
                 let Some(descriptor_owner) = owner.type9_descriptor_contact_owner else {
                     return PairComponentCallbackOutcome::Unresolved;
@@ -713,6 +757,7 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         player_craft.anim_vars(),
         None,
         None,
+        None,
     );
     player_runtime
         .pair_callbacks
@@ -751,12 +796,17 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         });
         let type17_descriptor_contact_owner = metadata
             .and_then(|metadata| Type17DescriptorContactOwner::authenticate(candidate, metadata));
+        // Type9 and Type17 keep their dedicated owners above.
+        let native_descriptor_source = (!matches!(candidate.entity_type, 9 | 17)
+            && !component_callbacks_are_noop(candidate.collision.pair_callbacks))
+        .then(|| NativeDescriptorContactSource::capture(entities, scheduler, candidate.id));
         runtime.push(RuntimePairSnapshot::from_entity(
             candidate,
             entity_pair_to_world(candidate),
             candidate.presentation_anim_vars(retail_tick),
             descriptor_contact_owner,
             type17_descriptor_contact_owner,
+            native_descriptor_source,
         ));
     }
     let original_candidates = candidates.clone();
@@ -768,7 +818,8 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         sounds: Vec::new(),
         descriptor_contact_plans: Vec::new(),
         type17_descriptor_plans: Vec::new(),
-        type17_block: None,
+        native_descriptor_plans: Vec::new(),
+        component_block: None,
         rolling_boulder_wakes: Vec::new(),
         world_fx,
     };
@@ -776,7 +827,7 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         Ok(core) => core,
         Err(error) => {
             return Err(oracle
-                .type17_block
+                .component_block
                 .take()
                 .unwrap_or(PlayerActivePairError::Core(error)));
         }
@@ -849,6 +900,7 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         &core.subject,
         &core.candidates,
         &oracle.descriptor_contact_plans,
+        &oracle.native_descriptor_plans,
         scheduler,
         oracle.world_fx,
         notifications,
@@ -1681,6 +1733,7 @@ mod tests {
             anim_vars: AnimVars::default(),
             type9_descriptor_contact_owner: None,
             type17_descriptor_contact_owner: None,
+            native_descriptor_source: None,
             spawn_index: None,
         }
     }
@@ -1702,6 +1755,7 @@ mod tests {
             anim_vars: AnimVars::default(),
             type9_descriptor_contact_owner: None,
             type17_descriptor_contact_owner: None,
+            native_descriptor_source: None,
         }
     }
 
