@@ -198,19 +198,17 @@ fn assert_lighthouse_peasant_continues_after_contact(side: ContactSide, warmup_t
     let mut hull = PlayerHull::default();
     let contact = world
         .entities
-        .resolve_player_active_contacts(
-            &world.session.cache,
-            v2k_game::player_active_contact::PlayerActivePairFrame {
-                resources: &world.session.cache,
-                retail_tick: world.tick,
-                player_craft: &PlayerCraft::new(),
-                player_hull: &mut hull,
-                scheduler: &mut world.scheduler,
-                world_fx: &mut WorldFx::new(),
-                notifications: &mut world.notifications,
-                extra_lives: 0,
-            },
-        )
+        .resolve_player_active_contacts(v2k_game::player_active_contact::PlayerActivePairFrame {
+            resources: &mut world.session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
+            retail_tick: world.tick,
+            player_craft: &PlayerCraft::new(),
+            player_hull: &mut hull,
+            scheduler: &mut world.scheduler,
+            world_fx: &mut WorldFx::new(),
+            notifications: &mut world.notifications,
+            extra_lives: 0,
+        })
         .expect("live player/peasant contact");
     assert!(
         contact.core.dispositions.iter().any(|disposition| matches!(

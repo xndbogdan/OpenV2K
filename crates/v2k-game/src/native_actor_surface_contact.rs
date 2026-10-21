@@ -185,8 +185,18 @@ pub fn resolve_native_actor_surface_contact(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
 ) -> NativeActorSurfaceContactOutcome {
+    resolve_native_actor_surface_contact_with_playing(frame, id, None)
+}
+
+/// Playing lends its craft: a Type3's lethal terrain collision runs class1,
+/// whose BAF0 radial reaches the player hull.
+pub fn resolve_native_actor_surface_contact_with_playing(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    mut playing: Option<crate::native_actor_capture::pair::PlayingPlayerContact<'_>>,
+) -> NativeActorSurfaceContactOutcome {
     let mut committed = false;
-    match resolve(frame, id, &mut committed) {
+    match resolve(frame, id, &mut playing, &mut committed) {
         Ok(outcome) => outcome,
         Err(reason) => {
             if committed {
@@ -214,6 +224,7 @@ fn bits(entity: &Entity, mask: u32) -> Result<u32, NativeActorSurfaceContactBloc
 fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
+    playing: &mut Option<crate::native_actor_capture::pair::PlayingPlayerContact<'_>>,
     committed: &mut bool,
 ) -> Result<NativeActorSurfaceContactOutcome, NativeActorSurfaceContactBlock> {
     use NativeActorSurfaceContactBlock as Block;
@@ -433,13 +444,37 @@ fn resolve(
                             None
                         }
                         // Type3's class1 BAF0 radial needs the Playing player
-                        // hull, which the late contact frame does not carry.
+                        // hull; only Playing lends it.
                         NativeSurfaceProfile::RollingBoulder(
                             crate::rolling_boulder::RollingBoulderProfile::Small,
                         ) => {
-                            return Err(Intro2CommonDyingBlock::Runtime(
-                                "Rolling Boulder class1 radial needs the player hull",
-                            ));
+                            let Some(player) = playing.as_mut() else {
+                                return Err(Intro2CommonDyingBlock::Runtime(
+                                    "Rolling Boulder class1 radial needs the player hull",
+                                ));
+                            };
+                            let feedback = feedback
+                                .ok_or(Intro2CommonDyingBlock::Runtime("surface death feedback"))?;
+                            crate::class49_terminal::run_class49_standard_death(
+                                crate::class49_terminal::Class49TerminalFrame {
+                                    entities: manager,
+                                    resources: frame.resources,
+                                    world_fx: fx,
+                                    static_damage: frame.static_damage,
+                                    notifications: &mut *feedback.notifications,
+                                    retail_tick: feedback.retail_tick,
+                                    world:
+                                        crate::class49_terminal::Class49WorldContext::for_contact(
+                                            frame.actor_tasks,
+                                            Some(player.reborrow()),
+                                        ),
+                                },
+                                id,
+                            )
+                            .map_err(|_| {
+                                Intro2CommonDyingBlock::Runtime("Rolling Boulder class1 terminal")
+                            })?;
+                            None
                         }
                     };
                     Ok(LiveActorDeathResult {
@@ -464,7 +499,10 @@ fn resolve(
         }
     }
     // 11AD0 passes its retained entry model into 129B0, even if the solid
-    // callback changed actor state. XYZ and crossing bits are read anew.
+    // callback changed actor state. XYZ and crossing bits are read anew, and
+    // so is the static world a class1 blast may have changed.
+    let context = TerrainCollisionContext::from_current_level_cache(frame.resources)
+        .ok_or(Block::Runtime("terrain contact environment"))?;
     let entity = frame
         .entities
         .entity_mut(id)

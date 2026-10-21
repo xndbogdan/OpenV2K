@@ -437,7 +437,7 @@ fn fresh_level_one_type17_constructor_surface_state_is_exact_and_route_scoped() 
 
 #[v2k_test_support::retail_test]
 fn ordinary_type17_overlap_does_not_unresolved_the_solid_pass() {
-    let (session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
+    let (mut session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
     let spider = entity_at_spawn(&manager, 17);
     assert_eq!(spider.entity_type, 17);
     assert!(spider.intro2_type17_runtime.is_some());
@@ -466,9 +466,9 @@ fn ordinary_type17_overlap_does_not_unresolved_the_solid_pass() {
     let mut hull = PlayerHull::default();
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &craft,
             player_hull: &mut hull,
@@ -491,7 +491,7 @@ fn ordinary_type17_overlap_does_not_unresolved_the_solid_pass() {
 
 #[v2k_test_support::retail_test]
 fn lethal_player_ram_kills_native_spider_through_capture_path_death() {
-    let (session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
+    let (mut session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
     let spider = entity_at_spawn(&manager, 17);
     assert_eq!(spider.entity_type, 17);
     assert!(spider.intro2_type17_runtime.is_some());
@@ -526,9 +526,9 @@ fn lethal_player_ram_kills_native_spider_through_capture_path_death() {
         let mut world_fx = WorldFx::new();
         let pass = resolve_player_active_contacts(
             &mut manager,
-            &session.cache,
             PlayerActivePairFrame {
-                resources: &session.cache,
+                resources: &mut session.cache,
+                static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
                 retail_tick: 12_010,
                 player_craft: &PlayerCraft::new(),
                 player_hull: &mut hull,
@@ -599,7 +599,7 @@ fn lethal_player_ram_kills_native_spider_through_capture_path_death() {
 
 #[v2k_test_support::retail_test]
 fn lethal_player_ram_kills_player_through_hull_terminal_without_failing_pass() {
-    let (session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
+    let (mut session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
     let spider = entity_at_spawn(&manager, 17);
     assert_eq!(spider.entity_type, 17);
     assert!(spider.intro2_type17_runtime.is_some());
@@ -647,9 +647,9 @@ fn lethal_player_ram_kills_player_through_hull_terminal_without_failing_pass() {
         let mut notifications = GameplayNotifications::new();
         let pass = resolve_player_active_contacts(
             &mut manager,
-            &session.cache,
             PlayerActivePairFrame {
-                resources: &session.cache,
+                resources: &mut session.cache,
+                static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
                 retail_tick: 12_010,
                 player_craft: &PlayerCraft::new(),
                 player_hull: &mut hull,
@@ -735,7 +735,7 @@ fn lethal_player_ram_kills_player_through_hull_terminal_without_failing_pass() {
 
 #[v2k_test_support::retail_test]
 fn ordinary_type17_forward_player_contact_applies_native_02da0() {
-    let (session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
+    let (mut session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
     let spider = entity_at_spawn(&manager, 17);
     assert_eq!(spider.entity_type, 17);
     assert!(spider.intro2_type17_runtime.is_some());
@@ -778,9 +778,9 @@ fn ordinary_type17_forward_player_contact_applies_native_02da0() {
     player.position = std::array::from_fn(|axis| position[axis] + 0.25 * forward[axis]);
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &PlayerCraft::new(),
             player_hull: &mut PlayerHull::default(),
@@ -829,7 +829,7 @@ fn ordinary_type17_forward_player_contact_applies_native_02da0() {
 
 #[v2k_test_support::retail_test]
 fn unauthenticated_type17_player_contact_fails_closed_with_diagnostics() {
-    let (session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
+    let (mut session, mut manager) = authored_ordinary_world(13).expect("retail fixture");
     let spider = entity_at_spawn(&manager, 17);
     assert_eq!(spider.entity_type, 17);
     assert!(spider.intro2_type17_runtime.is_some());
@@ -843,9 +843,9 @@ fn unauthenticated_type17_player_contact_fails_closed_with_diagnostics() {
     player.set_motion_raw(spider_position, [0, -4_096, 0]);
     let error = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &PlayerCraft::new(),
             player_hull: &mut PlayerHull::default(),
@@ -868,7 +868,7 @@ fn unauthenticated_type17_player_contact_fails_closed_with_diagnostics() {
 
 #[v2k_test_support::retail_test]
 fn no_contact_pass_preserves_noncanonical_float_bits_exactly() {
-    let (session, mut manager) = level_one().expect("retail fixture");
+    let (mut session, mut manager) = level_one().expect("retail fixture");
     let player = manager.player_mut().expect("persistent type-46 player");
     player.position = [1.234_567, 100.123_45, 2.345_678];
     player.velocity = [0.012_345_67, -0.076_543_21, 0.034_567_89];
@@ -877,9 +877,9 @@ fn no_contact_pass_preserves_noncanonical_float_bits_exactly() {
 
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 0,
             player_craft: &PlayerCraft::new(),
             player_hull: &mut hull,
@@ -901,7 +901,7 @@ fn no_contact_pass_preserves_noncanonical_float_bits_exactly() {
 
 #[v2k_test_support::retail_test]
 fn unresolved_overlapping_allocation_is_omitted_without_rolling_back_the_solid_pass() {
-    let (session, mut manager) = level_one().expect("retail fixture");
+    let (mut session, mut manager) = level_one().expect("retail fixture");
     let type47 = entity_at_spawn(&manager, 11);
     let type47_id = type47.id;
     let unresolved_position = type47.position;
@@ -915,9 +915,9 @@ fn unresolved_overlapping_allocation_is_omitted_without_rolling_back_the_solid_p
 
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 0,
             player_craft: &PlayerCraft::new(),
             player_hull: &mut hull,
@@ -954,7 +954,7 @@ fn unresolved_overlapping_allocation_is_omitted_without_rolling_back_the_solid_p
 
 #[v2k_test_support::retail_test]
 fn authored_main_base_program_resolves_a_real_level_one_overlap() {
-    let (session, mut manager) = fresh_level_one().expect("retail fixture");
+    let (mut session, mut manager) = fresh_level_one().expect("retail fixture");
     let base_id = entity_at_spawn(&manager, 6).id;
     let RetailRuntimeValue::Known(Some(player_context)) = manager
         .player()
@@ -981,9 +981,9 @@ fn authored_main_base_program_resolves_a_real_level_one_overlap() {
 
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &craft,
             player_hull: &mut hull,
@@ -1026,7 +1026,7 @@ fn authored_main_base_program_resolves_a_real_level_one_overlap() {
 
 #[v2k_test_support::retail_test]
 fn authored_hive_resolves_a_real_level_one_overlap() {
-    let (session, mut manager) = level_one().expect("retail fixture");
+    let (mut session, mut manager) = level_one().expect("retail fixture");
     let hive = entity_at_spawn(&manager, 24);
     assert_eq!(hive.entity_type, 67);
     assert_eq!(hive.model_index, Some(341));
@@ -1051,9 +1051,9 @@ fn authored_hive_resolves_a_real_level_one_overlap() {
 
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &craft,
             player_hull: &mut hull,
@@ -1175,7 +1175,7 @@ fn authored_hive_lethal_hit_fails_closed_while_the_level_one_cohort_lives() {
 
 #[v2k_test_support::retail_test]
 fn live_cargo_makes_the_player_damage_modifier_fail_closed() {
-    let (session, mut manager) = level_one().expect("retail fixture");
+    let (mut session, mut manager) = level_one().expect("retail fixture");
     let weight = entity_at_spawn(&manager, 5);
     let weight_id = weight.id;
     let weight_position = weight.position;
@@ -1198,9 +1198,9 @@ fn live_cargo_makes_the_player_damage_modifier_fail_closed() {
     let hull_before = hull;
     let error = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &craft,
             player_hull: &mut hull,
@@ -1222,7 +1222,7 @@ fn live_cargo_makes_the_player_damage_modifier_fail_closed() {
 
 #[v2k_test_support::retail_test]
 fn later_campaign_main_base_is_collidable_and_takes_projectile_damage() {
-    let (session, mut manager) = later_campaign_world().expect("retail fixture");
+    let (mut session, mut manager) = later_campaign_world().expect("retail fixture");
 
     let player = manager.player().expect("campaign arrival type-46 player");
     assert_eq!(
@@ -1325,9 +1325,9 @@ fn later_campaign_main_base_is_collidable_and_takes_projectile_damage() {
 
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &craft,
             player_hull: &mut hull,
@@ -1353,7 +1353,7 @@ fn later_campaign_main_base_is_collidable_and_takes_projectile_damage() {
 
 #[v2k_test_support::retail_test]
 fn later_campaign_hive_uses_constructor_pair_identity() {
-    let (session, mut manager) = later_campaign_world().expect("retail fixture");
+    let (mut session, mut manager) = later_campaign_world().expect("retail fixture");
     let hive = manager
         .iter()
         .find(|entity| entity.entity_type == 67)
@@ -1394,9 +1394,9 @@ fn later_campaign_hive_uses_constructor_pair_identity() {
     let mut hull = PlayerHull::default();
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &craft,
             player_hull: &mut hull,
@@ -1429,7 +1429,7 @@ fn overlapping_fish_are_omitted_from_the_player_solid_pass_untouched() {
     // admits only closed-identity candidates, so overlapping fish are
     // omitted rather than contacted. Their task recovery needs the same
     // style-table evidence as the Type9 02CA0 matrix.
-    let (session, mut manager) = authored_ordinary_world(22).expect("retail fixture");
+    let (mut session, mut manager) = authored_ordinary_world(22).expect("retail fixture");
     let fish = manager
         .iter_all()
         .find(|entity| matches!(entity.entity_type, 22 | 24 | 124))
@@ -1450,9 +1450,9 @@ fn overlapping_fish_are_omitted_from_the_player_solid_pass_untouched() {
     let mut notifications = GameplayNotifications::new();
     let pass = resolve_player_active_contacts(
         &mut manager,
-        &session.cache,
         PlayerActivePairFrame {
-            resources: &session.cache,
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
             retail_tick: 12_010,
             player_craft: &PlayerCraft::new(),
             player_hull: &mut hull,

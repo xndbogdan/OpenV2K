@@ -362,13 +362,35 @@ pub fn resolve_insect_static_contact_with_playing(
                 .is_ok()
             },
             // Type3's class1 BAF0 radial needs the Playing player hull,
-            // which the late contact frame does not carry.
-            |_, _, _| {
-                Err(NativeStaticActorDeathBlock::Common(
-                    Intro2CommonDyingBlock::Runtime(
-                        "Rolling Boulder class1 radial needs the player hull",
-                    ),
-                ))
+            // which only the Playing walk lends.
+            |manager, id, context| {
+                let Some(player) = context.player.as_mut() else {
+                    return Err(NativeStaticActorDeathBlock::Common(
+                        Intro2CommonDyingBlock::Runtime(
+                            "Rolling Boulder class1 radial needs the player hull",
+                        ),
+                    ));
+                };
+                crate::class49_terminal::run_class49_standard_death(
+                    crate::class49_terminal::Class49TerminalFrame {
+                        entities: manager,
+                        resources: context.resources,
+                        world_fx: context.world_fx,
+                        static_damage: context.static_damage,
+                        notifications: context.notifications,
+                        retail_tick: context.retail_tick,
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            context.tasks,
+                            Some(PlayingPlayerContact::reborrow(player)),
+                        ),
+                    },
+                    id,
+                )
+                .map(|result| LiveActorDeathResult {
+                    returned_nonzero: result.returned_nonzero,
+                    publication: None,
+                })
+                .map_err(|error| NativeStaticActorDeathBlock::Class1(Box::new(error)))
             },
         ),
         27 => rolling_boulder_static_profile(

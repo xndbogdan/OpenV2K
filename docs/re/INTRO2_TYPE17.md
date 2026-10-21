@@ -245,8 +245,9 @@ no-Sub-I `02DA0`. Player-as-subject uses that same adapter walk: authenticated
 Type17 component contact applies the descriptor plan, and unauthenticated Type17
 fails closed as `Type17DescriptorContact` with actor/type/spawn diagnostics.
 Unknown counterpart tasks and physical-body
-custody stay explicit. Lethal Type17 `DeathDispatchRequired` on the player
-adapter remains deferred. Hive67 lethal destinations now run the dying initializer,
+custody stay explicit. A lethal Type17 packet on the player adapter ends the
+walk segment and runs the capture-path death at its pair before the walk
+resumes. Hive67 lethal destinations now run the dying initializer,
 slot-0 `FUN_004260F0` and `FUN_00440950` burst with dying-model extent and sea
 level; nested `FUN_004566E0` stays the projectile/abort host. Shared Type53 construction and component contact do not
 close that family's carry2--5/D040 or complete11AD0 scan. The external writer/entry

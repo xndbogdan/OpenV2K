@@ -165,19 +165,17 @@ fn factory_product_contact_auto_selects_and_fires_the_rapid_machine_gun() {
     // census succeeds. A unit-only payload claim must not hide a live gate
     // which would prevent the player from collecting the delivered product.
     entities
-        .resolve_player_active_contacts(
-            &session.cache,
-            v2k_game::player_active_contact::PlayerActivePairFrame {
-                resources: &session.cache,
-                retail_tick: 550,
-                player_craft: &craft,
-                player_hull: &mut hull,
-                scheduler: &mut SpecializedActorTaskScheduler::new(),
-                world_fx: &mut WorldFx::new(),
-                notifications: &mut GameplayNotifications::new(),
-                extra_lives: 0,
-            },
-        )
+        .resolve_player_active_contacts(v2k_game::player_active_contact::PlayerActivePairFrame {
+            resources: &mut session.cache,
+            static_damage: &mut v2k_game::static_damage::StaticDamageScheduler::new(),
+            retail_tick: 550,
+            player_craft: &craft,
+            player_hull: &mut hull,
+            scheduler: &mut SpecializedActorTaskScheduler::new(),
+            world_fx: &mut WorldFx::new(),
+            notifications: &mut GameplayNotifications::new(),
+            extra_lives: 0,
+        })
         .expect("main's active-solid gate at the delivered factory product");
     let contacts = resolve_player_power_up_contacts(
         &mut entities,

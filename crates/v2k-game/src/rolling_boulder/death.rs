@@ -361,3 +361,109 @@ impl SplitAndExplodeHost for RollingBoulderSplitHost<'_, '_> {
         Ok(())
     }
 }
+
+/// The world a boulder's lethal player-pair packet reaches.
+pub(crate) struct RollingBoulderPairDeathWorld<'a> {
+    pub resources: &'a mut crate::resource_cache::ResourceCache,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub world_fx: &'a mut crate::world_fx::WorldFx,
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    pub scheduler: &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    pub player_hull: &'a mut crate::player_hull::PlayerHull,
+    pub extra_lives: RetailRuntimeValue<u8>,
+    pub retail_tick: u32,
+}
+
+/// The player pair's capped packet enters 15040 directly, after both bodies
+/// moved: no DAC0 hook, hit stamp or 11030 reaction. A lethal Type3 takes
+/// class1 (BAF0's blast and radial), a Type27 its class18 split, whose
+/// children join the live list's tail for the resumed walk.
+pub(crate) fn apply_rolling_boulder_pair_damage(
+    manager: &mut EntityManager,
+    id: u32,
+    delivery: crate::damage::DamageDeliveryRecord,
+    profile: RollingBoulderProfile,
+    world: RollingBoulderPairDeathWorld<'_>,
+) -> Result<
+    crate::live_actor_checked_damage::LiveActorDamageOutcome<()>,
+    crate::live_actor_checked_damage::LiveActorDamageError<
+        super::impact::RollingBoulderDeathProgramBlock,
+        (),
+    >,
+> {
+    use crate::{
+        class49_terminal::{run_class49_standard_death, Class49TerminalFrame, Class49WorldContext},
+        live_actor_checked_damage::{
+            apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageFeedback,
+            LiveActorDamageRequest, LiveActorDeathResult,
+        },
+    };
+    let RollingBoulderPairDeathWorld {
+        resources,
+        static_damage,
+        world_fx,
+        notifications,
+        scheduler,
+        player_hull,
+        extra_lives,
+        retail_tick,
+    } = world;
+    apply_live_actor_checked_damage(
+        manager,
+        world_fx,
+        LiveActorDamageRequest {
+            ratio_numerator: 0,
+            ratio_denominator: 0,
+            entity_id: id,
+            delivery,
+            entry: LiveActorDamageEntry::Checked,
+            feedback: Some(LiveActorDamageFeedback {
+                notifications,
+                retail_tick,
+            }),
+        },
+        |manager, world_fx, feedback| {
+            let feedback = feedback.expect("the pair delivery lends its feedback");
+            match profile {
+                RollingBoulderProfile::Small => run_class49_standard_death(
+                    Class49TerminalFrame {
+                        entities: manager,
+                        resources,
+                        world_fx,
+                        static_damage,
+                        notifications: &mut *feedback.notifications,
+                        retail_tick,
+                        world: Class49WorldContext::Playing {
+                            scheduler,
+                            player_hull,
+                            extra_lives,
+                            active_terminal_calls: Vec::new(),
+                        },
+                    },
+                    id,
+                )
+                .map_err(super::impact::RollingBoulderDeathProgramBlock::Class1),
+                RollingBoulderProfile::Large => {
+                    let result = begin_rolling_boulder_split(
+                        manager,
+                        id,
+                        RollingBoulderSplitFrame {
+                            resources,
+                            world_fx,
+                            retail_tick,
+                            tasks: &mut *scheduler,
+                        },
+                    )
+                    .map_err(super::impact::RollingBoulderDeathProgramBlock::Split)?;
+                    if let Some(terminal) = result.publication {
+                        scheduler.register_native_ground_terminal(terminal);
+                    }
+                    Ok(LiveActorDeathResult {
+                        returned_nonzero: result.returned_nonzero,
+                        publication: None,
+                    })
+                }
+            }
+        },
+    )
+}

@@ -3775,6 +3775,13 @@ fn apply_progressive_death_animation_idle(entity: &mut Entity) {
     entity.base_factory_runtime = RetailRuntimeValue::Known(Some(runtime));
 }
 
+/// A lethal player-pair packet's admitted native death owner.
+#[derive(Debug, Clone, Copy)]
+enum PlayerPairCandidateDeath {
+    Type17,
+    Boulder(crate::rolling_boulder::RollingBoulderProfile),
+}
+
 impl EntityManager {
     /// Deep-copy the complete manager only for one speculative Main Base abort.
     ///
@@ -8686,7 +8693,7 @@ impl EntityManager {
     /// commit before the first entity word changes.
     pub(crate) fn commit_player_active_pair_bodies(
         &mut self,
-        cache: &crate::resource_cache::ResourceCache,
+        world: crate::player_active_contact::PlayerPairCommitWorld<'_>,
         expected_live_order: &[u32],
         original_subject: &ActivePairBody,
         original_candidates: &[ActivePairBody],
@@ -8694,12 +8701,6 @@ impl EntityManager {
         resolved_candidates: &[ActivePairBody],
         descriptor_plans: &[Type9DescriptorContactPlan],
         native_descriptor_plans: &[crate::native_actor_descriptor_contact::NativeDescriptorContactSlotPlan],
-        scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
-        world_fx: &mut crate::world_fx::WorldFx,
-        notifications: &mut crate::gameplay_notifications::GameplayNotifications,
-        retail_tick: u32,
-        extra_lives: u8,
-        player_hull: &mut crate::player_hull::PlayerHull,
         subject_death_dispatch: Option<(u32, i32, GenericEntityDamageTransition)>,
         candidate_death_dispatches: &[(u32, i32, GenericEntityDamageTransition)],
         rolling_boulder_wakes: &[u32],
@@ -8708,6 +8709,16 @@ impl EntityManager {
         crate::player_active_contact::PlayerActivePairError,
     > {
         use crate::player_active_contact::PlayerActivePairError;
+        let crate::player_active_contact::PlayerPairCommitWorld {
+            resources: cache,
+            static_damage,
+            scheduler,
+            world_fx,
+            notifications,
+            retail_tick,
+            extra_lives,
+            player_hull,
+        } = world;
         if self.player_id != Some(original_subject.id)
             || self.entities.len() != expected_live_order.len()
             || self
@@ -8826,6 +8837,46 @@ impl EntityManager {
         {
             return Err(PlayerActivePairError::TopologyChangedBeforeCommit);
         }
+        // A candidate's death runs last, after every body write: retail moves
+        // both bodies and delivers the subject direction before 15040 kills
+        // the candidate, and the segment ends at that pair. Admit each owner
+        // before the first write.
+        let mut candidate_deaths = Vec::with_capacity(candidate_death_dispatches.len());
+        for &(entity_id, capped_pair_damage_raw, transition) in candidate_death_dispatches {
+            let entity = self
+                .entities
+                .iter()
+                .find(|entity| entity.id == entity_id && snapshot_ids.contains(&entity_id))
+                .ok_or(PlayerActivePairError::TopologyChangedBeforeCommit)?;
+            let death = if entity.entity_type == 17 && entity.intro2_type17_runtime.is_some() {
+                if !crate::intro2_type17::type17_manager_allocation_authenticates(&*self, entity_id)
+                    || !scheduler.prepare_native_actor_mutation(&*self, entity_id)
+                {
+                    return Err(PlayerActivePairError::Type17PairDamage { entity_id });
+                }
+                PlayerPairCandidateDeath::Type17
+            } else if let Some(runtime) = entity.rolling_boulder_runtime {
+                if !crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                    &*self, entity_id,
+                ) || !scheduler.prepare_native_actor_mutation(&*self, entity_id)
+                {
+                    return Err(PlayerActivePairError::RollingBoulderPair { entity_id });
+                }
+                PlayerPairCandidateDeath::Boulder(runtime.profile)
+            } else {
+                return Err(PlayerActivePairError::Core(
+                    crate::active_pair::ActivePairUnresolved::DeathDispatchRequired {
+                        entity_id,
+                        transition,
+                    },
+                ));
+            };
+            candidate_deaths.push((entity_id, capped_pair_damage_raw, death));
+        }
+        let death_dispatched_ids = candidate_deaths
+            .iter()
+            .map(|&(entity_id, ..)| entity_id)
+            .collect::<Vec<_>>();
 
         // Lethal packets staged by the planner run here, after every
         // fallible body/descriptor check and before any scheduler, descriptor
@@ -8866,7 +8917,7 @@ impl EntityManager {
                     ratio_denominator: 0,
                 };
                 let mut plan = self
-                    .prepare_player_checked_damage(request, player_hull, None, cache)
+                    .prepare_player_checked_damage(request, player_hull, None, &*cache)
                     .map_err(|_| PlayerActivePairError::PlayerHullStateMismatch)?;
                 if !plan.terminal_at(resolved_subject.position_raw) {
                     return Err(PlayerActivePairError::PlayerHullStateMismatch);
@@ -8910,52 +8961,6 @@ impl EntityManager {
                 .expect("validated woken boulder disappeared before commit");
             crate::rolling_boulder::wake_resting_boulder(entity)
                 .map_err(|_| PlayerActivePairError::RollingBoulderPair { entity_id: id })?;
-        }
-        let mut death_dispatched_ids = Vec::with_capacity(candidate_death_dispatches.len());
-        for &(entity_id, capped_pair_damage_raw, transition) in candidate_death_dispatches {
-            let native_spider = self
-                .entities
-                .iter()
-                .find(|entity| entity.id == entity_id)
-                .is_some_and(|entity| {
-                    entity.entity_type == 17 && entity.intro2_type17_runtime.is_some()
-                });
-            if !native_spider {
-                return Err(PlayerActivePairError::Core(
-                    crate::active_pair::ActivePairUnresolved::DeathDispatchRequired {
-                        entity_id,
-                        transition,
-                    },
-                ));
-            }
-            if !crate::intro2_type17::type17_manager_allocation_authenticates(&*self, entity_id)
-                || !scheduler.prepare_native_actor_mutation(&*self, entity_id)
-            {
-                return Err(PlayerActivePairError::Type17PairDamage { entity_id });
-            }
-            let completion = crate::native_actor_capture::apply_capture_pair_checked_damage(
-                &mut *self,
-                entity_id,
-                DamageDeliveryRecord {
-                    packet: DamagePacket::collision(capped_pair_damage_raw),
-                    source_entity_type_raw: PLAYER_ENTITY_TYPE,
-                    owner_handle: original_subject.id,
-                },
-                &mut crate::native_actor_capture::CaptureContext {
-                    resources: None,
-                    tasks: &mut *scheduler,
-                    world_fx: &mut *world_fx,
-                    notifications: &mut *notifications,
-                    retail_tick,
-                    result_screen: MainBaseType9ResultScreenState::NotShown,
-                    hive_dying: Default::default(),
-                },
-            )
-            .map_err(|_| PlayerActivePairError::Type17PairDamage { entity_id })?;
-            if let Some(owner) = completion.common_dying_owner {
-                scheduler.register_intro2_common_dying(owner);
-            }
-            death_dispatched_ids.push(entity_id);
         }
 
         // A rear-half-space descriptor miss can still produce physical body
@@ -9028,6 +9033,68 @@ impl EntityManager {
         apply(original_subject, resolved_subject);
         for (original, resolved) in original_candidates.iter().zip(resolved_candidates) {
             apply(original, resolved);
+        }
+        // The hull mirrors the walked craft before a candidate's blast can
+        // reach it; the terminal already owns a craft that died here.
+        if !subject_died {
+            let (RetailRuntimeValue::Known(health), RetailRuntimeValue::Known(buffer)) = (
+                resolved_subject.collision.health_raw,
+                resolved_subject.collision.pre_health_damage_buffer_raw,
+            ) else {
+                return Err(PlayerActivePairError::PlayerHullStateMismatch);
+            };
+            player_hull.health_raw = health;
+            player_hull.pre_health_damage_buffer_raw = buffer;
+        }
+        let player_id = original_subject.id;
+        for (entity_id, capped_pair_damage_raw, death) in candidate_deaths {
+            let delivery = DamageDeliveryRecord {
+                packet: DamagePacket::collision(capped_pair_damage_raw),
+                source_entity_type_raw: PLAYER_ENTITY_TYPE,
+                owner_handle: player_id,
+            };
+            match death {
+                PlayerPairCandidateDeath::Type17 => {
+                    let completion =
+                        crate::native_actor_capture::apply_capture_pair_checked_damage(
+                            &mut *self,
+                            entity_id,
+                            delivery,
+                            &mut crate::native_actor_capture::CaptureContext {
+                                resources: None,
+                                tasks: &mut *scheduler,
+                                world_fx: &mut *world_fx,
+                                notifications: &mut *notifications,
+                                retail_tick,
+                                result_screen: MainBaseType9ResultScreenState::NotShown,
+                                hive_dying: Default::default(),
+                            },
+                        )
+                        .map_err(|_| PlayerActivePairError::Type17PairDamage { entity_id })?;
+                    if let Some(owner) = completion.common_dying_owner {
+                        scheduler.register_intro2_common_dying(owner);
+                    }
+                }
+                PlayerPairCandidateDeath::Boulder(profile) => {
+                    crate::rolling_boulder::death::apply_rolling_boulder_pair_damage(
+                        &mut *self,
+                        entity_id,
+                        delivery,
+                        profile,
+                        crate::rolling_boulder::death::RollingBoulderPairDeathWorld {
+                            resources: &mut *cache,
+                            static_damage: &mut *static_damage,
+                            world_fx: &mut *world_fx,
+                            notifications: &mut *notifications,
+                            scheduler: &mut *scheduler,
+                            player_hull: &mut *player_hull,
+                            extra_lives: RetailRuntimeValue::Known(extra_lives),
+                            retail_tick,
+                        },
+                    )
+                    .map_err(|_| PlayerActivePairError::RollingBoulderPair { entity_id })?;
+                }
+            }
         }
         Ok(descriptor_outcomes)
     }

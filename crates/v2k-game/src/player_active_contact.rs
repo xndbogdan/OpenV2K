@@ -9,10 +9,12 @@
 //! state, unauthenticated descriptor-component effects, topology changes, and
 //! death transitions without a native owner stop before mutation. Native
 //! actors' 02DA0 component callbacks plan at the callback, drawing the shared
-//! RNG there, and commit with the body pass. A lethal
-//! candidate packet to a native Type17 stages a commit-time dispatch through
-//! the shared capture-path death owner; a lethal subject packet re-enters the
-//! player's own checked-damage terminal instead.
+//! RNG there, and commit with the body pass. A lethal candidate packet ends a
+//! walk segment: the segment commits its bodies, then the candidate's 15040
+//! death (Type17's capture path, a Type3's class1 blast or a Type27's class18
+//! split), and the walk resumes at the candidate's successor in the live
+//! list, as retail's synchronous 11AD0 walk does. A lethal subject packet
+//! re-enters the player's own checked-damage terminal.
 
 use crate::active_pair::{
     resolve_active_pair_pass, ActivePairBody, ActivePairContact, ActivePairModel,
@@ -118,8 +120,13 @@ pub enum PlayerActivePairError {
     Type17PairDamage {
         entity_id: u32,
     },
-    /// A rolling boulder's pair wake, custody or class18 split failed.
+    /// A rolling boulder's pair wake, custody, death or class18 split failed.
     RollingBoulderPair {
+        entity_id: u32,
+    },
+    /// A candidate died after the craft's own death in the same walk: the
+    /// resumed walk would pair the wreck model. Earlier segments committed.
+    ResumeAfterPlayerDeath {
         entity_id: u32,
     },
     /// A native actor's 02DA0 component callback was reached but its owner,
@@ -674,20 +681,32 @@ fn damage_modifier_outcome(runtime: Option<&RuntimePairSnapshot>) -> PairDamageM
 }
 
 impl EntityManager {
-    /// Run and atomically commit one local player active-pair pass.
-    pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
+    /// Run and commit one local player active-pair walk, segment by segment.
+    pub fn resolve_player_active_contacts(
         &mut self,
-        model_pool: &P,
         frame: PlayerActivePairFrame<'_>,
     ) -> Result<PlayerActivePairPass, PlayerActivePairError> {
-        resolve_player_active_contacts(self, model_pool, frame)
+        resolve_player_active_contacts(self, frame)
     }
 }
 
-/// Ordered collision geometry can use a detached model pool; native player
-/// death separately requires the actual world resources and effect custody.
+/// The world a committed segment's deaths need.
+pub(crate) struct PlayerPairCommitWorld<'a> {
+    pub resources: &'a mut crate::resource_cache::ResourceCache,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub scheduler: &'a mut SpecializedActorTaskScheduler,
+    pub world_fx: &'a mut WorldFx,
+    pub notifications: &'a mut GameplayNotifications,
+    pub retail_tick: u32,
+    pub extra_lives: u8,
+    pub player_hull: &'a mut PlayerHull,
+}
+
+/// The world resources supply the ordered collision geometry and, for a
+/// candidate's death, its blast's static world.
 pub struct PlayerActivePairFrame<'a> {
-    pub resources: &'a crate::resource_cache::ResourceCache,
+    pub resources: &'a mut crate::resource_cache::ResourceCache,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
     pub retail_tick: u32,
     pub player_craft: &'a PlayerCraft,
     pub player_hull: &'a mut PlayerHull,
@@ -697,13 +716,13 @@ pub struct PlayerActivePairFrame<'a> {
     pub extra_lives: u8,
 }
 
-pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
+pub fn resolve_player_active_contacts(
     entities: &mut EntityManager,
-    model_pool: &P,
     frame: PlayerActivePairFrame<'_>,
 ) -> Result<PlayerActivePairPass, PlayerActivePairError> {
     let PlayerActivePairFrame {
-        resources: cache,
+        resources,
+        static_damage,
         retail_tick,
         player_craft,
         player_hull,
@@ -712,6 +731,88 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         notifications,
         extra_lives,
     } = frame;
+    let mut resume_after = None;
+    let mut combined: Option<PlayerActivePairPass> = None;
+    loop {
+        let segment = resolve_player_active_segment(
+            entities,
+            PlayerActivePairFrame {
+                resources: &mut *resources,
+                static_damage: &mut *static_damage,
+                retail_tick,
+                player_craft,
+                player_hull: &mut *player_hull,
+                scheduler: &mut *scheduler,
+                world_fx: &mut *world_fx,
+                notifications: &mut *notifications,
+                extra_lives,
+            },
+            resume_after,
+        )?;
+        let dead_candidate = match segment.core.termination {
+            ActivePairPassTermination::CandidateDeathDispatched { candidate_id } => {
+                Some(candidate_id)
+            }
+            _ => None,
+        };
+        let pass = match combined.take() {
+            None => segment,
+            Some(mut pass) => {
+                pass.extend(segment);
+                pass
+            }
+        };
+        match dead_candidate {
+            None => return Ok(pass),
+            // The craft's own death switched its model; a walk resumed past a
+            // candidate's death would pair the wreck.
+            Some(candidate_id) if player_hull.dying => {
+                return Err(PlayerActivePairError::ResumeAfterPlayerDeath {
+                    entity_id: candidate_id,
+                });
+            }
+            // 11AD0 continues at the dead candidate's successor in the live
+            // list, which now holds a split's tail-appended children.
+            Some(candidate_id) => {
+                resume_after = Some(candidate_id);
+                combined = Some(pass);
+            }
+        }
+    }
+}
+
+impl PlayerActivePairPass {
+    fn extend(&mut self, later: Self) {
+        self.core.subject = later.core.subject;
+        self.core.candidates.extend(later.core.candidates);
+        self.core.dispositions.extend(later.core.dispositions);
+        self.core.processed_candidate_count += later.core.processed_candidate_count;
+        self.core.termination = later.core.termination;
+        self.feedback.extend(later.feedback);
+        self.sounds.extend(later.sounds);
+        self.descriptor_contacts.extend(later.descriptor_contacts);
+    }
+}
+
+/// One walk segment: candidates after `resume_after` in the live list, ending
+/// at the walk's end or at a candidate's death, which commits with it.
+fn resolve_player_active_segment(
+    entities: &mut EntityManager,
+    frame: PlayerActivePairFrame<'_>,
+    resume_after: Option<u32>,
+) -> Result<PlayerActivePairPass, PlayerActivePairError> {
+    let PlayerActivePairFrame {
+        resources,
+        static_damage,
+        retail_tick,
+        player_craft,
+        player_hull,
+        scheduler,
+        world_fx,
+        notifications,
+        extra_lives,
+    } = frame;
+    let model_pool: &crate::resource_cache::ResourceCache = &*resources;
     let player = entities
         .player()
         .ok_or(PlayerActivePairError::PlayerMissing)?;
@@ -749,6 +850,18 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
 
     let player_id = player.id;
     let expected_live_order = entities.retail_live_order_ids().collect::<Vec<_>>();
+    let walked = match resume_after {
+        None => 0,
+        Some(id) => {
+            expected_live_order
+                .iter()
+                .position(|&live| live == id)
+                .ok_or(PlayerActivePairError::TopologyChangedBeforeCommit)?
+                + 1
+        }
+    };
+    let walked: std::collections::HashSet<u32> =
+        expected_live_order[..walked].iter().copied().collect();
     let subject = active_pair_body_from_entity(player, model_pool);
     let original_subject = subject.clone();
     let mut player_runtime = RuntimePairSnapshot::from_entity(
@@ -767,7 +880,7 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
     let mut candidates = Vec::new();
     for candidate in entities
         .iter_collidable()
-        .filter(|candidate| candidate.id != player_id)
+        .filter(|candidate| candidate.id != player_id && !walked.contains(&candidate.id))
         // The proven PowerUp behavior owns a separate bounded inventory
         // transaction. Level-1 authors those allocations after every audited
         // solid (indices 32..=34), so this pass retains the captured ordering
@@ -832,18 +945,27 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
                 .unwrap_or(PlayerActivePairError::Core(error)));
         }
     };
+    let PlayerPairOracle {
+        feedback,
+        sounds,
+        descriptor_contact_plans,
+        type17_descriptor_plans,
+        native_descriptor_plans,
+        rolling_boulder_wakes,
+        ..
+    } = oracle;
 
-    let (health_raw, pre_health_damage_buffer_raw) = match (
-        core.subject.collision.health_raw,
-        core.subject.collision.pre_health_damage_buffer_raw,
+    if !matches!(
+        (
+            core.subject.collision.health_raw,
+            core.subject.collision.pre_health_damage_buffer_raw,
+        ),
+        (RetailRuntimeValue::Known(health), RetailRuntimeValue::Known(_)) if health > 0
     ) {
-        (RetailRuntimeValue::Known(health), RetailRuntimeValue::Known(buffer)) if health > 0 => {
-            (health, buffer)
-        }
-        _ => return Err(PlayerActivePairError::PlayerHullStateMismatch),
-    };
+        return Err(PlayerActivePairError::PlayerHullStateMismatch);
+    }
 
-    for plan in oracle.type17_descriptor_plans {
+    for plan in type17_descriptor_plans {
         let Some(entity) = entities.entity_mut(plan.entity_id) else {
             return Err(PlayerActivePairError::Type17DescriptorContact {
                 entity_id: plan.entity_id,
@@ -893,26 +1015,29 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         }
     }
     let descriptor_contacts = entities.commit_player_active_pair_bodies(
-        cache,
+        PlayerPairCommitWorld {
+            resources,
+            static_damage,
+            scheduler: &mut *scheduler,
+            world_fx,
+            notifications,
+            retail_tick,
+            extra_lives,
+            player_hull: &mut *player_hull,
+        },
         &expected_live_order,
         &original_subject,
         &original_candidates,
         &core.subject,
         &core.candidates,
-        &oracle.descriptor_contact_plans,
-        &oracle.native_descriptor_plans,
-        scheduler,
-        oracle.world_fx,
-        notifications,
-        retail_tick,
-        extra_lives,
-        player_hull,
+        &descriptor_contact_plans,
+        &native_descriptor_plans,
         subject_death_dispatch,
         &candidate_death_dispatches,
-        &oracle.rolling_boulder_wakes,
+        &rolling_boulder_wakes,
     )?;
     // A woken boulder that survived the pass keeps its replaced rolling owner.
-    for &id in &oracle.rolling_boulder_wakes {
+    for &id in &rolling_boulder_wakes {
         if let Ok(owner) = crate::rolling_boulder::RollingBoulderOwner::adopt(entities, id) {
             scheduler.register_rolling_boulder(owner);
         }
@@ -932,15 +1057,12 @@ pub fn resolve_player_active_contacts<P: CollisionModelPool + ?Sized>(
         if !synced {
             return Err(PlayerActivePairError::PlayerHullStateMismatch);
         }
-    } else {
-        player_hull.health_raw = health_raw;
-        player_hull.pre_health_damage_buffer_raw = pre_health_damage_buffer_raw;
     }
 
     Ok(PlayerActivePairPass {
         core,
-        feedback: oracle.feedback,
-        sounds: oracle.sounds,
+        feedback,
+        sounds,
         descriptor_contacts,
     })
 }
@@ -1354,7 +1476,7 @@ mod tests {
     #[v2k_test_support::retail_test]
     fn native_weapon_allocation_keeps_pair_routing_after_its_wrapper_changes() {
         use crate::native_entity_weapons::{EntityWeaponConstructionRequest, EntityWeaponKind};
-        let (session, mut manager, mut fx) =
+        let (mut session, mut manager, mut fx) =
             crate::native_type122::construction_tests::native_fixture_with_player(17);
         let player_id = manager.player().unwrap().id;
         let owner = manager
@@ -1409,9 +1531,9 @@ mod tests {
             let rng_before = *fx.entity_construction_state().0;
             let pass = resolve_player_active_contacts(
                 &mut manager,
-                &session.cache,
                 PlayerActivePairFrame {
-                    resources: &session.cache,
+                    resources: &mut session.cache,
+                    static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
                     retail_tick: 0,
                     player_craft: &craft,
                     player_hull: &mut hull,
@@ -1441,7 +1563,7 @@ mod tests {
     /// A dying craft's model is still refused.
     #[v2k_test_support::retail_test]
     fn the_infected_craft_from_world43s_arrival_keeps_its_pair_contacts() {
-        let (session, mut manager, mut fx) =
+        let (mut session, mut manager, mut fx) =
             crate::native_type122::construction_tests::native_fixture_with_arrival(
                 43,
                 [15104, 2048, -14592],
@@ -1465,9 +1587,9 @@ mod tests {
                 .unwrap();
             let pass = resolve_player_active_contacts(
                 &mut manager,
-                &session.cache,
                 PlayerActivePairFrame {
-                    resources: &session.cache,
+                    resources: &mut session.cache,
+                    static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
                     retail_tick: 0,
                     player_craft: &craft,
                     player_hull: &mut hull,
@@ -1894,7 +2016,7 @@ mod tests {
 
     #[v2k_test_support::retail_test]
     fn authenticated_type9_descriptor_contact_commits_with_player_body_pass() {
-        let (session, mut manager) = fresh_level_one();
+        let (mut session, mut manager) = fresh_level_one();
         let fixture = publish_type9_wander_fixture(&mut manager);
 
         manager
@@ -1905,9 +2027,9 @@ mod tests {
         let mut notifications = GameplayNotifications::new();
         let pass = resolve_player_active_contacts(
             &mut manager,
-            &session.cache,
             PlayerActivePairFrame {
-                resources: &session.cache,
+                resources: &mut session.cache,
+                static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
                 retail_tick: 12_010,
                 player_craft: &PlayerCraft::new(),
                 player_hull: &mut hull,
@@ -1940,7 +2062,7 @@ mod tests {
 
     #[v2k_test_support::retail_test]
     fn later_damage_block_discards_staged_type9_descriptor_contact() {
-        let (session, mut manager) = fresh_level_one();
+        let (mut session, mut manager) = fresh_level_one();
         let fixture = publish_type9_wander_fixture(&mut manager);
         let source = manager
             .entity_mut_for_test(fixture.source_id)
@@ -1958,9 +2080,9 @@ mod tests {
         let mut notifications = GameplayNotifications::new();
         let error = resolve_player_active_contacts(
             &mut manager,
-            &session.cache,
             PlayerActivePairFrame {
-                resources: &session.cache,
+                resources: &mut session.cache,
+                static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
                 retail_tick: 12_010,
                 player_craft: &PlayerCraft::new(),
                 player_hull: &mut hull,

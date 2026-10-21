@@ -248,12 +248,13 @@ but retains the separate [Type13 incoming-hit gap](INTRO2_COMBAT_PROJECTILES.md#
    candidates with live pair-to-world orientation and applies native no-Sub-I
    `02DA0` through the same descriptor planner as pair.rs. Unauthenticated Type17
    component contact fails closed as `Type17DescriptorContact` with actor/type/spawn
-   diagnostics. Lethal player-pair packets to a native Type17 stage a
-   commit-time `CandidateDeathDispatch` and complete through the shared
-   capture-path 15040 and standard death (motion first, capture death second,
-   staged pre-damage collision never clobbering it); the planner stays pure,
-   RNG is drawn once, and lethal packets to any other family preserve the
-   fail-closed `Core(DeathDispatchRequired)` boundary. A lethal subject packet
+   diagnostics. A lethal player-pair packet to a native Type17 ends its walk
+   segment as `CandidateDeathDispatch`: the segment's bodies commit (staged
+   pre-damage collision never clobbering the dying body), the shared
+   capture-path 15040 and standard death run, and the walk resumes at the
+   spider's successor. Boulders take the same segment end; lethal packets to
+   any other family preserve the fail-closed `Core(DeathDispatchRequired)`
+   boundary. A lethal subject packet
    stages symmetrically and re-enters the player's own checked-damage terminal
    at commit time — subject direction first — with hull/model/sound ownership,
    so the pass no longer grants ram immunity. Hive67 lethal contact now owns the dying initializer/Sub-K suffix.
