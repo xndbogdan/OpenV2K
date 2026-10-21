@@ -77,6 +77,11 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     } else {
         false
     };
+    // 164D0 reads the live axis: an earlier acquisition may have rewritten it.
+    let RetailRuntimeValue::Known(live_axis) = entity.actor_common_axis_descriptor else {
+        return Err(Block::Runtime("live common axis"));
+    };
+    let range = live_axis.strict_axis_limit_raw;
     let mut owner = candidate(entity);
     // 22C10 ignores candidate relations, but reentry reads the owner's real
     // +60 relation. Only the constructor may authenticate this word as zero.
@@ -87,12 +92,14 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
         .map(candidate)
         .collect();
     let people = if needs(BehaviorWeightRule::PeopleNearby) {
-        nearby::<P>(owner, &candidates, 0xc00).map_err(|_| Block::Runtime("people selector"))?
+        nearby_within(owner, &candidates, 0xc00, range)
+            .map_err(|_| Block::Runtime("people selector"))?
     } else {
         false
     };
     let player = if needs(BehaviorWeightRule::PlayerNearby) {
-        nearby::<P>(owner, &candidates, 1).map_err(|_| Block::Runtime("player selector"))?
+        nearby_within(owner, &candidates, 1, range)
+            .map_err(|_| Block::Runtime("player selector"))?
     } else {
         false
     };
@@ -107,7 +114,8 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     };
     // Rule 11 is 16570: 164D0 with the beacon mask 0x100.
     let beacon = if needs(BehaviorWeightRule::BeaconNearby) {
-        nearby::<P>(owner, &candidates, 0x100).map_err(|_| Block::Runtime("beacon selector"))?
+        nearby_within(owner, &candidates, 0x100, range)
+            .map_err(|_| Block::Runtime("beacon selector"))?
     } else {
         false
     };

@@ -592,3 +592,60 @@ fn type32_absorbs_every_channel() {
     assert!(!manager.pending_actor_deferred_destroy_ids().contains(&id));
     assert_ne!(style(&manager, id), 0x004c_7150, "{style_before:#x}");
 }
+
+/// Reselection's PlayerNearby reads the live axis (164D0's `+28` word), not
+/// the authored one: with the player inside 3840 but outside a live 1000,
+/// C690 leaves class5 certain.
+#[v2k_test_support::retail_test]
+fn reselection_nearby_reads_the_live_axis() {
+    use crate::native_ground_actor::behavior::{reselect, ReselectionEntry};
+    let (session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(42);
+    let ids = ids(&manager, Type38Row::Type38);
+    activate(&mut manager, &ids);
+    let id = ids[0];
+    let [x, y, z] = entity(&manager, id).position_raw();
+    manager
+        .player_mut()
+        .unwrap()
+        .set_motion_raw([x.wrapping_add(2000), y, z], [0; 3]);
+    let class = |manager: &EntityManager| {
+        let RetailRuntimeValue::Known(Some(context)) = entity(manager, id).current_behavior_context
+        else {
+            panic!("context");
+        };
+        match context.descriptor() {
+            crate::entity_behavior::BehaviorDescriptorIdentity::Named(program) => program.class_id,
+            _ => panic!("named"),
+        }
+    };
+    let mut reselect_once = |manager: &mut EntityManager, fx: &mut WorldFx| {
+        reselect::<profile::Type38Profile>(
+            manager,
+            id,
+            600,
+            fx,
+            Some(&session.cache),
+            ReselectionEntry::Impact,
+        )
+        .unwrap();
+        class(manager)
+    };
+    let mut classes = std::collections::BTreeSet::new();
+    for _ in 0..12 {
+        classes.insert(reselect_once(&mut manager, &mut fx));
+    }
+    assert!(
+        classes.contains(&7),
+        "authored axis sees the player: {classes:?}"
+    );
+    let entity = manager.entity_mut(id).unwrap();
+    let RetailRuntimeValue::Known(mut axis) = entity.actor_common_axis_descriptor else {
+        panic!("axis");
+    };
+    axis.strict_axis_limit_raw = 1000;
+    entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(axis);
+    for _ in 0..12 {
+        assert_eq!(reselect_once(&mut manager, &mut fx), 5);
+    }
+}
