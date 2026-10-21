@@ -90,12 +90,12 @@ impl Evaluators {
     }
 }
 
-pub(super) enum ReselectionEntry {
+pub(crate) enum ReselectionEntry {
     TaskResult,
     Impact,
 }
 
-pub(super) fn reselect(
+pub(crate) fn reselect(
     manager: &mut EntityManager,
     id: u32,
     tick: u32,

@@ -389,6 +389,7 @@ fn corpse_hit(
             &f.session.cache,
             &mut f.fx,
             &mut f.scheduler,
+            &mut crate::gameplay_notifications::GameplayNotifications::new(),
             impact,
             f.tick,
         ) {

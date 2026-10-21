@@ -1,15 +1,17 @@
 //! Native Intro2 Type16 construction and task ownership.
 
 pub mod aim;
-mod behavior;
+pub(crate) mod behavior;
 mod defecate;
 pub mod impact;
-mod live;
-mod mover;
+pub(crate) mod live;
+pub(crate) mod mover;
 mod native;
 mod search;
 mod world;
 
+#[cfg(test)]
+mod capture_tests;
 #[cfg(test)]
 mod carrier_tests;
 #[cfg(test)]

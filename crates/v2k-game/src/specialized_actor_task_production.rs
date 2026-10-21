@@ -5821,6 +5821,12 @@ impl SpecializedActorTaskScheduler {
                             world_fx,
                             elapsed_micros,
                             retail_tick,
+                            capture_tasks: &mut Intro2RadialCursorCustody {
+                                pending: &mut pending,
+                                retained: &mut retained,
+                                remaining_live_ids: &live_order[live_index + 1..],
+                            },
+                            notifications,
                         },
                     );
                     if let Some(owner) = tick.replacement_common_dying_owner {

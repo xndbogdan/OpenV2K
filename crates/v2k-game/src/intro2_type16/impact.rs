@@ -16,9 +16,7 @@ use crate::{
         apply_impact_reaction, ImpactReactionBody, IMPACT_REACTION_ENABLED_STATE_BIT,
         IMPACT_REACTION_NETWORKED_STATE_BIT, IMPACT_REACTION_SUPPRESSED_STATE_BIT,
     },
-    intro2_common_dying::{
-        publish_intro2_common_standard_death, Intro2CommonDyingBlock, Intro2CommonDyingOwner,
-    },
+    intro2_common_dying::{Intro2CommonDyingBlock, Intro2CommonDyingOwner},
     live_actor_checked_damage::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
         LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathResult,
@@ -34,6 +32,7 @@ pub enum Intro2Type16ImpactBlock {
     Runtime(&'static str),
     Callback(ImpactCallbackPolicy),
     Behavior(Intro2Type16Block),
+    Capture(crate::native_actor_capture::CaptureBlock),
     Damage(LiveActorDamageError<Intro2CommonDyingBlock, Intro2CommonDyingOwner>),
 }
 
@@ -100,15 +99,24 @@ pub(crate) struct Type16AutoPilotWorld<'a> {
 }
 
 enum HitResources<'a> {
-    Shared(&'a ResourceCache),
+    Shared(
+        &'a ResourceCache,
+        &'a mut crate::gameplay_notifications::GameplayNotifications,
+    ),
     AutoPilot(Type16AutoPilotWorld<'a>),
 }
 
 impl HitResources<'_> {
     fn cache(&self) -> &ResourceCache {
         match self {
-            Self::Shared(resources) => resources,
+            Self::Shared(resources, _) => resources,
             Self::AutoPilot(world) => world.resources,
+        }
+    }
+    fn notifications(&mut self) -> &mut crate::gameplay_notifications::GameplayNotifications {
+        match self {
+            Self::Shared(_, notifications) => notifications,
+            Self::AutoPilot(world) => world.notifications,
         }
     }
 }
@@ -118,12 +126,13 @@ pub(crate) fn apply_intro2_type16_particle_hit(
     resources: &ResourceCache,
     world_fx: &mut WorldFx,
     scheduler: &mut SpecializedActorTaskScheduler,
+    notifications: &mut crate::gameplay_notifications::GameplayNotifications,
     impact: ParticleEntityImpact,
     retail_tick: u32,
 ) -> Intro2Type16ImpactOutcome {
     apply(
         manager,
-        HitResources::Shared(resources),
+        HitResources::Shared(resources, notifications),
         world_fx,
         scheduler,
         impact,
@@ -274,6 +283,30 @@ fn run(
             let owner = Intro2Type16Owner::adopt(manager, id).map_err(Block::Behavior)?;
             scheduler.register_intro2_type16(owner);
         }
+        ImpactCallbackPolicy::CapturePeopleCleanup => {
+            let completion = crate::native_actor_capture::execute_capture_root(
+                manager,
+                id,
+                crate::native_actor_capture::CaptureRootCallback::Cleanup,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: scheduler,
+                    world_fx,
+                    notifications: resources.notifications(),
+                    retail_tick,
+                    result_screen:
+                        crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
+                    hive_dying: Default::default(),
+                },
+            )
+            .map_err(Block::Capture)?;
+            if let Some(owner) = completion.common_dying_owner {
+                scheduler.register_intro2_common_dying(owner);
+            } else {
+                let owner = Intro2Type16Owner::adopt(manager, id).map_err(Block::Behavior)?;
+                scheduler.register_intro2_type16(owner);
+            }
+        }
         other => return Err(Block::Callback(other)),
     }
 
@@ -342,11 +375,25 @@ fn run(
                 })
                 .map_err(|error| Intro2CommonDyingBlock::Terminal(Box::new(error)));
             }
-            publish_intro2_common_standard_death(manager, id, world_fx).map(|owner| {
-                LiveActorDeathResult {
-                    returned_nonzero: owner.is_some(),
-                    publication: owner,
-                }
+            // DB80: a carrying style's D040 releases the child first.
+            crate::native_actor_capture::publish_native_captor_standard_death(
+                manager,
+                id,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: &mut *scheduler,
+                    world_fx,
+                    notifications: resources.notifications(),
+                    retail_tick,
+                    result_screen:
+                        crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
+                    hive_dying: Default::default(),
+                },
+            )
+            .map_err(|block| Intro2CommonDyingBlock::Runtime(block.reason))
+            .map(|owner| LiveActorDeathResult {
+                returned_nonzero: owner.is_some(),
+                publication: owner,
             })
         },
     )

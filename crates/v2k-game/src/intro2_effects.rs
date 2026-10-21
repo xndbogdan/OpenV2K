@@ -598,6 +598,7 @@ fn deliver_entity_impact(
         cache,
         world_fx,
         scheduler,
+        notifications,
         impact,
         retail_tick,
     );

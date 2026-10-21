@@ -16,11 +16,11 @@ use crate::{
 /// Every authored world and its Type28 count (11 rows).
 const WORLDS: [(u32, usize); 5] = [(21, 1), (22, 1), (23, 2), (30, 5), (36, 2)];
 
-fn fixture(level: u32) -> (GameSession, EntityManager, WorldFx) {
+pub(crate) fn fixture(level: u32) -> (GameSession, EntityManager, WorldFx) {
     crate::native_type122::construction_tests::native_fixture_with_player(level)
 }
 
-fn ids(manager: &EntityManager) -> Vec<u32> {
+pub(crate) fn ids(manager: &EntityManager) -> Vec<u32> {
     manager
         .iter_all()
         .filter(|entity| entity.entity_type == ENTITY_TYPE)
@@ -28,11 +28,11 @@ fn ids(manager: &EntityManager) -> Vec<u32> {
         .collect()
 }
 
-fn entity(manager: &EntityManager, id: u32) -> &Entity {
+pub(crate) fn entity(manager: &EntityManager, id: u32) -> &Entity {
     manager.iter_all().find(|entity| entity.id == id).unwrap()
 }
 
-fn class(manager: &EntityManager, id: u32) -> u8 {
+pub(crate) fn class(manager: &EntityManager, id: u32) -> u8 {
     let RetailRuntimeValue::Known(Some(context)) = entity(manager, id).current_behavior_context
     else {
         panic!("context");
@@ -43,7 +43,7 @@ fn class(manager: &EntityManager, id: u32) -> u8 {
         .map_or(0, |style| style.class_id)
 }
 
-fn style(manager: &EntityManager, id: u32) -> u32 {
+pub(crate) fn style(manager: &EntityManager, id: u32) -> u32 {
     let RetailRuntimeValue::Known(Some(context)) = entity(manager, id).current_behavior_context
     else {
         panic!("context");
@@ -51,7 +51,7 @@ fn style(manager: &EntityManager, id: u32) -> u32 {
     context.active_style().style_address()
 }
 
-fn context_target(manager: &EntityManager, id: u32) -> Option<u32> {
+pub(crate) fn context_target(manager: &EntityManager, id: u32) -> Option<u32> {
     let RetailRuntimeValue::Known(Some(context)) = entity(manager, id).current_behavior_context
     else {
         return None;
@@ -62,7 +62,7 @@ fn context_target(manager: &EntityManager, id: u32) -> Option<u32> {
     }
 }
 
-fn activate(manager: &mut EntityManager, ids: &[u32]) {
+pub(crate) fn activate(manager: &mut EntityManager, ids: &[u32]) {
     for &id in ids {
         let entity = manager.entity_mut(id).unwrap();
         entity
@@ -74,12 +74,17 @@ fn activate(manager: &mut EntityManager, ids: &[u32]) {
 }
 
 /// Production's ordinary adoption set: every native owner `main` adopts.
-fn adopt_world(manager: &mut EntityManager) -> SpecializedActorTaskScheduler {
+pub(crate) fn adopt_world(manager: &mut EntityManager) -> SpecializedActorTaskScheduler {
     let mut tasks = SpecializedActorTaskScheduler::new();
+    tasks.adopt_intro2_type13_search_attack(manager);
+    tasks.adopt_intro2_type26(manager);
+    tasks.adopt_intro2_type47_guards(manager);
+    tasks.adopt_intro2_flyers(manager);
     tasks.adopt_intro2_type53(manager);
     tasks.adopt_type122(manager);
     tasks.adopt_type18(manager);
     tasks.adopt_type28(manager);
+    tasks.adopt_type76_family(manager);
     tasks.adopt_type30(manager);
     tasks.adopt_rolling_boulders(manager);
     tasks.adopt_type40(manager);
@@ -105,6 +110,7 @@ fn adopt_world(manager: &mut EntityManager) -> SpecializedActorTaskScheduler {
     tasks.adopt_intro2_type9(manager);
     tasks.adopt_native_type123(manager);
     tasks.adopt_native_type86(manager);
+    tasks.adopt_intro2_meteors(manager);
     tasks
 }
 
@@ -193,7 +199,7 @@ fn type28_births_publish_every_authored_row() {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn tick(
+pub(crate) fn tick(
     tasks: &mut SpecializedActorTaskScheduler,
     manager: &mut EntityManager,
     session: &mut GameSession,
@@ -282,7 +288,7 @@ fn type28_cohorts_run_ten_seconds_with_late_static_contact() {
     }
 }
 
-fn lethal_hit(id: u32) -> crate::world_fx::ParticleEntityImpact {
+pub(crate) fn lethal_hit(id: u32) -> crate::world_fx::ParticleEntityImpact {
     crate::world_fx::ParticleEntityImpact {
         source_particle_class: 16,
         impact_position_argument_va: 0,

@@ -39,6 +39,8 @@ pub(crate) enum NativeCaptorProfile {
     Type122,
     Type18,
     Type28,
+    Type16,
+    Type128,
 }
 
 impl NativeCaptorProfile {
@@ -57,6 +59,15 @@ impl NativeCaptorProfile {
             28 if crate::native_type28::manager_allocation_authenticates(manager, id) => {
                 Self::Type28
             }
+            16 | 128
+                if crate::intro2_type16::type16_manager_allocation_authenticates(manager, id) =>
+            {
+                match crate::intro2_type16::type16_row(entity) {
+                    Some(crate::intro2_type16::Type16Row::Type16) => Self::Type16,
+                    Some(crate::intro2_type16::Type16Row::Type128) => Self::Type128,
+                    None => return Err(CaptureBlock::new("capture native allocation")),
+                }
+            }
             _ => return Err(CaptureBlock::new("capture native allocation")),
         };
         let metadata = manager
@@ -67,6 +78,16 @@ impl NativeCaptorProfile {
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
             Self::Type18 => crate::native_type18::authenticate_metadata(metadata).is_ok(),
             Self::Type28 => crate::native_type28::authenticate_metadata(metadata).is_ok(),
+            Self::Type16 => crate::intro2_type16::authenticate_metadata(
+                crate::intro2_type16::Type16Row::Type16,
+                metadata,
+            )
+            .is_ok(),
+            Self::Type128 => crate::intro2_type16::authenticate_metadata(
+                crate::intro2_type16::Type16Row::Type128,
+                metadata,
+            )
+            .is_ok(),
         };
         if !authentic {
             return Err(CaptureBlock::new("capture native metadata"));
@@ -80,6 +101,8 @@ impl NativeCaptorProfile {
             Self::Type122 => 122,
             Self::Type18 => 18,
             Self::Type28 => 28,
+            Self::Type16 => 16,
+            Self::Type128 => 128,
         }
     }
 
@@ -130,6 +153,14 @@ impl NativeCaptorProfile {
                 context.world_fx,
                 context.resources,
                 crate::native_ground_actor::behavior::ReselectionEntry::Impact,
+            )
+            .map_err(|_| ()),
+            Self::Type16 | Self::Type128 => crate::intro2_type16::behavior::reselect(
+                manager,
+                id,
+                context.retail_tick,
+                context.world_fx,
+                crate::intro2_type16::behavior::ReselectionEntry::Impact,
             )
             .map_err(|_| ()),
         };
@@ -504,7 +535,7 @@ pub fn apply_capture_pair_checked_damage(
         LiveActorDamageRequest, LiveActorDeathResult,
     };
     let target_type = actor(manager, target)?.entity_type;
-    let is_captor = matches!(target_type, 17 | 122 | 18 | 28);
+    let is_captor = matches!(target_type, 17 | 122 | 18 | 28 | 16);
     let is_hive_destination = target_type == 67;
     if is_captor {
         captor(manager, target)?;

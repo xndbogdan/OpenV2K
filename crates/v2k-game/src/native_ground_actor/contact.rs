@@ -217,13 +217,27 @@ pub fn resolve_insect_static_contact_with_playing(
             },
             completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
             publish_standard_death: |manager, id, context| {
-                crate::intro2_common_dying::publish_intro2_common_standard_death(
+                // DB80: a carrying style's D040 releases the child first.
+                crate::native_actor_capture::publish_native_captor_standard_death(
                     manager,
                     id,
-                    context.world_fx,
+                    &mut crate::native_actor_capture::CaptureContext {
+                        resources: Some(context.resources),
+                        tasks: context.tasks,
+                        world_fx: context.world_fx,
+                        notifications: context.notifications,
+                        retail_tick: context.retail_tick,
+                        result_screen:
+                            crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
+                        hive_dying: Default::default(),
+                    },
                 )
                 .map(common_death_result)
-                .map_err(NativeStaticActorDeathBlock::Common)
+                .map_err(|error| {
+                    NativeStaticActorDeathBlock::Common(Intro2CommonDyingBlock::Runtime(
+                        error.reason,
+                    ))
+                })
             },
         },
         // Type128 is Type16's row with alternate class63: its death is the

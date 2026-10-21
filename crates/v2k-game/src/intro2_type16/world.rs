@@ -15,11 +15,20 @@ pub(super) fn effective_flags(entity: &Entity) -> Result<u32, Intro2Type16Block>
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Graph);
     };
-    // Defecate/Aimless/Capture have zero masks. Search clears21080 or80;
-    // all admitted styles leave Type16's authored C8=439 unchanged.
+    // Defecate/Aimless/Capture (carrying included) have zero masks. Search
+    // clears21080 or80; all admitted styles leave the authored C8=439 unchanged.
     if !matches!(
         context.active_style().style_address(),
-        0x4c7e88 | 0x4c7930 | 0x4c7a50 | 0x4c7a98 | 0x4c7ff0 | 0x4c8038
+        0x4c7e88
+            | 0x4c7930
+            | 0x4c7a50
+            | 0x4c7a98
+            | 0x4c7ff0
+            | 0x4c8038
+            | 0x4c8080
+            | 0x4c80c8
+            | 0x4c8110
+            | 0x4c8158
     ) {
         return Err(Block::Runtime("effective style flags"));
     }
@@ -116,24 +125,73 @@ pub(super) fn finish(
         environment.1,
     );
     entity.set_velocity_raw(velocity);
-    crate::intro2_common_dying::run_living_actor_surface(
-        manager,
-        id,
-        crate::intro2_common_dying::Intro2ActorSurfaceFrame {
-            metadata,
-            terrain,
-            active_model_extent_raw: model.radius,
-            elapsed_micros: dt,
-            retail_tick: frame.retail_tick,
-            particle_environment: crate::world_fx::ParticleEnvironment::Terrain(
-                crate::world_fx::TerrainCollisionContext::from_current_level_cache(frame.resources)
-                    .ok_or(Block::Runtime("particle terrain context"))?,
-            ),
-        },
-        frame.world_fx,
-        death,
-    )
-    .map_err(Block::Surface)?;
+    let surface_frame = crate::intro2_common_dying::Intro2ActorSurfaceFrame {
+        metadata,
+        terrain,
+        active_model_extent_raw: model.radius,
+        elapsed_micros: dt,
+        retail_tick: frame.retail_tick,
+        particle_environment: crate::world_fx::ParticleEnvironment::Terrain(
+            crate::world_fx::TerrainCollisionContext::from_current_level_cache(frame.resources)
+                .ok_or(Block::Runtime("particle terrain context"))?,
+        ),
+    };
+    if super::type16_row(manager.iter_all().find(|entity| entity.id == id).unwrap())
+        == Some(super::Type16Row::Type128)
+    {
+        // Type128's class63 drowning needs BAF0's lent world; the class12
+        // publisher rejects its alternate and this step holds.
+        crate::intro2_common_dying::run_living_actor_surface(
+            manager,
+            id,
+            surface_frame,
+            frame.world_fx,
+            death,
+        )
+        .map_err(Block::Surface)?;
+    } else {
+        let mut capture_error = None;
+        let tick = frame.retail_tick;
+        let surface = crate::intro2_common_dying::run_actor_surface_with_death(
+            manager,
+            id,
+            surface_frame,
+            frame.world_fx,
+            death,
+            super::intro2_type16_allocation_authenticates,
+            |manager, id, world_fx| {
+                // 162B0's direct 10C10 enters DB80: a carrying style's D040
+                // releases the child before the nested and outer C620.
+                crate::native_actor_capture::publish_native_captor_standard_death(
+                    manager,
+                    id,
+                    &mut crate::native_actor_capture::CaptureContext {
+                        resources: None,
+                        tasks: &mut *frame.capture_tasks,
+                        world_fx,
+                        notifications: &mut *frame.notifications,
+                        retail_tick: tick,
+                        result_screen:
+                            crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
+                        hive_dying: Default::default(),
+                    },
+                )
+                .map_err(|error| {
+                    capture_error = Some(error);
+                    crate::intro2_common_dying::Intro2CommonDyingBlock::Runtime(
+                        "Capture surface death",
+                    )
+                })
+            },
+        );
+        if let Some(error) = capture_error {
+            return Err(Block::Capture(error));
+        }
+        surface.map_err(Block::Surface)?;
+    }
+    // 413135..413149 invokes Sub-J after the complete type callback and
+    // before the parent's master integration, at the rebuilt basis.
+    crate::native_actor_capture::update_carried_pose(manager, id).map_err(Block::Capture)?;
     let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
     super::live::commit_motion(entity, dt)?;
     // 12DA0 returns after master motion. 44FFA0 later calls 11A80, whose

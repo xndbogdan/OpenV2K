@@ -8,7 +8,8 @@ Sub-J container stores ordered child identities. Its row callback policy belongs
 to the captor and is distinct from player cargo.
 
 Implementation ownership is shared with the independently authenticated
-[Type122 profile](TYPE122_RUNTIME.md), through
+[Type122 profile](TYPE122_RUNTIME.md), the Type18/28 ground-host rows and the
+[Type16/128 rows](INTRO2_TYPE16.md#capture-transport), through
 [pair contact](../../crates/v2k-game/src/native_actor_capture/pair.rs),
 [carrying tasks](../../crates/v2k-game/src/native_actor_capture/carry_tasks.rs),
 [capture lifecycle](../../crates/v2k-game/src/native_actor_capture.rs) and
@@ -92,7 +93,7 @@ remain the entry path; these variants extend the same actor and components.
 
 | Variant / style | Initializer and task | Root / completion / pair |
 |---|---|---|
-| 2 / 004C8080 | AF10 clears Secondary then Tertiary and installs03650 with duration0, meaning an unlimited target route. | RootCF90; pairD0B0. |
+| 2 / 004C8080 | AF10 clears Secondary then Tertiary and installs03650 with duration0, meaning an unlimited target route. The style is shared class9, so every authenticated captor takes it (the port once admitted only Type17 here, stopping Types 122/18/28 on their first delivery route). | RootCF90; pairD0B0. |
 | 3 / 004C80C8 | B780 clears Tertiary, allocates02190/021B0 search in Secondary, then02B10/500ms retarget in Primary, including both06070 suffixes. | RootC7B0 selects absolute5; successfulC7D0 advances to4. |
 | 4 / 004C8110 | AFD0 clears Secondary then Tertiary and installs03B70/9000ms Following. | RootCF90; completionC790 selects absolute3. |
 | 5 / 004C8158 | ACD0 clears Tertiary then Secondary and installs02B10/5000ms retarget. | Both root and completionCF90. |

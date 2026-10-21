@@ -39,6 +39,8 @@ pub enum Intro2Type16Block {
     Aim(super::aim::Intro2Type16AimError),
     BehaviorTransition { class: u8, variant: u32 },
     Surface(crate::intro2_common_dying::Intro2CommonDyingBlock),
+    Capture(crate::native_actor_capture::CaptureBlock),
+    CaptureTask(Box<crate::native_actor_capture::carry_tasks::CaptureTaskBlock>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -167,6 +169,8 @@ pub struct Intro2Type16Frame<'a> {
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
+    pub capture_tasks: &'a mut dyn crate::native_actor_capture::CaptureTaskCustody,
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -312,14 +316,13 @@ fn run_frame(
         .ok_or(Block::Metadata)?;
     authenticate_metadata(row, &metadata).map_err(|_| Block::Metadata)?;
     if callback_enabled {
-        // 12DA0 follows its callback with18640 for authored Sub-J and later
-        // updates the attached voice. These births have one empty J slot and
-        // no voice; do not silently omit either phase after external mutation.
+        // 12DA0 follows its callback with18640 for the one authored J slot and
+        // later updates the attached voice, which these births never own.
         if !matches!(&entity.sub_j_attachment_runtime,
             RetailRuntimeValue::Known(Some(j)) if j.authored_slot_count() == 1
-                && j.is_empty() && j.policy_raw_at_0x0c() == 0)
+                && j.policy_raw_at_0x0c() == 0)
         {
-            return Err(Block::Runtime("empty Sub-J"));
+            return Err(Block::Runtime("Sub-J shape"));
         }
         if entity.collision.constructor_sound_attachment_id_at_0x8c
             != RetailRuntimeValue::Known(None)
@@ -377,7 +380,42 @@ fn run_frame(
         entity.actor_task_state(ActorTaskSlot::Primary),
         Some(ActorTaskRuntime::ChaseTarget(_))
     );
-    let changed = if capture_pursuit {
+    let carrying = crate::native_actor_capture::carry_tasks::carrying_variant(entity).is_some();
+    let changed = if carrying {
+        let release = crate::native_actor_capture::carry_tasks::tick_primary(
+            manager,
+            id,
+            crate::native_actor_capture::carry_tasks::CaptureTaskFrame {
+                metadata: &metadata,
+                terrain,
+                dispatch_mode: mode,
+                elapsed_micros: dt,
+                global_elapsed_micros: frame.elapsed_micros,
+            },
+            frame.world_fx,
+        )
+        .map_err(|error| Block::CaptureTask(Box::new(error)))?;
+        if release {
+            let completion = crate::native_actor_capture::execute_capture_root(
+                manager,
+                id,
+                crate::native_actor_capture::CaptureRootCallback::ReleaseOrKill,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: &mut *frame.capture_tasks,
+                    world_fx: frame.world_fx,
+                    notifications: frame.notifications,
+                    retail_tick: frame.retail_tick,
+                    result_screen:
+                        crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
+                    hive_dying: Default::default(),
+                },
+            )
+            .map_err(Block::Capture)?;
+            *replacement_common_dying_owner = completion.common_dying_owner;
+        }
+        false
+    } else if capture_pursuit {
         crate::intro2_capture_pursuit::tick_primary(
             manager,
             crate::intro2_capture_pursuit::Intro2CapturePrimaryFrame {
@@ -449,9 +487,18 @@ fn run_frame(
         else {
             return Err(Block::Graph);
         };
+        let beacon = matches!(
+            current.actor_task_state(ActorTaskSlot::Secondary),
+            Some(ActorTaskRuntime::CaptureBeaconAcquisition)
+        );
         match program.class_id {
             7 => {
                 super::search::acquire(manager, id, dt, frame.world_fx)?;
+            }
+            // Carrying variant3's 021B0 ranks beacons for C7D0.
+            9 if beacon => {
+                crate::native_actor_capture::carry_tasks::acquire(manager, id, frame.world_fx)
+                    .map_err(|error| Block::CaptureTask(Box::new(error)))?
             }
             9 => crate::intro2_capture_pursuit::acquire(
                 manager,
@@ -524,7 +571,7 @@ fn run_frame(
     })
 }
 
-fn tick_primary(
+pub(crate) fn tick_primary(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
     terrain: &TerrainGrid,
