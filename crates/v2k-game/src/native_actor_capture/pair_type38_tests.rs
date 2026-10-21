@@ -70,7 +70,7 @@ fn type38_family_lethal_pair_runs_the_row_terminal() {
             .map(|entity| entity.power_up_payload_packed)
             .collect();
         match row {
-            Type38Row::Type38 | Type38Row::Type119 => {
+            Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 => {
                 assert!(drops.is_empty());
                 assert!(entities
                     .pending_actor_deferred_destroy_ids()

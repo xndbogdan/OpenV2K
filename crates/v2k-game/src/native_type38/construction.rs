@@ -188,16 +188,22 @@ fn publish_birth(
         .filter(|entity| entity.active)
         .map(shared::candidate)
         .collect();
-    // Only rule 6 reads candidate state: PlayerNearby within the strict axis.
-    // Type119 weighs both classes Always and never reads it.
+    // Rule 6 (PlayerNearby) and Type32's rule 11 (BeaconNearby, 16570's
+    // 164D0 mask 0x100) read candidates within the strict axis; Type119
+    // weighs both classes Always and reads neither.
     let player_nearby = match row {
         Type38Row::Type38 => shared::nearby::<profile::Type38Profile>(owner, &candidates, 1),
         Type38Row::Type129 => shared::nearby::<profile::Type129Profile>(owner, &candidates, 1),
-        Type38Row::Type119 => Ok(false),
+        Type38Row::Type119 | Type38Row::Type32 => Ok(false),
     }
     .map_err(Type38Block::Ground)?;
+    let beacon_nearby = match row {
+        Type38Row::Type32 => shared::nearby::<profile::Type32Profile>(owner, &candidates, 0x100)
+            .map_err(Type38Block::Ground)?,
+        _ => false,
+    };
     let mut selector_word = 0;
-    let selection = tasks::select(row, player_nearby, &mut || {
+    let selection = tasks::select(row, player_nearby, beacon_nearby, &mut || {
         selector_word = next_random();
         selector_word
     })?;

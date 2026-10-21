@@ -15,6 +15,7 @@ use crate::{
 pub(super) fn select(
     row: Type38Row,
     player_nearby: bool,
+    beacon_nearby: bool,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<BehaviorSelection, Type38Block> {
     select_initial_behavior(
@@ -22,6 +23,7 @@ pub(super) fn select(
         |rule| match rule {
             BehaviorWeightRule::Always => 1,
             BehaviorWeightRule::PlayerNearby => i32::from(player_nearby),
+            BehaviorWeightRule::BeaconNearby => i32::from(beacon_nearby),
             _ => unreachable!("authenticated Type38 rule list"),
         },
         next_random,
@@ -77,6 +79,19 @@ pub(super) fn publish_acquiring(
     let Some(row) = entity.native_type38_runtime.as_ref().map(|r| r.row) else {
         return false;
     };
+    // Type32's Follow Beacons33 runs B740 on the shared host's programs.
+    if selection.program.class_id == 33 {
+        return row == Type38Row::Type32
+            && initializer_storage_authenticates(entity)
+            && crate::native_ground_actor::publication::publish_shared_root_class(
+                entity,
+                metadata,
+                selection,
+                context,
+                row.axis(),
+                next_random,
+            );
+    }
     if !matches!(selection.program.class_id, 5 | 7) || !initializer_storage_authenticates(entity) {
         return false;
     }

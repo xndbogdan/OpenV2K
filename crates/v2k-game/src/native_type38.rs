@@ -8,6 +8,9 @@
 //! Type119 (world 46, model1161) is the same shape with its own data: an
 //! Always class7 choice, four Sub-H legs whose completed steps play sound 90,
 //! `+C0` 0x439 (D920's generic crush) and armour that only channel 3 hurts.
+//! Type32 (world 32, model1098) is Type119's data with its own mass, health,
+//! armour no hit reaches, a six-second surface breath and a third choice:
+//! BeaconNearby (rule11, `16570`) Follow Beacons33.
 //! Every death is the shared class49 terminal (BAF0, then BAC0 or BC90).
 
 pub mod aim;
@@ -55,6 +58,15 @@ pub(crate) const TYPE119_CHOICES: [BehaviorChoice; 2] = [
         behavior_class_id: 7,
     },
 ];
+pub(crate) const TYPE32_CHOICES: [BehaviorChoice; 3] = [
+    TYPE119_CHOICES[0],
+    TYPE119_CHOICES[1],
+    BehaviorChoice {
+        weight_rule_id: 11,
+        weight_multiplier: 5,
+        behavior_class_id: 33,
+    },
+];
 pub(crate) const CHOICES: [BehaviorChoice; 2] = [
     BehaviorChoice {
         weight_rule_id: 1,
@@ -91,6 +103,8 @@ pub enum Type38Row {
     Type129,
     /// World 46's model1161 walkers, alternate class1.
     Type119,
+    /// World 32's model1098 walkers, alternate class1.
+    Type32,
 }
 
 impl Type38Row {
@@ -99,6 +113,7 @@ impl Type38Row {
             38 => Some(Self::Type38),
             129 => Some(Self::Type129),
             119 => Some(Self::Type119),
+            32 => Some(Self::Type32),
             _ => None,
         }
     }
@@ -107,37 +122,41 @@ impl Type38Row {
             Self::Type38 => 38,
             Self::Type129 => 129,
             Self::Type119 => 119,
+            Self::Type32 => 32,
         }
     }
     pub const fn model(self) -> usize {
         match self {
             Self::Type38 | Self::Type129 => MODEL,
             Self::Type119 => 1161,
+            Self::Type32 => 1098,
         }
     }
     pub const fn health(self) -> i32 {
         match self {
             Self::Type38 | Self::Type129 => HEALTH,
             Self::Type119 => 20_000,
+            Self::Type32 => 10_000,
         }
     }
     pub const fn default_flags(self) -> u32 {
         match self {
             Self::Type38 | Self::Type129 => DEFAULT_FLAGS,
-            Self::Type119 => TYPE119_DEFAULT_FLAGS,
+            Self::Type119 | Self::Type32 => TYPE119_DEFAULT_FLAGS,
         }
     }
     pub const fn choices(self) -> &'static [BehaviorChoice] {
         match self {
             Self::Type38 | Self::Type129 => &CHOICES,
             Self::Type119 => &TYPE119_CHOICES,
+            Self::Type32 => &TYPE32_CHOICES,
         }
     }
     /// 09A80 allocates one 0x3C-byte Sub-H record per authored leg.
     pub const fn sub_h_records(self) -> usize {
         match self {
             Self::Type38 | Self::Type129 => 8,
-            Self::Type119 => 4,
+            Self::Type119 | Self::Type32 => 4,
         }
     }
     /// 24E30 copies this sound into Sub-E; Type129's emitter is silent.
@@ -148,7 +167,7 @@ impl Type38Row {
                 sound_id: 0,
                 ..EMITTER
             },
-            Self::Type119 => ProjectileEmitterDescriptor {
+            Self::Type119 | Self::Type32 => ProjectileEmitterDescriptor {
                 random_interval_us: 800_000,
                 aim_threshold_raw: 8000,
                 target_axis_tolerance_raw: 3840,
@@ -160,7 +179,7 @@ impl Type38Row {
     pub const fn target_warning_sound(self) -> Option<u16> {
         match self {
             Self::Type38 => Some(87),
-            Self::Type129 | Self::Type119 => None,
+            Self::Type129 | Self::Type119 | Self::Type32 => None,
         }
     }
     pub const fn axis(self) -> CommonAxisDescriptor {
@@ -169,13 +188,13 @@ impl Type38Row {
             raw_word_at_0x04: match self {
                 Self::Type38 => 3109,
                 Self::Type129 => 3073,
-                Self::Type119 => 3077,
+                Self::Type119 | Self::Type32 => 3077,
             },
         }
     }
     pub const fn alternate_behavior_class(self) -> u32 {
         match self {
-            Self::Type38 | Self::Type119 => 1,
+            Self::Type38 | Self::Type119 | Self::Type32 => 1,
             Self::Type129 => 63,
         }
     }
@@ -209,6 +228,7 @@ impl Type38Runtime {
 pub type Type38Owner = shared::NativeGroundActorOwner<profile::Type38Profile>;
 pub type Type129Owner = shared::NativeGroundActorOwner<profile::Type129Profile>;
 pub type Type119Owner = shared::NativeGroundActorOwner<profile::Type119Profile>;
+pub type Type32Owner = shared::NativeGroundActorOwner<profile::Type32Profile>;
 pub type Type38Outcome = shared::NativeGroundActorOutcome;
 
 /// One scheduler entry for both rows; each keeps its own framework profile.
@@ -217,6 +237,7 @@ pub enum Type38FamilyOwner {
     Type38(Type38Owner),
     Type129(Type129Owner),
     Type119(Type119Owner),
+    Type32(Type32Owner),
 }
 
 impl Type38FamilyOwner {
@@ -229,6 +250,7 @@ impl Type38FamilyOwner {
             Some(Type38Row::Type38) => Type38Owner::adopt(manager, id).map(Self::Type38),
             Some(Type38Row::Type129) => Type129Owner::adopt(manager, id).map(Self::Type129),
             Some(Type38Row::Type119) => Type119Owner::adopt(manager, id).map(Self::Type119),
+            Some(Type38Row::Type32) => Type32Owner::adopt(manager, id).map(Self::Type32),
             None => Err(shared::NativeGroundActorBlock::Allocation),
         }
     }
@@ -237,6 +259,7 @@ impl Type38FamilyOwner {
             Self::Type38(owner) => owner.entity_id(),
             Self::Type129(owner) => owner.entity_id(),
             Self::Type119(owner) => owner.entity_id(),
+            Self::Type32(owner) => owner.entity_id(),
         }
     }
     pub(crate) const fn actor_lease(self) -> MainBaseAbortActorLease {
@@ -244,6 +267,7 @@ impl Type38FamilyOwner {
             Self::Type38(owner) => owner.actor_lease(),
             Self::Type129(owner) => owner.actor_lease(),
             Self::Type119(owner) => owner.actor_lease(),
+            Self::Type32(owner) => owner.actor_lease(),
         }
     }
     pub(crate) const fn has_pending_prefix(self) -> bool {
@@ -251,6 +275,7 @@ impl Type38FamilyOwner {
             Self::Type38(owner) => owner.has_pending_prefix(),
             Self::Type129(owner) => owner.has_pending_prefix(),
             Self::Type119(owner) => owner.has_pending_prefix(),
+            Self::Type32(owner) => owner.has_pending_prefix(),
         }
     }
     pub(crate) fn park_external_prefix(&mut self) {
@@ -258,6 +283,7 @@ impl Type38FamilyOwner {
             Self::Type38(owner) => owner.park_external_prefix(),
             Self::Type129(owner) => owner.park_external_prefix(),
             Self::Type119(owner) => owner.park_external_prefix(),
+            Self::Type32(owner) => owner.park_external_prefix(),
         }
     }
     pub(crate) const fn fork_for_main_base_abort_transaction(self) -> Self {
@@ -268,6 +294,7 @@ impl Type38FamilyOwner {
             Self::Type38(owner) => owner.completed_mutation_boundary(manager),
             Self::Type129(owner) => owner.completed_mutation_boundary(manager),
             Self::Type119(owner) => owner.completed_mutation_boundary(manager),
+            Self::Type32(owner) => owner.completed_mutation_boundary(manager),
         }
     }
 }
@@ -341,6 +368,14 @@ pub fn tick_type38_family(
             Type38FamilyTick {
                 outcome: tick.outcome,
                 retained_owner: tick.retained_owner.map(Type38FamilyOwner::Type119),
+            }
+        }
+        Type38FamilyOwner::Type32(owner) => {
+            let tick = shared::tick_native_ground_actor(manager, owner, shared_frame);
+            debug_assert!(tick.replacement_terminal.is_none());
+            Type38FamilyTick {
+                outcome: tick.outcome,
+                retained_owner: tick.retained_owner.map(Type38FamilyOwner::Type32),
             }
         }
     }
@@ -466,6 +501,16 @@ fn row_record(row: Type38Row) -> RowRecord {
             sub_h_completion_sound: None,
             sub_h_phase_rate_raw: 0x2000_0000,
             sub_h: &MODEL1131_SUB_H,
+        },
+        Type38Row::Type32 => RowRecord {
+            mass_raw: 600,
+            // Every channel's multiplier is zero: no hit reaches its health.
+            damage: DamageProfile {
+                thresholds_raw: [0, 10_000, 10_000, 10_000, 200, 0, 0],
+                multipliers_q8: [0; 7],
+            },
+            surface_lifetime_ms: 6000,
+            ..row_record(Type38Row::Type119)
         },
         Type38Row::Type119 => RowRecord {
             mass_raw: 500,
