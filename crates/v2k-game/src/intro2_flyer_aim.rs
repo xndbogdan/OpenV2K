@@ -844,7 +844,7 @@ fn handle_flyer_generic_action(
             {
                 return Err(Intro2FlyerAimError::ActionContractMismatch);
             }
-            world_fx.queue_fixed_positional_sound_raw(profile.sound(), expected_position);
+            world_fx.queue_networked_positional_sound_raw(profile.sound(), expected_position);
             Ok(GenericEmitterResume::Acknowledged { phase })
         }
         GenericEmitterAction::EmitMethod31Rejection { .. }

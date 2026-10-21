@@ -418,7 +418,7 @@ impl EntityManager {
         if let Some(sound) = death_sound {
             frame
                 .world_fx
-                .emit_fixed_positional_sound_raw(sound, position);
+                .emit_networked_positional_sound_raw(sound, position);
         }
         self.commit_player_dying(
             plan,
@@ -651,7 +651,7 @@ impl EntityManager {
                     RetailRuntimeValue::Known(transition.pre_health_buffer_after_raw);
                 hull.pre_health_damage_buffer_raw = transition.pre_health_buffer_after_raw;
                 if let Some(sound_id) = generic_hit_sound_id {
-                    fx.emit_fixed_positional_sound_raw(sound_id, position_raw);
+                    fx.emit_networked_positional_sound_raw(sound_id, position_raw);
                 }
                 entity.collision.health_raw = RetailRuntimeValue::Known(health);
                 hull.health_raw = health;
@@ -663,7 +663,7 @@ impl EntityManager {
                     hull.dying = true;
                 }
                 if let Some(sound_id) = death_sound_id {
-                    fx.emit_fixed_positional_sound_raw(sound_id, position_raw);
+                    fx.emit_networked_positional_sound_raw(sound_id, position_raw);
                 }
                 if let Some(plan) = death {
                     self.commit_player_dying(plan, fx, retail_tick, notifications, extra_lives);

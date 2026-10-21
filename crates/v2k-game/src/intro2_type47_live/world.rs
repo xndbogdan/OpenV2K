@@ -702,7 +702,7 @@ fn commit_tail(
         })
         .flatten()
     {
-        world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        world_fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31 else {
@@ -860,7 +860,7 @@ fn commit_tail(
                     next_random(world_fx)
                 })
             {
-                world_fx.queue_fixed_positional_sound_raw(sound.sound_id, sound.position_raw);
+                world_fx.queue_networked_positional_sound_raw(sound.sound_id, sound.position_raw);
             }
         }
     }

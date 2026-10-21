@@ -871,7 +871,7 @@ fn run_prepared_type66_frame(
                                 explosion_lights,
                             );
                         };
-                        world_fx.queue_fixed_positional_sound_raw(
+                        world_fx.queue_networked_positional_sound_raw(
                             LEVEL_ONE_TYPE66_DEATH_SOUND_ID,
                             position_raw,
                         );

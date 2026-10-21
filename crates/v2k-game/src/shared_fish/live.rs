@@ -425,7 +425,7 @@ fn finish_detailed(
     ) {
         frame
             .world_fx
-            .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+            .queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     // Entry2004/200C skips E640(10), DF70(2), and hot-terrain damage(800).
     // DCA0 still publishes13F70; E100 rereads the current style. Bit4 skips

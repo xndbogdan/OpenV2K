@@ -114,7 +114,7 @@ pub(super) fn run(
     ]);
     *target = result.target_private;
     if let Some(sound) = result.sound {
-        world_fx.queue_fixed_positional_sound_raw_at_rate(
+        world_fx.queue_networked_positional_sound_raw_at_rate(
             sound.sound_id,
             sound.position_raw,
             sound.rate_q16,
@@ -178,7 +178,7 @@ fn commit_failure_prefix(
         *target = value;
     }
     if let Some(sound) = prefix.sound {
-        world_fx.queue_fixed_positional_sound_raw_at_rate(
+        world_fx.queue_networked_positional_sound_raw_at_rate(
             sound.sound_id,
             sound.position_raw,
             sound.rate_q16,

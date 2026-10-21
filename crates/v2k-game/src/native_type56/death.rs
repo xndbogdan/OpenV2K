@@ -129,7 +129,7 @@ pub fn begin_type56_standard_death(
         .state_flags_at_0x08
         .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
     if let Some(sound) = sound {
-        fx.emit_fixed_positional_sound_raw(sound, position);
+        fx.emit_networked_positional_sound_raw(sound, position);
     }
     //Alternate rule1/class2 is selected directly after dying; no425680 draw.
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(terminal));

@@ -738,7 +738,7 @@ fn apply_prepared_type17_standard_death(
         ACTIVE_MODEL_SLOT_LOW_STATE_BIT,
         ACTIVE_MODEL_SLOT_LOW_STATE_BIT,
     );
-    world_fx.queue_fixed_positional_sound_raw(
+    world_fx.queue_networked_positional_sound_raw(
         TYPE17_STANDARD_DEATH_SOUND_ID,
         prepared.sound_position_raw,
     );

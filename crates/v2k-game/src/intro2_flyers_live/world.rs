@@ -350,7 +350,7 @@ pub(super) fn tick_world(
             },
             &mut || next_random(world_fx),
         ) {
-            world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+            world_fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
     if basis_flags.unwrap() & 0x4000 == 0 {

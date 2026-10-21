@@ -2186,11 +2186,27 @@ pub struct WorldFx {
     frame_pacing: ParticleFramePacing,
     /// Live diagnostics counters; never simulated state.
     splash_path_counters: SplashPathCounters,
-    /// A network game's kind-1 sends: `FUN_00440A60` sends each local birth
-    /// of a class whose descriptor flags hold 2. `None` outside one.
-    network_particles: Option<Vec<NetworkParticleBirth>>,
-    /// A network game's `FUN_00440950` ran: its kind-2 send is held.
-    network_burst_unsent: bool,
+    /// A network game's sends from these effects, in call order. `None`
+    /// outside one.
+    network_sends: Option<Vec<NetworkSend>>,
+}
+
+/// What these effects send to the other machines of a network game.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkSend {
+    /// `FUN_00440A60`'s kind 1: a local birth of a class whose descriptor
+    /// flags hold 2.
+    Particle(NetworkParticleBirth),
+    /// `FUN_00440950`'s kind 2: its request's count, X, Y, Z, extent and
+    /// the two scatter classes.
+    Burst([u16; 6]),
+    /// `FUN_0044F480`'s kinds 22 and 23: a cue at a position, with its rate
+    /// (every retail caller passes full gain).
+    Sound {
+        sound_id: u16,
+        position_raw: [i16; 3],
+        rate_q16: u32,
+    },
 }
 
 /// A particle request as `FUN_00440A60` receives it: position and velocity
@@ -2211,13 +2227,13 @@ impl InfectionEvolutionEffects for WorldFx {
     }
 
     fn queue_infection_tail_sound(&mut self, sound: InfectionTailSound) {
-        self.queue_fixed_positional_sound_raw(sound.global_sound_id, sound.position_raw);
+        self.queue_networked_positional_sound_raw(sound.global_sound_id, sound.position_raw);
     }
 }
 
 impl AuthoredHiveComponentEffects for WorldFx {
     fn queue_hive_detailed_sound(&mut self, sound_id: u16, position_raw: [i16; 3]) {
-        self.queue_fixed_positional_sound_raw(sound_id, position_raw);
+        self.queue_networked_positional_sound_raw(sound_id, position_raw);
     }
 
     fn emit_authored_radial(&mut self, emission: AuthoredRadialEmission) {
@@ -2254,27 +2270,84 @@ impl WorldFx {
             last_retail_tick: self.last_retail_tick,
             frame_pacing: self.frame_pacing.clone(),
             splash_path_counters: self.splash_path_counters,
-            network_particles: self.network_particles.clone(),
-            network_burst_unsent: self.network_burst_unsent,
+            network_sends: self.network_sends.clone(),
         }
     }
 
-    /// Start or stop sending replicated particle births.
-    pub fn set_network_particles(&mut self, enabled: bool) {
-        self.network_particles = enabled.then(Vec::new);
+    /// Start or stop collecting a network game's sends.
+    pub fn set_network_sends(&mut self, enabled: bool) {
+        self.network_sends = enabled.then(Vec::new);
     }
 
-    /// Whether a burst's kind-2 send was due since the last call.
-    pub fn take_network_burst_unsent(&mut self) -> bool {
-        std::mem::take(&mut self.network_burst_unsent)
-    }
-
-    /// The births to send since the last call.
-    pub fn take_network_particles(&mut self) -> Vec<NetworkParticleBirth> {
-        self.network_particles
+    /// The sends since the last call, in call order.
+    pub fn take_network_sends(&mut self) -> Vec<NetworkSend> {
+        self.network_sends
             .as_mut()
             .map(std::mem::take)
             .unwrap_or_default()
+    }
+
+    /// `FUN_0044F480`'s send: the other machines play the cue too.
+    pub fn send_network_sound(&mut self, sound_id: u16, position_raw: [i16; 3], rate_q16: u32) {
+        if let Some(sends) = self.network_sends.as_mut() {
+            sends.push(NetworkSend::Sound {
+                sound_id,
+                position_raw,
+                rate_q16,
+            });
+        }
+    }
+
+    /// `FUN_0044F480`: a full-gain cue that network play also sends, then
+    /// plays here as [`Self::queue_fixed_positional_sound_raw`].
+    pub fn queue_networked_positional_sound_raw(&mut self, sound_id: u16, position_raw: [i16; 3]) {
+        self.queue_networked_positional_sound_raw_at_rate(sound_id, position_raw, 0x1_0000);
+    }
+
+    /// `FUN_0044F480` at a playback rate.
+    pub fn queue_networked_positional_sound_raw_at_rate(
+        &mut self,
+        sound_id: u16,
+        position_raw: [i16; 3],
+        rate_q16: u32,
+    ) {
+        self.send_network_sound(sound_id, position_raw, rate_q16);
+        self.queue_fixed_positional_sound_raw_at_rate(sound_id, position_raw, rate_q16);
+    }
+
+    /// `FUN_0044F480` submitted synchronously, as
+    /// [`Self::emit_fixed_positional_sound_raw`].
+    pub fn emit_networked_positional_sound_raw(&mut self, sound_id: u16, position_raw: [i16; 3]) {
+        self.send_network_sound(sound_id, position_raw, 0x1_0000);
+        self.emit_fixed_positional_sound_raw(sound_id, position_raw);
+    }
+
+    /// `FUN_00440950`'s kind 2 for a local burst (network byte 0).
+    fn send_network_burst(&mut self, request: [u16; 6]) {
+        if let Some(sends) = self.network_sends.as_mut() {
+            sends.push(NetworkSend::Burst(request));
+        }
+    }
+
+    /// `FUN_0043A020` -> `FUN_00440950` with network byte 2: a peer's burst,
+    /// owned by no body, its particles harmless and not sent on again.
+    pub fn materialize_network_burst(&mut self, request: [u16; 6], sea_level_raw: Option<i16>) {
+        let sending = self.network_sends.take();
+        let position_raw = [request[1] as i16, request[2] as i16, request[3] as i16];
+        self.emit_direction_table_scatter_raw(
+            position_raw,
+            DirectionTableScatterEmission {
+                base_count: i32::from(request[0]),
+                extent_raw: request[4],
+                source_classes: [request[5] as u8, (request[5] >> 8) as u8],
+                velocity_scale_raw: EXPLODE_WITH_RING_VELOCITY_SCALE_RAW,
+                owner_id: None,
+                source_entity_type_at_birth: None,
+                suppresses_impact_damage: true,
+            },
+        );
+        self.emit_scatter_surface_sound_tail_raw(position_raw, sea_level_raw, None, None, true);
+        self.network_sends = sending;
     }
 
     /// `FUN_00439FB0` -> `FUN_00440A60` with network byte 2: a peer's
@@ -2322,7 +2395,7 @@ impl WorldFx {
             draw_scale_raw: descriptor.draw_scale_raw(),
             size_jitter_divisor_raw: descriptor.size_jitter_divisor_raw(),
         };
-        let sending = self.network_particles.take();
+        let sending = self.network_sends.take();
         let slot = self.materialize_particle_spawn_with_birth_context(
             raw_position_to_world(position_raw),
             spawn,
@@ -2331,7 +2404,7 @@ impl WorldFx {
                 retail_tick,
             }),
         );
-        self.network_particles = sending;
+        self.network_sends = sending;
         slot
     }
 
@@ -3130,11 +3203,20 @@ impl WorldFx {
                 suppresses_impact_damage: false,
             },
         );
+        self.send_network_burst([
+            METEOR_IMPACT_SCATTER_COUNT as u16,
+            position_raw[0] as u16,
+            position_raw[1] as u16,
+            position_raw[2] as u16,
+            source_extent_raw,
+            u16::from(METEOR_SCATTER_CLASS) | u16::from(METEOR_SCATTER_CLASS) << 8,
+        ]);
         self.emit_scatter_surface_sound_tail_raw(
             position_raw,
             sea_level_raw,
-            owner_entity_id,
+            Some(owner_entity_id),
             None,
+            false,
         );
     }
 
@@ -3158,11 +3240,22 @@ impl WorldFx {
                 suppresses_impact_damage: request.suppresses_impact_damage,
             },
         );
+        if !request.suppresses_impact_damage {
+            self.send_network_burst([
+                request.scatter_count as u16,
+                request.position_raw[0] as u16,
+                request.position_raw[1] as u16,
+                request.position_raw[2] as u16,
+                request.source_extent_raw,
+                u16::from(request.scatter_classes[0]) | u16::from(request.scatter_classes[1]) << 8,
+            ]);
+        }
         self.emit_scatter_surface_sound_tail_raw(
             request.position_raw,
             request.sea_level_raw,
-            request.logical_owner_entity_id,
+            Some(request.logical_owner_entity_id),
             Some(request.logical_owner_entity_type),
+            request.suppresses_impact_damage,
         );
     }
 
@@ -3175,36 +3268,39 @@ impl WorldFx {
         &mut self,
         position_raw: [i16; 3],
         sea_level_raw: Option<i16>,
-        owner_entity_id: u32,
+        owner_entity_id: Option<u32>,
         source_entity_type_at_birth: Option<u8>,
+        suppresses_impact_damage: bool,
     ) {
-        self.network_burst_unsent |= self.network_particles.is_some();
         let mut sound_position_raw = position_raw;
         if sea_level_raw.is_none_or(|sea_level| sea_level < position_raw[1]) {
-            self.materialize_owned_descriptor_particle_raw(
+            self.materialize_descriptor_particle_raw(
                 position_raw,
                 METEOR_SURFACE_CLASS,
                 [0, 500, 0],
                 owner_entity_id,
                 source_entity_type_at_birth,
+                suppresses_impact_damage,
             );
         } else {
-            self.materialize_owned_descriptor_particle_raw(
+            self.materialize_descriptor_particle_raw(
                 position_raw,
                 UNDERWATER_IMPACT_CLASSES[0],
                 [0; 3],
                 owner_entity_id,
                 source_entity_type_at_birth,
+                suppresses_impact_damage,
             );
             // 440A20 mutates 440950's local request even if either allocation
             // fails. The later sound62 reads that same displaced position.
             sound_position_raw[0] = sound_position_raw[0].wrapping_sub(0x40);
-            self.materialize_owned_descriptor_particle_raw(
+            self.materialize_descriptor_particle_raw(
                 sound_position_raw,
                 UNDERWATER_IMPACT_CLASSES[1],
                 [0; 3],
                 owner_entity_id,
                 source_entity_type_at_birth,
+                suppresses_impact_damage,
             );
         }
 
@@ -3225,13 +3321,33 @@ impl WorldFx {
         owner_entity_id: u32,
         source_entity_type_at_birth: Option<u8>,
     ) {
+        self.materialize_descriptor_particle_raw(
+            position_raw,
+            source_class,
+            raw_velocity,
+            Some(owner_entity_id),
+            source_entity_type_at_birth,
+            false,
+        );
+    }
+
+    fn materialize_descriptor_particle_raw(
+        &mut self,
+        position_raw: [i16; 3],
+        source_class: u8,
+        raw_velocity: [i32; 3],
+        owner_entity_id: Option<u32>,
+        source_entity_type_at_birth: Option<u8>,
+        suppresses_impact_damage: bool,
+    ) {
         let mut burst = single_descriptor_particle_burst(
             raw_position_to_world(position_raw),
             source_class,
             raw_velocity,
-            Some(owner_entity_id),
+            owner_entity_id,
         );
         burst.particles[0].source_entity_type_at_birth = source_entity_type_at_birth;
+        burst.particles[0].suppresses_impact_damage = suppresses_impact_damage;
         self.materialize_particle_burst(burst);
     }
 
@@ -3253,6 +3369,11 @@ impl WorldFx {
             owner_entity_id,
         );
         let origin = raw_position_to_world(position_raw);
+        self.send_network_sound(
+            PLAYER_WRECK_SOUND_ID as u16,
+            position_raw,
+            PLAYER_WRECK_FIXED_RATE_16_16,
+        );
         self.ready_sounds.push(PositionalSoundEvent {
             sound_id: PLAYER_WRECK_SOUND_ID,
             position: origin,
@@ -3483,7 +3604,7 @@ impl WorldFx {
         }
         let slot = self.particles.allocate(particle)?;
         if let (Some(sending), Some(descriptor)) = (
-            self.network_particles.as_mut(),
+            self.network_sends.as_mut(),
             particle_descriptor(particle.source_class),
         ) {
             // A suppressed birth (network byte nonzero) is never sent.
@@ -3496,13 +3617,13 @@ impl WorldFx {
                     .map(|v| world_velocity_component_to_raw(v) as i16);
                 velocity_raw[1] =
                     velocity_raw[1].wrapping_sub(descriptor.spawn_velocity_y_bias_raw());
-                sending.push(NetworkParticleBirth {
+                sending.push(NetworkSend::Particle(NetworkParticleBirth {
                     source_class: particle.source_class,
                     position_raw,
                     velocity_raw,
                     owner_id: particle.owner_id,
                     owner_entity_type: particle.source_entity_type_at_birth.unwrap_or(0),
-                });
+                }));
             }
         }
         Some(slot)
@@ -4469,6 +4590,7 @@ impl WorldFx {
         // The request is made after the particle packet even if the pool
         // later rejects it. Keep audio in the ordinary sound owner, so an
         // intervening mute/discard also consumes this request.
+        self.send_network_sound(CARGO_TRANSFER_SOUND_ID as u16, position_raw, 0x1_0000);
         self.queue_cargo_transfer_sound(raw_position_to_world(position_raw));
     }
 
@@ -4622,6 +4744,12 @@ impl WorldFx {
             }
         }
         if let Some(event) = events.last() {
+            // FUN_00424650's descriptor cue goes through FUN_0044F480.
+            self.send_network_sound(
+                event.sound.sound_id as u16,
+                crate::entity::world_position_raw(event.sound.origin_world),
+                0x1_0000,
+            );
             self.queue(WorldEvent::PositionalSound(PositionalSoundEvent::fixed(
                 event.sound.sound_id,
                 event.sound.origin_world,
@@ -12851,6 +12979,64 @@ mod tests {
         assert!(raw_spheres_overlap(low, high, 54));
         assert!(!raw_spheres_overlap(low, high, 49));
         assert!(!raw_spheres_overlap_nonwrapping(low, high, 54));
+    }
+
+    #[test]
+    fn a_network_game_sends_its_bursts_and_networked_cues_in_call_order() {
+        let mut fx = WorldFx::new();
+        fx.set_network_sends(true);
+        fx.queue_networked_positional_sound_raw(88, [0x1234, 0x100, 0x7F00]);
+        // FUN_0044F450's cues stay on this machine.
+        fx.queue_fixed_positional_sound_raw(90, [0; 3]);
+        fx.emit_player_wreck_burst_raw([100, -20, 300], 0x100, Some(-512), 7);
+        let sends = fx.take_network_sends();
+        assert_eq!(
+            sends.first(),
+            Some(&NetworkSend::Sound {
+                sound_id: 88,
+                position_raw: [0x1234, 0x100, 0x7F00],
+                rate_q16: 0x1_0000,
+            })
+        );
+        let burst = sends
+            .iter()
+            .position(|send| {
+                *send == NetworkSend::Burst([10, 100, (-20i16) as u16, 300, 0x100, 0x1010])
+            })
+            .expect("FUN_00440950 sends its request");
+        // FUN_004475F0's cue follows the burst.
+        assert_eq!(
+            sends.last(),
+            Some(&NetworkSend::Sound {
+                sound_id: PLAYER_WRECK_SOUND_ID as u16,
+                position_raw: [100, -20, 300],
+                rate_q16: PLAYER_WRECK_FIXED_RATE_16_16,
+            })
+        );
+        assert!(burst < sends.len() - 1);
+        assert!(fx.take_network_sends().is_empty());
+    }
+
+    #[test]
+    fn a_peers_burst_is_harmless_ownerless_and_not_sent_on() {
+        let mut fx = WorldFx::new();
+        fx.frame_pacing.count_scale_q16 = 0x1_0000;
+        fx.set_network_sends(true);
+        fx.materialize_network_burst([10, 100, (-20i16) as u16, 300, 0x100, 0x1010], Some(-512));
+        assert!(fx.take_network_sends().is_empty());
+        let particles = fx.test_particles_in_virgin_birth_order();
+        assert_eq!(
+            particles
+                .iter()
+                .filter(|particle| particle.source_class == METEOR_SCATTER_CLASS)
+                .count(),
+            10
+        );
+        assert!(particles
+            .iter()
+            .all(|particle| particle.suppresses_impact_damage && particle.owner_id.is_none()));
+        // The receiver plays FUN_00440950's own cue 62 locally.
+        assert_eq!(fx.take_positional_sounds().len(), 1);
     }
 
     #[test]

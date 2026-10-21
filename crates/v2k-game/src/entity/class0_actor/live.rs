@@ -412,7 +412,7 @@ fn run_callback(
         ) {
             frame
                 .world_fx
-                .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+                .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
     // These admitted class0 profiles omit E640, gravity/drag and infected-ground

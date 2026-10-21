@@ -399,7 +399,7 @@ fn run_frame(
         ) {
             frame
                 .world_fx
-                .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+                .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
     // Entry effective 28/428/420 bypasses E640; DCA0 and E870 still publish
@@ -585,7 +585,7 @@ pub(crate) fn run_surface(
         if let Some(sound) = plan_ordinary_type9_surface_sound(surface_frame.into(), &mut || {
             u32::from(world_fx.next_shared_retail_random_u16())
         }) {
-            world_fx.queue_fixed_positional_sound_raw(sound.sound_id, sound.position_raw);
+            world_fx.queue_networked_positional_sound_raw(sound.sound_id, sound.position_raw);
         }
     }
     Ok(())

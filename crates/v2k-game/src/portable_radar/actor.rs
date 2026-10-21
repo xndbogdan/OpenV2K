@@ -796,7 +796,7 @@ fn run_callback(
         ) {
             frame
                 .world_fx
-                .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+                .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
     // E100: gravity only; Sub-C is absent, so there is no water response.

@@ -190,7 +190,7 @@ impl NativeActorAttachmentPlan {
             .animation
             .relation_attach_sound_id(self.parent_capability)
         {
-            fx.queue_fixed_positional_sound_raw(sound, self.parent_position);
+            fx.queue_networked_positional_sound_raw(sound, self.parent_position);
         }
         let RetailRuntimeValue::Known(Some(animation)) = &mut entity.actor_animation_runtime else {
             unreachable!();

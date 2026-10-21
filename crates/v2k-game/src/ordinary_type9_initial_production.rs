@@ -2241,7 +2241,7 @@ impl FreshLevel1Type9InitialProductionRuntime for InfallibleFreshLevel1Type9Prod
 
     fn deliver_positional_sound(&mut self, request: AttractAttentionPositionalSoundRequest) {
         self.world_fx
-            .queue_fixed_positional_sound_raw(request.global_sound_id, request.position_raw);
+            .queue_networked_positional_sound_raw(request.global_sound_id, request.position_raw);
     }
 }
 

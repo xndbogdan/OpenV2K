@@ -832,7 +832,7 @@ fn deliver_entity_impact(
             generic_hit_sound_id: Some(sound_id),
             position_raw,
         } => {
-            world_fx.queue_fixed_positional_sound_raw(sound_id, position_raw);
+            world_fx.queue_networked_positional_sound_raw(sound_id, position_raw);
         }
         Fun00411250Type9DamageOutcome::Lethal {
             task_lease: Some(task_lease),
@@ -913,41 +913,58 @@ fn queue_fixed_actor_damage_audio(
     world_fx: &mut WorldFx,
     outcome: &CheckedProjectileDamageOutcome,
 ) {
+    // FUN_00414E90's hit and FUN_00410C10's death cues go through
+    // FUN_0044F480; the accepted-hit presentation through FUN_0044F450.
     let (position_raw, sounds) = match outcome {
         CheckedProjectileDamageOutcome::Applied(applied) => (
             applied.target_position_raw,
             [
-                applied.transition.generic_hit_sound_id,
-                applied
-                    .accepted_hit_presentation
-                    .and_then(|presentation| presentation.sound_id),
-                None,
+                (applied.transition.generic_hit_sound_id, true),
+                (
+                    applied
+                        .accepted_hit_presentation
+                        .and_then(|presentation| presentation.sound_id),
+                    false,
+                ),
+                (None, false),
             ],
         ),
         CheckedProjectileDamageOutcome::ProgressiveDeathStarted(started) => (
             started.target_position_raw,
             [
-                started.generic_hit_sound_id,
-                started.death_sound_id,
-                started
-                    .accepted_hit_presentation
-                    .and_then(|presentation| presentation.sound_id),
+                (started.generic_hit_sound_id, true),
+                (started.death_sound_id, true),
+                (
+                    started
+                        .accepted_hit_presentation
+                        .and_then(|presentation| presentation.sound_id),
+                    false,
+                ),
             ],
         ),
         CheckedProjectileDamageOutcome::HiveDeathStarted(started) => (
             started.target_position_raw,
             [
-                started.generic_hit_sound_id,
-                started
-                    .accepted_hit_presentation
-                    .and_then(|presentation| presentation.sound_id),
-                None,
+                (started.generic_hit_sound_id, true),
+                (
+                    started
+                        .accepted_hit_presentation
+                        .and_then(|presentation| presentation.sound_id),
+                    false,
+                ),
+                (None, false),
             ],
         ),
         _ => return,
     };
-    for sound in sounds.into_iter().flatten() {
-        world_fx.queue_fixed_positional_sound_raw(sound, position_raw);
+    for (sound, networked) in sounds {
+        match (sound, networked) {
+            (Some(sound), true) => {
+                world_fx.queue_networked_positional_sound_raw(sound, position_raw)
+            }
+            (Some(sound), false) => world_fx.queue_fixed_positional_sound_raw(sound, position_raw),
+            (None, _) => {}
+        }
     }
 }
 

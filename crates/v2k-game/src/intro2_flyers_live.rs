@@ -1502,7 +1502,7 @@ fn tick_flyer_tasks(
         }
     };
     if let Some(sound) = sound {
-        world_fx.queue_fixed_positional_sound_raw_at_rate(
+        world_fx.queue_networked_positional_sound_raw_at_rate(
             sound.sound_id,
             sound.position_raw,
             sound.rate_q16,

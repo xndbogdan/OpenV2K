@@ -195,7 +195,7 @@ pub(crate) fn apply_live_actor_checked_damage<D, E>(
     if let Some(sound) = known(entity.collision.generic_hit_sound_id)
         .ok_or_else(|| unresolved(Phase::HitSound, committed, "generic-hit sound"))?
     {
-        world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        world_fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
         committed = true;
     }
     if let Some(address) = known(entity.collision.pair_callbacks.type_hit_callback_address)

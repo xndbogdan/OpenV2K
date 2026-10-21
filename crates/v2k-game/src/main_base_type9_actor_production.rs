@@ -742,8 +742,10 @@ fn run_outer_transaction(
                         .expect("the adapter owns the current bubble receipt");
                 }
                 OrdinaryType9OwnerAction::PlaySound(request) => {
-                    world_fx
-                        .queue_fixed_positional_sound_raw(request.sound_id, request.position_raw);
+                    world_fx.queue_networked_positional_sound_raw(
+                        request.sound_id,
+                        request.position_raw,
+                    );
                     effects.surface_sounds_queued += 1;
                     let fresh_state = snapshot_outer_state(manager, actor)?;
                     transaction

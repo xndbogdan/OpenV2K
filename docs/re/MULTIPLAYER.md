@@ -215,6 +215,8 @@ without `0x08000000`) or 3.5 s otherwise.
 | `FUN_00414E90` | damage to a peer's body goes to its owner (kind 9: handle, amount, `(attacker type + 6) \| slot << 8`), which applies it through `FUN_00417E10` with the sender's slot. On the local player, a lethal hit runs `FUN_00439C90` (the killer is the attacker's slot when a player's craft, type 46, dealt it) and a player's nonlethal hit `FUN_00439DB0` |
 | `FUN_00440A60` | a local birth of a class whose descriptor flags hold 2 is sent (kind 1); a peer's arrives with byte 17 = 2, which sets `+1D` bit 0 (no damage) and is not sent on |
 | `FUN_00442950` | classes 52, 68 and 85 hitting an entity deal their damage without testing `+1D` bit 0, so a peer's copy of such a creature shot also hits on every machine that shows it |
+| `FUN_00440950` | a burst: its scatter (`FUN_004407D0`), then for a local one (network byte 0) kind 2 with the request's first 12 bytes (count, X, Y, Z, extent, the two scatter classes), then the surface particle and its own cue 62 (`FUN_0044F450`). `FUN_0043A020` replays a peer's with network byte 2 and no owner, so its particles are harmless and nothing is sent on |
+| `FUN_0044F480` | a cue every machine hears: in network play it sends kind 22 (23 with a rate, 24 with a gain, 25 with both), the cue's low byte and the high bytes of X, Y and Z, then plays it here; `FUN_00439E90` plays a peer's through `FUN_0044F450`, the local-only cue. Its callers are the weapons' and creatures' fire (`FUN_00424650`, `FUN_00402300`, `FUN_00425160`), every hit and death cue (`FUN_00414E90` +98, `FUN_00410C10` +90), the low-health and surface cues (`FUN_0040DCA0`, `FUN_0040E370`), Sub-G's flight cue (`FUN_0041AA60`), the attract-attention and attach cues (`FUN_00420870`, `FUN_00420760`), search and run-away (`FUN_0040ADE0`, `FUN_00403F40`), the factory (`FUN_00419010`), cargo (`FUN_00443B50`, `FUN_00443D30`), infection (`FUN_00436750`), a weapon pickup (`FUN_00445A90`), the player's wreck (`FUN_004475F0`) and the Main Base abort (`FUN_00456960`); every caller passes full gain |
 | `FUN_00413500` | in network play counts each local body's detail wait `+78` down, holding state `0x06000000` while it runs, and on the host runs `FUN_004132D0` each second while fewer than 32 Type61s live |
 | `FUN_004132D0` | the host's power-up: at a random X and Z with no body within 2,048, 0x80 above the ground, a Type61 (`FUN_00438080`) whose payload comes from a random entry of the twelve at `0x4C92D0` |
 | `FUN_00447280` | a dying network player drops a Type61 for each weapon slot it held, except selectors 1 and 0x12 (`FUN_00447750`) |
@@ -261,6 +263,13 @@ becoming the host). Its wire format is its own, so retail cannot join a port
 session. It is Infestation's port transport with V2000's application GUID,
 limit and names.
 
+The port sends every cue a `FUN_0044F480` caller it has ported plays, and
+the bursts of `FUN_00440950`. `FUN_00402850`'s cue is zero in the shipped
+data; the callers it has not ported (`FUN_004024E0`, `FUN_00404D50`,
+`FUN_00405760`, `FUN_0040B340`, `FUN_0040B800`, `FUN_0040CAF0`,
+`FUN_00422840` and the special weapon `FUN_00444400`) play nothing here
+either.
+
 Above it the port keeps retail's messages: the slot table on channel 0, the
 stamped game messages on channel 1 with their 26 kinds and layouts, the
 inbound ring of 64, the 100 ms session tick, handles, sync records and their
@@ -273,10 +282,9 @@ Held, each with a logged stop ("Network: ... is held"):
 
 - the power-ups: the host's spawner (`FUN_004132D0`) and a dying player's
   drops (`FUN_00447280`);
-- sending kinds 2 (`FUN_00440950`'s bursts), 3 to 6 (terrain, cells and
-  static objects), 10 (impacts on a peer's body), 13 to 15 (attachments) and
-  22 to 25 (`FUN_0044F480`'s sound cues, from 32 callers);
-- receiving kinds 2 to 6 and 13 to 15, kind 9 for an owned body other than
+- sending kinds 3 to 6 (terrain, cells and static objects), 10 (impacts on
+  a peer's body) and 13 to 15 (attachments);
+- receiving kinds 3 to 6 and 13 to 15, kind 9 for an owned body other than
   the player, and kind 10's attitude deltas;
 - the components (Sub-H frames) of a peer's body, which `FUN_0041D0A0` and
   `FUN_00420920` draw on the owner's side.

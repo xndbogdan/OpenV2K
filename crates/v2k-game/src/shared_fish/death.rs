@@ -231,7 +231,7 @@ pub(crate) fn begin_shared_fish_standard_death(
         .state_flags_at_0x08
         .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
     if let Some(sound) = death_sound {
-        fx.emit_fixed_positional_sound_raw(sound, position_raw);
+        fx.emit_networked_positional_sound_raw(sound, position_raw);
     }
     // The constructor's type-header+B4 sound selector and entity+8C sound
     // attachment are zero/null, as are all four living style+2C hooks. AC60 uses

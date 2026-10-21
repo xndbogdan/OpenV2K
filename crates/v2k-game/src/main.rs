@@ -749,7 +749,7 @@ fn begin_main_base_abort_transaction_body(
     world_fx: &mut WorldFx,
 ) -> MainBaseAbortAdmission {
     if let Some(position_raw) = entities.player().map(|player| player.position_raw()) {
-        world_fx.queue_fixed_positional_sound_raw(MAIN_BASE_ABORT_SOUND_ID, position_raw);
+        world_fx.queue_networked_positional_sound_raw(MAIN_BASE_ABORT_SOUND_ID, position_raw);
     } else {
         log!("Main Base terminal: player position unavailable for resource 0x3E");
     }
@@ -3447,7 +3447,7 @@ fn run_game(
                 network_pause = None;
                 if let Some(net) = network_game.take() {
                     net.close();
-                    world_fx.set_network_particles(false);
+                    world_fx.set_network_sends(false);
                 }
                 post_intro_world_cover = None;
                 log!("Returning to menu...");
@@ -4529,7 +4529,7 @@ fn run_game(
                                 v2k_game::weapon_inventory::NETWORK_ENTRY_CARGO_CAPACITY,
                             );
                         }
-                        world_fx.set_network_particles(true);
+                        world_fx.set_network_sends(true);
                         GameState::Playing
                     }
                     LoadingPurpose::Normal => GameState::Playing,
@@ -7446,7 +7446,7 @@ fn run_game(
                                     position_raw,
                                 } => {
                                     if let Some(sound_id) = generic_hit_sound_id {
-                                        world_fx.queue_fixed_positional_sound_raw(
+                                        world_fx.queue_networked_positional_sound_raw(
                                             sound_id,
                                             position_raw,
                                         );
@@ -7754,7 +7754,7 @@ fn run_game(
                                         position_raw,
                                     } => {
                                         if let Some(sound_id) = generic_hit_sound_id {
-                                            world_fx.queue_fixed_positional_sound_raw(
+                                            world_fx.queue_networked_positional_sound_raw(
                                                 sound_id,
                                                 position_raw,
                                             );
@@ -8575,7 +8575,7 @@ fn run_game(
                                     v2k_game::pad_vibration::submit(strength_raw);
                                 }
                                 for sound in sounds {
-                                    world_fx.queue_fixed_positional_sound_raw(
+                                    world_fx.queue_networked_positional_sound_raw(
                                         sound.sound_id,
                                         sound.position_raw,
                                     );
@@ -9001,6 +9001,12 @@ fn run_game(
                             target, sound_id, ..
                         } => {
                             debug_assert_eq!(sound_id, v2k_game::world_fx::CARGO_TRANSFER_SOUND_ID);
+                            // FUN_00443D30's cue goes through FUN_0044F480.
+                            world_fx.send_network_sound(
+                                sound_id as u16,
+                                v2k_game::entity::world_position_raw(target),
+                                0x1_0000,
+                            );
                             world_fx.queue_cargo_transfer_sound(target);
                         }
                         CargoProxyEvent::PositionChanged {
@@ -12400,7 +12406,8 @@ fn apply_power_up_contact_feedback(
                         descriptor.pickup_resource_event_id(),
                         retail_tick as i32,
                     );
-                    world_fx.queue_fixed_positional_sound_raw(PLAYER_PICKUP_SOUND_ID, position_raw);
+                    world_fx
+                        .queue_networked_positional_sound_raw(PLAYER_PICKUP_SOUND_ID, position_raw);
                     notifications.queue_weapon_collected_text(
                         descriptor.pickup_text_argument_id(),
                         retail_tick as i32,
@@ -13103,7 +13110,8 @@ fn queue_checked_projectile_damage_audio(
             // FUN_00414E90's generic-hit submission precedes the
             // target-specific accepted-hit presentation.
             if let Some(sound_id) = applied.transition.generic_hit_sound_id {
-                world_fx.queue_fixed_positional_sound_raw(sound_id, applied.target_position_raw);
+                world_fx
+                    .queue_networked_positional_sound_raw(sound_id, applied.target_position_raw);
             }
             if let Some(sound_id) = applied
                 .accepted_hit_presentation
@@ -13116,22 +13124,26 @@ fn queue_checked_projectile_damage_audio(
             // The first lethal hit submits generic-hit, generic-death, then
             // accepted-hit audio before FUN_00419750 exposes the revived
             // structure.
-            for sound_id in [
-                started.generic_hit_sound_id,
-                started.death_sound_id,
-                started
-                    .accepted_hit_presentation
-                    .and_then(|presentation| presentation.sound_id),
-            ]
-            .into_iter()
-            .flatten()
+            // The hit and death cues are FUN_0044F480's, the accepted-hit
+            // presentation FUN_0044F450's.
+            for sound_id in [started.generic_hit_sound_id, started.death_sound_id]
+                .into_iter()
+                .flatten()
+            {
+                world_fx
+                    .queue_networked_positional_sound_raw(sound_id, started.target_position_raw);
+            }
+            if let Some(sound_id) = started
+                .accepted_hit_presentation
+                .and_then(|presentation| presentation.sound_id)
             {
                 world_fx.queue_fixed_positional_sound_raw(sound_id, started.target_position_raw);
             }
         }
         CheckedProjectileDamageOutcome::HiveDeathStarted(started) => {
             if let Some(sound_id) = started.generic_hit_sound_id {
-                world_fx.queue_fixed_positional_sound_raw(sound_id, started.target_position_raw);
+                world_fx
+                    .queue_networked_positional_sound_raw(sound_id, started.target_position_raw);
             }
             if let Some(sound_id) = started
                 .accepted_hit_presentation
@@ -13587,7 +13599,7 @@ fn advance_base_factory_progression(
                 full_frame_sequence_requested: request_full_frame,
             } => {
                 if let Some(sound_id) = death_sound_id {
-                    world_fx.queue_fixed_positional_sound_raw(sound_id, target_position_raw);
+                    world_fx.queue_networked_positional_sound_raw(sound_id, target_position_raw);
                 }
                 full_frame_sequence_requested |= request_full_frame;
             }

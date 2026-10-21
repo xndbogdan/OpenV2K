@@ -96,7 +96,7 @@ pub(crate) fn run_native_type86_standard_death(
     // The standard death prefix plays each profile's actual death cue before
     // DB80 enters the alternate graph. Capability1804 never requests C6.
     if let RetailRuntimeValue::Known(Some(sound)) = metadata.death_sound_id {
-        fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Type86Block::Runtime("death context"));

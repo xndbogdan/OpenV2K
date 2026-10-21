@@ -676,8 +676,10 @@ pub(crate) fn drive_outer_tail_transaction(
                         .expect("the selected adapter owns the exact bubble receipt");
                 }
                 OrdinaryType9OwnerAction::PlaySound(request) => {
-                    world_fx
-                        .queue_fixed_positional_sound_raw(request.sound_id, request.position_raw);
+                    world_fx.queue_networked_positional_sound_raw(
+                        request.sound_id,
+                        request.position_raw,
+                    );
                     let Some(fresh_state) = snapshot_outer_tail_state(manager, actor_lease) else {
                         return OrdinaryType9OuterTailDrive::StateMismatch;
                     };

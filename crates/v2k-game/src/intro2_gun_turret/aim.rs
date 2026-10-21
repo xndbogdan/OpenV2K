@@ -240,7 +240,7 @@ pub fn tick_intro2_gun_turret_aim(
     if sound != 0 {
         let sound =
             u16::try_from(sound).map_err(|_| Intro2GunTurretAimError::Runtime("425160 sound"))?;
-        world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        world_fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     Ok(outcome)
 }

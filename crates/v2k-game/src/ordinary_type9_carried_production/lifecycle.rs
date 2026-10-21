@@ -144,7 +144,8 @@ impl CarriedSurfaceExpiry {
         )
         .expect("preflighted CE90 initializes the actual weighted root");
         for sound in sounds {
-            world_fx.queue_fixed_positional_sound_raw(sound.global_sound_id, sound.position_raw);
+            world_fx
+                .queue_networked_positional_sound_raw(sound.global_sound_id, sound.position_raw);
         }
         // 16750 has now completed, including its style callback. Calling the
         // generic 10C10 entry avoids applying that release prefix a second time.

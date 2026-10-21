@@ -763,8 +763,10 @@ fn handle_type13_generic_action(
             {
                 return Err(Type13AimError::ActionContractMismatch);
             }
-            world_fx
-                .queue_fixed_positional_sound_raw(TYPE13_PROJECTILE_SOUND_ID, expected_position);
+            world_fx.queue_networked_positional_sound_raw(
+                TYPE13_PROJECTILE_SOUND_ID,
+                expected_position,
+            );
             Ok(GenericEmitterResume::Acknowledged { phase })
         }
         GenericEmitterAction::EmitMethod31Rejection { .. }

@@ -10513,7 +10513,7 @@ impl EntityManager {
             .state_flags_at_0x08
             .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
         if let Some(sound_id) = profile.death_sound_id {
-            world_fx.queue_fixed_positional_sound_raw(sound_id, position_raw);
+            world_fx.queue_networked_positional_sound_raw(sound_id, position_raw);
         }
         // Section-12 +0xB4 is authenticated null for every admitted record,
         // so the generic prefix's entity +0x8C release branch is an exact no-op.
@@ -11491,7 +11491,8 @@ impl EntityManager {
             .collision
             .state_flags_at_0x08
             .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
-        world_fx.queue_fixed_positional_sound_raw(LEVEL_ONE_TYPE66_DEATH_SOUND_ID, position_raw);
+        world_fx
+            .queue_networked_positional_sound_raw(LEVEL_ONE_TYPE66_DEATH_SOUND_ID, position_raw);
         entity.collision.health_raw = RetailRuntimeValue::Known(PROGRESSION_REVIVE_HEALTH_RAW);
         entity
             .collision
@@ -11840,7 +11841,7 @@ impl EntityManager {
             .collision
             .state_flags_at_0x08
             .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
-        world_fx.queue_fixed_positional_sound_raw(LEVEL_ONE_TYPE9_DEATH_SOUND_ID, position_raw);
+        world_fx.queue_networked_positional_sound_raw(LEVEL_ONE_TYPE9_DEATH_SOUND_ID, position_raw);
         entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected_context));
 
         // FUN_0040C3A0's committed pre-constructor prefix.

@@ -88,7 +88,7 @@ pub(crate) fn run_native_type123_standard_death(
     // DB80 marks dying/health0 then plays the actual death cue: cue74 for
     // Type123. Capability1804 never requests C6.
     if let RetailRuntimeValue::Known(Some(sound)) = metadata.death_sound_id {
-        fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Type123Block::Runtime("death context"));

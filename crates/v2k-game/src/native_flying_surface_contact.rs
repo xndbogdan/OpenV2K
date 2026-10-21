@@ -203,7 +203,7 @@ fn publish_native_flyer_quiet_death(
         .state_flags_at_0x08
         .overwrite(0x4000, 0x4000);
     if let Some(sound) = death_sound {
-        world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        world_fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     entity.collision.constructor_sound_attachment_id_at_0x8c = RetailRuntimeValue::Known(None);
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));

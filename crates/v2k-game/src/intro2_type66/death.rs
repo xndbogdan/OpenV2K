@@ -157,7 +157,7 @@ pub fn publish_intro2_type66_standard_death(
         .collision
         .state_flags_at_0x08
         .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
-    world_fx.queue_fixed_positional_sound_raw(62, position);
+    world_fx.queue_networked_positional_sound_raw(62, position);
     // Exact-null +8C requires no stop request. 19750 revives without changing
     // damage buffer, pose, basis, model-high bit or any production counter.
     entity.collision.health_raw = RetailRuntimeValue::Known(PROGRESSION_REVIVE_HEALTH_RAW);
@@ -305,7 +305,7 @@ fn finish_with_effects(
     entity
         .select_active_model_slot(usize::from(slot | 1))
         .expect("admitted wreck slot");
-    world_fx.queue_fixed_positional_sound_raw(62, request.position_raw);
+    world_fx.queue_networked_positional_sound_raw(62, request.position_raw);
     // 37390 executes before staff/capacity, both animation resets and19630.
     // The crater's EB20 pass can change this actor's Y/basis here.
     let effects = effects(manager, world_fx, request).map_err(|mut error| {

@@ -85,7 +85,7 @@ pub(crate) fn run_intro2_type8_standard_death(
     // DB80 marks dying/health0 then plays the actual death cue: null for
     // Type8/116 workers, cue35 for Type90. Capability1404 never requests C6.
     if let RetailRuntimeValue::Known(Some(sound)) = metadata.death_sound_id {
-        fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+        fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Intro2Type8Block::Runtime("death context"));

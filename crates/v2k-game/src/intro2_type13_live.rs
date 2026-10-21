@@ -1123,7 +1123,7 @@ fn tick_intro2_type13_scheduler_owner_with_elapsed_and_random(
         }
     };
     if let Some(sound) = primary.sound {
-        world_fx.queue_fixed_positional_sound_raw_at_rate(
+        world_fx.queue_networked_positional_sound_raw_at_rate(
             sound.sound_id,
             sound.position_raw,
             sound.rate_q16,
@@ -1290,7 +1290,7 @@ fn tick_intro2_type13_pursuing_owner(
         }
     };
     if let Some(sound) = chase.sound {
-        world_fx.queue_fixed_positional_sound_raw_at_rate(
+        world_fx.queue_networked_positional_sound_raw_at_rate(
             sound.sound_id,
             sound.position_raw,
             sound.rate_q16,

@@ -1108,7 +1108,7 @@ fn apply_production_action(
             && request.gain_raw_16_16 == 0x1_0000
             && request.rate_raw_16_16 == 0x1_0000 =>
         {
-            world_fx.queue_fixed_positional_sound_raw_at_rate(
+            world_fx.queue_networked_positional_sound_raw_at_rate(
                 request.sound_id,
                 request.position_raw,
                 request.rate_raw_16_16 as u32,
