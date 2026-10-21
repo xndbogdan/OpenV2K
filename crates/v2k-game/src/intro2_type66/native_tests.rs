@@ -666,3 +666,93 @@ fn ordinary_type125_births_publish_the_working_factory_owner() {
     }
     assert_eq!(births, 4);
 }
+
+/// Type82 (worlds 22, 25, 32 and 38) is the Working Factory row with `+C0`
+/// `0x21005`: no grounding, so retail's world-38 Type82 keeps its authored
+/// `(32000, -2560, -31232)`, under the sea, and reads `0x08228805` on every
+/// visit, never DF70's grounded `0x00800000`.
+#[v2k_test_support::retail_test]
+fn ordinary_type82_births_keep_their_authored_height() {
+    use crate::specialized_actor_task_production::{
+        SpecializedActorTaskProductionFrame, SpecializedActorTaskScheduler,
+        SpecializedActorTaskWorld,
+    };
+    let mut births = 0;
+    for level in [22, 25, 32, 38] {
+        let (mut session, mut manager, mut fx) =
+            crate::intro2_gun_turret::authored_tests::fixture(level);
+        let row = EntityTypeRuntimeMetadata::from_section12(
+            session.cache.global_entity_type(82).unwrap(),
+        );
+        authenticate_metadata(82, &row).unwrap();
+        let ids: Vec<u32> = manager
+            .iter_all()
+            .filter(|entity| entity.entity_type == 82)
+            .map(|entity| entity.id)
+            .collect();
+        assert_eq!(ids.len(), 1, "world{level}");
+        let entity = manager
+            .iter_all()
+            .find(|entity| entity.id == ids[0])
+            .unwrap();
+        births += 1;
+        assert!(crate::intro2_type66::intro2_type66_allocation_authenticates(entity));
+        let spawn =
+            &session.cache.level_desc().unwrap().entities[entity.authored_spawn_index.unwrap()];
+        assert_eq!(entity.position_raw(), spawn.position_raw(), "world{level}");
+        if level != 38 {
+            continue;
+        }
+        assert_eq!(entity.position_raw(), [32000, -2560, -31232]);
+        // Less the per-frame detail bits and the birth's surface pair.
+        let mask = !(0x0600_0000 | crate::entity_collision_state::SURFACE_STATE_MASK);
+        let state = |manager: &EntityManager| {
+            manager
+                .iter_all()
+                .find(|entity| entity.id == ids[0])
+                .unwrap()
+                .collision
+                .state_flags_at_0x08
+                .masked(mask)
+        };
+        assert_eq!(
+            state(&manager),
+            RetailRuntimeValue::Known(0x0822_8805 & mask)
+        );
+        let mut tasks = SpecializedActorTaskScheduler::new();
+        assert_eq!(tasks.adopt_intro2_type66(&manager), 1 + 2);
+        for tick in 1..=50 {
+            let pass = tasks.tick(
+                &mut manager,
+                SpecializedActorTaskProductionFrame {
+                    world: SpecializedActorTaskWorld::Cinematic,
+                    hive_components: None,
+                    notification_phase:
+                        crate::gameplay_notifications::GameplayNotificationPhase::Playing,
+                    resources: &mut session.cache,
+                    world_fx: &mut fx,
+                    static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
+                    elapsed_micros: 20_000,
+                    global_elapsed_micros: tick * 20_000,
+                    retail_tick: tick,
+                    main_base_abort_active: false,
+                },
+                &mut crate::gameplay_notifications::GameplayNotifications::new(),
+            );
+            assert!(pass.block.is_none(), "tick{tick}: {:?}", pass.block);
+        }
+        assert_eq!(
+            state(&manager),
+            RetailRuntimeValue::Known(0x0822_8805 & mask)
+        );
+        assert_eq!(
+            manager
+                .iter_all()
+                .find(|entity| entity.id == ids[0])
+                .unwrap()
+                .position_raw(),
+            [32000, -2560, -31232]
+        );
+    }
+    assert_eq!(births, 4);
+}

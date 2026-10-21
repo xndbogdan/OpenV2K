@@ -317,11 +317,11 @@ fn run_frame(
         };
         entity.mass_raw = mass;
         if entity.collision.default_state_flags_at_0xc8
-            != RetailRuntimeValue::Known(super::INITIALIZER_STATE_RAW)
+            != RetailRuntimeValue::Known(super::working_factory_initializer_state_raw(factory_type))
         {
             return Err(Block::Runtime("default flags"));
         }
-        // Both class39 and class0 preserve25027. DCA0/E870 retain this
+        // Both class39 and class0 preserve the +C0 word. DCA0/E870 retain this
         // entry value when terminal DB80 replaces the behavior mid-callback.
         let detailed = state & SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT != 0;
         let visit = ActorTaskVisit {
@@ -705,20 +705,27 @@ fn finish_world(
     }
     //25027 omits attitude10, retains physical basis4000, skips gravity4 and
     //drag8. DF70 still grounds at old X/Z without a model-origin40 offset.
-    let terrain = frame
-        .resources
-        .level_terrain()
-        .ok_or(Block::Runtime("terrain"))?;
-    let mut position = entity.position_raw();
-    let mut velocity = entity.velocity_raw();
-    let mut grounded = 0;
-    apply_type9_ground_snap_raw(&mut position, &mut velocity, &mut grounded, terrain);
-    entity.set_position_raw(position);
-    entity.set_velocity_raw(velocity);
-    entity
-        .collision
-        .state_flags_at_0x08
-        .overwrite(MASTER_GROUNDED_STATE_BIT, grounded);
+    // Type82's 21005 rebuilds the basis (413F70) and has no DF70.
+    let flags = super::working_factory_initializer_state_raw(entity.entity_type);
+    if flags & 0x4000 == 0 {
+        entity.apply_d720_euler_body_basis();
+    }
+    if flags & 0x2 != 0 {
+        let terrain = frame
+            .resources
+            .level_terrain()
+            .ok_or(Block::Runtime("terrain"))?;
+        let mut position = entity.position_raw();
+        let mut velocity = entity.velocity_raw();
+        let mut grounded = 0;
+        apply_type9_ground_snap_raw(&mut position, &mut velocity, &mut grounded, terrain);
+        entity.set_position_raw(position);
+        entity.set_velocity_raw(velocity);
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(MASTER_GROUNDED_STATE_BIT, grounded);
+    }
     if bits(entity, ACTOR_SURFACE_OWNER_DISABLED_STATE_BIT)? == 0 {
         let RetailRuntimeValue::Known(timer) = entity.surface_lifetime_timer_ms_at_0x48 else {
             return Err(Block::Runtime("surface timer"));

@@ -378,10 +378,11 @@ fn lethal_hits_on_guards_run_tumble_and_class63() {
                     &manager, id
                 ));
                 assert_eq!(style(&manager, id), 0x004c_7198);
-                assert!(matches!(
-                    entity(&manager, id).actor_task_state(ActorTaskSlot::Primary),
-                    Some(ActorTaskRuntime::OrdinaryType9Wander(_))
-                ));
+                // BC90 never calls A860: a living Primary stays installed,
+                // whichever task the birth's draws and the hit's C690 left.
+                assert!(entity(&manager, id)
+                    .actor_task_state(ActorTaskSlot::Primary)
+                    .is_some());
                 let drop = manager
                     .iter_all()
                     .find(|entity| entity.id > newest && entity.entity_type == 61)

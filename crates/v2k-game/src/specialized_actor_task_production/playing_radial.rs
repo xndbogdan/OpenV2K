@@ -148,7 +148,7 @@ impl SpecializedActorTaskScheduler {
                 40 => entity.native_type40_runtime.is_some(),
                 31 | 105 => entity.native_type31_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
-                66 | 125 => entity.intro2_type66_runtime.is_some(),
+                66 | 82 | 125 => entity.intro2_type66_runtime.is_some(),
                 22 | 23 | 24 | 62 | 124 => entity.shared_fish_runtime.is_some(),
                 3 | 27 => entity.rolling_boulder_runtime.is_some(),
                 // Mass 1 takes no 14AE0 impulse; its zero multipliers filter
