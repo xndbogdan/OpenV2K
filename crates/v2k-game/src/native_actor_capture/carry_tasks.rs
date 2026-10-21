@@ -22,6 +22,7 @@ pub enum CaptureTaskBlock {
     Acquisition(crate::search_attack_live::SearchAttackLiveAcquisitionBlock),
     Type17(Box<crate::intro2_type17::Intro2Type17Block>),
     Ground(Box<crate::native_ground_actor::NativeGroundActorBlock>),
+    Type16(Box<crate::intro2_type16::Intro2Type16Block>),
 }
 
 #[derive(Clone, Copy)]
@@ -106,6 +107,20 @@ fn run_mover(
             )
             .map_err(|error| CaptureTaskBlock::Ground(Box::new(error)))
         }
+        16 | 128 => crate::intro2_type16::mover::run(
+            entity,
+            crate::intro2_type16::mover::MoverFrame {
+                metadata: frame.metadata,
+                terrain: frame.terrain,
+                dispatch_mode: frame.dispatch_mode,
+                elapsed_micros: frame.elapsed_micros,
+                global_elapsed_micros: frame.global_elapsed_micros,
+            },
+            target,
+            tracked,
+            next_random,
+        )
+        .map_err(|error| CaptureTaskBlock::Type16(Box::new(error))),
         _ => Err(CaptureTaskBlock::Allocation),
     }
 }
@@ -174,6 +189,16 @@ fn tick_retarget(
             world_fx,
         )
         .map_err(|error| CaptureTaskBlock::Ground(Box::new(error))),
+        16 | 128 => crate::intro2_type16::live::tick_primary(
+            entity,
+            frame.metadata,
+            frame.terrain,
+            frame.elapsed_micros,
+            frame.global_elapsed_micros,
+            frame.dispatch_mode,
+            world_fx,
+        )
+        .map_err(|error| CaptureTaskBlock::Type16(Box::new(error))),
         _ => Err(CaptureTaskBlock::Allocation),
     }
 }

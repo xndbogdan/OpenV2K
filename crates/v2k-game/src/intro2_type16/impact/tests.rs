@@ -218,6 +218,7 @@ fn native_type16_both_births_reselect_before_primary_or_filtered_zero_infected_d
                 &session.cache,
                 &mut fx,
                 &mut scheduler,
+                &mut crate::gameplay_notifications::GameplayNotifications::new(),
                 delivery,
                 251,
             );
@@ -314,6 +315,7 @@ fn native_type16_capture_attached_styles_block_primary_but_allow_zero_infected_r
                 &session.cache,
                 &mut fx,
                 &mut SpecializedActorTaskScheduler::new(),
+                &mut crate::gameplay_notifications::GameplayNotifications::new(),
                 impact(id, infected, 2500),
                 251,
             );
@@ -332,8 +334,13 @@ fn native_type16_capture_attached_styles_block_primary_but_allow_zero_infected_r
                     matches!(
                         result,
                         Intro2Type16ImpactOutcome::Blocked {
-                            reason: Intro2Type16ImpactBlock::Callback(
-                                ImpactCallbackPolicy::CapturePeopleCleanup
+                            // D040 runs now; a raw carrying style with no
+                            // relation must hold, as Type17's does.
+                            reason: Intro2Type16ImpactBlock::Capture(
+                                crate::native_actor_capture::CaptureBlock {
+                                    reason: "capture row callback custody",
+                                    ..
+                                }
                             ),
                             committed_prefix: true
                         }
@@ -387,6 +394,7 @@ fn native_type16_lethal_primary_publishes_class12_before_later_hits() {
         &session.cache,
         &mut fx,
         &mut scheduler,
+        &mut crate::gameplay_notifications::GameplayNotifications::new(),
         impact(id, false, 2500),
         251,
     );
@@ -422,6 +430,7 @@ fn native_type16_lethal_primary_publishes_class12_before_later_hits() {
         &session.cache,
         &mut fx,
         &mut scheduler,
+        &mut crate::gameplay_notifications::GameplayNotifications::new(),
         impact(id, false, 2500),
         252,
     );
@@ -456,6 +465,7 @@ fn native_type16_late_checked_block_preserves_reselected_scheduler_owner() {
         &session.cache,
         &mut WorldFx::new(),
         &mut scheduler,
+        &mut crate::gameplay_notifications::GameplayNotifications::new(),
         impact(id, false, 2500),
         251,
     );
@@ -528,6 +538,7 @@ fn native_type16_pending_actor_prefix_rejects_both_hits_without_mutation() {
                 &session.cache,
                 &mut fx,
                 &mut scheduler,
+                &mut crate::gameplay_notifications::GameplayNotifications::new(),
                 impact(id, infected, 2500),
                 251,
             );
@@ -597,6 +608,7 @@ fn native_type16_wrong_allocation_cannot_commit_either_hit_prefix() {
             &session.cache,
             &mut fx,
             &mut SpecializedActorTaskScheduler::new(),
+            &mut crate::gameplay_notifications::GameplayNotifications::new(),
             impact(id, infected, 2500),
             251,
         );

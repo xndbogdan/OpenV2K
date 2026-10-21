@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy)]
-pub(super) struct MoverFrame<'a> {
+pub(crate) struct MoverFrame<'a> {
     pub metadata: &'a EntityTypeRuntimeMetadata,
     pub terrain: &'a TerrainGrid,
     pub dispatch_mode: CommonMoverDispatchMode,
@@ -21,7 +21,7 @@ pub(super) struct MoverFrame<'a> {
     pub global_elapsed_micros: u32,
 }
 
-pub(super) fn run(
+pub(crate) fn run(
     entity: &mut Entity,
     frame: MoverFrame<'_>,
     target: &mut WanderNearPrivateState,

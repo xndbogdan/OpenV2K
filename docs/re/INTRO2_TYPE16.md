@@ -154,7 +154,10 @@ does the living body.
 A Type128 killed while carrying a captive is held. The four carrying Capture
 variants (class9 variants 2..5) own `D040`'s death hook, which releases the
 child before AC60's alternate. The class63 terminal admits only styles whose
-`+2C` is null, so this death fails closed before its first write.
+`+2C` is null, so a direct death (radial, static contact, pair, abort,
+infected hit) fails closed before its first write. A primary hit is not held:
+DAC0 runs `D040` while the carrier is alive (living C690), and a lethal packet
+then installs class63 once from the released style.
 
 [Carrier tests](../../crates/v2k-game/src/intro2_type16/carrier_tests.rs)
 cover:
@@ -167,6 +170,37 @@ cover:
 
 The [abort test](../../crates/v2k-game/src/main_base_abort_production/native/type128_tests.rs)
 checks class63 in place of class12.
+
+## Capture transport
+
+Type16 and Type128 are captors on the shared
+[capture lane](TYPE17_CAPTURE.md), each authenticated by its own row and
+reselecting through its own weighted choices. Every Type16/128 pair is
+visited: C910 attaches a person to the one J slot, the carrying variants 2..5
+run on Type16's mover (variant3's `021B0` beacon search in Secondary,
+variant4's Following), D0B0 delivers, and `18640` follows the surface step,
+before the master motion. Every death path runs DB80's carrying `D040` first:
+a lethal or primary hit, a radial, static contact, the pair terminal, the
+Main Base abort and a Type16 drowning. Type16 then takes class12 as before;
+Type128's class63 death with a captive stays held (above), as does a Type128
+drowning.
+
+Before this, the port visited no Type16/128 pair at all, so their bodies
+passed through others. In the production Intro2 (New Game, 20-ms steps), the
+first newly resolved contact (spawn6's Type16 with a Type53, tick1669) parts
+the actor motion from the previous build from then on. The cinematic's
+timeline, its 4302 ticks and its log lines are unchanged. The port's Intro2
+motion is not in RNG lockstep with retail (it already parts by tick500), so
+the lab cannot arbitrate the later motion; retail's 11AD0 does visit the pair.
+
+Retail lab runs (Skip to World, 20 ms) show Type16 carrying Type86 people: in
+world 37 one captor carries one person for 557 ticks (until the person dies
+in its grip), then a second for 2182; in world 18 one carry lasts 1361 ticks.
+The port's minute in each world carries people in worlds 24 and 37.
+[Capture tests](../../crates/v2k-game/src/intro2_type16/capture_tests.rs)
+cover a minute of every Type16/128 world with pair walks, a forced capture and
+ten seconds of carrying, a Type16 killed while carrying (its person released
+alive, class12 installed), and the Type128 hold.
 
 ## Validation and remaining acceptance
 
@@ -204,8 +238,7 @@ later removal. They validate the connected Type16 paths independently of
 the remaining whole-scene boundaries. Current combined scene validation is
 recorded with the [native Type94 checkpoint](INTRO2_TYPE94.md).
 
-Capture attachment, carry/release variants2..5 and their relation cleanup
-remain separate from variant1 pursuit. The complete11AD0 active-pair scan,
+The complete11AD0 active-pair scan,
 externally entered class5 variant1 and matched retail scene acceptance are
 not established by constructor or first-query evidence. Native runtime and
 whole-scene tests must report any unresolved callback prefix without dropping

@@ -216,23 +216,12 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
-        16 if manager
-            .iter_all()
-            .find(|entity| entity.id == id)
-            .is_some_and(crate::intro2_type16::intro2_type16_allocation_authenticates) =>
-        {
-            crate::intro2_common_dying::publish_intro2_common_standard_death(manager, id, world_fx)
-                .map(|owner| LiveActorDeathResult {
-                    returned_nonzero: owner.is_some(),
-                    publication: owner.map(DynamicRadialDeathPublication::Intro2Class12),
-                })
-                .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
-        }
-        17 | 122 | 18 | 28
+        17 | 122 | 18 | 28 | 16
             if crate::intro2_type17::type17_manager_allocation_authenticates(manager, id)
                 || crate::native_type122::type122_manager_allocation_authenticates(manager, id)
                 || crate::native_type18::manager_allocation_authenticates(manager, id)
-                || crate::native_type28::manager_allocation_authenticates(manager, id) =>
+                || crate::native_type28::manager_allocation_authenticates(manager, id)
+                || crate::intro2_type16::type16_manager_allocation_authenticates(manager, id) =>
         {
             if let Some(tasks) = callbacks.capture_task_custody() {
                 return crate::native_actor_capture::publish_native_captor_standard_death(

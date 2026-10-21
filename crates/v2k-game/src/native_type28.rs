@@ -12,7 +12,7 @@ pub(crate) mod impact;
 mod live;
 pub(crate) mod profile;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 pub(crate) use construction::{publish_native_type28, NativeType28ConstructionRequest};
 pub use live::{tick_type28, Type28Block, Type28Frame, Type28Outcome, Type28Owner, Type28Tick};
 

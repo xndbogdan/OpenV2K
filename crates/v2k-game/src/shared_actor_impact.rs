@@ -376,6 +376,7 @@ pub fn apply_shared_actor_particle_hit(
                 frame.resources,
                 frame.world_fx,
                 frame.scheduler,
+                frame.notifications,
                 impact,
                 frame.retail_tick,
             ),

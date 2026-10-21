@@ -40,7 +40,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     GunTurret(crate::class49_terminal::Class49TerminalBlock),
     Type10(crate::intro2_type10::death::Intro2Type10DeathBlock),
     Flyer(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
-    Type16(crate::intro2_common_dying::Intro2CommonDyingBlock),
+    Type16(crate::native_actor_capture::CaptureBlock),
     Type94(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type30(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type40(crate::native_type40::death::Type40DeathBlock),
@@ -482,9 +482,19 @@ fn dispatch(
         }
         NativeActor::Type16 => {
             // 10C10 -> DB80 -> alternate class12 (Flip Over And Die), as a
-            // lethal hit's publisher.
-            let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
-                entities, id, world_fx,
+            // lethal hit's publisher; a carrying style's D040 releases first.
+            let owner = crate::native_actor_capture::publish_native_captor_standard_death(
+                entities,
+                id,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: specialized_tasks,
+                    world_fx,
+                    notifications: gameplay.notifications,
+                    retail_tick: gameplay.retail_tick,
+                    result_screen: MainBaseType9ResultScreenState::AlreadyShownByMainBaseAbort,
+                    hive_dying: Default::default(),
+                },
             )
             .map_err(|error| block(Block::Type16(error)))?;
             if let Some(owner) = owner {

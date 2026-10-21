@@ -348,6 +348,9 @@ pub(crate) fn tick_primary<E>(
 ) -> Result<Option<SharedTargetRouteTransitionRequest>, Intro2CaptureBlock<E>> {
     use Intro2CaptureBlock as Block;
     let id = frame.entity_id;
+    // Carrying variant2's AF10 route is the shared class9 style of every captor.
+    let captor =
+        crate::native_actor_capture::NativeCaptorProfile::authenticate(manager, id).is_ok();
     let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Graph);
@@ -361,9 +364,7 @@ pub(crate) fn tick_primary<E>(
         PURSUIT_STYLE_ADDRESS => {
             crate::shared_target_route::SharedTargetRouteLifetime::FixedMilliseconds(5_000)
         }
-        0x004C_8080 if crate::intro2_type17::intro2_type17_allocation_authenticates(entity) => {
-            crate::shared_target_route::SharedTargetRouteLifetime::Unlimited
-        }
+        0x004C_8080 if captor => crate::shared_target_route::SharedTargetRouteLifetime::Unlimited,
         _ => return Err(Block::Graph),
     };
     if task.lifetime() != route_contract
