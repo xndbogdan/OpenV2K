@@ -29,7 +29,10 @@ pub enum Intro2Type94Block {
     Metadata,
     Runtime(&'static str),
     Behavior(&'static str),
-    SubDFirstQuery { spawn_index: usize, seed: u8 },
+    SubDFirstQuery {
+        spawn_index: Option<usize>,
+        seed: u8,
+    },
     SubD(Type9SubDStep),
     SubH(crate::sub_h_external_frame::SubHUpdateError),
     Mover(CommonMoverFrameBlock),
@@ -38,7 +41,10 @@ pub enum Intro2Type94Block {
     Acquisition(crate::search_attack_live::SearchAttackLiveAcquisitionBlock),
     Aim(super::aim::Intro2Type94AimError),
     FollowAcquisition(crate::follow_beacons::live_acquisition::FollowBeaconsLiveAcquisitionError),
-    BehaviorTransition { class: u8, variant: u32 },
+    BehaviorTransition {
+        class: u8,
+        variant: u32,
+    },
     Surface(crate::intro2_common_dying::Intro2CommonDyingBlock),
 }
 

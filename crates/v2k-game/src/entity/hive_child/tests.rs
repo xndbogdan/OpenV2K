@@ -256,3 +256,126 @@ fn hive_wasp_native_source_suffix_runs_class7_and_quiet_death_clears_tasks() {
         .into_iter()
         .all(|slot| child.actor_tasks.task_in_slot(slot).is_none()));
 }
+
+/// Each worker row's own Hive births its worker through the shared native
+/// constructor, seeing the whole live list, and the owner keeps it ticking.
+#[v2k_test_support::retail_test]
+fn hive_workers_take_the_authored_constructor_with_a_zeroed_record() {
+    use crate::{
+        gameplay_notifications::{GameplayNotificationPhase, GameplayNotifications},
+        specialized_actor_task_production::{
+            SpecializedActorTaskProductionFrame, SpecializedActorTaskScheduler,
+            SpecializedActorTaskWorld,
+        },
+        static_damage::StaticDamageScheduler,
+    };
+    for (level, hive_spawn, entity_type) in [
+        (25, 86, 8),
+        (27, 40, 91),
+        (28, 2, 90),
+        (29, 0, 79),
+        (41, 1, 116),
+    ] {
+        let (mut session, mut manager, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(level);
+        let hive = manager
+            .entities
+            .iter()
+            .find(|entity| entity.authored_spawn_index == Some(hive_spawn))
+            .unwrap();
+        assert_eq!(hive.entity_type, 67, "world{level}");
+        let request = HiveBirthRequest {
+            entity_type,
+            position_raw: hive.position_raw(),
+            objective: false,
+            source_id: hive.id,
+        };
+        let before = manager.entities.len();
+        let newborn = manager
+            .append_native_hive_child(request, context(&session), &mut fx)
+            .unwrap_or_else(|block| panic!("world{level} Type{entity_type}: {block:?}"));
+        let NativeHiveNewborn::Worker(owner) = newborn else {
+            panic!("world{level}: {newborn:?}");
+        };
+        assert_eq!(manager.entities.len(), before + 1);
+        let child = manager.entities.last().unwrap();
+        assert_eq!(child.id, owner.entity_id());
+        assert_eq!(child.entity_type, entity_type);
+        assert_eq!(child.authored_spawn_index, None);
+        assert_eq!(child.rotation_heading_pitch_roll_raw(), [0; 3]);
+        assert!(
+            crate::intro2_type8::intro2_type8_manager_allocation_authenticates(&manager, child.id)
+        );
+        let id = child.id;
+        let mut tasks = SpecializedActorTaskScheduler::new();
+        tasks.adopt_intro2_type8(&mut manager);
+        tasks.register_intro2_type8(owner);
+        let mut static_damage = StaticDamageScheduler::new();
+        let mut notifications = GameplayNotifications::new();
+        for t in 1..=100u32 {
+            let pass = tasks.tick(
+                &mut manager,
+                SpecializedActorTaskProductionFrame {
+                    world: SpecializedActorTaskWorld::Cinematic,
+                    hive_components: None,
+                    notification_phase: GameplayNotificationPhase::Playing,
+                    resources: &mut session.cache,
+                    world_fx: &mut fx,
+                    static_damage: &mut static_damage,
+                    elapsed_micros: 20_000,
+                    global_elapsed_micros: t * 20_000,
+                    retail_tick: t,
+                    main_base_abort_active: false,
+                },
+                &mut notifications,
+            );
+            assert!(
+                pass.block.is_none(),
+                "world{level} tick{t}: {:?}",
+                pass.block
+            );
+            for outcome in &pass.outcomes {
+                assert!(
+                    outcome.entity_id() != id || !format!("{outcome:?}").contains("Block"),
+                    "world{level} tick{t}: {outcome:?}"
+                );
+            }
+        }
+        assert!(manager.entities.iter().any(|entity| entity.id == id));
+    }
+}
+
+/// World24's Hive30 births Type94 (an objective row) through its ordinary
+/// constructor with a zeroed record; the owner adopts the allocation.
+#[v2k_test_support::retail_test]
+fn hive_type94_takes_its_ordinary_constructor_with_a_zeroed_record() {
+    let (session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(24);
+    let hive = manager
+        .entities
+        .iter()
+        .find(|entity| entity.authored_spawn_index == Some(30))
+        .unwrap();
+    assert_eq!(hive.entity_type, 67);
+    let request = HiveBirthRequest {
+        entity_type: 94,
+        position_raw: hive.position_raw(),
+        objective: true,
+        source_id: hive.id,
+    };
+    let newborn = manager
+        .append_native_hive_child(request, context(&session), &mut fx)
+        .unwrap();
+    let NativeHiveNewborn::Type94(owner) = newborn else {
+        panic!("{newborn:?}");
+    };
+    let child = manager.entities.last().unwrap();
+    assert_eq!(child.id, owner.entity_id());
+    assert_eq!(child.authored_spawn_index, None);
+    assert!(crate::intro2_type94::type94_manager_allocation_authenticates(&manager, child.id));
+    // The objective bit reaches 104B0's spawn-parameter state.
+    assert_eq!(
+        child.collision.state_flags_at_0x08.masked(0x0100_0000),
+        RetailRuntimeValue::Known(0x0100_0000)
+    );
+}

@@ -79,7 +79,8 @@ pub const INITIAL_CHOICES: [BehaviorChoice; 3] = [
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Intro2Type94Runtime {
     entity_id: u32,
-    spawn_index: usize,
+    /// Intro2's spawn43 or an authored ordinary row; a Hive birth has none.
+    spawn_index: Option<usize>,
     pub(crate) sub_d_runtime: Type9SubDRuntime,
     sub_d_owner: Type9SubDFrameOwner,
     sub_e_runtime: crate::generic_projectile_emitter::GenericEmitterRuntime,
@@ -113,10 +114,12 @@ pub(crate) fn intro2_type94_allocation_authenticates(entity: &Entity) -> bool {
         entity.active
             && entity.id == runtime.entity_id
             && entity.entity_type == 94
-            && entity.authored_spawn_index == Some(runtime.spawn_index)
+            && entity.authored_spawn_index == runtime.spawn_index
             && match runtime.ordinary_allocation {
                 Some(lease) => lease.entity_id == entity.id,
-                None => INTRO2_TYPE94_SPAWN_INDICES.contains(&runtime.spawn_index),
+                None => runtime
+                    .spawn_index
+                    .is_some_and(|index| INTRO2_TYPE94_SPAWN_INDICES.contains(&index)),
             }
             && entity.model_slots == [Some(MODEL); 4]
     })

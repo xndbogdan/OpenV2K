@@ -1,5 +1,6 @@
 //! Authored 20450 -> 425680 -> AD10/AF90 construction and C690 reselection.
 use super::*;
+use crate::entity::NativeCreationRecord;
 use crate::{
     actor_task_owner::PreparedActorTask,
     common_mover::{
@@ -26,15 +27,17 @@ use crate::{
     wrapped_axis_range::WrappedAxisRange,
 };
 use std::convert::Infallible;
-use v2k_formats::{levels::EntitySpawn, terrain::TerrainGrid};
+use v2k_formats::terrain::TerrainGrid;
 
 /// The shared process constructor supplies an actual successful Sub-D allocation
-/// and `104B0`'s surface comparison before `D4A0` grounds the authored worker.
+/// and `104B0`'s surface comparison before `D4A0` grounds the worker. The record
+/// is an authored spawn's or a Hive birth's zeroed `0x4C` request.
 pub(crate) struct Type8AuthoredConstructionRequest<'a> {
     pub entity: &'a mut Entity,
     pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
     pub metadata: &'a EntityTypeRuntimeMetadata,
-    pub spawn: &'a EntitySpawn,
+    pub record: NativeCreationRecord,
+    /// An authored birth's preceding spawns, or a Hive birth's live list.
     pub preceding: &'a [Entity],
     pub terrain: &'a TerrainGrid,
     pub sub_d: NativeSubDConstruction,
@@ -49,7 +52,7 @@ pub(crate) fn publish_authored_type8(
         entity,
         allocation,
         metadata,
-        spawn,
+        record,
         preceding,
         terrain,
         sub_d,
@@ -60,16 +63,29 @@ pub(crate) fn publish_authored_type8(
     let profile = NativeWorkerProfile::from_entity_type(entity_type)
         .ok_or(Intro2Type8Block::Runtime("worker entity type"))?;
     let expected_model = profile.model_id();
-    if !entity.active || entity.id != allocation.entity_id
-        || spawn.entity_type != entity_type || entity.authored_spawn_index != Some(spawn.index)
-        || entity.model_slots != [Some(expected_model); 4] || entity.capability_flags != 0x1404
-        || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
+    // An authored birth sees only the spawns before it; a Hive birth the
+    // whole live list.
+    let preceding_out_of_order = record.authored_spawn_index.is_some_and(|index| {
+        preceding
+            .iter()
+            .any(|e| e.authored_spawn_index.is_some_and(|i| i >= index))
+            || preceding.windows(2).any(|pair| matches!((pair[0].authored_spawn_index, pair[1].authored_spawn_index), (Some(a), Some(b)) if a >= b))
+    });
+    if !entity.active
+        || entity.id != allocation.entity_id
+        || record.entity_type != entity_type
+        || entity.authored_spawn_index != record.authored_spawn_index
+        || entity.model_slots != [Some(expected_model); 4]
+        || entity.capability_flags != 0x1404
+        || entity.rotation_heading_pitch_roll_raw() != record.rotation.map(|word| word as i16)
         || entity.intro2_type8_runtime.is_some()
         || entity.current_behavior_context != RetailRuntimeValue::Unresolved
         || entity.initial_behavior != RetailRuntimeValue::Unresolved
-        || ActorTaskSlot::IN_RETAIL_TICK_ORDER.iter().any(|&s| entity.actor_tasks.task_in_slot(s).is_some())
-        || preceding.iter().any(|e| e.id == entity.id || e.authored_spawn_index.is_some_and(|i| i >= spawn.index))
-        || preceding.windows(2).any(|pair| matches!((pair[0].authored_spawn_index, pair[1].authored_spawn_index), (Some(a), Some(b)) if a >= b))
+        || ActorTaskSlot::IN_RETAIL_TICK_ORDER
+            .iter()
+            .any(|&s| entity.actor_tasks.task_in_slot(s).is_some())
+        || preceding.iter().any(|e| e.id == entity.id)
+        || preceding_out_of_order
     {
         return Err(Intro2Type8Block::Runtime("authored Type8 birth"));
     }
@@ -90,13 +106,13 @@ pub(crate) fn publish_authored_type8(
             "unconsumed native Type8 Sub-A constructor",
         ));
     }
-    let [x, _, z] = spawn.position_raw();
+    let [x, _, z] = record.position_raw;
     let cell = terrain
         .cell(usize::from((x as u16) >> 8), usize::from((z as u16) >> 8))
         .ok_or(Intro2Type8Block::Runtime("authored terrain cell"))?;
     let anchor = [x, terrain.bilinear_height_raw(x, z), z];
     let mut state =
-        RetailStateWord::exact(0x0607_8801 | if spawn.param != 0 { 0x0100_0000 } else { 0 });
+        RetailStateWord::exact(0x0607_8801 | if record.param != 0 { 0x0100_0000 } else { 0 });
     state.overwrite(SURFACE_STATE_MASK, constructor_surface_bits);
     state.overwrite(
         ACTIVE_MODEL_SLOT_HIGH_STATE_BIT,

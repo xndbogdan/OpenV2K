@@ -618,7 +618,7 @@ fn shared_constructor_preserves_nonfixture_pose_seed_and_completed_dynamic_graph
             entity: &mut entity,
             allocation,
             metadata: &metadata,
-            spawn: &spawn,
+            record: crate::entity::NativeCreationRecord::authored(&spawn),
             preceding: &[],
             terrain,
             sub_d,

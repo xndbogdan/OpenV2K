@@ -159,12 +159,13 @@ pub(crate) fn publish_intro2_type94(
     )
 }
 
-/// Ordinary 104B0 publication of one authored Type94.
+/// Ordinary 104B0 publication of one authored Type94 or a Hive birth's
+/// zeroed `0x4C` record.
 pub(crate) struct Type94AuthoredConstruction<'a> {
     pub entity: &'a mut Entity,
     pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
     pub metadata: &'a EntityTypeRuntimeMetadata,
-    pub spawn: &'a v2k_formats::levels::EntitySpawn,
+    pub record: crate::entity::NativeCreationRecord,
     /// The already-linked live list, read by AC60's nearby predicates.
     pub preceding: &'a [Entity],
     pub terrain: &'a TerrainGrid,
@@ -182,7 +183,7 @@ pub(crate) fn publish_authored_type94(
         entity,
         allocation,
         metadata,
-        spawn,
+        record,
         preceding,
         terrain,
         constructor_surface_bits,
@@ -190,19 +191,16 @@ pub(crate) fn publish_authored_type94(
     } = request;
     if !entity.active
         || entity.entity_type != 94
-        || spawn.entity_type != 94
+        || record.entity_type != 94
         || entity.id != allocation.entity_id
-        || entity.authored_spawn_index != Some(spawn.index)
+        || entity.authored_spawn_index != record.authored_spawn_index
         || entity.model_slots != [Some(MODEL); 4]
-        || spawn
+        || record
             .model_overrides
             .iter()
             .any(|&model| model != 0 && model as usize != MODEL)
-        || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
-        || spawn.has_animation
-        || spawn.animation.is_some()
-        || spawn.has_config
-        || spawn.config.is_some()
+        || entity.rotation_heading_pitch_roll_raw() != record.rotation.map(|word| word as i16)
+        || !record.plain
     {
         return Err(Intro2Type94Error::Identity);
     }
@@ -272,9 +270,11 @@ fn publish_birth(
     ordinary_allocation: Option<crate::main_base_abort::MainBaseAbortActorLease>,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<Intro2Type94Publication, Intro2Type94Error> {
-    let spawn = entity
-        .authored_spawn_index
-        .ok_or(Intro2Type94Error::Identity)?;
+    // Intro2's own allocation is spawn43; an ordinary one carries its lease.
+    let spawn = entity.authored_spawn_index;
+    if spawn.is_none() && ordinary_allocation.is_none() {
+        return Err(Intro2Type94Error::Identity);
+    }
     let mut selector_owner = behavior::candidate(entity);
     // D4A0's type-default bit0x20 terrain snap precedes the AC60 range reads.
     let RetailRuntimeValue::Known(position) = crate::entity_initializer::constructor_position_raw(
