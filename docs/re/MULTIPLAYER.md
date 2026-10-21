@@ -219,7 +219,10 @@ without `0x08000000`) or 3.5 s otherwise.
 | `FUN_0044F480` | a cue every machine hears: in network play it sends kind 22 (23 with a rate, 24 with a gain, 25 with both), the cue's low byte and the high bytes of X, Y and Z, then plays it here; `FUN_00439E90` plays a peer's through `FUN_0044F450`, the local-only cue. Its callers are the weapons' and creatures' fire (`FUN_00424650`, `FUN_00402300`, `FUN_00425160`), every hit and death cue (`FUN_00414E90` +98, `FUN_00410C10` +90), the low-health and surface cues (`FUN_0040DCA0`, `FUN_0040E370`), Sub-G's flight cue (`FUN_0041AA60`), the attract-attention and attach cues (`FUN_00420870`, `FUN_00420760`), search and run-away (`FUN_0040ADE0`, `FUN_00403F40`), the factory (`FUN_00419010`), cargo (`FUN_00443B50`, `FUN_00443D30`), infection (`FUN_00436750`), a weapon pickup (`FUN_00445A90`), the player's wreck (`FUN_004475F0`) and the Main Base abort (`FUN_00456960`); every caller passes full gain |
 | `FUN_00413500` | in network play counts each local body's detail wait `+78` down, holding state `0x06000000` while it runs, and on the host runs `FUN_004132D0` each second while fewer than 32 Type61s live |
 | `FUN_004132D0` | the host's power-up: at a random X and Z with no body within 2,048, 0x80 above the ground, a Type61 (`FUN_00438080`) whose payload comes from a random entry of the twelve at `0x4C92D0` |
-| `FUN_00447280` | a dying network player drops a Type61 for each weapon slot it held, except selectors 1 and 0x12 (`FUN_00447750`) |
+| `FUN_00447280` | in network play a dying player leaves its power-ups: a Type61 for each weapon slot up to the first empty one whose count is nonzero and whose selector is neither 1 nor 0x12; then one for the cargo capacity (selector 0x3A) when `+199` is above 2, and one for the special weapon (0x39) when its count `+195` is nonzero, each of these two after building the previous request once more. It then clears the active slot (`+196`, `+5A8`) and the weapon component's (`+14`) |
+| `FUN_00447750` | where a dropped power-up lands: X and Z within 0x200 of the player and Y up to 0x1FF above it, held between 0x80 over the ground and 0x800 over the higher of that and the sea |
+| `FUN_00425AF0` | a player touching a Type61 runs the pickup (`FUN_0040DB20`, `FUN_00445A90`); once it is accepted, kind 8 goes out for the power-up, whichever machine owns it, and the power-up is destroyed (`FUN_00410B70`) |
+| `FUN_00417D90` | kind 8: `FUN_00410B70` on the body the handle names, a peer's or one of this machine's, so the owner destroys a power-up a peer picked up. Destroying a peer's body sends nothing (`FUN_004149F0`) |
 
 ## Scores on screen and the winner
 
@@ -280,8 +283,11 @@ is not run.
 
 Held, each with a logged stop ("Network: ... is held"):
 
-- the power-ups: the host's spawner (`FUN_004132D0`) and a dying player's
-  drops (`FUN_00447280`);
+- the special weapon's power-up (selector 0x39): `FUN_00445A90` raises the
+  count `+195` (at most 4) and builds a Type65, the seedpod, at the player,
+  and the deploy `FUN_00444400` builds three. The port has no Type65, so it
+  refuses the pickup and the power-up stays; with no count, a dying player
+  here never drops one;
 - sending kinds 3 to 6 (terrain, cells and static objects), 10 (impacts on
   a peer's body) and 13 to 15 (attachments);
 - receiving kinds 3 to 6 and 13 to 15, kind 9 for an owned body other than

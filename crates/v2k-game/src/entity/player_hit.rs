@@ -320,6 +320,7 @@ impl EntityManager {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn commit_player_dying(
         &mut self,
         plan: PlayerDyingPlan,
@@ -327,6 +328,7 @@ impl EntityManager {
         retail_tick: u32,
         notifications: &mut crate::gameplay_notifications::GameplayNotifications,
         extra_lives: u8,
+        terrain: Option<&v2k_formats::terrain::TerrainGrid>,
     ) {
         let entity = &mut self.entities[plan.index];
         // Physical hull death and checked damage converge on the same 10C10
@@ -342,6 +344,10 @@ impl EntityManager {
             .expect("preflight resolved dying model");
         let id = entity.id;
         let position = entity.position_raw();
+        // 447280 in network play first leaves the player's power-ups.
+        if let (Some(_), Some(terrain)) = (self.network_player_hits.as_ref(), terrain) {
+            self.leave_network_power_ups(position, terrain, fx, retail_tick);
+        }
         // 447280: empty cargo release, synchronous475F0, then controller208
         // seed. The seed consumes its RNG word even without a later contact.
         fx.emit_player_wreck_burst_raw(position, plan.source_extent_raw, plan.sea_level_raw, id);
@@ -355,6 +361,7 @@ impl EntityManager {
         });
         // 4474B7..44755A clears 2 then1 and replaces0. The PlayerDeathLifecycle
         // host owns the new zeroed control7/BB8 wrapper, not an actor callback.
+        let entity = &mut self.entities[plan.index];
         entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
         entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
         entity.actor_tasks.clear_slot(ActorTaskSlot::Primary);
@@ -426,6 +433,7 @@ impl EntityManager {
             frame.retail_tick,
             frame.notifications,
             frame.extra_lives,
+            frame.resources.terrain(),
         );
         Ok(true)
     }
@@ -603,6 +611,7 @@ impl EntityManager {
         retail_tick: u32,
         notifications: &mut crate::gameplay_notifications::GameplayNotifications,
         extra_lives: u8,
+        terrain: Option<&v2k_formats::terrain::TerrainGrid>,
     ) -> PlayerCheckedDamageOutcome {
         match plan {
             PlayerDamagePlan::NotPlayer => PlayerCheckedDamageOutcome::NotPlayer,
@@ -666,7 +675,14 @@ impl EntityManager {
                     fx.emit_networked_positional_sound_raw(sound_id, position_raw);
                 }
                 if let Some(plan) = death {
-                    self.commit_player_dying(plan, fx, retail_tick, notifications, extra_lives);
+                    self.commit_player_dying(
+                        plan,
+                        fx,
+                        retail_tick,
+                        notifications,
+                        extra_lives,
+                        terrain,
+                    );
                 }
                 if player_kill_hint {
                     notifications.queue_player_kill(retail_tick as i32);
@@ -705,6 +721,7 @@ impl EntityManager {
                 frame.retail_tick,
                 frame.notifications,
                 frame.extra_lives,
+                frame.resources.terrain(),
             ),
             Err(block) => PlayerCheckedDamageOutcome::Blocked(block),
         }
@@ -844,6 +861,7 @@ impl EntityManager {
             retail_tick,
             notifications,
             extra_lives,
+            resources.terrain(),
         );
         PlayerModelSwitchHitOutcome::Applied {
             entry,
@@ -976,6 +994,7 @@ impl EntityManager {
                 retail_tick,
                 notifications,
                 extra_lives,
+                resources.terrain(),
             ),
         }
     }
