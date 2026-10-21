@@ -206,9 +206,9 @@ and Trash Furniture26, all existing programs. The host now evaluates rule8
 gate drag on effective bit8: Type18's `+C0` 0x431 has none (dying 0x420).
 The eleven [Type28 insects](TYPE28_RUNTIME.md) (worlds21-23, 30 and36) use the
 same machinery without an emitter: Capture9, Run Away10, Furniture26 and
-Follow Beacons33. A carried four-choice person that drowns still fails closed
-and parks (its `E370` admits no `CE90` release hook), then blocks its captor's
-release; that chain is held.
+Follow Beacons33. A carried person that drowns runs its own `E370` release
+(`16750`, `CE90`) and `10C10`; its captor's row keeps the corpse until `18640`
+drops it ([TYPE28_RUNTIME.md](TYPE28_RUNTIME.md#a-carried-person-drowning)).
 The six Type76 and eight Type77 [insects](TYPE76_RUNTIME.md) (worlds26, 31,
 37, 39 and40) share one owner on the same host, without capture. Each fires
 its own emitter (methods24/30) from Search's Aim. Both roots weigh Follow

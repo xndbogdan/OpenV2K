@@ -57,25 +57,25 @@ Its acquiring and fleeing styles `4C7618/4C7660` are admitted for Type28 in
 the static walk. No class installs Aim, so the profile's Aim hook fails
 closed.
 
-## Held boundary: a carried person drowning
+## A carried person drowning
 
-A four-choice person (Type86/95 and kin) carried under water reaches its
-`E370` lifecycle. In retail that runs `16750`. It clears `0x20001000` on the
-child, sets `0x800`, reapplies the type flags and nulls the child's parent.
-It then calls the carried style's release hook `CE90` (enable pairs, then
-reselect), and `10C10` follows. `16750` never edits the captor's J list.
+A person (Type86/95 and kin, or Type123) carried under water reaches its own
+`E370` lifecycle. `162B0` calls `16750` with a null argument: it clears
+`0x20001000` on the child, sets `0x800`, reapplies the type flags and nulls
+the child's parent. `DC50` then runs the carried style's `CE90` with the
+child's own context, so the release reselects exactly as a captor's release
+does (enable pairs, Sub-I release, full reselection with its RNG and attract
+receipts). `10C10` follows and class14 replaces that graph. Ordinary Type9's
+carried expiry takes the same order.
 
-The four-choice owner's `E370` admits only a null release hook. It therefore
-fails closed and parks, with its prefix committed. The parked person then
-blocks its captor's next release ("capture four-choice actor pending
-callback"), and the captor parks too. Pairs that touch the parked captor fail
-closed in turn ("completed pair owner").
-
-This chain predates Type28: Type122 and Type18 captors carrying four-choice
-people into deep water reach it too. World 36 reaches it in its first minute.
-Closing it needs the captor's response to a child that released itself
-(`18640`'s J update and the carry tasks); ordinary Type9's carried expiry is
-the model.
+`16750` never edits the captor's J row. Until the captor's next `18640`, the
+row names a corpse with a null backlink and no relation bit. `18640` drops a
+dying row callback-free; its re-attach branch runs only in multiplayer
+(`DAT_004F741C`). A captor that pops the row first, through its carrying
+root (`D040`), a delivery or its own death, pops the corpse: `16750` repeats
+its fixed writes, and class14's null hook keeps the corpse's task. The row
+check and each child family's release (people, Type123 and peasant corpses)
+accept that self-released corpse in place of the backlink.
 
 ## Validation
 
@@ -88,9 +88,11 @@ covers:
 - a lethal hit's class12 death, then five seconds of the class12 world;
 - a capture: once Type28 pursues a person, a body contact runs `C910` and the
   person attaches to Type28's J row;
-- a minute of every world with the live-order pair walk. This asserts no block
-  except the held drowning chain above. In world 36, person 20 drowns and
-  its Type18 captor 50 holds; either captor family may carry it.
+- a minute of every world with the live-order pair walk, with no block. In
+  world 36, person 20 drowns in Type18 captor 50's grip;
+- that drowning in detail: below the sea, class14 replaces `CE90`'s graph,
+  the captor's row drops the corpse on its next tick, and neither owner parks
+  for the following five seconds.
 
 [The abort test](../../crates/v2k-game/src/main_base_abort_production/native/type28_tests.rs)
 checks class12 in every world, once per corpse.

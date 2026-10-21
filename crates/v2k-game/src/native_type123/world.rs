@@ -13,7 +13,8 @@ use crate::{
     entity_collision_state::{BODY_BASIS_REBUILT_STATE_BIT, REMOTE_OWNED_STATE_BIT},
     entity_scheduler::*,
     intro2_common_dying::{
-        run_actor_surface_with_death, Intro2ActorSurfaceFrame, Intro2CommonDyingBlock,
+        run_actor_surface_with_death, run_actor_surface_with_lifecycle, Intro2ActorSurfaceFrame,
+        Intro2CommonDyingBlock,
     },
     resource_cache::ResourceCache,
     world_fx::{ParticleEnvironment, TerrainCollisionContext},
@@ -334,27 +335,56 @@ fn run_frame(
             .state_flags_at_0x08
             .overwrite(0x800000, flags & 0x800000);
     }
+    // 162B0 calls 16750 with a null argument. A carried person's DC50 runs
+    // CE90 (enable pairs, reselect) before 10C10; the captor's row keeps the
+    // corpse until its next 18640.
+    let carried_parent = entity
+        .attached_to
+        .filter(|_| owner.kind == TaskKind::Carried);
     let mut death = None;
-    let surface = run_actor_surface_with_death(
-        manager,
-        id,
-        Intro2ActorSurfaceFrame {
-            metadata: &metadata,
-            terrain,
-            active_model_extent_raw: model.radius,
-            elapsed_micros: dt,
-            retail_tick: frame.retail_tick,
-            particle_environment,
-        },
-        frame.world_fx,
-        &mut death,
-        native_type123_allocation_authenticates,
-        |manager, id, fx| {
-            impact::run_native_type123_standard_death(manager, id, fx)
-                .map(|result| result.publication)
-                .map_err(|_| Intro2CommonDyingBlock::Runtime("Type123 surface death"))
-        },
-    );
+    let surface_frame = Intro2ActorSurfaceFrame {
+        metadata: &metadata,
+        terrain,
+        active_model_extent_raw: model.radius,
+        elapsed_micros: dt,
+        retail_tick: frame.retail_tick,
+        particle_environment,
+    };
+    let standard_death = |manager: &mut EntityManager, id: u32, fx: &mut WorldFx| {
+        impact::run_native_type123_standard_death(manager, id, fx)
+            .map(|result| result.publication)
+            .map_err(|_| Intro2CommonDyingBlock::Runtime("Type123 surface death"))
+    };
+    let surface = match carried_parent {
+        Some(parent) => run_actor_surface_with_lifecycle(
+            manager,
+            id,
+            surface_frame,
+            frame.world_fx,
+            &mut death,
+            native_type123_allocation_authenticates,
+            |manager, id, fx| {
+                let plan = cargo::prepare_release(
+                    manager,
+                    id,
+                    parent,
+                    crate::ordinary_type9_cargo::Type9CargoReleasePosition::Retained,
+                )
+                .map_err(|_| Intro2CommonDyingBlock::Runtime("Type123 surface release"))?;
+                cargo::commit_release(manager, id, plan, fx);
+                standard_death(manager, id, fx)
+            },
+        ),
+        None => run_actor_surface_with_death(
+            manager,
+            id,
+            surface_frame,
+            frame.world_fx,
+            &mut death,
+            native_type123_allocation_authenticates,
+            standard_death,
+        ),
+    };
     // A new class14 graph survives a later surface/sound block. The next frame
     // must never repeat this callback or the surface death constructor draw.
     if let Some(death) = death {

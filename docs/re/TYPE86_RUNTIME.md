@@ -172,6 +172,10 @@ plays the profile's cue74/35, then C3A0 installs the 1000ms class14 graph.
   and release commits only after a continuing scheduler prefix. A missing
   parent still blocks explicitly at the separate180F0 boundary. Production
   controls cover real78/86/95 and123 with retained and compacted parent rows.
+- A carried person whose `E370` lifetime runs out drowns in custody: `162B0`'s
+  null-argument `16750` runs the same `CE90` release, then `10C10`. The
+  captor's row keeps the self-released corpse until `18640`
+  ([TYPE28_RUNTIME.md](TYPE28_RUNTIME.md#a-carried-person-drowning)).
 - Reattaching Class14 enters its real `4C70C0+08=CD50`: `40CD70` runs420760,
   clears8000, and `C6B0` selects variant1 `4C7108`. Its initializerC470 calls
   A860, retiring physical task slots0→1→2 (`40A87F..40A8A3`), then410B70 marks

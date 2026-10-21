@@ -535,14 +535,17 @@ fn mutate(
             defer_destroy,
         } => {
             let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
-            if entity.attached_to != Some(captor) {
-                return Err(blocked("capture peasant parent changed"));
-            }
-            if matches!(
+            let corpse = matches!(
                 &owners[index],
                 SpecializedActorTaskOwner::Intro2Type9Class14(_)
                     | SpecializedActorTaskOwner::OrdinaryType9Class14(_)
-            ) {
+            );
+            if entity.attached_to != Some(captor)
+                && !(corpse && crate::native_actor_capture::self_released_corpse(entity))
+            {
+                return Err(blocked("capture peasant parent changed"));
+            }
+            if corpse {
                 let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context
                 else {
                     return Err(blocked("capture corpse context"));

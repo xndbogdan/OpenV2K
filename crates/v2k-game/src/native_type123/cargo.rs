@@ -177,7 +177,9 @@ pub(crate) fn prepare_release(
     let (task_id, context, kind) = Type123Owner::published_graph(entity)
         .ok_or(Type123Block::Runtime("Type123 release graph"))?;
     if !matches!(kind, TaskKind::Carried | TaskKind::Exploding)
-        || entity.attached_to != Some(parent)
+        || (entity.attached_to != Some(parent)
+            && !(kind == TaskKind::Exploding
+                && crate::native_actor_capture::self_released_corpse(entity)))
         || entity
             .collision
             .state_flags_at_0x08
