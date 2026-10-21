@@ -292,7 +292,7 @@ fn run(
     // +28 are40C690. This direct style call omits task-result dispatch's
     // 416410 suppression.
     match style.frame_address {
-        0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7d20 => {
+        0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7d20 | 0x004c_7e88 => {
             crate::shared_fish_tasks::reselect_behavior(manager, id, &metadata, &mut || {
                 u32::from(world_fx.next_shared_retail_random_u16())
             })
@@ -304,7 +304,8 @@ fn run(
         address
             if completed_death
                 && address == crate::entity_behavior::QUIET_DEATH_STYLE.frame_address => {}
-        // The dying shark's class12 style has a null +28.
+        // Run Away's two styles and class12's dying style have a null +28.
+        0x004c_7618 | 0x004c_7660 => {}
         address
             if super::dying::dying_graph(manager.iter_all().find(|e| e.id == id).unwrap())
                 && address == crate::actor_death::COMMON_ACTOR_DYING_ACTIVE_STYLE.frame_address => {

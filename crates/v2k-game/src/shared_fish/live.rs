@@ -29,7 +29,6 @@ use crate::{
     entity_scheduler::*,
     guard_location_owner::acquisition::GuardLocationCandidateSelectionError,
     main_base_abort::MainBaseAbortActorLease,
-    resource_cache::ResourceCache,
     shared_fish_tasks::{self as tasks, FishTaskError, FishTaskFrame},
     world_fx::WorldFx,
 };
@@ -73,7 +72,7 @@ impl SharedFishOwner {
         };
         if !matches!(
             (program.class_id, context.style_table_index_raw_at_0x10()),
-            (5 | 6 | 69, 0) | (13, 0 | 1)
+            (4 | 5 | 6 | 69, 0) | (10 | 13, 0 | 1)
         ) && !super::dying::dying_graph(entity)
         {
             return Err(SharedFishBlock::Graph);
@@ -130,7 +129,9 @@ fn slots(entity: &Entity) -> [Option<ActorTaskId>; 3] {
 }
 
 pub struct SharedFishFrame<'a> {
-    pub resources: &'a ResourceCache,
+    /// Mutable when the scheduler can lend it: class4's coarse visit writes
+    /// the infected cell under Type37.
+    pub resources: crate::native_ground_actor::NativeGroundResources<'a>,
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     /// Engine DAT_004D04E4; Sub-D integrates yaw independently of owner carry.
@@ -332,36 +333,82 @@ fn run_frame(
         .ok_or(Block::Runtime("fish cell"))?
         .height as i8;
     {
-        let mut next_random = || u32::from(frame.world_fx.next_shared_retail_random_u16());
-        let changed = tasks::tick_primary(
-            manager,
-            FishTaskFrame {
-                entity_id: id,
-                elapsed_micros: dt,
-                dispatch_mode: mode,
-                immutable_anchor_raw,
-                sea_level_raw: terrain.sea_level_raw(),
-                cell_height_raw,
-            },
-            &mut next_random,
-            |entity, target, tracked_target, random| {
-                super::mover::run(
-                    entity,
-                    super::mover::FishMoverFrame {
-                        metadata: &metadata,
-                        terrain,
-                        dispatch_mode: mode,
+        let fleeing = matches!(
+            manager
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .ok_or(Block::Allocation)?
+                .actor_task_state(ActorTaskSlot::Primary),
+            Some(ActorTaskRuntime::RunAway(_))
+        );
+        let fish_frame = super::mover::FishMoverFrame {
+            metadata: &metadata,
+            terrain,
+            dispatch_mode: mode,
+            elapsed_micros: dt,
+            global_elapsed_micros: frame.global_elapsed_micros,
+            active_model_extent_raw,
+        };
+        // Run Away's 403F40 draws its own words around the mover.
+        let fled = if fleeing {
+            Some(
+                crate::native_ground_actor::run_away::tick_primary(
+                    manager,
+                    id,
+                    crate::native_ground_actor::run_away::NativeRunAwayFrame {
                         elapsed_micros: dt,
-                        global_elapsed_micros: frame.global_elapsed_micros,
-                        active_model_extent_raw,
+                        dispatch_mode: mode,
                     },
-                    Some(target),
-                    tracked_target,
-                    random,
+                    frame.world_fx,
+                    |request| {
+                        super::mover::run(
+                            request.entity,
+                            fish_frame,
+                            Some(request.target),
+                            request.tracked_target,
+                            &mut || u32::from(request.world_fx.next_shared_retail_random_u16()),
+                        )
+                    },
                 )
-            },
-        )
-        .map_err(map_task)?;
+                .map_err(map_run_away)?,
+            )
+        } else {
+            None
+        };
+        let mut next_random = || u32::from(frame.world_fx.next_shared_retail_random_u16());
+        let changed = if let Some(changed) = fled {
+            changed
+        } else {
+            tasks::tick_primary(
+                manager,
+                FishTaskFrame {
+                    entity_id: id,
+                    elapsed_micros: dt,
+                    dispatch_mode: mode,
+                    immutable_anchor_raw,
+                    sea_level_raw: terrain.sea_level_raw(),
+                    cell_height_raw,
+                },
+                &mut next_random,
+                |entity, target, tracked_target, random| {
+                    super::mover::run(
+                        entity,
+                        super::mover::FishMoverFrame {
+                            metadata: &metadata,
+                            terrain,
+                            dispatch_mode: mode,
+                            elapsed_micros: dt,
+                            global_elapsed_micros: frame.global_elapsed_micros,
+                            active_model_extent_raw,
+                        },
+                        Some(target),
+                        tracked_target,
+                        random,
+                    )
+                },
+            )
+            .map_err(map_task)?
+        };
         if changed {
             tasks::reselect_after_task_result(manager, id, &metadata, &mut next_random)
                 .map_err(map_plain_task)?;
@@ -377,17 +424,29 @@ fn run_frame(
             Some(ActorTaskRuntime::GuardLocationAcquisition(_)) => {
                 tasks::acquire(manager, id, &mut next_random).map_err(map_plain_task)?
             }
+            Some(ActorTaskRuntime::TargetAcquisition(_)) => {
+                tasks::acquire_flee_target(manager, id, &metadata).map_err(map_plain_task)?
+            }
             Some(_) => return Err(Block::Graph),
         }
-        if manager
-            .iter_all()
-            .find(|entity| entity.id == id)
-            .ok_or(Block::Allocation)?
-            .actor_task_state(ActorTaskSlot::Tertiary)
-            .is_some()
-        {
-            return Err(Block::Graph);
-        }
+    }
+    // Slot2 is read after the Secondary; class4's terrain task can write the
+    // coarse cell before the tail reads it.
+    let terrain_task = match manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .ok_or(Block::Allocation)?
+        .actor_task_state(ActorTaskSlot::Tertiary)
+    {
+        None => false,
+        Some(ActorTaskRuntime::DefecateVirusTerrain(_)) => true,
+        Some(_) => return Err(Block::Graph),
+    };
+    if terrain_task && defecate_terrain(manager, id, &mut frame, mode, dt)? {
+        tasks::reselect_after_task_result(manager, id, &metadata, &mut || {
+            u32::from(frame.world_fx.next_shared_retail_random_u16())
+        })
+        .map_err(map_plain_task)?;
     }
     finish(manager, id, &metadata, &mut frame, dt, detailed)?;
     Ok(advanced)
@@ -404,10 +463,11 @@ fn effective_flags(entity: &Entity) -> Result<u32, SharedFishBlock> {
     };
     // PE styles5/6/13: +34=0; +38=0 except Wander21000. Neither policy
     // changes these defaults. Zebra fish omit E100's independent drag bit8.
-    // The shark's C keeps 4 and 8; Shark Attack's 4C7D20 has zero masks.
+    // The C swimmers keep 4 and 8: Shark Attack's 4C7D20, Defecate Virus's
+    // 4C7E88 and Run Away's 4C7618/4C7660 have zero masks.
     let style = context.active_style().style_address();
     if !matches!(style, 0x4c7930 | 0x4c79c0 | 0x4c7df8 | 0x4c7e40)
-        && !(flags == 0xc && style == 0x4c7d20)
+        && !(flags == 0xc && matches!(style, 0x4c7d20 | 0x4c7e88 | 0x4c7618 | 0x4c7660))
     {
         return Err(SharedFishBlock::Graph);
     }
@@ -576,6 +636,83 @@ fn map_plain_task(error: FishTaskError<Infallible>) -> SharedFishBlock {
     map_task(error.map_mover(|never| match never {}))
 }
 
+fn map_run_away(
+    error: crate::native_ground_actor::run_away::NativeRunAwayBlock<SharedFishBlock>,
+) -> SharedFishBlock {
+    use crate::native_ground_actor::run_away::NativeRunAwayBlock as RunAway;
+    match error {
+        RunAway::Allocation => SharedFishBlock::Allocation,
+        RunAway::Graph => SharedFishBlock::Graph,
+        RunAway::Runtime(reason) => SharedFishBlock::Runtime(reason),
+        RunAway::Acquisition(_) => SharedFishBlock::Runtime("Run Away acquisition"),
+        RunAway::Mover(reason) => reason,
+    }
+}
+
+/// Class4's 02850 in slot2: a detailed visit drops a particle by chance; a
+/// coarse one writes the cell under the body.
+fn defecate_terrain(
+    manager: &mut EntityManager,
+    id: u32,
+    frame: &mut SharedFishFrame<'_>,
+    mode: CommonMoverDispatchMode,
+    dt: u32,
+) -> Result<bool, SharedFishBlock> {
+    use crate::defecate_virus::*;
+    use SharedFishBlock as Block;
+    let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
+    if !matches!(entity.current_behavior_context,
+        RetailRuntimeValue::Known(Some(context)) if context.active_style().style_address() == 0x004c_7e88)
+    {
+        return Err(Block::Graph);
+    }
+    let visit = crate::actor_task_owner::ActorTaskVisit {
+        slot: ActorTaskSlot::Tertiary,
+        task_id: entity
+            .actor_tasks
+            .task_in_slot(ActorTaskSlot::Tertiary)
+            .ok_or(Block::Graph)?,
+    };
+    let prefix = entity
+        .actor_tasks
+        .begin_exact_visit_with(visit, |runtime| {
+            let ActorTaskRuntime::DefecateVirusTerrain(task) = runtime else {
+                unreachable!()
+            };
+            task.before_callback(dt)
+        })
+        .ok_or(Block::Graph)?;
+    let applied = crate::native_ground_actor::defecate::plan_callback(
+        entity,
+        &frame.resources,
+        frame.world_fx,
+        mode,
+        dt,
+    )
+    .map_err(|_| Block::Runtime("class4 plan"))
+    .and_then(|plan| match plan {
+        DefecateVirusCallbackPlan::SuppressedByEntityState
+        | DefecateVirusCallbackPlan::DetailedChanceRejected => Ok(()),
+        DefecateVirusCallbackPlan::DetailedModelExtentUnavailable { .. } => {
+            Err(Block::Runtime("class4 model extent"))
+        }
+        DefecateVirusCallbackPlan::DetailedParticle(emission) => {
+            frame.world_fx.emit_defecate_virus_particle_raw(emission);
+            Ok(())
+        }
+        DefecateVirusCallbackPlan::CoarseTerrainMutation(write) => frame
+            .resources
+            .apply_infection_write(write)
+            .map_err(|_| Block::Runtime("class4 infection terrain")),
+    });
+    let survived = entity.actor_tasks.finish_exact_visit(visit);
+    applied?;
+    if !survived {
+        return Err(Block::Graph);
+    }
+    Ok(defecate_virus_terrain_after_unwind(visit, prefix).is_some())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -605,7 +742,9 @@ mod tests {
                 id,
                 &metadata,
                 &mut SharedFishFrame {
-                    resources: &session.cache,
+                    resources: crate::native_ground_actor::NativeGroundResources::ReadOnly(
+                        &session.cache,
+                    ),
                     world_fx: &mut fx,
                     elapsed_micros: 20_000,
                     global_elapsed_micros: 20_000,
@@ -644,7 +783,9 @@ mod tests {
             &mut manager,
             owner,
             SharedFishFrame {
-                resources: &session.cache,
+                resources: crate::native_ground_actor::NativeGroundResources::ReadOnly(
+                    &session.cache,
+                ),
                 world_fx: &mut fx,
                 elapsed_micros: 20_000,
                 global_elapsed_micros: 20_000,
@@ -677,7 +818,9 @@ mod tests {
                 &mut manager,
                 owner,
                 SharedFishFrame {
-                    resources: &session.cache,
+                    resources: crate::native_ground_actor::NativeGroundResources::ReadOnly(
+                        &session.cache,
+                    ),
                     world_fx: &mut fx,
                     elapsed_micros: 20_000,
                     global_elapsed_micros: 20_000,
@@ -722,7 +865,9 @@ mod tests {
             &mut manager,
             owner,
             SharedFishFrame {
-                resources: &session.cache,
+                resources: crate::native_ground_actor::NativeGroundResources::ReadOnly(
+                    &session.cache,
+                ),
                 world_fx: &mut fx,
                 elapsed_micros: 20_000,
                 global_elapsed_micros: 20_000,

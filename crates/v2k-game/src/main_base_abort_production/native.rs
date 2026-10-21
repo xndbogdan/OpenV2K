@@ -274,7 +274,9 @@ pub(super) fn dispatch_native_actor(
         {
             NativeActor::Type10Family
         }
-        22 | 23 | 24 | 62 | 25 if entity.shared_fish_runtime.is_some() => NativeActor::SharedFish,
+        22 | 23 | 24 | 62 | 25 | 37 if entity.shared_fish_runtime.is_some() => {
+            NativeActor::SharedFish
+        }
         // Type14's alternate class1 belongs to the class49 dispatch above.
         15 | 87 | 108 if entity.intro2_flyer_frame_owner.is_some() => NativeActor::Flyer,
         // Type128's class63 Auto Pilot belongs to the class49 dispatch above.
@@ -652,6 +654,8 @@ fn dispatch(
             }
             if crate::shared_fish::is_shark(actor.entity_type) {
                 MainBaseAbortActorDisposition::Type25Death
+            } else if actor.entity_type == 37 {
+                MainBaseAbortActorDisposition::Type37Death
             } else {
                 MainBaseAbortActorDisposition::QuietDeath
             }

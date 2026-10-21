@@ -79,7 +79,7 @@ impl FishRules {
         entity: &Entity,
         candidates: impl Iterator<Item = &'a Entity>,
     ) -> Result<Self, FishTaskError> {
-        if !crate::shared_fish::is_shark(entity.entity_type) {
+        if !crate::shared_fish::is_hostile_swimmer(entity.entity_type) {
             return Ok(Self::default());
         }
         let RetailRuntimeValue::Known(axis) = entity.actor_common_axis_descriptor else {
@@ -175,8 +175,12 @@ fn publish_selection_with(
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), FishTaskError> {
     let class = selection.program.class_id;
-    let shark = crate::shared_fish::is_shark(entity.entity_type);
-    if !(matches!(class, 5 | 6) || class == if shark { 69 } else { 13 })
+    let admitted = match entity.entity_type {
+        25 => matches!(class, 5 | 6 | 69),
+        37 => matches!(class, 4 | 5 | 10),
+        _ => matches!(class, 5 | 6 | 13),
+    };
+    if !admitted
         || context.descriptor() != BehaviorDescriptorIdentity::Named(selection.program)
         || context.style_table_index_raw_at_0x10() != 0
         || entity.shared_fish_runtime.is_none()
@@ -214,6 +218,16 @@ fn publish_selection_with(
                 .replace_prepared(ActorTaskSlot::Primary, prepared);
             return Ok(());
         }
+        if class == 4 {
+            return publish_defecate_virus(entity, metadata, position);
+        }
+        if class == 10 {
+            let RetailRuntimeValue::Known(filter) = selection.program.initializer_argument_raw
+            else {
+                return Err(FishTaskError::Metadata);
+            };
+            return publish_run_away_acquiring(entity, metadata, initializer, position, filter);
+        }
         // B640 copies only authored common-axis +4 before clearing slot2.
         if class == 13 {
             let RetailRuntimeValue::Known(mut axis) = entity.actor_common_axis_descriptor else {
@@ -246,6 +260,225 @@ fn publish_selection_with(
         // replaces the context and clears Secondary, Tertiary, Primary.
         entity.publish_behavior_initializer_failure_fallback(context);
     }
+    result
+}
+
+/// B9E0: clear slot1, then 402820's terrain task (slot2, the type's `+A2`
+/// lifetime, mode 5) and 4032A0's 2000-ms wander (slot0), each through
+/// 06030 whose 06070 resets Sub-F; there is no Sub-A to reset.
+fn publish_defecate_virus(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    position: [i16; 3],
+) -> Result<(), FishTaskError> {
+    use crate::defecate_virus_owner::*;
+    let RetailRuntimeValue::Known(lifetime) = metadata.terrain_contact_task_lifetime_ms else {
+        return Err(FishTaskError::Metadata);
+    };
+    let Entity {
+        actor_tasks,
+        shared_fish_runtime,
+        ..
+    } = entity;
+    let fish = shared_fish_runtime
+        .as_mut()
+        .ok_or(FishTaskError::Allocation)?;
+    apply_defecate_virus_setup_with_component_suffix(
+        actor_tasks,
+        DefecateVirusSetupRequest {
+            terrain_task_lifetime_ms: lifetime,
+        },
+        DefecateVirusSubATopology::NotAuthored,
+        |preparation, _| {
+            let task = crate::actor_task_dispatcher::prepare_defecate_virus_runtime_task(
+                preparation,
+                position,
+            )?;
+            fish.sub_f.reset_shared_task();
+            Ok::<_, crate::actor_task_dispatcher::DefecateVirusRuntimePreparationError>(task)
+        },
+    )
+    .map_err(|_| FishTaskError::Runtime("class4 setup"))
+}
+
+/// B6C0: authored axis `+04`, clear slot2, then 402050's acquisition (slot1)
+/// and 402B10's 500-ms retarget (slot0), each with 06070's Sub-F reset.
+fn publish_run_away_acquiring(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    initializer: &crate::entity_collision_state::EntityInitializerSpec,
+    position: [i16; 3],
+    filter: u32,
+) -> Result<(), FishTaskError> {
+    use crate::run_away::{apply_run_away_task_setup, RunAwayTaskSetupRequest};
+    let RetailRuntimeValue::Known(mut axis) = entity.actor_common_axis_descriptor else {
+        return Err(FishTaskError::Runtime("Run Away axis"));
+    };
+    axis.raw_word_at_0x04 = initializer.common_axis_descriptor.raw_word_at_0x04;
+    entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(axis);
+    let Entity {
+        actor_tasks,
+        shared_fish_runtime,
+        ..
+    } = entity;
+    let fish = shared_fish_runtime
+        .as_mut()
+        .ok_or(FishTaskError::Allocation)?;
+    apply_run_away_task_setup(
+        actor_tasks,
+        RunAwayTaskSetupRequest::Acquiring,
+        |preparation| {
+            let task = crate::actor_task_dispatcher::prepare_swimmer_acquiring_runtime_task(
+                preparation,
+                position,
+                metadata,
+                filter,
+            )?;
+            fish.sub_f.reset_shared_task();
+            Ok::<_, crate::actor_task_dispatcher::SharedAcquiringRuntimePreparationError>(task)
+        },
+    )
+    .map_err(|_| FishTaskError::Runtime("class10 setup"))
+}
+
+/// C7D0's handoff to B3F0 for a swimmer: variant1 with the target, then
+/// 403E20's 2000-ms flight, whose 06070 resets Sub-F.
+fn publish_fleeing(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    target_id: u32,
+) -> Result<(), FishTaskError> {
+    use crate::run_away::{
+        apply_run_away_task_setup, RunAwayAuthoredAudio, RunAwayTaskSetupRequest,
+    };
+    let RetailRuntimeValue::Known(Some(previous)) = entity.current_behavior_context else {
+        return Err(FishTaskError::Graph);
+    };
+    let context = BehaviorContextRuntime::named_audited(
+        behavior_program(10).unwrap(),
+        1,
+        previous.choice_list_source(),
+        RetailRuntimeValue::Known(Some(target_id)),
+        previous.auxiliary_word_at_0x0c(),
+        *audited_behavior_style(10, 1).ok_or(FishTaskError::Graph)?,
+    )
+    .ok_or(FishTaskError::Graph)?;
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
+    let (RetailRuntimeValue::Known(sound), RetailRuntimeValue::Known(period_raw)) = (
+        metadata.run_away_optional_sound_id,
+        metadata.run_away_sound_period_raw,
+    ) else {
+        return Err(FishTaskError::Metadata);
+    };
+    let id = entity.id;
+    let position = entity.position_raw();
+    let Entity {
+        actor_tasks,
+        shared_fish_runtime,
+        ..
+    } = entity;
+    let fish = shared_fish_runtime
+        .as_mut()
+        .ok_or(FishTaskError::Allocation)?;
+    let result = apply_run_away_task_setup(
+        actor_tasks,
+        RunAwayTaskSetupRequest::Fleeing {
+            target_id,
+            audio: RunAwayAuthoredAudio {
+                sound_id: sound.unwrap_or(0),
+                period_raw,
+            },
+        },
+        |preparation| {
+            let task = crate::actor_task_dispatcher::prepare_swimmer_run_away_runtime_task(
+                preparation,
+                id,
+                position,
+                metadata,
+            )?;
+            fish.sub_f.reset_shared_task();
+            Ok::<_, crate::actor_task_dispatcher::RunAwayRuntimePreparationError>(task)
+        },
+    );
+    if result.is_err() {
+        entity.publish_behavior_initializer_failure_fallback(context);
+        return Err(FishTaskError::Runtime("Run Away initializer fallback"));
+    }
+    Ok(())
+}
+
+/// Class10's Secondary: 02080 over the live list; a found body reaches the
+/// style's `+04` C7D0 and the swimmer flees it.
+pub(crate) fn acquire_flee_target(
+    manager: &mut EntityManager,
+    id: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), FishTaskError> {
+    use crate::search_attack_acquisition::{
+        evaluate_target_acquisition_callback, TargetAcquisitionCallbackResult,
+        TargetAcquisitionZeroReason,
+    };
+    let entity = manager.entity_mut(id).ok_or(FishTaskError::Allocation)?;
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return Err(FishTaskError::Graph);
+    };
+    if context.descriptor() != BehaviorDescriptorIdentity::Named(behavior_program(10).unwrap())
+        || context.style_table_index_raw_at_0x10() != 0
+    {
+        return Err(FishTaskError::Graph);
+    }
+    let task_id = entity
+        .actor_tasks
+        .task_in_slot(ActorTaskSlot::Secondary)
+        .ok_or(FishTaskError::Graph)?;
+    if !matches!(
+        entity.actor_tasks.task_state(task_id),
+        Some(ActorTaskRuntime::TargetAcquisition(_))
+    ) {
+        return Err(FishTaskError::Graph);
+    }
+    let visit = ActorTaskVisit {
+        slot: ActorTaskSlot::Secondary,
+        task_id,
+    };
+    let prefix = entity
+        .actor_tasks
+        .begin_exact_visit_with(visit, |runtime| {
+            let ActorTaskRuntime::TargetAcquisition(task) = runtime else {
+                unreachable!()
+            };
+            task.before_callback()
+        })
+        .ok_or(FishTaskError::Graph)?;
+    entity.actor_common_axis_descriptor =
+        RetailRuntimeValue::Known(v2k_formats::collision::CommonAxisDescriptor {
+            strict_axis_limit_raw: prefix.radius.raw(),
+            raw_word_at_0x04: prefix.filter.raw(),
+        });
+    let candidates = crate::search_attack_live::search_attack_live_list_snapshot(manager);
+    let subject = candidates
+        .iter()
+        .find(|candidate| candidate.id == id)
+        .copied()
+        .ok_or(FishTaskError::Allocation)?;
+    let selected = evaluate_target_acquisition_callback(
+        prefix,
+        subject,
+        &candidates,
+        None::<fn(crate::search_attack::SearchAttackTargetHandoff) -> u32>,
+    );
+    let entity = manager.entity_mut(id).ok_or(FishTaskError::Allocation)?;
+    let result = match selected {
+        Ok(TargetAcquisitionCallbackResult::Zero(
+            TargetAcquisitionZeroReason::BehaviorHandoffAbsent { target },
+        )) => publish_fleeing(entity, metadata, target.id),
+        Ok(TargetAcquisitionCallbackResult::Zero(
+            TargetAcquisitionZeroReason::SelectorTagConsumed { .. },
+        )) => Ok(()),
+        Ok(_) => unreachable!("selection-only evaluator cannot invoke handoff"),
+        Err(_) => Err(FishTaskError::Runtime("Run Away acquisition")),
+    };
+    entity.actor_tasks.finish_exact_visit(visit);
     result
 }
 
@@ -490,7 +723,10 @@ where
     let position = entity.position_raw();
     match entity.actor_tasks.task_state(task_id) {
         Some(ActorTaskRuntime::SharedRetarget(_)) => {
-            if !matches!(program.class_id, 5 | 13) || context.style_table_index_raw_at_0x10() != 0 {
+            // Class10's acquiring phase wanders through the same 02BA0.
+            if !matches!(program.class_id, 5 | 10 | 13)
+                || context.style_table_index_raw_at_0x10() != 0
+            {
                 return Err(FishTaskError::Graph);
             }
             let (prefix, mut stage) = entity
@@ -582,6 +818,50 @@ where
                 return Err(FishTaskError::Graph);
             }
             tick_shark(manager, frame, visit, next_random, mover)
+        }
+        Some(ActorTaskRuntime::DefecateVirusWander(_)) => {
+            if program.class_id != 4 || context.style_table_index_raw_at_0x10() != 0 {
+                return Err(FishTaskError::Graph);
+            }
+            use crate::defecate_virus::*;
+            let (age, mut stage) = entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |runtime| {
+                    let ActorTaskRuntime::DefecateVirusWander(task) = runtime else {
+                        unreachable!()
+                    };
+                    (
+                        task.before_callback(frame.elapsed_micros),
+                        task.stage_callback(position, || next_random() as u16),
+                    )
+                })
+                .ok_or(FishTaskError::Graph)?;
+            let moved = mover(
+                entity,
+                stage.private_state_mut(),
+                RetailRuntimeValue::Known(None),
+                next_random,
+            );
+            if let Some(ActorTaskRuntime::DefecateVirusWander(task)) =
+                entity.actor_tasks.task_state_mut(task_id)
+            {
+                stage.commit(task);
+            }
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Ok(false);
+            }
+            let moved = moved.map_err(FishTaskError::Mover)?;
+            Ok(matches!(
+                defecate_virus_wander_after_unwind(
+                    visit,
+                    DefecateVirusWanderCallbackPrefix {
+                        elapsed_ms: age,
+                        retarget: stage.retarget()
+                    },
+                    mover_return(moved)
+                ),
+                DefecateVirusWanderPostUnwind::Transition(_)
+            ))
         }
         _ => Err(FishTaskError::Graph),
     }
