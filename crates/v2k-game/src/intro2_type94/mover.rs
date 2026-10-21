@@ -62,7 +62,7 @@ pub(super) fn run(
         Intro2CommonMoverBlock::UnsupportedTopology => Intro2Type94Block::Metadata,
         Intro2CommonMoverBlock::Runtime(reason) => Intro2Type94Block::Runtime(reason),
         Intro2CommonMoverBlock::SubDFirstQuery { seed } => Intro2Type94Block::SubDFirstQuery {
-            spawn_index: entity.authored_spawn_index.unwrap(),
+            spawn_index: entity.authored_spawn_index,
             seed,
         },
         Intro2CommonMoverBlock::SubD(reason) => Intro2Type94Block::SubD(reason),

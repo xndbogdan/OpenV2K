@@ -24,6 +24,8 @@ pub enum NativeHiveNewborn {
     Type18(Type18Owner),
     Type38Family(Type38FamilyOwner),
     Type76Family(Type76FamilyOwner),
+    Worker(crate::intro2_type8::Intro2Type8Owner),
+    Type94(crate::intro2_type94::Intro2Type94Owner),
 }
 
 impl NativeHiveNewborn {
@@ -37,6 +39,8 @@ impl NativeHiveNewborn {
             Self::Type18(owner) => owner.entity_id(),
             Self::Type38Family(owner) => owner.entity_id(),
             Self::Type76Family(owner) => owner.entity_id(),
+            Self::Worker(owner) => owner.entity_id(),
+            Self::Type94(owner) => owner.entity_id(),
         }
     }
 }
@@ -115,6 +119,16 @@ pub enum HiveNativeBirthBlock {
     Type13Adoption(crate::intro2_type13_live::Intro2Type13SchedulerAdoptionError),
     /// Type26's task adoption failed after 104B0 entry: a committed prefix.
     Type26Adoption(crate::intro2_type26_defecate_virus::Intro2Type26WorldBlock),
+    /// A worker's metadata refused before 104B0 entry.
+    WorkerMetadata(crate::intro2_type8::Intro2Type8Block),
+    /// A worker's construction or birth receipt failed after 104B0 entry: a
+    /// committed prefix.
+    WorkerConstruction(crate::intro2_type8::Intro2Type8Block),
+    /// Type94's metadata refused before 104B0 entry.
+    Type94Metadata(crate::intro2_type94::Intro2Type94Error),
+    /// Type94's construction failed after 104B0 entry: a committed prefix.
+    Type94Construction(crate::intro2_type94::Intro2Type94Error),
+    Type94Adoption(crate::intro2_type94::Intro2Type94Block),
 }
 
 impl HiveNativeBirthBlock {
@@ -134,6 +148,9 @@ impl HiveNativeBirthBlock {
                 | Self::Type13Construction(_)
                 | Self::Type13Adoption(_)
                 | Self::Type26Adoption(_)
+                | Self::WorkerConstruction(_)
+                | Self::Type94Construction(_)
+                | Self::Type94Adoption(_)
         )
     }
 }
@@ -152,6 +169,17 @@ impl EntityManager {
             return self
                 .append_native_hive_type57(request, context, world_fx)
                 .map(NativeHiveNewborn::Type57);
+        }
+        if request.entity_type == 94 {
+            return self
+                .append_native_hive_type94(request, context, world_fx)
+                .map(NativeHiveNewborn::Type94);
+        }
+        if crate::intro2_type8::NativeWorkerProfile::from_entity_type(request.entity_type).is_some()
+        {
+            return self
+                .append_native_hive_worker(request, context, world_fx)
+                .map(NativeHiveNewborn::Worker);
         }
         if request.entity_type == crate::intro2_type13_live::TYPE13_ENTITY_TYPE {
             return self
@@ -336,6 +364,167 @@ impl EntityManager {
                 .map(NativeHiveNewborn::Type76Family)
                 .map_err(HiveNativeBirthBlock::GroundAdoption),
         }
+    }
+
+    /// A worker's zeroed record through its shared constructor: 104B0's body
+    /// ordinal, 09A80's Sub-D, then 20450's word, D4A0's anchor and 25680's
+    /// selection over the current live list, as an authored birth with no
+    /// index.
+    fn append_native_hive_worker(
+        &mut self,
+        request: HiveBirthRequest,
+        context: NativeHiveChildConstructionContext<'_>,
+        world_fx: &mut WorldFx,
+    ) -> Result<crate::intro2_type8::Intro2Type8Owner, HiveNativeBirthBlock> {
+        let metadata = self
+            .type_metadata
+            .get(request.entity_type as usize)
+            .ok_or(HiveNativeBirthBlock::Runtime("native worker metadata"))?
+            .clone();
+        crate::intro2_type8::validate_worker_metadata(request.entity_type, &metadata)
+            .map_err(HiveNativeBirthBlock::WorkerMetadata)?;
+        let RetailRuntimeValue::Known(Some(descriptor)) = metadata.sub_d_steering_descriptor else {
+            return Err(HiveNativeBirthBlock::Runtime("native worker Sub-D"));
+        };
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err(HiveNativeBirthBlock::Runtime("native body stamp lineage"));
+        }
+        let terrain = context
+            .resources
+            .terrain
+            .filter(|terrain| {
+                terrain.cells.len()
+                    == v2k_formats::terrain::GRID_SIZE * v2k_formats::terrain::GRID_SIZE
+            })
+            .ok_or(HiveNativeBirthBlock::Runtime(
+                "native worker complete terrain",
+            ))?;
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            request.position_raw,
+            terrain,
+            context.retail_tick,
+            context.waves_enabled,
+        )
+        .ok_or(HiveNativeBirthBlock::Runtime(
+            "native worker constructor surface",
+        ))?;
+        let id = self.next_entity_id;
+        if id == 0 || self.entities.iter().any(|entity| entity.id == id) {
+            return Err(HiveNativeBirthBlock::Runtime(
+                "native worker allocation handle",
+            ));
+        }
+        let body = NativeInstanceBodyRequest {
+            entity_type: request.entity_type,
+            position_raw: request.position_raw,
+            objective: request.objective,
+        };
+        let stamp = self.begin_common_body_attempt();
+        let sub_d = world_fx.construct_entity_sub_d(descriptor);
+        let mut entity = native_instance_body(id, stamp, &metadata, terrain, body);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        crate::intro2_type8::publish_authored_type8(
+            crate::intro2_type8::Type8AuthoredConstructionRequest {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+                record: NativeCreationRecord::zeroed(body),
+                preceding: &self.entities,
+                terrain,
+                sub_d,
+                constructor_surface_bits,
+            },
+            &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+        )
+        .map_err(HiveNativeBirthBlock::WorkerConstruction)?;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        self.entity_mut(id)
+            .and_then(crate::intro2_type8::Intro2Type8Owner::take_birth)
+            .ok_or(HiveNativeBirthBlock::WorkerConstruction(
+                crate::intro2_type8::Intro2Type8Block::Runtime("worker birth receipt"),
+            ))
+    }
+
+    /// Type94's zeroed record through its ordinary constructor, over the
+    /// current live list.
+    fn append_native_hive_type94(
+        &mut self,
+        request: HiveBirthRequest,
+        context: NativeHiveChildConstructionContext<'_>,
+        world_fx: &mut WorldFx,
+    ) -> Result<crate::intro2_type94::Intro2Type94Owner, HiveNativeBirthBlock> {
+        let metadata = self
+            .type_metadata
+            .get(request.entity_type as usize)
+            .ok_or(HiveNativeBirthBlock::Runtime("native Type94 metadata"))?
+            .clone();
+        crate::intro2_type94::authenticate_metadata(&metadata)
+            .map_err(HiveNativeBirthBlock::Type94Metadata)?;
+        let RetailRuntimeValue::Known(Some(descriptor)) = metadata.sub_d_steering_descriptor else {
+            return Err(HiveNativeBirthBlock::Runtime("native Type94 Sub-D"));
+        };
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err(HiveNativeBirthBlock::Runtime("native body stamp lineage"));
+        }
+        let terrain = context
+            .resources
+            .terrain
+            .filter(|terrain| {
+                terrain.cells.len()
+                    == v2k_formats::terrain::GRID_SIZE * v2k_formats::terrain::GRID_SIZE
+            })
+            .ok_or(HiveNativeBirthBlock::Runtime(
+                "native Type94 complete terrain",
+            ))?;
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            request.position_raw,
+            terrain,
+            context.retail_tick,
+            context.waves_enabled,
+        )
+        .ok_or(HiveNativeBirthBlock::Runtime(
+            "native Type94 constructor surface",
+        ))?;
+        let id = self.next_entity_id;
+        if id == 0 || self.entities.iter().any(|entity| entity.id == id) {
+            return Err(HiveNativeBirthBlock::Runtime(
+                "native Type94 allocation handle",
+            ));
+        }
+        let body = NativeInstanceBodyRequest {
+            entity_type: request.entity_type,
+            position_raw: request.position_raw,
+            objective: request.objective,
+        };
+        let stamp = self.begin_common_body_attempt();
+        let sub_d = world_fx.construct_entity_sub_d(descriptor);
+        let mut entity = native_instance_body(id, stamp, &metadata, terrain, body);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        crate::intro2_type94::publish_authored_type94(
+            crate::intro2_type94::Type94AuthoredConstruction {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+                record: NativeCreationRecord::zeroed(body),
+                preceding: &self.entities,
+                terrain,
+                constructor_surface_bits,
+                sub_d,
+            },
+            &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+        )
+        .map_err(HiveNativeBirthBlock::Type94Construction)?;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        crate::intro2_type94::Intro2Type94Owner::adopt(self, id)
+            .map_err(HiveNativeBirthBlock::Type94Adoption)
     }
 
     fn append_native_hive_flyer(

@@ -319,6 +319,8 @@ impl From<crate::entity::NativeHiveNewborn> for SpecializedActorTaskOwner {
             crate::entity::NativeHiveNewborn::Type76Family(owner) => {
                 Self::NativeType76Family(owner)
             }
+            crate::entity::NativeHiveNewborn::Worker(owner) => Self::Intro2Type8(owner),
+            crate::entity::NativeHiveNewborn::Type94(owner) => Self::Intro2Type94(owner),
         }
     }
 }

@@ -218,6 +218,16 @@ constructor ([INTRO2_TYPE57.md](INTRO2_TYPE57.md)): G's word, the process
 Sub-D, the selection and B6C0's two words. Type5 and Type10 take their
 family's 09A80 ([INTRO2_TYPE10.md](INTRO2_TYPE10.md)) in the same order, as
 does Type13 ([ACTOR_TASK_PROGRAMS.md](ACTOR_TASK_PROGRAMS.md)).
+The workers Type8/79/90/91/116 ([INTRO2_TYPE8.md](INTRO2_TYPE8.md)) take their
+authored constructor the same way: the body ordinal, the process Sub-D,
+Sub-A's word, the D4A0 anchor, then 25680's selection over the current live
+list and the selected task's word. So does Type94
+([INTRO2_TYPE94.md](INTRO2_TYPE94.md)), whose receipt carries its ordinary
+allocation lease in place of a spawn index. Their rows are world25's Hive86
+(Type8), world27's Hive40 (Type91), world28's Hive2 and Hive7 (Type90),
+world29's Hive0 (Type79) and world41's Hive1 (Type116), all live-world rows
+(flags 0), and world24's Hive30 (Type94, an objective row; retail's first
+minute there births only Type14 and Type57).
 Every newborn's task owner
 joins the walk in its birth pass; other types keep the row's explicit block.
 
