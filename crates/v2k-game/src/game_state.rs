@@ -743,6 +743,20 @@ impl MenuShell {
         )
     }
 
+    /// `FUN_00455D60` in a network game: 4D1190 under `FUN_0043CBA0`'s
+    /// network mask 1, over the world that keeps running.
+    pub fn new_network_pause_menu(ctx: &MenuCtx) -> Self {
+        let engine = MenuEngine::new(PAUSE_FULL, VIS_INGAME);
+        Self::new_with_engine(
+            ctx,
+            engine,
+            MenuPhase::FlyIn {
+                remaining: FLY_LEG_SECS,
+            },
+            true,
+        )
+    }
+
     fn new_with_engine(
         ctx: &MenuCtx,
         mut engine: MenuEngine,
@@ -1821,10 +1835,12 @@ fn build_screen_view_with_selected(
         map.push(idx);
     }
 
+    // A list cursor on a hidden row (a session that left the search)
+    // lights no row.
     let selected = map
         .iter()
         .position(|&engine_idx| engine_idx == selected_item)
-        .unwrap_or(0);
+        .unwrap_or(if ring { 0 } else { items.len() });
     let text_group = screen.groups.iter().find(|group| group.flags & 0x08 != 0);
     let list_window_rows = text_group
         .map(|group| usize::from(group.window_rows).max(1))

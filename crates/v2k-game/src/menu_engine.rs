@@ -247,13 +247,7 @@ impl MenuEngine {
                 }
             }
         }
-        let mask = self.vis_mask;
-        if let (Some(slot), Some(screen)) = (self.stack.last_mut(), self.tree.screen(va)) {
-            let selected = screen.items.get(slot.sel);
-            if slot.screen == va && !selected.is_some_and(|item| item_is_enabled(item, mask)) {
-                slot.sel = first_selectable(screen, mask);
-            }
-        }
+        // The cursor stays where it was, even on a row that just hid.
     }
 
     /// Replace the whole stack with a new root (mode change).
@@ -371,7 +365,10 @@ impl MenuEngine {
     fn selected_action(&self) -> Option<SelectAction> {
         let screen = self.current()?;
         let item = screen.items.get(self.selected())?;
-        self.item_enabled(item).then_some(item.select)
+        // FUN_0043C450 calls the cursor row's callback whatever its flags:
+        // a session row that hid under the cursor still tries its join.
+        let hidden_session = matches!(item.select, SelectAction::NetworkJoin { .. });
+        (self.item_enabled(item) || hidden_session).then_some(item.select)
     }
 
     /// Fire/Enter: dispatch the selected item's action (FUN_0043C780).
