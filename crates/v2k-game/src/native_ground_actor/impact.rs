@@ -236,6 +236,9 @@ fn run<P: NativeGroundActorProfile>(
                     // it is not the ordinary native Class5 task graph.
                     0x004C_7930
                         | 0x004C_7738
+                        | 0x004C_79C0
+                        | 0x004C_7BB8
+                        | 0x004C_7C00
                         | 0x004C_7A50
                         | 0x004C_7A98
                         | 0x004C_7AE0

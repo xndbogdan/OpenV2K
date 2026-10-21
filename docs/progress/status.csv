@@ -570,3 +570,4 @@ address,status,note
 0x0040B5A0,implemented,Guard Location initializer for the Type47 gunners and the Type55/81 guards (docs/re/INTRO2_TYPE10.md)
 0x00401FB0,implemented,Guard Location first-eligible candidate search (docs/re/GUARD_LOCATION_TASK.md)
 0x00402EB0,implemented,Wander Near Location anchor retarget and shared mover (docs/re/GUARD_LOCATION_TASK.md)
+0x0040AD10,implemented,Wander Near Location initializer for the ground host's Type33 and the Type47 gunners (docs/re/TYPE33_FIREECTO.md)

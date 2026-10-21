@@ -343,7 +343,10 @@ preserve native components through reselection and Class12; detailed Class12
 runs the same K/L bank with a NULL target and retains committed prefixes on a
 later block. [Living/FIFO controls](../../crates/v2k-game/src/native_type30/live_tests.rs)
 and [hit/death controls](../../crates/v2k-game/src/native_type30/tests.rs) use
-canonical metadata and constructor-issued leases.
+canonical metadata and constructor-issued leases. The ten
+[Type33 fireectos](TYPE33_FIREECTO.md) share the owner as a second row with
+their own profile: Wander Near Location and Guard Location, method24 Aim and
+a Sub-C that rides the waved sea.
 
 Actual model1042 `icecurly` is normal-tier `1X9XX.OVL` Section8 local69. Its
 40-byte collision program contains an `8E` radius440 sphere at slot56, a `95`

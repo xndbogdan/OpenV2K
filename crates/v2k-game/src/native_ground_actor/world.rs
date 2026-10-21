@@ -24,10 +24,16 @@ pub(crate) fn effective_flags<P: NativeGroundActorProfile>(
     // instead sets80/clears2 and is not this ordinary living task graph.
     let carrying = P::CAPTURE_POLICY == NativeCapturePolicy::Transport
         && crate::native_actor_capture::carry_tasks::carrying_variant(entity).is_some();
+    // Wander Near Location 4C79C0 clears 21000; both Guard styles are zero.
+    if context.active_style().style_address() == 0x4c79c0 {
+        return Ok(P::DEFAULT_FLAGS & !0x21000);
+    }
     if !carrying
         && !matches!(
             context.active_style().style_address(),
-            0x4c7b28
+            0x4c7bb8
+                | 0x4c7c00
+                | 0x4c7b28
                 | 0x4c7b70
                 | 0x4c7ff0
                 | 0x4c8038
@@ -101,9 +107,6 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
     let RetailRuntimeValue::Known(Some(sub_c)) = metadata.sub_c_lift_descriptor else {
         return Err(Block::Metadata);
     };
-    if sub_c.surface_mode_raw != 0 {
-        return Err(Block::Runtime("Sub-C surface mode"));
-    }
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
         return Err(Block::Runtime("physical basis"));
     };
@@ -118,7 +121,8 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
         state_flags: super::live::bits(entity, TERRAIN_ATTITUDE_BILINEAR_STATE_BIT)?,
         effective_flags,
         active_model_extent_raw: model.radius,
-        resolved_surface_mode_raw: 0,
+        // Sub-C `+0C`: mode1 probes take the waved sea over water.
+        resolved_surface_mode_raw: sub_c.surface_mode_raw,
         water_enabled: waves_enabled,
         wave_tick_50hz: frame.retail_tick as i32,
         effective_elapsed_micros: dt,
@@ -131,15 +135,17 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
         .state_flags_at_0x08
         .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
     let mut velocity = entity.velocity_raw();
-    // 39/439/431 have gravity, no ground-snap bit2, and C+0c is terrain-only.
+    // 31/39/439/431 have gravity and no ground-snap bit2. E100's water
+    // response reads Sub-C +0C against the solid-or-sea cell height.
+    let [x, _, z] = entity.position_raw();
     apply_common_gravity_and_underwater_raw(
         &mut velocity,
         dt,
         CommonUnderwaterFrame {
             effective_environment_flags: effective_flags,
-            water_response_enabled: false,
+            water_response_enabled: sub_c.surface_mode_raw != 0,
             position_y_raw: entity.position_raw()[1],
-            solid_or_sea_y_raw: 0,
+            solid_or_sea_y_raw: crate::entity::common_environment_surface_raw(terrain, x, z),
             self_mass_raw: entity.mass_raw,
             attached_cargo_mass: 0,
         },

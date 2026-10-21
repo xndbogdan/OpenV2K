@@ -280,7 +280,7 @@ pub(super) fn dispatch_native_actor(
         // Type128's class63 Auto Pilot belongs to the class49 dispatch above.
         16 if entity.intro2_type16_runtime.is_some() => NativeActor::Type16,
         94 if entity.intro2_type94_runtime.is_some() => NativeActor::Type94,
-        30 if entity.native_type30_runtime.is_some() => NativeActor::Type30,
+        30 | 33 if entity.native_type30_runtime.is_some() => NativeActor::Type30,
         40 if entity.native_type40_runtime.is_some() => NativeActor::Type40,
         56 if entity.native_type56_runtime.is_some() => NativeActor::Type56,
         31 if entity.native_type31_runtime.is_some() => NativeActor::Type31,

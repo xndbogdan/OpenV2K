@@ -254,12 +254,12 @@
 <g><title>Retail data integrity (RETAIL_DATA_INTEGRITY.md): 4 notes</title>
 <rect x="1135.2" y="685.1" width="23.7" height="21.2" fill="#d4a72c"/>
 </g>
-<g><title>Intro2 type10 (INTRO2_TYPE10.md): 2 code</title>
-<rect x="1135.2" y="708.3" width="23.7" height="10.7" fill="#2da44e"/>
-</g>
 <g><title>Type17 capture (TYPE17_CAPTURE.md): 1 code, 3 notes</title>
-<rect x="1160.9" y="685.1" width="10.9" height="16" fill="#2da44e"/>
-<rect x="1171.8" y="685.1" width="5.2" height="16" fill="#d4a72c"/>
+<rect x="1135.2" y="708.3" width="16" height="10.7" fill="#2da44e"/>
+<rect x="1151.2" y="708.3" width="7.7" height="10.7" fill="#d4a72c"/>
+</g>
+<g><title>Type33 fireecto (TYPE33_FIREECTO.md): 2 code</title>
+<rect x="1160.9" y="685.1" width="16.1" height="16" fill="#2da44e"/>
 </g>
 <g><title>Rolling boulder (ROLLING_BOULDER.md): 1 code</title>
 <rect x="1160.9" y="703.1" width="16.1" height="15.9" fill="#2da44e"/>

@@ -68,7 +68,7 @@ fn type30_weighted_intervals_keep_unconditional_furniture_and_one_selector_word(
     ] {
         for (word, class) in cases {
             let mut draws = 0;
-            let selection = tasks::select(player, &mut || {
+            let selection = tasks::select(Type30Row::Type30, player, &mut || {
                 draws += 1;
                 0xdead0000 | word
             })
@@ -151,7 +151,10 @@ fn native_type30_constructor_owns_real_lease_and_three_or_four_rng_words() {
         assert_eq!(runtime.sub_d_owner, sub_d.frame_owner);
         assert_eq!(runtime.sub_d_runtime, sub_d.runtime);
         assert_eq!(runtime.kl_components.model_variables_raw(), &[0; 4]);
-        assert_eq!(runtime.sub_e_runtime, tasks::emitter_constructor());
+        assert_eq!(
+            runtime.sub_e_runtime,
+            tasks::emitter_constructor(Type30Row::Type30)
+        );
         assert_eq!(
             entity.collision.animation_offset_at_0xb2,
             RetailRuntimeValue::Known(0)
@@ -267,7 +270,7 @@ fn type30_task_reselection_retains_nonzero_native_kl_bank_emitter_and_transient_
     for class in [5, 7, 26, 5] {
         let selection = BehaviorSelection {
             program: behavior_program(class).unwrap(),
-            ..tasks::select(false, &mut || 0).unwrap()
+            ..tasks::select(Type30Row::Type30, false, &mut || 0).unwrap()
         };
         let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection).unwrap();
         let mut draws = 0;
@@ -632,7 +635,7 @@ fn native_type30_particle_hit_reselects_each_living_style_with_exact_rng_and_rec
                 .collision
                 .state_flags_at_0x08
                 .overwrite(u32::MAX, 0x68000);
-            let selection = tasks::select(class == 7, &mut || match class {
+            let selection = tasks::select(Type30Row::Type30, class == 7, &mut || match class {
                 5 => 0,
                 7 => 10000,
                 26 => 65535,
@@ -650,11 +653,12 @@ fn native_type30_particle_hit_reselects_each_living_style_with_exact_rng_and_rec
             let old_primary = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary);
             let bank_before = entity.native_type30_runtime.clone();
             let mut scheduler = SpecializedActorTaskScheduler::new();
-            scheduler.register_type30(Type30Owner::adopt(&manager, id).unwrap());
+            scheduler.register_type30(Type30FamilyOwner::adopt(&manager, id).unwrap());
             let mut fx = WorldFx::new();
             let mut control = WorldFx::new();
             let selector = u32::from(control.next_shared_retail_random_u16());
-            let expected_selection = tasks::select(false, &mut || selector).unwrap();
+            let expected_selection =
+                tasks::select(Type30Row::Type30, false, &mut || selector).unwrap();
             control.next_shared_retail_random_u16();
             let impact = ParticleEntityImpact {
                 source_particle_class: particle_class,

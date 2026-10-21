@@ -17,6 +17,7 @@
 //! outside these seams.
 
 pub mod acquisition;
+pub(crate) mod native;
 
 use crate::actor_task_owner::{ActorTaskOwner, ActorTaskSlot, PreparedActorTask};
 

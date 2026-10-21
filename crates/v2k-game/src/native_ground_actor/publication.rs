@@ -1,7 +1,8 @@
 //! AC60's class initializers for ground rows whose root is built only from
 //! the shared programs: Defecate Virus `B9E0`, Move About Aimlessly `ACD0`,
-//! Search/Capture/Run Away `B6C0`, Follow Beacons `B740`, and Trash Furniture
-//! and Trash Buildings `B7C0` (style arguments -1 and 3).
+//! Wander Near Location `AD10`, Search/Capture/Run Away `B6C0`, Guard Location
+//! `B5A0`, Follow Beacons `B740`, and Trash Furniture and Trash Buildings
+//! `B7C0` (style arguments -1 and 3).
 
 use super::*;
 use crate::{
@@ -34,7 +35,7 @@ pub(crate) fn publish_shared_root_class(
     next_random: &mut impl FnMut() -> u32,
 ) -> bool {
     let class = selection.program.class_id;
-    if !matches!(class, 4 | 5 | 7 | 9 | 10 | 15 | 26 | 33) {
+    if !matches!(class, 4 | 5 | 6 | 7 | 9 | 10 | 15 | 26 | 32 | 33) {
         return false;
     }
     let RetailRuntimeValue::Known(lifetime) = metadata.terrain_contact_task_lifetime_ms else {
@@ -46,8 +47,8 @@ pub(crate) fn publish_shared_root_class(
         .collision
         .state_flags_at_0x08
         .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
-    if matches!(class, 7 | 9 | 10) {
-        // B6C0 copies only authored axis+04; the live range word survives.
+    if matches!(class, 7 | 9 | 10 | 32) {
+        // B6C0 and B5A0 copy only authored axis+04; the live range survives.
         let RetailRuntimeValue::Known(mut axis) = entity.actor_common_axis_descriptor else {
             return false;
         };
@@ -137,14 +138,36 @@ pub(crate) fn publish_shared_root_class(
                 target_speed_raw, ..
             } => sub_a.apply_shared_initializer_target_speed_write(target_speed_raw),
         };
-        if class == 5 {
-            // ACD0: clear2 -> clear1 -> 402B10(owner,0,5000), then 06070 once.
+        if class == 32 {
+            crate::guard_location_owner::native::apply_native_guard_setup(
+                actor_tasks,
+                authored_axis,
+                position_raw,
+                |task| {
+                    prepare_shared_generic_constructor_suffix(task, metadata)
+                        .map(|prepared| prepared.apply_suffix(&mut *next_random, &mut apply))
+                        .map_err(drop)
+                },
+            )
+            .is_ok()
+        } else if matches!(class, 5 | 6) {
+            // ACD0/AD10: clear2 -> clear1 -> 402B10 or 402E20 (owner, 0,
+            // 5000), then 06070 once.
             actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
             actor_tasks.clear_slot(ActorTaskSlot::Secondary);
             match prepare_shared_generic_constructor_suffix(
-                PreparedActorTask::new(ActorTaskRuntime::SharedRetarget(
-                    SharedRetargetTaskState::new(position_raw, 5000),
-                )),
+                PreparedActorTask::new(if class == 5 {
+                    ActorTaskRuntime::SharedRetarget(SharedRetargetTaskState::new(
+                        position_raw,
+                        5000,
+                    ))
+                } else {
+                    ActorTaskRuntime::OrdinaryType9Wander(
+                        crate::ordinary_type9_wander_owner::OrdinaryType9WanderTaskState::from_allocated_anchor(
+                            position_raw,
+                        ),
+                    )
+                }),
                 metadata,
             ) {
                 Ok(prepared) => {

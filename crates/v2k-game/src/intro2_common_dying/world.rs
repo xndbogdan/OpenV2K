@@ -341,6 +341,7 @@ fn run_frame(
                     terrain,
                     dt,
                     frame.elapsed_micros,
+                    wave_clock.wave_tick_50hz,
                 );
                 if let Err(error) = result {
                     entity.actor_tasks.finish_exact_visit(owner.visit);

@@ -136,15 +136,22 @@ fn type31_abort_splits_into_type105s_that_die_quietly() {
     }
 }
 
-/// Type30's 10C10 takes class12 once, as a lethal hit's publisher does.
+/// Type30's and Type33's 10C10 take class12 once, as a lethal hit's
+/// publisher does.
 #[v2k_test_support::retail_test]
-fn type30_abort_takes_class12_once() {
+fn type30_family_abort_takes_class12_once() {
+    for (level, entity_type) in [(17, 30), (42, 33), (43, 33), (47, 33)] {
+        type30_family_abort(level, entity_type);
+    }
+}
+
+fn type30_family_abort(level: u32, entity_type: u32) {
     let (session, mut entities, mut fx) =
-        crate::native_type122::construction_tests::native_fixture_with_player(17);
+        crate::native_type122::construction_tests::native_fixture_with_player(level);
     let mut tasks = SpecializedActorTaskScheduler::new();
     assert!(tasks.adopt_type30(&entities) > 0);
     let mut publications = MainBaseAbortPublicationCounts::default();
-    let id = ids(&entities, 30)[0];
+    let id = ids(&entities, entity_type)[0];
     for _ in 0..2 {
         assert_eq!(
             abort_visit(

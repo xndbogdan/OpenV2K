@@ -177,7 +177,7 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
-        30 if crate::native_type30::manager_allocation_authenticates(manager, id) => {
+        30 | 33 if crate::native_type30::manager_allocation_authenticates(manager, id) => {
             crate::intro2_common_dying::publish_intro2_common_standard_death(manager, id, world_fx)
                 .map(|owner| LiveActorDeathResult {
                     returned_nonzero: owner.is_some(),

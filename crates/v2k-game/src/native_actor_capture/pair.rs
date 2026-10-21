@@ -877,7 +877,7 @@ fn behavior(
             if style != 0x004c7930
                 || entity.capability_flags != 8
                 || !crate::native_type30::manager_allocation_authenticates(frame.entities, owner)
-                || crate::native_type30::Type30Owner::adopt(frame.entities, owner).is_err()
+                || crate::native_type30::Type30FamilyOwner::adopt(frame.entities, owner).is_err()
             {
                 return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
             }

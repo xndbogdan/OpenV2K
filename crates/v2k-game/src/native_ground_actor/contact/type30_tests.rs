@@ -53,7 +53,7 @@ fn native_type30_class5_search7_and_furniture26_static_hooks_keep_own_graph() {
         control.next_shared_retail_random_u16();
         control.next_shared_retail_random_u16();
         let mut tasks = SpecializedActorTaskScheduler::new();
-        tasks.register_type30(native_type30::Type30Owner::adopt(&manager, id).unwrap());
+        tasks.register_type30(native_type30::Type30FamilyOwner::adopt(&manager, id).unwrap());
         reselect_after_furniture_contact(
             &mut Intro2ContactFrame {
                 entities: &mut manager,

@@ -51,7 +51,12 @@ fn live_fixture(class: u8) -> (GameSession, EntityManager, WorldFx, u32, u32) {
     for _ in 0..65536 {
         let mut peek = fx.fork_for_main_base_abort_transaction();
         let word = u32::from(peek.next_shared_retail_random_u16());
-        if tasks::select(true, &mut || word).unwrap().program.class_id == class {
+        if tasks::select(Type30Row::Type30, true, &mut || word)
+            .unwrap()
+            .program
+            .class_id
+            == class
+        {
             reached = true;
             break;
         }
@@ -93,7 +98,7 @@ fn native_type30_living_classes5_7_26_reach_own_kl_and_current_task_wrappers() {
         let entity = manager.entity_mut(id).unwrap();
         let runtime_before = entity.native_type30_runtime.as_ref().unwrap().clone();
         let primary_before = entity.actor_tasks.task_in_slot(Slot::Primary).unwrap();
-        let owner = Type30Owner::adopt(&manager, id).unwrap();
+        let owner = Type30FamilyOwner::adopt(&manager, id).unwrap();
         let tick = tick_type30(
             &mut manager,
             owner,
@@ -135,7 +140,7 @@ fn native_type30_living_classes5_7_26_reach_own_kl_and_current_task_wrappers() {
             RetailRuntimeValue::Known(0)
         );
         let retained = tick.retained_owner.unwrap();
-        assert_eq!(Type30Owner::adopt(&manager, id), Ok(retained));
+        assert_eq!(Type30FamilyOwner::adopt(&manager, id), Ok(retained));
         let entity = manager.entity_mut(id).unwrap();
         for slot in Slot::IN_RETAIL_TICK_ORDER {
             if let Some(task) = entity.actor_tasks.task_in_slot(slot) {
@@ -166,7 +171,7 @@ fn native_type30_living_classes5_7_26_reach_own_kl_and_current_task_wrappers() {
 #[v2k_test_support::retail_test]
 fn native_type30_real_acquisition_method20_fifo_survives_class12_and_drains_once() {
     let (mut session, mut manager, mut fx, id, player) = live_fixture(7);
-    let owner = Type30Owner::adopt(&manager, id).unwrap();
+    let owner = Type30FamilyOwner::adopt(&manager, id).unwrap();
     let tick = tick_type30(
         &mut manager,
         owner,

@@ -231,6 +231,9 @@ pub(crate) fn secondary<P: NativeGroundActorProfile>(
     if matches!(task, ActorTaskRuntime::FollowBeaconAcquisition(_)) && program.class_id == 33 {
         return acquire_beacon::<P>(manager, id, world_fx);
     }
+    if matches!(task, ActorTaskRuntime::GuardLocationAcquisition(_)) && program.class_id == 32 {
+        return super::guard::acquire::<P>(manager, id, world_fx);
+    }
     if matches!(task, ActorTaskRuntime::CaptureBeaconAcquisition)
         && P::CAPTURE_POLICY == NativeCapturePolicy::Transport
     {

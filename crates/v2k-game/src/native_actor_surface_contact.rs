@@ -46,6 +46,7 @@ enum NativeSurfaceProfile {
     Type17,
     Type58,
     Type30,
+    Type33,
     Type122,
     Type18,
     Type28,
@@ -61,6 +62,7 @@ impl NativeSurfaceProfile {
             17 => Some(Self::Type17),
             58 => Some(Self::Type58),
             30 => Some(Self::Type30),
+            33 => Some(Self::Type33),
             122 => Some(Self::Type122),
             18 => Some(Self::Type18),
             28 => Some(Self::Type28),
@@ -78,6 +80,7 @@ impl NativeSurfaceProfile {
             Self::Type17 => 17,
             Self::Type58 => 58,
             Self::Type30 => 30,
+            Self::Type33 => 33,
             Self::Type122 => 122,
             Self::Type18 => 18,
             Self::Type28 => 28,
@@ -102,7 +105,14 @@ impl NativeSurfaceProfile {
                     manager, id,
                 )
             }
-            Self::Type30 => crate::native_type30::manager_allocation_authenticates(manager, id),
+            Self::Type30 | Self::Type33 => {
+                crate::native_type30::manager_allocation_authenticates(manager, id)
+                    && manager
+                        .iter_all()
+                        .find(|entity| entity.id == id)
+                        .and_then(crate::native_type30::type30_row)
+                        .is_some_and(|row| row.entity_type() == self.entity_type())
+            }
             Self::Type122 => {
                 crate::native_type122::type122_manager_allocation_authenticates(manager, id)
             }
@@ -139,6 +149,7 @@ impl NativeSurfaceProfile {
                 crate::intro2_type26_defecate_virus::authenticate_metadata(metadata).is_ok()
             }
             Self::Type30 => crate::native_type30::authenticate_metadata(metadata).is_ok(),
+            Self::Type33 => crate::native_type30::authenticate_type33_metadata(metadata).is_ok(),
             Self::Type122 => crate::native_type122::authenticate_metadata(metadata).is_ok(),
             Self::Type18 => crate::native_type18::authenticate_metadata(metadata).is_ok(),
             Self::Type28 => crate::native_type28::authenticate_metadata(metadata).is_ok(),
@@ -415,6 +426,7 @@ fn resolve(
                         | NativeSurfaceProfile::Type26
                         | NativeSurfaceProfile::Type58
                         | NativeSurfaceProfile::Type30
+                        | NativeSurfaceProfile::Type33
                         | NativeSurfaceProfile::Type76Family(_) => {
                             crate::intro2_common_dying::publish_intro2_common_standard_death(
                                 manager, id, fx,
