@@ -15,7 +15,7 @@ use v2k_game::network::protocol::GameRecord;
 use v2k_game::player::PlayerCraft;
 use v2k_game::player_hull::PlayerHull;
 use v2k_game::world_fx::{
-    NetworkParticleBirth, ParticleEnvironment, TerrainCollisionContext, WorldFx,
+    NetworkParticleBirth, NetworkSend, ParticleEnvironment, TerrainCollisionContext, WorldFx,
 };
 
 pub struct NetworkWorldFrame<'a> {
@@ -73,6 +73,16 @@ fn particle_request(birth: NetworkParticleBirth, owner_handle: u32) -> [u8; 20] 
     out
 }
 
+/// `FUN_00439DF0`'s word: the cue's low byte, then the high bytes of the
+/// position's X, Y and Z.
+fn sound_word(sound_id: u16, position_raw: [i16; 3]) -> u32 {
+    let high = |word: i16| u32::from(word as u16 >> 8);
+    u32::from(sound_id & 0xFF)
+        | high(position_raw[0]) << 8
+        | high(position_raw[1]) << 16
+        | high(position_raw[2]) << 24
+}
+
 fn particle_birth(request: &[u8; 20], owner_id: Option<u32>) -> NetworkParticleBirth {
     let word = |index: usize| i16::from_le_bytes([request[index * 2], request[index * 2 + 1]]);
     NetworkParticleBirth {
@@ -101,12 +111,6 @@ pub fn advance_network_world(
         retail_tick,
         damage,
     } = frame;
-    // Sends the port holds: FUN_00440950's bursts (kind 2) and every
-    // FUN_0044F480 sound cue (kinds 22..=25).
-    if world_fx.take_network_burst_unsent() {
-        report_held("sending FUN_00440950's bursts (kind 2)".into());
-    }
-    report_held("sending FUN_0044F480's sound cues (kinds 22 to 25)".into());
     // The world owners' own sends: cells (4, 5), static objects (6), impacts
     // on a peer's body (10) and attachments (13 to 15).
     report_held("sending record kinds 4, 5, 6, 10, 13, 14 and 15".into());
@@ -115,10 +119,31 @@ pub fn advance_network_world(
         // Type61s live: a power-up from the table at 0x004C92D0.
         report_held("the host's power-up spawner (FUN_004132D0)".into());
     }
-    // FUN_00440A60's kind-1 sends for this frame's replicated births.
-    for birth in world_fx.take_network_particles() {
-        let owner = birth.owner_id.and_then(|id| net.handle_of(id)).unwrap_or(0);
-        net.send(GameRecord::Particle(particle_request(birth, owner)));
+    // This frame's sends from the effects, in call order: FUN_00440A60's
+    // kind 1, FUN_00440950's kind 2 and FUN_0044F480's kinds 22 and 23.
+    for send in world_fx.take_network_sends() {
+        match send {
+            NetworkSend::Particle(birth) => {
+                let owner = birth.owner_id.and_then(|id| net.handle_of(id)).unwrap_or(0);
+                net.send(GameRecord::Particle(particle_request(birth, owner)));
+            }
+            NetworkSend::Burst(request) => {
+                let mut record = [0u8; 12];
+                for (bytes, word) in record.chunks_exact_mut(2).zip(request) {
+                    bytes.copy_from_slice(&word.to_le_bytes());
+                }
+                net.send(GameRecord::Burst(record));
+            }
+            NetworkSend::Sound {
+                sound_id,
+                position_raw,
+                rate_q16,
+            } => net.send(GameRecord::Sound {
+                word: sound_word(sound_id, position_raw),
+                rate: (rate_q16 != 0x1_0000).then_some(rate_q16),
+                gain: None,
+            }),
+        }
     }
     // FUN_00414E90's kind-9 sends for peers' bodies hit this frame.
     for (id, amount, attacker_type) in damage.drain(..) {
@@ -195,6 +220,9 @@ pub fn advance_network_world(
                 if gain != 0x1_0000 {
                     report_held(format!("a sound's gain word ({gain:#x})"));
                 }
+                verbose(format_args!(
+                    "Network: a peer's cue {sound_id} at {position_raw:?}"
+                ));
                 world_fx.queue_fixed_positional_sound_raw_at_rate(sound_id, position_raw, rate);
             }
             NetworkEvent::Particle(request) => {
@@ -261,7 +289,16 @@ pub fn advance_network_world(
                     }
                 }
             }
-            NetworkEvent::Burst(_) => report_held("a peer's burst (kind 2)".into()),
+            NetworkEvent::Burst(record) => {
+                // FUN_0043A020: the request's six words, network byte 2.
+                let word = |i: usize| u16::from_le_bytes([record[i * 2], record[i * 2 + 1]]);
+                let sea_level_raw = cache
+                    .terrain()
+                    .and_then(|terrain| terrain.water_enabled().then(|| terrain.sea_level_raw()));
+                let request: [u16; 6] = std::array::from_fn(word);
+                verbose(format_args!("Network: a peer's burst {request:?}"));
+                world_fx.materialize_network_burst(request, sea_level_raw);
+            }
             NetworkEvent::Held { kind } => report_held(format!("record kind {kind}")),
             NetworkEvent::UnknownRestState => {
                 report_held("the rest period of a body with unknown state bits".into())
@@ -279,6 +316,11 @@ pub fn advance_network_world(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sound_word_keeps_the_cue_and_the_position_high_bytes() {
+        assert_eq!(sound_word(0x13E, [0x1234, -0x0100, 0x7F00]), 0x7F_FF_12_3E);
+    }
 
     #[test]
     fn a_particle_request_keeps_its_bytes() {

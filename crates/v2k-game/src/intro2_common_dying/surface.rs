@@ -230,7 +230,7 @@ pub(crate) fn run_actor_surface_with_lifecycle<D>(
         if let Some(sound) = plan_ordinary_type9_surface_sound(surface, &mut || {
             u32::from(world_fx.next_shared_retail_random_u16())
         }) {
-            world_fx.queue_fixed_positional_sound_raw(sound.sound_id, sound.position_raw);
+            world_fx.queue_networked_positional_sound_raw(sound.sound_id, sound.position_raw);
         }
     }
     Ok(())

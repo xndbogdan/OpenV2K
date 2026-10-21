@@ -87,7 +87,7 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
         ) {
             frame
                 .world_fx
-                .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+                .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
     let terrain = frame

@@ -901,7 +901,7 @@ fn drive_checked_action(
             position_raw,
             ..
         } => {
-            world_fx.queue_fixed_positional_sound_raw(*sound_id, *position_raw);
+            world_fx.queue_networked_positional_sound_raw(*sound_id, *position_raw);
             CheckedDamageResume::Acknowledged { phase }
         }
         CheckedDamageAction::SampleCachedGenericHitCallback { .. } => {

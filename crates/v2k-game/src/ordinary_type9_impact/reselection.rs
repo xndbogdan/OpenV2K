@@ -249,8 +249,10 @@ pub(super) fn reselect(
             // preparation. Preserve its prefix even if a later allocation
             // fails; a live hit never queues a load-time text receipt.
             if let Some(sound) = committed.positional_sound {
-                world_fx
-                    .queue_fixed_positional_sound_raw(sound.global_sound_id, sound.position_raw);
+                world_fx.queue_networked_positional_sound_raw(
+                    sound.global_sound_id,
+                    sound.position_raw,
+                );
             }
             publication
         }

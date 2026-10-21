@@ -29,8 +29,9 @@ impl WorldFx {
         self.emit_scatter_surface_sound_tail_raw(
             position_raw,
             sea_level_raw,
-            source_handle,
+            Some(source_handle),
             Some(10),
+            false,
         );
     }
 
@@ -58,8 +59,9 @@ impl WorldFx {
         self.emit_scatter_surface_sound_tail_raw(
             position_raw,
             sea_level_raw,
-            source_handle,
+            Some(source_handle),
             Some(57),
+            false,
         );
     }
 
@@ -104,8 +106,9 @@ impl WorldFx {
         self.emit_scatter_surface_sound_tail_raw(
             position_raw,
             sea_level_raw,
-            source_handle,
+            Some(source_handle),
             Some(34),
+            false,
         );
     }
 

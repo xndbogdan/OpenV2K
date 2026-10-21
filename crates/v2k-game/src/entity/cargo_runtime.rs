@@ -853,7 +853,7 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
                 project_relation_attach(entity, parent);
                 if let Some((sound, position)) = plan.sound() {
                     self.world_fx
-                        .queue_fixed_positional_sound_raw(sound, position);
+                        .queue_networked_positional_sound_raw(sound, position);
                 }
                 let carried = ordinary_type9_cargo::commit_attach(entity, actor, plan)
                     .expect("prepared synchronous Type-9 attachment");
@@ -1184,7 +1184,7 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
                 }
                 for request in sounds {
                     debug_assert_eq!((request.gain_16_16, request.rate_16_16), (0x10000, 0x10000));
-                    self.world_fx.queue_fixed_positional_sound_raw(
+                    self.world_fx.queue_networked_positional_sound_raw(
                         request.global_sound_id,
                         request.position_raw,
                     );

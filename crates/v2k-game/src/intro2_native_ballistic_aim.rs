@@ -1023,7 +1023,7 @@ fn handle_generic_action<P: NativeBallisticProfile>(
             {
                 return Err(NativeBallisticAimError::ActionContractMismatch);
             }
-            world_fx.queue_fixed_positional_sound_raw(P::ID.sound(), expected_position);
+            world_fx.queue_networked_positional_sound_raw(P::ID.sound(), expected_position);
             Ok(GenericEmitterResume::Acknowledged { phase })
         }
         GenericEmitterAction::EmitMethod31Rejection { .. }

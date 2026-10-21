@@ -475,7 +475,7 @@ fn finish_world(
         ) {
             frame
                 .world_fx
-                .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+                .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
     // Effective25027: no attitude, gravity, drag or origin-radius adjustment.

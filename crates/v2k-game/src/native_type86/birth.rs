@@ -569,7 +569,7 @@ impl AttractAttentionInitialSetupAdapter<ActorTaskRuntime> for BirthAdapter<'_, 
     fn emit_positional_sound(&mut self, request: AttractAttentionPositionalSoundRequest) {
         self.effects
             .world_fx
-            .queue_fixed_positional_sound_raw(request.global_sound_id, request.position_raw);
+            .queue_networked_positional_sound_raw(request.global_sound_id, request.position_raw);
     }
 }
 

@@ -1419,7 +1419,8 @@ pub(crate) fn commit_attract_attention_root_sounds(
         if let Some(sound) = committed.positional_sound {
             debug_assert_eq!(sound.gain_16_16, 0x1_0000);
             debug_assert_eq!(sound.rate_16_16, 0x1_0000);
-            world_fx.queue_fixed_positional_sound_raw(sound.global_sound_id, sound.position_raw);
+            world_fx
+                .queue_networked_positional_sound_raw(sound.global_sound_id, sound.position_raw);
         }
     }
 }

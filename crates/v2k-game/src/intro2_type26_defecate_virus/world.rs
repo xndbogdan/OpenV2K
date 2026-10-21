@@ -657,7 +657,7 @@ fn finish_world(
         ) {
             frame
                 .world_fx
-                .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+                .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();

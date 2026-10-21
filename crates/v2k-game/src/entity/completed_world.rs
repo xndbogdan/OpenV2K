@@ -111,7 +111,7 @@ impl EntityManager {
             .apply_hive_dying_initializer()
             .ok_or("42E440 Hive initializer unavailable")?;
         if let Some(sound) = sound {
-            world_fx.queue_fixed_positional_sound_raw(sound, position);
+            world_fx.queue_networked_positional_sound_raw(sound, position);
         }
         crate::hive_death::emit_hive_dying_surface_burst(
             world_fx,
@@ -157,7 +157,8 @@ impl EntityManager {
                 if outcome.hive_dying_bursts.is_empty() =>
             {
                 for sound in outcome.sounds {
-                    world_fx.queue_fixed_positional_sound_raw(sound.sound_id, sound.position_raw);
+                    world_fx
+                        .queue_networked_positional_sound_raw(sound.sound_id, sound.position_raw);
                 }
                 Ok(())
             }

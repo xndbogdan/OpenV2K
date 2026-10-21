@@ -233,7 +233,7 @@ impl SpecializedActorTaskScheduler {
                             outcome.completed_target_ids.push(id);
                         }
                         for sound in applied.sounds {
-                            world_fx.queue_fixed_positional_sound_raw(
+                            world_fx.queue_networked_positional_sound_raw(
                                 sound.sound_id,
                                 sound.position_raw,
                             );

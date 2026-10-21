@@ -393,7 +393,7 @@ fn publish_common_dying(
             .state_flags_at_0x08
             .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
         if let Some(sound) = death_sound {
-            world_fx.queue_fixed_positional_sound_raw(sound, position);
+            world_fx.queue_networked_positional_sound_raw(sound, position);
         }
     }
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));

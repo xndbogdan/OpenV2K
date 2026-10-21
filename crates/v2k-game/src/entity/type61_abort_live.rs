@@ -487,7 +487,7 @@ impl EntityManager {
         let dynamic_applied =
             self.commit_preflighted_dynamic_radial_damage(Some(player_hull), dynamic_plan);
         for sound in &dynamic_applied.sounds {
-            world_fx.queue_fixed_positional_sound_raw(sound.sound_id, sound.position_raw);
+            world_fx.queue_networked_positional_sound_raw(sound.sound_id, sound.position_raw);
         }
         let sea_level_raw = terrain.water_enabled().then(|| terrain.sea_level_raw());
         for burst in dynamic_applied.hive_dying_bursts {

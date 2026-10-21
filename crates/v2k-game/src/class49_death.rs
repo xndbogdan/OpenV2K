@@ -726,7 +726,7 @@ pub fn begin_class49_standard_death(
     // before DB80 enters BD20. This is distinct from 440950's later sound62
     // and consumes no process RNG. Submit now, before BAF0's immediate cues.
     if let Some(sound) = death_sound {
-        fx.emit_fixed_positional_sound_raw(sound, receipt.position_raw);
+        fx.emit_networked_positional_sound_raw(sound, receipt.position_raw);
     }
     // 10C10 then stops +8C before DB80 enters the selected alternate. In
     // particular the native Type61 class23 source owns looping sound44.

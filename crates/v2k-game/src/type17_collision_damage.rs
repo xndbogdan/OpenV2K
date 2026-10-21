@@ -244,7 +244,7 @@ pub fn apply_type17_collision_damage(
         }
     };
     if let Some(sound_id) = sound {
-        world_fx.queue_fixed_positional_sound_raw(sound_id, entity.position_raw());
+        world_fx.queue_networked_positional_sound_raw(sound_id, entity.position_raw());
         committed_prefix = true;
     }
     require_null_callback(entity.collision.pair_callbacks.type_hit_callback_address)

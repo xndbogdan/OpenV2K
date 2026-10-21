@@ -301,7 +301,7 @@ pub(crate) fn tick_primary<E>(
         },
         || u32::from(fx.borrow_mut().next_shared_retail_random_u16()),
         |sound| {
-            fx.borrow_mut().queue_fixed_positional_sound_raw(
+            fx.borrow_mut().queue_networked_positional_sound_raw(
                 sound.sound_id.get() as u16,
                 sound.owner_position_raw,
             )

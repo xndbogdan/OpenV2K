@@ -59,7 +59,7 @@ impl MainBaseAbortProductionFailure {
             if let Some(sound_id) = started.death_sound_id {
                 request
                     .world_fx
-                    .queue_fixed_positional_sound_raw(sound_id, started.target_position_raw);
+                    .queue_networked_positional_sound_raw(sound_id, started.target_position_raw);
             }
         }
         let terrain = request

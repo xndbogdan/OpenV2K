@@ -520,7 +520,7 @@ fn mutate(
                 .overwrite(0x1000, 0x1000);
             entity.attached_to = Some(captor);
             if let Some((sound, position)) = plan.sound() {
-                world_fx.queue_fixed_positional_sound_raw(sound, position);
+                world_fx.queue_networked_positional_sound_raw(sound, position);
             }
             let owner = ordinary_type9_cargo::commit_attach(entity, actor, plan).map_err(|_| {
                 CaptureBlock {
@@ -640,7 +640,7 @@ fn mutate(
                 )
                 .expect("child graph preflight and captor-only row prefix");
                 for sound in sounds {
-                    world_fx.queue_fixed_positional_sound_raw(
+                    world_fx.queue_networked_positional_sound_raw(
                         sound.global_sound_id,
                         sound.position_raw,
                     );

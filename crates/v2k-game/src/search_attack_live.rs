@@ -409,7 +409,7 @@ pub fn apply_search_attack_ade0_without_mover(
 
     let owner_position_raw = entity.position_raw();
     if let Some(sound_id) = prelude_sound_id {
-        world_fx.queue_fixed_positional_sound_raw(sound_id, owner_position_raw);
+        world_fx.queue_networked_positional_sound_raw(sound_id, owner_position_raw);
     }
     let request = SearchAttackTaskSetupRequest::Pursuing { target_id };
     let setup = search_attack_variant_setup(SearchAttackVariant::Pursuing);
@@ -869,7 +869,7 @@ pub fn apply_search_attack_aim_visit_without_emitter(
                 return;
             };
             fx.borrow_mut()
-                .queue_fixed_positional_sound_raw(sound_id, position_raw);
+                .queue_networked_positional_sound_raw(sound_id, position_raw);
         },
         |_| Err(SearchAttackLiveAimBlock::GenericEmitterUninvented),
     );

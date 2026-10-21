@@ -1211,7 +1211,7 @@ fn handle_type47_generic_action(
                     phase,
                 ));
             }
-            world_fx.queue_fixed_positional_sound_raw(row_sound, expected_position);
+            world_fx.queue_networked_positional_sound_raw(row_sound, expected_position);
             Ok(GenericEmitterResume::Acknowledged { phase })
         }
         GenericEmitterAction::EmitMethod31Rejection { .. }
