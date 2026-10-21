@@ -42,6 +42,12 @@ const SB_BOTTOM: usize = 7;
 const WM_SETFONT: u32 = 0x0030;
 const CB_RESETCONTENT: u32 = 0x014b;
 const CBN_SELCHANGE: usize = 1;
+const TBM_GETPOS: u32 = 0x0400;
+const TBM_SETPOS: u32 = 0x0405;
+const TBM_SETRANGE: u32 = 0x0406;
+const TBS_AUTOTICKS: u32 = 0x0001;
+const TBS_TOOLTIPS: u32 = 0x0100;
+const ICC_BAR_CLASSES: u32 = 0x0004;
 const DPI_AWARENESS_CONTEXT_SYSTEM_AWARE: isize = -2;
 const ENUM_CURRENT_SETTINGS: u32 = u32::MAX;
 const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
@@ -228,6 +234,11 @@ pub(super) fn attach_parent_console() {
 }
 unsafe fn run_native(request: LauncherRequest) -> Result<Option<LaunchSelection>, String> {
     let header_animation = HeaderAnimation::load()?;
+    // The effects volume slider is comctl32's trackbar.
+    InitCommonControlsEx(&InitCommonControls {
+        size: std::mem::size_of::<InitCommonControls>() as u32,
+        classes: ICC_BAR_CLASSES,
+    });
     // The process is per-monitor DPI aware for the game; the launcher keeps
     // its system-DPI layout, scaled by `GetDpiForSystem` below.
     let dpi_context = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
@@ -627,6 +638,35 @@ impl WindowState {
             SendMessageW(control, 0x0143, 0, wide(value).as_ptr() as isize);
         }
         SendMessageW(control, 0x014e, selection as usize, 0);
+        control
+    }
+
+    /// A trackbar over `0..=maximum` at `value`, with a tick at each step
+    /// and a tooltip that shows the value while it is dragged.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn slider(
+        &self,
+        parent: Handle,
+        value: u32,
+        maximum: u32,
+        id: usize,
+        x: i32,
+        y: i32,
+        width: i32,
+    ) -> Handle {
+        let control = self.control(
+            parent,
+            "msctls_trackbar32",
+            "",
+            WS_TABSTOP | TBS_AUTOTICKS | TBS_TOOLTIPS,
+            id,
+            x,
+            y,
+            width,
+            30,
+        );
+        SendMessageW(control, TBM_SETRANGE, 1, (maximum << 16) as isize);
+        SendMessageW(control, TBM_SETPOS, 1, value.min(maximum) as isize);
         control
     }
 
@@ -1376,13 +1416,13 @@ impl WindowState {
             config.sound_enabled,
         );
         self.label(window, "Effects volume:", 234, 279, 112, 20);
-        let effects_volume = self.combo(
+        let effects_volume = self.slider(
             window,
-            &(0..=15).map(|n| n.to_string()).collect::<Vec<_>>(),
-            (config.sfx_volume.clamp(0.0, 1.0) * 15.0).round() as usize,
+            (config.sfx_volume.clamp(0.0, 1.0) * 15.0).round() as u32,
+            15,
             ID_EFFECTS_VOLUME,
             356,
-            274,
+            270,
             168,
         );
         let music_availability = self.label(window, "", 234, 244, 294, 28);
@@ -1552,7 +1592,7 @@ impl WindowState {
             0.0
         };
         config.sound_enabled = checked(controls.effects);
-        config.sfx_volume = combo_selection(controls.effects_volume).min(15) as f32 / 15.0;
+        config.sfx_volume = slider_position(controls.effects_volume).min(15) as f32 / 15.0;
         config.controller_layout =
             ControllerLayout::from_index(combo_selection(controls.controller) as u32);
         config.fixes.beam_commands = checked(controls.fix_beam);
@@ -1711,6 +1751,9 @@ fn popup_description(report: &ValidationReport) -> String {
 
 unsafe fn combo_selection(control: Handle) -> usize {
     SendMessageW(control, 0x0147, 0, 0).max(0) as usize
+}
+unsafe fn slider_position(control: Handle) -> u32 {
+    SendMessageW(control, TBM_GETPOS, 0, 0).max(0) as u32
 }
 unsafe fn checked(control: Handle) -> bool {
     SendMessageW(control, 0x00f0, 0, 0) == 1
