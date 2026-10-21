@@ -1997,8 +1997,6 @@ fn run_game(
 
     // A network game in progress (FUN_0046BED0 to FUN_0046BFC0).
     let mut network_game: Option<v2k_game::network::game::NetworkGame> = None;
-    // Damage the particle pass dealt peers' bodies this frame (kind 9).
-    let mut network_damage: Vec<(u32, u16, u16)> = Vec::new();
     // Power-ups the player picked up this frame (kind 8), and the host's
     // power-up clock (`DAT_004DB0A4`).
     let mut network_removals: Vec<u32> = Vec::new();
@@ -7378,16 +7376,28 @@ fn run_game(
                             .network_entity(entity_impact.target_entity_id)
                             .filter(|target| target.is_network_remote())
                         {
-                            if let (Some(delivery), RetailRuntimeValue::Known(profile)) =
-                                (entity_impact.damage_delivery_record(), target.collision.damage_profile)
+                            let admitted = target
+                                .collision
+                                .state_flags_at_0x08
+                                .masked(v2k_game::entity_collision_state::CHECKED_DAMAGE_ENABLED_STATE_BIT)
+                                != RetailRuntimeValue::Known(0);
+                            if let (true, Some(delivery), RetailRuntimeValue::Known(profile)) =
+                                (admitted, entity_impact.damage_delivery_record(), target.collision.damage_profile)
                             {
                                 let amount = delivery.packet.filtered_raw_with_ratio(Some(&profile), 0, 0);
-                                if amount > 0 {
-                                    network_damage.push((
-                                        target.id,
-                                        amount.min(0xFFFF) as u16,
-                                        delivery.source_entity_type_raw as u16,
+                                let modifier = target.collision.pair_callbacks.damage_modifier_address;
+                                if amount != 0 && modifier != RetailRuntimeValue::Known(None) {
+                                    // FUN_00415040 runs the body's +44 first.
+                                    network_play::report_held(format!(
+                                        "a peer's Type{} damage modifier {modifier:x?}",
+                                        target.entity_type
                                     ));
+                                } else if amount != 0 {
+                                    world_fx.send_network_damage(
+                                        target.id,
+                                        amount as u16,
+                                        delivery.source_entity_type_raw as u16,
+                                    );
                                 }
                             }
                             return ParticleCollisionCacheRefresh::Unchanged;
@@ -9111,7 +9121,9 @@ fn run_game(
                         NetworkWorldFrame {
                             em,
                             world_fx: &mut world_fx,
-                            cache: &session.cache,
+                            cache: &mut session.cache,
+                            static_damage: &mut static_damage,
+                            scheduler: &mut specialized_actor_tasks,
                             hull: &mut player_hull,
                             notifications: &mut gameplay_notifications,
                             extra_lives: player_campaign_progress.extra_lives(),
@@ -9121,7 +9133,6 @@ fn run_game(
                             }),
                             elapsed_micros,
                             retail_tick,
-                            damage: &mut network_damage,
                             removals: &mut network_removals,
                         },
                     );

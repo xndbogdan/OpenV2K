@@ -49,6 +49,10 @@ pub struct DynamicRadialApplied {
     pub sounds: Vec<DynamicRadialSound>,
     /// Hive67 lethal follow-ups for the caller's `FUN_00440950` burst.
     pub hive_dying_bursts: Vec<HiveDyingBurst>,
+    /// `FUN_00414E90`'s kind 9 for peers' bodies: id, amount, attacker type.
+    pub peer_damage: Vec<(u32, u16, u16)>,
+    /// Peers' bodies whose impulse `FUN_00414AE0` would send as kind 10.
+    pub peer_impulses: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -150,6 +154,8 @@ pub(crate) struct DynamicRadialDamagePlan {
     player_feedback_damage_raw: Option<i32>,
     accepted_targets: usize,
     sounds: Vec<DynamicRadialSound>,
+    peer_damage: Vec<(u32, u16, u16)>,
+    peer_impulses: Vec<u32>,
 }
 
 impl DynamicRadialDamagePlan {
@@ -332,6 +338,8 @@ impl EntityManager {
             player_feedback_damage_raw,
             accepted_targets,
             sounds,
+            peer_damage,
+            peer_impulses,
         } = plan;
         if let Some(damage_raw) = player_feedback_damage_raw {
             crate::pad_vibration::submit_player_damage(damage_raw);
@@ -369,6 +377,8 @@ impl EntityManager {
             accepted_targets,
             sounds,
             hive_dying_bursts,
+            peer_damage,
+            peer_impulses,
         }
     }
 }
@@ -388,6 +398,8 @@ fn plan_dynamic_radial_damage<'a>(
         player_feedback_damage_raw: None,
         accepted_targets: 0,
         sounds: Vec::new(),
+        peer_damage: Vec::new(),
+        peer_impulses: Vec::new(),
     };
 
     for (index, target) in entities {
@@ -455,15 +467,28 @@ fn plan_dynamic_radial_damage<'a>(
         let mut mutated = false;
         let mut hive_dying = false;
 
+        let remote = || {
+            required(
+                collision_before
+                    .state_flags_at_0x08
+                    .masked(REMOTE_OWNED_STATE_BIT),
+                target.id,
+                DynamicRadialRuntimeField::RemoteOwnership,
+            )
+            .map(|bit| bit != 0)
+        };
         if target.entity_type != IMPULSE_SUPPRESSED_ENTITY_TYPE {
             if let Some(impulse) = scaled.impulse_vector_raw {
-                require_local_ownership(target.id, collision_before)?;
                 velocity_raw = [
                     velocity_raw[0].wrapping_add(impulse[0]),
                     velocity_raw[1].wrapping_add(impulse[1]),
                     velocity_raw[2].wrapping_add(impulse[2]),
                 ];
                 mutated = true;
+                // A peer's body moves here too, and its owner is sent kind 10.
+                if remote()? {
+                    plan.peer_impulses.push(target.id);
+                }
             }
         }
 
@@ -504,8 +529,26 @@ fn plan_dynamic_radial_damage<'a>(
         if player_id == Some(target.id) {
             plan.player_feedback_damage_raw = Some(filtered_damage_raw);
         }
+        if remote()? {
+            // 14E90's first branch: the owner's machine applies it (kind 9).
+            plan.peer_damage.push((
+                target.id,
+                filtered_damage_raw as u16,
+                scaled.trailing_raw[0] as u16,
+            ));
+            if mutated {
+                plan.mutations.push(PlannedEntityMutation {
+                    index,
+                    target_id: target.id,
+                    velocity_raw,
+                    collision,
+                    base_factory_runtime,
+                    hive_dying: false,
+                });
+            }
+            continue;
+        }
         admit_type_hit_callback(target.id, collision_before)?;
-        require_local_ownership(target.id, collision_before)?;
 
         let health_raw = required(
             collision.health_raw,
@@ -1045,6 +1088,47 @@ mod tests {
                 ..CommonEnvironmentPhysics::default()
             },
         }
+    }
+
+    /// 14AE0 on a peer's body: the impulse moves it here too (its kind 10 is
+    /// held) and 14E90 sends the filtered damage to its owner (kind 9) before
+    /// any buffer, health, sound or type hit callback.
+    #[test]
+    fn a_blast_moves_a_peers_body_and_sends_its_damage() {
+        let mut target = entity(1, [64, 0, 0], 10_000);
+        target.collision.state_flags_at_0x08 = RetailStateWord::exact(
+            CHECKED_DAMAGE_ENABLED_STATE_BIT
+                | RADIAL_DAMAGE_ALTERNATE_ELIGIBLE_STATE_BIT
+                | REMOTE_OWNED_STATE_BIT,
+        );
+        target.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Unresolved;
+        let mut peer = manager(vec![target]);
+        let mut local = manager(vec![entity(1, [64, 0, 0], 10_000)]);
+        let DynamicRadialDamageOutcome::Applied(applied) =
+            peer.apply_dynamic_radial_damage(DynamicRadialPlayerContext::Absent, [0; 3], TEMPLATE)
+        else {
+            panic!("a peer's body takes the blast");
+        };
+        let DynamicRadialDamageOutcome::Applied(local_applied) =
+            local.apply_dynamic_radial_damage(DynamicRadialPlayerContext::Absent, [0; 3], TEMPLATE)
+        else {
+            panic!("a local body takes the blast");
+        };
+        let RetailRuntimeValue::Known(health) = local.entities[0].collision.health_raw else {
+            panic!("known health");
+        };
+        assert_eq!(
+            peer.entities[0].velocity_raw(),
+            local.entities[0].velocity_raw()
+        );
+        assert_eq!(applied.peer_impulses, [1]);
+        assert_eq!(applied.peer_damage, [(1, (10_000 - health) as u16, 0xFFFF)]);
+        assert_eq!(
+            peer.entities[0].collision.health_raw,
+            RetailRuntimeValue::Known(10_000)
+        );
+        assert!(applied.sounds.is_empty() && !local_applied.sounds.is_empty());
+        assert!(local_applied.peer_damage.is_empty() && local_applied.peer_impulses.is_empty());
     }
 
     #[test]
@@ -1714,6 +1798,8 @@ mod tests {
                 accepted_targets: 0,
                 sounds: Vec::new(),
                 hive_dying_bursts: Vec::new(),
+                peer_damage: Vec::new(),
+                peer_impulses: Vec::new(),
             })
         );
     }
@@ -1739,6 +1825,8 @@ mod tests {
                 accepted_targets: 1,
                 sounds: Vec::new(),
                 hive_dying_bursts: Vec::new(),
+                peer_damage: Vec::new(),
+                peer_impulses: Vec::new(),
             })
         );
         assert_eq!(manager.entities[0].velocity_raw(), [0; 3]);

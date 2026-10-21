@@ -212,7 +212,10 @@ without `0x08000000`) or 3.5 s otherwise.
 
 | Routine | Does |
 | --- | --- |
-| `FUN_00414E90` | damage to a peer's body goes to its owner (kind 9: handle, amount, `(attacker type + 6) \| slot << 8`), which applies it through `FUN_00417E10` with the sender's slot. On the local player, a lethal hit runs `FUN_00439C90` (the killer is the attacker's slot when a player's craft, type 46, dealt it) and a player's nonlethal hit `FUN_00439DB0` |
+| `FUN_00414E90` | damage to a peer's body goes to its owner (kind 9: handle, amount, `(attacker type + 6) \| slot << 8`), whatever dealt it: a particle through `FUN_00415040`, a blast through `FUN_00414E10`, an attached particle through `FUN_004425D0`. On the local player, a lethal hit runs `FUN_00439C90` (the killer is the attacker's slot when a player's craft, type 46, dealt it) and a player's nonlethal hit `FUN_00439DB0` |
+| `FUN_004104B0` | the body constructor: the instance damage modifier `+44` is `FUN_004484A0` for type 46, `FUN_00416820` for types 73 and 109, `FUN_00421910` for type 110 and none otherwise; a body whose handle names another slot gets state bit `0x80000000` |
+| `FUN_00414AE0` | a blast moves a peer's body here too and sends its owner the impulse (kind 10), but that record's handle comes from a stack slot the loop writes only after the send: the previous target's handle, or an older value for the first, and its three attitude words are never written. The damage then reaches the owner as kind 9 |
+| `FUN_00417E10` | kind 9 for a body this machine owns: `FUN_00414E90` with the amount, the attacker's type (the byte less 6) and slot, past `FUN_00415040`'s admission, filter and modifier. So the owner runs the buffer `+50`, the hit cue, the type's hit callback, health and the death `FUN_00410C10`; a craft's kill (type 46) of a body with state `0x1000000` raises the owner's own kill notification (`FUN_004568B0(4)`) |
 | `FUN_00440A60` | a local birth of a class whose descriptor flags hold 2 is sent (kind 1); a peer's arrives with byte 17 = 2, which sets `+1D` bit 0 (no damage) and is not sent on |
 | `FUN_00442950` | classes 52, 68 and 85 hitting an entity deal their damage without testing `+1D` bit 0, so a peer's copy of such a creature shot also hits on every machine that shows it |
 | `FUN_00440950` | a burst: its scatter (`FUN_004407D0`), then for a local one (network byte 0) kind 2 with the request's first 12 bytes (count, X, Y, Z, extent, the two scatter classes), then the surface particle and its own cue 62 (`FUN_0044F450`). `FUN_0043A020` replays a peer's with network byte 2 and no owner, so its particles are harmless and nothing is sent on |
@@ -288,9 +291,15 @@ Held, each with a logged stop ("Network: ... is held"):
   and the deploy `FUN_00444400` builds three. The port has no Type65, so it
   refuses the pickup and the power-up stays; with no count, a dying player
   here never drops one;
-- sending kinds 3 to 6 (terrain, cells and static objects), 10 (impacts on
-  a peer's body) and 13 to 15 (attachments);
-- receiving kinds 3 to 6 and 13 to 15, kind 9 for an owned body other than
-  the player, and kind 10's attitude deltas;
+- sending kinds 3 to 6 (terrain, cells and static objects) and 13 to 15
+  (attachments), and kind 10: `FUN_00414AE0`'s, whose handle is stale (above),
+  and `FUN_00411030`'s, since the port runs no particle hit wrapper
+  (`FUN_00411180`, `FUN_00411250`) on a peer's body, only its damage;
+- receiving kinds 3 to 6 and 13 to 15;
+- a particle's damage to a peer's body of type 73, 109 or 110, whose modifier
+  `FUN_00415040` would run first;
+- a peer's damage to an owned creature whose type's hit callback or death the
+  port's shared damage phase has not ported (the same types its blasts stop
+  at), reported per type ("a peer's damage to an owned TypeN");
 - the components (Sub-H frames) of a peer's body, which `FUN_0041D0A0` and
   `FUN_00420920` draw on the owner's side.

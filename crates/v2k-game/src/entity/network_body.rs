@@ -97,6 +97,14 @@ impl EntityManager {
             0,
             RetailStateWord::exact(REMOTE_STATE_BIT),
         );
+        // FUN_004104B0's instance damage modifier `+44` by type.
+        entity.collision.pair_callbacks.damage_modifier_address =
+            RetailRuntimeValue::Known(match entity_type {
+                0x2E => Some(0x0044_84A0),
+                0x49 | 0x6D => Some(0x0041_6820),
+                0x6E => Some(0x0042_1910),
+                _ => None,
+            });
         entity.network_body = Some(Box::new(NetworkBody {
             sync_timeout_us: REMOTE_TIMEOUT_US,
             ..NetworkBody::default()

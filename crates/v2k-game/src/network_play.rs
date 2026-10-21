@@ -21,7 +21,10 @@ use v2k_game::world_fx::{
 pub struct NetworkWorldFrame<'a> {
     pub em: &'a mut EntityManager,
     pub world_fx: &'a mut WorldFx,
-    pub cache: &'a v2k_game::resource_cache::ResourceCache,
+    pub cache: &'a mut v2k_game::resource_cache::ResourceCache,
+    pub static_damage: &'a mut v2k_game::static_damage::StaticDamageScheduler,
+    pub scheduler:
+        &'a mut v2k_game::specialized_actor_task_production::SpecializedActorTaskScheduler,
     pub hull: &'a mut PlayerHull,
     pub notifications: &'a mut v2k_game::gameplay_notifications::GameplayNotifications,
     pub extra_lives: u8,
@@ -30,8 +33,6 @@ pub struct NetworkWorldFrame<'a> {
     pub world: u16,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
-    /// Peers' bodies the particle pass hit: id, amount, attacker type.
-    pub damage: &'a mut Vec<(u32, u16, u16)>,
     /// Power-ups the player picked up this frame.
     pub removals: &'a mut Vec<u32>,
 }
@@ -145,6 +146,8 @@ pub fn advance_network_world(
         em,
         world_fx,
         cache,
+        static_damage,
+        scheduler,
         hull,
         notifications,
         extra_lives,
@@ -152,7 +155,6 @@ pub fn advance_network_world(
         world,
         elapsed_micros,
         retail_tick,
-        damage,
         removals,
     } = frame;
     // The world owners' own sends: cells (4, 5), static objects (6), impacts
@@ -182,6 +184,19 @@ pub fn advance_network_world(
                 rate: (rate_q16 != 0x1_0000).then_some(rate_q16),
                 gain: None,
             }),
+            NetworkSend::BlastImpulse { .. } => {
+                report_held("FUN_00414AE0's kind 10 (the previous target's handle)".into())
+            }
+            NetworkSend::Damage {
+                entity_id,
+                amount,
+                attacker_type,
+            } => {
+                verbose(format_args!(
+                    "Network: {amount} damage from a Type{attacker_type} to peer body {entity_id}"
+                ));
+                net.forward_damage(entity_id, amount, attacker_type);
+            }
         }
     }
     // FUN_00425AF0 sends kind 8 for each power-up the player picked up,
@@ -193,13 +208,6 @@ pub fn advance_network_world(
     }
     for reason in em.take_refused_network_drops() {
         report_held(format!("a dropped power-up ({reason})"));
-    }
-    // FUN_00414E90's kind-9 sends for peers' bodies hit this frame.
-    for (id, amount, attacker_type) in damage.drain(..) {
-        verbose(format_args!(
-            "Network: {amount} damage from a Type{attacker_type} to peer body {id}"
-        ));
-        net.forward_damage(id, amount, attacker_type);
     }
     let lines_before = net.scoring.lines.clone();
     let scores_before = (net.scoring.table, net.scoring.winner);
@@ -298,7 +306,30 @@ pub fn advance_network_world(
             } => {
                 if em.player().map(|player| player.id) != Some(entity_id) {
                     let entity_type = em.network_entity(entity_id).map_or(0, |e| e.entity_type);
-                    report_held(format!("a peer's damage to an owned Type{entity_type}"));
+                    let result = v2k_game::attached_particle_damage::apply_network_damage(
+                        v2k_game::attached_particle_damage::AttachedParticleDamageFrame {
+                            resources: &mut *cache,
+                            entities: &mut *em,
+                            world_fx: &mut *world_fx,
+                            static_damage: &mut *static_damage,
+                            scheduler: &mut *scheduler,
+                            notifications: &mut *notifications,
+                            retail_tick,
+                            world: v2k_game::attached_particle_damage::AttachedParticleDamageWorld::Playing {
+                                player_hull: &mut *hull,
+                                extra_lives: v2k_game::entity_collision_state::RetailRuntimeValue::Known(extra_lives),
+                            },
+                        },
+                        entity_id,
+                        amount,
+                        attacker_type,
+                    );
+                    verbose(format_args!(
+                        "Network: a peer's {amount} damage to owned Type{entity_type} {entity_id}: {result:?}"
+                    ));
+                    if result.is_err() {
+                        report_held(format!("a peer's damage to an owned Type{entity_type}"));
+                    }
                     continue;
                 }
                 let outcome = em.apply_player_checked_damage(
@@ -329,16 +360,17 @@ pub fn advance_network_world(
                 }
             }
             NetworkEvent::Impact { entity_id, deltas } => {
-                // FUN_00417EB0: velocity and attitude deltas.
+                // FUN_00417EB0: velocity (+9C..+A0) and attitude (+A2..+A6)
+                // deltas, wrapping words, as FUN_00411030 writes them.
                 if let Some(entity) = em.entity_mut(entity_id) {
-                    let mut velocity = entity.velocity_raw();
-                    for (axis, delta) in velocity.iter_mut().zip(&deltas[..3]) {
-                        *axis = axis.wrapping_add(*delta);
-                    }
-                    entity.velocity = velocity.map(|word| f32::from(word) / 256.0);
-                    if deltas[3..] != [0, 0, 0] {
-                        report_held("a peer's attitude delta (kind 10)".into());
-                    }
+                    let velocity = entity.velocity_raw();
+                    entity.velocity = std::array::from_fn(|axis| {
+                        f32::from(velocity[axis].wrapping_add(deltas[axis])) / 256.0
+                    });
+                    let attitude = entity.rotation_heading_pitch_roll_raw();
+                    entity.set_rotation_heading_pitch_roll_raw(std::array::from_fn(|axis| {
+                        attitude[axis].wrapping_add(deltas[3 + axis])
+                    }));
                 }
             }
             NetworkEvent::Burst(record) => {
