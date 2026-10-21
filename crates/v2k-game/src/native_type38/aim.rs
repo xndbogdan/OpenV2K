@@ -76,6 +76,12 @@ row_aim_profile!(
     Type38Row::Type119,
     super::profile::Type119Profile
 );
+row_aim_profile!(
+    Type32AimProfile,
+    Type32,
+    Type38Row::Type32,
+    super::profile::Type32Profile
+);
 
 fn manager_row(manager: &EntityManager, entity_id: u32) -> Option<Type38Row> {
     manager
@@ -94,6 +100,9 @@ pub fn ensure_type38_family_aim_runtime(
         }
         Some(Type38Row::Type119) => {
             shared::ensure_native_aim_runtime::<Type119AimProfile>(entity, metadata)
+        }
+        Some(Type38Row::Type32) => {
+            shared::ensure_native_aim_runtime::<Type32AimProfile>(entity, metadata)
         }
         _ => shared::ensure_native_aim_runtime::<Type38AimProfile>(entity, metadata),
     }
@@ -133,6 +142,14 @@ pub fn tick_type38_family_aim(
             elapsed_micros,
             metadata,
         ),
+        Some(Type38Row::Type32) => shared::tick_native_aim::<Type32AimProfile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
         _ => shared::tick_native_aim::<Type38AimProfile>(
             dispatch_mode,
             manager,
@@ -160,6 +177,13 @@ pub fn drain_type38_family_shots(
             retail_tick,
         ),
         Some(Type38Row::Type119) => shared::drain_native_shots::<Type119AimProfile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
+        Some(Type38Row::Type32) => shared::drain_native_shots::<Type32AimProfile>(
             manager,
             world_fx,
             source_entity_id,

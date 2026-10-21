@@ -105,6 +105,12 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     } else {
         false
     };
+    // Rule 11 is 16570: 164D0 with the beacon mask 0x100.
+    let beacon = if needs(BehaviorWeightRule::BeaconNearby) {
+        nearby::<P>(owner, &candidates, 0x100).map_err(|_| Block::Runtime("beacon selector"))?
+    } else {
+        false
+    };
     let buildings = if needs(BehaviorWeightRule::BuildingsNearby) {
         buildings_nearby(
             entity,
@@ -122,6 +128,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
             BehaviorWeightRule::PlayerNearby => i32::from(player),
             BehaviorWeightRule::FurnitureNearby => i32::from(furniture),
             BehaviorWeightRule::BuildingsNearby => i32::from(buildings),
+            BehaviorWeightRule::BeaconNearby => i32::from(beacon),
             _ => unreachable!(),
         },
         || u32::from(world_fx.next_shared_retail_random_u16()),

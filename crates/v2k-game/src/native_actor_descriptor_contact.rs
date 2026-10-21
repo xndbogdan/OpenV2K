@@ -291,7 +291,9 @@ fn commit_plan(
             30 => &mut entity.native_type30_runtime.as_mut().unwrap().sub_d_runtime,
             40 => &mut entity.native_type40_runtime.as_mut().unwrap().sub_d_runtime,
             56 => &mut entity.native_type56_runtime.as_mut().unwrap().sub_d_runtime,
-            38 | 129 | 119 => &mut entity.native_type38_runtime.as_mut().unwrap().sub_d_runtime,
+            38 | 129 | 119 | 32 => {
+                &mut entity.native_type38_runtime.as_mut().unwrap().sub_d_runtime
+            }
             12 | 127 => &mut entity.native_type12_runtime.as_mut().unwrap().sub_d_runtime,
             31 | 105 => &mut entity.native_type31_runtime.as_mut().unwrap().sub_d_runtime,
             13 => {
@@ -546,7 +548,7 @@ fn contact_topology(
         || topology.sub_g != flying
         // Type30 retains its constructor-owned K/L alongside A/B/C/D/E/H.
         //01A20 uses its A/D branch without advancing or reinterpreting K/L.
-        || (topology.sub_l && !flying && !matches!(entity.entity_type, 30 | 38 | 129 | 119 | 12 | 127))
+        || (topology.sub_l && !flying && !matches!(entity.entity_type, 30 | 38 | 129 | 119 | 32 | 12 | 127))
         || topology.sub_i != person
         || !animation_presence_matches
         || if fish {
@@ -589,7 +591,7 @@ fn contact_topology(
             30 => entity.native_type30_runtime.is_none(),
             40 => entity.native_type40_runtime.is_none(),
             56 => entity.native_type56_runtime.is_none(),
-            38 | 129 | 119 => entity.native_type38_runtime.is_none(),
+            38 | 129 | 119 | 32 => entity.native_type38_runtime.is_none(),
             12 | 127 => entity.native_type12_runtime.is_none(),
             31 | 105 => entity.native_type31_runtime.is_none(),
             13 => entity.intro2_type13_common_mover_runtime.is_none(),
@@ -650,7 +652,7 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         40 => crate::native_type40::manager_allocation_authenticates(manager, id),
         56 => crate::native_type56::manager_allocation_authenticates(manager, id),
         43 => crate::native_type43::manager_allocation_authenticates(manager, id),
-        38 | 129 | 119 => crate::native_type38::manager_allocation_authenticates(manager, id),
+        38 | 129 | 119 | 32 => crate::native_type38::manager_allocation_authenticates(manager, id),
         12 | 127 => crate::native_type12::manager_allocation_authenticates(manager, id),
         31 | 105 => crate::native_type31::manager_allocation_authenticates(manager, id),
         13 => crate::intro2_type13_live::type13_manager_allocation_authenticates(manager, id),
@@ -699,7 +701,7 @@ pub(crate) fn completed_contact_owner(
                     && tasks.type43_completed_owner(manager, id))
         }
         // BAC0 cleared a Type38 corpse's tasks; only its receipt remains.
-        38 | 129 | 119 | 12 | 127 => {
+        38 | 129 | 119 | 32 | 12 | 127 => {
             crate::class49_death::finished_terminal_hit_authenticates(manager, id)
                 || tasks.prepare_native_actor_mutation(manager, id)
         }
@@ -739,8 +741,8 @@ pub(crate) fn native_weapon_contact_owner_authenticates(
 
 fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool {
     match kind {
-        26 | 30 | 38 | 129 | 119 | 12 | 127 | 31 | 105 | 40 | 56 | 43 | 13 | 14 | 15 | 39 | 87
-        | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57 => {
+        26 | 30 | 38 | 129 | 119 | 32 | 12 | 127 | 31 | 105 | 40 | 56 | 43 | 13 | 14 | 15 | 39
+        | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57 => {
             native_insect_allocation_authenticates(manager, id)
         }
         kind if NativeWorkerProfile::from_entity_type(kind).is_some() => {

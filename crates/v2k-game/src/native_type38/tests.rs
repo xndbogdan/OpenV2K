@@ -20,12 +20,13 @@ use crate::{
 };
 
 /// Every authored row: Type129 in world 41, Type38 in worlds 42 and 43,
-/// Type119 in world 46.
-const WORLDS: [(u32, Type38Row); 4] = [
+/// Type119 in world 46 and Type32 in world 32.
+const WORLDS: [(u32, Type38Row); 5] = [
     (41, Type38Row::Type129),
     (42, Type38Row::Type38),
     (43, Type38Row::Type38),
     (46, Type38Row::Type119),
+    (32, Type38Row::Type32),
 ];
 
 fn row_index(row: Type38Row) -> usize {
@@ -33,6 +34,7 @@ fn row_index(row: Type38Row) -> usize {
         Type38Row::Type38 => 0,
         Type38Row::Type129 => 1,
         Type38Row::Type119 => 2,
+        Type38Row::Type32 => 3,
     }
 }
 
@@ -115,7 +117,7 @@ fn assert_no_block(
 
 #[v2k_test_support::retail_test]
 fn type38_family_births_publish_their_rows_on_the_ground_host() {
-    let mut births = [0; 3];
+    let mut births = [0; 4];
     for (level, row) in WORLDS {
         let (session, manager, _) = crate::intro2_gun_turret::authored_tests::fixture(level);
         let ids = ids(&manager, row);
@@ -133,14 +135,20 @@ fn type38_family_births_publish_their_rows_on_the_ground_host() {
                 runtime.sub_e_runtime.sound_id,
                 u32::from(row.emitter().sound_id)
             );
-            assert!(matches!(style(&manager, id), 0x004c_7930 | 0x004c_7a50));
+            // Type32's BeaconNearby choice publishes Follow Beacons.
+            assert!(matches!(
+                style(&manager, id),
+                0x004c_7930 | 0x004c_7a50 | 0x004c_7b28
+            ));
             assert!(Type38FamilyOwner::adopt(&manager, id).is_ok());
             let profile = source_profile(entity).unwrap();
             assert_eq!(profile, NativeExplosionSourceProfile::Type38Family(row));
             assert_eq!(
                 profile.policy(),
                 match row {
-                    Type38Row::Type38 | Type38Row::Type119 => NativeExplosionPolicy::Class1,
+                    Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 => {
+                        NativeExplosionPolicy::Class1
+                    }
                     Type38Row::Type129 => NativeExplosionPolicy::Class63,
                 }
             );
@@ -159,7 +167,7 @@ fn type38_family_births_publish_their_rows_on_the_ground_host() {
             "world{level}"
         );
     }
-    assert_eq!(births, [10, 25, 3]);
+    assert_eq!(births, [10, 25, 3, 3]);
 }
 
 /// Ten seconds under the real scheduler and the late static walk.
@@ -304,7 +312,11 @@ fn lethal_row_hit(id: u32, row: Type38Row) -> ParticleEntityImpact {
 /// Type61 authored in its +88 at the carrier.
 #[v2k_test_support::retail_test]
 fn lethal_playing_hits_run_class1_and_class63() {
-    for (level, row) in WORLDS {
+    // Type32's zero multipliers let no channel reach its health.
+    for (level, row) in WORLDS
+        .into_iter()
+        .filter(|&(_, row)| row != Type38Row::Type32)
+    {
         let (mut session, mut manager, mut fx) =
             crate::native_type122::construction_tests::native_fixture_with_player(level);
         manager.cleanup_pending_actor_deferred_destroys();
@@ -350,7 +362,7 @@ fn lethal_playing_hits_run_class1_and_class63() {
             .actor_tasks
             .task_in_slot(ActorTaskSlot::Primary);
         match row {
-            Type38Row::Type38 | Type38Row::Type119 => {
+            Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 => {
                 assert_eq!(style(&manager, id), 0x004c_7150);
                 assert!(primary.is_none(), "BAC0 runs A860");
             }
@@ -536,4 +548,47 @@ fn draw_sub_h(session: &crate::session::GameSession, manager: &mut EntityManager
         |x, z| terrain.bilinear_height_raw(x, z),
     )
     .unwrap();
+}
+
+/// Type32's armour multiplies every channel by zero: a hit that kills any
+/// other row leaves its health and graph unchanged.
+#[v2k_test_support::retail_test]
+fn type32_absorbs_every_channel() {
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(32);
+    manager.cleanup_pending_actor_deferred_destroys();
+    let ids = ids(&manager, Type38Row::Type32);
+    activate(&mut manager, &ids);
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    assert_eq!(tasks.adopt_type38_family(&manager), ids.len());
+    let id = ids[0];
+    let style_before = style(&manager, id);
+    let mut static_damage = StaticDamageScheduler::new();
+    let mut notifications = GameplayNotifications::new();
+    let mut hull = PlayerHull::default();
+    for channel in 1..=6 {
+        let mut hit = lethal_hit(id);
+        hit.damage.as_mut().unwrap().packet.channels = [channel, 0];
+        apply_playing_actor_particle_hit(
+            PlayingActorImpactFrame {
+                extra_lives: RetailRuntimeValue::Known(3),
+                resources: &mut session.cache,
+                entities: &mut manager,
+                world_fx: &mut fx,
+                scheduler: &mut tasks,
+                notifications: &mut notifications,
+                static_damage: &mut static_damage,
+                player_hull: &mut hull,
+                retail_tick: 600 + channel as u32,
+            },
+            hit,
+        );
+        assert_eq!(
+            entity(&manager, id).collision.health_raw,
+            RetailRuntimeValue::Known(10_000),
+            "channel{channel}"
+        );
+    }
+    assert!(!manager.pending_actor_deferred_destroy_ids().contains(&id));
+    assert_ne!(style(&manager, id), 0x004c_7150, "{style_before:#x}");
 }

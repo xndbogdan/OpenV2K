@@ -32,6 +32,15 @@ fn graph_authenticates<P: NativeGroundActorProfile>(entity: &Entity) -> bool {
                 && t.is_none()
         }
         0x4c7a98 => shared::search::pursuing_graph_authenticates::<P>(entity),
+        // Type32's Follow Beacons33: B740's acquiring pair, then the follow.
+        0x4c7b28 if P::LIVING_CLASSES.contains(&33) => {
+            matches!(p, Some(Task::SharedRetarget(_)))
+                && matches!(s, Some(Task::FollowBeaconAcquisition(_)))
+                && t.is_none()
+        }
+        0x4c7b70 if P::LIVING_CLASSES.contains(&33) => {
+            matches!(p, Some(Task::FollowBeaconsFollowing(_))) && s.is_none() && t.is_none()
+        }
         _ => false,
     }
 }
@@ -71,7 +80,7 @@ fn update_attachment(manager: &mut EntityManager, id: u32) -> Result<(), NativeG
 }
 
 macro_rules! type38_profile {
-    ($name:ident, $row:expr, $variant:ident) => {
+    ($name:ident, $row:expr, $variant:ident, $classes:expr) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name;
         impl NativeGroundActorProfile for $name {}
@@ -83,7 +92,7 @@ macro_rules! type38_profile {
             const TOPOLOGY: crate::entity_collision_state::CommonMoverComponentTopology = TOPOLOGY;
             const AXIS: CommonAxisDescriptor = $row.axis();
             const CHOICES: &'static [BehaviorChoice] = $row.choices();
-            const LIVING_CLASSES: &'static [u8] = &[5, 7];
+            const LIVING_CLASSES: &'static [u8] = $classes;
             const TERMINAL_DEATH: bool = true;
             fn register_owner(
                 scheduler: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
@@ -209,6 +218,7 @@ macro_rules! type38_profile {
     };
 }
 
-type38_profile!(Type38Profile, Type38Row::Type38, Type38);
-type38_profile!(Type129Profile, Type38Row::Type129, Type129);
-type38_profile!(Type119Profile, Type38Row::Type119, Type119);
+type38_profile!(Type38Profile, Type38Row::Type38, Type38, &[5, 7]);
+type38_profile!(Type129Profile, Type38Row::Type129, Type129, &[5, 7]);
+type38_profile!(Type119Profile, Type38Row::Type119, Type119, &[5, 7]);
+type38_profile!(Type32Profile, Type38Row::Type32, Type32, &[5, 7, 33]);

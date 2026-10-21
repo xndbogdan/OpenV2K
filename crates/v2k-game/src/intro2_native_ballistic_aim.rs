@@ -62,6 +62,8 @@ pub(crate) enum NativeBallisticProfileId {
     Type38,
     Type129,
     Type119,
+    /// World 32's Type32 walkers: Type119's emitter.
+    Type32,
     Type16,
     /// Ordinary Type128 carriers on the Type16 owner: a silent emitter.
     Type128,
@@ -93,7 +95,8 @@ impl NativeBallisticProfileId {
             | Self::Type43
             | Self::Type38
             | Self::Type129
-            | Self::Type119 => 10,
+            | Self::Type119
+            | Self::Type32 => 10,
             Self::Type16
             | Self::Type128
             | Self::Type58
@@ -115,6 +118,7 @@ impl NativeBallisticProfileId {
             | Self::Type38
             | Self::Type129
             | Self::Type119
+            | Self::Type32
             | Self::Type12
             | Self::Type127 => 1500,
             Self::Type5
@@ -159,7 +163,7 @@ impl NativeBallisticProfileId {
             Self::Type43 => 68,
             Self::Type38 => 82,
             Self::Type129 => 0,
-            Self::Type119 => 82,
+            Self::Type119 | Self::Type32 => 82,
             Self::Type16 => 81,
             Self::Type58 => 70,
             Self::Type94 => 69,
@@ -184,6 +188,7 @@ impl NativeBallisticProfileId {
             Self::Type38 => 0x5459_5033_3853_5243,
             Self::Type129 => 0x5459_3132_3953_5243,
             Self::Type119 => 0x5459_3131_3953_5243,
+            Self::Type32 => 0x5459_5033_3253_5243,
             Self::Type16 => 0x5459_5031_3653_5243,
             Self::Type128 => 0x5459_3132_3853_5243,
             Self::Type58 => 0x5459_5035_3853_5243,
@@ -213,6 +218,7 @@ impl NativeBallisticProfileId {
             Self::Type38 => 0x5459_5033_3854_4754,
             Self::Type129 => 0x5459_3132_3954_4754,
             Self::Type119 => 0x5459_3131_3954_4754,
+            Self::Type32 => 0x5459_5033_3254_4754,
             Self::Type16 => 0x5459_5031_3654_4754,
             Self::Type128 => 0x5459_3132_3854_4754,
             Self::Type58 => 0x5459_5035_3854_4754,
@@ -239,7 +245,7 @@ impl NativeBallisticProfileId {
             Self::Type43 => (300_000, 1024, 0, 65_535, 7680),
             Self::Type35 => (600_000, 65_535, 0, 65_535, 7680),
             Self::Type38 | Self::Type129 => (600_000, 256, 122, 4000, 5120),
-            Self::Type119 => (800_000, 256, 48, 8000, 3840),
+            Self::Type119 | Self::Type32 => (800_000, 256, 48, 8000, 3840),
             Self::Type16 | Self::Type128 => (300_000, 100, 158, 16_000, 2560),
             Self::Type58 => (400_000, 256, 150, 16_000, 2560),
             Self::Type94 => (700_000, 256, 102, 12_000, 2304),
@@ -633,7 +639,8 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
             | NativeBallisticProfileId::Type43
             | NativeBallisticProfileId::Type38
             | NativeBallisticProfileId::Type129
-            | NativeBallisticProfileId::Type119 => world_fx
+            | NativeBallisticProfileId::Type119
+            | NativeBallisticProfileId::Type32 => world_fx
                 .materialize_class_38_request(
                     Class38ParticleRequest {
                         position_raw: solution.position_raw,
@@ -746,7 +753,8 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                     | NativeBallisticProfileId::Type43
                     | NativeBallisticProfileId::Type38
                     | NativeBallisticProfileId::Type129
-                    | NativeBallisticProfileId::Type119 => drain_type13_transient_request(
+                    | NativeBallisticProfileId::Type119
+                    | NativeBallisticProfileId::Type32 => drain_type13_transient_request(
                         request,
                         entity.position_raw(),
                         entity.velocity_raw(),

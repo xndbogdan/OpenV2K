@@ -591,8 +591,9 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
             }
-            // Type38, its Type129 carriers and Type119 share one ground-host owner.
-            38 | 129 | 119 => {
+            // Type38, its Type129 carriers, Type119 and Type32 share one
+            // ground-host owner.
+            38 | 129 | 119 | 32 => {
                 let sub_d = sub_d.ok_or("missing Type38-family Sub-D allocation")?;
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(

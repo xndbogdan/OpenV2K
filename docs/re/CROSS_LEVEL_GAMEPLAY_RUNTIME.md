@@ -168,7 +168,10 @@ authored Type61 drop (Type129). Drowning (`E370`) fails closed until the surface
 step can lend the terminal its world.
 World46's three Type119 walkers join that owner as a third row: armour only
 channel 3 reaches, the generic crush, Always class5/class7 and four legs whose
-completed strides play sound90 at a drawn rate.
+completed strides play sound90 at a drawn rate. World32's three Type32
+walkers are a fourth row: Type119's body with armour no channel reaches, a
+six-second surface time and BeaconNearby (rule11) Follow Beacons33; the ground
+host now evaluates rule11 when it reselects.
 
 The eight Type12s (worlds31/35) and the 25 Type127 carriers (world27) share
 the [building-trasher owner](TYPE12_BUILDING_TRASHER.md): Follow Beacons33,

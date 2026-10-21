@@ -68,6 +68,7 @@ an emitter or rebuilds the incoming body matrix.
 | Ordinary Type43 |2003B| No generic crush; Search/Pursuit style+1C is null; class1 death |
 | Ordinary Type38/129 |39| No generic crush; Aimless/Search/Pursuit style+1C is null; class1/class63 death |
 | Ordinary Type119 |439| Generic crush; Aimless/Search/Pursuit style+1C is null; class1 death |
+| Ordinary Type32 |439| As Type119, with Follow Beacons 4C7B28/4C7B70 |
 | Ordinary Type12/127 |39| No generic crush; Trash Buildings 4C76F0's C890 reselects with rule9; class1/class63 death |
 | Ordinary Type31 |439| Generic crush; Defecate, class5 and Run Away style+1C are null; class18 split death |
 | Split Type105 |39| No generic crush; Defecate and Run Away style+1C are null; class2 death |

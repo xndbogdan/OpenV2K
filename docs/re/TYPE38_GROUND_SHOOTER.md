@@ -1,8 +1,8 @@
-# Type38, Type129 and Type119 ground shooters
+# Type38, Type129, Type119 and Type32 ground shooters
 
 This document owns the ten ordinary Type38 rows (worlds 42 and 43), the 25
-Type129 rows (world 41), the three Type119 walkers (world 46) and their shared
-native owner,
+Type129 rows (world 41), the three Type119 walkers (world 46), the three
+Type32 walkers (world 32) and their shared native owner,
 [`native_type38`](../../crates/v2k-game/src/native_type38.rs). Both run on the
 shared ground host that also carries
 [Type30](ALPINE_INSECTS.md#native-type30-owner). Static contact is in
@@ -83,6 +83,24 @@ classes, and its own data:
 Both of its choices are Always, so its birth draws no PlayerNearby evidence.
 Its alternate is class1, as Type38's.
 
+### Type32
+
+Type32 (model 1098, three rows in world 32) is Type119's row (components, H
+legs and step sound, K/L, A/B/C/D, emitter, axis and `+C0`) apart from:
+
+| Field | Type32 |
+|---|---|
+| Mass / health | 600 / 10000 |
+| Damage thresholds | `[0, 10000, 10000, 10000, 200, 0, 0]` |
+| Damage multipliers (Q8) | all zero: no channel reaches its health |
+| Surface | selectors `[1, 0]`, 6000 ms |
+| Choices | Always ×1 class5, Always ×1 class7, BeaconNearby ×5 class33 |
+
+BeaconNearby (rule 11, `FUN_00416570`) is `164D0` with mask `0x100`: a beacon
+within the strict axis. Class33 Follow Beacons runs the ground host's shared
+`B740` acquiring pair and its follow. Only the Main Base abort's `10C10` or a
+drowning reaches its class1 terminal.
+
 A leg only starts a stride after `D360` resolves it, and `D360` is the model
 draw's external-frame callback (`6ECF0 -> 0D350 -> 0A9F0`). A walker that is
 never drawn keeps its legs at rest and plays no steps, in retail and in the
@@ -122,7 +140,8 @@ keeps each admitted model's selectors and admits only these two shapes.
 
 Aim fires through the native ballistic FIFO
 ([`intro2_native_ballistic_aim`](../../crates/v2k-game/src/intro2_native_ballistic_aim.rs),
-profiles `Type38`, `Type129` and `Type119`). Type129's shots are silent.
+profiles `Type38`, `Type129`, `Type119` and `Type32`). Type129's shots are
+silent.
 
 ## Hits and death
 
@@ -155,7 +174,8 @@ the same class1 or class63 death.
 
 ## Held boundary
 
-`E370` drowns either row after 500 ms below the surface. That death runs the
+`E370` drowns a row after its surface time below the surface (500 ms for
+Type38 and Type129, 2000 ms for Type119, 6000 ms for Type32). That death runs the
 class1 or class63 terminal, which needs the static world and resources that the
 surface step holds. The owner therefore fails closed at that step, as Type128
 does. The fix is to split the surface step around its lifecycle callback.
@@ -166,8 +186,9 @@ does. The fix is to split the surface step around its lifecycle callback.
 covers:
 
 - all 38 births, their rows, graphs and source profiles;
-- ten-second cohorts in worlds 41, 42, 43 and 46 under the real scheduler and
-  the late static walk;
+- ten-second cohorts in worlds 41, 42, 43, 46 and 32 under the real
+  scheduler and the late static walk;
+- Type32 absorbing a hit on every channel;
 - Type119's step sound 90 at drawn rates, with the draw's `D360` writeback;
 - method10 shots after a player comes near;
 - lethal Playing hits: class1 for Type38 and Type119 (a channel-3 packet), class63
@@ -182,7 +203,7 @@ Elsewhere:
   runs a lethal pair delivery through each row's terminal, then pairs the
   finished corpse without replaying it;
 - [the abort test](../../crates/v2k-game/src/main_base_abort_production/native/type38_tests.rs)
-  checks the deaths in worlds 41, 42, 43 and 46.
+  checks the deaths in worlds 41, 42, 43, 46 and 32.
 
 Headless 60-second runs of worlds 41, 42 and 43 completed with no blocked
 owner. In world 42 a Type38 took thirty 500-point particle hits from other
