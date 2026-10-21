@@ -135,14 +135,15 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (38, 82),
     // Type125 factories share Type66's class39 owner.
     (40, 50),
-    (41, 35),
+    // World 41 completes: its Type35 launchers republish their class7
+    // alternate on the dying body.
     // Type108 flyers die quietly and the Type83 radar through class49;
-    // Alien1's next is its Type35.
-    (42, 35),
-    (43, 35),
+    // Alien1's Type35s republish Search and its next is a Type36.
+    (42, 36),
+    (43, 33),
     // Ordinary Type13 and the emitter-only Type43 take their native class1
-    // abort deaths and Type5 its class11 Tumble publication.
-    (46, 35),
+    // abort deaths, Type5 its class11 Tumble publication and Type35 Search.
+    (46, 36),
     (47, 110),
 ];
 
@@ -373,7 +374,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     }
     assert_eq!(
         exact_worlds,
-        [13, 14, 15, 17, 19, 27, 28, 29, 30, 35, 37, 39, 44, 45, 48]
+        [13, 14, 15, 17, 19, 27, 28, 29, 30, 35, 37, 39, 41, 44, 45, 48]
     );
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,

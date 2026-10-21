@@ -266,7 +266,7 @@ later runtime graph or predecessor history.
 
 | Fresh-world exact sweep | Global OVLs |
 |---|---|
-| Complete | 13, 14, 15, 17, 19, 27, 28, 29, 30, 35, 37, 39, 44, 45, 48 |
+| Complete | 13, 14, 15, 17, 19, 27, 28, 29, 30, 35, 37, 39, 41, 44, 45, 48 |
 | No campaign controller or casualty record | 49, 50 |
 
 The remaining first unsupported ordinary callbacks are listed below. Each is
@@ -280,7 +280,8 @@ retail skips those actors.
 | 25 | 23, 34 |
 | 29 | 20, 24 |
 | 31 | 16 |
-| 35 | 41, 42, 43, 46 |
+| 33 | 43 |
+| 36 | 42, 46 |
 | 41 | 22 |
 | 50 | 40 |
 | 73 | 18 |

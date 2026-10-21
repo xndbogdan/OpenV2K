@@ -278,6 +278,19 @@ fn corpus_weapon_births_keep_rng_allocation_relation_angles_and_task_custody() {
                     RetailRuntimeValue::Known(None)
                 );
             }
+            EntityWeaponKind::Meteor => {
+                assert!(matches!(
+                    entity.actor_task_state(ActorTaskSlot::Tertiary),
+                    Some(ActorTaskRuntime::TrailingFire(_))
+                ));
+                assert!(entity.actor_task_state(ActorTaskSlot::Secondary).is_none());
+                let Some(ActorTaskRuntime::BoulderRolling(task)) =
+                    entity.actor_task_state(ActorTaskSlot::Primary)
+                else {
+                    panic!("class19 primary")
+                };
+                assert_eq!(task.previous_position_raw, request.position_raw);
+            }
         }
     }
 }

@@ -273,7 +273,9 @@ fn authenticate_identity(entity: &Entity) -> Result<usize, Intro2MeteorError> {
     Ok(spawn)
 }
 
-fn authenticate_metadata(metadata: &EntityTypeRuntimeMetadata) -> Result<(), Intro2MeteorError> {
+pub(crate) fn authenticate_metadata(
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), Intro2MeteorError> {
     let Some(init) = &metadata.initializer else {
         return Err(Intro2MeteorError::Metadata);
     };
@@ -578,7 +580,9 @@ pub(crate) fn tick_intro2_meteor_with_random(
                 let ActorTaskRuntime::BoulderRolling(state) = task else {
                     unreachable!()
                 };
-                let tagged = state.step(
+                // Style 4C7858's +04 is null: 401120 lets tag 9C00 fall
+                // through to the lifetime test, which selects +00 (40CEF0).
+                state.step(
                     position,
                     &mut velocity,
                     &mut basis,
@@ -586,7 +590,7 @@ pub(crate) fn tick_intro2_meteor_with_random(
                     dt,
                     detailed,
                 );
-                tagged || state.elapsed_ms > BOULDER_ROLLING_LIFETIME_MS
+                state.elapsed_ms > BOULDER_ROLLING_LIFETIME_MS
             })
             .unwrap();
         entity.set_velocity_raw(velocity);
@@ -654,7 +658,7 @@ pub(crate) fn tick_intro2_meteor_with_random(
     }
 }
 
-fn emit_meteor_trail(
+pub(crate) fn emit_meteor_trail(
     fx: &mut WorldFx,
     id: u32,
     mut position: [i16; 3],

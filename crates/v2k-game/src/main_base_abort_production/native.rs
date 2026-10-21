@@ -46,6 +46,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     Type40(crate::native_type40::death::Type40DeathBlock),
     Type56(crate::native_type56::death::Type56DeathBlock),
     Type27(crate::rolling_boulder::death::RollingBoulderDeathBlock),
+    Type35(crate::native_type43::Type43Error),
 }
 
 pub(super) fn dispatch_native_class49(
@@ -91,7 +92,9 @@ pub(super) fn dispatch_native_class49(
         || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
         || crate::intro2_type16::type16_auto_pilot_row(entity).is_some()
         // A Type3 boulder (authored or split from a Type27) enters class1.
-        || (entity.entity_type == 3 && entity.rolling_boulder_runtime.is_some());
+        || (entity.entity_type == 3 && entity.rolling_boulder_runtime.is_some())
+        // A rocket's or meteor's class1 and a grenade's class49.
+        || crate::native_entity_weapons::entity_authenticates(entity);
     if !admitted {
         return None;
     }
@@ -209,6 +212,7 @@ enum NativeActor {
     Type40,
     Type56,
     Type27,
+    Type35,
 }
 
 pub(super) fn dispatch_native_actor(
@@ -271,6 +275,9 @@ pub(super) fn dispatch_native_actor(
         40 if entity.native_type40_runtime.is_some() => NativeActor::Type40,
         56 if entity.native_type56_runtime.is_some() => NativeActor::Type56,
         27 if entity.rolling_boulder_runtime.is_some() => NativeActor::Type27,
+        crate::native_type43::TYPE35_ENTITY_TYPE if entity.native_type43_runtime.is_some() => {
+            NativeActor::Type35
+        }
         _ => return None,
     };
     Some(dispatch(
@@ -404,6 +411,7 @@ fn dispatch(
             | NativeActor::Type40
             | NativeActor::Type56
             | NativeActor::Type27
+            | NativeActor::Type35
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
         if !ready {
@@ -526,6 +534,28 @@ fn dispatch(
             retire_native_ground_death(specialized_tasks, death.publication);
             publications.appended_type3_actors += children(entities).saturating_sub(before);
             MainBaseAbortActorDisposition::Type27Death
+        }
+        NativeActor::Type35 => {
+            // 10C10 -> DB80: Search's null +2C, then AC40 -> AC60 on the
+            // dying body takes 25660's class7 alternate without a word.
+            let metadata = entities
+                .type_runtime_metadata(crate::native_type43::TYPE35_ENTITY_TYPE)
+                .cloned()
+                .ok_or(block(Block::Type35(
+                    crate::native_type43::Type43Error::Metadata,
+                )))?;
+            let entity = entities.entity_mut(id).unwrap();
+            let published = crate::native_type43::publish_type35_standard_death(entity, &metadata)
+                .map_err(|error| block(Block::Type35(error)))?;
+            if published.is_some() {
+                let owner =
+                    crate::native_type43::Type43Owner::adopt(entities, id).map_err(|_| {
+                        block(Block::Type35(crate::native_type43::Type43Error::Selection))
+                    })?;
+                specialized_tasks.register_type43(owner);
+                publications.same_family_replacements += 1;
+            }
+            MainBaseAbortActorDisposition::Type35Death
         }
         NativeActor::Type56 => {
             // 10C10 -> DB80 -> class2's C470 quiet terminal.
@@ -866,6 +896,8 @@ mod type13_tests;
 mod type14_tests;
 #[cfg(test)]
 mod type16_tests;
+#[cfg(test)]
+mod type35_tests;
 #[cfg(test)]
 mod type38_tests;
 #[cfg(test)]

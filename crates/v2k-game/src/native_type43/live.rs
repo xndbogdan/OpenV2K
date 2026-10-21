@@ -254,17 +254,22 @@ fn run_frame(
             | SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT
             | COMMON_MASTER_MOTION_REQUIRED_STATE_MASK,
     )?;
-    if state & (REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT | 0x1000) != 0
+    let row = type43_row(entity).ok_or(Block::Allocation)?;
+    // A dying Type35 keeps the class7 graph its alternate republished; a
+    // Type43's class1 alternate never leaves it one.
+    let dying_owner = row == Type43Row::Type35 && state & DYING_STATE_BIT != 0;
+    if state & (REMOTE_OWNED_STATE_BIT | 0x1000) != 0
+        || (state & DYING_STATE_BIT != 0 && !dying_owner)
         || entity.attached_to.is_some()
     {
-        return Err(Block::Runtime("local living unattached owner"));
+        return Err(Block::Runtime("local unattached owner"));
     }
     let callback_enabled = state & COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT != 0;
     let metadata = manager
-        .type_runtime_metadata(ENTITY_TYPE)
+        .type_runtime_metadata(row.entity_type())
         .cloned()
         .ok_or(Block::Metadata)?;
-    authenticate_metadata(&metadata).map_err(|_| Block::Metadata)?;
+    super::native::authenticate_row_metadata(row, &metadata).map_err(|_| Block::Metadata)?;
     if callback_enabled
         && (entity.sub_j_attachment_runtime != RetailRuntimeValue::Known(None)
             || entity.collision.constructor_sound_attachment_id_at_0x8c

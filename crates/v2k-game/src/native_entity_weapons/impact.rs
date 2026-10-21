@@ -1,9 +1,10 @@
-//! Native Type42/59 particle hits, retaining their synchronous class1/49 death.
+//! Native Type42/59/34 particle hits, retaining their synchronous class1/49
+//! death.
 //!
 //! 10EB0 and411180 share the type-vtable+14 trampoline40DAC0, but11180
 //! queues the living +80 cue before the hook and multiplies the11030 impulse
 //! by eight.11250/11320 retain their own model-switch prefix. Current class22,
-//! class35 and completed class1/49 have null +20/+24/+28 style hooks.
+//! class35, class19 and completed class1/49 have null +20/+24/+28 style hooks.
 
 use crate::{
     class49_terminal::{
@@ -117,10 +118,7 @@ fn run(
             .policy()
             .style_address()
     } else {
-        match kind {
-            super::EntityWeaponKind::Rocket => 0x004c_81a0,
-            super::EntityWeaponKind::Grenade | super::EntityWeaponKind::DepthCharge => 0x004c_8350,
-        }
+        kind.living_style()
     };
     if context.active_style().style_address() != expected_style {
         return Err(Block::Runtime("unaudited style hit hook"));

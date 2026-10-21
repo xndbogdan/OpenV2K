@@ -1,4 +1,5 @@
 //! Native modeled44E770 births:438080 ->104B0/D4A0 ->D720, then source+60.
+//! A meteor's record already carries 44E770's Y+300 and vertical floor.
 
 use super::*;
 use crate::{
@@ -7,6 +8,7 @@ use crate::{
     },
     native_entity_weapons::{
         grenade::{authenticate_grenade_metadata, GRENADE_CLASS35_CLEAR_ORDER},
+        meteor::authenticate_meteor_metadata,
         rocket::{
             authenticate_rocket_metadata, initialize_rocket_class22, RocketClass22InitHost,
             RocketClass22InitRequest, RocketFlightTaskState, RocketTaskPublication,
@@ -107,6 +109,7 @@ impl EntityManager {
                 authenticate_grenade_metadata(&metadata)
                     .map_err(|_| EntityWeaponBlock::Metadata)?;
             }
+            EntityWeaponKind::Meteor => authenticate_meteor_metadata(&metadata)?,
         }
         if metadata
             .model_slots
@@ -292,6 +295,23 @@ impl EntityManager {
                 for slot in GRENADE_CLASS35_CLEAR_ORDER {
                     entity.actor_tasks.clear_slot(slot);
                 }
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::BoulderRolling(
+                        crate::intro2_meteors::BoulderRollingTaskState::new(request.position_raw),
+                    )),
+                );
+            }
+            EntityWeaponKind::Meteor => {
+                // B910: 069E0(slot2, 0x28), a cleared Secondary, then
+                // 04580(slot0, 5000), whose 4012E0 copies the birth XYZ.
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Tertiary,
+                    PreparedActorTask::new(ActorTaskRuntime::TrailingFire(
+                        crate::intro2_meteors::TrailingFireTaskState::new(),
+                    )),
+                );
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
                 entity.actor_tasks.replace_prepared(
                     ActorTaskSlot::Primary,
                     PreparedActorTask::new(ActorTaskRuntime::BoulderRolling(

@@ -154,8 +154,10 @@ The twelve ordinary [Type43 shooters](TYPE43_SHOOTER.md) (worlds42/46/47)
 carry Sub-E alone. Their native owner runs class7 Search, Chase and method10
 Aim over a prelude-only01430, then E640/E100/DF70 grounding. Lethal hits,
 radials, static and pair contacts and the abort take alternate class1 through
-the shared terminal. Type35, the same shape firing Type34 meteor births, is
-the next boundary.
+the shared terminal. The twelve Type35 launchers (worlds41-47) share that
+owner without a model; their method11 shots birth Type34 meteors on the native
+weapon host, and the abort's 10C10 republishes their class7 alternate on the
+dying body.
 
 The ten [Type38 ground shooters](TYPE38_GROUND_SHOOTER.md) (worlds42/43) and
 the 25 Type129 carriers (world41) share one native owner on the ground host

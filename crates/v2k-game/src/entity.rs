@@ -2665,6 +2665,9 @@ pub struct EntityManager {
     /// write; this dedicated queue is the port-side count/identity owner for
     /// the bounded class-2, class-12, and class-38 families only.
     pending_actor_deferred_destroy_ids: Vec<u32>,
+    /// Meteors a Type35 drain linked during presentation; the scheduler
+    /// registers their owners before its next pass.
+    born_native_weapons: Vec<crate::native_entity_weapons::NativeEntityWeaponOwner>,
     player_id: Option<u32>,
     player_dying_contact_runtime: Option<player_hit::PlayerDyingContactRuntime>,
     /// In a network game, each damage the local player took
@@ -3806,6 +3809,7 @@ impl EntityManager {
                 .pending_factory_scientist_destroy_ids
                 .clone(),
             pending_actor_deferred_destroy_ids: self.pending_actor_deferred_destroy_ids.clone(),
+            born_native_weapons: self.born_native_weapons.clone(),
             player_id: self.player_id,
             player_dying_contact_runtime: self.player_dying_contact_runtime,
             network_player_hits: self.network_player_hits.clone(),
@@ -4856,6 +4860,7 @@ impl EntityManager {
             pending_main_base_conversion_destroy_ids: Vec::new(),
             pending_factory_scientist_destroy_ids: Vec::new(),
             pending_actor_deferred_destroy_ids: Vec::new(),
+            born_native_weapons: Vec::new(),
             player_id: None,
             player_dying_contact_runtime: None,
             network_player_hits: None,
@@ -5034,6 +5039,7 @@ impl EntityManager {
                             | 27
                             | 28
                             | 30
+                            | 35
                             | 38
                             | 39
                             | 40
@@ -7584,6 +7590,19 @@ impl EntityManager {
 
     /// Record the deferred-count side of `FUN_00410B70` after its exact state
     /// write has committed on an admitted actor terminal callback.
+    pub(crate) fn queue_born_native_weapon(
+        &mut self,
+        owner: crate::native_entity_weapons::NativeEntityWeaponOwner,
+    ) {
+        self.born_native_weapons.push(owner);
+    }
+
+    pub(crate) fn take_born_native_weapons(
+        &mut self,
+    ) -> Vec<crate::native_entity_weapons::NativeEntityWeaponOwner> {
+        std::mem::take(&mut self.born_native_weapons)
+    }
+
     pub(crate) fn queue_actor_deferred_destroy(&mut self, entity_id: u32) {
         debug_assert!(self.entities.iter().any(|entity| {
             entity.id == entity_id
@@ -12691,6 +12710,7 @@ impl EntityManager {
             pending_main_base_conversion_destroy_ids: Vec::new(),
             pending_factory_scientist_destroy_ids: Vec::new(),
             pending_actor_deferred_destroy_ids: Vec::new(),
+            born_native_weapons: Vec::new(),
             player_id,
             player_dying_contact_runtime: None,
             network_player_hits: None,

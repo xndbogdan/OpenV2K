@@ -40,10 +40,8 @@ pub(super) fn run(
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<bool, Type43MoverBlock> {
     use Type43MoverBlock as Block;
-    if !allocation_authenticates(entity) {
-        return Err(Block::Allocation);
-    }
-    authenticate_metadata(metadata).map_err(|_| Block::Metadata)?;
+    let row = type43_row(entity).ok_or(Block::Allocation)?;
+    super::native::authenticate_row_metadata(row, metadata).map_err(|_| Block::Metadata)?;
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
         return Err(Block::Runtime("physical basis"));
     };

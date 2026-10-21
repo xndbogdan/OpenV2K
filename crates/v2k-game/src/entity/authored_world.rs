@@ -591,10 +591,14 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
             }
-            // Emitter-only Search And Attack: no Sub-D allocation precedes it.
-            43 => {
+            // Emitter-only Search And Attack, with or without a model (Type35's
+            // meteor launchers): no Sub-D allocation precedes it.
+            43 | 35 => {
                 if sub_d.is_some() {
-                    return Err("unexpected Type43 Sub-D allocation".into());
+                    return Err(format!(
+                        "unexpected Type{} Sub-D allocation",
+                        spawn.entity_type
+                    ));
                 }
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(
@@ -603,7 +607,7 @@ impl EntityManager {
                         retail_tick,
                         waves_enabled,
                     )
-                    .ok_or("Type43 constructor surface")?;
+                    .ok_or("Type43/35 constructor surface")?;
                 crate::native_type43::publish_authored_type43(
                     crate::native_type43::Type43AuthoredConstruction {
                         entity: &mut entity,
@@ -615,7 +619,7 @@ impl EntityManager {
                     },
                     &mut || u32::from(world_fx.next_shared_retail_random_u16()),
                 )
-                .map_err(|error| format!("Type43: {error:?}"))?;
+                .map_err(|error| format!("Type{}: {error:?}", spawn.entity_type))?;
             }
             // Sub-K-only Portable Radar: no Sub-D allocation precedes it.
             83 => {

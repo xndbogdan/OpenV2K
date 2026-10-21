@@ -1,7 +1,9 @@
-# Type43 emitter-only shooters
+# Type43 emitter-only shooters and Type35 meteor launchers
 
-This document owns the twelve ordinary Type43 rows (worlds 42, 46 and 47) and
-their native owner, [`native_type43`](../../crates/v2k-game/src/native_type43.rs).
+This document owns the twelve ordinary Type43 rows (worlds 42, 46 and 47), the
+twelve Type35 meteor launchers (worlds 41, 42, 43, 46 and 47) and their shared
+native owner, [`native_type43`](../../crates/v2k-game/src/native_type43.rs).
+The meteors Type35 births are in [INTRO2_METEORS.md](INTRO2_METEORS.md#dynamic-meteors).
 Shared task programs remain in [ACTOR_TASK_PROGRAMS.md](ACTOR_TASK_PROGRAMS.md).
 Static contact is in [INSECT_STATIC_CONTACT.md](INSECT_STATIC_CONTACT.md). The
 class1 terminal is in [ENTITY_DAMAGE_AND_DEATH.md](ENTITY_DAMAGE_AND_DEATH.md).
@@ -134,23 +136,58 @@ carriers' BC90.
 
 ## Type35
 
-Type35 (12 rows, worlds 41/42/43/46/47) has the same Sub-E-only class7 shape,
-with these differences:
+Type35 (12 rows, worlds 41/42/43/46/47) has the same Sub-E-only class7 shape
+and runs on the same owner as row `Type35`, with these differences:
 
-- model 0 and mass 1;
-- capability `0x2`;
-- `+C0` `0x201A7`;
-- axis 7680/1;
-- rule 1;
-- alternate class7;
-- zero damage multipliers, so it is never damaged.
+- **No model.** Its Section-12 model words are zero, so it has no collision
+  radius: no particle hit, static contact or pair reaches it.
+- **Mass 1.** `14AE0` gives no radial impulse below mass 2.
+- **Never damaged.** Capability `0x2`, health 100000, thresholds
+  `[0, 10000, 200, 0, 200, 0, 0]` and every multiplier zero, so a radial
+  packet filters to nothing.
+- **`+C0` `0x201A7`.** Bit `0x04` disables `E100`'s gravity; there is no `E640`
+  (`0x10`) or drag (`0x08`). Search's effective word is `0x127` and Pursuit's
+  `0x20127`. Bits `0x80` and `0x100` are read by none of `DCA0`, `E100` or
+  `DF70`.
+- **Axis 7680/1, rule 1, alternate class7.**
 
-Its emitter fires method 11. That projectile row has no particle class and
-trails entity type 34, so `44E92B` builds a `0x4C` actor request instead of a
-particle (`44E976` special-cases type 34): each shot is a Type34 meteor birth.
-Type35 waits for that dynamic Type34 birth and its ordinary owner; until then
-the Main Base abort stops at Type35 in world 46. World 47 now stops at Type110
-(class67).
+Its emitter fires method 11 (600000 µs, spread 65535, aim threshold 65535, no
+speed override, tolerance 7680, no sound). The table row is `{0, 2400, 0, 34}`:
+no particle class, actor type 34. `44EA60` gives method 11 the default gravity
+lead, so Aim runs the shared transaction at table speed 2400 (profile `Type35`).
+At drain, `11400` applies its time correction and `44E770` adds the source
+velocity (leading word 0). The actor branch (`44E92B`) then builds a zeroed
+`0x4C` record:
+
+- type 34, the launcher's X/Z;
+- Y + 300 (`44E976`);
+- the vertical velocity floored at `0x960`;
+- rotation words from the launcher's `+A2`/`+A6`.
+
+`438080 -> D720` builds the meteor, and its `+60` is the launcher. The scheduler
+registers each meteor's owner before its next pass.
+
+**Retail lab.** In world 43, with the player written 2500 units from the
+`(32256, -32256)` launcher, both corner launchers fired across the map wrap:
+
+- the first meteors came 16 ticks after the move, then one every 10-30 ticks;
+- each was born at its launcher's position plus 300 in Y, climbing;
+- each died within 1-45 ticks of starting to move, through class1's BAF0 blast
+  (`[0x200, 0x400]`, impulse 2000, `[1, 3]`/`[4000, 4000]`);
+- the launchers never moved or changed state;
+- firing stopped once the player left the 7680 axis.
+
+**Death.** Only `10C10`, from the Main Base abort, kills a launcher. It sets
+health 0 and the dying bit; type `+90` and the attached sound are null. `DB80`
+then runs:
+
+1. Search's `+2C`, which is null.
+2. `AC40 -> AC60`. `16460` sees the dying bit, so `25660` republishes the
+   class7 alternate without a word.
+
+The launcher stays linked and keeps searching and firing. Every later `C690`
+on the dying body takes the same `25660` path. World 41's abort now runs every
+death.
 
 ## Validation
 
@@ -166,3 +203,10 @@ covers:
 
 [The abort test](../../crates/v2k-game/src/main_base_abort_production/native/type43_tests.rs)
 checks class1 in worlds 42/46/47.
+[`type35_tests.rs`](../../crates/v2k-game/src/native_type43/type35_tests.rs)
+covers the twelve launcher births, the world-43 lab setup (both corner
+launchers, births at launcher + 300 climbing at least `0x960`, landings that
+explode), the rolling profile and `10C10`'s republished Search on a dying
+launcher that keeps firing.
+[Its abort test](../../crates/v2k-game/src/main_base_abort_production/native/type35_tests.rs)
+checks the launchers in worlds 41-47 and a meteor in flight.

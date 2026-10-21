@@ -4542,6 +4542,15 @@ impl SpecializedActorTaskScheduler {
             notification_phase,
             main_base_abort_active,
         } = frame;
+        // Meteors a Type35 drain linked during presentation tick from here.
+        for owner in manager.take_born_native_weapons() {
+            if let Err(reason) = self.register_native_weapon(manager, owner) {
+                eprintln!(
+                    "Native meteor {} owner registration blocked: {reason:?}",
+                    owner.entity_id()
+                );
+            }
+        }
         if self.owners.is_empty() && hive_components.is_none() {
             return SpecializedActorTaskProductionPass {
                 block: None,

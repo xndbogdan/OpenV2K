@@ -212,11 +212,7 @@ fn run<E>(
         return Ok(EntityWeaponSurfaceOutcome::Ineligible);
     }
     let entity_type = owner.kind().entity_type() as u32;
-    let living_style = if entity_type == 42 {
-        0x004c81a0
-    } else {
-        GRENADE_STYLE_ADDRESS
-    };
+    let living_style = owner.kind().living_style();
     if entity.entity_type != entity_type || !owner.authenticates(manager) {
         return Err(Owned(EntityWeaponBlock::Allocation));
     }
@@ -410,7 +406,8 @@ fn run<E>(
     }
     // Solid damage may have installed class49; its style+14 is also null.
     if !matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(style))
-        if matches!(style.active_style().style_address(), GRENADE_STYLE_ADDRESS | 0x004c81a0 | 0x004c7150 | 0x004c71e0))
+        if style.active_style().style_address() == living_style
+            || matches!(style.active_style().style_address(), 0x004c7150 | 0x004c71e0))
     {
         return Err(Owned(EntityWeaponBlock::Runtime("water style callback")));
     }
