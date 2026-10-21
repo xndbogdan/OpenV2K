@@ -83,9 +83,9 @@ impl WorkerPair {
         let mut notifications = GameplayNotifications::new();
         resolve_player_active_contacts(
             &mut self.manager,
-            &self.session.cache,
             PlayerActivePairFrame {
-                resources: &self.session.cache,
+                resources: &mut self.session.cache,
+                static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
                 retail_tick: 5000,
                 player_craft: &PlayerCraft::new(),
                 player_hull: &mut self.hull,

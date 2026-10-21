@@ -70,13 +70,18 @@ allocation and completed-owner custody before the pass, plans each slot at its
 component callback, where `01A20` draws the shared RNG and a later slot reads
 the heading, roll and Sub-A runtime the earlier one wrote, and commits after
 the body checks. An owner or task the late walk would refuse fails closed as
-`NativeDescriptorContact`. Lethal player-pair packets to a native Type17 stage
-a commit-time dispatch and complete through the shared capture-path 15040 and
-standard death instead of failing the solid pass; a lethal subject packet
-re-enters the player's own checked-damage terminal, so the ram can wreck the
-player with hull/model/sound ownership instead of granting ram immunity.
-Lethal packets to any other family, unsupported counterpart owners, and
-externally entered Run Away2 remain boundaries in
+`NativeDescriptorContact`. A lethal player-pair packet to a candidate ends a
+walk segment: the segment commits every body write, then the candidate's
+15040 death runs at its post-response pose, and the walk resumes at its
+successor in the current live list. Type17 dies through the shared
+capture-path death, a Type3 boulder through class1's blast and radial, a
+Type27 through its class18 split, whose tail-appended Type3s the resumed walk
+visits in the same frame ([ROLLING_BOULDER.md](ROLLING_BOULDER.md)). A lethal
+subject packet re-enters the player's own checked-damage terminal, so the ram
+can wreck the player with hull/model/sound ownership. A walk that would
+resume after the craft's own death stops as `ResumeAfterPlayerDeath`: the
+wreck's model would pair. Lethal packets to any other family, unsupported
+counterpart owners and externally entered Run Away2 remain boundaries in
 [SPIDER_BEHAVIOR.md](SPIDER_BEHAVIOR.md).
 
 The [shared Type53 constructor](INTRO2_TYPE53.md) retains the native process

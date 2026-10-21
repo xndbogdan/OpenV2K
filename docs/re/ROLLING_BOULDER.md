@@ -124,6 +124,13 @@ Implemented:
   so the walk's component stage passes a boulder under its completed owner;
 - both deaths from hits and from Playing or cinematic blasts;
 - a Type27 split from a lethal collision;
+- lethal player rams. The pair's capped packet enters 15040 directly once
+  both bodies have moved: a Type3 takes class1, whose blast and radial reach
+  the craft, a Type27 splits. The player's walk ends its segment at that
+  pair, commits it with the death last, and resumes at the corpse's
+  successor, so a split's two Type3s are paired in the same frame;
+- a Type3 killed by a terrain landing or a static model in Playing: the late
+  walk lends its craft, so class1's radial runs there;
 - corpse contacts and hits.
 
 Radial blasts and attached particles reach a boulder only through its
@@ -131,14 +138,9 @@ completed owner or its finished terminal.
 
 Remaining boundaries, each held rather than approximated:
 
-- A Type3 killed by a terrain or static collision holds at "Rolling Boulder
-  class1 radial needs the player hull", because the late contact frame does
-  not carry the Playing hull. That needs over 13000 raw collision damage,
-  which has not been observed.
-- Lethal player pairs. A lethal pair packet holds at `DeathDispatchRequired`.
-  Type3's class1 radial needs mutable resources this pass does not carry, and a
-  Type27 split appends children that retail's continuing pair walk would visit
-  in the same frame.
+- A Type3 killed by a terrain or static collision outside Playing holds at
+  "Rolling Boulder class1 radial needs the player hull": only the Playing walk
+  lends the craft its radial reaches.
 - Other pairs. Boulder pairs with actors other than the player, and the Hive
   ram (`UnsupportedHiveImpactCounterpart`, [Hive wreck](HIVE_WRECK.md)).
 - In the Main Base abort, Type27 splits through the same class18 path and

@@ -1022,3 +1022,56 @@ fn split_children_join_the_scheduler_and_come_to_rest() {
     }
     assert_eq!(rested.len(), 2, "both thrown children land and rest");
 }
+
+/// A lethal terrain landing runs Type3's class1 when Playing lends its craft;
+/// without it the late walk still holds rather than skip the radial.
+#[v2k_test_support::retail_test]
+fn a_lethal_landing_explodes_a_small_boulder_in_playing() {
+    use crate::native_actor_surface_contact::resolve_native_actor_surface_contact_with_playing;
+    for playing in [false, true] {
+        let mut world = BoulderWorld::new(31);
+        let id = world.first(3);
+        world.isolate(id);
+        world.activate(id);
+        let entity = world.manager.entity_mut(id).unwrap();
+        entity.collision.health_raw = RetailRuntimeValue::Known(1);
+        let [x, _, z] = entity.position_raw();
+        let ground = world
+            .session
+            .cache
+            .terrain()
+            .unwrap()
+            .bilinear_height_raw(x, z);
+        world
+            .manager
+            .entity_mut(id)
+            .unwrap()
+            .set_motion_raw([x, ground.wrapping_sub(100), z], [0, -4000, 0]);
+        let mut hull = PlayerHull::default();
+        let mut frame = world.contact_frame();
+        let player = playing.then(|| crate::native_actor_capture::pair::PlayingPlayerContact {
+            hull: &mut hull,
+            extra_lives: RetailRuntimeValue::Known(3),
+        });
+        let surface = resolve_native_actor_surface_contact_with_playing(&mut frame, id, player);
+        if playing {
+            assert!(
+                !matches!(surface, NativeActorSurfaceContactOutcome::Blocked { .. }),
+                "{surface:?}"
+            );
+            assert!(crate::class49_death::finished_terminal_hit_authenticates(
+                &world.manager,
+                id
+            ));
+            assert!(world
+                .manager
+                .pending_actor_deferred_destroy_ids()
+                .contains(&id));
+        } else {
+            assert!(
+                matches!(surface, NativeActorSurfaceContactOutcome::Blocked { .. }),
+                "{surface:?}"
+            );
+        }
+    }
+}

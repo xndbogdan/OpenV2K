@@ -520,6 +520,12 @@ pub enum ActivePairPassTermination<E> {
         side: PairCallbackSide,
         effect: E,
     },
+    /// A lethal candidate packet. Its 15040 death runs synchronously in
+    /// retail's walk, so the adapter commits this prefix with that death and
+    /// resumes the walk at the candidate's successor in the live list.
+    CandidateDeathDispatched {
+        candidate_id: u32,
+    },
 }
 
 /// Atomic result of one pure `FUN_00411AD0` active-neighbour pass.
@@ -528,7 +534,7 @@ pub struct ActivePairPass<E> {
     pub subject: ActivePairBody,
     /// Candidate bodies retain their original intrusive order. Processed
     /// entries contain callback/response state; entries after a returned
-    /// effect remain untouched.
+    /// effect or a candidate death remain untouched.
     pub candidates: Vec<ActivePairBody>,
     pub dispositions: Vec<PairCandidateDisposition<E>>,
     pub processed_candidate_count: usize,
@@ -942,6 +948,27 @@ where
             },
         });
         candidate_bodies.push(candidate);
+
+        if matches!(
+            dispositions.last(),
+            Some(PairCandidateDisposition::Resolved {
+                contact: ResolvedActivePairContact {
+                    candidate_damage: PairDamageDelivery::CandidateDeathDispatch { .. },
+                    ..
+                },
+                ..
+            })
+        ) && returned_effect.is_none()
+        {
+            candidate_bodies.extend(candidates.map(|(_, candidate)| candidate));
+            return Ok(ActivePairPass {
+                subject,
+                candidates: candidate_bodies,
+                dispositions,
+                processed_candidate_count,
+                termination: ActivePairPassTermination::CandidateDeathDispatched { candidate_id },
+            });
+        }
 
         if let Some((side, effect)) = returned_effect {
             candidate_bodies.extend(candidates.map(|(_, candidate)| candidate));

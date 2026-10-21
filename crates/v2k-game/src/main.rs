@@ -8084,9 +8084,19 @@ fn run_game(
                         }
                     } else {
                         use v2k_game::native_actor_surface_contact::{
-                            resolve_native_actor_surface_contact, NativeActorSurfaceContactOutcome,
+                            resolve_native_actor_surface_contact_with_playing,
+                            NativeActorSurfaceContactOutcome,
                         };
-                        let surface = resolve_native_actor_surface_contact(&mut contact_frame, id);
+                        let surface = resolve_native_actor_surface_contact_with_playing(
+                            &mut contact_frame,
+                            id,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
                         if matches!(
                             &surface,
                             NativeActorSurfaceContactOutcome::Blocked { .. }
@@ -8573,9 +8583,9 @@ fn run_game(
                         true
                     } else if !player_hull.dying {
                         match em.resolve_player_active_contacts(
-                            &session.cache,
                             v2k_game::player_active_contact::PlayerActivePairFrame {
-                                resources: &session.cache,
+                                resources: &mut session.cache,
+                                static_damage: &mut static_damage,
                                 retail_tick: retail_tick,
                                 player_craft: &player_craft,
                                 player_hull: &mut player_hull,

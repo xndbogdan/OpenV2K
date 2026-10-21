@@ -80,9 +80,9 @@ impl PairWorld {
         let mut notifications = GameplayNotifications::new();
         resolve_player_active_contacts(
             &mut self.manager,
-            &self.session.cache,
             PlayerActivePairFrame {
-                resources: &self.session.cache,
+                resources: &mut self.session.cache,
+                static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
                 retail_tick: 5000,
                 player_craft: &PlayerCraft::new(),
                 player_hull: &mut self.hull,
@@ -167,4 +167,118 @@ fn a_parked_boulder_holds_the_player_pass() {
     assert_eq!(boulder.position_raw(), position);
     assert_eq!(boulder.velocity_raw(), velocity);
     assert_eq!(boulder.collision, collision);
+}
+
+/// Drive the player into the boulder fast enough for a lethal pair packet.
+fn ram(world: &mut PairWorld, speed_raw: i16) {
+    let position = world.boulder().position_raw();
+    world.manager.player_mut().unwrap().set_motion_raw(
+        [position[0].wrapping_sub(64), position[1], position[2]],
+        [speed_raw, 0, 0],
+    );
+}
+
+/// A lethal packet kills the Type27 at its pair: the class18 split appends
+/// two Type3s to the live list's tail, and the walk resumes past the corpse,
+/// so those children are this frame's candidates too.
+#[v2k_test_support::retail_test]
+fn a_lethal_ram_splits_a_type27_and_the_walk_resumes() {
+    let mut world = PairWorld::new(RollingBoulderStyle::Rolling);
+    world
+        .manager
+        .entity_mut(world.id)
+        .unwrap()
+        .collision
+        .health_raw = RetailRuntimeValue::Known(1);
+    let before: Vec<u32> = world.manager.iter_all().map(|entity| entity.id).collect();
+    ram(&mut world, 12_000);
+    let pass = world.pass().unwrap();
+    assert!(death::finished_split_authenticates(
+        &world.manager,
+        world.id
+    ));
+    let children: Vec<u32> = world
+        .manager
+        .iter_all()
+        .filter(|entity| !before.contains(&entity.id))
+        .map(|entity| entity.id)
+        .collect();
+    assert_eq!(children.len(), 2);
+    for &child in &children {
+        let entity = world
+            .manager
+            .iter_all()
+            .find(|entity| entity.id == child)
+            .unwrap();
+        assert_eq!(entity.entity_type, 3);
+    }
+    // The resumed segment walked the children after the corpse.
+    assert!(!matches!(
+        pass.core.termination,
+        crate::active_pair::ActivePairPassTermination::CandidateDeathDispatched { .. }
+    ));
+    assert!(pass
+        .core
+        .candidates
+        .iter()
+        .any(|candidate| children.contains(&candidate.id)));
+}
+
+/// A Type3 child of that split dies through class1 when rammed: BAF0's blast
+/// and radial run in the walk, and BAC0 stages its removal.
+#[v2k_test_support::retail_test]
+fn a_lethal_ram_explodes_a_type3() {
+    let mut world = PairWorld::new(RollingBoulderStyle::Rolling);
+    world
+        .manager
+        .entity_mut(world.id)
+        .unwrap()
+        .collision
+        .health_raw = RetailRuntimeValue::Known(1);
+    let before: Vec<u32> = world.manager.iter_all().map(|entity| entity.id).collect();
+    ram(&mut world, 12_000);
+    world.pass().unwrap();
+    let child = world
+        .manager
+        .iter_all()
+        .find(|entity| !before.contains(&entity.id))
+        .unwrap()
+        .id;
+    world.id = child;
+    for other in world
+        .manager
+        .iter_all()
+        .map(|entity| entity.id)
+        .collect::<Vec<_>>()
+    {
+        if other != child && Some(other) != world.manager.player().map(|player| player.id) {
+            world
+                .manager
+                .entity_mut(other)
+                .unwrap()
+                .collision
+                .state_flags_at_0x08
+                .overwrite(0x8000, 0);
+        }
+    }
+    let boulder = world.manager.entity_mut(child).unwrap();
+    boulder.collision.health_raw = RetailRuntimeValue::Known(1);
+    boulder
+        .collision
+        .state_flags_at_0x08
+        .overwrite(0x0202_8000, 0x0202_8000);
+    boulder.collision.subject_scan_gate_at_0x70 = RetailRuntimeValue::Known(0);
+    ram(&mut world, 12_000);
+    let hull_before = world.hull.health_raw;
+    world.pass().unwrap();
+    assert!(crate::class49_death::finished_terminal_hit_authenticates(
+        &world.manager,
+        child
+    ));
+    assert!(world
+        .manager
+        .pending_actor_deferred_destroy_ids()
+        .contains(&child));
+    // BAF0's radial reaches the craft beside the blast.
+    assert!(world.hull.health_raw <= hull_before);
 }
