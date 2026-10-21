@@ -164,7 +164,7 @@ send kind 10 for network-owned bodies, and the session tick sends kinds 3, 7,
 | `FUN_0043CEB0` | a connection chosen: initializes it (`FUN_0046CA60`) and opens the session list `0x4C1198`; a failure plays menu sound 2 (`FUN_0042A860`) |
 | `FUN_0043D0D0` | opens `0x4C1198`: hides the session rows and zeroes the search clock `004DCEA8` |
 | `FUN_0043CF90` | `0x4C1198`'s tick: when more than 50 ticks of the 50 Hz clock passed since the last search, hides the rows and searches again (`FUN_0046C9A0`) |
-| `FUN_0043CFD0` | a session row (at most eight): its name and instance; `FUN_0043CF30` draws string 20 then the name |
+| `FUN_0043CFD0` | a session row (at most eight): its name and instance; `FUN_0043CF30` draws string 20 then the name. A search that loses the session under the cursor leaves the cursor on its hidden row, lighting no row, and Select there still runs `FUN_0043CD00` (`FUN_0043C450` calls the cursor row's callback whatever its flags) |
 | `FUN_0043D200` | leaving a network screen: empties both lists |
 | `FUN_0043CD50` | row 0, "Host session on this machine" (string 21): the CD check (`FUN_00496BF0`, `FUN_00496DE0`), a session named after the computer (`FUN_0046CB50`), `FUN_00410BB0`, `FUN_00439290`, then the game starts in mode 7 (`0xC02` to the ring); a failure plays sound 2 |
 | `FUN_0043CD00` | a session row: joins it under the Windows user name (`FUN_0046CAC0`) and opens the wait `0x4C10F0` ("Waiting for host to start game", "Please Wait"); a failure plays sound 2 |
@@ -232,13 +232,22 @@ without `0x08000000`) or 3.5 s otherwise.
 
 | Routine | Does |
 | --- | --- |
-| `FUN_00455D60` | Escape or P: after the level opening, opens the pause menu `0x4D1190` and suspends (`FUN_0044F600`) |
-| `FUN_0044F600` | pause reason 8 (`FUN_0044F3E0`); outside network play it also switches to the suspended simulation chain. In network play the world keeps running beneath the menu, which `FUN_0043CBA0` shows with mask 1 |
+| `FUN_00455D60` | Escape or P (the in-play table at `0x4C25E0`): after the level opening, opens the pause menu `0x4D1190` and suspends (`FUN_004513E0`, `FUN_0044F600`) |
+| `FUN_0044F600` | counts the suspension (`+260`); the first raises pause reason 8 (`FUN_0044F3E0`), which stops the world's voices (`FUN_0044CE70`), and outside network play switches to the suspended simulation chain `0x4D08F0`. Then event 5 (`FUN_00494540`) |
+| `FUN_0044FCD0`, `FUN_0044FD60` | the in-play mode's events: event 5 picks the mode from the table at `0x4D0DA0` by the suspension and the window's activity; a suspended game gets `0x4D09F8` (`FUN_00451420`), whose keys are the menu table `0x4C45B0` (arrows, Return, Escape back, Shift+Escape abort) in place of the in-play and craft tables, whose tick is the menu's (`FUN_00451480`) and whose draw list (`0x4D0768`) has the menu (`FUN_004514A0`) but neither the world's sound pass (`FUN_00453AA0`) nor the HUD text and scores (`FUN_00452CB0`) |
+| `FUN_004512E0` | the resume (after Continue's fly-out): the count falls; at zero, pause reason 8 clears, the simulation chain returns outside network play, and event 5 restores the in-play mode (`FUN_00453330`) |
+| `FUN_0043CBA0` | the in-game menu mask: 3, or 1 in network play, so `0x4D1190` shows Continue, Options and Quit there |
 | `FUN_00456610` | the map opens only after the level opening and outside network play |
 | `FUN_00455C90` | Shift+Escape: menu cue 3 and the abort flag `+28D`, which `FUN_0044FE20` turns into the return to the frontend (`FUN_0044FEB0`, which stops the session) |
 
 Becoming the host, or losing the session, sets the abort flag too
 (`FUN_00450CC0`).
+
+So in network play the world runs on under the pause menu: peers keep moving,
+shooting and syncing, the local craft gets no keys, and the world's sounds
+wait (the sound records `FUN_0044C830` queues are started and discarded by
+`FUN_0044C970`, which the pause's draw list never calls, so they play at the
+resume).
 
 ## The port
 
@@ -258,14 +267,10 @@ inbound ring of 64, the 100 ms session tick, handles, sync records and their
 timers, scores, lines and the HUD. The menus are retail's screens; the one
 connection row is the port's transport, and a port-owned prompt asks for the
 host's address in place of DirectPlay's dialog. The CD check before hosting
-is not run. A search that loses the selected session moves the cursor to the
-Host row; retail leaves it on the hidden row, where Select fails with sound
-2.
+is not run.
 
 Held, each with a logged stop ("Network: ... is held"):
 
-- the pause menu over the running world (Escape and P do nothing in network
-  play; Shift+Escape leaves);
 - the power-ups: the host's spawner (`FUN_004132D0`) and a dying player's
   drops (`FUN_00447280`);
 - sending kinds 2 (`FUN_00440950`'s bursts), 3 to 6 (terrain, cells and

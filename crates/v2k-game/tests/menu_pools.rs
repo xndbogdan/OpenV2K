@@ -1071,9 +1071,17 @@ fn network_lists_the_connection_then_hosting_and_sessions() {
         shell.engine.handle(MenuInput::Select),
         [MenuCommand::NetworkJoin(1)]
     );
-    // A search that lost the selected session moves the cursor home.
+    // A search that loses the selected session leaves the cursor on its
+    // hidden row, lighting none, and Select still tries that row's join.
     shell.set_rows(SESSIONS, 1, 8, &found[..1], &ctx);
-    assert_eq!(shell.engine.selected(), 0);
+    assert_eq!(shell.engine.selected(), 2);
+    assert_eq!(shell.view().selected, shell.view().items.len());
+    assert_eq!(
+        shell.engine.handle(MenuInput::Select),
+        [MenuCommand::NetworkJoin(1)]
+    );
+    shell.engine.handle(MenuInput::Up);
+    assert_eq!(shell.engine.selected(), 1);
 
     shell.engine.handle(MenuInput::Back);
     assert_eq!(shell.engine.current_va(), Some(NETWORK));

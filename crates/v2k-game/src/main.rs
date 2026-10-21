@@ -1002,6 +1002,20 @@ enum GameplayInterruption {
 /// Escape and a pad's pause are deliberately pause requests; only the
 /// completed death lifecycle or the pause menu's confirmed Quit reaches
 /// `ReturningToFrontend`.
+/// Keys, buttons and motion: what the craft and the in-play keys read.
+fn is_player_input(event: &GameEvent) -> bool {
+    matches!(
+        event,
+        GameEvent::KeyDown(_)
+            | GameEvent::KeyUp(_)
+            | GameEvent::MouseMotion { .. }
+            | GameEvent::MouseButtonDown(_)
+            | GameEvent::MouseButtonUp(_)
+            | GameEvent::MouseWheel { .. }
+            | GameEvent::PadButton { .. }
+    )
+}
+
 fn gameplay_interruption(
     return_to_frontend_pending: bool,
     events: &[GameEvent],
@@ -1998,6 +2012,10 @@ fn run_game(
     let mut network_address = String::new();
     let mut network_screen: Option<u32> = None;
     let mut network_arena: Option<u8> = None;
+    // FUN_00455D60 in a network game: the pause menu over the running world,
+    // and Shift as its key table last saw it.
+    let mut network_pause: Option<MenuShell> = None;
+    let mut network_pause_shift = false;
     if let Some(network) = probe
         .start
         .as_ref()
@@ -2319,6 +2337,133 @@ fn run_game(
     let mut frames_done = 0u64;
     let mut last_frame_delta_micros = 0u32;
 
+    // A setting a menu changed: the config, live audio and display, then the
+    // menu's rows again. Both the menu states and the network pause use it.
+    macro_rules! apply_menu_setting {
+        ($shell:expr, $id:expr, $v:expr) => {{
+            let (id, v) = ($id, $v);
+            let shell: &mut MenuShell = $shell;
+                apply_setting_to_config(&mut config, id, v, &display_modes);
+                apply_live_audio_setting(
+                    id,
+                    &config,
+                    &mut sound_manager,
+                    &mut music_player,
+                    world_complete_results.is_progress_map_active(),
+                );
+                // FUN_0043CC40 -> FUN_0044E0E0 rebuilds the display. One
+                // that cannot start leaves the previous display and its
+                // resources; the setting stays as chosen.
+                let mut display_started = true;
+                match id {
+                    SettingId::FullScreen | SettingId::Resolution => {
+                        if let Err(error) =
+                            renderer.set_display(config.display_request())
+                        {
+                            eprintln!(
+                                "Display change failed ({error}); keeping the previous display"
+                            );
+                            display_started = false;
+                        }
+                        display_modes = game_window
+                            .display_modes(renderer.display_index().unwrap_or(0));
+                        config.desktop = display_modes.desktop;
+                    }
+                    v2k_game::menu_data::SettingId::Rendering
+                        if config.resolve_backend(None) != actual_backend =>
+                    {
+                        match replace_renderer(&game_window, &mut renderer, &config) {
+                            Ok(backend) => {
+                                actual_backend = backend;
+                                renderer.set_overlay_depth_policy(overlay_depth_policy);
+                                if let Err(error) =
+                                    renderer.set_display(config.display_request())
+                                {
+                                    eprintln!(
+                                        "Display unavailable for the new renderer ({error})"
+                                    );
+                                }
+                                game_window.release_mouse_capture();
+                                // Texture ids belonged to the old renderer.
+                                face_colors.forget_textures();
+                                if terrain_frames.is_some() {
+                                    terrain_frames =
+                                        v2k_game::terrain_render::build_terrain_frames(
+                                            &session.cache,
+                                            renderer.as_mut(),
+                                        );
+                                }
+                                if water_frames.is_some() {
+                                    water_frames = v2k_game::water::build_water_frames(
+                                        &session.cache,
+                                        renderer.as_mut(),
+                                    );
+                                }
+                                log!("Renderer: {}", renderer.backend_name());
+                            }
+                            Err(error) => eprintln!(
+                                "Renderer change failed ({error}); keeping {}",
+                                renderer.backend_name()
+                            ),
+                        }
+                    }
+                    _ => {}
+                }
+                if display_started
+                    && matches!(
+                        id,
+                        SettingId::FullScreen
+                            | SettingId::Resolution
+                            | SettingId::Scaling
+                            | SettingId::Rendering
+                    )
+                {
+                    if let Some(tier) =
+                        v2k_game::system_layout::HighSystemLayoutTier::from_variant(
+                            config.system_graphics_variant(),
+                        )
+                    {
+                        match (live_display::ResidentDisplay {
+                            session: &mut session,
+                            fonts: &mut menu_fonts,
+                            variant: &mut gameplay_hud_variant,
+                            world_variant: &mut startup_world_variant,
+                            reference_size: &mut menu_reference_size,
+                            hud_layout: &mut gameplay_hud_layout,
+                            radar: &mut gameplay_radar,
+                            map_status: &mut fullscreen_map_status,
+                            overlay: &mut gameplay_overlay_frame,
+                            projection: &mut world_projection,
+                        }).refresh(tier) {
+                            Ok(true) => log!("Display layout refreshed to {}x{}", tier.size().0, tier.size().1),
+                            Ok(false) => {}
+                            Err(error) => eprintln!("Display layout change rejected; retained resident presentation: {error}"),
+                        }
+                    }
+                    renderer.set_scaling_mode(
+                        config.scaling,
+                        menu_reference_size.0,
+                        menu_reference_size.1,
+                    );
+                    renderer.set_ui_submission_policy(live_display::ui_policy(
+                        &config,
+                        gameplay_hud_variant,
+                    ));
+                }
+                world_projection.apply_to(&mut camera, renderer.viewport_size());
+                if let Err(error) = config.try_save(settings_dir) {
+                    eprintln!("Could not save settings: {error}");
+                }
+                let ctx = MenuCtx {
+                    cache: &session.cache,
+                    config: &config,
+                    saves: Some(&save_manager),
+                    display_modes: &display_modes,
+                };
+                shell.refresh(&ctx);
+        }};
+    }
+
     'main_loop: loop {
         // The frame just completed: its event lines, its snapshots, the end.
         if frames_done > 0 {
@@ -2439,7 +2584,7 @@ fn run_game(
         // full-screen game, menus included. The port also captures it in play
         // so relative motion keeps arriving at the window's edge.
         game_window.set_pointer_mode(PointerMode::for_frame(
-            matches!(state, GameState::Playing),
+            matches!(state, GameState::Playing) && network_pause.is_none(),
             game_window.has_focus(),
             debug_panel.is_visible() || diagnostic_console.is_visible(),
             matches!(
@@ -2449,13 +2594,17 @@ fn run_game(
         ));
         // A pad's binding sets follow the screen, as each retail mode installs
         // its own; its button changes arrive as events, in order.
-        pad_bindings.set_context(pad_context(
-            &state,
-            world_complete_results.is_progress_map_active(),
-            gameplay_radar
-                .as_ref()
-                .is_some_and(GameplayRadar::is_fullscreen_open),
-        ));
+        pad_bindings.set_context(if network_pause.is_some() {
+            PadContext::PauseMenu
+        } else {
+            pad_context(
+                &state,
+                world_complete_results.is_progress_map_active(),
+                gameplay_radar
+                    .as_ref()
+                    .is_some_and(GameplayRadar::is_fullscreen_open),
+            )
+        });
         let mut pad_actions = Vec::new();
         for event in &events {
             if let GameEvent::PadButton { button, pressed } = event {
@@ -2464,7 +2613,10 @@ fn run_game(
         }
         // The active pad or joystick, as of this frame's poll.
         let controller = game_window.controller_sample();
-        let joystick = controller.map(|sample| pad_bindings.joystick_sample(sample));
+        // The network pause's menu keys replace the craft's (0x4C45B0).
+        let joystick = controller
+            .filter(|_| network_pause.is_none())
+            .map(|sample| pad_bindings.joystick_sample(sample));
 
         let menu_is_paused = matches!(&state, GameState::Paused { .. });
         match &mut state {
@@ -2812,124 +2964,7 @@ fn run_game(
                         ShellEvent::SettingChanged(id, v) => {
                             redraw_paused_world |=
                                 menu_is_paused && setting_requires_paused_redraw(id);
-                            apply_setting_to_config(&mut config, id, v, &display_modes);
-                            apply_live_audio_setting(
-                                id,
-                                &config,
-                                &mut sound_manager,
-                                &mut music_player,
-                                world_complete_results.is_progress_map_active(),
-                            );
-                            // FUN_0043CC40 -> FUN_0044E0E0 rebuilds the display. One
-                            // that cannot start leaves the previous display and its
-                            // resources; the setting stays as chosen.
-                            let mut display_started = true;
-                            match id {
-                                SettingId::FullScreen | SettingId::Resolution => {
-                                    if let Err(error) =
-                                        renderer.set_display(config.display_request())
-                                    {
-                                        eprintln!(
-                                            "Display change failed ({error}); keeping the previous display"
-                                        );
-                                        display_started = false;
-                                    }
-                                    display_modes = game_window
-                                        .display_modes(renderer.display_index().unwrap_or(0));
-                                    config.desktop = display_modes.desktop;
-                                }
-                                v2k_game::menu_data::SettingId::Rendering
-                                    if config.resolve_backend(None) != actual_backend =>
-                                {
-                                    match replace_renderer(&game_window, &mut renderer, &config) {
-                                        Ok(backend) => {
-                                            actual_backend = backend;
-                                            renderer.set_overlay_depth_policy(overlay_depth_policy);
-                                            if let Err(error) =
-                                                renderer.set_display(config.display_request())
-                                            {
-                                                eprintln!(
-                                                    "Display unavailable for the new renderer ({error})"
-                                                );
-                                            }
-                                            game_window.release_mouse_capture();
-                                            // Texture ids belonged to the old renderer.
-                                            face_colors.forget_textures();
-                                            if terrain_frames.is_some() {
-                                                terrain_frames =
-                                                    v2k_game::terrain_render::build_terrain_frames(
-                                                        &session.cache,
-                                                        renderer.as_mut(),
-                                                    );
-                                            }
-                                            if water_frames.is_some() {
-                                                water_frames = v2k_game::water::build_water_frames(
-                                                    &session.cache,
-                                                    renderer.as_mut(),
-                                                );
-                                            }
-                                            log!("Renderer: {}", renderer.backend_name());
-                                        }
-                                        Err(error) => eprintln!(
-                                            "Renderer change failed ({error}); keeping {}",
-                                            renderer.backend_name()
-                                        ),
-                                    }
-                                }
-                                _ => {}
-                            }
-                            if display_started
-                                && matches!(
-                                    id,
-                                    SettingId::FullScreen
-                                        | SettingId::Resolution
-                                        | SettingId::Scaling
-                                        | SettingId::Rendering
-                                )
-                            {
-                                if let Some(tier) =
-                                    v2k_game::system_layout::HighSystemLayoutTier::from_variant(
-                                        config.system_graphics_variant(),
-                                    )
-                                {
-                                    match (live_display::ResidentDisplay {
-                                        session: &mut session,
-                                        fonts: &mut menu_fonts,
-                                        variant: &mut gameplay_hud_variant,
-                                        world_variant: &mut startup_world_variant,
-                                        reference_size: &mut menu_reference_size,
-                                        hud_layout: &mut gameplay_hud_layout,
-                                        radar: &mut gameplay_radar,
-                                        map_status: &mut fullscreen_map_status,
-                                        overlay: &mut gameplay_overlay_frame,
-                                        projection: &mut world_projection,
-                                    }).refresh(tier) {
-                                        Ok(true) => log!("Display layout refreshed to {}x{}", tier.size().0, tier.size().1),
-                                        Ok(false) => {}
-                                        Err(error) => eprintln!("Display layout change rejected; retained resident presentation: {error}"),
-                                    }
-                                }
-                                renderer.set_scaling_mode(
-                                    config.scaling,
-                                    menu_reference_size.0,
-                                    menu_reference_size.1,
-                                );
-                                renderer.set_ui_submission_policy(live_display::ui_policy(
-                                    &config,
-                                    gameplay_hud_variant,
-                                ));
-                            }
-                            world_projection.apply_to(&mut camera, renderer.viewport_size());
-                            if let Err(error) = config.try_save(settings_dir) {
-                                eprintln!("Could not save settings: {error}");
-                            }
-                            let ctx = MenuCtx {
-                                cache: &session.cache,
-                                config: &config,
-                                saves: Some(&save_manager),
-                                display_modes: &display_modes,
-                            };
-                            shell.refresh(&ctx);
+                            apply_menu_setting!(shell, id, v);
                         }
                         // MenuShell consumes StartGame and runs the verified
                         // Klaus-mouth handoff before arming the transition.
@@ -3409,6 +3444,7 @@ fn run_game(
 
             GameState::ReturningToFrontend => {
                 // FUN_0044FEB0: leaving a network game stops its session.
+                network_pause = None;
                 if let Some(net) = network_game.take() {
                     net.close();
                     world_fx.set_network_particles(false);
@@ -5489,7 +5525,17 @@ fn run_game(
                     &events,
                     &pad_actions,
                 );
-                if network_game.is_some() && interruption == Some(GameplayInterruption::Pause) {
+                let pause_key = events
+                    .iter()
+                    .any(|event| matches!(event, GameEvent::KeyDown(Keycode::P)));
+                if network_pause.is_some() {
+                    // The open menu owns Escape and the pad's pause.
+                    if interruption == Some(GameplayInterruption::Pause) {
+                        interruption = None;
+                    }
+                } else if network_game.is_some()
+                    && (interruption == Some(GameplayInterruption::Pause) || pause_key)
+                {
                     // Shift as it stood when Escape went down this frame.
                     let mut shift = keys_down.contains(&Keycode::LShift)
                         || keys_down.contains(&Keycode::RShift);
@@ -5500,7 +5546,7 @@ fn run_game(
                             _ => {}
                         }
                     }
-                    if shift {
+                    if shift && interruption == Some(GameplayInterruption::Pause) {
                         // FUN_00455C90: menu cue 3 and the abort flag +28D,
                         // which FUN_0044FE20 turns into FUN_0044FEB0.
                         GlobalSoundRuntime::new(
@@ -5510,12 +5556,151 @@ fn run_game(
                         )
                         .play_global_sound(3);
                         interruption = Some(GameplayInterruption::ReturnToFrontend);
-                    } else {
-                        // FUN_00455D60 then FUN_0044F600: the network pause
-                        // keeps the world running under menu mask 1.
-                        report_held("the pause menu over the running world".into());
+                    } else if interruption.is_none()
+                        || interruption == Some(GameplayInterruption::Pause)
+                    {
+                        // FUN_00455D60 (Escape or P) then FUN_0044F600: pause
+                        // reason 8 stops the world's voices, and event 5 puts
+                        // 4D09F8's menu keys (0x4C45B0) in place of the in-play
+                        // and craft keys. Network play keeps the simulation
+                        // chain, so the world runs on under the menu.
+                        suspend_world_audio(
+                            &mut world_fx,
+                            &mut sound_manager,
+                            &mut entity_positional_audio,
+                            &mut player_fan_audio,
+                        );
+                        keys_down.clear();
+                        mouse_buttons_down.clear();
+                        network_pause_shift = false;
+                        let ctx = MenuCtx {
+                            cache: &session.cache,
+                            config: &config,
+                            saves: Some(&save_manager),
+                            display_modes: &display_modes,
+                        };
+                        network_pause = Some(MenuShell::new_network_pause_menu(&ctx));
+                        log!("Network: the pause menu opens over the running world");
+                        events.retain(|event| !is_player_input(event));
+                        pad_actions.clear();
                         interruption = None;
                     }
+                }
+                // 4D09F8's frame: the menu's keys and tick (FUN_00451480).
+                let mut network_pause_quit = false;
+                if let Some(shell) = network_pause.as_mut() {
+                    let mut shell_events: Vec<ShellEvent> = Vec::new();
+                    for event in &events {
+                        let input = match event {
+                            GameEvent::KeyDown(Keycode::LShift | Keycode::RShift) => {
+                                network_pause_shift = true;
+                                None
+                            }
+                            GameEvent::KeyUp(Keycode::LShift | Keycode::RShift) => {
+                                network_pause_shift = false;
+                                None
+                            }
+                            // FUN_00455C90 from the menu's table.
+                            GameEvent::KeyDown(Keycode::Escape) if network_pause_shift => {
+                                shell_events.push(ShellEvent::Sound(3));
+                                network_pause_quit = true;
+                                None
+                            }
+                            _ if shell.is_transitioning() => None,
+                            GameEvent::KeyDown(Keycode::Escape) if shell.back_is_inert() => None,
+                            GameEvent::KeyDown(Keycode::Escape) => {
+                                if let Err(error) = config.try_save(settings_dir) {
+                                    eprintln!("Could not save settings: {error}");
+                                }
+                                Some(MenuInput::Back)
+                            }
+                            GameEvent::KeyDown(Keycode::Up) => Some(MenuInput::Up),
+                            GameEvent::KeyDown(Keycode::Down) => Some(MenuInput::Down),
+                            GameEvent::KeyDown(Keycode::Left) => Some(MenuInput::Left),
+                            GameEvent::KeyDown(Keycode::Right) => Some(MenuInput::Right),
+                            GameEvent::KeyDown(Keycode::Return | Keycode::Space) => {
+                                Some(MenuInput::Select)
+                            }
+                            _ => None,
+                        };
+                        if let Some(input) = input {
+                            let ctx = MenuCtx {
+                                cache: &session.cache,
+                                config: &config,
+                                saves: Some(&save_manager),
+                                display_modes: &display_modes,
+                            };
+                            shell_events.extend(shell.input(input, &ctx));
+                        }
+                    }
+                    for &action in &pad_actions {
+                        if shell.is_transitioning() {
+                            break;
+                        }
+                        let ctx = MenuCtx {
+                            cache: &session.cache,
+                            config: &config,
+                            saves: Some(&save_manager),
+                            display_modes: &display_modes,
+                        };
+                        let input = match action {
+                            PadAction::PauseResumeOrBack if shell.back_is_inert() => {
+                                shell_events.extend(shell.select_continue(&ctx));
+                                None
+                            }
+                            PadAction::Menu(MenuInput::Back) if shell.back_is_inert() => None,
+                            PadAction::Menu(MenuInput::Back) | PadAction::PauseResumeOrBack => {
+                                Some(MenuInput::Back)
+                            }
+                            PadAction::Menu(input) => Some(input),
+                            _ => None,
+                        };
+                        if let Some(input) = input {
+                            shell_events.extend(shell.input(input, &ctx));
+                        }
+                    }
+                    shell.update(
+                        elapsed_micros,
+                        &mut GlobalSoundRuntime::new(
+                            &session.cache,
+                            &mut world_fx,
+                            sound_manager.as_mut(),
+                        ),
+                    );
+                    let resumed =
+                        matches!(shell.take_switch_away_event(), Some(ShellEvent::ResumeGame));
+                    for event in shell_events {
+                        match event {
+                            ShellEvent::Sound(id) => {
+                                GlobalSoundRuntime::new(
+                                    &session.cache,
+                                    &mut world_fx,
+                                    sound_manager.as_mut(),
+                                )
+                                .play_global_sound(id as usize);
+                            }
+                            ShellEvent::SettingChanged(id, v) => {
+                                apply_menu_setting!(shell, id, v);
+                            }
+                            ShellEvent::QuitToFrontend => network_pause_quit = true,
+                            _ => {}
+                        }
+                    }
+                    // The menu's keys stand in for the in-play and craft keys.
+                    events.retain(|event| !is_player_input(event));
+                    pad_actions.clear();
+                    if resumed {
+                        // FUN_004512E0: the pause count falls to zero and
+                        // event 5 restores the in-play keys.
+                        network_pause = None;
+                        keys_down.clear();
+                        mouse_buttons_down.clear();
+                        log!("Network: the pause menu closes");
+                    }
+                }
+                if network_pause_quit {
+                    network_pause = None;
+                    interruption = Some(GameplayInterruption::ReturnToFrontend);
                 }
                 match interruption {
                     Some(GameplayInterruption::QuitApplication) => break 'main_loop,
@@ -8931,18 +9116,22 @@ fn run_game(
 
                 // Overlay 51's completion descriptor replaces the in-game HUD
                 // chain. World, water, and particles still draw underneath.
-                play_world_audio(
-                    WorldAudioFrame {
-                        cache: &session.cache,
-                        entities: em,
-                        camera: &camera,
-                        elapsed_micros,
-                        positional_masked: false,
-                    },
-                    &mut world_fx,
-                    &mut sound_manager,
-                    &mut entity_positional_audio,
-                );
+                // The network pause's draw list (0x4D0768) has no FUN_00453AA0:
+                // the world's sounds wait for the resume.
+                if network_pause.is_none() {
+                    play_world_audio(
+                        WorldAudioFrame {
+                            cache: &session.cache,
+                            entities: em,
+                            camera: &camera,
+                            elapsed_micros,
+                            positional_masked: false,
+                        },
+                        &mut world_fx,
+                        &mut sound_manager,
+                        &mut entity_positional_audio,
+                    );
+                }
 
                 let overlay_51_results = world_complete_results.replaces_ingame_hud();
 
@@ -9005,7 +9194,8 @@ fn run_game(
                             gameplay_overlay_frame.hud = Some(frame);
                         }
                     }
-                    {
+                    // The network pause's draw list has no FUN_00452CB0.
+                    if network_pause.is_none() {
                         // FUN_00452CB0 first draws the world's arrival records
                         // (its strings up to `#`) unless its control slot is
                         // already completed.
@@ -9106,7 +9296,23 @@ fn run_game(
                         post_intro_world_cover = None;
                     }
                 }
-                renderer.present();
+                if let Some(shell) = network_pause.as_ref() {
+                    // FUN_004514A0 draws the menu over this frame's world.
+                    let world = renderer.capture_frame(FrameCaptureSource::CurrentScene);
+                    render_pause_menu(
+                        &mut *renderer,
+                        shell,
+                        &system_strings,
+                        &menu_resources,
+                        menu_fonts.as_ref(),
+                        &session.cache,
+                        &face_colors,
+                        retail_tick,
+                        world.as_ref(),
+                    );
+                } else {
+                    renderer.present();
+                }
             }
         }
 
