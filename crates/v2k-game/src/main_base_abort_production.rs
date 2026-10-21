@@ -113,6 +113,8 @@ pub enum MainBaseAbortActorDisposition {
     Type16Death,
     /// The native Type25 shark: alternate class12 on its B/D/F owner.
     Type25Death,
+    /// The native Type37 swimmer: alternate class12 on the same owner.
+    Type37Death,
     /// The native Type94: alternate class12.
     Type94Death,
     /// The native Type30: alternate class12.

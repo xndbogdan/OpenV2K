@@ -276,10 +276,9 @@ retail skips those actors.
 
 | First unsupported entity type | Global OVLs |
 |---|---|
-| 20 | 33 |
+| 20 | 23, 33 |
 | 29 | 20, 24 |
 | 36 | 42, 43, 46 |
-| 37 | 23 |
 | 41 | 22 |
 | 73 | 18 |
 | 74 | 21, 36 |

@@ -571,3 +571,5 @@ address,status,note
 0x00401FB0,implemented,Guard Location first-eligible candidate search (docs/re/GUARD_LOCATION_TASK.md)
 0x00402EB0,implemented,Wander Near Location anchor retarget and shared mover (docs/re/GUARD_LOCATION_TASK.md)
 0x0040AD10,implemented,Wander Near Location initializer for the ground host's Type33 and the Type47 gunners (docs/re/TYPE33_FIREECTO.md)
+0x0040B9E0,implemented,Defecate Virus class4 initializer for the Type37 swimmer (docs/re/FISH_RUNTIME.md#type37)
+0x0040B6C0,implemented,Run Away class10 acquiring initializer for the Type37 swimmer (docs/re/FISH_RUNTIME.md#type37)

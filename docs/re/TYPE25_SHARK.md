@@ -109,8 +109,7 @@ gravity. `FUN_00404220`:
   then Sub-B) and damps X and Z.
 
 The fish owner keeps ticking the dying shark under its fresh receipt. The
-Main Base abort's `10C10` takes the same death: worlds 23 and 34 now reach
-their Type37 and Type117 rows.
+Main Base abort's `10C10` takes the same death in worlds 23 and 34.
 
 ## Not run
 

@@ -2,7 +2,8 @@
 
 Types22,23,24,62,124 share B/D/F components and authored neutral swimming tasks.
 Types23/62 are `zebrafsh`, with environment2004;22/24/124 use200C.
-The hostile [Type25 shark](TYPE25_SHARK.md) shares this owner with `0xC`.
+The hostile [Type25 shark](TYPE25_SHARK.md) and [Type37](#type37) share this
+owner with `0xC`.
 The aquatic resource catalog is overlay11; Reef is gameplay23 and Cistern30.
 Zebra Type62 uses common model38 and occurs in13/14/18/36. Its former
 constructor-only path classified it as furniture, omitted Sub-F construction
@@ -202,6 +203,36 @@ The class2 entry still rejects Type124 as `UnsupportedDeathProgram`.
 Section12 loader410090 installs vtable4C8A30, whose+08 word is40DB80;
 the later438080 overrides affect67 and46/51, not fish. C470 calls A860's
 slot0/1/2 retirement and10B70 marking before the later14990 sweep.
+
+## Type37
+
+Type37 (two in world 22, one in 23) is a `0xC` swimmer beside the shark. Its
+row: alternate class12, Retarget x4 (class5), Defecate Virus x1 (class4) and
+PlayerNearby x15 Run Away (class10). Its Sub-D is Type28's divisor and probes
+with a zero classifier. Each task's `06070` resets only Sub-F: a swimmer has
+no Sub-A and takes no A/H constructor suffix.
+
+- Class4 `FUN_0040B9E0` clears slot1, installs `FUN_00402820`'s terrain task
+  in slot2 (the type's `+A2` lifetime, mode 5), and only if that succeeds
+  `FUN_004032A0`'s 2,000-ms wander in slot0. The owner visits slot2 after the
+  Primary and Secondary: a detailed visit drops a virus particle by chance; a
+  coarse one infects the cell under the body (`FUN_00402850`). Its style
+  `4C7E88` has zero flag masks, so the effective word stays `0xC`.
+- Class10 `FUN_0040B6C0` copies the type's authored common-axis `+04`, clears
+  slot2, then installs `FUN_00402050`'s acquisition (slot1) and a 500-ms
+  retarget (slot0) that wanders through the same `02BA0`. A found body
+  reaches the style's `+04` `FUN_0040C7D0`, which writes its handle and
+  switches to variant 1; `FUN_0040B3F0` then installs `FUN_00403E20`'s
+  2,000-ms flight, ticked by `FUN_00403F40` around the fish mover. Both
+  variants (`4C7618`, `4C7660`) have zero masks.
+- Death takes the shark's class12 (`FUN_0040C620`, `FUN_00404120`,
+  `FUN_00404220`), and the Main Base abort reaches it.
+
+Retail lab, world 23 from Skip to World with an idle player (2,929 ticks):
+retail's Type37 moved on 1,007 ticks with a median step of 44.8 raw units
+(max 98), the port's on 1,028 with 42.2 (max 91). Both stayed coarse nearly
+throughout, keeping full health. Paths part, since the random words are not
+in step.
 
 ## Acceptance boundaries
 

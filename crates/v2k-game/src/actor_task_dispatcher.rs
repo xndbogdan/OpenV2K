@@ -721,6 +721,24 @@ pub fn prepare_shared_acquiring_runtime_task(
     metadata: &EntityTypeRuntimeMetadata,
     constructor_filter_override_raw: u32,
 ) -> Result<PreparedSharedGenericRuntimeTask, SharedAcquiringRuntimePreparationError> {
+    let task = prepare_swimmer_acquiring_runtime_task(
+        preparation,
+        owner_position_raw,
+        metadata,
+        constructor_filter_override_raw,
+    )?;
+    prepare_shared_generic_constructor_suffix(task, metadata)
+        .map_err(map_suffix_error_to_shared_acquiring)
+}
+
+/// B6C0's two allocations without 06070's A/H suffix: a B/D/F swimmer's
+/// 06070 only resets Sub-F, which its owner applies.
+pub(crate) fn prepare_swimmer_acquiring_runtime_task(
+    preparation: RunAwayTaskPreparation,
+    owner_position_raw: [i16; 3],
+    metadata: &EntityTypeRuntimeMetadata,
+    constructor_filter_override_raw: u32,
+) -> Result<PreparedActorTask<ActorTaskRuntime>, SharedAcquiringRuntimePreparationError> {
     if preparation.request != RunAwayTaskSetupRequest::Acquiring {
         return Err(SharedAcquiringRuntimePreparationError::TaskContractMismatch);
     }
@@ -764,8 +782,7 @@ pub fn prepare_shared_acquiring_runtime_task(
             return Err(SharedAcquiringRuntimePreparationError::TaskContractMismatch);
         }
     };
-    prepare_shared_generic_constructor_suffix(PreparedActorTask::new(runtime), metadata)
-        .map_err(map_suffix_error_to_shared_acquiring)
+    Ok(PreparedActorTask::new(runtime))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -941,6 +958,43 @@ pub fn prepare_run_away_runtime_task(
         owner_id,
         custom_suffix,
     })
+}
+
+/// B3F0's 403E20 for a B/D/F swimmer: no Sub-A speed and no A/H suffix; its
+/// 06070 only resets Sub-F, which the owner applies.
+pub(crate) fn prepare_swimmer_run_away_runtime_task(
+    preparation: RunAwayTaskPreparation,
+    owner_entity_id: u32,
+    owner_position_raw: [i16; 3],
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<PreparedActorTask<ActorTaskRuntime>, RunAwayRuntimePreparationError> {
+    let RunAwayTaskSetupRequest::Fleeing { target_id, audio } = preparation.request else {
+        return Err(RunAwayRuntimePreparationError::TaskContractMismatch);
+    };
+    let task = preparation.task;
+    if preparation.phase_index != 0
+        || task.role != RunAwayTaskRole::Flee
+        || task.slot != ActorTaskSlot::Primary
+        || task.constructor_address != RUN_AWAY_TASK_CONSTRUCTOR_ADDRESS
+        || task.tick_address != RUN_AWAY_TASK_TICK_ADDRESS
+        || task.lifetime != RunAwayTaskLifetime::FixedMilliseconds(RUN_AWAY_TASK_LIFETIME_MS)
+    {
+        return Err(RunAwayRuntimePreparationError::TaskContractMismatch);
+    }
+    let (task, _, suffix) = RunAwayTaskState::prepare_after_allocation(
+        owner_entity_id,
+        owner_position_raw,
+        target_id,
+        audio,
+        metadata,
+    )
+    .map(|prepared| prepared.map_task(ActorTaskRuntime::RunAway))
+    .map_err(RunAwayRuntimePreparationError::ConstructorSuffix)?
+    .into_generic_task();
+    if suffix.sub_a_target_speed_raw().is_some() {
+        return Err(RunAwayRuntimePreparationError::TaskContractMismatch);
+    }
+    Ok(task)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

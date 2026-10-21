@@ -5741,7 +5741,9 @@ impl SpecializedActorTaskScheduler {
                         manager,
                         owner,
                         crate::shared_fish::SharedFishFrame {
-                            resources,
+                            resources: crate::native_ground_actor::NativeGroundResources::Mutable(
+                                resources,
+                            ),
                             world_fx,
                             elapsed_micros,
                             global_elapsed_micros,

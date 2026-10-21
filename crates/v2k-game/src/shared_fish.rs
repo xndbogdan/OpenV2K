@@ -60,9 +60,9 @@ pub(crate) const TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTo
 };
 
 /// B/D/F swimmers whose authored task graphs are owned here: the neutral
-/// fish and the Type25 shark. Other hostile swimmers are not admitted.
+/// fish and the hostile Type25 and Type37. Other swimmers are not admitted.
 pub(crate) const fn is_shared_fish_type(entity_type: u32) -> bool {
-    matches!(entity_type, 22 | 23 | 24 | 62 | 124 | 25)
+    matches!(entity_type, 22 | 23 | 24 | 62 | 124 | 25 | 37)
 }
 
 /// Type25: C8 `0xC`, Wander x1, PlayerNearby x40 Shark Attack, Retarget x6,
@@ -71,17 +71,27 @@ pub(crate) const fn is_shark(entity_type: u32) -> bool {
     entity_type == 25
 }
 
-const SHARK_CHOICES: [(u32, u32, u32); 3] = [(1, 1, 6), (6, 40, 69), (1, 6, 5)];
+/// The C8 `0xC` swimmers with PlayerNearby and alternate class12: the shark
+/// and Type37 (Retarget x4, Defecate Virus x1, PlayerNearby x15 Run Away).
+pub(crate) const fn is_hostile_swimmer(entity_type: u32) -> bool {
+    matches!(entity_type, 25 | 37)
+}
 
-fn is_shark_row(init: &crate::entity_collision_state::EntityInitializerSpec) -> bool {
+const HOSTILE_CHOICES: [[(u32, u32, u32); 3]; 2] = [
+    [(1, 1, 6), (6, 40, 69), (1, 6, 5)],
+    [(1, 4, 5), (1, 1, 4), (6, 15, 10)],
+];
+
+fn is_hostile_row(init: &crate::entity_collision_state::EntityInitializerSpec) -> bool {
     init.initializer_state_flags_raw == 0xc
         && init.behavior_rule_ref == 1
         && init.alternate_behavior_class_ref == 12
-        && init
-            .behavior_choices
-            .iter()
-            .map(|c| (c.weight_rule_id, c.weight_multiplier, c.behavior_class_id))
-            .eq(SHARK_CHOICES)
+        && HOSTILE_CHOICES.iter().any(|choices| {
+            init.behavior_choices
+                .iter()
+                .map(|c| (c.weight_rule_id, c.weight_multiplier, c.behavior_class_id))
+                .eq(*choices)
+        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,7 +146,7 @@ pub(crate) fn authenticate_metadata(
             metadata.sub_d_steering_descriptor,
             RetailRuntimeValue::Known(Some(_))
         )
-        || !(is_shark_row(init)
+        || !(is_hostile_row(init)
             || matches!(init.initializer_state_flags_raw, 0x2004 | 0x200c)
                 && !init.behavior_choices.is_empty()
                 && init

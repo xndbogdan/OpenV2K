@@ -485,3 +485,163 @@ fn sharks_swim_ten_seconds_in_every_water_world_and_hunt_on_coarse_visits() {
         }
     }
 }
+
+fn type37s(manager: &EntityManager) -> Vec<u32> {
+    manager
+        .iter_all()
+        .filter(|e| e.entity_type == 37)
+        .map(|e| e.id)
+        .collect()
+}
+
+#[v2k_test_support::retail_test]
+fn type37s_are_born_on_the_fish_owner_and_defecate_virus_runs_its_two_slots() {
+    for (level, count) in [(22, 2), (23, 1)] {
+        let (mut session, mut manager, mut fx) = world(level, None);
+        let ids = type37s(&manager);
+        assert_eq!(ids.len(), count, "world{level}");
+        for &id in &ids {
+            let entity = manager.iter_all().find(|e| e.id == id).unwrap();
+            assert_eq!(
+                entity.collision.default_state_flags_at_0xc8,
+                RetailRuntimeValue::Known(0xc)
+            );
+            // No player: Run Away's PlayerNearby is zero.
+            assert!(matches!(class(&manager, id), 4 | 5), "world{level}");
+        }
+        // Force Defecate Virus: B9E0's terrain task in slot2, wander in slot0.
+        let id = ids[0];
+        let metadata = manager.type_runtime_metadata(37).unwrap().clone();
+        let selection = crate::entity_behavior::BehaviorSelection {
+            choice_index: 1,
+            program: crate::entity_behavior::behavior_program(4).unwrap(),
+        };
+        let context =
+            crate::entity_behavior::BehaviorContextRuntime::from_fresh_weighted_selection(
+                selection,
+            )
+            .unwrap();
+        crate::shared_fish_tasks::publish_selection(
+            manager.entity_mut(id).unwrap(),
+            &metadata,
+            selection,
+            context,
+            &mut || panic!("class4 constructors draw no word"),
+        )
+        .unwrap();
+        let entity = manager.iter_all().find(|e| e.id == id).unwrap();
+        assert!(matches!(
+            entity.actor_task_state(ActorTaskSlot::Primary),
+            Some(ActorTaskRuntime::DefecateVirusWander(_))
+        ));
+        assert!(matches!(
+            entity.actor_task_state(ActorTaskSlot::Tertiary),
+            Some(ActorTaskRuntime::DefecateVirusTerrain(_))
+        ));
+        let mut scheduler = SpecializedActorTaskScheduler::new();
+        scheduler.adopt_shared_fish(&manager);
+        // One Type37 is coarse throughout: its terrain task writes cells.
+        manager
+            .entity_mut(id)
+            .unwrap()
+            .collision
+            .state_flags_at_0x08
+            .overwrite(0x0200_0000, 0);
+        let before = manager
+            .iter_all()
+            .find(|e| e.id == id)
+            .unwrap()
+            .position_raw();
+        let terrain = |session: &GameSession| -> Vec<u8> {
+            let cells = &session.cache.level_terrain().unwrap().cells;
+            cells.iter().map(|cell| cell.terrain_type).collect()
+        };
+        let cells_before = terrain(&session);
+        for tick in 1001..1501 {
+            pass(&mut session, &mut manager, &mut fx, &mut scheduler, tick);
+        }
+        assert_ne!(
+            manager
+                .iter_all()
+                .find(|e| e.id == id)
+                .unwrap()
+                .position_raw(),
+            before
+        );
+        // Only fish run here: a newly infected cell is a coarse class4 write.
+        assert!(
+            terrain(&session)
+                .iter()
+                .zip(&cells_before)
+                .any(|(after, before)| {
+                    after & !before & crate::infection_evolution::INFECTION_TERRAIN_TYPE_BIT != 0
+                }),
+            "world{level}: no coarse Defecate Virus write"
+        );
+    }
+}
+
+#[v2k_test_support::retail_test]
+fn a_nearby_player_makes_type37_run_away_from_it() {
+    let (_, probe, _) = world(22, None);
+    let id = type37s(&probe)[0];
+    let position = probe
+        .iter_all()
+        .find(|e| e.id == id)
+        .unwrap()
+        .position_raw();
+    let (mut session, mut manager, mut fx) = world(
+        22,
+        Some([position[0].wrapping_add(1500), position[1], position[2]]),
+    );
+    let player = manager.player().unwrap().id;
+    let id = type37s(&manager)[0];
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    scheduler.adopt_shared_fish(&manager);
+    let mut fled = false;
+    for tick in 1001..1501 {
+        if class(&manager, id) != 10 {
+            // Reselection retries until PlayerNearby's Run Away is drawn.
+            pass(&mut session, &mut manager, &mut fx, &mut scheduler, tick);
+            continue;
+        }
+        pass(&mut session, &mut manager, &mut fx, &mut scheduler, tick);
+        let entity = manager.iter_all().find(|e| e.id == id).unwrap();
+        if let Some(ActorTaskRuntime::RunAway(task)) =
+            entity.actor_task_state(ActorTaskSlot::Primary)
+        {
+            assert_eq!(task.target_id(), player);
+            fled = true;
+            break;
+        }
+    }
+    assert!(fled, "Type37 never acquired the player to flee");
+}
+
+#[v2k_test_support::retail_test]
+fn a_dead_type37_takes_the_swimmer_class12() {
+    let (mut session, mut manager, mut fx) = world(22, None);
+    let id = type37s(&manager)[0];
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    scheduler.adopt_shared_fish(&manager);
+    pass(&mut session, &mut manager, &mut fx, &mut scheduler, 1001);
+    let death =
+        super::death::begin_shared_fish_standard_death(&mut manager, id, &mut fx, &scheduler)
+            .unwrap();
+    assert!(death.publication.is_some());
+    scheduler.retire_shared_fish(&manager, id);
+    assert!(super::dying::dying_graph(
+        manager.iter_all().find(|e| e.id == id).unwrap()
+    ));
+    for tick in 1002..1022 {
+        pass(&mut session, &mut manager, &mut fx, &mut scheduler, tick);
+    }
+    assert!(
+        manager
+            .iter_all()
+            .find(|e| e.id == id)
+            .unwrap()
+            .velocity_raw()[1]
+            < 500
+    );
+}

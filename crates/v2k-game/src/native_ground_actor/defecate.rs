@@ -126,7 +126,7 @@ pub(crate) fn tertiary<P: NativeGroundActorProfile>(
     Ok(defecate_virus_terrain_after_unwind(visit, prefix).is_some())
 }
 
-fn plan_callback(
+pub(crate) fn plan_callback(
     entity: &Entity,
     resources: &crate::resource_cache::ResourceCache,
     fx: &mut WorldFx,

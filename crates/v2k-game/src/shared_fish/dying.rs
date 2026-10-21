@@ -43,7 +43,7 @@ const DYING_CLEAR_MASK: u32 = 0x2015;
 
 /// Whether the live context is the shark's class12 dying graph.
 pub(crate) fn dying_graph(entity: &crate::entity::Entity) -> bool {
-    super::is_shark(entity.entity_type)
+    super::is_hostile_swimmer(entity.entity_type)
         && matches!(entity.current_behavior_context,
             RetailRuntimeValue::Known(Some(context))
                 if context.active_style().style_address()
@@ -98,10 +98,10 @@ pub(crate) fn publish_shark_death(
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Error::Graph);
     };
-    // Styles 4C7930/79C0/7D20 hold null +2C death hooks.
+    // Styles 4C7930/79C0/7D20/7E88/7618/7660 hold null +2C death hooks.
     if !matches!(
         context.active_style().style_address(),
-        0x4c7930 | 0x4c79c0 | 0x4c7d20
+        0x4c7930 | 0x4c79c0 | 0x4c7d20 | 0x4c7e88 | 0x4c7618 | 0x4c7660
     ) {
         return Err(Error::Graph);
     }
