@@ -14,11 +14,15 @@ use crate::{
 };
 
 pub(super) fn select(
+    row: Type30Row,
     player_nearby: bool,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<BehaviorSelection, Type30Block> {
     select_initial_behavior(
-        &CHOICES,
+        match row {
+            Type30Row::Type30 => &CHOICES[..],
+            Type30Row::Type33 => &TYPE33_CHOICES[..],
+        },
         |rule| match rule {
             BehaviorWeightRule::Always => 1,
             BehaviorWeightRule::PlayerNearby => i32::from(player_nearby),
@@ -30,13 +34,13 @@ pub(super) fn select(
     .ok_or(Type30Block::Runtime("empty weighted selector"))
 }
 
-pub(super) fn emitter_constructor() -> GenericEmitterRuntime {
+pub(super) fn emitter_constructor(row: Type30Row) -> GenericEmitterRuntime {
     // 24E30 zeroes0x3c and copies method/sound. E+12 is not a model binding.
     GenericEmitterRuntime {
         joint_bindings: [None; 2],
-        projectile_method: 20,
+        projectile_method: row.emitter().projectile_method,
         emitter_selector: 0,
-        sound_id: 75,
+        sound_id: u32::from(row.emitter().sound_id),
         direct_mode: 0,
         remaining_time_raw: 0,
         manual_step_raw: 0,
@@ -46,14 +50,14 @@ pub(super) fn emitter_constructor() -> GenericEmitterRuntime {
     }
 }
 
-pub(super) fn initializer_storage_authenticates(entity: &Entity) -> bool {
+pub(super) fn initializer_storage_authenticates(row: Type30Row, entity: &Entity) -> bool {
     matches!(
         entity.actor_common_axis_descriptor,
         RetailRuntimeValue::Known(_)
     ) && matches!(
         entity.sub_a_propulsion_runtime,
         RetailRuntimeValue::Known(Some(_))
-    ) && matches!(&entity.sub_h_external_frame_runtime, RetailRuntimeValue::Known(Some(h)) if h.records().len() == 10)
+    ) && matches!(&entity.sub_h_external_frame_runtime, RetailRuntimeValue::Known(Some(h)) if h.records().len() == row.sub_h_records())
 }
 
 /// ACD0/B6C0/B7C0 initialize tasks only. Reselection never reconstructs the
@@ -66,7 +70,7 @@ pub(super) fn publish_acquiring(
     next_random: &mut impl FnMut() -> u32,
 ) -> bool {
     if !matches!(selection.program.class_id, 5 | 7 | 26)
-        || !initializer_storage_authenticates(entity)
+        || !initializer_storage_authenticates(Type30Row::Type30, entity)
     {
         return false;
     }

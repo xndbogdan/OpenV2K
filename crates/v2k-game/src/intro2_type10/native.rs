@@ -479,7 +479,7 @@ fn publish_acquiring(
                 profile.sub_g_randomized_target_base() + i32::from(word >> 8),
                 0,
             );
-            prepared
+            Ok(prepared)
         });
         if result.is_err() {
             entity.publish_behavior_initializer_failure_fallback(context);

@@ -467,6 +467,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                         dispatch_mode: mode,
                         elapsed_micros: dt,
                         global_elapsed_micros: frame.elapsed_micros,
+                        wave_tick_50hz: Some(frame.retail_tick as i32),
                     },
                     target,
                     RetailRuntimeValue::Known(None),
@@ -503,6 +504,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                         dispatch_mode: mode,
                         elapsed_micros: dt,
                         global_elapsed_micros: frame.elapsed_micros,
+                        wave_tick_50hz: Some(frame.retail_tick as i32),
                     },
                     request.target,
                     request.tracked_target,
@@ -523,6 +525,23 @@ fn run_frame<P: NativeGroundActorProfile>(
                 dispatch_mode: mode,
                 elapsed_micros: dt,
                 global_elapsed_micros: frame.elapsed_micros,
+                wave_tick_50hz: Some(frame.retail_tick as i32),
+            },
+            frame.world_fx,
+        )?
+    } else if matches!(
+        entity.actor_task_state(ActorTaskSlot::Primary),
+        Some(ActorTaskRuntime::OrdinaryType9Wander(_))
+    ) {
+        super::guard::tick_wander_primary::<P>(
+            entity,
+            super::mover::MoverFrame {
+                metadata: &metadata,
+                terrain,
+                dispatch_mode: mode,
+                elapsed_micros: dt,
+                global_elapsed_micros: frame.elapsed_micros,
+                wave_tick_50hz: Some(frame.retail_tick as i32),
             },
             frame.world_fx,
         )?
@@ -536,6 +555,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                 dispatch_mode: mode,
                 elapsed_micros: dt,
                 global_elapsed_micros: frame.elapsed_micros,
+                wave_tick_50hz: Some(frame.retail_tick as i32),
             },
             frame.world_fx,
         )?
@@ -549,6 +569,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                 dispatch_mode: mode,
                 elapsed_micros: dt,
                 global_elapsed_micros: frame.elapsed_micros,
+                wave_tick_50hz: Some(frame.retail_tick as i32),
             },
             frame.world_fx,
         )?
@@ -569,6 +590,7 @@ fn run_frame<P: NativeGroundActorProfile>(
                         dispatch_mode: mode,
                         elapsed_micros: dt,
                         global_elapsed_micros: frame.elapsed_micros,
+                        wave_tick_50hz: Some(frame.retail_tick as i32),
                     },
                     request.target,
                     request.tracked_target,
@@ -587,11 +609,14 @@ fn run_frame<P: NativeGroundActorProfile>(
     } else {
         tick_primary::<P>(
             entity,
-            &metadata,
-            terrain,
-            dt,
-            frame.elapsed_micros,
-            mode,
+            super::mover::MoverFrame {
+                metadata: &metadata,
+                terrain,
+                dispatch_mode: mode,
+                elapsed_micros: dt,
+                global_elapsed_micros: frame.elapsed_micros,
+                wave_tick_50hz: Some(frame.retail_tick as i32),
+            },
             frame.world_fx,
         )?
     };
@@ -669,13 +694,10 @@ fn run_frame<P: NativeGroundActorProfile>(
 
 pub(crate) fn tick_primary<P: NativeGroundActorProfile>(
     entity: &mut Entity,
-    metadata: &EntityTypeRuntimeMetadata,
-    terrain: &TerrainGrid,
-    dt: u32,
-    global_dt: u32,
-    mode: CommonMoverDispatchMode,
+    frame: super::mover::MoverFrame<'_>,
     world_fx: &mut WorldFx,
 ) -> Result<bool, NativeGroundActorBlock> {
+    let dt = frame.elapsed_micros;
     use NativeGroundActorBlock as Block;
     let Some(task_id) = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary) else {
         return Ok(false);
@@ -716,13 +738,7 @@ pub(crate) fn tick_primary<P: NativeGroundActorProfile>(
         .ok_or(Block::Graph)?;
     let moved = super::mover::run::<P>(
         entity,
-        super::mover::MoverFrame {
-            metadata,
-            terrain,
-            dispatch_mode: mode,
-            elapsed_micros: dt,
-            global_elapsed_micros: global_dt,
-        },
+        frame,
         stage.private_state_mut(),
         RetailRuntimeValue::Known(None),
         &mut || u32::from(world_fx.next_shared_retail_random_u16()),

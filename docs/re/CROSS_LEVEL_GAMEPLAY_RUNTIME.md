@@ -142,7 +142,10 @@ weighted5/7/26 tasks and Method20 queue. Living, hit/static and Class12 paths
 retain the same constructor lease and K/L bank. Its owning authority records
 the finite Class5 variant0 graph and replaceable transient-B2/Furniture-height
 allocation approximations; source-owned implementation is distinct from
-matched Alpine motion and audiovisual acceptance.
+matched Alpine motion and audiovisual acceptance. The ten
+[Type33 fireectos](TYPE33_FIREECTO.md) (worlds 42/43/47) join that owner as a
+second row on the ground host's new class6 Wander Near Location and class32
+Guard Location programs, and die by class12.
 
 [Native fish22/23/24/62/124](FISH_RUNTIME.md#particle-hits-and-quiet-death) use their
 current task/allocation owner for primary, static-route, infected and cured

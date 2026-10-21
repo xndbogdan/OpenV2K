@@ -144,7 +144,8 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // Type108 flyers die quietly and the Type83 radar through class49;
     // Alien1's Type35s republish Search and its next is a Type36.
     (42, 36),
-    (43, 33),
+    // World 43's Type33 fireectos take class12; its next is a Type36.
+    (43, 36),
     // Ordinary Type13 and the emitter-only Type43 take their native class1
     // abort deaths, Type5 its class11 Tumble publication and Type35 Search.
     (46, 36),

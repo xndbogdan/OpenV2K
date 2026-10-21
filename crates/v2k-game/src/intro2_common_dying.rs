@@ -204,12 +204,8 @@ fn authenticate_components(
     let (expected_mass, expected_model, expected) =
         if crate::intro2_type16::intro2_type16_allocation_authenticates(entity) {
             (100, 257, crate::intro2_type16::TOPOLOGY)
-        } else if crate::native_type30::allocation_authenticates(entity) {
-            (
-                100,
-                crate::native_type30::MODEL as u16,
-                crate::native_type30::TOPOLOGY,
-            )
+        } else if let Some(row) = crate::native_type30::type30_row(entity) {
+            (100, row.model() as u16, crate::native_type30::TOPOLOGY)
         } else if crate::native_type122::type122_allocation_authenticates(entity) {
             (100, 274, crate::native_type122::TOPOLOGY)
         } else if crate::native_type18::allocation_authenticates(entity) {

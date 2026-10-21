@@ -26,6 +26,13 @@ const MODEL1131_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
     sub_k: Some([4, 3]),
     sub_l: Some([1, 2, 64, 31, 160, 15]),
 };
+/// Model 1171 (Type33): model1131's K and L selectors, with L's second
+/// limit pair (64, 31) like its first.
+const MODEL1171_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
+    sub_g: None,
+    sub_k: Some([4, 3]),
+    sub_l: Some([1, 2, 64, 31, 64, 31]),
+};
 /// Model 684 (Type12/Type127): an 82-word bank. K writes its last two words,
 /// past the 63 a model operand can address, and L words 2/1.
 const MODEL684_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
@@ -87,7 +94,9 @@ impl Intro2KlComponents {
         };
         let expected = match metadata.common_mover_gkl_payloads {
             RetailRuntimeValue::Known(payloads)
-                if payloads == TYPE30_PAYLOADS || payloads == MODEL1131_PAYLOADS =>
+                if payloads == TYPE30_PAYLOADS
+                    || payloads == MODEL1131_PAYLOADS
+                    || payloads == MODEL1171_PAYLOADS =>
             {
                 4
             }

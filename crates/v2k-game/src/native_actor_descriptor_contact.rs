@@ -288,7 +288,7 @@ fn commit_plan(
         let runtime = match kind {
             16 | 128 => &mut entity.intro2_type16_runtime.as_mut().unwrap().sub_d_runtime,
             26 => entity.intro2_type26_sub_d_runtime.as_mut().unwrap(),
-            30 => &mut entity.native_type30_runtime.as_mut().unwrap().sub_d_runtime,
+            30 | 33 => &mut entity.native_type30_runtime.as_mut().unwrap().sub_d_runtime,
             40 => &mut entity.native_type40_runtime.as_mut().unwrap().sub_d_runtime,
             56 => &mut entity.native_type56_runtime.as_mut().unwrap().sub_d_runtime,
             38 | 129 | 119 | 32 => {
@@ -548,7 +548,9 @@ fn contact_topology(
         || topology.sub_g != flying
         // Type30 retains its constructor-owned K/L alongside A/B/C/D/E/H.
         //01A20 uses its A/D branch without advancing or reinterpreting K/L.
-        || (topology.sub_l && !flying && !matches!(entity.entity_type, 30 | 38 | 129 | 119 | 32 | 12 | 127))
+        || (topology.sub_l
+            && !flying
+            && !matches!(entity.entity_type, 30 | 33 | 38 | 129 | 119 | 32 | 12 | 127))
         || topology.sub_i != person
         || !animation_presence_matches
         || if fish {
@@ -588,7 +590,7 @@ fn contact_topology(
         && match entity.entity_type {
             16 | 128 => entity.intro2_type16_runtime.is_none(),
             26 => entity.intro2_type26_sub_d_runtime.is_none(),
-            30 => entity.native_type30_runtime.is_none(),
+            30 | 33 => entity.native_type30_runtime.is_none(),
             40 => entity.native_type40_runtime.is_none(),
             56 => entity.native_type56_runtime.is_none(),
             38 | 129 | 119 | 32 => entity.native_type38_runtime.is_none(),
@@ -648,7 +650,7 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         26 => crate::intro2_type26_defecate_virus::type26_manager_allocation_authenticates(
             manager, id,
         ),
-        30 => crate::native_type30::manager_allocation_authenticates(manager, id),
+        30 | 33 => crate::native_type30::manager_allocation_authenticates(manager, id),
         40 => crate::native_type40::manager_allocation_authenticates(manager, id),
         56 => crate::native_type56::manager_allocation_authenticates(manager, id),
         43 => crate::native_type43::manager_allocation_authenticates(manager, id),
@@ -741,8 +743,8 @@ pub(crate) fn native_weapon_contact_owner_authenticates(
 
 fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool {
     match kind {
-        26 | 30 | 38 | 129 | 119 | 32 | 12 | 127 | 31 | 105 | 40 | 56 | 43 | 13 | 14 | 15 | 39
-        | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57 => {
+        26 | 30 | 33 | 38 | 129 | 119 | 32 | 12 | 127 | 31 | 105 | 40 | 56 | 43 | 13 | 14 | 15
+        | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57 => {
             native_insect_allocation_authenticates(manager, id)
         }
         kind if NativeWorkerProfile::from_entity_type(kind).is_some() => {

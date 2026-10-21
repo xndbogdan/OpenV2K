@@ -1159,13 +1159,14 @@ impl BaseFactoryRuntimeState {
 /// PLASMA_WEAPON_PRESENTATION.md for the type/model census and override audit.
 /// Type71's Section-12 row equals Type47's apart from data words and Sub-E,
 /// so the loader gives it the same pair. The native Type83 radar's row gets
-/// it too; its selector 1 is the Sub-K word 405610 counts.
+/// it too; its selector 1 is the Sub-K word 405610 counts. The loader sets
+/// every row's pair, so Type33 on the Type30 owner reads the same clock.
 /// Keeping this as an explicit evidence policy prevents an unobserved type
 /// from acquiring animation merely because its model happens to look similar.
 pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool {
     matches!(
         entity_type,
-        9 | 13 | 17 | 26 | 30 | 40 | 47 | 56 | 61 | 71 | 83 | 92 | 96 | 97 | 99 | 102 | 103
+        9 | 13 | 17 | 26 | 30 | 33 | 40 | 47 | 56 | 61 | 71 | 83 | 92 | 96 | 97 | 99 | 102 | 103
     )
 }
 
@@ -5064,6 +5065,7 @@ impl EntityManager {
                             | 30
                             | 31
                             | 32
+                            | 33
                             | 35
                             | 38
                             | 39

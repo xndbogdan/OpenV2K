@@ -39,7 +39,8 @@ pub(crate) fn publish_authored_type30(
         constructor_surface_bits,
         sub_d,
     } = request;
-    authenticate_metadata(metadata)?;
+    let row = Type30Row::from_entity_type(spawn.entity_type).ok_or(Type30Block::Identity)?;
+    authenticate_row_metadata(row, metadata)?;
     let slots = std::array::from_fn(|slot| {
         let model = if spawn.model_overrides[slot] == 0 {
             u32::from(metadata.model_slots[slot])
@@ -49,13 +50,12 @@ pub(crate) fn publish_authored_type30(
         (model != 0).then_some(model as usize)
     });
     if !entity.active
-        || entity.entity_type != 30
-        || spawn.entity_type != 30
+        || entity.entity_type != row.entity_type()
         || entity.id != allocation.entity_id
         || entity.authored_spawn_index != Some(spawn.index)
         || entity.capability_flags != metadata.capability_flags
         || entity.model_slots != slots
-        || slots != [Some(MODEL); 4]
+        || slots != [Some(row.model()); 4]
         || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
         || spawn.has_animation
         || spawn.animation.is_some()
@@ -89,12 +89,12 @@ pub(crate) fn publish_authored_type30(
     let RetailRuntimeValue::Known(Some(a)) = metadata.sub_a_propulsion_descriptor else {
         unreachable!()
     };
-    if entity.actor_common_axis_descriptor != RetailRuntimeValue::Known(AXIS)
+    if entity.actor_common_axis_descriptor != RetailRuntimeValue::Known(row.axis())
         || entity.sub_a_propulsion_runtime
             != RetailRuntimeValue::Known(Some(SubAPropulsionRuntime::pending_constructor_rng(a)))
-        || !tasks::initializer_storage_authenticates(entity)
+        || !tasks::initializer_storage_authenticates(row, entity)
         || entity.sub_j_attachment_runtime != RetailRuntimeValue::Known(None)
-        || entity.collision.health_raw != RetailRuntimeValue::Known(12_000)
+        || entity.collision.health_raw != RetailRuntimeValue::Known(row.health_raw())
         || entity.collision.pre_health_damage_buffer_raw
             != RetailRuntimeValue::Known(spawn.initial_damage_buffer_raw)
         || entity.collision.last_hit_presentation_tick_at_0x34 != RetailRuntimeValue::Known(0)
@@ -143,8 +143,8 @@ pub(crate) fn publish_authored_type30(
     );
     state.overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     entity.collision.state_flags_at_0x08 = state;
-    entity.model_index = Some(MODEL);
-    // Common104B0 +44 and Type30 type-vtable+30 are both null.
+    entity.model_index = Some(row.model());
+    // Common104B0 +44 and both rows' type-vtable+30 are null.
     entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
     entity
         .collision
@@ -152,12 +152,13 @@ pub(crate) fn publish_authored_type30(
         .damage_modifier_identity_context_empty = RetailRuntimeValue::Known(true);
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
     let runtime = Type30Runtime {
+        row,
         allocation,
         spawn_index: spawn.index,
         anchor_raw,
         sub_d_runtime: sub_d.runtime,
         sub_d_owner: sub_d.frame_owner,
-        sub_e_runtime: tasks::emitter_constructor(),
+        sub_e_runtime: tasks::emitter_constructor(row),
         kl_components: Intro2KlComponents::from_native_constructor(metadata)
             .map_err(Type30Block::Kl)?,
     };
@@ -176,7 +177,13 @@ fn publish_birth(
     let RetailRuntimeValue::Known(Some(a)) = metadata.sub_a_propulsion_descriptor else {
         unreachable!()
     };
-    let h = SubHRuntimeState::new(10).map_err(|_| Type30Block::ComponentStorage)?;
+    let row = runtime.row;
+    let mut h =
+        SubHRuntimeState::new(row.sub_h_records()).map_err(|_| Type30Block::ComponentStorage)?;
+    if row == Type30Row::Type33 {
+        // Sub-C +0C 1: the feet also stand on the waved sea.
+        h.set_surface_policy(crate::sub_h_external_frame::SubHSurfacePolicy::TerrainAndWater);
+    }
     let a = SubAPropulsionRuntime::from_20450_constructor(a, next_random() as u16);
     entity.set_position_raw(runtime.anchor_raw);
     entity.sub_h_external_frame_runtime = RetailRuntimeValue::Known(Some(h));
@@ -195,17 +202,31 @@ fn publish_birth(
         .collect();
     // Only rule6 reads candidate state. Type30 has no People or Furniture
     // evaluator; its Furniture26 choice is unconditional, exactly as authored.
-    let player_nearby = shared::nearby::<profile::Type30Profile>(owner, &candidates, 1)
-        .map_err(Type30Block::Ground)?;
+    // Type33's two Always choices read nothing.
+    let player_nearby = row == Type30Row::Type30
+        && shared::nearby::<profile::Type30Profile>(owner, &candidates, 1)
+            .map_err(Type30Block::Ground)?;
     let mut selector_word = 0;
-    let selection = tasks::select(player_nearby, &mut || {
+    let selection = tasks::select(row, player_nearby, &mut || {
         selector_word = next_random();
         selector_word
     })?;
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(Type30Block::Runtime("weighted selection context"))?;
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
-    let succeeded = tasks::publish_acquiring(entity, metadata, selection, context, next_random);
+    let succeeded = match row {
+        Type30Row::Type30 => {
+            tasks::publish_acquiring(entity, metadata, selection, context, next_random)
+        }
+        Type30Row::Type33 => shared::publication::publish_shared_root_class(
+            entity,
+            metadata,
+            selection,
+            context,
+            TYPE33_AXIS,
+            next_random,
+        ),
+    };
     Ok(Type30Publication {
         selection,
         selector_word,

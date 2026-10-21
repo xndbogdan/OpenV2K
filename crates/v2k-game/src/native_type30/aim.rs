@@ -1,6 +1,7 @@
-//! Native Type30 method20 Aim: actor-specific custody over the shared transaction.
+//! Native Type30 method20 and Type33 method24 Aim: actor-specific custody over
+//! the shared transaction, one source profile per row.
 
-use super::{allocation_authenticates, manager_allocation_authenticates};
+use super::{manager_allocation_authenticates, type30_row, Type30Row};
 use crate::native_ground_actor::search::pursuing_graph_authenticates;
 use crate::{
     common_mover::component_dispatch::CommonMoverDispatchMode,
@@ -20,44 +21,73 @@ pub use shared::{
     NativeBallisticShotDrainOutcome as Type30ShotDrainOutcome,
 };
 
-struct Type30Profile;
-impl shared::sealed::Sealed for Type30Profile {}
-impl NativeBallisticProfile for Type30Profile {
-    const ID: NativeBallisticProfileId = NativeBallisticProfileId::Type30;
-    fn allocation_authenticates(entity: &Entity) -> bool {
-        allocation_authenticates(entity)
-    }
-    fn graph_authenticates(entity: &Entity) -> bool {
-        pursuing_graph_authenticates::<super::profile::Type30Profile>(entity)
-    }
-    fn metadata_authenticates(metadata: &EntityTypeRuntimeMetadata) -> bool {
-        super::authenticate_metadata(metadata).is_ok()
-    }
-    fn emitter(entity: &Entity) -> Option<&GenericEmitterRuntime> {
-        entity
-            .native_type30_runtime
-            .as_ref()
-            .map(|runtime| &runtime.sub_e_runtime)
-    }
-    fn emitter_mut(entity: &mut Entity) -> Option<&mut GenericEmitterRuntime> {
-        entity
-            .native_type30_runtime
-            .as_mut()
-            .map(|runtime| &mut runtime.sub_e_runtime)
-    }
-    fn queue(entity: &Entity) -> Option<&Type30AimRuntime> {
-        entity.native_type30_aim_runtime.as_ref()
-    }
-    fn queue_slot_mut(entity: &mut Entity) -> &mut Option<Type30AimRuntime> {
-        &mut entity.native_type30_aim_runtime
-    }
+macro_rules! row_aim_profile {
+    ($name:ident, $id:ident, $row:expr, $ground:ty) => {
+        struct $name;
+        impl shared::sealed::Sealed for $name {}
+        impl NativeBallisticProfile for $name {
+            const ID: NativeBallisticProfileId = NativeBallisticProfileId::$id;
+            fn allocation_authenticates(entity: &Entity) -> bool {
+                type30_row(entity) == Some($row)
+            }
+            fn graph_authenticates(entity: &Entity) -> bool {
+                pursuing_graph_authenticates::<$ground>(entity)
+            }
+            fn metadata_authenticates(metadata: &EntityTypeRuntimeMetadata) -> bool {
+                super::authenticate_row_metadata($row, metadata).is_ok()
+            }
+            fn emitter(entity: &Entity) -> Option<&GenericEmitterRuntime> {
+                entity
+                    .native_type30_runtime
+                    .as_ref()
+                    .map(|runtime| &runtime.sub_e_runtime)
+            }
+            fn emitter_mut(entity: &mut Entity) -> Option<&mut GenericEmitterRuntime> {
+                entity
+                    .native_type30_runtime
+                    .as_mut()
+                    .map(|runtime| &mut runtime.sub_e_runtime)
+            }
+            fn queue(entity: &Entity) -> Option<&Type30AimRuntime> {
+                entity.native_type30_aim_runtime.as_ref()
+            }
+            fn queue_slot_mut(entity: &mut Entity) -> &mut Option<Type30AimRuntime> {
+                &mut entity.native_type30_aim_runtime
+            }
+        }
+    };
+}
+
+row_aim_profile!(
+    Type30Profile,
+    Type30,
+    Type30Row::Type30,
+    super::profile::Type30Profile
+);
+row_aim_profile!(
+    Type33Profile,
+    Type33,
+    Type30Row::Type33,
+    super::profile::Type33Profile
+);
+
+fn manager_row(manager: &EntityManager, entity_id: u32) -> Option<Type30Row> {
+    manager
+        .iter_all()
+        .find(|entity| entity.id == entity_id)
+        .and_then(type30_row)
 }
 
 pub fn ensure_native_type30_aim_runtime(
     entity: &mut Entity,
     metadata: Option<&EntityTypeRuntimeMetadata>,
 ) -> Result<(), Type30AimError> {
-    shared::ensure_native_aim_runtime::<Type30Profile>(entity, metadata)
+    match type30_row(entity) {
+        Some(Type30Row::Type33) => {
+            shared::ensure_native_aim_runtime::<Type33Profile>(entity, metadata)
+        }
+        _ => shared::ensure_native_aim_runtime::<Type30Profile>(entity, metadata),
+    }
 }
 pub fn tick_type30_aim(
     dispatch_mode: CommonMoverDispatchMode,
@@ -76,14 +106,24 @@ pub fn tick_type30_aim(
             Type30AimError::EntityUnavailable
         });
     }
-    shared::tick_native_aim::<Type30Profile>(
-        dispatch_mode,
-        manager,
-        world_fx,
-        entity_id,
-        elapsed_micros,
-        metadata,
-    )
+    match manager_row(manager, entity_id) {
+        Some(Type30Row::Type33) => shared::tick_native_aim::<Type33Profile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
+        _ => shared::tick_native_aim::<Type30Profile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
+    }
 }
 pub fn drain_type30_shots(
     manager: &mut EntityManager,
@@ -105,11 +145,20 @@ pub fn drain_type30_shots(
             },
         );
     }
-    shared::drain_native_shots::<Type30Profile>(
-        manager,
-        world_fx,
-        source_entity_id,
-        environment,
-        retail_tick,
-    )
+    match manager_row(manager, source_entity_id) {
+        Some(Type30Row::Type33) => shared::drain_native_shots::<Type33Profile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
+        _ => shared::drain_native_shots::<Type30Profile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
+    }
 }

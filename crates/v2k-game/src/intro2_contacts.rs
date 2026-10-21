@@ -435,7 +435,7 @@ pub fn resolve_intro2_contacts(mut frame: Intro2ContactFrame<'_>) -> Vec<Intro2C
             if blocked {
                 continue;
             }
-        } else if entity.entity_type == 30 && entity.native_type30_runtime.is_some() {
+        } else if matches!(entity.entity_type, 30 | 33) && entity.native_type30_runtime.is_some() {
             let entity_type = entity.entity_type;
             let result = crate::native_actor_surface_contact::resolve_native_actor_surface_contact(
                 &mut frame, id,

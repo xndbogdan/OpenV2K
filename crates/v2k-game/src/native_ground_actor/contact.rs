@@ -816,6 +816,7 @@ fn resolve(
                 | 127
                 | 31
                 | 105
+                | 33
         ) && matches!(
             context.active_style().style_address(),
             0x4c7930 | 0x4c7978 | 0x4c74f8
@@ -827,9 +828,15 @@ fn resolve(
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
-        // Guard Location's search and pursuit styles hold null contact hooks.
+        // Guard Location's search and pursuit styles and Wander Near
+        // Location's hold null contact hooks.
         || (matches!(profile.entity_type, 55 | 81)
             && matches!(context.active_style().style_address(), 0x4c7bb8 | 0x4c7c00))
+        || (profile.entity_type == 33
+            && matches!(
+                context.active_style().style_address(),
+                0x4c79c0 | 0x4c7bb8 | 0x4c7c00
+            ))
         || (matches!(profile.entity_type, 80 | 126 | 81 | 128 | 129 | 127)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
@@ -1022,6 +1029,8 @@ fn apply_contact(
             profile.default_flags
         }
         0x4c7978 => (profile.default_flags | 0x80) & !2,
+        // Wander Near Location's +38 clears 21000.
+        0x4c79c0 => profile.default_flags & !0x21000,
         0x4c78a0 | 0x4c78e8 if matches!(profile.entity_type, 3 | 27) => {
             crate::rolling_boulder::current_style(entity)
                 .map_err(|_| Block::Runtime("Rolling Boulder style"))?
@@ -1304,8 +1313,11 @@ fn contact_task_hook(
         (0x4c7a98 | 0x4c7c00, Some(Task::ChaseTarget(task)), None) => Ok(
             NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
         ),
-        // Guard's 02E20 installs 02B10's hooks: 02CA0 at the Primary's +20;
-        // 01F80's search keeps 05FF0's null hook.
+        // Wander's and Guard's 02E20 installs 02B10's hooks: 02CA0 at the
+        // Primary's +20; 01F80's search keeps 05FF0's null hook.
+        (0x4c79c0, Some(Task::OrdinaryType9Wander(task)), None) => Ok(
+            NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
+        ),
         (
             0x4c7bb8,
             Some(Task::OrdinaryType9Wander(task)),
@@ -1496,24 +1508,40 @@ fn reselect_after_furniture_contact(
         return Ok(());
     }
     if crate::native_type30::manager_allocation_authenticates(frame.entities, id) {
-        if super::behavior::reselect::<crate::native_type30::profile::Type30Profile>(
-            frame.entities,
-            id,
-            frame.retail_tick,
-            frame.world_fx,
-            Some(frame.resources),
-            super::behavior::ReselectionEntry::Impact,
-        )
-        .is_err()
-        {
+        let row = frame
+            .entities
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .and_then(crate::native_type30::type30_row);
+        let reselected = match row {
+            Some(crate::native_type30::Type30Row::Type33) => {
+                super::behavior::reselect::<crate::native_type30::profile::Type33Profile>(
+                    frame.entities,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(frame.resources),
+                    super::behavior::ReselectionEntry::Impact,
+                )
+            }
+            _ => super::behavior::reselect::<crate::native_type30::profile::Type30Profile>(
+                frame.entities,
+                id,
+                frame.retail_tick,
+                frame.world_fx,
+                Some(frame.resources),
+                super::behavior::ReselectionEntry::Impact,
+            ),
+        };
+        if reselected.is_err() {
             if let Ok(owner) =
-                crate::native_type30::Type30Owner::adopt_blocked_prefix(frame.entities, id)
+                crate::native_type30::Type30FamilyOwner::adopt_blocked_prefix(frame.entities, id)
             {
                 frame.actor_tasks.register_type30(owner);
             }
             return Err(Block::Runtime("Type30 static C690 suffix"));
         }
-        let owner = crate::native_type30::Type30Owner::adopt(frame.entities, id)
+        let owner = crate::native_type30::Type30FamilyOwner::adopt(frame.entities, id)
             .map_err(|_| Block::Runtime("Type30 post-static owner"))?;
         frame.actor_tasks.register_type30(owner);
         Ok(())

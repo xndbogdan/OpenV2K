@@ -273,7 +273,7 @@ enum SpecializedActorTaskOwner {
     NativeType18(crate::native_type18::Type18Owner),
     NativeType28(crate::native_type28::Type28Owner),
     NativeType76Family(crate::native_type76::Type76FamilyOwner),
-    NativeType30(crate::native_type30::Type30Owner),
+    NativeType30(crate::native_type30::Type30FamilyOwner),
     RollingBoulder(crate::rolling_boulder::RollingBoulderOwner),
     NativeType40(crate::native_type40::Type40Owner),
     NativeType56(crate::native_type56::Type56Owner),

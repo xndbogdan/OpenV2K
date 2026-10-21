@@ -73,6 +73,7 @@ fn frame<'a>(
         dispatch_mode: CommonMoverDispatchMode::Normal,
         elapsed_micros: 20_000,
         global_elapsed_micros: 20_000,
+        wave_tick_50hz: None,
     }
 }
 

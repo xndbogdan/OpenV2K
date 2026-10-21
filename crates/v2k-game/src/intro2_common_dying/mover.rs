@@ -28,6 +28,7 @@ pub(super) fn run_retained_kl_mover(
     terrain: &TerrainGrid,
     elapsed_micros: u32,
     global_elapsed_micros: u32,
+    wave_tick_50hz: i32,
 ) -> Result<(), Intro2CommonDyingBlock> {
     use crate::intro2_common_mover::{
         run_intro2_common_mover, Intro2CommonMoverBlock, Intro2CommonMoverFrame,
@@ -48,9 +49,9 @@ pub(super) fn run_retained_kl_mover(
             metadata,
             topology: crate::native_type30::TOPOLOGY,
             terrain,
-            // Canonical Type30 C samples solid terrain, with both wave and offset
-            // flags clear. No world clock is read by this source component phase.
-            wave_tick_50hz: None,
+            // Type30's C samples solid terrain and never reads the clock;
+            // Type33's surface mode 1 samples the waved sea at this tick.
+            wave_tick_50hz: Some(wave_tick_50hz),
             dispatch_mode: CommonMoverDispatchMode::Normal,
             elapsed_micros,
             global_elapsed_micros,

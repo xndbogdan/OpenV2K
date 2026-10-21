@@ -7,6 +7,7 @@
 pub(crate) mod behavior;
 pub mod contact;
 pub(crate) mod defecate;
+pub(crate) mod guard;
 pub mod impact;
 pub(crate) mod live;
 pub(crate) mod mover;
@@ -313,6 +314,10 @@ pub(crate) mod sealed {
         }
         fn completed_terminal_authenticates(_: &EntityManager, _: u32) -> bool {
             false
+        }
+        /// Entity `+0x90`, read by class6/32's `02EB0` wander.
+        fn wander_anchor(_: &Entity) -> Option<[i16; 3]> {
+            None
         }
         // Sealed crate-local component custody is intentionally not public API.
         fn kl_components(_: &Entity) -> Option<crate::intro2_common_mover::Intro2KlComponents> {

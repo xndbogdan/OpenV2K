@@ -16,6 +16,9 @@ pub struct MoverFrame<'a> {
     pub dispatch_mode: CommonMoverDispatchMode,
     pub elapsed_micros: u32,
     pub global_elapsed_micros: u32,
+    /// The 50-Hz wave clock a surface-mode-1 Sub-C samples; a lane without
+    /// one fails closed there.
+    pub wave_tick_50hz: Option<i32>,
 }
 
 pub(crate) fn run<P: NativeGroundActorProfile>(
@@ -44,7 +47,7 @@ pub(crate) fn run<P: NativeGroundActorProfile>(
             metadata: frame.metadata,
             topology: P::TOPOLOGY,
             terrain: frame.terrain,
-            wave_tick_50hz: None,
+            wave_tick_50hz: frame.wave_tick_50hz,
             dispatch_mode: frame.dispatch_mode,
             elapsed_micros: frame.elapsed_micros,
             global_elapsed_micros: frame.global_elapsed_micros,

@@ -8,7 +8,7 @@ use super::{
     SpecializedActorTaskScheduler,
 };
 use crate::{
-    native_ground_actor::NativeGroundTerminalPublication, native_type30::Type30Owner,
+    native_ground_actor::NativeGroundTerminalPublication, native_type30::Type30FamilyOwner,
     native_type40::Type40Owner, native_type56::Type56Owner, rolling_boulder::RollingBoulderOwner,
 };
 
@@ -139,7 +139,7 @@ impl SpecializedActorTaskScheduler {
     pub fn adopt_type30(&mut self, manager: &EntityManager) -> usize {
         let owners: Vec<_> = manager
             .iter_all()
-            .filter_map(|entity| Type30Owner::adopt(manager, entity.id).ok())
+            .filter_map(|entity| Type30FamilyOwner::adopt(manager, entity.id).ok())
             .filter(|owner| {
                 !self
                     .owners
@@ -156,7 +156,7 @@ impl SpecializedActorTaskScheduler {
         count
     }
 
-    pub(crate) fn register_type30(&mut self, owner: Type30Owner) {
+    pub(crate) fn register_type30(&mut self, owner: Type30FamilyOwner) {
         if self.has_native_contact_prefix(owner.entity_id())
             || self.owners.iter().any(|present| {
                 matches!(present, SpecializedActorTaskOwner::NativeType30(current)

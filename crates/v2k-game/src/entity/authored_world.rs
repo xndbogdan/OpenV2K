@@ -337,8 +337,9 @@ impl EntityManager {
                 )
                 .map_err(|error| format!("Type53: {error:?}"))?;
             }
-            30 => {
-                let sub_d = sub_d.ok_or("missing Type30 Sub-D allocation")?;
+            // Type33 shares the Type30 owner as its second row.
+            30 | 33 => {
+                let sub_d = sub_d.ok_or("missing Type30-family Sub-D allocation")?;
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(
                         spawn.position_raw(),

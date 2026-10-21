@@ -607,3 +607,19 @@ missing component, or unresolved Sub-A target speed rejects without mutation.
 This legacy seam does not install a task or synthesize behavior, RNG, basis, or
 surface input. Fresh selected Wander uses its separate production-adopted
 linear owner and exact finalized entity state.
+
+## Native owners
+
+Three owners run this program natively. Type47/71's gunner owner keeps its own
+adapters. [`guard_location_owner::native`](../../crates/v2k-game/src/guard_location_owner/native.rs)
+holds what the others share: `B5A0`'s two constructors behind each owner's
+`06070` suffix, one `01FB0` visit, and `C7D0`'s pursuit, which publishes
+style `4C7C00` and Search's `ADE0`. Each owner authenticates its own graph,
+supplies the `+90` anchor and runs its own mover:
+
+- the [Type10 owner](INTRO2_TYPE10.md#ordinary-type55-guards-and-type81-carriers)
+  for the Type55 guards and Type81 carriers, through its Sub-G suffix and
+  GKL mover;
+- the ground host for the [Type33 fireectos](TYPE33_FIREECTO.md), through
+  the Sub-H/Sub-A suffix and the shared `01430` binding.
+
