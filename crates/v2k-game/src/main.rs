@@ -14,7 +14,7 @@ mod launcher;
 mod launcher_startup;
 mod live_display;
 mod network_play;
-use network_play::{advance_network_world, report_held, NetworkWorldFrame};
+use network_play::{advance_network_world, NetworkWorldFrame};
 mod probe;
 use v2k_game::{launcher_preferences, setup};
 mod paused_gameplay;
@@ -1999,6 +1999,10 @@ fn run_game(
     let mut network_game: Option<v2k_game::network::game::NetworkGame> = None;
     // Damage the particle pass dealt peers' bodies this frame (kind 9).
     let mut network_damage: Vec<(u32, u16, u16)> = Vec::new();
+    // Power-ups the player picked up this frame (kind 8), and the host's
+    // power-up clock (`DAT_004DB0A4`).
+    let mut network_removals: Vec<u32> = Vec::new();
+    let mut network_power_up_clock_us: u32 = 0;
     let mut network_join_wait = false;
     // A test run's first network entry point, in place of FUN_00451AF0's.
     let mut network_test_entry = None;
@@ -5973,6 +5977,34 @@ fn run_game(
                     }
                 }
 
+                // FUN_00413500 in network play: the host's power-up each
+                // second while fewer than 32 Type61s live; and the inputs a
+                // death this frame drops (FUN_00447280).
+                if let Some(net) = network_game.as_ref() {
+                    em.set_network_death_drops(v2k_game::entity::network_body::NetworkDeathDrops {
+                        slots: (0..32)
+                            .filter_map(|slot| weapon_inventory.slot(slot))
+                            .map(|descriptor| {
+                                (descriptor.selector(), descriptor.stored_resource_count())
+                            })
+                            .collect(),
+                        special: 0,
+                        refused: Vec::new(),
+                    });
+                    if net.is_host() {
+                        if let Some(terrain) = session.cache.terrain() {
+                            network_play::advance_power_up_spawner(
+                                em,
+                                &mut world_fx,
+                                terrain,
+                                &mut network_power_up_clock_us,
+                                elapsed_micros,
+                                retail_tick,
+                            );
+                        }
+                    }
+                }
+
                 // FUN_0044FFA0 runs the complete FUN_00413500 actor-task pass
                 // before its later FUN_00411A80 entity/contact walker. This
                 // ordering is material for Type 54's live sea word and for
@@ -6046,9 +6078,6 @@ fn run_game(
                         PlayerDeathTick::ExpiredNow { .. } if network_game.is_some() => {
                             // FUN_00450980 then FUN_00451AF0: a network player
                             // re-enters the same world at a random point.
-                            report_held(
-                                "a dying network player's power-up drops (FUN_00447280)".into(),
-                            );
                             em.remove_player_and_attached_entities();
                             let metadata = session
                                 .cache
@@ -8708,6 +8737,21 @@ fn run_game(
                             if feedback.targetter_acquired {
                                 targetter.install();
                             }
+                            if network_game.is_some() {
+                                network_removals
+                                    .extend(pass.accepted().map(|contact| contact.entity_id()));
+                                if pass.contacts.iter().any(|contact| {
+                                    matches!(contact, PowerUpContactOutcome::Rejected(rejected)
+                                    if rejected.reason
+                                        == PowerUpContactRejection::UnsupportedSelector {
+                                            selector: 0x39,
+                                        })
+                                }) {
+                                    network_play::report_held(
+                                        "a special-weapon power-up (Type65)".into(),
+                                    );
+                                }
+                            }
                             if !pass.contacts.is_empty() {
                                 log!("Power Up contacts: {:?}", pass.contacts);
                             }
@@ -9078,8 +9122,13 @@ fn run_game(
                             elapsed_micros,
                             retail_tick,
                             damage: &mut network_damage,
+                            removals: &mut network_removals,
                         },
                     );
+                    if outcome.player_died {
+                        // FUN_00447280 in network play clears the active slot.
+                        weapon_inventory.clear_network_selection();
+                    }
                     if outcome.winner_flash {
                         main_base_level_abort.outer_frame_sequence.request();
                     }

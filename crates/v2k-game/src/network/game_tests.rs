@@ -17,15 +17,20 @@ fn tables() -> LineTables {
     }
 }
 
-fn world(position: [f32; 3]) -> EntityManager {
-    let mut metadata = vec![EntityTypeRuntimeMetadata::default(); 60];
+fn metadata() -> Vec<EntityTypeRuntimeMetadata> {
+    let mut metadata = vec![EntityTypeRuntimeMetadata::default(); 62];
     metadata[51].model_slots = [301; 4];
     metadata[51].capability_flags = 5;
+    metadata[61].model_slots = [302; 4];
+    metadata
+}
+
+fn world(position: [f32; 3]) -> EntityManager {
     let mut player = Entity::unresolved_port_entity(1, EntityKind::Player, 46);
     player.capability_flags = 5;
     player.position = position;
     player.velocity = [0.5, 0.0, 0.0];
-    EntityManager::from_entities_with_type_metadata_for_test(vec![player], metadata, false)
+    EntityManager::from_entities_with_type_metadata_for_test(vec![player], metadata(), false)
 }
 
 /// A host and a guest over loopback, each in world 13 with its player.
@@ -211,4 +216,56 @@ fn the_frag_limit_names_the_winner_everywhere() {
     assert!(flashed);
     assert_eq!(pair.host.scoring.winner, 2);
     assert_eq!(pair.guest.scoring.winner, 2);
+}
+
+/// A peer's pickup of the host's power-up (`FUN_00425AF0`'s kind 8) asks
+/// the host to destroy it (`FUN_00417D90`); once gone on both machines it
+/// does not come back.
+#[test]
+fn a_power_up_a_peer_picks_up_leaves_the_host_too() {
+    let mut pair = Pair::new();
+    let mut player = Entity::unresolved_port_entity(1, EntityKind::Player, 46);
+    player.capability_flags = 5;
+    player.position = [10.0, 1.0, 10.0];
+    let mut power_up = Entity::unresolved_port_entity(2, EntityKind::Enemy, 61);
+    power_up.position = [30.0, 1.0, 30.0];
+    power_up.power_up_payload_packed = Some(0x0C + 100 * 0x100);
+    pair.host_world = EntityManager::from_entities_with_type_metadata_for_test(
+        vec![player, power_up],
+        metadata(),
+        false,
+    );
+    let proxy = |world: &EntityManager| {
+        world
+            .iter_all()
+            .find(|entity| entity.is_network_remote() && entity.entity_type == 61)
+            .map(|entity| (entity.id, entity.power_up_payload_packed))
+    };
+    pair.run_until(|p| proxy(&p.guest_world).is_some());
+    let (id, payload) = proxy(&pair.guest_world).unwrap();
+    assert_eq!(payload, Some(0x0C + 100 * 0x100));
+
+    // The guest's pickup: kind 8 for the proxy, then its own destroy.
+    let handle = pair.guest.handle_of(id).unwrap();
+    pair.guest.send(GameRecord::Removed(handle));
+    pair.guest_world.queue_power_up_destroys(&[id]);
+    pair.guest_world.cleanup_pending_power_up_destroys();
+    let mut destroyed = None;
+    for _ in 0..100 {
+        let (host_events, _) = pair.frame();
+        destroyed = host_events.into_iter().find_map(|event| match event {
+            NetworkEvent::Destroy { entity_id } => Some(entity_id),
+            _ => None,
+        });
+        if destroyed.is_some() {
+            break;
+        }
+    }
+    assert_eq!(destroyed, Some(2));
+    pair.host_world.queue_power_up_destroys(&[2]);
+    pair.host_world.cleanup_pending_power_up_destroys();
+    for _ in 0..200 {
+        pair.frame();
+    }
+    assert_eq!(proxy(&pair.guest_world), None);
 }

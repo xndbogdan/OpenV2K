@@ -3,7 +3,8 @@
 
 use super::*;
 use crate::native_type61::{
-    publish_auto_pilot_power_up, AutoPilotPowerUpBirth, AutoPilotPowerUpConstruction,
+    publish_auto_pilot_power_up, publish_network_power_up, AutoPilotPowerUpBirth,
+    AutoPilotPowerUpConstruction, NetworkPowerUpConstruction,
 };
 
 impl EntityManager {
@@ -70,6 +71,59 @@ impl EntityManager {
                 allocation,
                 metadata: &metadata,
                 birth,
+                terrain,
+                constructor_surface_bits,
+            },
+            world_fx,
+        )?;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        Ok(id)
+    }
+
+    /// Tail-append a network game's Type61 (`FUN_004132D0`'s host power-up
+    /// or `FUN_00447750`'s drop): `FUN_00438080` with a zero-filled request
+    /// but for type 61, the position and the `+20` payload.
+    pub fn append_network_power_up(
+        &mut self,
+        position_raw: [i16; 3],
+        payload_packed: u32,
+        terrain: &TerrainGrid,
+        retail_tick: u32,
+        world_fx: &mut WorldFx,
+    ) -> Result<u32, &'static str> {
+        if !self.auto_pilot_power_up_constructor_ready(position_raw, terrain) {
+            return Err("Type61 network constructor inputs");
+        }
+        let metadata = self.type_metadata[LEVEL_ONE_TYPE61_ENTITY_TYPE as usize].clone();
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            position_raw,
+            terrain,
+            retail_tick,
+            self.common_environment_physics().waves_enabled,
+        )
+        .ok_or("Type61 network constructor surface")?;
+        let id = self.next_entity_id;
+        let stamp = self.begin_common_body_attempt();
+        let mut entity = native_instance_body(
+            id,
+            stamp,
+            &metadata,
+            terrain,
+            NativeInstanceBodyRequest {
+                entity_type: LEVEL_ONE_TYPE61_ENTITY_TYPE,
+                position_raw,
+                objective: false,
+            },
+        );
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        publish_network_power_up(
+            NetworkPowerUpConstruction {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+                position_raw,
+                payload_packed,
                 terrain,
                 constructor_surface_bits,
             },

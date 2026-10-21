@@ -2678,6 +2678,8 @@ pub struct EntityManager {
     /// In a network game, each damage the local player took
     /// (`FUN_00414E90`'s kill and hit reports). `None` outside one.
     pub(crate) network_player_hits: Option<Vec<network_body::PlayerHitReport>>,
+    /// `FUN_00447280`'s network inputs, refreshed by the host each frame.
+    pub(crate) network_death_drops: network_body::NetworkDeathDrops,
     /// Fresh 443 constructor initializes controller+6C to invalid; takeover
     /// 446D70 must own any future non-null replacement, independently of cargo.
     player_pending_replacement_handle: RetailRuntimeValue<Option<u32>>,
@@ -3831,6 +3833,7 @@ impl EntityManager {
             player_id: self.player_id,
             player_dying_contact_runtime: self.player_dying_contact_runtime,
             network_player_hits: self.network_player_hits.clone(),
+            network_death_drops: self.network_death_drops.clone(),
             player_pending_replacement_handle: self.player_pending_replacement_handle,
             next_entity_id: self.next_entity_id,
             type_primary_models: self.type_primary_models.clone(),
@@ -4882,6 +4885,7 @@ impl EntityManager {
             player_id: None,
             player_dying_contact_runtime: None,
             network_player_hits: None,
+            network_death_drops: Default::default(),
             player_pending_replacement_handle: RetailRuntimeValue::Known(None),
             next_entity_id: 1,
             type_primary_models: type_metadata
@@ -7751,7 +7755,7 @@ impl EntityManager {
     /// player/Power-Up contact transaction and the exact Working Factory
     /// progressive-death owner; it is not a general entity-kill API and
     /// deliberately cannot queue another entity class.
-    pub(crate) fn queue_power_up_destroys(&mut self, accepted_ids: &[u32]) {
+    pub fn queue_power_up_destroys(&mut self, accepted_ids: &[u32]) {
         for entity in &mut self.entities {
             if entity.entity_type != 61 || !accepted_ids.contains(&entity.id) {
                 continue;
@@ -8943,6 +8947,7 @@ impl EntityManager {
                     retail_tick,
                     notifications,
                     extra_lives,
+                    cache.terrain(),
                 ) {
                     PlayerCheckedDamageOutcome::Applied { dying: true, .. } => true,
                     _ => unreachable!("preflight proved the native player terminal"),
@@ -12804,6 +12809,7 @@ impl EntityManager {
             player_id,
             player_dying_contact_runtime: None,
             network_player_hits: None,
+            network_death_drops: Default::default(),
             player_pending_replacement_handle: RetailRuntimeValue::Known(None),
             next_entity_id,
             type_primary_models: Vec::new(),

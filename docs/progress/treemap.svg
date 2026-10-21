@@ -47,239 +47,242 @@
 <rect x="1198.7" y="172.8" width="0.3" height="74.8" fill="#8c959f"/>
 <text x="1023.4" y="43" fill="#1f2328">Menu system 41.0%</text>
 </g>
-<g><title>Player craft (PLAYER_CRAFT.md): 65 code, 49 notes, 2 omitted</title>
-<rect x="566.7" y="249.6" width="151.8" height="160.1" fill="#2da44e"/>
-<rect x="566.7" y="409.7" width="150.6" height="87.4" fill="#d4a72c"/>
-<rect x="717.4" y="409.7" width="1.1" height="87.4" fill="#8c959f"/>
-<text x="568.7" y="261.6" fill="#1f2328">Player craft 57.0%</text>
+<g><title>Player craft (PLAYER_CRAFT.md): 66 code, 48 notes, 2 omitted</title>
+<rect x="566.7" y="249.6" width="139.2" height="178.1" fill="#2da44e"/>
+<rect x="705.9" y="249.6" width="71.9" height="176.7" fill="#d4a72c"/>
+<rect x="705.9" y="426.3" width="71.9" height="1.4" fill="#8c959f"/>
+<text x="568.7" y="261.6" fill="#1f2328">Player craft 57.9%</text>
 </g>
-<g><title>Hud rendering (HUD_RENDERING.md): 26 code, 32 notes, 1 omitted</title>
-<rect x="566.7" y="499.1" width="151.8" height="183.9" fill="#2da44e"/>
-<rect x="566.7" y="683" width="151.7" height="36" fill="#d4a72c"/>
-<rect x="718.5" y="683" width="0.1" height="36" fill="#8c959f"/>
-<text x="568.7" y="511.1" fill="#1f2328">Hud rendering 44.8%</text>
+<g><title>Hud rendering (HUD_RENDERING.md): 25 code, 32 notes, 1 omitted</title>
+<rect x="566.7" y="429.7" width="173.2" height="144.4" fill="#2da44e"/>
+<rect x="740" y="429.7" width="37.8" height="144.3" fill="#d4a72c"/>
+<rect x="740" y="574" width="37.8" height="0.1" fill="#8c959f"/>
+<text x="568.7" y="441.7" fill="#1f2328">Hud rendering 43.9%</text>
 </g>
-<g><title>Multiplayer (MULTIPLAYER.md): 87 code, 63 notes, 19 omitted</title>
-<rect x="720.5" y="249.6" width="158.2" height="122.6" fill="#2da44e"/>
-<rect x="720.5" y="372.2" width="107" height="49.8" fill="#d4a72c"/>
-<rect x="827.5" y="372.2" width="51.2" height="49.8" fill="#8c959f"/>
-<text x="722.5" y="261.6" fill="#1f2328">Multiplayer 58.0%</text>
+<g><title>Multiplayer (MULTIPLAYER.md): 88 code, 63 notes, 19 omitted</title>
+<rect x="566.7" y="576.1" width="155.9" height="142.9" fill="#2da44e"/>
+<rect x="722.7" y="576.1" width="55.1" height="96.6" fill="#d4a72c"/>
+<rect x="722.7" y="672.7" width="55.1" height="46.3" fill="#8c959f"/>
+<text x="568.7" y="588.1" fill="#1f2328">Multiplayer 58.3%</text>
 </g>
 <g><title>Game mechanics (GAME_MECHANICS.md): 46 code, 15 notes</title>
-<rect x="720.5" y="424" width="158.2" height="143.6" fill="#2da44e"/>
-<rect x="720.5" y="567.6" width="158.2" height="25.9" fill="#d4a72c"/>
-<text x="722.5" y="436" fill="#1f2328">Game mechanics 75.4%</text>
+<rect x="779.8" y="249.6" width="146.4" height="155.2" fill="#2da44e"/>
+<rect x="926.2" y="249.6" width="26.4" height="155.2" fill="#d4a72c"/>
+<text x="781.8" y="261.6" fill="#1f2328">Game mechanics 75.4%</text>
 </g>
 <g><title>Loading transitions (LOADING_TRANSITIONS.md): 37 code, 37 notes, 2 omitted</title>
-<rect x="720.5" y="595.4" width="128.8" height="123.6" fill="#2da44e"/>
-<rect x="849.3" y="595.4" width="29.4" height="121.8" fill="#d4a72c"/>
-<rect x="849.3" y="717.2" width="29.4" height="1.8" fill="#8c959f"/>
-<text x="722.5" y="607.4" fill="#1f2328">Loading transitions 50.…</text>
+<rect x="954.6" y="249.6" width="126" height="126.3" fill="#2da44e"/>
+<rect x="954.6" y="375.9" width="124.2" height="28.8" fill="#d4a72c"/>
+<rect x="1078.8" y="375.9" width="1.8" height="28.8" fill="#8c959f"/>
+<text x="956.6" y="261.6" fill="#1f2328">Loading transition…</text>
 </g>
 <g><title>Controls (CONTROLS.md): 24 code, 78 notes</title>
-<rect x="880.7" y="249.6" width="127.1" height="63" fill="#2da44e"/>
-<rect x="880.7" y="312.6" width="127.1" height="79.1" fill="#d4a72c"/>
-<text x="882.7" y="261.6" fill="#1f2328">Controls 23.5%</text>
+<rect x="1082.6" y="249.6" width="116.4" height="68.8" fill="#2da44e"/>
+<rect x="1082.6" y="318.4" width="116.4" height="86.4" fill="#d4a72c"/>
+<text x="1084.6" y="261.6" fill="#1f2328">Controls 23.5%</text>
 </g>
 <g><title>Vtol flight (VTOL_FLIGHT.md): 28 code</title>
-<rect x="1009.9" y="249.6" width="99.8" height="142.1" fill="#2da44e"/>
-<text x="1011.9" y="261.6" fill="#1f2328">Vtol flight 10…</text>
+<rect x="779.8" y="406.7" width="123.1" height="115.2" fill="#2da44e"/>
+<text x="781.8" y="418.7" fill="#1f2328">Vtol flight 100.0%</text>
 </g>
 <g><title>Entity static damage programs (ENTITY_STATIC_DAMAGE_PROGRAMS.md): 25 code, 6 notes</title>
-<rect x="1111.6" y="249.6" width="87.4" height="123.7" fill="#2da44e"/>
-<rect x="1111.6" y="373.3" width="87.4" height="18.4" fill="#d4a72c"/>
-<text x="1113.6" y="261.6" fill="#1f2328">Entity stati…</text>
+<rect x="779.8" y="523.9" width="107.2" height="100.9" fill="#2da44e"/>
+<rect x="887" y="523.9" width="16" height="100.9" fill="#d4a72c"/>
+<text x="781.8" y="535.9" fill="#1f2328">Entity static dama…</text>
 </g>
 <g><title>Factory system (FACTORY_SYSTEM.md): 51 code, 13 notes</title>
-<rect x="880.7" y="393.7" width="118.1" height="88.5" fill="#2da44e"/>
-<rect x="998.8" y="393.7" width="10.2" height="88.5" fill="#d4a72c"/>
-<text x="882.7" y="405.7" fill="#1f2328">Factory system 79.7%</text>
+<rect x="779.8" y="626.8" width="113.4" height="92.2" fill="#2da44e"/>
+<rect x="893.2" y="626.8" width="9.8" height="92.2" fill="#d4a72c"/>
+<text x="781.8" y="638.8" fill="#1f2328">Factory system 79.…</text>
 </g>
 <g><title>Entity damage and death (ENTITY_DAMAGE_AND_DEATH.md): 29 code, 11 notes, 2 omitted</title>
-<rect x="1011" y="393.7" width="89.5" height="88.5" fill="#2da44e"/>
-<rect x="1100.5" y="393.7" width="23.2" height="85.6" fill="#d4a72c"/>
-<rect x="1100.5" y="479.3" width="23.2" height="2.9" fill="#8c959f"/>
-<text x="1013" y="405.7" fill="#1f2328">Entity damage an…</text>
+<rect x="904.9" y="406.7" width="100.8" height="78.5" fill="#2da44e"/>
+<rect x="1005.7" y="406.7" width="26.1" height="75.9" fill="#d4a72c"/>
+<rect x="1005.7" y="482.7" width="26.1" height="2.6" fill="#8c959f"/>
+<text x="906.9" y="418.7" fill="#1f2328">Entity damage and …</text>
 </g>
 <g><title>Hive wreck (HIVE_WRECK.md): 9 code, 4 notes</title>
-<rect x="1125.7" y="393.7" width="73.3" height="72.3" fill="#2da44e"/>
-<rect x="1125.7" y="466" width="73.3" height="16.1" fill="#d4a72c"/>
-<text x="1127.7" y="405.7" fill="#1f2328">Hive wreck…</text>
+<rect x="1033.8" y="406.7" width="67.5" height="78.5" fill="#2da44e"/>
+<rect x="1101.3" y="406.7" width="15.1" height="78.5" fill="#d4a72c"/>
+<text x="1035.8" y="418.7" fill="#1f2328">Hive wreck …</text>
 </g>
 <g><title>Actor (ACTOR_RUNTIME.md): 43 code, 16 notes, 1 omitted</title>
-<rect x="880.7" y="484.2" width="73" height="64.5" fill="#2da44e"/>
-<rect x="880.7" y="548.7" width="72.6" height="22.2" fill="#d4a72c"/>
-<rect x="953.4" y="548.7" width="0.3" height="22.2" fill="#8c959f"/>
-<text x="882.7" y="496.2" fill="#1f2328">Actor 72.9%</text>
+<rect x="1118.4" y="406.7" width="60" height="78.5" fill="#2da44e"/>
+<rect x="1178.4" y="406.7" width="20.6" height="78.2" fill="#d4a72c"/>
+<rect x="1178.4" y="484.9" width="20.6" height="0.3" fill="#8c959f"/>
+<text x="1120.4" y="418.7" fill="#1f2328">Actor 72.9%</text>
 </g>
 <g><title>Terrain collision (TERRAIN_COLLISION.md): 2 code, 10 notes</title>
-<rect x="880.7" y="572.9" width="4.5" height="72.8" fill="#2da44e"/>
-<rect x="885.3" y="572.9" width="68.4" height="72.8" fill="#d4a72c"/>
-<text x="882.7" y="584.9" fill="#1f2328">Terrain co…</text>
+<rect x="904.9" y="487.3" width="66.5" height="5" fill="#2da44e"/>
+<rect x="904.9" y="492.2" width="66.5" height="74.9" fill="#d4a72c"/>
+<text x="906.9" y="499.3" fill="#1f2328">Terrain c…</text>
 </g>
 <g><title>Virus spread (VIRUS_SPREAD.md): 18 code, 4 notes</title>
-<rect x="880.7" y="647.7" width="68.8" height="71.3" fill="#2da44e"/>
-<rect x="949.5" y="647.7" width="4.2" height="71.3" fill="#d4a72c"/>
-<text x="882.7" y="659.7" fill="#1f2328">Virus spre…</text>
+<rect x="904.9" y="569.1" width="66.5" height="73.7" fill="#2da44e"/>
+<rect x="904.9" y="642.8" width="66.5" height="4.5" fill="#d4a72c"/>
+<text x="906.9" y="581.1" fill="#1f2328">Virus spr…</text>
 </g>
 <g><title>Guard location task (GUARD_LOCATION_TASK.md): 15 code, 2 notes</title>
-<rect x="955.7" y="484.2" width="56.8" height="70.8" fill="#2da44e"/>
-<rect x="955.7" y="554.9" width="56.8" height="10.6" fill="#d4a72c"/>
-<text x="957.7" y="496.2" fill="#1f2328">Guard l…</text>
+<rect x="904.9" y="649.3" width="66.5" height="60.6" fill="#2da44e"/>
+<rect x="904.9" y="709.9" width="66.5" height="9.1" fill="#d4a72c"/>
+<text x="906.9" y="661.3" fill="#1f2328">Guard loc…</text>
 </g>
 <g><title>Intro2 type94 (INTRO2_TYPE94.md): 3 code</title>
-<rect x="955.7" y="567.6" width="56.8" height="77.1" fill="#2da44e"/>
-<text x="957.7" y="579.6" fill="#1f2328">Intro2 …</text>
+<rect x="973.4" y="487.3" width="78.9" height="55.5" fill="#2da44e"/>
+<text x="975.4" y="499.3" fill="#1f2328">Intro2 type…</text>
 </g>
 <g><title>Spider behavior (SPIDER_BEHAVIOR.md): 15 code, 12 notes</title>
-<rect x="955.7" y="646.7" width="56.8" height="52.2" fill="#2da44e"/>
-<rect x="955.7" y="698.8" width="56.8" height="20.2" fill="#d4a72c"/>
-<text x="957.7" y="658.7" fill="#1f2328">Spider …</text>
+<rect x="1054.4" y="487.3" width="53.4" height="55.5" fill="#2da44e"/>
+<rect x="1107.8" y="487.3" width="20.7" height="55.5" fill="#d4a72c"/>
+<text x="1056.4" y="499.3" fill="#1f2328">Spider beh…</text>
 </g>
 <g><title>Portable radar (PORTABLE_RADAR.md): 3 code, 11 notes</title>
-<rect x="1014.5" y="484.2" width="19.2" height="54.4" fill="#2da44e"/>
-<rect x="1033.7" y="484.2" width="50.8" height="54.4" fill="#d4a72c"/>
-<text x="1016.5" y="496.2" fill="#1f2328">Portable …</text>
+<rect x="1130.4" y="487.3" width="18.8" height="55.5" fill="#2da44e"/>
+<rect x="1149.2" y="487.3" width="49.8" height="55.5" fill="#d4a72c"/>
+<text x="1132.4" y="499.3" fill="#1f2328">Portable …</text>
 </g>
 <g><title>Intro2 bee water (INTRO2_BEE_WATER.md): 4 code, 2 notes</title>
-<rect x="1086.5" y="484.2" width="55.1" height="54.4" fill="#2da44e"/>
-<rect x="1141.6" y="484.2" width="6.4" height="54.4" fill="#d4a72c"/>
-<text x="1088.5" y="496.2" fill="#1f2328">Intro2 b…</text>
+<rect x="973.4" y="544.8" width="50.3" height="59.5" fill="#2da44e"/>
+<rect x="973.4" y="604.3" width="50.3" height="6.9" fill="#d4a72c"/>
+<text x="975.4" y="556.8" fill="#1f2328">Intro2…</text>
 </g>
 <g><title>Intro2 type102 (INTRO2_TYPE102.md): 1 code, 4 notes</title>
-<rect x="1150" y="484.2" width="49" height="1" fill="#2da44e"/>
-<rect x="1150" y="485.2" width="49" height="53.3" fill="#d4a72c"/>
-<text x="1152" y="496.2" fill="#1f2328">Intro2…</text>
+<rect x="973.4" y="613.2" width="50.3" height="1" fill="#2da44e"/>
+<rect x="973.4" y="614.2" width="50.3" height="52" fill="#d4a72c"/>
+<text x="975.4" y="625.2" fill="#1f2328">Intro2…</text>
 </g>
 <g><title>Type115 virus flower (TYPE115_VIRUS_FLOWER.md): 9 code, 5 notes</title>
-<rect x="1014.5" y="540.5" width="47.8" height="34.8" fill="#2da44e"/>
-<rect x="1014.5" y="575.3" width="47.8" height="18.8" fill="#d4a72c"/>
-<text x="1016.5" y="552.5" fill="#1f2328">Type11…</text>
+<rect x="973.4" y="668.1" width="50.3" height="33" fill="#2da44e"/>
+<rect x="973.4" y="701.2" width="50.3" height="17.8" fill="#d4a72c"/>
+<text x="975.4" y="680.1" fill="#1f2328">Type11…</text>
 </g>
 <g><title>Class0 (CLASS0_RUNTIME.md): 10 code, 2 notes</title>
-<rect x="1014.5" y="596.1" width="43.3" height="43.8" fill="#2da44e"/>
-<rect x="1057.8" y="596.1" width="4.5" height="43.8" fill="#d4a72c"/>
-<text x="1016.5" y="608.1" fill="#1f2328">Class0…</text>
+<rect x="1025.7" y="544.8" width="43.8" height="43.3" fill="#2da44e"/>
+<rect x="1069.5" y="544.8" width="4.5" height="43.3" fill="#d4a72c"/>
+<text x="1027.7" y="556.8" fill="#1f2328">Class0…</text>
 </g>
 <g><title>Demo re (DEMO_RE.md): 2 code, 8 notes</title>
-<rect x="1014.5" y="641.8" width="5.5" height="39.8" fill="#2da44e"/>
-<rect x="1020" y="641.8" width="42.3" height="39.8" fill="#d4a72c"/>
-<text x="1016.5" y="653.8" fill="#1f2328">Demo r…</text>
+<rect x="1076" y="544.8" width="5" height="43.3" fill="#2da44e"/>
+<rect x="1081.1" y="544.8" width="39" height="43.3" fill="#d4a72c"/>
+<text x="1078" y="556.8" fill="#1f2328">Demo …</text>
 </g>
 <g><title>Intro2 type57 (INTRO2_TYPE57.md): 2 code, 3 notes</title>
-<rect x="1014.5" y="683.7" width="27.6" height="35.3" fill="#2da44e"/>
-<rect x="1042.2" y="683.7" width="20.1" height="35.3" fill="#d4a72c"/>
-<text x="1016.5" y="695.7" fill="#1f2328">Intro2…</text>
+<rect x="1122" y="544.8" width="39" height="25" fill="#2da44e"/>
+<rect x="1122" y="569.8" width="39" height="18.2" fill="#d4a72c"/>
+<text x="1124" y="556.8" fill="#1f2328">Intr…</text>
 </g>
 <g><title>Swimming component (SWIMMING_COMPONENT.md): 2 notes</title>
-<rect x="1064.3" y="540.5" width="45.7" height="34" fill="#d4a72c"/>
-<text x="1066.3" y="552.5" fill="#1f2328">Swimm…</text>
+<rect x="1163.1" y="544.8" width="35.9" height="43.3" fill="#d4a72c"/>
+<text x="1165.1" y="556.8" fill="#1f2328">Swim…</text>
 </g>
 <g><title>Model draw custody (MODEL_DRAW_CUSTODY.md): 2 code, 5 notes</title>
-<rect x="1112" y="540.5" width="13.2" height="34" fill="#2da44e"/>
-<rect x="1125.2" y="540.5" width="31.1" height="34" fill="#d4a72c"/>
-<text x="1114" y="552.5" fill="#1f2328">Model…</text>
+<rect x="1025.7" y="590" width="34" height="13.2" fill="#2da44e"/>
+<rect x="1025.7" y="603.2" width="34" height="31.1" fill="#d4a72c"/>
+<text x="1027.7" y="602" fill="#1f2328">Mod…</text>
 </g>
 <g><title>Intro2 meteors (INTRO2_METEORS.md): 2 code, 3 notes</title>
-<rect x="1158.3" y="540.5" width="3.2" height="34" fill="#2da44e"/>
-<rect x="1161.4" y="540.5" width="37.6" height="34" fill="#d4a72c"/>
-<text x="1160.3" y="552.5" fill="#1f2328">Intr…</text>
+<rect x="1025.7" y="636.3" width="34" height="3.2" fill="#2da44e"/>
+<rect x="1025.7" y="639.4" width="34" height="37.6" fill="#d4a72c"/>
+<text x="1027.7" y="648.3" fill="#1f2328">Int…</text>
 </g>
 <g><title>Intro2 type58 (INTRO2_TYPE58.md): 1 notes</title>
-<rect x="1064.3" y="576.5" width="35.1" height="38.7" fill="#d4a72c"/>
-<text x="1066.3" y="588.5" fill="#1f2328">Intr…</text>
+<rect x="1025.7" y="679" width="34" height="40" fill="#d4a72c"/>
+<text x="1027.7" y="691" fill="#1f2328">Int…</text>
 </g>
 <g><title>Save and settings (SAVE_AND_SETTINGS.md): 3 code, 4 notes</title>
-<rect x="1101.4" y="576.5" width="31.4" height="21" fill="#2da44e"/>
-<rect x="1101.4" y="597.5" width="31.4" height="17.7" fill="#d4a72c"/>
-<text x="1103.4" y="588.5" fill="#1f2328">Sav…</text>
+<rect x="1061.7" y="590" width="21.2" height="31.2" fill="#2da44e"/>
+<rect x="1082.9" y="590" width="17.8" height="31.2" fill="#d4a72c"/>
+<text x="1063.7" y="602" fill="#1f2328">Save…</text>
 </g>
 <g><title>Intro2 type9 (INTRO2_TYPE9.md): 6 code</title>
-<rect x="1134.9" y="576.5" width="31.3" height="38.7" fill="#2da44e"/>
-<text x="1136.9" y="588.5" fill="#1f2328">Int…</text>
+<rect x="1061.7" y="623.2" width="39" height="31" fill="#2da44e"/>
+<text x="1063.7" y="635.2" fill="#1f2328">Intr…</text>
 </g>
 <g><title>Alpine insects (ALPINE_INSECTS.md): 3 code, 3 notes</title>
-<rect x="1168.2" y="576.5" width="30.8" height="17.8" fill="#2da44e"/>
-<rect x="1168.2" y="594.3" width="30.8" height="20.9" fill="#d4a72c"/>
-<text x="1170.2" y="588.5" fill="#1f2328">Alp…</text>
+<rect x="1061.7" y="656.2" width="18" height="30.5" fill="#2da44e"/>
+<rect x="1079.7" y="656.2" width="21" height="30.5" fill="#d4a72c"/>
+<text x="1063.7" y="668.2" fill="#1f2328">Alpi…</text>
 </g>
 <g><title>Type25 shark (TYPE25_SHARK.md): 4 code, 2 notes</title>
-<rect x="1064.3" y="617.2" width="32.7" height="33.4" fill="#2da44e"/>
-<rect x="1097" y="617.2" width="2.7" height="33.4" fill="#d4a72c"/>
-<text x="1066.3" y="629.2" fill="#1f2328">Type…</text>
+<rect x="1061.7" y="688.8" width="36.1" height="30.2" fill="#2da44e"/>
+<rect x="1097.8" y="688.8" width="2.9" height="30.2" fill="#d4a72c"/>
+<text x="1063.7" y="700.8" fill="#1f2328">Type…</text>
 </g>
 <g><title>Type18 (TYPE18_RUNTIME.md): 1 code, 1 notes</title>
-<rect x="1064.3" y="652.6" width="4" height="32.5" fill="#2da44e"/>
-<rect x="1068.3" y="652.6" width="31.4" height="32.5" fill="#d4a72c"/>
-<text x="1066.3" y="664.6" fill="#1f2328">Type…</text>
+<rect x="1102.7" y="590" width="31.9" height="4.1" fill="#2da44e"/>
+<rect x="1102.7" y="594.2" width="31.9" height="32" fill="#d4a72c"/>
+<text x="1104.7" y="602" fill="#1f2328">Typ…</text>
 </g>
 <g><title>Intro2 type66 (INTRO2_TYPE66.md): 3 notes</title>
-<rect x="1064.3" y="687.1" width="35.4" height="31.9" fill="#d4a72c"/>
-<text x="1066.3" y="699.1" fill="#1f2328">Intr…</text>
+<rect x="1136.6" y="590" width="31.2" height="36.1" fill="#d4a72c"/>
+<text x="1138.6" y="602" fill="#1f2328">Int…</text>
 </g>
 <g><title>Campaign failure (CAMPAIGN_FAILURE.md): 7 code, 3 notes</title>
-<rect x="1101.7" y="617.2" width="24.3" height="31.8" fill="#2da44e"/>
-<rect x="1126" y="617.2" width="8.9" height="31.8" fill="#d4a72c"/>
-<text x="1103.7" y="629.2" fill="#1f2328">Cam…</text>
+<rect x="1169.8" y="590" width="29.2" height="26.4" fill="#2da44e"/>
+<rect x="1169.8" y="616.5" width="29.2" height="9.7" fill="#d4a72c"/>
+<text x="1171.8" y="602" fill="#1f2328">Cam…</text>
 </g>
 <g><title>Campaign cargo (CAMPAIGN_CARGO.md): 7 notes</title>
-<rect x="1136.9" y="617.2" width="33" height="31.8" fill="#d4a72c"/>
-<text x="1138.9" y="629.2" fill="#1f2328">Cam…</text>
+<rect x="1102.7" y="628.2" width="31.2" height="33.6" fill="#d4a72c"/>
+<text x="1104.7" y="640.2" fill="#1f2328">Cam…</text>
 </g>
 <g><title>Player shield (PLAYER_SHIELD.md): 2 code, 2 notes</title>
-<rect x="1171.9" y="617.2" width="27.1" height="27.2" fill="#2da44e"/>
-<rect x="1171.9" y="644.4" width="27.1" height="4.6" fill="#d4a72c"/>
+<rect x="1102.7" y="663.8" width="26.7" height="27.5" fill="#2da44e"/>
+<rect x="1129.4" y="663.8" width="4.5" height="27.5" fill="#d4a72c"/>
+<text x="1104.7" y="675.8" fill="#1f2328">Pla…</text>
 </g>
 <g><title>Type31 virus slug (TYPE31_VIRUS_SLUG.md): 1 code</title>
-<rect x="1101.7" y="651" width="23.2" height="34.5" fill="#2da44e"/>
+<rect x="1102.7" y="693.4" width="31.2" height="25.6" fill="#2da44e"/>
+<text x="1104.7" y="705.4" fill="#1f2328">Typ…</text>
 </g>
 <g><title>Factory product markers (FACTORY_PRODUCT_MARKERS.md): 4 notes</title>
-<rect x="1101.7" y="687.4" width="23.2" height="31.6" fill="#d4a72c"/>
+<rect x="1136" y="628.2" width="30.9" height="23.7" fill="#d4a72c"/>
+<text x="1138" y="640.2" fill="#1f2328">Fac…</text>
 </g>
 <g><title>Authored base factory (AUTHORED_BASE_FACTORY_RUNTIME.md): 2 code, 3 notes</title>
-<rect x="1126.9" y="651" width="10.6" height="23.9" fill="#2da44e"/>
-<rect x="1137.5" y="651" width="19.1" height="23.9" fill="#d4a72c"/>
-<text x="1128.9" y="663" fill="#1f2328">Aut…</text>
+<rect x="1168.9" y="628.2" width="10.7" height="23.7" fill="#2da44e"/>
+<rect x="1179.6" y="628.2" width="19.4" height="23.7" fill="#d4a72c"/>
+<text x="1170.9" y="640.2" fill="#1f2328">Aut…</text>
 </g>
 <g><title>Intro2 combat projectiles (INTRO2_COMBAT_PROJECTILES.md): 3 code, 1 notes</title>
-<rect x="1126.9" y="676.9" width="21.3" height="20.3" fill="#2da44e"/>
-<rect x="1148.2" y="676.9" width="8.4" height="20.3" fill="#d4a72c"/>
-<text x="1128.9" y="688.9" fill="#1f2328">Int…</text>
+<rect x="1136" y="653.9" width="22.1" height="19.5" fill="#2da44e"/>
+<rect x="1158.1" y="653.9" width="8.7" height="19.5" fill="#d4a72c"/>
+<text x="1138" y="665.9" fill="#1f2328">Int…</text>
 </g>
 <g><title>Type47 (TYPE47_RUNTIME.md): 2 notes</title>
-<rect x="1126.9" y="699.2" width="29.8" height="19.8" fill="#d4a72c"/>
-<text x="1128.9" y="711.2" fill="#1f2328">Typ…</text>
+<rect x="1168.8" y="653.9" width="30.2" height="19.5" fill="#d4a72c"/>
+<text x="1170.8" y="665.9" fill="#1f2328">Typ…</text>
 </g>
 <g><title>Intro2 type8 (INTRO2_TYPE8.md): 1 code</title>
-<rect x="1158.6" y="651" width="19.3" height="26.4" fill="#2da44e"/>
+<rect x="1136" y="675.4" width="24.4" height="21" fill="#2da44e"/>
 </g>
 <g><title>Retail data integrity (RETAIL_DATA_INTEGRITY.md): 4 notes</title>
-<rect x="1180" y="651" width="19" height="26.4" fill="#d4a72c"/>
+<rect x="1136" y="698.4" width="24.4" height="20.6" fill="#d4a72c"/>
 </g>
 <g><title>Intro2 type10 (INTRO2_TYPE10.md): 2 code</title>
-<rect x="1158.6" y="679.4" width="13.7" height="18.8" fill="#2da44e"/>
+<rect x="1162.3" y="675.4" width="17.3" height="14.9" fill="#2da44e"/>
 </g>
 <g><title>Type17 capture (TYPE17_CAPTURE.md): 1 code, 3 notes</title>
-<rect x="1158.6" y="700.2" width="13.7" height="12.7" fill="#2da44e"/>
-<rect x="1158.6" y="712.9" width="13.7" height="6.1" fill="#d4a72c"/>
+<rect x="1181.7" y="675.4" width="11.7" height="14.9" fill="#2da44e"/>
+<rect x="1193.4" y="675.4" width="5.6" height="14.9" fill="#d4a72c"/>
 </g>
 <g><title>Rolling boulder (ROLLING_BOULDER.md): 1 code</title>
-<rect x="1174.3" y="679.4" width="11.9" height="21.3" fill="#2da44e"/>
+<rect x="1162.3" y="692.3" width="19.6" height="13" fill="#2da44e"/>
 </g>
 <g><title>Type12 building trasher (TYPE12_BUILDING_TRASHER.md): 2 code, 1 notes</title>
-<rect x="1188.3" y="679.4" width="10.7" height="11.1" fill="#2da44e"/>
-<rect x="1188.3" y="690.4" width="10.7" height="10.2" fill="#d4a72c"/>
+<rect x="1162.3" y="707.3" width="10.2" height="11.7" fill="#2da44e"/>
+<rect x="1172.5" y="707.3" width="9.4" height="11.7" fill="#d4a72c"/>
 </g>
 <g><title>Type39 (TYPE39_RUNTIME.md): 1 code</title>
-<rect x="1174.3" y="702.6" width="8.1" height="16.4" fill="#2da44e"/>
+<rect x="1184" y="692.3" width="15" height="8.8" fill="#2da44e"/>
 </g>
 <g><title>Gate helpers (GATE_HELPERS.md): 5 notes</title>
-<rect x="1184.4" y="702.6" width="14.6" height="8.5" fill="#d4a72c"/>
+<rect x="1184" y="703.1" width="15" height="8.2" fill="#d4a72c"/>
 </g>
 <g><title>Numeric wrap audit (NUMERIC_WRAP_AUDIT.md): 1 notes</title>
-<rect x="1184.4" y="713.1" width="11.7" height="5.9" fill="#d4a72c"/>
+<rect x="1184" y="713.3" width="12" height="5.7" fill="#d4a72c"/>
 </g>
 <g><title>Type38 ground shooter (TYPE38_GROUND_SHOOTER.md): 1 notes</title>
-<rect x="1198.1" y="713.1" width="0.9" height="5.9" fill="#d4a72c"/>
+<rect x="1198" y="713.3" width="1" height="5.7" fill="#d4a72c"/>
 </g>
 </svg>

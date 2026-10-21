@@ -423,6 +423,13 @@ impl WeaponInventory {
         inventory
     }
 
+    /// `FUN_00447280` in network play clears the active slot (controller
+    /// `+0x196`) and the slot `FUN_00444FA0` compares with (`+0x5A8`).
+    pub fn clear_network_selection(&mut self) {
+        self.selected_slot = 0;
+        self.last_fired_slot = 0;
+    }
+
     /// Restore 32 inventory slots from the 0x248-byte native retail save state
     /// payload matching `FUN_00443560`.
     pub fn restore_from_native_payload(payload: &[u8; 0x248]) -> Option<Self> {

@@ -32,11 +32,15 @@ pub struct NetworkWorldFrame<'a> {
     pub retail_tick: u32,
     /// Peers' bodies the particle pass hit: id, amount, attacker type.
     pub damage: &'a mut Vec<(u32, u16, u16)>,
+    /// Power-ups the player picked up this frame.
+    pub removals: &'a mut Vec<u32>,
 }
 
 #[derive(Debug, Default)]
 pub struct NetworkWorldOutcome {
     pub winner_flash: bool,
+    /// The local player died this frame (`FUN_00447280` ran).
+    pub player_died: bool,
     pub abort: bool,
 }
 
@@ -47,7 +51,7 @@ fn verbose(message: std::fmt::Arguments) {
 }
 
 /// One stop line per kind of record the port holds.
-pub(crate) fn report_held(what: String) {
+pub fn report_held(what: String) {
     static REPORTED: Mutex<Option<HashSet<String>>> = Mutex::new(None);
     let mut reported = REPORTED
         .lock()
@@ -71,6 +75,45 @@ fn particle_request(birth: NetworkParticleBirth, owner_handle: u32) -> [u8; 20] 
     out[16] = birth.source_class;
     out[18] = birth.owner_entity_type;
     out
+}
+
+/// `FUN_00413500` on the host: while fewer than 32 Type61s live (peers'
+/// too), each second `FUN_004132D0` tries a power-up from the table at
+/// `0x4C92D0` (`DAT_004DB0A4` is the clock).
+pub fn advance_power_up_spawner(
+    em: &mut EntityManager,
+    world_fx: &mut WorldFx,
+    terrain: &v2k_formats::terrain::TerrainGrid,
+    clock_us: &mut u32,
+    elapsed_micros: u32,
+    retail_tick: u32,
+) {
+    use v2k_game::network::power_ups::{spawn, SPAWN_LIMIT, SPAWN_PERIOD_US};
+    let live = em
+        .iter_all()
+        .filter(|entity| entity.entity_type == 61)
+        .count();
+    if live >= SPAWN_LIMIT {
+        return;
+    }
+    if *clock_us >= elapsed_micros {
+        *clock_us -= elapsed_micros;
+        return;
+    }
+    *clock_us = SPAWN_PERIOD_US;
+    let bodies: Vec<[i16; 3]> = em.iter_all().map(|entity| entity.position_raw()).collect();
+    if let Some((position_raw, payload)) = spawn(
+        &mut || world_fx.next_shared_retail_random_u16(),
+        bodies,
+        |x, z| terrain.bilinear_height_raw(x, z),
+    ) {
+        match em.append_network_power_up(position_raw, payload, terrain, retail_tick, world_fx) {
+            Ok(id) => verbose(format_args!(
+                "Network: a power-up {payload:#x} at {position_raw:?} (body {id})"
+            )),
+            Err(reason) => report_held(format!("a host power-up ({reason})")),
+        }
+    }
 }
 
 /// `FUN_00439DF0`'s word: the cue's low byte, then the high bytes of the
@@ -110,15 +153,11 @@ pub fn advance_network_world(
         elapsed_micros,
         retail_tick,
         damage,
+        removals,
     } = frame;
     // The world owners' own sends: cells (4, 5), static objects (6), impacts
     // on a peer's body (10) and attachments (13 to 15).
     report_held("sending record kinds 4, 5, 6, 10, 13, 14 and 15".into());
-    if net.is_host() {
-        // FUN_00413500 runs FUN_004132D0 each second while fewer than 32
-        // Type61s live: a power-up from the table at 0x004C92D0.
-        report_held("the host's power-up spawner (FUN_004132D0)".into());
-    }
     // This frame's sends from the effects, in call order: FUN_00440A60's
     // kind 1, FUN_00440950's kind 2 and FUN_0044F480's kinds 22 and 23.
     for send in world_fx.take_network_sends() {
@@ -145,6 +184,16 @@ pub fn advance_network_world(
             }),
         }
     }
+    // FUN_00425AF0 sends kind 8 for each power-up the player picked up,
+    // a peer's or this machine's, before it is destroyed.
+    for id in removals.drain(..) {
+        if let Some(handle) = net.handle_of(id) {
+            net.send(GameRecord::Removed(handle));
+        }
+    }
+    for reason in em.take_refused_network_drops() {
+        report_held(format!("a dropped power-up ({reason})"));
+    }
     // FUN_00414E90's kind-9 sends for peers' bodies hit this frame.
     for (id, amount, attacker_type) in damage.drain(..) {
         verbose(format_args!(
@@ -159,6 +208,10 @@ pub fn advance_network_world(
     for hit in &hits {
         verbose(format_args!("Network: the player took a hit {hit:?}"));
     }
+    let mut outcome = NetworkWorldOutcome {
+        player_died: hits.iter().any(|hit| hit.lethal),
+        ..NetworkWorldOutcome::default()
+    };
     net.report_player_hits(hits, &mut || {
         u32::from(world_fx.next_shared_retail_random_u16())
     });
@@ -208,7 +261,6 @@ pub fn advance_network_world(
             net.scoring.winner
         ));
     }
-    let mut outcome = NetworkWorldOutcome::default();
     for event in std::mem::take(&mut net.events) {
         match event {
             NetworkEvent::Sound {
@@ -308,6 +360,19 @@ pub fn advance_network_world(
                 outcome.winner_flash = true;
             }
             NetworkEvent::Abort => outcome.abort = true,
+            NetworkEvent::Destroy { entity_id } => {
+                // Only FUN_00425AF0 sends kind 8 for another machine's body.
+                match em
+                    .network_entity(entity_id)
+                    .map(|entity| entity.entity_type)
+                {
+                    Some(61) => em.queue_power_up_destroys(&[entity_id]),
+                    Some(entity_type) => {
+                        report_held(format!("a peer's removal of an owned Type{entity_type}"))
+                    }
+                    None => {}
+                }
+            }
         }
     }
     outcome

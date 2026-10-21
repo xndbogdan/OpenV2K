@@ -1028,6 +1028,7 @@ mod tests {
             player_id: None,
             player_dying_contact_runtime: None,
             network_player_hits: None,
+            network_death_drops: Default::default(),
             player_pending_replacement_handle: RetailRuntimeValue::Known(None),
             type_primary_models: Vec::new(),
             type_metadata: Vec::new(),

@@ -27,8 +27,15 @@ pub(crate) struct NativeType61Allocation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NativeType61Origin {
-    Authored { spawn_index: usize },
+    Authored {
+        spawn_index: usize,
+    },
     AutoPilot(AutoPilotPowerUpBirth),
+    /// A network game's `FUN_004132D0` or `FUN_00447750`: the same
+    /// zero-filled request with only a position and the `+20` payload.
+    Network {
+        payload_packed: u32,
+    },
 }
 
 /// `40BC90`'s zero-filled request: type 61 at `+08`, the carrier's `+96..+9A`
@@ -47,7 +54,7 @@ impl NativeType61Allocation {
     pub(crate) const fn auto_pilot_birth(self) -> Option<AutoPilotPowerUpBirth> {
         match self.origin {
             NativeType61Origin::AutoPilot(birth) => Some(birth),
-            NativeType61Origin::Authored { .. } => None,
+            NativeType61Origin::Authored { .. } | NativeType61Origin::Network { .. } => None,
         }
     }
 }
@@ -170,6 +177,64 @@ pub(crate) fn publish_auto_pilot_power_up(
     Ok(())
 }
 
+pub(crate) struct NetworkPowerUpConstruction<'a> {
+    pub entity: &'a mut Entity,
+    pub allocation: MainBaseAbortActorLease,
+    pub metadata: &'a EntityTypeRuntimeMetadata,
+    pub position_raw: [i16; 3],
+    pub payload_packed: u32,
+    pub terrain: &'a TerrainGrid,
+    pub constructor_surface_bits: u32,
+}
+
+/// Publish a network game's Type61 (`FUN_004132D0`, `FUN_00447750`) on a
+/// fresh `104B0` body, as `40BC90`'s request but from no carrier.
+pub(crate) fn publish_network_power_up(
+    request: NetworkPowerUpConstruction<'_>,
+    world_fx: &mut WorldFx,
+) -> Result<(), &'static str> {
+    let NetworkPowerUpConstruction {
+        entity,
+        allocation,
+        metadata,
+        position_raw,
+        payload_packed,
+        terrain,
+        constructor_surface_bits,
+    } = request;
+    if !exact_level_one_type61_metadata(metadata)
+        || !entity.active
+        || entity.entity_type != 61
+        || entity.id != allocation.entity_id
+        || entity.authored_spawn_index.is_some()
+        || entity.factory_type61_birth_provenance().is_some()
+        || entity.native_type61_allocation.is_some()
+        || entity.position_raw() != position_raw
+        || constructor_surface_bits & !SURFACE_STATE_MASK != 0
+    {
+        return Err("Type61 network construction identity");
+    }
+    publish_power_up(
+        entity,
+        metadata,
+        EntityInitializerRequest {
+            metadata: Some(metadata),
+            spawn_param: 0,
+            authored_position_raw: position_raw,
+            terrain: Some(terrain),
+            resource_domain: ResourceDomainRelation::Current,
+        },
+        constructor_surface_bits,
+        world_fx,
+    )?;
+    entity.power_up_payload_packed = Some(payload_packed);
+    entity.native_type61_allocation = Some(NativeType61Allocation {
+        allocation,
+        origin: NativeType61Origin::Network { payload_packed },
+    });
+    Ok(())
+}
+
 fn publish_power_up(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
@@ -219,7 +284,7 @@ pub(crate) fn entity_authenticates(entity: &Entity) -> bool {
                     NativeType61Origin::Authored { spawn_index } => {
                         entity.authored_spawn_index == Some(spawn_index)
                     }
-                    NativeType61Origin::AutoPilot(_) => {
+                    NativeType61Origin::AutoPilot(_) | NativeType61Origin::Network { .. } => {
                         entity.authored_spawn_index.is_none()
                             && entity.factory_type61_birth_provenance().is_none()
                     }

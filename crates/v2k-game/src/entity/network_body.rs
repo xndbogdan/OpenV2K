@@ -67,6 +67,16 @@ impl Entity {
     }
 }
 
+/// `FUN_00447280`'s network inputs: the player's weapon slots as (selector,
+/// count) and its special-weapon count (controller `+0x195`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct NetworkDeathDrops {
+    pub slots: Vec<(u32, u32)>,
+    pub special: u8,
+    /// Births the constructor refused, for the host's typed stop.
+    pub refused: Vec<&'static str>,
+}
+
 impl EntityManager {
     /// `FUN_00438080`'s network birth of a peer's body of `entity_type`:
     /// an allocation with the type's models and no callbacks. Returns its id.
@@ -215,6 +225,53 @@ impl EntityManager {
     }
 
     /// Start collecting the local player's damage reports.
+    /// The player's weapon slots (selector, count) and special-weapon count
+    /// for `FUN_00447280`'s drops should it die this frame.
+    pub fn set_network_death_drops(&mut self, drops: NetworkDeathDrops) {
+        self.network_death_drops = drops;
+    }
+
+    /// `FUN_00447280`'s network branch: each step builds a Type61 through
+    /// `FUN_00438080`, a placed one around the player first
+    /// (`FUN_00447750`); a repeat builds the request as it stands.
+    pub(crate) fn leave_network_power_ups(
+        &mut self,
+        player_raw: [i16; 3],
+        terrain: &TerrainGrid,
+        fx: &mut WorldFx,
+        retail_tick: u32,
+    ) {
+        use crate::network::power_ups::{drop_position, drop_steps, DropStep};
+        let steps = drop_steps(
+            &self.network_death_drops.slots,
+            self.player_cargo_unlock_raw(),
+            self.network_death_drops.special,
+        );
+        let sea_raw = terrain.sea_level_raw();
+        let mut request = ([0i16; 3], 0u32);
+        for step in steps {
+            if let DropStep::Place(payload) = step {
+                let position = drop_position(
+                    &mut || fx.next_shared_retail_random_u16(),
+                    player_raw,
+                    |x, z| terrain.bilinear_height_raw(x, z),
+                    sea_raw,
+                );
+                request = (position, payload);
+            }
+            if let Err(reason) =
+                self.append_network_power_up(request.0, request.1, terrain, retail_tick, fx)
+            {
+                self.network_death_drops.refused.push(reason);
+            }
+        }
+    }
+
+    /// The drops the constructor refused since the last call.
+    pub fn take_refused_network_drops(&mut self) -> Vec<&'static str> {
+        std::mem::take(&mut self.network_death_drops.refused)
+    }
+
     pub fn set_network_player_hits(&mut self, enabled: bool) {
         self.network_player_hits = enabled.then(Vec::new);
     }

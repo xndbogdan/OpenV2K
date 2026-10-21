@@ -9,6 +9,7 @@ pub mod arena;
 pub mod framing;
 pub mod game;
 pub mod handles;
+pub mod power_ups;
 pub mod protocol;
 pub mod scoring;
 pub mod slots;

@@ -62,6 +62,9 @@ pub enum NetworkEvent {
     /// `FUN_00450CC0`: the session was lost, or this machine became the host
     /// (retail aborts the game for it).
     Abort,
+    /// Kind 8 for a body this machine owns (`FUN_00417D90` ->
+    /// `FUN_00410B70`): a peer picked up one of its power-ups.
+    Destroy { entity_id: u32 },
 }
 
 /// The local side of a body this machine owns.
@@ -412,6 +415,19 @@ impl NetworkGame {
             self.handles.free(body.handle);
             self.send(GameRecord::Removed(body.handle));
         }
+        // A peer's body destroyed here (a power-up picked up) frees its
+        // handle without a send (FUN_004149F0 -> FUN_0043A600).
+        let gone_peers: Vec<u32> = self
+            .peers
+            .keys()
+            .copied()
+            .filter(|id| entities.network_entity(*id).is_none())
+            .collect();
+        for id in gone_peers {
+            if let Some(handle) = self.peers.remove(&id) {
+                self.handles.free(handle);
+            }
+        }
         for id in live {
             if self.local.contains_key(&id) {
                 continue;
@@ -664,10 +680,13 @@ impl NetworkGame {
         match record {
             GameRecord::Body(sync) => self.apply_body(sync, frame),
             GameRecord::Removed(handle) => {
-                // FUN_00417D90: the owner removed it.
+                // FUN_00417D90: FUN_00410B70 on whichever body the handle
+                // names, a peer's or one of this machine's.
                 if let Some(id) = self.handles.lookup(handle) {
                     if self.peers.contains_key(&id) {
                         self.forget_peer_body(frame.entities, id);
+                    } else if self.local.contains_key(&id) {
+                        self.events.push(NetworkEvent::Destroy { entity_id: id });
                     }
                 }
             }
