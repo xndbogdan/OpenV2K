@@ -396,16 +396,29 @@ pub(crate) fn candidate(entity: &Entity) -> GuardLocationEntityRef {
     }
 }
 
+/// A birth's rule: its live axis is still the authored one.
 pub(crate) fn nearby<P: NativeGroundActorProfile>(
     owner: GuardLocationEntityRef,
     prefix: &[GuardLocationEntityRef],
     mask: u32,
 ) -> Result<bool, NativeGroundActorBlock> {
+    nearby_within(owner, prefix, mask, P::AXIS.strict_axis_limit_raw)
+}
+
+/// `FUN_004164D0`: `22C10` within the strict limit of the actor's live axis
+/// component (`+28`'s first word), which Follow Beacons' acquisition and
+/// the carrying tasks rewrite.
+pub(crate) fn nearby_within(
+    owner: GuardLocationEntityRef,
+    prefix: &[GuardLocationEntityRef],
+    mask: u32,
+    strict_axis_limit_raw: i32,
+) -> Result<bool, NativeGroundActorBlock> {
     select_guard_location_candidate(GuardLocationCandidateRequest {
         owner,
         candidates_in_intrusive_order: prefix,
         search_context: GuardLocationSearchContext::new(
-            WrappedAxisRange::from_raw(P::AXIS.strict_axis_limit_raw),
+            WrappedAxisRange::from_raw(strict_axis_limit_raw),
             GuardLocationCandidateFilter::CapabilityMask(NonZeroU32::new(mask).unwrap()),
         ),
     })

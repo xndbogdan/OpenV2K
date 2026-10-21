@@ -905,6 +905,14 @@ The proven evaluator ids are:
 | 12 | Base Nearby | `FUN_004165B0` |
 | 13 | Job Nearby | `FUN_004165C0` |
 
+The nearby rules 6, 7, 10, 11 and 12 all call `FUN_004164D0` with their
+capability mask (1, 8, `0xC00`, `0x100`, `0x20`). It searches the live list
+through `FUN_00422C10` within the strict limit of the actor's live axis
+component (`+28`'s first word), not the authored one: Follow Beacons'
+acquisition and the carrying tasks rewrite that word, and a later reselection
+sees the rewritten range. The ground host's reselection reads it from the
+allocation; a birth's live axis is still the authored one.
+
 `FUN_00425680` evaluates and weights every candidate, caps only the upper
 total at 0x7FFF, consumes a random word even for one deterministic candidate,
 and chooses the first strict cumulative weight above the random threshold.
