@@ -243,6 +243,12 @@ impl SpecializedActorTaskScheduler {
                                 sound.position_raw,
                             );
                         }
+                        for id in applied.peer_impulses {
+                            world_fx.hold_network_blast_impulse(id);
+                        }
+                        for (id, amount, attacker_type) in applied.peer_damage {
+                            world_fx.send_network_damage(id, amount, attacker_type);
+                        }
                     }
                     Err(block) => {
                         outcome.blocked = Some(PlayingRadialBlock::Retained(block));

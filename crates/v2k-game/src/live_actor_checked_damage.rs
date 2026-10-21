@@ -34,7 +34,6 @@ pub enum LiveActorDamagePhase {
 pub enum LiveActorDamageBlock<E> {
     Unresolved(&'static str),
     Callback(u32),
-    RemoteOwned,
     PlayerFeedback,
     Death(E),
 }
@@ -72,6 +71,9 @@ pub enum LiveActorDamageEntry {
     Checked,
     /// 414E10: radial falloff has already passed its outer admission.
     Unchecked,
+    /// 417E10: a peer's kind 9 enters 14E90 with its amount, past 415040's
+    /// admission, filter and modifier.
+    Network { amount: u16 },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,9 +91,9 @@ pub struct LiveActorDeathResult<D> {
     pub publication: Option<D>,
 }
 
-/// Explicit post-filter ratio and no multiplayer session. A present modifier or
-/// generic hit callback requires its own live owner; neither is treated as
-/// identity. The death closure is entered after the lethal health write and
+/// Explicit post-filter ratio. A peer's body sends the damage to its owner
+/// (kind 9). A present modifier or generic hit callback requires its own live
+/// owner; neither is treated as identity. The death closure is entered after the lethal health write and
 /// reborrows the current feedback context for synchronous child callbacks.
 pub(crate) fn apply_live_actor_checked_damage<D, E>(
     manager: &mut EntityManager,
@@ -132,36 +134,42 @@ pub(crate) fn apply_live_actor_checked_damage<D, E>(
             return Ok(outcome);
         }
     }
-    let profile = known(entity.collision.damage_profile)
-        .ok_or_else(|| unresolved(Phase::Filter, false, "damage profile"))?;
-    let filtered = request.delivery.packet.filtered_raw_with_ratio(
-        Some(&profile),
-        request.ratio_numerator,
-        request.ratio_denominator,
-    );
-    if filtered == 0 {
-        if request.entry == LiveActorDamageEntry::Checked
-            && request
-                .delivery
-                .filtered_zero_feedback_required(entity.capability_flags)
+    let filtered = if let LiveActorDamageEntry::Network { amount } = request.entry {
+        i32::from(amount)
+    } else {
+        let profile = known(entity.collision.damage_profile)
+            .ok_or_else(|| unresolved(Phase::Filter, false, "damage profile"))?;
+        let filtered = request.delivery.packet.filtered_raw_with_ratio(
+            Some(&profile),
+            request.ratio_numerator,
+            request.ratio_denominator,
+        );
+        if filtered == 0 {
+            if request.entry == LiveActorDamageEntry::Checked
+                && request
+                    .delivery
+                    .filtered_zero_feedback_required(entity.capability_flags)
+            {
+                return Err(error(
+                    Phase::Filter,
+                    false,
+                    LiveActorDamageBlock::PlayerFeedback,
+                ));
+            }
+            return Ok(outcome);
+        }
+        if let Some(address) = known(entity.collision.pair_callbacks.damage_modifier_address)
+            .ok_or_else(|| unresolved(Phase::Modifier, false, "damage modifier"))?
         {
             return Err(error(
-                Phase::Filter,
+                Phase::Modifier,
                 false,
-                LiveActorDamageBlock::PlayerFeedback,
+                LiveActorDamageBlock::Callback(address),
             ));
         }
-        return Ok(outcome);
-    }
-    if let Some(address) = known(entity.collision.pair_callbacks.damage_modifier_address)
-        .ok_or_else(|| unresolved(Phase::Modifier, false, "damage modifier"))?
-    {
-        return Err(error(
-            Phase::Modifier,
-            false,
-            LiveActorDamageBlock::Callback(address),
-        ));
-    }
+        filtered
+    };
+    outcome.filtered_damage_raw = filtered;
     if known(
         entity
             .collision
@@ -171,13 +179,14 @@ pub(crate) fn apply_live_actor_checked_damage<D, E>(
     .ok_or_else(|| unresolved(Phase::RemoteOwner, false, "remote ownership"))?
         != 0
     {
-        return Err(error(
-            Phase::RemoteOwner,
-            false,
-            LiveActorDamageBlock::RemoteOwned,
-        ));
+        // 14E90's first branch: the owner's machine applies it (kind 9).
+        world_fx.send_network_damage(
+            request.entity_id,
+            filtered as u16,
+            request.delivery.source_entity_type_raw as u16,
+        );
+        return Ok(outcome);
     }
-    outcome.filtered_damage_raw = filtered;
     let buffer = known(entity.collision.pre_health_damage_buffer_raw)
         .ok_or_else(|| unresolved(Phase::Buffer, false, "pre-health buffer"))?;
     let (after, remaining) = absorb_pre_health_damage_buffer(buffer, filtered);
@@ -294,6 +303,60 @@ mod tests {
                 owner_handle: 99,
             },
         }
+    }
+
+    /// 417E10 enters 14E90 with a peer's amount, past the admission, filter
+    /// and modifier; a peer's body sends the filtered amount to its owner.
+    #[test]
+    fn a_peers_damage_enters_past_the_filter_and_a_peers_body_sends_it() {
+        let mut manager = fixture(100, 30);
+        let entity = manager.entity_mut(1).unwrap();
+        entity.collision.state_flags_at_0x08 = RetailStateWord::exact(0);
+        entity.collision.damage_profile = RetailRuntimeValue::Unresolved;
+        entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Unresolved;
+        let mut req = request(46, 1);
+        req.entry = LiveActorDamageEntry::Network { amount: 50 };
+        let mut fx = WorldFx::new();
+        let outcome =
+            apply_live_actor_checked_damage::<(), ()>(&mut manager, &mut fx, req, |_, _, _| {
+                panic!("nonlethal")
+            })
+            .unwrap();
+        assert_eq!(
+            (outcome.filtered_damage_raw, outcome.damage_after_buffer_raw),
+            (50, 20)
+        );
+        let entity = manager.entity_mut(1).unwrap();
+        assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(80));
+        assert_eq!(fx.pending_event_count(), 1);
+
+        let mut manager = fixture(100, 30);
+        manager.entity_mut(1).unwrap().collision.state_flags_at_0x08 =
+            RetailStateWord::exact(CHECKED_DAMAGE_ENABLED_STATE_BIT | REMOTE_OWNED_STATE_BIT);
+        let mut fx = WorldFx::new();
+        fx.set_network_sends(true);
+        let outcome = apply_live_actor_checked_damage::<(), ()>(
+            &mut manager,
+            &mut fx,
+            request(46, 70),
+            |_, _, _| panic!("the owner applies it"),
+        )
+        .unwrap();
+        assert_eq!(outcome.filtered_damage_raw, 70);
+        assert_eq!(
+            fx.take_network_sends(),
+            [crate::world_fx::NetworkSend::Damage {
+                entity_id: 1,
+                amount: 70,
+                attacker_type: 46,
+            }]
+        );
+        let entity = manager.entity_mut(1).unwrap();
+        assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(100));
+        assert_eq!(
+            entity.collision.pre_health_damage_buffer_raw,
+            RetailRuntimeValue::Known(30)
+        );
     }
 
     #[test]

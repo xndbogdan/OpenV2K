@@ -2210,6 +2210,17 @@ pub enum NetworkSend {
         position_raw: [i16; 3],
         rate_q16: u32,
     },
+    /// `FUN_00414E90`'s kind 9: damage to a peer's body goes to its owner,
+    /// the amount after `FUN_00415040`'s filter with the attacker's type.
+    Damage {
+        entity_id: u32,
+        amount: u16,
+        attacker_type: u16,
+    },
+    /// `FUN_00414AE0`'s kind 10 for a blast's impulse on a peer's body. Its
+    /// handle is read from a stack slot written only after the send (the
+    /// previous target's, or older), so it is not sent.
+    BlastImpulse { entity_id: u32 },
 }
 
 /// A particle request as `FUN_00440A60` receives it: position and velocity
@@ -2327,6 +2338,24 @@ impl WorldFx {
     }
 
     /// `FUN_00440950`'s kind 2 for a local burst (network byte 0).
+    /// `FUN_00414AE0`'s impulse on a peer's body (its kind 10 is held).
+    pub fn hold_network_blast_impulse(&mut self, entity_id: u32) {
+        if let Some(sends) = self.network_sends.as_mut() {
+            sends.push(NetworkSend::BlastImpulse { entity_id });
+        }
+    }
+
+    /// `FUN_00414E90` on a peer's body: its owner applies the damage.
+    pub fn send_network_damage(&mut self, entity_id: u32, amount: u16, attacker_type: u16) {
+        if let Some(sends) = self.network_sends.as_mut() {
+            sends.push(NetworkSend::Damage {
+                entity_id,
+                amount,
+                attacker_type,
+            });
+        }
+    }
+
     fn send_network_burst(&mut self, request: [u16; 6]) {
         if let Some(sends) = self.network_sends.as_mut() {
             sends.push(NetworkSend::Burst(request));

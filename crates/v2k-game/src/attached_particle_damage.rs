@@ -14,7 +14,7 @@ use crate::{
     intro2_radial::{Intro2RadialCallbacks, Intro2RadialTaskCustody},
     live_actor_checked_damage::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
-        LiveActorDamagePhase, LiveActorDamageRequest,
+        LiveActorDamageFeedback, LiveActorDamagePhase, LiveActorDamageRequest,
     },
     native_checked_damage::{
         apply_native_actor_checked_damage, prepare_native_actor_damage_mutation,
@@ -73,7 +73,7 @@ impl AttachedParticleDamageRequest {
 /// The mutable world includes nested class49 radial calls and their terrain
 /// writes. This function enters15040 directly without a primary/style hit.
 pub fn apply_attached_particle_damage(
-    mut frame: AttachedParticleDamageFrame<'_>,
+    frame: AttachedParticleDamageFrame<'_>,
     request: AttachedParticleDamageRequest,
 ) -> Result<i32, AttachedParticleDamageBlock> {
     let id = request.target_handle;
@@ -124,22 +124,69 @@ pub fn apply_attached_particle_damage(
             }
         };
     }
+    apply_actor_damage(
+        frame,
+        LiveActorDamageRequest {
+            entity_id: id,
+            delivery,
+            entry: LiveActorDamageEntry::Checked,
+            ratio_numerator: u32::from(request.ratio_numerator),
+            ratio_denominator: request.ratio_denominator,
+            // Attached's source-5 cannot reach either player feedback branch.
+            feedback: None,
+        },
+    )
+}
+
+/// `FUN_00417E10`: a peer's kind 9 for a body this machine owns, other than
+/// the player, enters `FUN_00414E90` with the sender's amount and attacker
+/// type, as directly as `FUN_004425D0` enters `FUN_00415040`.
+pub fn apply_network_damage(
+    frame: AttachedParticleDamageFrame<'_>,
+    entity_id: u32,
+    amount: u16,
+    attacker_type: u16,
+) -> Result<i32, AttachedParticleDamageBlock> {
+    apply_actor_damage(
+        frame,
+        LiveActorDamageRequest {
+            entity_id,
+            delivery: DamageDeliveryRecord {
+                source_entity_type_raw: u32::from(attacker_type),
+                ..DamageDeliveryRecord::default()
+            },
+            entry: LiveActorDamageEntry::Network { amount },
+            ratio_numerator: 0,
+            ratio_denominator: 0,
+            feedback: None,
+        },
+    )
+}
+
+/// The custody, fish and native phases of a direct entry past the player.
+fn apply_actor_damage(
+    mut frame: AttachedParticleDamageFrame<'_>,
+    live_request: LiveActorDamageRequest<'_>,
+) -> Result<i32, AttachedParticleDamageBlock> {
+    let id = live_request.entity_id;
     // Custody is required only on the nonzero path that can write or enter
-    // callbacks. Admission-clear and filtered-zero are real15040 zero returns.
-    let mutation_requested = frame
-        .entities
-        .iter_all()
-        .find(|entity| entity.id == id)
-        .is_some_and(|entity| {
-            entity
-                .collision
-                .state_flags_at_0x08
-                .masked(CHECKED_DAMAGE_ENABLED_STATE_BIT)
-                == RetailRuntimeValue::Known(CHECKED_DAMAGE_ENABLED_STATE_BIT)
-                && matches!(entity.collision.damage_profile, RetailRuntimeValue::Known(profile)
-                    if delivery.packet.filtered_raw_with_ratio(Some(&profile),
-                        u32::from(request.ratio_numerator), request.ratio_denominator) != 0)
-        });
+    // callbacks. Admission-clear and filtered-zero are real15040 zero returns;
+    // 14E90 itself always writes.
+    let mutation_requested = matches!(live_request.entry, LiveActorDamageEntry::Network { .. })
+        || frame
+            .entities
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .is_some_and(|entity| {
+                entity
+                    .collision
+                    .state_flags_at_0x08
+                    .masked(CHECKED_DAMAGE_ENABLED_STATE_BIT)
+                    == RetailRuntimeValue::Known(CHECKED_DAMAGE_ENABLED_STATE_BIT)
+                    && matches!(entity.collision.damage_profile, RetailRuntimeValue::Known(profile)
+                        if live_request.delivery.packet.filtered_raw_with_ratio(Some(&profile),
+                            live_request.ratio_numerator, live_request.ratio_denominator) != 0)
+            });
     if mutation_requested
         && !prepare_native_actor_damage_mutation(
             frame.entities,
@@ -164,16 +211,16 @@ pub fn apply_attached_particle_damage(
         .iter_all()
         .find(|entity| entity.id == id)
         .is_some_and(|entity| entity.shared_fish_runtime.is_some());
-    let live_request = LiveActorDamageRequest {
-        entity_id: id,
-        delivery,
-        entry: LiveActorDamageEntry::Checked,
-        ratio_numerator: u32::from(request.ratio_numerator),
-        ratio_denominator: request.ratio_denominator,
-        // Attached's source-5 cannot reach either player feedback branch.
-        feedback: None,
-    };
     if fish {
+        // The death reborrows this frame's notifications through the
+        // feedback, which a network kill by a craft (type 46) also needs.
+        let live_request = LiveActorDamageRequest {
+            feedback: Some(LiveActorDamageFeedback {
+                notifications: &mut *frame.notifications,
+                retail_tick: frame.retail_tick,
+            }),
+            ..live_request
+        };
         let auto_pilot = frame
             .entities
             .iter_all()
@@ -182,7 +229,7 @@ pub fn apply_attached_particle_damage(
             frame.entities,
             frame.world_fx,
             live_request,
-            |entities, world_fx, _| {
+            |entities, world_fx, feedback| {
                 if !auto_pilot {
                     return crate::shared_fish::death::begin_shared_fish_standard_death(
                         entities,
@@ -199,7 +246,9 @@ pub fn apply_attached_particle_damage(
                         resources: &mut *frame.resources,
                         world_fx,
                         static_damage: &mut *frame.static_damage,
-                        notifications: &mut *frame.notifications,
+                        notifications: &mut *feedback
+                            .expect("fish damage lends its feedback")
+                            .notifications,
                         retail_tick: frame.retail_tick,
                         world: match &mut frame.world {
                             AttachedParticleDamageWorld::Cinematic => {

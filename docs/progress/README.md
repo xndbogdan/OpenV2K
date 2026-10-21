@@ -47,7 +47,7 @@ Where the code's references are thinnest:
 | [Software raster](../re/SOFTWARE_RASTER.md) | 81 | 3 | 56 |
 | [Controls](../re/CONTROLS.md) | 78 | 17 | 24 |
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 76 | 16 | 69 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 63 | 17 | 88 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 63 | 17 | 90 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 48 | 6 | 66 |
 | [Loading transitions](../re/LOADING_TRANSITIONS.md) | 37 | 10 | 37 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 32 | 8 | 25 |
