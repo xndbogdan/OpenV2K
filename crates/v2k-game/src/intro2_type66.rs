@@ -26,14 +26,16 @@ use v2k_formats::collision::{BehaviorChoice, StatusComponentDescriptor};
 
 pub const INTRO2_TYPE66_SPAWN_INDICES: [usize; 2] = [36, 51];
 /// Section-12 rows sharing the class-39 Working Factory constructor. Type125
-/// differs from Type66 only in its model slots.
+/// differs from Type66 only in its model slots; Type82 (worlds 22, 25, 32
+/// and 38) also in its `+C0`.
 pub const fn is_working_factory_type(entity_type: u32) -> bool {
-    matches!(entity_type, 66 | 125)
+    matches!(entity_type, 66 | 82 | 125)
 }
 
 pub const fn working_factory_model_slots(entity_type: u32) -> Option<[u16; 4]> {
     match entity_type {
         66 => Some([210, 225, 210, 225]),
+        82 => Some([210; 4]),
         125 => Some([231, 225, 231, 225]),
         _ => None,
     }
@@ -41,6 +43,18 @@ pub const fn working_factory_model_slots(entity_type: u32) -> Option<[u16; 4]> {
 
 pub const INITIAL_HEALTH_RAW: i32 = 99_999;
 pub const INITIALIZER_STATE_RAW: u32 = 0x0002_5027;
+/// Type82's `+C0` lacks D4A0's grounding (0x20), DF70's snap (0x02) and the
+/// retained basis (0x4000): it keeps its authored height, under the sea in
+/// world 38, and 413F70 rebuilds its basis on every callback.
+pub const TYPE82_INITIALIZER_STATE_RAW: u32 = 0x0002_1005;
+
+pub const fn working_factory_initializer_state_raw(entity_type: u32) -> u32 {
+    if entity_type == 82 {
+        TYPE82_INITIALIZER_STATE_RAW
+    } else {
+        INITIALIZER_STATE_RAW
+    }
+}
 pub const STATUS_DESCRIPTOR: StatusComponentDescriptor = StatusComponentDescriptor {
     raw_word_at_0x00: 8,
     variable_bindings: [4, 3, 0, 2, 1, 0],

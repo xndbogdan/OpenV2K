@@ -40,7 +40,8 @@ fn main_load_order_keeps_native_spawn23_factory_with_its_native_scheduler() {
     };
     use v2k_game::static_damage::StaticDamageScheduler;
 
-    for (level, factory_count) in [(13, 1), (25, 13)] {
+    // World 25's Working Factory owner runs its thirteen Type66 and its Type82.
+    for (level, factory_count) in [(13, 1), (25, 14)] {
         let (mut session, mut entities, mut fx) = native_world(level);
         let factory = entities
             .iter_all()

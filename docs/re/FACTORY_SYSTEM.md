@@ -42,22 +42,23 @@ component, Always1/class39, alternate0, capability `0x84`, health99999):
 |---|---|---|---|---|
 | 66 | `210,225,210,225` | `0x25027` | 81, 28 worlds | native |
 | 125 | `231,225,231,225` | `0x25027` | 4, worlds 37 and 40 | native, same owner |
-| 82 | `210,210,210,210` | `0x21005` | 4, 4 worlds | no owner yet |
+| 82 | `210,210,210,210` | `0x21005` | 4, worlds 22, 25, 32 and 38 | native, same owner |
 
 Type125 differs from Type66 only in its models (its authored spawns also
 override slots 1/3 with model144), so it takes the same construction, task,
 production, damage, progressive-death and Main Base abort paths; the port's
 `is_working_factory_type` replaces the former type-66 checks. Type82's
-initializer state `0x21005` lacks `0x4000`, `0x20` and `0x2`. Two of those
-effects are recovered. Without `0x20`, D4A0 does not snap the body to
-bilinear terrain, so it keeps its authored height. `416460` returns live-state
-bit `0x4000`, which `D920`'s `(+C8 | style+34) & ~style+38` carries over from
-`+C8`, and `AC60` takes the alternate class only when it is set. At death
-`DB80 -> AC60` therefore gives Type66/125 their alternate class0, while Type82
-reselects through the weighted list, whose only choice is class39 Working
-Factory again. Bit `0x2`'s role is not recovered. Type82 stays an explicit
-unsupported type: the port's factory death assumes the class0 continuation
-and its live tick assumes `0x25027`.
+initializer state `0x21005` lacks `0x4000`, `0x20` and `0x2`, and each bit
+has one consumer. Without `0x20`, D4A0 does not snap the body to bilinear
+terrain, so it keeps its authored height: retail's world-38 Type82 stays at
+`(32000, -2560, -31232)`, under the sea. Without `0x2`, DCA0/E870 skip DF70's
+ground snap, so its state never gains the grounded `0x00800000` (retail reads
+`0x08228805` throughout). Without `0x4000`, both rebuild the basis through
+`FUN_00413F70` on every callback. Its death matches Type66's: `FUN_0040AC60`
+takes the alternate only while `FUN_00416460` reads the dying state bit
+`0x4000`; `FUN_00419750` clears that bit on the reviving first death (so the
+weighted list reselects Working Factory) and keeps it on the terminal one (so
+the alternate class0 follows), whatever the type's `+C0`.
 
 Factory appears in 29 levels. Section 8 models include `factory2`–`factory9`,
 `factory2lift`, `factory3engine`, and `factory4door`. The older type-67 base

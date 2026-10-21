@@ -57,7 +57,8 @@ pub(crate) fn authenticate_metadata(
         || metadata.sub_h_external_frame_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_j_attachment_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_n_payload.is_some()
-        || initializer.initializer_state_flags_raw != INITIALIZER_STATE_RAW
+        || initializer.initializer_state_flags_raw
+            != working_factory_initializer_state_raw(entity_type)
         || initializer.common_axis_descriptor != Default::default()
         || initializer.behavior_choices.as_ref() != INITIAL_CHOICES
         || initializer.behavior_rule_ref != 1
@@ -147,7 +148,7 @@ pub(crate) fn publish_working_factory(
             != RetailRuntimeValue::Known(spawn.initial_damage_buffer_raw)
         || entity.collision.last_hit_presentation_tick_at_0x34 != RetailRuntimeValue::Known(0)
         || entity.collision.default_state_flags_at_0xc8
-            != RetailRuntimeValue::Known(INITIALIZER_STATE_RAW)
+            != RetailRuntimeValue::Known(working_factory_initializer_state_raw(entity.entity_type))
         || entity.initial_behavior != RetailRuntimeValue::Known(Some(initial_selection))
         || RetailStateWord::from_known_bits(
             entity.collision.state_flags_at_0x08.known_value_bits() & !SURFACE_STATE_MASK,
@@ -175,9 +176,11 @@ pub(crate) fn publish_working_factory(
     .ok_or(Intro2Type66Error::Selection)?;
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(Intro2Type66Error::Selection)?;
-    // D4A0 bit20 grounds this descriptor; bit40 model-radius and Sub-C
-    // clearance additions are absent. Each authored spawn supplies its own XZ.
-    entity.set_position_raw([xz[0], terrain.bilinear_height_raw(xz[0], xz[1]), xz[1]]);
+    // D4A0 bit20 grounds 66/125; bit40 model-radius and Sub-C clearance
+    // additions are absent. Type82 keeps its authored height.
+    if working_factory_initializer_state_raw(entity.entity_type) & 0x20 != 0 {
+        entity.set_position_raw([xz[0], terrain.bilinear_height_raw(xz[0], xz[1]), xz[1]]);
+    }
     // 104B0 classifies the authored Y against the constructor sea/wave before
     // 09A80/D4A0 relocates this body. The initializer resolution owns every
     // other known state bit; admission above checks those domains separately.

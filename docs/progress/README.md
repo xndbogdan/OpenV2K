@@ -44,7 +44,7 @@ Where the code's references are thinnest:
 | [Platform](../re/PLATFORM_RUNTIME.md) | 153 | 23 | 10 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 130 | 6 | 49 |
 | [Menu system](../re/MENU_SYSTEM.md) | 111 | 31 | 77 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 83 | 16 | 64 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 83 | 16 | 63 |
 | [Software raster](../re/SOFTWARE_RASTER.md) | 81 | 3 | 56 |
 | [Controls](../re/CONTROLS.md) | 78 | 17 | 24 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 63 | 17 | 87 |

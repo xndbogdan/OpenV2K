@@ -118,7 +118,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // Reef's next unsupported callback is its Type25 actor.
     (23, 25),
     (24, 29),
-    (25, 82),
+    // World 25 completes: its Type82 factory shares Type66's class39 owner.
     (26, 109),
     // Type27 boulders split into Type3s (class18), which explode (class1);
     // world 27 completes with its Type127 carriers' class63.
@@ -127,15 +127,14 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // guards take class11 Tumble, and it completes.
     // Worlds 30 and 39 complete: their Type83 radars take class49.
     (31, 107),
-    // World 32's Type55 guards take class11 Tumble; its next is the
-    // Type82 factory row.
-    (32, 82),
+    // World 32 completes: its Type55 guards take class11 Tumble, its Type82
+    // factory class39 and its Type32s the ground host's terminal deaths.
     (33, 20),
     (34, 25),
     // World 35 completes: its Type12s explode through class1.
     (36, 74),
     // World 37 completes: its Type106 dies quietly through class2.
-    (38, 82),
+    // World 38 completes: its Type82 factory takes class39 too.
     // Type125 factories share Type66's class39 owner; Type50 dies into
     // class38's Change Sea Level and the Type118s into class65 Geysers.
     (40, 121),
@@ -378,7 +377,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     }
     assert_eq!(
         exact_worlds,
-        [13, 14, 15, 16, 17, 19, 27, 28, 29, 30, 35, 37, 39, 41, 44, 45, 48]
+        [13, 14, 15, 16, 17, 19, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 44, 45, 48]
     );
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
