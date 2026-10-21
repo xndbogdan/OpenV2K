@@ -29,7 +29,7 @@ use crate::{
     resource_cache::ResourceCache,
     world_fx::{ParticleEnvironment, ParticleOwnerAtBirth, TerrainCollisionContext, WorldFx},
 };
-use grenade::{step_grenade_primary, GrenadePrimaryStepRequest};
+use grenade::{step_rolling_primary, GrenadePrimaryStepRequest, RollingPrimaryProfile};
 use rocket::{
     apply_rocket_flight_forces_raw, emit_rocket_trail, RocketFlightRequest, RocketTrailRequest,
     WorldFxRocketTrailHost,
@@ -164,6 +164,7 @@ pub fn tick_entity_weapon<E>(
             let mut search_context = runtime.search_context;
             let mut acquisition = None;
             let mut trail = false;
+            let mut meteor_trail = false;
             let mut terminal_after_unwind = false;
             let mut terminal_in_callback = false;
             // Every admitted callback must unwind even when a later owned
@@ -175,7 +176,12 @@ pub fn tick_entity_weapon<E>(
                     .begin_exact_visit_with(visit, |task| {
                         match task {
                             ActorTaskRuntime::BoulderRolling(state) => {
-                                let result = step_grenade_primary(
+                                let profile = if owner.kind == EntityWeaponKind::Meteor {
+                                    meteor::METEOR_PRIMARY
+                                } else {
+                                    RollingPrimaryProfile::GRENADE
+                                };
+                                let result = step_rolling_primary(
                                     state,
                                     GrenadePrimaryStepRequest {
                                         position_raw: position,
@@ -186,6 +192,7 @@ pub fn tick_entity_weapon<E>(
                                         detailed: flags & 0x0200_0000 != 0,
                                         owner_transition_suppressed: flags & 0x1000 != 0,
                                     },
+                                    profile,
                                 )
                                 .map_err(|_| EntityWeaponBlock::Runtime("rolling model extent"))?;
                                 velocity = result.velocity_raw;
@@ -252,6 +259,20 @@ pub fn tick_entity_weapon<E>(
                             }
                             ActorTaskRuntime::RocketTrail => {
                                 trail = true;
+                            }
+                            // 06A70 sees Primary's damped velocity and the
+                            // pre-environment pose.
+                            ActorTaskRuntime::TrailingFire(state)
+                                if owner.kind == EntityWeaponKind::Meteor =>
+                            {
+                                state.elapsed_ms = state.elapsed_ms.wrapping_add(dt / 1_000);
+                                let speed_squared = velocity.iter().fold(0i32, |sum, &v| {
+                                    sum.wrapping_add(i32::from(v).wrapping_mul(i32::from(v)))
+                                });
+                                if flags & 0x0200_0000 != 0 && speed_squared > 0x77a10 {
+                                    state.emitted_state_bit_at_0x84 = true;
+                                    meteor_trail = true;
+                                }
                             }
                             _ => return Err(EntityWeaponBlock::TaskChanged),
                         }
@@ -341,6 +362,24 @@ pub fn tick_entity_weapon<E>(
                         .as_mut()
                         .unwrap()
                         .model_effect_bits_at_0x84 |= outcome.model_effect_bits_to_set;
+                }
+                if meteor_trail {
+                    // 4061A0(entity, 0x28, dt), then byte +84 |= 0x20.
+                    trail_attempts += crate::intro2_meteors::emit_meteor_trail(
+                        frame.world_fx,
+                        id,
+                        position,
+                        velocity,
+                        dt,
+                        &mut |fx| u32::from(fx.next_shared_retail_random_u16()),
+                    ) as u32;
+                    manager
+                        .entity_mut(id)
+                        .unwrap()
+                        .native_entity_weapon_runtime
+                        .as_mut()
+                        .unwrap()
+                        .model_effect_bits_at_0x84 |= 0x20;
                 }
                 if terminal_in_callback {
                     terminal(manager, frame.resources, frame.world_fx, id)

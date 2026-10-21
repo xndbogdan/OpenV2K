@@ -84,7 +84,9 @@ normalizing the matrix changes retail geometry.
 
 Nonterminal Primary visits approach signed `vx/vz` toward zero by `dt>>13`.
 Its 5000-ms wrapper timeout is strict `elapsed>5000` after callback unwind.
-Both the stationary tag and timeout reach style `40CEF0 -> 410C10` generic death.
+Style `4C7858` holds `40CEF0` at `+00` but a null `+04`, so `401120` lets the
+stationary tag fall through to that lifetime test: only the timeout reaches
+`40CEF0 -> 410C10` generic death.
 
 Effective bit4000 suppresses DCA0/E870's normal Euler basis rebuild. E100 adds
 gravity `vy -= Q(dt,0x300000)`, then applies the current level's no-wind drag.
@@ -193,6 +195,29 @@ receipt, and exactly-once finalizer. The terrain adapter does not claim the
 following129B0 water callback, static-model scan, or active-pair scan. Their
 broader Intro2 walker remains an explicit integration boundary. The accepted
 tracked impact is above sea: rawY95 versus sea-1129.
+
+## Dynamic meteors
+
+A Type35 launcher's method-11 shot births a Type34 through `44E770 -> 438080
+-> D720` ([TYPE43_SHOOTER.md](TYPE43_SHOOTER.md#type35)). Its class19 body runs
+on the [native weapon host](../../crates/v2k-game/src/native_entity_weapons/meteor.rs)
+as `EntityWeaponKind::Meteor`, beside the rockets and grenades:
+
+- **Construction.** The common body and the one selector word, then `B910`:
+  Trailing Fire (`069E0`, class `0x28`) in Tertiary, a cleared Secondary and
+  the 5000-ms Boulder Rolling (`04580`) in Primary, whose `4012E0` copies the
+  birth XYZ.
+- **Callback.** As above: rolling, damping, the trail at detailed speed above
+  `0x77A10` (entity byte `+84` gains `0x20`), then `E100` gravity and drag.
+  The 0x4000 effective bit keeps the rolled matrix.
+- **Contacts.** The weapon pass: `D7F0`'s null callback enters `141D0` mode 1,
+  as for the grenade, and the water branch takes the same fallback. Class19's
+  `+18` and `+1C` are null, so neither a pair nor a static model kills the
+  meteor directly: `427E20` acts only for capability1, `D920` finds no crush
+  bit and `11760` responds and delivers the collision damage.
+- **Death.** Lethal damage, the strict lifetime or the Main Base abort's
+  `10C10` publish class1: `BAF0`'s ten class16 particles and radial, then
+  `BAC0` stages removal.
 
 ## Evidence and acceptance
 

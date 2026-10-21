@@ -35,6 +35,14 @@ fn type43_ids(manager: &EntityManager) -> Vec<u32> {
         .collect()
 }
 
+/// The owner also adopts the world's Type35 launchers.
+fn family_count(manager: &EntityManager) -> usize {
+    manager
+        .iter_all()
+        .filter(|entity| type43_row(entity).is_some())
+        .count()
+}
+
 fn entity(manager: &EntityManager, id: u32) -> &Entity {
     manager.iter_all().find(|entity| entity.id == id).unwrap()
 }
@@ -150,7 +158,11 @@ fn type43_births_publish_the_emitter_only_search_graph() {
             );
         }
         let mut tasks = SpecializedActorTaskScheduler::new();
-        assert_eq!(tasks.adopt_type43(&manager), ids.len(), "world{level}");
+        assert_eq!(
+            tasks.adopt_type43(&manager),
+            family_count(&manager),
+            "world{level}"
+        );
     }
     assert_eq!(births, 12);
 }
@@ -168,7 +180,7 @@ fn type43_cohorts_stay_grounded_for_ten_seconds() {
             .map(|&id| entity(&manager, id).position_raw())
             .collect();
         let mut tasks = SpecializedActorTaskScheduler::new();
-        assert_eq!(tasks.adopt_type43(&manager), ids.len());
+        assert_eq!(tasks.adopt_type43(&manager), family_count(&manager));
         let mut static_damage = StaticDamageScheduler::new();
         let mut notifications = GameplayNotifications::new();
         for t in 1..=500u32 {
@@ -241,7 +253,7 @@ fn type43_acquires_the_player_and_fires_method10() {
         z,
     ]);
     let mut tasks = SpecializedActorTaskScheduler::new();
-    assert_eq!(tasks.adopt_type43(&manager), ids.len());
+    assert_eq!(tasks.adopt_type43(&manager), family_count(&manager));
     let mut static_damage = StaticDamageScheduler::new();
     let mut notifications = GameplayNotifications::new();
     let player = manager.player().unwrap().id;
@@ -329,7 +341,7 @@ fn a_lethal_playing_hit_explodes_the_type43() {
         let ids = type43_ids(&manager);
         activate(&mut manager, &ids);
         let mut tasks = SpecializedActorTaskScheduler::new();
-        assert_eq!(tasks.adopt_type43(&manager), ids.len());
+        assert_eq!(tasks.adopt_type43(&manager), family_count(&manager));
         let id = ids[0];
         let mut static_damage = StaticDamageScheduler::new();
         let mut notifications = GameplayNotifications::new();
@@ -398,7 +410,7 @@ fn a_nonlethal_hit_reselects_search() {
     let ids = type43_ids(&manager);
     activate(&mut manager, &ids);
     let mut tasks = SpecializedActorTaskScheduler::new();
-    assert_eq!(tasks.adopt_type43(&manager), ids.len());
+    assert_eq!(tasks.adopt_type43(&manager), family_count(&manager));
     let id = ids[0];
     let mut hit = lethal_hit(id);
     hit.damage.as_mut().unwrap().packet.amounts_raw = [2_100, 0];
@@ -457,7 +469,7 @@ fn a_type43_inside_a_static_model_takes_the_insect_static_hook() {
     let ids = type43_ids(&manager);
     activate(&mut manager, &ids);
     let mut tasks = SpecializedActorTaskScheduler::new();
-    assert_eq!(tasks.adopt_type43(&manager), ids.len());
+    assert_eq!(tasks.adopt_type43(&manager), family_count(&manager));
     let id = ids[0];
     let terrain = session.cache.terrain().unwrap();
     let centers: Vec<[i16; 3]> = terrain
@@ -518,7 +530,7 @@ fn the_retarget_descriptor_contact_runs_without_a_or_d() {
     let ids = type43_ids(&manager);
     activate(&mut manager, &ids);
     let mut tasks = SpecializedActorTaskScheduler::new();
-    assert_eq!(tasks.adopt_type43(&manager), ids.len());
+    assert_eq!(tasks.adopt_type43(&manager), family_count(&manager));
     let id = ids[0];
     let RetailRuntimeValue::Known(basis) = entity(&manager, id).physical_body_basis_q31() else {
         panic!("basis");

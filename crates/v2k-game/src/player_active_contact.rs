@@ -1505,10 +1505,10 @@ mod tests {
         assert_eq!(model_less.len(), 4);
         for empty in model_less {
             assert_eq!(empty.model_slots, [None; 4]);
-            assert_eq!(
-                empty.current_behavior_context,
-                RetailRuntimeValue::Unresolved
-            );
+            // The native launcher owner has published its class7 Search.
+            assert!(matches!(empty.current_behavior_context,
+                RetailRuntimeValue::Known(Some(context))
+                    if context.active_style().style_address() == 0x004c_7a50));
             assert_eq!(
                 active_pair_body_from_entity(empty, &session.cache).active_model,
                 ActivePairModelState::Resolved(ActivePairModel {

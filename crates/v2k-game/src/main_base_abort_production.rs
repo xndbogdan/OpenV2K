@@ -119,6 +119,8 @@ pub enum MainBaseAbortActorDisposition {
     Type40Death,
     /// Type27's class18 split into two Type3 boulders.
     Type27Death,
+    /// Type35's dying body republishes its class7 alternate.
+    Type35Death,
     /// Ordinary Type10-family rows: alternate class11 publishes Tumble.
     Type10Death,
     Class49Death,

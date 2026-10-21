@@ -23,15 +23,17 @@ use crate::{
 /// Pursuit 4C7A98's is 0x80. Neither result has 0x1000/0x2000 (motion and
 /// coarse skip), 0x0800 (terrain material), 0x4000 (keep basis) or 0x40.
 pub(super) fn effective_flags(entity: &Entity) -> Result<u32, Type43Block> {
-    if entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(DEFAULT_FLAGS) {
+    let row = type43_row(entity).ok_or(Type43Block::Allocation)?;
+    let flags = row.default_flags();
+    if entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(flags) {
         return Err(Type43Block::Runtime("default flags"));
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Type43Block::Graph);
     };
     match context.active_style().style_address() {
-        0x004c_7a50 => Ok(DEFAULT_FLAGS & !0x0002_1080),
-        0x004c_7a98 => Ok(DEFAULT_FLAGS & !0x0000_0080),
+        0x004c_7a50 => Ok(flags & !0x0002_1080),
+        0x004c_7a98 => Ok(flags & !0x0000_0080),
         _ => Err(Type43Block::Runtime("effective style flags")),
     }
 }
@@ -61,10 +63,11 @@ pub(super) fn finish(
     .map_err(Block::Runtime)?;
     let waves_enabled = manager.common_environment_physics().waves_enabled;
     let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
+    let row = type43_row(entity).ok_or(Block::Allocation)?;
     if frame.detailed {
         let record = frame
             .resources
-            .global_entity_type(ENTITY_TYPE as usize)
+            .global_entity_type(row.entity_type() as usize)
             .ok_or(Block::Metadata)?;
         let RetailRuntimeValue::Known(health) = entity.collision.health_raw else {
             return Err(Block::Runtime("detailed sound health"));
@@ -88,12 +91,13 @@ pub(super) fn finish(
         .resources
         .level_terrain()
         .ok_or(Block::Runtime("terrain"))?;
-    let model = entity
-        .model_index
-        .and_then(|model| frame.resources.global_model(model))
-        .ok_or(Block::Runtime("active model"))?;
     let [heading, mut pitch, mut roll] = entity.rotation_heading_pitch_roll_raw();
     if entry_flags & TERRAIN_ATTITUDE_EFFECTIVE_FLAG != 0 {
+        // Only Type43's E640 reads the active model; Type35 has neither.
+        let model = entity
+            .model_index
+            .and_then(|model| frame.resources.global_model(model))
+            .ok_or(Block::Runtime("active model"))?;
         let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
             return Err(Block::Runtime("physical basis"));
         };
@@ -129,7 +133,8 @@ pub(super) fn finish(
     // re-read the current style's masks after the walk. Search and Pursuit
     // differ only in 0x20000, which neither reads.
     let current_flags = effective_flags(entity)?;
-    // E100: gravity (no 0x04); the water response reads Sub-C+0C, absent.
+    // E100: gravity unless 0x04 (Type35); the water response reads Sub-C+0C,
+    // absent.
     let mut velocity = entity.velocity_raw();
     apply_common_gravity_and_underwater_raw(
         &mut velocity,

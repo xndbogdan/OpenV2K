@@ -1,13 +1,15 @@
-//! Source-owned Type42 rocket and Type59 grenade/depth-charge programs.
+//! Source-owned Type42 rocket, Type59 grenade/depth-charge and Type34 meteor
+//! programs.
 //!
 //! These share launch and common-body machinery, while retaining distinct
-//! class22/class35 tasks and class1/class49 terminal policies. Guided missiles
-//! (class28) require their own owner.
+//! class22/class35/class19 tasks and class1/class49 terminal policies. Guided
+//! missiles (class28) require their own owner.
 
 pub mod contact;
 pub mod grenade;
 pub mod impact;
 pub mod launch;
+pub mod meteor;
 pub mod production;
 pub mod rocket;
 
@@ -27,6 +29,8 @@ pub enum EntityWeaponKind {
     Grenade,
     DepthCharge,
     Rocket,
+    /// A Type35 launcher's method-11 birth; no player selector owns it.
+    Meteor,
 }
 
 impl EntityWeaponKind {
@@ -42,6 +46,15 @@ impl EntityWeaponKind {
         match self {
             Self::Rocket => 42,
             Self::Grenade | Self::DepthCharge => 59,
+            Self::Meteor => meteor::METEOR_ENTITY_TYPE as usize,
+        }
+    }
+    /// The living class22, class35 or class19 style its initializer installs.
+    pub const fn living_style(self) -> u32 {
+        match self {
+            Self::Rocket => 0x004c_81a0,
+            Self::Grenade | Self::DepthCharge => grenade::GRENADE_STYLE_ADDRESS,
+            Self::Meteor => meteor::METEOR_STYLE_ADDRESS,
         }
     }
     pub const fn launch_speed_raw(self) -> i32 {
@@ -49,6 +62,7 @@ impl EntityWeaponKind {
             Self::Grenade => 2000,
             Self::DepthCharge => 1000,
             Self::Rocket => 1,
+            Self::Meteor => meteor::METEOR_LAUNCH_SPEED_RAW,
         }
     }
 }
@@ -135,5 +149,6 @@ pub(crate) fn authenticate_weapon_metadata(
             grenade::authenticate_grenade_metadata(metadata)
                 .map_err(|_| EntityWeaponBlock::Metadata)
         }
+        EntityWeaponKind::Meteor => meteor::authenticate_meteor_metadata(metadata),
     }
 }

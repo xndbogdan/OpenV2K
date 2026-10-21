@@ -196,14 +196,7 @@ impl NativeExplosionSourceProfile {
                 style,
                 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_7930 | 0x004c_7978 | 0x004c_74f8
             ),
-            Self::EntityWeapon(kind) => {
-                style == 0x004c_74f8
-                    || style
-                        == match kind {
-                            crate::native_entity_weapons::EntityWeaponKind::Rocket => 0x004c_81a0,
-                            _ => 0x004c_8350,
-                        }
-            }
+            Self::EntityWeapon(kind) => style == 0x004c_74f8 || style == kind.living_style(),
             // Aimless, Wander and both Flocking variants: all four +2C are null.
             Self::Fish124 => matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40),
             // Search acquiring, pursuing, completion, both Guard styles and the
@@ -283,6 +276,11 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
                 (10, [37, 37])
             }
+            // No A/B/N/G, capability0, neither type49 nor 112..115: the
+            // 40BB9C default keeps ten class16 particles.
+            Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
+                (10, [16, 16])
+            }
             Self::EntityWeapon(_) => (16, [94, 95]),
             // Nonnull B takes 40BBB3.
             Self::Fish124 => (10, [37, 37]),
@@ -320,7 +318,8 @@ impl NativeExplosionSourceProfile {
             | Self::Type12Family(crate::native_type12::Type12Row::Type12)
             | Self::RollingBoulder
             | Self::ExplodingFlyer(_)
-            | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
+            | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket)
+            | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
                 NativeExplosionPolicy::Class1
             }
             Self::Fish124

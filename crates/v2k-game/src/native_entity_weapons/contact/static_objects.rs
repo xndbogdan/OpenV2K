@@ -1,10 +1,13 @@
-//! Complete source-owned Type42/59 static-model contact after the surface pass.
+//! Complete source-owned Type42/59/34 static-model contact after the surface
+//! pass.
 //!
-//! 412CF0: type+8A cue, 427E20, A8B0, D920, style+1C40CEF0, then11760.
-//! Capability40 excludes every nonzero427E20 branch. The actual published
-//! task constructors retain05FF0's null+20 hook; living flags12/8 exclude
-//! D9B0. The terminal callback can mutate the world synchronously, so11760
-//! retains only the selected plane and reacquires current motion/static cells.
+//! 412CF0: type+8A cue, 427E20, A8B0, D920, style+1C, then11760. 427E20's
+//! programs act only for capability1, the player's. The actual published
+//! task constructors retain05FF0's null+20 hook; living flags12/8 and the
+//! meteor's 4008 exclude D9B0. Class22/35's +1C is 40CEF0; class19's is
+//! null, so a meteor goes straight to 11760. The terminal callback can mutate
+//! the world synchronously, so11760 retains only the selected plane and
+//! reacquires current motion/static cells.
 
 use super::reborrow_terminal_world;
 use crate::{
@@ -133,27 +136,18 @@ fn run(
     if !owner.authenticates(frame.entities) && !finished {
         return Err(Block::Owner(EntityWeaponBlock::Allocation));
     }
-    authenticate_weapon_metadata(
-        owner.kind(),
-        frame
-            .entities
-            .type_runtime_metadata(entity.entity_type)
-            .ok_or(Block::Owner(EntityWeaponBlock::Metadata))?,
-    )
-    .map_err(Block::Owner)?;
-    let living_style = if owner.kind().entity_type() == 42 {
-        0x4c81a0
-    } else {
-        0x4c8350
-    };
+    let metadata = frame
+        .entities
+        .type_runtime_metadata(entity.entity_type)
+        .ok_or(Block::Owner(EntityWeaponBlock::Metadata))?;
+    authenticate_weapon_metadata(owner.kind(), metadata).map_err(Block::Owner)?;
+    let capability = metadata.capability_flags;
     let expected_style = if finished {
-        if owner.kind().entity_type() == 42 {
-            0x4c7150
-        } else {
-            0x4c71e0
-        }
+        crate::class49_death::NativeExplosionSourceProfile::EntityWeapon(owner.kind())
+            .policy()
+            .style_address()
     } else {
-        living_style
+        owner.kind().living_style()
     };
     if !matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(style))
         if style.active_style().style_address() == expected_style)
@@ -169,7 +163,7 @@ fn run(
     {
         return Err(Block::Owner(EntityWeaponBlock::TaskChanged));
     }
-    if entity.capability_flags != 0x40 {
+    if entity.capability_flags != capability || capability & 1 != 0 {
         return Err(fail("427E20 capability exclusion"));
     }
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
@@ -209,9 +203,9 @@ fn run(
             .emit_fixed_positional_sound_raw(cue, entity.position_raw());
     }
     // Source-proven no-op427E20 and all null A8B0 hooks precede D920. Both
-    // living styles preserve default flags12/8 and have terminal+1C40CEF0.
+    // weapon styles preserve default flags12/8 and have terminal+1C40CEF0.
     *committed = true;
-    if !finished {
+    if !finished && owner.kind() != crate::native_entity_weapons::EntityWeaponKind::Meteor {
         run_class49_standard_death(
             Class49TerminalFrame {
                 entities: frame.entities,

@@ -55,6 +55,8 @@ pub(crate) enum NativeBallisticProfileId {
     Type81,
     /// Ordinary emitter-only Type43 shooters: method 10 at Type10's override.
     Type43,
+    /// Ordinary Type35 meteor launchers: method 11 births a Type34 actor.
+    Type35,
     /// Ordinary Type38 ground shooters, the silent Type129 carriers and the
     /// Type119 walkers.
     Type38,
@@ -101,6 +103,7 @@ impl NativeBallisticProfileId {
             Self::Type57 | Self::Type122 | Self::Type76 | Self::Type12 | Self::Type127 => 24,
             Self::Type56 | Self::Type77 => 30,
             Self::Type40 => 1,
+            Self::Type35 => 11,
         }
     }
     const fn speed_override(self) -> i16 {
@@ -128,7 +131,8 @@ impl NativeBallisticProfileId {
             | Self::Type40
             | Self::Type18
             | Self::Type76
-            | Self::Type77 => 0,
+            | Self::Type77
+            | Self::Type35 => 0,
         }
     }
     fn table_speed(self) -> i16 {
@@ -149,7 +153,7 @@ impl NativeBallisticProfileId {
     }
     const fn sound(self) -> u16 {
         match self {
-            Self::Type40 | Self::Type128 | Self::Type81 => 0,
+            Self::Type40 | Self::Type128 | Self::Type81 | Self::Type35 => 0,
             Self::Type10 | Self::Type5 | Self::Type80 | Self::Type55 => 81,
             Self::Type126 => 82,
             Self::Type43 => 68,
@@ -176,6 +180,7 @@ impl NativeBallisticProfileId {
             Self::Type55 => 0x5459_5035_3553_5243,
             Self::Type81 => 0x5459_5038_3153_5243,
             Self::Type43 => 0x5459_5034_3353_5243,
+            Self::Type35 => 0x5459_5033_3553_5243,
             Self::Type38 => 0x5459_5033_3853_5243,
             Self::Type129 => 0x5459_3132_3953_5243,
             Self::Type119 => 0x5459_3131_3953_5243,
@@ -204,6 +209,7 @@ impl NativeBallisticProfileId {
             Self::Type55 => 0x5459_5035_3554_4754,
             Self::Type81 => 0x5459_5038_3154_4754,
             Self::Type43 => 0x5459_5034_3354_4754,
+            Self::Type35 => 0x5459_5033_3554_4754,
             Self::Type38 => 0x5459_5033_3854_4754,
             Self::Type129 => 0x5459_3132_3954_4754,
             Self::Type119 => 0x5459_3131_3954_4754,
@@ -231,6 +237,7 @@ impl NativeBallisticProfileId {
             Self::Type55 => (600_000, 256, 46, 24_000, 5120),
             Self::Type81 => (600_000, 256, 46, 24_000, 7680),
             Self::Type43 => (300_000, 1024, 0, 65_535, 7680),
+            Self::Type35 => (600_000, 65_535, 0, 65_535, 7680),
             Self::Type38 | Self::Type129 => (600_000, 256, 122, 4000, 5120),
             Self::Type119 => (800_000, 256, 48, 8000, 3840),
             Self::Type16 | Self::Type128 => (300_000, 100, 158, 16_000, 2560),
@@ -358,9 +365,13 @@ pub enum NativeBallisticShotDrainError {
     EntityUnavailable,
     RuntimeUnavailable,
     RuntimeContractMismatch,
-    MalformedTransientRequest { index: usize },
+    MalformedTransientRequest {
+        index: usize,
+    },
     ShotMath(Type47ShotMathError),
     ImpactSuppressionStateUnresolved,
+    /// Method 11 births actors; its owner drains through its own constructor.
+    ActorBirthMethod,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -598,93 +609,15 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
     environment: ParticleEnvironment<'_>,
     retail_tick: u32,
 ) -> Result<NativeBallisticShotDrainOutcome, NativeBallisticShotDrainError> {
-    let (solutions, suppresses_impact_damage, owner_entity_type) = {
-        let entity = manager
-            .iter_all()
-            .find(|entity| entity.id == source_entity_id)
-            .ok_or(NativeBallisticShotDrainError::EntityUnavailable)?;
-        if !P::allocation_authenticates(entity) || !native_emitter_shape::<P>(entity) {
-            return Err(NativeBallisticShotDrainError::RuntimeContractMismatch);
-        }
-        let runtime = P::queue(entity).ok_or(NativeBallisticShotDrainError::RuntimeUnavailable)?;
-        if runtime.profile != P::ID || !P::ID.accepts(runtime.projectile_descriptor) {
-            return Err(NativeBallisticShotDrainError::RuntimeContractMismatch);
-        }
-        if runtime.transient_shots.is_empty() {
-            return Ok(NativeBallisticShotDrainOutcome {
-                consumed_requests: 0,
-                materialized_particle_classes: Vec::new(),
-            });
-        }
-        let suppression = match entity
-            .collision
-            .state_flags_at_0x08
-            .masked(IMPACT_SUPPRESSION_STATE_BIT)
-        {
-            RetailRuntimeValue::Known(value) => value != 0,
-            RetailRuntimeValue::Unresolved => {
-                return Err(NativeBallisticShotDrainError::ImpactSuppressionStateUnresolved);
-            }
-        };
-        let mut solutions = Vec::with_capacity(runtime.transient_shots.len());
-        for (index, request) in runtime.transient_shots.iter().copied().enumerate() {
-            if !is_exact_transient_request::<P>(source_entity_id, request) {
-                return Err(NativeBallisticShotDrainError::MalformedTransientRequest { index });
-            }
-            solutions.push(
-                match P::ID {
-                    // Method 10's leading dword is 1: 4E770 applies only
-                    // positive closing-speed boost, without adding source velocity.
-                    NativeBallisticProfileId::Type10
-                    | NativeBallisticProfileId::Type5
-                    | NativeBallisticProfileId::Type80
-                    | NativeBallisticProfileId::Type126
-                    | NativeBallisticProfileId::Type55
-                    | NativeBallisticProfileId::Type81
-                    | NativeBallisticProfileId::Type43
-                    | NativeBallisticProfileId::Type38
-                    | NativeBallisticProfileId::Type129
-                    | NativeBallisticProfileId::Type119 => drain_type13_transient_request(
-                        request,
-                        entity.position_raw(),
-                        entity.velocity_raw(),
-                    ),
-                    NativeBallisticProfileId::Type16
-                    | NativeBallisticProfileId::Type128
-                    | NativeBallisticProfileId::Type58
-                    | NativeBallisticProfileId::Type94
-                    | NativeBallisticProfileId::Type57
-                    | NativeBallisticProfileId::Type122
-                    | NativeBallisticProfileId::Type30
-                    | NativeBallisticProfileId::Type56
-                    | NativeBallisticProfileId::Type40
-                    | NativeBallisticProfileId::Type18
-                    | NativeBallisticProfileId::Type76
-                    | NativeBallisticProfileId::Type77
-                    | NativeBallisticProfileId::Type12
-                    | NativeBallisticProfileId::Type127 => drain_intro2_flyer_transient_request(
-                        request,
-                        entity.position_raw(),
-                        entity.velocity_raw(),
-                    ),
-                }
-                .map_err(NativeBallisticShotDrainError::ShotMath)?,
-            );
-        }
-        (solutions, suppression, entity.entity_type as u8)
-    };
-
-    let queued = {
-        let entity = manager
-            .entity_mut(source_entity_id)
-            .ok_or(NativeBallisticShotDrainError::EntityUnavailable)?;
-        let runtime = P::queue_slot_mut(entity)
-            .as_mut()
-            .ok_or(NativeBallisticShotDrainError::RuntimeUnavailable)?;
-        std::mem::take(&mut runtime.transient_shots)
-    };
-    debug_assert_eq!(queued.len(), solutions.len());
-
+    if P::ID == NativeBallisticProfileId::Type35 {
+        return Err(NativeBallisticShotDrainError::ActorBirthMethod);
+    }
+    let NativeShotSolutions {
+        solutions,
+        suppresses_impact_damage,
+        owner_entity_type,
+    } = take_native_shot_solutions::<P>(manager, source_entity_id)?;
+    let consumed_requests = solutions.len();
     let mut materialized_particle_classes = Vec::with_capacity(solutions.len());
     for solution in solutions {
         let particle_class = match P::ID {
@@ -742,14 +675,130 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
                     retail_tick,
                 )
                 .map(|_| P::ID.particle_class()),
+            NativeBallisticProfileId::Type35 => unreachable!("rejected above"),
         };
         if let Some(particle_class) = particle_class {
             materialized_particle_classes.push(particle_class);
         }
     }
     Ok(NativeBallisticShotDrainOutcome {
-        consumed_requests: queued.len(),
+        consumed_requests,
         materialized_particle_classes,
+    })
+}
+
+/// The FIFO's 11400 solutions, consumed from the source allocation.
+pub(crate) struct NativeShotSolutions {
+    pub solutions: Vec<crate::ordinary_type47_shot_math::Type47TransientDrainSolution>,
+    pub suppresses_impact_damage: bool,
+    pub owner_entity_type: u8,
+}
+
+/// Validate and consume every queued command, returning 44E770's inputs.
+pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
+    manager: &mut crate::entity::EntityManager,
+    source_entity_id: u32,
+) -> Result<NativeShotSolutions, NativeBallisticShotDrainError> {
+    let (solutions, suppresses_impact_damage, owner_entity_type) = {
+        let entity = manager
+            .iter_all()
+            .find(|entity| entity.id == source_entity_id)
+            .ok_or(NativeBallisticShotDrainError::EntityUnavailable)?;
+        if !P::allocation_authenticates(entity) || !native_emitter_shape::<P>(entity) {
+            return Err(NativeBallisticShotDrainError::RuntimeContractMismatch);
+        }
+        let runtime = P::queue(entity).ok_or(NativeBallisticShotDrainError::RuntimeUnavailable)?;
+        if runtime.profile != P::ID || !P::ID.accepts(runtime.projectile_descriptor) {
+            return Err(NativeBallisticShotDrainError::RuntimeContractMismatch);
+        }
+        if runtime.transient_shots.is_empty() {
+            return Ok(NativeShotSolutions {
+                solutions: Vec::new(),
+                suppresses_impact_damage: false,
+                owner_entity_type: entity.entity_type as u8,
+            });
+        }
+        let suppression = match entity
+            .collision
+            .state_flags_at_0x08
+            .masked(IMPACT_SUPPRESSION_STATE_BIT)
+        {
+            RetailRuntimeValue::Known(value) => value != 0,
+            RetailRuntimeValue::Unresolved => {
+                return Err(NativeBallisticShotDrainError::ImpactSuppressionStateUnresolved);
+            }
+        };
+        let mut solutions = Vec::with_capacity(runtime.transient_shots.len());
+        for (index, request) in runtime.transient_shots.iter().copied().enumerate() {
+            if !is_exact_transient_request::<P>(source_entity_id, request) {
+                return Err(NativeBallisticShotDrainError::MalformedTransientRequest { index });
+            }
+            solutions.push(
+                match P::ID {
+                    // Method 10's leading dword is 1: 4E770 applies only
+                    // positive closing-speed boost, without adding source velocity.
+                    NativeBallisticProfileId::Type10
+                    | NativeBallisticProfileId::Type5
+                    | NativeBallisticProfileId::Type80
+                    | NativeBallisticProfileId::Type126
+                    | NativeBallisticProfileId::Type55
+                    | NativeBallisticProfileId::Type81
+                    | NativeBallisticProfileId::Type43
+                    | NativeBallisticProfileId::Type38
+                    | NativeBallisticProfileId::Type129
+                    | NativeBallisticProfileId::Type119 => drain_type13_transient_request(
+                        request,
+                        entity.position_raw(),
+                        entity.velocity_raw(),
+                    ),
+                    NativeBallisticProfileId::Type16
+                    | NativeBallisticProfileId::Type128
+                    | NativeBallisticProfileId::Type58
+                    | NativeBallisticProfileId::Type94
+                    | NativeBallisticProfileId::Type57
+                    | NativeBallisticProfileId::Type122
+                    | NativeBallisticProfileId::Type30
+                    | NativeBallisticProfileId::Type56
+                    | NativeBallisticProfileId::Type40
+                    | NativeBallisticProfileId::Type18
+                    | NativeBallisticProfileId::Type76
+                    | NativeBallisticProfileId::Type77
+                    | NativeBallisticProfileId::Type12
+                    | NativeBallisticProfileId::Type127 => drain_intro2_flyer_transient_request(
+                        request,
+                        entity.position_raw(),
+                        entity.velocity_raw(),
+                    ),
+                    // Method 11's leading dword is 0: drain adds source velocity.
+                    NativeBallisticProfileId::Type35 => {
+                        crate::ordinary_type47_shot_math::drain_transient_with_method_row(
+                            request,
+                            entity.position_raw(),
+                            entity.velocity_raw(),
+                            projectile_class_row(11).expect("method 11 is an authored row"),
+                        )
+                    }
+                }
+                .map_err(NativeBallisticShotDrainError::ShotMath)?,
+            );
+        }
+        (solutions, suppression, entity.entity_type as u8)
+    };
+
+    let queued = {
+        let entity = manager
+            .entity_mut(source_entity_id)
+            .ok_or(NativeBallisticShotDrainError::EntityUnavailable)?;
+        let runtime = P::queue_slot_mut(entity)
+            .as_mut()
+            .ok_or(NativeBallisticShotDrainError::RuntimeUnavailable)?;
+        std::mem::take(&mut runtime.transient_shots)
+    };
+    debug_assert_eq!(queued.len(), solutions.len());
+    Ok(NativeShotSolutions {
+        solutions,
+        suppresses_impact_damage,
+        owner_entity_type,
     })
 }
 

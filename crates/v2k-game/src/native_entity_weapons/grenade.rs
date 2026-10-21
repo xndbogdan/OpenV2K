@@ -127,6 +127,33 @@ pub fn step_grenade_primary(
     task: &mut BoulderRollingTaskState,
     request: GrenadePrimaryStepRequest,
 ) -> Result<GrenadePrimaryStep, GrenadeKernelBlock> {
+    step_rolling_primary(task, request, RollingPrimaryProfile::GRENADE)
+}
+
+/// One style's 401120 suffix around the shared 404690 rolling callback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RollingPrimaryProfile {
+    /// The wrapper lifetime its constructor gave 404580.
+    pub lifetime_ms: u32,
+    /// Style +04 is nonnull: tag 9C00 reaches it.
+    pub tag_transition: bool,
+}
+
+impl RollingPrimaryProfile {
+    /// Class35: both +00 and +04 hold 40CEF0.
+    pub const GRENADE: Self = Self {
+        lifetime_ms: GRENADE_PRIMARY_LIFETIME_MS,
+        tag_transition: true,
+    };
+}
+
+/// [`step_grenade_primary`] for any rolling style. A null +04 lets a tagged
+/// visit fall through to 401120's lifetime test, as an untagged one does.
+pub fn step_rolling_primary(
+    task: &mut BoulderRollingTaskState,
+    request: GrenadePrimaryStepRequest,
+    profile: RollingPrimaryProfile,
+) -> Result<GrenadePrimaryStep, GrenadeKernelBlock> {
     if request.detailed
         && task.previous_position_raw != request.position_raw
         && request.model_extent_raw == 0
@@ -144,10 +171,10 @@ pub fn step_grenade_primary(
         request.elapsed_micros,
         request.detailed,
     );
-    let strict_lifetime_expired = task.elapsed_ms > GRENADE_PRIMARY_LIFETIME_MS;
+    let strict_lifetime_expired = task.elapsed_ms > profile.lifetime_ms;
     let owner_transition = if request.owner_transition_suppressed {
         None
-    } else if stationary_tagged {
+    } else if stationary_tagged && profile.tag_transition {
         Some(GrenadePrimaryOwnerTransition::StationaryTagged)
     } else if strict_lifetime_expired {
         Some(GrenadePrimaryOwnerTransition::StrictLifetimeExpired)

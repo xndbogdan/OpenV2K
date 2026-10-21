@@ -1023,6 +1023,7 @@ mod tests {
             pending_main_base_conversion_destroy_ids: Vec::new(),
             pending_factory_scientist_destroy_ids: Vec::new(),
             pending_actor_deferred_destroy_ids: Vec::new(),
+            born_native_weapons: Vec::new(),
             player_id: None,
             player_dying_contact_runtime: None,
             network_player_hits: None,
