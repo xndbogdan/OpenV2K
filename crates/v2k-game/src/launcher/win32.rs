@@ -341,3 +341,15 @@ unsafe extern "system" {
 unsafe extern "system" {
     pub fn SetWindowTheme(window: Handle, app: *const u16, classes: *const u16) -> i32;
 }
+
+/// `INITCOMMONCONTROLSEX`.
+#[repr(C)]
+pub struct InitCommonControls {
+    pub size: u32,
+    pub classes: u32,
+}
+
+#[link(name = "comctl32")]
+unsafe extern "system" {
+    pub fn InitCommonControlsEx(init: *const InitCommonControls) -> i32;
+}
