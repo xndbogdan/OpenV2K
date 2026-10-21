@@ -132,6 +132,9 @@ C3A0 installs the 1000ms class14 graph with one Sub-A word and speed1.
   The real world49 control checks both paths, unchanged Sub-I and no release
   RNG; missing-parent180F0 remains an explicit pre-mutation boundary. This
   follows the [shared person relation order](TYPE86_RUNTIME.md#attach-release-abort-radial).
+- Drowning while carried runs `16750 -> CE90` (the Always-only reselection),
+  then `10C10`, as for Type86
+  ([TYPE28_RUNTIME.md](TYPE28_RUNTIME.md#a-carried-person-drowning)).
 - Main Base abort dispatches Type123 through its own `Type123Person` route
   into the standard-death publisher with scheduler registration, counts and
   same-family replacement. Playing radial gates on the native receipt and

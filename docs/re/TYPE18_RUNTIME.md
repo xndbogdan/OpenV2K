@@ -115,12 +115,12 @@ release, cleanup and delivery callbacks lend that world through
 - **Class12 corpse.** The corpse takes the terrain and water contact through
   `native_actor_surface_contact`.
 
-## Held boundary
+## A carried person drowning
 
-A carried four-choice person that drowns fails closed in its own `E370`,
-which admits no `CE90` release hook. It then blocks its captor's next
-release. [TYPE28_RUNTIME.md](TYPE28_RUNTIME.md#held-boundary-a-carried-person-drowning)
-owns that chain, which every captor shares.
+A carried person that drowns releases itself through its own `E370` and
+`CE90`, then dies; the captor's row keeps the corpse until `18640` drops it.
+[TYPE28_RUNTIME.md](TYPE28_RUNTIME.md#a-carried-person-drowning) owns that
+order, which every captor shares.
 
 ## Validation
 

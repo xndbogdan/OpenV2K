@@ -321,11 +321,27 @@ fn held_child(manager: &EntityManager, id: u32) -> Result<Option<u32>, CaptureBl
             .main_base_abort_actor_observation(relation.child.entity_id)
             .map(|actor| actor.lease)
             != Some(relation.child)
-        || actor(manager, relation.child.entity_id)?.attached_to != Some(id)
+        || !backlink_holds(actor(manager, relation.child.entity_id)?, id)
     {
         return Err(CaptureBlock::new("capture relation allocation changed"));
     }
     Ok(Some(relation.child.entity_id))
+}
+
+fn backlink_holds(child: &Entity, captor: u32) -> bool {
+    child.attached_to == Some(captor) || self_released_corpse(child)
+}
+
+/// 162B0 releases a drowning child through 16750 without touching its
+/// captor's row, then 10C10 kills it. Until the captor's 18640 compacts the
+/// corpse, the row holds a child with a null backlink and no relation bit.
+pub(crate) fn self_released_corpse(child: &Entity) -> bool {
+    child.attached_to.is_none()
+        && child
+            .collision
+            .state_flags_at_0x08
+            .masked(0x1000 | DYING_STATE_BIT)
+            == RetailRuntimeValue::Known(DYING_STATE_BIT)
 }
 
 /// Authenticate the retained callback row without executing a child callback.

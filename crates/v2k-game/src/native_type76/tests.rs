@@ -101,7 +101,6 @@ fn walk_pairs(
     notifications: &mut GameplayNotifications,
     tasks: &mut SpecializedActorTaskScheduler,
     t: u32,
-    held_captors: bool,
 ) {
     let live: Vec<u32> = manager.retail_live_order_ids().collect();
     for id in live {
@@ -133,10 +132,6 @@ fn walk_pairs(
                     entity_type,
                     ..
                 } => Type76Row::from_entity_type(*entity_type).is_some(),
-                // A parked captor (the held drowning chain) fails its pairs.
-                crate::native_actor_capture::pair::NativeCaptorPairBlock::Runtime(
-                    "completed pair owner",
-                ) => !held_captors,
                 _ => true,
             };
             let subject = manager.iter_all().find(|entity| entity.id == id).unwrap();
@@ -403,7 +398,6 @@ fn type76_family_worlds_run_a_minute_with_pairs() {
                 &mut notifications,
                 &mut tasks,
                 t,
-                false,
             );
             for &id in &ids {
                 if !manager

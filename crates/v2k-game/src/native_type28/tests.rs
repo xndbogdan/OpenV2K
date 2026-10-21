@@ -119,7 +119,6 @@ fn walk_pairs(
     notifications: &mut GameplayNotifications,
     tasks: &mut SpecializedActorTaskScheduler,
     t: u32,
-    held_captors: bool,
 ) {
     let live: Vec<u32> = manager.retail_live_order_ids().collect();
     for id in live {
@@ -151,10 +150,6 @@ fn walk_pairs(
                     entity_type,
                     ..
                 } => *entity_type == ENTITY_TYPE,
-                // A parked captor (the held drowning chain) fails its pairs.
-                crate::native_actor_capture::pair::NativeCaptorPairBlock::Runtime(
-                    "completed pair owner",
-                ) => !held_captors,
                 _ => true,
             };
             let subject = manager.iter_all().find(|entity| entity.id == id).unwrap();
@@ -369,6 +364,42 @@ fn a_lethal_hit_runs_class12() {
     }
 }
 
+/// Carried four-choice people that release themselves into death while their
+/// captor's receipt still names them: E370 drowning, never a captor's pop.
+fn drowned_in_custody(manager: &EntityManager, carried: &[(u32, u32)]) -> Vec<(u32, u32)> {
+    carried
+        .iter()
+        .copied()
+        .filter(|&(person, captor)| {
+            manager.iter_all().any(|entity| {
+                entity.id == person && crate::native_actor_capture::self_released_corpse(entity)
+            }) && entity(manager, captor)
+                .native_capture_relation
+                .is_some_and(|relation| relation.child.entity_id == person)
+        })
+        .collect()
+}
+
+/// Living four-choice people and the captors carrying them.
+fn carried_people(manager: &EntityManager) -> Vec<(u32, u32)> {
+    manager
+        .iter_all()
+        .filter(|entity| {
+            entity.active
+                && crate::native_type86::NativeFourChoiceProfile::from_entity_type(
+                    entity.entity_type,
+                )
+                .is_some()
+                && entity
+                    .collision
+                    .state_flags_at_0x08
+                    .masked(crate::entity_collision_state::DYING_STATE_BIT)
+                    == RetailRuntimeValue::Known(0)
+        })
+        .filter_map(|entity| entity.attached_to.map(|captor| (entity.id, captor)))
+        .collect()
+}
+
 /// A minute of every Type28 world with its pair walks: no owner or pair
 /// blocks, and the classes and captures each actor reaches.
 #[v2k_test_support::retail_test]
@@ -383,8 +414,8 @@ fn type28_worlds_run_a_minute_with_pairs() {
         let mut classes = std::collections::BTreeSet::new();
         let mut captures = 0;
         let mut drowned = std::collections::BTreeSet::new();
-        let mut held = std::collections::BTreeSet::new();
         for t in 1..=3000u32 {
+            let carried = carried_people(&manager);
             let pass = tick(
                 &mut tasks,
                 &mut manager,
@@ -400,45 +431,20 @@ fn type28_worlds_run_a_minute_with_pairs() {
                 pass.block
             );
             for outcome in &pass.outcomes {
-                match outcome {
-                    // Held: a carried four-choice person drowning runs 16750's
-                    // CE90 release, which its E370 does not own yet.
+                if matches!(
+                    outcome,
                     SpecializedActorTaskProductionOutcome::NativeType86(
-                        crate::native_type86::Type86Outcome::Blocked {
-                            entity_id,
-                            reason:
-                                crate::native_type86::Type86Block::Surface(
-                                    crate::intro2_common_dying::Intro2CommonDyingBlock::UnsupportedReleaseHook(
-                                        crate::entity_behavior::ReleaseCallbackPolicy::EnablePairAndReselect,
-                                    ),
-                                ),
-                            ..
-                        },
-                    ) => {
-                        drowned.insert(*entity_id);
-                    }
-                    // ...after which its captor's release fails closed. World
-                    // 36's Type18 captors carry the same people.
-                    SpecializedActorTaskProductionOutcome::NativeType28(
-                        Type28Outcome::Blocked { reason, .. },
+                        crate::native_type86::Type86Outcome::Blocked { .. }
+                    ) | SpecializedActorTaskProductionOutcome::NativeType28(
+                        Type28Outcome::Blocked { .. }
+                    ) | SpecializedActorTaskProductionOutcome::NativeType18(
+                        crate::native_type18::Type18Outcome::Blocked { .. }
                     )
-                    | SpecializedActorTaskProductionOutcome::NativeType18(
-                        crate::native_type18::Type18Outcome::Blocked { reason, .. },
-                    ) => {
-                        assert!(
-                            !drowned.is_empty()
-                                && matches!(
-                                    reason,
-                                    Type28Block::Capture(block)
-                                        if block.reason == "capture four-choice actor pending callback"
-                                ),
-                            "world{level} tick{t}: {outcome:?}"
-                        );
-                        held.insert(outcome.entity_id());
-                    }
-                    _ => {}
+                ) {
+                    panic!("world{level} tick{t}: {outcome:?}");
                 }
             }
+            drowned.extend(drowned_in_custody(&manager, &carried));
             walk_pairs(
                 &mut manager,
                 &mut session,
@@ -447,7 +453,6 @@ fn type28_worlds_run_a_minute_with_pairs() {
                 &mut notifications,
                 &mut tasks,
                 t,
-                !held.is_empty(),
             );
             for &id in &ids {
                 if !manager
@@ -462,10 +467,80 @@ fn type28_worlds_run_a_minute_with_pairs() {
                 classes.insert(class(&manager, id));
             }
         }
-        println!(
-            "world{level} classes {classes:?} captured-ticks {captures} drowned {drowned:?} held captors {held:?}"
-        );
+        println!("world{level} classes {classes:?} captured-ticks {captures} drowned {drowned:?}");
+        if level == 36 {
+            assert!(drowned.contains(&(20, 50)), "world36 drowned {drowned:?}");
+        }
     }
+}
+
+/// World 36's person 20 drowns in Type18 captor 50's grip. Its own E370 runs
+/// 16750 and CE90, then 10C10: the corpse lets go of the captor, whose row
+/// keeps it until 18640 compacts it. Neither owner parks afterwards.
+#[v2k_test_support::retail_test]
+fn a_carried_person_drowns_and_its_captor_drops_the_corpse() {
+    let (mut session, mut manager, mut fx) = fixture(36);
+    let ids = ids(&manager);
+    activate(&mut manager, &ids);
+    let mut tasks = adopt_world(&mut manager);
+    let mut static_damage = StaticDamageScheduler::new();
+    let mut notifications = GameplayNotifications::new();
+    let sea = session.cache.level_terrain().unwrap().sea_level_raw();
+    let mut drowned_at = None;
+    for t in 1..=3000u32 {
+        let carried = carried_people(&manager);
+        let pass = tick(
+            &mut tasks,
+            &mut manager,
+            &mut session,
+            &mut fx,
+            &mut static_damage,
+            &mut notifications,
+            t,
+        );
+        assert!(pass.block.is_none(), "tick{t}: {:?}", pass.block);
+        for outcome in &pass.outcomes {
+            if matches!(
+                outcome,
+                SpecializedActorTaskProductionOutcome::NativeType86(
+                    crate::native_type86::Type86Outcome::Blocked { .. }
+                ) | SpecializedActorTaskProductionOutcome::NativeType18(
+                    crate::native_type18::Type18Outcome::Blocked { .. }
+                )
+            ) {
+                panic!("tick{t}: {outcome:?}");
+            }
+        }
+        if drowned_at.is_none() && drowned_in_custody(&manager, &carried).contains(&(20, 50)) {
+            drowned_at = Some(t);
+            let person = entity(&manager, 20);
+            assert!(person.position_raw()[1] < sea, "under the sea");
+            assert_eq!(class(&manager, 20), 14, "class14 replaced CE90's graph");
+            assert_eq!(person.collision.health_raw, RetailRuntimeValue::Known(0));
+        }
+        walk_pairs(
+            &mut manager,
+            &mut session,
+            &mut fx,
+            &mut static_damage,
+            &mut notifications,
+            &mut tasks,
+            t,
+        );
+        if drowned_at.is_some_and(|drowned| t > drowned) {
+            // 18640 ran on the captor's tick after the drowning.
+            let RetailRuntimeValue::Known(Some(rows)) =
+                &entity(&manager, 50).sub_j_attachment_runtime
+            else {
+                panic!("captor Sub-J");
+            };
+            assert!(!rows.contains(20), "tick{t}: the corpse left the row");
+        }
+        if drowned_at.is_some_and(|drowned| t >= drowned + 250) {
+            return;
+        }
+    }
+    panic!("person 20 never drowned in custody: {drowned_at:?}");
 }
 
 /// With a person beside it, PeopleNearby weighs Capture9 against Follow3.
@@ -531,7 +606,6 @@ fn a_type28_captures_its_pursued_person() {
             &mut notifications,
             &mut tasks,
             t,
-            false,
         );
         if captured_at.is_none() && entity(&manager, ids[0]).native_capture_relation.is_some() {
             captured_at = Some(t);
