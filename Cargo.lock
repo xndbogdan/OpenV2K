@@ -3249,7 +3249,7 @@ dependencies = [
 
 [[package]]
 name = "v2k-game"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "clap",
  "eframe",
