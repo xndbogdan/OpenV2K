@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::launcher_preferences::LauncherPreferences;
+use crate::setup::{IssueSeverity, ValidationReport};
 
 #[derive(Debug)]
 pub struct LauncherRequest {
@@ -16,6 +17,8 @@ pub struct LauncherRequest {
     pub preferences: LauncherPreferences,
     pub preferences_path: PathBuf,
     pub executable: PathBuf,
+    // Windows setup copies these beside the executable; Linux never copies it.
+    #[cfg_attr(not(windows), allow(dead_code))]
     pub runtime_dependencies: Vec<PathBuf>,
     /// An integration-smoke timeout; ordinary launches leave this unset.
     pub smoke_timeout: Option<Duration>,
@@ -23,10 +26,18 @@ pub struct LauncherRequest {
 
 #[derive(Debug)]
 pub enum LaunchSelection {
-    Play { data_dir: PathBuf },
-    Restart { executable: PathBuf },
+    Play {
+        data_dir: PathBuf,
+    },
+    #[cfg_attr(not(windows), allow(dead_code))]
+    Restart {
+        executable: PathBuf,
+    },
 }
 
+mod header_animation;
+#[cfg(not(windows))]
+mod linux;
 #[cfg(windows)]
 mod native;
 
@@ -53,26 +64,89 @@ pub fn run(request: LauncherRequest) -> Result<Option<LaunchSelection>, String> 
     }
     #[cfg(not(windows))]
     {
-        let root = request
-            .initial_root
-            .or_else(|| {
-                request
-                    .executable
-                    .parent()
-                    .map(std::path::Path::to_path_buf)
-            })
-            .ok_or_else(|| "Cannot determine the game-data directory".to_string())?;
-        let report = crate::setup::validate_installation(&root);
+        linux::run(request)
+    }
+}
+
+pub(super) fn music_description(report: &ValidationReport) -> String {
+    let count = report.music.available_count();
+    if report.music.directory_missing {
+        "Music directory missing.".to_string()
+    } else if count == 0 {
+        "Music disabled: no soundtrack tracks are available.".to_string()
+    } else if report.music.missing_tracks().is_empty() {
+        "Music available: all 10 CD audio tracks.".to_string()
+    } else {
+        format!("Music incomplete: {count} of 10 tracks available.")
+    }
+}
+
+pub(super) fn report_description(report: &ValidationReport) -> String {
+    let mut lines = vec![format!(
+        "Game files: {}. Checked {} overlays.",
         if report.is_ready() {
-            Ok(Some(LaunchSelection::Play {
-                data_dir: report.root,
-            }))
+            "ready"
         } else {
-            Err(format!(
-                "V2000 data at {} is incomplete. Use --data-dir with a valid installation or the setup commands to install a disc image.",
-                root.display()
-            ))
+            "missing or inconsistent"
+        },
+        report.checked_overlays
+    )];
+    // Missing-directory guidance is already a path-bearing validation warning.
+    if !report.music.directory_missing {
+        lines.push(music_description(report));
+    }
+    if !report.music.missing_tracks().is_empty() && report.music.available_count() > 0 {
+        lines.push(format!(
+            "Missing music tracks: {}.",
+            report
+                .music
+                .missing_tracks()
+                .iter()
+                .map(|track| format!("{track:02}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    if report.embedded_checksums_verified {
+        lines.push("Bundled retail checksums verified.".to_string());
+    } else if report.manifest_verified {
+        lines.push("Installation checksum manifest verified.".to_string());
+    }
+    for issue in &report.issues {
+        // One absent-directory warning also covers optional manifest tracks.
+        if report.music.directory_missing
+            && issue.severity == IssueSeverity::Warning
+            && issue.path != report.music.directory
+            && issue.path.starts_with(&report.music.directory)
+        {
+            continue;
         }
+        lines.push(format!("{}\r\n{}", issue.path.display(), issue.message));
+    }
+    for error in &report.music.scan_errors {
+        lines.push(error.clone());
+    }
+    for track in &report.music.tracks {
+        for error in &track.errors {
+            lines.push(format!("Music track {:02}: {error}", track.cd_track));
+        }
+    }
+    lines.join("\r\n")
+}
+
+/// A completely empty directory has hundreds of diagnostics. Keep the native
+/// popup within the screen; the main read-only, scrollable control retains all.
+pub(super) fn popup_description(report: &ValidationReport) -> String {
+    let description = report_description(report);
+    let lines: Vec<_> = description.lines().collect();
+    if lines.len() <= 12 {
+        description
+    } else {
+        format!(
+            "{}\r\n\r\n{} additional details are available in the main window's scrollable list.",
+            lines[..12].join("\r\n"),
+            lines.len() - 12
+        )
     }
 }
 
@@ -87,7 +161,11 @@ pub fn show_error(message: &str) {
     #[cfg(windows)]
     native::show_error(message);
     #[cfg(not(windows))]
-    eprintln!("V2000: {message}");
+    {
+        // A desktop start has no terminal; a shell still gets the text.
+        eprintln!("V2000: {message}");
+        linux::show_error(message);
+    }
 }
 
 #[cfg(test)]
