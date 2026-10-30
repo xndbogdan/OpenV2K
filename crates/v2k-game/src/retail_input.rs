@@ -21,23 +21,40 @@ use v2k_render::{ControllerSample, PadSnapshot};
 
 use crate::weapon_inventory::WeaponCycleDirection;
 
-/// Turn or pitch words per mickey. The slot-1 binding scales each mouse axis
-/// by `-400` and Q31 one half; the reader adds `previous - current` of X to the
-/// turn channel and `current - previous` of Y to the pitch channel.
+/// Q31 gain of every analog device axis for the 0..15 Sensitivity setting
+/// (`+0x2C`): `(sensitivity << 27) + 0x7FFFFFF`. The game module's open
+/// (`FUN_0044E1F0`) and the Sensitivity row (`FUN_0043B8C0`) store it at
+/// `004CA5D0` and reapply it to every device (`FUN_00428EA0`).
+pub fn analog_axis_gain(sensitivity: u8) -> i32 {
+    (i32::from(sensitivity.min(15)) << 27) + 0x7FF_FFFF
+}
+
+/// A device axis after its adapter bias: `FUN_004721F0` multiplies it by the
+/// axis scale 2 (a 32-bit product) and then by the Sensitivity gain in Q31.
+fn device_axis(biased: i32, sensitivity: u8) -> i32 {
+    ((i64::from(biased.wrapping_mul(2)) * i64::from(analog_axis_gain(sensitivity)) * 2) >> 32)
+        as i32
+}
+
+/// Turn or pitch words per device-scaled mickey. The slot-1 binding scales
+/// each mouse axis by `-400` and Q31 one half; the reader adds `previous -
+/// current` of X to the turn channel and `current - previous` of Y to the
+/// pitch channel.
 pub const MOUSE_AXIS_GAIN: i32 = 200;
 
 /// Turn-channel term for one reader call's mouse X motion in mickeys. The
 /// reader works on 16-bit words, so very fast motion wraps instead of
 /// saturating.
-pub fn mouse_turn_raw(dx_mickeys: i32) -> i16 {
-    dx_mickeys.wrapping_mul(MOUSE_AXIS_GAIN) as i16
+// shortcut: retail scales each DirectInput sample, the port the frame's total; per-sample rounding differs by a step at most.
+pub fn mouse_turn_raw(dx_mickeys: i32, sensitivity: u8) -> i16 {
+    device_axis(dx_mickeys, sensitivity).wrapping_mul(MOUSE_AXIS_GAIN) as i16
 }
 
 /// Pitch-channel term for one reader call's mouse Y motion in mickeys
 /// (positive towards the player). Pulling the mouse back elevates the Hover
 /// gun and lifts the VTOL nose; pushing it forward does the opposite.
-pub fn mouse_pitch_raw(dy_mickeys: i32) -> i16 {
-    dy_mickeys.wrapping_mul(-MOUSE_AXIS_GAIN) as i16
+pub fn mouse_pitch_raw(dy_mickeys: i32, sensitivity: u8) -> i16 {
+    device_axis(dy_mickeys, sensitivity).wrapping_mul(-MOUSE_AXIS_GAIN) as i16
 }
 
 /// The reader's single weapon step for the wheel motion since its last call.
@@ -150,17 +167,25 @@ pub fn joystick_dead_zone(value: i32) -> i32 {
     }
 }
 
-/// Joystick X after the adapter bias, the slot-2 binding (Q31 one eighth)
-/// and the reader dead zone. Full deflection gives about +/-2096 turn words,
-/// close to a held arrow's 2303 at the default sensitivity.
-pub fn joystick_turn_raw(sample: JoystickSample) -> i32 {
-    joystick_dead_zone((i32::from(sample.axes[0]) - i32::from(JOYSTICK_AXIS_CENTRE)) >> 3)
+/// Joystick X after the adapter bias, the Sensitivity gain, the slot-2
+/// binding (Q31 one eighth) and the reader dead zone. Full deflection gives
+/// about +/-3632 turn words at the default Sensitivity 10, and nothing at 0.
+pub fn joystick_turn_raw(sample: JoystickSample, sensitivity: u8) -> i32 {
+    let x = device_axis(
+        i32::from(sample.axes[0]) - i32::from(JOYSTICK_AXIS_CENTRE),
+        sensitivity,
+    );
+    joystick_dead_zone(x >> 3)
 }
 
 /// Joystick Y, negated by its binding: pushing forward is positive, which
 /// depresses the Hover gun and drops the VTOL nose.
-pub fn joystick_pitch_raw(sample: JoystickSample) -> i32 {
-    joystick_dead_zone((i32::from(JOYSTICK_AXIS_CENTRE) - i32::from(sample.axes[1])) >> 3)
+pub fn joystick_pitch_raw(sample: JoystickSample, sensitivity: u8) -> i32 {
+    let y = device_axis(
+        i32::from(sample.axes[1]) - i32::from(JOYSTICK_AXIS_CENTRE),
+        sensitivity,
+    );
+    joystick_dead_zone(-y >> 3)
 }
 
 /// Settings word `+0x08`. Relative adds the keyboard and joystick terms to
@@ -292,13 +317,16 @@ mod tests {
 
     #[test]
     fn mouse_terms_follow_the_reader_signs_and_wrap_as_words() {
-        assert_eq!(mouse_turn_raw(1), 200);
-        assert_eq!(mouse_turn_raw(-3), -600);
-        assert_eq!(mouse_pitch_raw(1), -200);
-        assert_eq!(mouse_pitch_raw(-2), 400);
+        // Sensitivity 10 (gain 0x57FFFFFF, about 1.375) floors each value.
+        assert_eq!(mouse_turn_raw(1, 10), 200);
+        assert_eq!(mouse_turn_raw(-3, 10), -1000);
+        assert_eq!(mouse_pitch_raw(1, 10), -200);
+        assert_eq!(mouse_pitch_raw(-2, 10), 600);
+        // Sensitivity 0 ("Off", gain 0x07FFFFFF) loses a single mickey.
+        assert_eq!(mouse_turn_raw(1, 0), 0);
+        assert_eq!(mouse_turn_raw(-3, 15), -1200);
         // 164 mickeys in one reader call exceed a signed word: retail wraps.
-        assert_eq!(mouse_turn_raw(164), (164 * 200 - 65_536) as i16);
-        assert_eq!(mouse_turn_raw(i32::MAX), i32::MAX.wrapping_mul(200) as i16);
+        assert_eq!(mouse_turn_raw(164, 10), 45_000_i32 as i16);
     }
 
     #[test]
@@ -314,14 +342,21 @@ mod tests {
             axes: [x, y, 0x8000, 0x8000, 0x8000, 0x8000],
             buttons: 0,
         };
-        assert_eq!(joystick_turn_raw(JoystickSample::AT_REST), 0);
-        assert_eq!(joystick_pitch_raw(JoystickSample::AT_REST), 0);
-        // Full right/left: (raw - 0x8000) >> 3 = 4095 / -4096, less 2000.
-        assert_eq!(joystick_turn_raw(at(0xFFFF, 0x8000)), 2095);
-        assert_eq!(joystick_turn_raw(at(0, 0x8000)), -2096);
+        assert_eq!(joystick_turn_raw(JoystickSample::AT_REST, 10), 0);
+        assert_eq!(joystick_pitch_raw(JoystickSample::AT_REST, 10), 0);
+        // Full right/left at Sensitivity 10: 5631 / -5632, less 2000.
+        assert_eq!(joystick_turn_raw(at(0xFFFF, 0x8000), 10), 3631);
+        assert_eq!(joystick_turn_raw(at(0, 0x8000), 10), -3632);
         // Forward (WinMM Y towards zero) is positive pitch.
-        assert_eq!(joystick_pitch_raw(at(0x8000, 0)), 2096);
-        assert_eq!(joystick_pitch_raw(at(0x8000, 0xFFFF)), -2096);
+        assert_eq!(joystick_pitch_raw(at(0x8000, 0), 10), 3632);
+        assert_eq!(joystick_pitch_raw(at(0x8000, 0xFFFF), 10), -3632);
+        // Sensitivity scales the stick: 7 is about the old unit gain, and
+        // "Off" never leaves the dead zone.
+        assert_eq!(joystick_turn_raw(at(0xFFFF, 0x8000), 15), 6191);
+        assert_eq!(joystick_turn_raw(at(0, 0x8000), 7), -2096);
+        assert_eq!(joystick_turn_raw(at(0xFFFF, 0x8000), 0), 0);
+        assert_eq!(analog_axis_gain(10), 0x57FF_FFFF);
+        assert_eq!(analog_axis_gain(15), 0x7FFF_FFFF);
         // Exactly +/-2000 after scaling lands inside the dead zone.
         assert_eq!(joystick_dead_zone(2000), 0);
         assert_eq!(joystick_dead_zone(-2000), 0);
@@ -345,7 +380,7 @@ mod tests {
         assert_eq!(sample.axes[0], 0xFFFF);
         // SDL's stick-up is WinMM's forward, which the binding makes positive.
         assert_eq!(sample.axes[1], 0);
-        assert_eq!(joystick_pitch_raw(sample), 2096);
+        assert_eq!(joystick_pitch_raw(sample, 10), 3632);
         assert_eq!(sample.axes[2], 0xFFFF);
         assert!(sample.fire());
         assert!(sample.thrust());
@@ -353,7 +388,7 @@ mod tests {
 
         let idle = JoystickSample::from_pad(PadSnapshot::default());
         assert_eq!(idle, JoystickSample::AT_REST);
-        assert_eq!(joystick_turn_raw(idle), 0);
+        assert_eq!(joystick_turn_raw(idle, 10), 0);
 
         let mut shoulders = PadSnapshot::default();
         shoulders.buttons[4] = true;
@@ -372,7 +407,7 @@ mod tests {
         assert_eq!(sample.axes, [0, 0x8000, 0x8000, 0x8000, 0x8000, 0xFFFF]);
         assert!(!sample.fire());
         assert!(sample.thrust());
-        assert_eq!(joystick_turn_raw(sample), -2096);
+        assert_eq!(joystick_turn_raw(sample, 10), -3632);
     }
 
     #[test]

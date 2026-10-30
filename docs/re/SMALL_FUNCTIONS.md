@@ -217,7 +217,7 @@ when the buffer is too small.
 | `FUN_004337A0` | calls every callback of a list with its argument and three more |
 | `FUN_00437470` | unlinks and frees every node of the list at `0x004DC618` |
 | `FUN_00438B60` | refreshes the 12-byte stamp: the dword at `0x004F73B4`, the counter incremented, and `0x004F7378`'s byte twice (the second only when `0x004F73B8` is set) |
-| `FUN_0043B8C0` | runs `FUN_0043B7C0`, then raises an error (`FUN_00471150`) built from its fourth argument |
+| `FUN_0043B8C0` | the Sensitivity row: runs `FUN_0043B7C0`, then sets the analog gain from the new value (`FUN_00428EA0`) and raises any error that returns (`FUN_00471150`) |
 | `FUN_0043CB50` | runs `FUN_0043B7C0`, then `FUN_00495910` with the nibble at `0x004CB3D8` repeated four times |
 | `FUN_0043CF90` | at most every 50 world ticks, runs `FUN_0043D070` and walks with `FUN_0043CFD0` (`FUN_0046C9A0`) |
 | `FUN_00447C20` | discards the controller's player (flag and sweep, `FUN_00414990`), stores the new type at `+0x190` and builds the player again (`FUN_004438A0`) |

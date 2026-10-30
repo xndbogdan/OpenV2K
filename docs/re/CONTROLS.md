@@ -162,14 +162,24 @@ mouse and slot 2 the joystick. Slots 6 and 7 hold console-pad tables that no
 PC device uses. Menu sets bind only the keyboard and those console slots, so
 the mouse and joystick do nothing outside the craft.
 
+**Sensitivity scales every analog axis.** Each device axis passes its
+adapter bias, then the axis scale 2 (a 32-bit product), then a Q31 gain
+(`FUN_004721F0`): `axis = ((raw + bias) × 2 × gain) >> 31`. The gain is
+`(Sensitivity << 27) + 0x7FFFFFF`, roughly `(s + 1) / 16`: `0x57FFFFFF` at
+the default 10, `0x7FFFFFFF` at 15, `0x07FFFFFF` at 0 ("Off"). The game
+module's open (`FUN_0044E1F0`) sets it from the loaded settings and the
+Sensitivity row (`FUN_0043B8C0`) whenever it changes; both go through
+`FUN_00428EA0`. The executable's static `0x40000000` (unit gain) is never
+the live value. The figures below are at the default Sensitivity.
+
 **Mouse.** A DirectInput `GUID_SysMouse` device with relative axes, read in
 the background (the game never sets a cooperative level). Binding table
 `0x004C2DE0`:
 
 | Input | Reader effect | Hovercraft | VTOL |
 |---|---|---|---|
-| X | turn `+= 200·Δx` (mickeys, right positive) | steer | bank-turn |
-| Y | pitch `+= -200·Δy` (towards the player positive) | pull back: elevate gun; push: depress | push: nose down, forward; pull: nose up |
+| X | turn `+= 200·axis(Δx)` (mickeys, right positive; 1 mickey → 1, 3 → 4) | steer | bank-turn |
+| Y | pitch `+= -200·axis(Δy)` (towards the player positive) | pull back: elevate gun; push: depress | push: nose down, forward; pull: nose up |
 | Wheel | one weapon step per reader call when the total changed | towards the player: B's step (`0x004441D0`); away: V's (`0x00444260`) | same |
 | Button 1 (left) | both SPACE descriptors (`0x4CD838` throttle, `0x4CD848` positive-thrust gate) | thrust | ascent and powered-pitch gate |
 | Button 2 (right) | fire descriptor `0x4CD850`, shared with Enter | fire | fire |
@@ -187,14 +197,15 @@ subtracts `0x8000` from each axis. Binding table `0x004C2E90`:
 
 | Input | Value | Effect |
 |---|---|---|
-| X | `(x - 0x8000) >> 3`, then the dead zone | turn, right positive |
-| Y | `(0x8000 - y) >> 3`, then the dead zone | pitch, forward positive: depress gun or nose down |
+| X | `axis(x) >> 3`, then the dead zone | turn, right positive |
+| Y | `-axis(y) >> 3`, then the dead zone | pitch, forward positive: depress gun or nose down |
 | Button 1 | fire descriptor | fire |
 | Button 2 | both SPACE descriptors | thrust |
 
 The reader's dead zone (`0x0044463F..0x00444663`) maps `v < -2000` to
 `v + 2000`, `-2000 <= v < 2000` to 0 and larger values to `v - 2000`. Full
-deflection is therefore about ±2096 words, close to a held arrow's 2303. Z, R,
+deflection is therefore about ±3632 words at Sensitivity 10 (a held arrow is
+2303), ±6192 at 15, and at 0 the stick never leaves the dead zone. Z, R,
 U, V, the POV hat and buttons 3 onward are unbound.
 
 **Reader order** (`FUN_004445E0`): clear turn and pitch; read the two joystick
@@ -451,6 +462,8 @@ write value records that the frame pump stamps and drains each frame.
 | --- | --- |
 | `FUN_00428FE0` | installs a mode's bindings for one device: creates the device's input state (`FUN_00472040`, kept at `004DB0E8`) on first use and sets its axes (`FUN_00428EE0`), then builds the mode's button bindings for it (`FUN_00471880`) and, from the table at `+30`, its axis bindings (`FUN_00471A40`) |
 | `FUN_00428EE0` | sets a device input state's eight axes (`FUN_00472520`): each from its `004CA448` table entry, with `004CA5D0` and mode 2 |
+| `FUN_00428EA0` | sets the analog gain `004CA5D0` (`(Sensitivity << 27) + 0x7FFFFFF`, from `FUN_0044E1F0` and `FUN_0043B8C0`) and reapplies it to every device input state (`FUN_00428EE0`), stopping at the first error |
+| `FUN_004291A0` | frees every device input state (`004DB0E8`, twelve slots; `FUN_004724E0`) and clears its slot, from the input module's close (`FUN_0042A8C0`) and `FUN_0044F5B0` |
 | `FUN_00429100` | appends a mode's twelve per-device button bindings to list `+08` (`FUN_00471C80`) and its twelve axis bindings to list `+14` (`FUN_00471CD0`), skipping empty entries |
 | `FUN_00429160` | drops one reference from each of a mode's twelve button (`FUN_004719F0`) and twelve axis (`FUN_00471B80`) binding records |
 | `FUN_00472040` | creates a device's input state (0xCC bytes, kept at `004DB0E8` by `FUN_00428FE0`): the device, a cleared 16-word state, eight axes at scale 0x40000000 and mode 2 (`+4C`, 12 bytes each), two empty binding lists, and `FUN_00472180` as the device's callback (`FUN_00494D80`); linked at the tail of the input-state list `004FB850` |
@@ -459,6 +472,8 @@ write value records that the frame pump stamps and drains each frame.
 | `FUN_00472180` | a device's callback: copies the device's 16-word state into the input state (`+0C`), then updates the axis bindings (`FUN_004721F0`) when they are enabled (`+BC`) and runs the button matcher (`FUN_00472320`) when there are button bindings (`+AC`) |
 | `FUN_004721F0` | updates a device's axis bindings: scales each of the eight raw axes ((raw + offset) × scale × gain, Q31), then for each binding row (axis, flags, offset, scale, gain) computes its value and, when it changed, writes it to the bound value record's `+14` (adding the change when the row's flag 1 is set) and notifies an armed record (`+20`, `FUN_00471760`) |
 | `FUN_004715F0` | the frame pump's value step (from `FUN_00494070`): stamps every value record (`004FB858`) with the frame's clock (`+20/+24`, clearing `+28/+2C`), then drains the 32-entry event ring (`004FB870`, 0x28 bytes each, from `004FB83C` to `004FB854`): an event that turns its value on stores its time in its timing record, one that turns it off adds the time held; each event's value is written to its target and its callback runs with its argument, value and time; finally it reads the clock (`FUN_00495FF0`, `004FB840`) |
+| `FUN_004717C0` | delivers one binding event: flag 2 stamps the device's shared event packet with the clock once (`FUN_00495FF0`); flag 1 writes the value to its target and runs its callback at once (argument, value, time); any other event is queued in the 32-entry ring (`004FB870`: target, callback, argument, value, time, timing record), and a full ring (31 queued) drops it |
+| `FUN_00471400` | the time a value record has been held: while it is on (`+18`), adds the clock's advance since `+20/+24` to `+28/+2C` and moves `+20/+24` to now; returns the low word of the total (ten reads in `FUN_004445E0`) |
 | `FUN_00428C10` | counts the devices with an input state (`004DB0E8`, twelve slots) whose value record at `004DB118` reads zero (`FUN_004715E0`) |
 | `FUN_00428C60` | the same count over device slots 1, 2 and 8 only, for the menu's visibility mask |
 
@@ -565,8 +580,8 @@ whether the console pad moves it there is not traced.
 | Pitch-rate cap | 0x900 (2304) | S/X |
 | Throttle clamp | 0x10000 | SPACE/RSHIFT |
 | VTOL vertical rate | ±0xA00 (2560) | console pads only |
-| Mouse axis gain | ±200 words per mickey, wrapping | slot-1 binding `0x004C2DE0` |
-| Joystick axis | `(raw - 0x8000) >> 3`, dead zone ±2000 | slot-2 binding `0x004C2E90`, reader `0x0044463F` |
+| Mouse axis gain | ±200 words per Sensitivity-scaled mickey, wrapping | slot-1 binding `0x004C2DE0`, gain `FUN_00428EA0` |
+| Joystick axis | `axis(raw) >> 3`, dead zone ±2000 | slot-2 binding `0x004C2E90`, reader `0x0044463F` |
 | Powered pitch coupling | cap 0x600, gain `-pitch/6`; dedicated SPACE binding active, S/X inactive, Self Righting >1. UP/DOWN and RSHIFT may coexist | FUN_00445310 |
 | Default keyboard turn | held key ≈±0x8FF; `step=((turn*52/28)*(dt>>2))>>15`, heading subtracts it; VTOL roll subtracts it before one A690 damping pass | FUN_004445E0 → FUN_00420360 |
 | Absolute joystick helper | `motion.turn -= (target−heading)·magnitude·2>>15`; Full flying also writes pitch | FUN_00444B90 |

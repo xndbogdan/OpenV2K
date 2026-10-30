@@ -152,6 +152,7 @@ send kind 10 for network-owned bodies, and the session tick sends kinds 3, 7,
 | `FUN_0043A1D0` | builds one block of network handles: its entries (12 bytes each) chained into a free list, each handle carrying the block's number in its upper bits |
 | `FUN_0043A600` | frees a network handle: forgets the cached lookup (`004DC9F0`) when it names this handle and returns the entry to its block's free list |
 | `FUN_0043A800` | frees every network handle block (`004DC9F4`, 0x18 bytes each, count `004DC9F8`) and its entry array, and resets the cached lookup |
+| `FUN_0043A870` | a network handle block by number: the low byte of its argument indexes the blocks (`004DC9F4`, 0x18 bytes each) when below the count `004DC9F8`, else 0 |
 | `FUN_00469110` | starts a fresh outgoing message on channel n (records at `004F7340`, 0x1C bytes apart): sends a pending one first (`FUN_0046C050`), writes the header (two zero bytes, the channel and the local slot `004F7378`), lets the channel's header callback (`004F7384`) add its part, rounded up to 4 bytes (a negative size is error `0x3902`), and sets the write cursor, the room left and an empty count |
 | `FUN_004694F0` | the address of a ring's next entry, `+10` + `+4` × `+C`, giving its index `+C` through the second argument (from the receive step `FUN_0046C570`) |
 

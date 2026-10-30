@@ -126,6 +126,10 @@ unwinds to the innermost frame and runs the cleanups registered above it.
 - `FUN_00471050` registers a cleanup in the current scope.
 - `FUN_004710B0` cancels a registered cleanup, matched by function and
   argument, so a later unwind skips it.
+- `FUN_004711B0` closes the innermost scope normally: it walks down to the
+  scope frame (skipping cleanups and cancelled slots), overwrites the frame's
+  17 words with cancelled slots, then drops cancelled slots from the top. Its
+  cleanups never run.
 
 ## Message pump and main loop
 
