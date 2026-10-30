@@ -90,7 +90,7 @@ The game runs the original's own code paths, including its frame rate cap of
 default. The launcher's Options show each fix, and turning it off restores the
 original behavior:
 
-- **Beam commands at any frame rate:** on a fast PC the original ignores C
+- **The C and D beam commands work at high frame rates:** on a fast PC the original ignores C
   (collect) and D (drop). Pass `--beam-commands false` for one run, or set
   `fixes.beam_commands` in `port-config.json`.
 

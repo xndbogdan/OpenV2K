@@ -682,7 +682,7 @@ impl WindowState {
             608,
             22,
         );
-        let files_group = self.group(window, " Game files and music ", 16, 200, 628, 121);
+        let files_group = self.group(window, " Game files ", 16, 200, 628, 121);
         let details = self.control(
             window,
             "EDIT",
@@ -934,7 +934,7 @@ impl WindowState {
                     .preferences
                     .save(&self.request.preferences_path)
                 {
-                    notice(self.window, "V2K settings", &format!("The game can run, but the selected installation could not be remembered:\n\n{error}"), 0x30);
+                    notice(self.window, "V2K settings", &format!("The game can start, but the launcher could not remember this installation:\n\n{error}"), 0x30);
                 }
                 self.selection = Some(LaunchSelection::Play {
                     data_dir: self.root.clone(),
@@ -1321,7 +1321,7 @@ impl WindowState {
             OPTIONS_CLASS,
             "V2K Options",
             560,
-            704,
+            730,
             self.window,
             self.host,
             self.scale,
@@ -1424,8 +1424,8 @@ impl WindowState {
             168,
         );
         let music_availability = self.label(window, "", 234, 244, 294, 28);
-        self.group(window, " Controls ", 12, 316, 536, 54);
-        self.label(window, "&Controller:", 24, 340, 106, 20);
+        self.group(window, " Controls ", 12, 316, 536, 80);
+        self.label(window, "&Controller layout:", 24, 340, 106, 20);
         let controller = self.combo(
             window,
             &ControllerLayout::ALL.map(|layout| layout.label().to_string()),
@@ -1433,67 +1433,66 @@ impl WindowState {
             ID_CONTROLLER,
             136,
             336,
-            194,
+            240,
         );
         self.label(
             window,
             "Gamepads only. Flight sticks always use the PC original.",
-            346,
-            332,
-            186,
-            34,
+            24,
+            368,
+            512,
+            20,
         );
         // Fixes for retail bugs: on by default; off restores retail.
-        self.group(window, " Fixes ", 12, 378, 536, 54);
+        self.group(
+            window,
+            " Fixes for retail bugs (off restores retail) ",
+            12,
+            404,
+            536,
+            54,
+        );
         let fix_beam = self.checkbox(
             window,
-            "&Beam commands at any frame rate",
+            "The C and D &beam commands work at high frame rates",
             ID_FIX_BEAM,
             24,
-            402,
-            310,
+            428,
+            512,
             config.fixes.beam_commands,
-        );
-        self.label(
-            window,
-            "Off restores retail: C and D fail at 125 fps.",
-            346,
-            394,
-            186,
-            34,
         );
         let skip = self.checkbox(
             window,
-            "Skip the launcher when this installation is ready",
+            "S&kip the launcher when this installation is ready",
             ID_SKIP,
             16,
-            444,
+            470,
             528,
             self.request.preferences.skip_launcher,
         );
         self.label(
             window,
-            "Use --launcher to open it again. Missing game files still open setup.",
+            "Start with --launcher to open it again. Missing game files still open it.",
             34,
-            470,
+            496,
             510,
             20,
         );
-        self.group(window, " Installation tools ", 12, 502, 536, 132);
-        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 526, 248, 30);
-        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 526, 252, 30);
+        self.group(window, " Installation tools ", 12, 528, 536, 132);
+        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 552, 248, 30);
+        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 552, 252, 30);
         let install = self.button(
             window,
             "&Install from disc image...",
             ID_INSTALL,
             24,
-            568,
+            594,
             512,
             30,
         );
-        let progress = self.label(window, "", 24, 607, 512, 22);
-        let save = self.button(window, "&Save", ID_SAVE, 308, 654, 112, 32);
-        self.button(window, "Cancel", ID_CANCEL, 436, 654, 112, 32);
+        let progress = self.label(window, "", 24, 633, 512, 22);
+        let save = self.button(window, "&Save", ID_SAVE, 308, 680, 112, 32);
+        self.button(window, "Cancel", ID_CANCEL, 436, 680, 112, 32);
         self.option_controls = OptionControls {
             resolution,
             renderer,
@@ -1599,7 +1598,7 @@ impl WindowState {
             notice(
                 self.options_window,
                 "Save V2K options",
-                &format!("Could not save game settings:\n\n{error}"),
+                &format!("The game's settings could not be saved:\n\n{error}"),
                 0x10,
             );
             return;
@@ -1610,7 +1609,7 @@ impl WindowState {
             .preferences
             .save(&self.request.preferences_path)
         {
-            notice(self.options_window, "Save launcher options", &format!("Game settings were saved, but the launcher preference could not be saved:\n\n{error}"), 0x10);
+            notice(self.options_window, "Save launcher options", &format!("The game's settings were saved, but the launcher's preference could not be:\n\n{error}"), 0x10);
             return;
         }
         self.close_options();
