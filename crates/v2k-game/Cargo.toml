@@ -15,15 +15,28 @@ clap = { version = "4", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
+# The launcher's header flipbook (indexed PNG atlas).
+png = "0.17.16"
 
 # The setup window must start even when the EXE is alone in an empty folder.
 # Avoid a Windows loader dependency on SDL2.dll before our launcher can run.
 [target.'cfg(windows)'.dependencies]
 sdl2 = { version = "0.38", features = ["static-link", "bundled"] }
-png = "0.17.16"
+
+# The Linux launcher's window and file choosers (the xdg portal); Windows
+# keeps its native Win32 launcher and never builds these.
+[target.'cfg(not(windows))'.dependencies]
+eframe = { version = "0.32", default-features = false, features = ["glow", "wayland", "x11", "default_fonts"] }
+rfd = { version = "0.15", default-features = false, features = ["xdg-portal", "async-std"] }
 
 [dev-dependencies]
 v2k-test-support = { path = "../v2k-test-support" }
+
+# Clicks the Linux launcher's controls headlessly.
+[target.'cfg(not(windows))'.dev-dependencies]
+egui_kittest = "0.32"
+# kittest turns on egui's accesskit; egui-winit then needs it too.
+eframe = { version = "0.32", default-features = false, features = ["accesskit"] }
 
 [build-dependencies]
 v2k-test-support = { path = "../v2k-test-support" }

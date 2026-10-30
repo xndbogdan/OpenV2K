@@ -55,9 +55,12 @@ pub(super) fn prepare(cli: &super::Cli) -> Result<Option<PathBuf>, Box<dyn std::
         valid,
         direct,
     );
-    let root = if show_launcher && cfg!(windows) {
+    let root = if show_launcher {
+        // Windows plays only the executable's own installation; Linux plays
+        // any valid one, as it found it without the launcher.
+        let initial = if cfg!(windows) { &local } else { &discovered };
         let selection = super::launcher::run(super::launcher::LauncherRequest {
-            initial_root: local.as_ref().map(|report| report.root.clone()),
+            initial_root: initial.as_ref().map(|report| report.root.clone()),
             setup_hint: discover_setup_hint(&request),
             preferences,
             preferences_path,

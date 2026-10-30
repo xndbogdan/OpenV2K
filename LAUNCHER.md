@@ -181,7 +181,23 @@ path remain readable imports; new saves never write back to those locations.
 validation. A saved skip-launcher preference only skips a healthy installation;
 broken data brings setup back. Explicit `--level` and VTOL tracing preserve
 direct diagnostic startup. Existing `ovl` and `init` commands are unchanged.
-On other platforms, command-line setup and direct game startup remain available.
+
+## Linux
+
+Linux opens the same launcher in an egui window (OpenGL, X11 or Wayland),
+with the Windows launcher's banner, Play, Options and Quit, and the same
+Options rows and rules. Linux plays any valid installation, as its direct
+start always did: the installation field takes a typed folder, and
+**Change...** opens the desktop's folder chooser (the xdg portal). Setup never
+copies the executable there. **Install from disc image...** installs game
+data, intro videos and available music into a chosen folder, then Play uses
+it; Options keeps Verify files and Extract music. Game settings are saved in
+the installation folder, and launcher preferences under
+`$XDG_CONFIG_HOME/v2000-port/launcher.json` (`~/.config/...` without it).
+Without a display server the window cannot open, and a valid installation
+starts directly. `--data-dir` stays a direct run without the launcher.
+`V2K_LAUNCHER_SNAPSHOT=<png>` saves an image of the window once the file
+check is done (`V2K_LAUNCHER_SNAPSHOT_PAGE=options` shows Options).
 
 From the repository root, build and use release binaries:
 
@@ -207,7 +223,8 @@ for the bundled SDL sources when using CMake 4 or later.
 `v2k-game::setup` owns bounded image reading, asset validation and installation.
 `installation_discovery` only supplies read-only path hints;
 `launcher_preferences` owns the separate launcher state. The binary's launcher
-module owns native Windows controls and asynchronous job presentation.
+module owns native Windows controls, the Linux egui window and asynchronous
+job presentation; headless click tests (`egui_kittest`) cover the Linux one.
 `v2k-render::music` owns soundtrack inventory and bounded audio decoding.
 
 Focused tests cover malformed images, incomplete final sections, embedded

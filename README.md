@@ -53,14 +53,15 @@ Releases are unsigned, so Windows SmartScreen may warn on first launch.
 
 **Linux**
 
-The Linux build has no graphical launcher. Point it at an existing V2000
-installation, or install one from your disc image first:
+Run `./openv2k` for the launcher: choose an existing V2000 installation with
+**Change...**, or **Install from disc image...**, then press Play. Options
+offers the same rows as on Windows. The command line works without it:
 
 ```sh
 tar -xzf OpenV2K-*-linux-x64.tar.gz && cd OpenV2K-*-linux-x64
-./openv2k --data-dir /path/to/V2000            # play an existing installation
+./openv2k                                      # the launcher
+./openv2k --data-dir /path/to/V2000            # play an existing installation directly
 ./openv2k install --image V2000.bin --destination ~/V2000   # or install from disc
-./openv2k --data-dir ~/V2000
 ```
 
 SDL2 is built into the binary. Windows is the primary platform; Linux builds

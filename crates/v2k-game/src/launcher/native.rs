@@ -5,9 +5,7 @@
 #[path = "win32.rs"]
 mod win32;
 
-#[path = "header_animation.rs"]
-mod header_animation;
-use header_animation::HeaderAnimation;
+use super::header_animation::HeaderAnimation;
 
 use std::cell::RefCell;
 use std::ffi::{OsStr, OsString};
@@ -25,10 +23,10 @@ use v2k_render::config::{
 };
 use v2k_render::music::SoundtrackAvailability;
 
-use super::{LaunchSelection, LauncherRequest};
-use crate::setup::{
-    DiscImage, InstallRequest, InstallResult, IssueSeverity, SetupProgress, ValidationReport,
+use super::{
+    music_description, popup_description, report_description, LaunchSelection, LauncherRequest,
 };
+use crate::setup::{DiscImage, InstallRequest, InstallResult, SetupProgress, ValidationReport};
 use win32::*;
 
 const WM_CREATE: u32 = 0x0001;
@@ -1665,88 +1663,6 @@ unsafe fn primary_display_modes() -> DisplayModes {
 
 fn strings(values: &[&str]) -> Vec<String> {
     values.iter().map(|value| (*value).to_string()).collect()
-}
-
-fn music_description(report: &ValidationReport) -> String {
-    let count = report.music.available_count();
-    if report.music.directory_missing {
-        "Music directory missing.".to_string()
-    } else if count == 0 {
-        "Music disabled: no soundtrack tracks are available.".to_string()
-    } else if report.music.missing_tracks().is_empty() {
-        "Music available: all 10 CD audio tracks.".to_string()
-    } else {
-        format!("Music incomplete: {count} of 10 tracks available.")
-    }
-}
-
-fn report_description(report: &ValidationReport) -> String {
-    let mut lines = vec![format!(
-        "Game files: {}. Checked {} overlays.",
-        if report.is_ready() {
-            "ready"
-        } else {
-            "missing or inconsistent"
-        },
-        report.checked_overlays
-    )];
-    // Missing-directory guidance is already a path-bearing validation warning.
-    if !report.music.directory_missing {
-        lines.push(music_description(report));
-    }
-    if !report.music.missing_tracks().is_empty() && report.music.available_count() > 0 {
-        lines.push(format!(
-            "Missing music tracks: {}.",
-            report
-                .music
-                .missing_tracks()
-                .iter()
-                .map(|track| format!("{track:02}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ));
-    }
-    if report.embedded_checksums_verified {
-        lines.push("Bundled retail checksums verified.".to_string());
-    } else if report.manifest_verified {
-        lines.push("Installation checksum manifest verified.".to_string());
-    }
-    for issue in &report.issues {
-        // One absent-directory warning also covers optional manifest tracks.
-        if report.music.directory_missing
-            && issue.severity == IssueSeverity::Warning
-            && issue.path != report.music.directory
-            && issue.path.starts_with(&report.music.directory)
-        {
-            continue;
-        }
-        lines.push(format!("{}\r\n{}", issue.path.display(), issue.message));
-    }
-    for error in &report.music.scan_errors {
-        lines.push(error.clone());
-    }
-    for track in &report.music.tracks {
-        for error in &track.errors {
-            lines.push(format!("Music track {:02}: {error}", track.cd_track));
-        }
-    }
-    lines.join("\r\n")
-}
-
-/// A completely empty directory has hundreds of diagnostics. Keep the native
-/// popup within the screen; the main read-only, scrollable control retains all.
-fn popup_description(report: &ValidationReport) -> String {
-    let description = report_description(report);
-    let lines: Vec<_> = description.lines().collect();
-    if lines.len() <= 12 {
-        description
-    } else {
-        format!(
-            "{}\r\n\r\n{} additional details are available in the main window's scrollable list.",
-            lines[..12].join("\r\n"),
-            lines.len() - 12
-        )
-    }
 }
 
 unsafe fn combo_selection(control: Handle) -> usize {
