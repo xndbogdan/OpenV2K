@@ -356,10 +356,10 @@ impl MotionChannels {
         }
 
         let joystick = analog.joystick;
-        let joystick_turn = joystick.map_or(0, joystick_turn_raw);
-        let joystick_pitch = joystick.map_or(0, joystick_pitch_raw);
-        let mouse_turn = i32::from(mouse_turn_raw(analog.mouse_dx));
-        let mouse_pitch = i32::from(mouse_pitch_raw(analog.mouse_dy));
+        let joystick_turn = joystick.map_or(0, |j| joystick_turn_raw(j, sensitivity));
+        let joystick_pitch = joystick.map_or(0, |j| joystick_pitch_raw(j, sensitivity));
+        let mouse_turn = i32::from(mouse_turn_raw(analog.mouse_dx, sensitivity));
+        let mouse_pitch = i32::from(mouse_pitch_raw(analog.mouse_dy, sensitivity));
 
         let (pitch_raw, analog_turn_raw, absolute) = match settings.joystick_mode {
             JoystickMode::Relative => (
@@ -1612,28 +1612,30 @@ mod tests {
     #[test]
     fn mouse_y_aims_the_hover_gun_and_mouse_x_steers() {
         let none = HashSet::new();
-        // Pulling the mouse 10 mickeys back gives pitch -2000: +1000 barrel.
+        // Pulling the mouse 10 mickeys back is 13 after the Sensitivity-10
+        // gain, pitch -2600: +1300 barrel.
         let back =
             MotionChannels::from_input(&none, analog(0, 10), 20_000, ReaderSettings::DEFAULT);
-        assert_eq!(back.pitch, -2000.0);
+        assert_eq!(back.pitch, -2600.0);
         let mut craft = PlayerCraft::new();
         let mut player = dummy_entity();
         player.heading = std::f32::consts::FRAC_PI_2;
         craft.integrate_configured_micros(20_000, &back, &mut player, 1);
-        assert_eq!(craft.gun_barrel, 1000.0);
+        assert_eq!(craft.gun_barrel, 1300.0);
         assert_eq!(radians_to_angle_word(player.heading), 0x4000);
 
-        // Five mickeys right is turn word 1000, steered like any other word.
+        // Five mickeys right (6 after the gain) is turn word 1200, steered
+        // like any other word.
         let right =
             MotionChannels::from_input(&none, analog(5, 0), 20_000, ReaderSettings::DEFAULT);
-        assert_eq!(right.analog_turn_raw, 1000);
+        assert_eq!(right.analog_turn_raw, 1200);
         let mut craft = PlayerCraft::new();
         let mut player = dummy_entity();
         player.heading = std::f32::consts::FRAC_PI_2;
         craft.integrate_configured_micros(20_000, &right, &mut player, 1);
         let expected = steer_heading_raw(
             0x4000,
-            1000,
+            1200,
             20_000,
             craft.hover_physics().steering_divisor_raw,
         );
@@ -1644,11 +1646,11 @@ mod tests {
     #[test]
     fn mouse_and_keys_share_one_wrapping_pitch_word() {
         let up = keys(&[Keycode::Up, Keycode::S]);
-        // 2303 + 2304 - 200 * -150 = 34607 wraps to -30929, as retail's word
-        // additions do.
+        // -150 mickeys are -207 after the gain: 2303 + 2304 + 41400 = 46007
+        // wraps to -19529, as retail's word additions do.
         let wrapped =
             MotionChannels::from_input(&up, analog(0, -150), 20_000, ReaderSettings::DEFAULT);
-        assert_eq!(wrapped.pitch, f32::from((2303 + 2304 + 30_000) as i16));
+        assert_eq!(wrapped.pitch, f32::from((2303 + 2304 + 41_400) as i16));
         assert!(wrapped.pitch < 0.0);
         assert!(wrapped.fine_pitch_active);
     }
@@ -1662,14 +1664,14 @@ mod tests {
         let mut mouse_player = dummy_entity();
         let mut key_player = dummy_entity();
 
-        // Eleven mickeys forward is pitch word +2200, which VTOL consumes
-        // exactly as it would the same word from the keys.
+        // Eleven mickeys forward (-16 after the gain) is pitch word +3200,
+        // which VTOL consumes exactly as it would the same word from the keys.
         let pushed =
             MotionChannels::from_input(&none, analog(0, -11), 20_000, ReaderSettings::DEFAULT);
-        assert_eq!(pushed.pitch, 2200.0);
+        assert_eq!(pushed.pitch, 3200.0);
         from_mouse.integrate_configured_micros(20_000, &pushed, &mut mouse_player, 1);
         let keyed = MotionChannels {
-            pitch: 2200.0,
+            pitch: 3200.0,
             ..Default::default()
         };
         from_keys.integrate_configured_micros(20_000, &keyed, &mut key_player, 1);
@@ -1692,8 +1694,8 @@ mod tests {
             ..AnalogInput::default()
         };
         let channels = MotionChannels::from_input(&none, input, 20_000, ReaderSettings::DEFAULT);
-        assert_eq!(channels.analog_turn_raw, 2095);
-        assert_eq!(channels.pitch, 2096.0);
+        assert_eq!(channels.analog_turn_raw, 3631);
+        assert_eq!(channels.pitch, 3632.0);
         assert!(channels.fire);
         assert_eq!(channels.throttle_q16, 0x1_0000);
         assert!(channels.positive_thrust_binding_active);

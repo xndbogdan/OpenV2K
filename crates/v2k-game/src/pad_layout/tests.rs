@@ -229,12 +229,12 @@ fn console_stick_has_the_analog_pads_eight_bit_resolution() {
             ..PadSnapshot::default()
         }))
     };
-    // (0xFF - 0x80) * 32 = 4064 and (0 - 0x80) * 32 = -4096, less the
-    // reader's 2000-word dead zone.
-    assert_eq!(joystick_turn_raw(sample(i16::MAX, 0)), 2064);
-    assert_eq!(joystick_turn_raw(sample(i16::MIN, 0)), -2096);
-    assert_eq!(joystick_pitch_raw(sample(0, i16::MIN)), 2096);
-    assert_eq!(joystick_turn_raw(sample(0, 0)), 0);
+    // (0xFF - 0x80) * 32 = 4064 and (0 - 0x80) * 32 = -4096 words before
+    // the Sensitivity-10 gain, less the reader's 2000-word dead zone.
+    assert_eq!(joystick_turn_raw(sample(i16::MAX, 0), 10), 3587);
+    assert_eq!(joystick_turn_raw(sample(i16::MIN, 0), 10), -3632);
+    assert_eq!(joystick_pitch_raw(sample(0, i16::MIN), 10), 3632);
+    assert_eq!(joystick_turn_raw(sample(0, 0), 10), 0);
     // Its buttons go through the binding sets instead.
     assert!(!sample(0, 0).fire() && !sample(0, 0).thrust());
 }

@@ -169,8 +169,8 @@ absent from the committed bulk decompile).
 
 | Channel | Written by | Notes |
 |---|---|---|
-| `+0` turn | LEFT(−)/RIGHT(+), joystick X, mouse X (`+200` per mickey) | default Joystick **Relative** mode writes the duty-cycle-scaled keys and the joystick term directly; `FUN_00444B90` is only the Joystick Absolute-mode target-bearing helper. Mouse X is added in both modes |
-| `+2` pitch | UP(+)/DOWN(−) authored amplitude **0xD80**, passed through the default Relative sensitivity/duty quantizer; S(+)/X(−) scale **0x900**, clamp ±0x900; S/X suppress only SPACE's separate powered coupling; joystick Y (forward +); mouse Y (`-200` per mickey towards the player) | one shared channel — in Hover positive depresses the gun; in VTOL it pitches nose-down. At default sensitivity 10 and 20 ms, a held arrow is ±2303 (`0x08FF`), confirmed live on 2026-07-16 |
+| `+0` turn | LEFT(−)/RIGHT(+), joystick X, mouse X (`+200` per Sensitivity-scaled mickey, [CONTROLS](CONTROLS.md#mouse-joystick-and-pointer)) | default Joystick **Relative** mode writes the duty-cycle-scaled keys and the joystick term directly; `FUN_00444B90` is only the Joystick Absolute-mode target-bearing helper. Mouse X is added in both modes |
+| `+2` pitch | UP(+)/DOWN(−) authored amplitude **0xD80**, passed through the default Relative sensitivity/duty quantizer; S(+)/X(−) scale **0x900**, clamp ±0x900; S/X suppress only SPACE's separate powered coupling; joystick Y (forward +); mouse Y (`-200` per Sensitivity-scaled mickey towards the player) | one shared channel — in Hover positive depresses the gun; in VTOL it pitches nose-down. At default sensitivity 10 and 20 ms, a held arrow is ±2303 (`0x08FF`), confirmed live on 2026-07-16 |
 | `+4` vertical | console pads only, ±0xA00 | no PC device binds it |
 | `+8` throttle | SPACE / left mouse / joystick button 2 (+), RSHIFT(−), clamp 0x10000 | the three positive sources share both SPACE descriptors |
 | `+C` fire | Enter / right mouse / joystick button 1 | foreground retail capture; all feed one held trigger |
