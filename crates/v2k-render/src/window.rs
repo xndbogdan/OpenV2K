@@ -476,6 +476,9 @@ impl GameWindow {
         gl_attr.set_context_profile(sdl2::video::GLProfile::Compatibility);
         gl_attr.set_context_version(2, 1);
         gl_attr.set_double_buffer(true);
+        // SDL asks for 16 depth bits unless told; AMD's drivers give exactly
+        // that, and the far terrain and the sea surface then share depths.
+        gl_attr.set_depth_size(24);
         self.build_window(title, width, height, placement, true)
     }
 
