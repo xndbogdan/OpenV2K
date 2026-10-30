@@ -103,7 +103,8 @@ more. Start with [`FORMAT_DOCUMENTATION.md`](docs/re/FORMAT_DOCUMENTATION.md),
 functions and addresses. Some mention private analysis material, such as
 decompiler output and time-travel debugging traces, that is not published here.
 
-V2000 is the direct predecessor of Frontier's **Infestation** (2000). The
+V2000 is the direct predecessor of Frontier's **Infestation** (2000), ported by
+the sibling project [OpenInfestation](https://github.com/xndbogdan/OpenInfestation). The
 build paths left in Infestation's executable name its source tree `V3000`, and
 it runs on a C++ port of V2000's engine, with V2000's software rasterizer,
 data formats and much of its platform code carried over.
@@ -440,6 +441,14 @@ cargo run --release -- --no-launcher --data-dir retail --skip-intro --vtol-trace
 This writes into the repository's ignored `.tmp/` directory. The stage split makes a mismatch
 attributable without inferring intermediate force values from the final
 rendered pose.
+
+## Verification harness
+
+The [FGDK harness](https://github.com/xndbogdan/fgdk-harness) is an agent
+skill shared by OpenV2K and OpenInfestation. It runs either port headless
+and repeatable, reproduces a player's bug report, sweeps every world for
+regressions and, with [REA](https://github.com/morluto/rea), compares the
+port against your own copy of the retail executable.
 
 ## License
 
