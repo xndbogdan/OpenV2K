@@ -103,7 +103,7 @@ impl ControllerLayout {
     pub const fn label(self) -> &'static str {
         match self {
             Self::PcOriginal => "PC original",
-            Self::ConsoleOriginal => "Console original",
+            Self::ConsoleOriginal => "Console original (PlayStation)",
             Self::Remastered => "Remastered",
         }
     }

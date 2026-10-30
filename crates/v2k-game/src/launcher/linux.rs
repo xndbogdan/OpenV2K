@@ -474,7 +474,7 @@ impl Launcher {
             .save(&self.request.preferences_path)
         {
             eprintln!(
-                "The game can run, but the selected installation could not be remembered: {error}"
+                "The game can start, but the launcher could not remember this installation: {error}"
             );
         }
         *self.selection.borrow_mut() = Some(LaunchSelection::Play {
@@ -553,7 +553,7 @@ impl Launcher {
         if let Err(error) = config.try_save(&dir) {
             return self.notice(
                 "Save V2K options",
-                &format!("Could not save game settings:\n\n{error}"),
+                &format!("The game's settings could not be saved:\n\n{error}"),
             );
         }
         self.request.preferences.skip_launcher = skip;
@@ -562,7 +562,7 @@ impl Launcher {
             .preferences
             .save(&self.request.preferences_path)
         {
-            return self.notice("Save launcher options", &format!("Game settings were saved, but the launcher preference could not be saved:\n\n{error}"));
+            return self.notice("Save launcher options", &format!("The game's settings were saved, but the launcher's preference could not be:\n\n{error}"));
         }
         self.options = None;
         self.progress = "Options saved.".to_string();
@@ -725,23 +725,31 @@ impl Launcher {
             group(ui, |ui| {
                 ui.strong("Controls");
                 egui::Grid::new("controls").num_columns(2).show(ui, |ui| {
-                    ui.label("Controller:");
+                    ui.label("Controller layout:");
                     let labels = ControllerLayout::ALL.map(ControllerLayout::label);
-                    combo(ui, "Controller", "controller", &mut p.controller, &labels);
+                    combo(
+                        ui,
+                        "Controller layout",
+                        "controller",
+                        &mut p.controller,
+                        &labels,
+                    );
                     ui.end_row();
                 });
                 ui.weak("Gamepads only. Flight sticks always use the PC original.");
             });
             group(ui, |ui| {
-                ui.strong("Fixes");
-                ui.checkbox(&mut p.fix_beam, "Beam commands at any frame rate");
-                ui.weak("Off restores retail: C and D fail at 125 fps.");
+                ui.strong("Fixes for retail bugs (off restores retail)");
+                ui.checkbox(
+                    &mut p.fix_beam,
+                    "The C and D beam commands work at high frame rates",
+                );
             });
             ui.checkbox(
                 &mut p.skip,
                 "Skip the launcher when this installation is ready",
             );
-            ui.weak("Use --launcher to open it again. Missing game files still open setup.");
+            ui.weak("Start with --launcher to open it again. Missing game files still open it.");
             group(ui, |ui| {
                 ui.strong("Installation tools");
                 ui.horizontal(|ui| {

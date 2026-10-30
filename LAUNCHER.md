@@ -157,12 +157,13 @@ mode when the game starts; Borderless covers the desktop, so Resolution shows
 the desktop's size and is disabled.
 Renderer offers Automatic, OpenGL and Software; without a command-line choice,
 OpenGL that cannot start falls back to Software.
-Controls offers the game-controller layout: PC original, Console original or
-Remastered ([layouts](docs/re/CONTROLS.md#port-controller-layouts)), saved as a
+Controls offers the controller layout: PC original, Console original
+(PlayStation) or Remastered ([layouts](docs/re/CONTROLS.md#port-controller-layouts)), saved as a
 port preference. `--controller-layout` chooses one for a single run.
-Fixes lists the port's fixes for retail bugs. Each is on by default and saved
-under `fixes` in `port-config.json`; turning one off restores retail's
-behavior. **Beam commands at any frame rate** fires a C or D beam command whose
+Fixes for retail bugs (off restores retail) lists the port's fixes, worded as
+in OpenInfestation's launcher. Each is on by default and saved under `fixes`
+in `port-config.json`; turning one off restores retail's behavior. **The C and
+D beam commands work at high frame rates** fires a C or D beam command whose
 countdown lands exactly on zero, which retail ignores at its 125-fps cap
 ([beam timing](docs/re/PLAYER_CRAFT.md#beam-attachment-and-weight-interaction-resolved-2026-07-13)).
 `--beam-commands <BOOL>` overrides it for a single run.

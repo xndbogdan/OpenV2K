@@ -144,7 +144,10 @@ fn options_save_writes_the_chosen_rows() {
     click(&mut harness, "Software");
     open_combo(&mut harness, "Art detail");
     click(&mut harness, "Low (320 x 240)");
-    click(&mut harness, "Beam commands at any frame rate");
+    click(
+        &mut harness,
+        "The C and D beam commands work at high frame rates",
+    );
     click(
         &mut harness,
         "Skip the launcher when this installation is ready",
