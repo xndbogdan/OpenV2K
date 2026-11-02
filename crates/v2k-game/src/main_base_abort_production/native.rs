@@ -98,9 +98,12 @@ pub(super) fn dispatch_native_class49(
         // A rocket's or meteor's class1 and a grenade's class49.
         || crate::native_entity_weapons::entity_authenticates(entity)
         // World 21's Type89 enters class1 too, leaving class38 and the
-        // rising sea.
-        || (entity.entity_type == crate::main_base_type54_abort::TYPE89_ENTITY_TYPE
-            && frame
+        // rising sea; so do the Type74 Remote Beamers, leaving class59.
+        || (matches!(
+            entity.entity_type,
+            crate::main_base_type54_abort::TYPE89_ENTITY_TYPE
+                | crate::main_base_type54_abort::TYPE74_ENTITY_TYPE
+        ) && frame
                 .entities
                 .native_class0_construction_present(entity.id));
     if !admitted {

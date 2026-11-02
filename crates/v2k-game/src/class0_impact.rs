@@ -227,7 +227,11 @@ fn run(
             entry: LiveActorDamageEntry::Checked,
         },
         |manager, world_fx, feedback| {
-            if entity_type == crate::main_base_type54_abort::TYPE89_ENTITY_TYPE {
+            if matches!(
+                entity_type,
+                crate::main_base_type54_abort::TYPE89_ENTITY_TYPE
+                    | crate::main_base_type54_abort::TYPE74_ENTITY_TYPE
+            ) {
                 let feedback = feedback.ok_or(Class0DeathBlock::Custody)?;
                 return crate::class49_terminal::run_class49_standard_death(
                     crate::class49_terminal::Class49TerminalFrame {

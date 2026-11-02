@@ -598,3 +598,7 @@ address,status,note
 0x004051B0,implemented,Tractor Beam task constructor (docs/re/TYPE2_TRACTOR_BEAM.md)
 0x00405240,implemented,Tractor Beam visit: hold, pull beyond 1024 and break beyond 2560 units (docs/re/TYPE2_TRACTOR_BEAM.md)
 0x0040CEF0,implemented,class58 search timeout: 10C10 (docs/re/TYPE2_TRACTOR_BEAM.md)
+0x0040C530,implemented,Remote Beamer class59 initializer for the Type74 beamers (docs/re/CLASS0_RUNTIME.md)
+0x004054C0,implemented,Remote Beamer tick: Sub-K word 1 charges unless held (docs/re/CLASS0_RUNTIME.md)
+0x0040CAF0,documented,Remote Beamer beam pair callback; held behind a logged skip in the port (docs/re/CLASS0_RUNTIME.md)
+0x00405420,implemented,Remote Beamer Primary constructor for the Type74 beamers (docs/re/CLASS0_RUNTIME.md)

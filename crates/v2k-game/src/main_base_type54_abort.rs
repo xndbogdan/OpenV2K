@@ -12,10 +12,11 @@ use crate::actor_task_owner::ActorTaskId;
 use crate::behavior::SeaLevelTransition;
 use crate::entity::EntityManager;
 use crate::entity_collision_state::{
-    CommonMoverComponentTopology, EntityTypeRuntimeMetadata, RetailRuntimeValue,
+    CommonMoverComponentTopology, CommonMoverGklPayloads, EntityTypeRuntimeMetadata,
+    RetailRuntimeValue,
 };
 use crate::main_base_abort::{MainBaseAbortActorLease, MainBaseAbortActorObservation};
-use v2k_formats::collision::BehaviorChoice;
+use v2k_formats::collision::{BehaviorChoice, CommonAxisDescriptor};
 use v2k_formats::terrain::TerrainGrid;
 
 pub const LEVEL_ONE_TYPE54_SPAWN_INDEX: usize = 8;
@@ -36,10 +37,11 @@ pub const TYPE50_ENTITY_TYPE: u32 = 50;
 pub const TYPE89_ENTITY_TYPE: u32 = 89;
 pub const TYPE118_ENTITY_TYPE: u32 = 118;
 pub const TYPE36_ENTITY_TYPE: u32 = 36;
+pub const TYPE74_ENTITY_TYPE: u32 = 74;
 
 /// A row on the class0 constructor whose single program is not class0's
 /// alone: class38 Change Sea Level (its alternate or its living program),
-/// class65 Geyser, or class16 Generate Flares.
+/// class65 Geyser, class16 Generate Flares or class59 Remote Beamer.
 #[derive(Clone, Copy)]
 struct Class0HostRow {
     entity_type: u32,
@@ -52,7 +54,16 @@ struct Class0HostRow {
     /// The class of the singleton Always choice.
     living_class: u32,
     alternate_class: u32,
+    death_sound_id: Option<u16>,
+    axis: CommonAxisDescriptor,
+    /// Sub-K alone, one model word at selector 1.
+    sub_k: bool,
 }
+
+const NO_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 0,
+    raw_word_at_0x04: 0,
+};
 
 /// Level 1's Type54, world 17's Type72 (a running callback, no retained
 /// basis) and world 43's Type85 live in class0. Type50 (worlds 16 and 40)
@@ -60,9 +71,11 @@ struct Class0HostRow {
 /// The two Type89s of world 21 (Flood) run class38 from birth and explode
 /// through class1. World 40's two Type118s live in class0 and die into the
 /// class65 Geyser. The Type36s of worlds 42, 43, 46 and 47 live in class16
-/// Generate Flares, their alternate too. Every row has null sounds and
-/// components and a default axis.
-const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
+/// Generate Flares, their alternate too. Every row but Type74 has null sounds
+/// and components and a default axis; the Remote Beamers of worlds 21, 31 and
+/// 36 carry Sub-K, death cue 62 and their own axis, and explode through
+/// class1.
+const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
     Class0HostRow {
         entity_type: LEVEL_ONE_TYPE54_ENTITY_TYPE,
         model: LEVEL_ONE_TYPE54_MODEL_ID as u16,
@@ -73,6 +86,9 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
         behavior_rule_ref: 1,
         living_class: 0,
         alternate_class: 38,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k: false,
     },
     Class0HostRow {
         entity_type: TYPE72_ENTITY_TYPE,
@@ -84,6 +100,9 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
         behavior_rule_ref: 1,
         living_class: 0,
         alternate_class: 38,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k: false,
     },
     Class0HostRow {
         entity_type: TYPE85_ENTITY_TYPE,
@@ -95,6 +114,9 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
         behavior_rule_ref: 3,
         living_class: 0,
         alternate_class: 38,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k: false,
     },
     Class0HostRow {
         entity_type: TYPE50_ENTITY_TYPE,
@@ -106,6 +128,9 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
         behavior_rule_ref: 3,
         living_class: 36,
         alternate_class: 38,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k: false,
     },
     Class0HostRow {
         entity_type: TYPE89_ENTITY_TYPE,
@@ -117,6 +142,9 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
         behavior_rule_ref: 1,
         living_class: 38,
         alternate_class: 1,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k: false,
     },
     Class0HostRow {
         entity_type: TYPE118_ENTITY_TYPE,
@@ -128,6 +156,9 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
         behavior_rule_ref: 1,
         living_class: 0,
         alternate_class: 65,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k: false,
     },
     Class0HostRow {
         entity_type: TYPE36_ENTITY_TYPE,
@@ -139,6 +170,26 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
         behavior_rule_ref: 1,
         living_class: 16,
         alternate_class: 16,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k: false,
+    },
+    Class0HostRow {
+        entity_type: TYPE74_ENTITY_TYPE,
+        model: 253,
+        mass_raw: 10,
+        capability_flags: 0x1224,
+        health_raw: 50_000,
+        initializer_state_flags_raw: 0x0002_6025,
+        behavior_rule_ref: 1,
+        living_class: 59,
+        alternate_class: 1,
+        death_sound_id: Some(62),
+        axis: CommonAxisDescriptor {
+            strict_axis_limit_raw: 512,
+            raw_word_at_0x04: 8,
+        },
+        sub_k: true,
     },
 ];
 
@@ -179,7 +230,23 @@ pub(crate) fn flare_generator_metadata(
     class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 16)
 }
 
-/// The living class of an authenticated row: 0, 16, 36 or 38.
+/// Authenticate a row whose alternate is class1 (Type89, Type74).
+pub(crate) fn class0_host_class1_metadata(
+    entity_type: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> bool {
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.alternate_class == 1)
+}
+
+/// Authenticate Type74's row: class59 Remote Beamer, alternate class1.
+pub(crate) fn remote_beamer_metadata(
+    entity_type: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> bool {
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 59)
+}
+
+/// The living class of an authenticated row: 0, 16, 36, 38 or 59.
 pub(crate) fn class0_host_living_class(entity_type: u32) -> Option<u32> {
     CLASS0_HOST_ROWS
         .iter()
@@ -209,13 +276,24 @@ fn class0_host_row_metadata(
         && metadata.capability_flags == row.capability_flags
         && metadata.initial_health_raw == Some(row.health_raw)
         && metadata.accepted_hit_presentation_sound_id == RetailRuntimeValue::Known(None)
-        && metadata.death_sound_id == RetailRuntimeValue::Known(None)
+        && metadata.death_sound_id == RetailRuntimeValue::Known(row.death_sound_id)
         && metadata.constructor_sound_attachment_id == RetailRuntimeValue::Known(None)
         && metadata.generic_hit_sound_id == RetailRuntimeValue::Known(None)
         && metadata.common_mover_topology
-            == RetailRuntimeValue::Known(CommonMoverComponentTopology::default())
-        && initializer.common_axis_descriptor == Default::default())
-    .then_some(row)
+            == RetailRuntimeValue::Known(CommonMoverComponentTopology {
+                sub_k: row.sub_k,
+                ..CommonMoverComponentTopology::default()
+            })
+        && (!row.sub_k
+            || (metadata.model_variable_count_raw == RetailRuntimeValue::Known(1)
+                && metadata.common_mover_gkl_payloads
+                    == RetailRuntimeValue::Known(CommonMoverGklPayloads {
+                        sub_g: None,
+                        sub_k: Some([1, 0]),
+                        sub_l: None,
+                    })))
+        && initializer.common_axis_descriptor == row.axis)
+        .then_some(row)
 }
 
 /// Authenticate the cumulative Section-12 row used by the bounded adapter.

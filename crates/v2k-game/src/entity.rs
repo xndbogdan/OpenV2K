@@ -1165,7 +1165,8 @@ impl BaseFactoryRuntimeState {
 /// so the loader gives it the same pair. The native Type83 radar's row gets
 /// it too; its selector 1 is the Sub-K word 405610 counts. The loader sets
 /// every row's pair (`FUN_00410090` writes `+0x78` for each row), so Type33
-/// on the Type30 owner and the Type100 mortar read the same clock.
+/// on the Type30 owner, the Type100 mortar and the Type74 Remote Beamer read
+/// the same clock.
 /// Keeping this as an explicit evidence policy prevents an unobserved type
 /// from acquiring animation merely because its model happens to look similar.
 pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool {
@@ -1181,6 +1182,7 @@ pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool 
             | 56
             | 61
             | 71
+            | 74
             | 83
             | 92
             | 96
@@ -2127,6 +2129,13 @@ impl Entity {
         if let Some(runtime) = self.portable_radar_runtime {
             // 40D320's selector 1 is Sub-K word 1, 405610's deployment count.
             vars.dynamic[1] = i32::from(runtime.sub_k1);
+        }
+        if let Some(ActorTaskRuntime::RemoteBeamer(k1)) =
+            self.actor_task_state(ActorTaskSlot::Primary)
+        {
+            // Selector 1 is Sub-K word 1, which 054C0 charges; 054A0 zeroes
+            // it with the task, so no task reads as zero.
+            vars.dynamic[1] = i32::from(*k1);
         }
         if let Some(runtime) = self.intro2_type10_runtime {
             // 09A80 binds only the row's components: Type29 has no K.
@@ -5129,6 +5138,7 @@ impl EntityManager {
                             | 71
                             | 72
                             | 73
+                            | 74
                             | 76
                             | 77
                             | 81
