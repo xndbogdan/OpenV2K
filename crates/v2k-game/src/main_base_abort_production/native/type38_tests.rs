@@ -21,6 +21,7 @@ fn type38_family_abort_runs_class1_and_class63() {
         (43, Type38Row::Type38),
         (46, Type38Row::Type119),
         (32, Type38Row::Type32),
+        (47, Type38Row::Type2),
     ] {
         let (mut session, mut manager, mut fx) =
             crate::native_type122::construction_tests::native_fixture_with_player(level);
@@ -70,7 +71,7 @@ fn type38_family_abort_runs_class1_and_class63() {
             &manager, id
         ));
         match row {
-            Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 => {
+            Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 | Type38Row::Type2 => {
                 assert_eq!(publications.appended_type61_actors, 0, "world{level}");
                 assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
             }

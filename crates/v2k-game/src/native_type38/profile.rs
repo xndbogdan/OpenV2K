@@ -21,6 +21,12 @@ fn graph_authenticates<P: NativeGroundActorProfile>(entity: &Entity) -> bool {
     let s = entity.actor_task_state(Slot::Secondary);
     let t = entity.actor_task_state(Slot::Tertiary);
     match context.active_style().style_address() {
+        // Type2's Defecate Virus4: B9E0's wander and its terrain task.
+        0x4c7e88 if P::LIVING_CLASSES.contains(&4) => {
+            matches!(p, Some(Task::DefecateVirusWander(_)))
+                && s.is_none()
+                && matches!(t, Some(Task::DefecateVirusTerrain(task)) if task.lifetime_ms() == 0)
+        }
         0x4c7930 => {
             matches!(p, Some(Task::SharedRetarget(task)) if task.lifetime_ms() == 5000)
                 && s.is_none()
@@ -89,7 +95,8 @@ macro_rules! type38_profile {
             const CAPTURE_POLICY: shared::NativeCapturePolicy =
                 shared::NativeCapturePolicy::NoCapture;
             const DEFAULT_FLAGS: u32 = $row.default_flags();
-            const TOPOLOGY: crate::entity_collision_state::CommonMoverComponentTopology = TOPOLOGY;
+            const TOPOLOGY: crate::entity_collision_state::CommonMoverComponentTopology =
+                $row.topology();
             const AXIS: CommonAxisDescriptor = $row.axis();
             const CHOICES: &'static [BehaviorChoice] = $row.choices();
             const LIVING_CLASSES: &'static [u8] = $classes;
@@ -222,3 +229,4 @@ type38_profile!(Type38Profile, Type38Row::Type38, Type38, &[5, 7]);
 type38_profile!(Type129Profile, Type38Row::Type129, Type129, &[5, 7]);
 type38_profile!(Type119Profile, Type38Row::Type119, Type119, &[5, 7]);
 type38_profile!(Type32Profile, Type38Row::Type32, Type32, &[5, 7, 33]);
+type38_profile!(Type2Profile, Type38Row::Type2, Type2, &[4, 5, 7]);

@@ -114,7 +114,7 @@ impl Fixture {
         self.entity
             .set_motion_raw([10_000, -20, 10_000], [-9, -125, 13]);
         self.kl.commit_target([10_001, 50, 10_001]);
-        self.kl.commit_sub_d_writes(64, 128);
+        self.kl.commit_sub_d_writes(64, Some(128));
     }
 }
 
@@ -128,7 +128,7 @@ fn type30_kl_constructor_owns_four_zeroed_words_and_real_one_based_bindings() {
     assert_eq!(kl.sub_k_smoothed_raw(), 0);
     assert_eq!(kl.sub_l_target_raw(), [0; 3]);
     assert_eq!(kl.sub_l_exact_raw(), 0);
-    kl.commit_sub_d_writes(64, 128);
+    kl.commit_sub_d_writes(64, Some(128));
     kl.advance_sub_k(80);
     // K+0 points at selector3; K+4 points at selector4.
     assert_eq!(kl.model_variables_raw(), &[0, 0, -256, -160]);
@@ -183,7 +183,7 @@ fn model1131_kl_binds_each_pair_the_other_way_round() {
         assert!(kl.authenticates(&metadata));
         // A bank bound for model 1131 is not Type30's.
         assert!(!kl.authenticates(&type30));
-        kl.commit_sub_d_writes(64, 128);
+        kl.commit_sub_d_writes(64, Some(128));
         kl.advance_sub_k(80);
         // K+0 points at selector4; K+4 points at selector3.
         assert_eq!(kl.model_variables_raw(), &[0, 0, -160, -256]);

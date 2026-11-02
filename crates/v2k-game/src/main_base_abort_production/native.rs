@@ -45,6 +45,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     Type30(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Type40(crate::native_type40::death::Type40DeathBlock),
     Type31(crate::native_type31::death::Type31DeathBlock),
+    Type69(crate::native_type69::Type69Error),
     Type56(crate::native_type56::death::Type56DeathBlock),
     Type27(crate::rolling_boulder::death::RollingBoulderDeathBlock),
     Type35(crate::native_type43::Type43Error),
@@ -222,6 +223,7 @@ enum NativeActor {
     Type105,
     Type27,
     Type35,
+    Type69,
 }
 
 pub(super) fn dispatch_native_actor(
@@ -288,6 +290,9 @@ pub(super) fn dispatch_native_actor(
         31 if entity.native_type31_runtime.is_some() => NativeActor::Type31,
         // 10C10 reaches the bugs' class2 directly; 416820 is a hit modifier.
         105 | 73 | 109 if entity.native_type31_runtime.is_some() => NativeActor::Type105,
+        crate::native_type69::ENTITY_TYPE if entity.native_type69_runtime.is_some() => {
+            NativeActor::Type69
+        }
         27 if entity.rolling_boulder_runtime.is_some() => NativeActor::Type27,
         crate::native_type43::TYPE35_ENTITY_TYPE if entity.native_type43_runtime.is_some() => {
             NativeActor::Type35
@@ -428,6 +433,7 @@ fn dispatch(
             | NativeActor::Type105
             | NativeActor::Type27
             | NativeActor::Type35
+            | NativeActor::Type69
             | NativeActor::Factory => specialized_tasks.prepare_native_actor_mutation(entities, id),
         };
         if !ready {
@@ -565,6 +571,12 @@ fn dispatch(
             let death = crate::native_type31::death::begin_quiet_standard_death(entities, id, row)
                 .map_err(|error| block(Block::Type31(error)))?;
             retire_native_ground_death(specialized_tasks, death.publication);
+            MainBaseAbortActorDisposition::QuietDeath
+        }
+        NativeActor::Type69 => {
+            // 10C10: sound 62, then class2's C470 quiet terminal.
+            crate::native_type69::begin_quiet_death(entities, id, world_fx)
+                .map_err(|error| block(Block::Type69(error)))?;
             MainBaseAbortActorDisposition::QuietDeath
         }
         NativeActor::Type27 => {

@@ -24,6 +24,9 @@ pub(super) fn select(
             BehaviorWeightRule::Always => 1,
             BehaviorWeightRule::PlayerNearby => i32::from(player_nearby),
             BehaviorWeightRule::BeaconNearby => i32::from(beacon_nearby),
+            // A fresh +34 of zero: 16490 needs the tick both below 250 and,
+            // signed, above 249.
+            BehaviorWeightRule::UnderAttack => 0,
             _ => unreachable!("authenticated Type38 rule list"),
         },
         next_random,
@@ -79,7 +82,20 @@ pub(super) fn publish_acquiring(
     let Some(row) = entity.native_type38_runtime.as_ref().map(|r| r.row) else {
         return false;
     };
-    // Type32's Follow Beacons33 runs B740 on the shared host's programs.
+    // Type32's Follow Beacons33 runs B740 and Type2's Defecate Virus4 B9E0
+    // on the shared host's programs.
+    if selection.program.class_id == 4 {
+        return row == Type38Row::Type2
+            && initializer_storage_authenticates(entity)
+            && crate::native_ground_actor::publication::publish_shared_root_class(
+                entity,
+                metadata,
+                selection,
+                context,
+                row.axis(),
+                next_random,
+            );
+    }
     if selection.program.class_id == 33 {
         return row == Type38Row::Type32
             && initializer_storage_authenticates(entity)

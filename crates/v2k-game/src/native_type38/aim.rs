@@ -83,6 +83,13 @@ row_aim_profile!(
     super::profile::Type32Profile
 );
 
+row_aim_profile!(
+    Type2AimProfile,
+    Type2,
+    Type38Row::Type2,
+    super::profile::Type2Profile
+);
+
 fn manager_row(manager: &EntityManager, entity_id: u32) -> Option<Type38Row> {
     manager
         .iter_all()
@@ -103,6 +110,9 @@ pub fn ensure_type38_family_aim_runtime(
         }
         Some(Type38Row::Type32) => {
             shared::ensure_native_aim_runtime::<Type32AimProfile>(entity, metadata)
+        }
+        Some(Type38Row::Type2) => {
+            shared::ensure_native_aim_runtime::<Type2AimProfile>(entity, metadata)
         }
         _ => shared::ensure_native_aim_runtime::<Type38AimProfile>(entity, metadata),
     }
@@ -150,6 +160,14 @@ pub fn tick_type38_family_aim(
             elapsed_micros,
             metadata,
         ),
+        Some(Type38Row::Type2) => shared::tick_native_aim::<Type2AimProfile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
         _ => shared::tick_native_aim::<Type38AimProfile>(
             dispatch_mode,
             manager,
@@ -190,6 +208,7 @@ pub fn drain_type38_family_shots(
             environment,
             retail_tick,
         ),
+        Some(Type38Row::Type2) => Err(shared::NativeBallisticShotDrainError::ActorBirthMethod),
         _ => shared::drain_native_shots::<Type38AimProfile>(
             manager,
             world_fx,
@@ -197,5 +216,59 @@ pub fn drain_type38_family_shots(
             environment,
             retail_tick,
         ),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Type2ShotDrainError {
+    Drain(Type38ShotDrainError),
+    /// Every command was consumed; this beam's 438080 failed.
+    Birth(crate::native_type69::Type69Error),
+}
+
+/// 11400 -> 14870 -> 44E770 for each queued method-25 command: the shot's
+/// position and velocity (the shooter's plus speed 1), the shooter's current
+/// Euler words, then 438080 builds a Type69 with the shooter at +60. The
+/// scheduler registers each beam's owner before its next pass.
+pub fn drain_type2_shots(
+    manager: &mut EntityManager,
+    world_fx: &mut WorldFx,
+    resources: &crate::resource_cache::ResourceCache,
+    source_entity_id: u32,
+    retail_tick: u32,
+) -> Result<usize, Type2ShotDrainError> {
+    let solutions =
+        shared::take_native_shot_solutions::<Type2AimProfile>(manager, source_entity_id)
+            .map_err(Type2ShotDrainError::Drain)?
+            .solutions;
+    let mut blocked = None;
+    for solution in &solutions {
+        let rotation_raw = manager
+            .iter_all()
+            .find(|entity| entity.id == source_entity_id)
+            .map(Entity::rotation_heading_pitch_roll_raw)
+            .ok_or(Type2ShotDrainError::Birth(
+                crate::native_type69::Type69Error::SourceAllocation,
+            ))?;
+        match manager.construct_native_type69(
+            crate::entity::Type69BirthRequest {
+                shooter_id: source_entity_id,
+                position_raw: solution.position_raw,
+                velocity_raw: solution.velocity_raw,
+                rotation_raw,
+            },
+            resources,
+            world_fx,
+            retail_tick,
+        ) {
+            Ok(owner) => manager.queue_born_native_type69(owner),
+            Err(reason) => {
+                blocked.get_or_insert(reason);
+            }
+        }
+    }
+    match blocked {
+        Some(reason) => Err(Type2ShotDrainError::Birth(reason)),
+        None => Ok(solutions.len()),
     }
 }

@@ -231,3 +231,49 @@ fn type27_abort_splits_into_two_type3s() {
     assert_eq!(ids(&entities, 3).len() - before, 2);
     assert_eq!(publications.appended_type3_actors, 2);
 }
+
+/// 10C10 on a Type69 beam: sound 62, then class2's quiet terminal.
+#[v2k_test_support::retail_test]
+fn a_tractor_beam_abort_dies_quietly_with_sound_62() {
+    let (session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(47);
+    let shooter = ids(&entities, 2)[0];
+    let at = entities
+        .iter_all()
+        .find(|entity| entity.id == shooter)
+        .unwrap()
+        .position_raw();
+    let owner = entities
+        .construct_native_type69(
+            crate::entity::Type69BirthRequest {
+                shooter_id: shooter,
+                position_raw: [at[0].wrapping_add(4000), at[1], at[2]],
+                velocity_raw: [0; 3],
+                rotation_raw: [0; 3],
+            },
+            &session.cache,
+            &mut fx,
+            400,
+        )
+        .unwrap();
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    tasks.register_native_type69(owner);
+    let mut publications = MainBaseAbortPublicationCounts::default();
+    let pending = fx.pending_event_count();
+    assert_eq!(
+        abort_visit(
+            &mut entities,
+            &mut fx,
+            &mut tasks,
+            &mut publications,
+            &session.cache,
+            owner.entity_id()
+        ),
+        MainBaseAbortActorDisposition::QuietDeath
+    );
+    assert!(crate::native_type69::finished_terminal_authenticates(
+        &entities,
+        owner.entity_id()
+    ));
+    assert_eq!(fx.pending_event_count(), pending + 1, "sound 62");
+}

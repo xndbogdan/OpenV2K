@@ -194,7 +194,7 @@ fn publish_birth(
     let player_nearby = match row {
         Type38Row::Type38 => shared::nearby::<profile::Type38Profile>(owner, &candidates, 1),
         Type38Row::Type129 => shared::nearby::<profile::Type129Profile>(owner, &candidates, 1),
-        Type38Row::Type119 | Type38Row::Type32 => Ok(false),
+        Type38Row::Type119 | Type38Row::Type32 | Type38Row::Type2 => Ok(false),
     }
     .map_err(Type38Block::Ground)?;
     let beacon_nearby = match row {

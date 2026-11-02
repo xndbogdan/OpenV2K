@@ -191,6 +191,7 @@ pub(crate) fn native_instance_body(
         native_type12_runtime: None,
         native_type12_aim_runtime: None,
         native_type31_runtime: None,
+        native_type69_runtime: None,
         native_type18_runtime: None,
         native_type18_aim_runtime: None,
         native_type28_runtime: None,

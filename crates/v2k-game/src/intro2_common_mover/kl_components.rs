@@ -40,6 +40,12 @@ const MODEL684_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
     sub_k: Some([81, 82]),
     sub_l: Some([2, 1, 244, 1, 120, 5]),
 };
+/// Model 1168 (Type2): K alone, writing selectors 1/2 of a two-word bank.
+const MODEL1168_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
+    sub_g: None,
+    sub_k: Some([1, 2]),
+    sub_l: None,
+};
 /// Model operands address callback values through six bits.
 const MODEL_ADDRESSABLE_VARIABLES: usize = 64;
 
@@ -57,7 +63,8 @@ pub enum Intro2KlConstructionError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Intro2KlComponents {
     sub_k_selectors: [u8; 2],
-    sub_l_descriptor: [u8; 6],
+    /// None for a K-only body (Type2), whose 09A80 allocates no L.
+    sub_l_descriptor: Option<[u8; 6]>,
     /// The type's `+0x110` words, zeroed by 09A80.
     model_variables_raw: Vec<i16>,
     sub_k_smoothed_raw: i32,
@@ -85,10 +92,12 @@ impl Intro2KlComponents {
 
     fn authenticate_profile(
         metadata: &EntityTypeRuntimeMetadata,
-    ) -> Result<([u8; 2], [u8; 6], usize), Intro2KlConstructionError> {
-        if metadata.common_mover_topology != RetailRuntimeValue::Known(super::ABCDEHKL_TOPOLOGY) {
-            return Err(Intro2KlConstructionError::ComponentTopology);
-        }
+    ) -> Result<([u8; 2], Option<[u8; 6]>, usize), Intro2KlConstructionError> {
+        let k_only = match metadata.common_mover_topology {
+            RetailRuntimeValue::Known(super::ABCDEHKL_TOPOLOGY) => false,
+            RetailRuntimeValue::Known(super::ABCDEHK_TOPOLOGY) => true,
+            _ => return Err(Intro2KlConstructionError::ComponentTopology),
+        };
         let RetailRuntimeValue::Known(count) = metadata.model_variable_count_raw else {
             return Err(Intro2KlConstructionError::VariableCount);
         };
@@ -101,6 +110,7 @@ impl Intro2KlComponents {
                 4
             }
             RetailRuntimeValue::Known(payloads) if payloads == MODEL684_PAYLOADS => 82,
+            RetailRuntimeValue::Known(payloads) if payloads == MODEL1168_PAYLOADS => 2,
             _ => return Err(Intro2KlConstructionError::ComponentDescriptors),
         };
         if count != expected {
@@ -110,8 +120,8 @@ impl Intro2KlComponents {
             RetailRuntimeValue::Known(CommonMoverGklPayloads {
                 sub_g: None,
                 sub_k: Some(sub_k),
-                sub_l: Some(sub_l),
-            }) => Ok((sub_k, sub_l, count as usize)),
+                sub_l,
+            }) if sub_l.is_none() == k_only => Ok((sub_k, sub_l, count as usize)),
             _ => Err(Intro2KlConstructionError::ComponentDescriptors),
         }
     }
@@ -157,9 +167,11 @@ impl Intro2KlComponents {
         self.sub_l_target_raw = target_raw;
     }
 
-    pub(super) fn commit_sub_d_writes(&mut self, smoothed_raw: i32, exact_raw: i32) {
+    pub(super) fn commit_sub_d_writes(&mut self, smoothed_raw: i32, exact_raw: Option<i32>) {
         self.sub_k_smoothed_raw = smoothed_raw;
-        self.sub_l_exact_raw = exact_raw;
+        if let Some(exact_raw) = exact_raw {
+            self.sub_l_exact_raw = exact_raw;
+        }
     }
 
     fn load_outputs(&self, selectors: [u8; 2]) -> [i16; 2] {
@@ -181,18 +193,22 @@ impl Intro2KlComponents {
         self.store_outputs(self.sub_k_selectors, outputs);
     }
 
-    pub(super) fn advance_sub_l(&mut self, position_raw: [i16; 3], basis: Type9BodyBasis) {
+    /// None when the body owns no L.
+    pub(super) fn advance_sub_l(
+        &mut self,
+        position_raw: [i16; 3],
+        basis: Type9BodyBasis,
+    ) -> Option<()> {
+        let descriptor = self.sub_l_descriptor?;
         let outputs = component_outputs::advance_sub_l(
-            self.load_outputs([self.sub_l_descriptor[0], self.sub_l_descriptor[1]]),
+            self.load_outputs([descriptor[0], descriptor[1]]),
             self.sub_l_exact_raw,
             position_raw,
             self.sub_l_target_raw,
             basis,
-            self.sub_l_descriptor,
+            descriptor,
         );
-        self.store_outputs(
-            [self.sub_l_descriptor[0], self.sub_l_descriptor[1]],
-            outputs,
-        );
+        self.store_outputs([descriptor[0], descriptor[1]], outputs);
+        Some(())
     }
 }

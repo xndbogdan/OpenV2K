@@ -1341,6 +1341,17 @@ pub static AUDITED_NON_INITIAL_BEHAVIOR_STYLES: &[BehaviorStyle] = &[
         impact_callback_address: None,
         death_callback_address: None,
     },
+    // Class58 Tractor Beam's tractor: +00/+04 C690, +40 C5E0, every hook
+    // from +08 to +3C null.
+    BehaviorStyle {
+        class_id: 58,
+        variant: 1,
+        frame_address: 0x004C_7270,
+        release_callback_address: None,
+        pair_contact_callback_address: None,
+        impact_callback_address: None,
+        death_callback_address: None,
+    },
 ];
 
 pub fn behavior_program(class_id: u32) -> Option<&'static BehaviorProgram> {

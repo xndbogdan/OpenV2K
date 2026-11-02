@@ -593,3 +593,8 @@ address,status,note
 0x0041B970,implemented,Sub-G mode +3F setter (docs/re/INTRO2_TYPE10.md)
 0x00416820,implemented,Type73/Type109 lethal-hit splitter: capped births through 438080 and class2 death (docs/re/TYPE73_SPLITTING_BUGS.md)
 0x00441850,implemented,class-4 and class-54 shell static hits: sound 90, the FUN_004566E0 radial, then the debris (docs/re/PLAYER_CRAFT.md)
+0x0040B500,implemented,class58 Tractor Beam search initializer for the Type69 beams (docs/re/TYPE2_TRACTOR_BEAM.md)
+0x0040C5E0,implemented,class58 tractor initializer: the held target's 4051B0 task (docs/re/TYPE2_TRACTOR_BEAM.md)
+0x004051B0,implemented,Tractor Beam task constructor (docs/re/TYPE2_TRACTOR_BEAM.md)
+0x00405240,implemented,Tractor Beam visit: hold, pull beyond 1024 and break beyond 2560 units (docs/re/TYPE2_TRACTOR_BEAM.md)
+0x0040CEF0,implemented,class58 search timeout: 10C10 (docs/re/TYPE2_TRACTOR_BEAM.md)

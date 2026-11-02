@@ -67,6 +67,11 @@ pub(crate) const ABCDE_TOPOLOGY: CommonMoverComponentTopology = CommonMoverCompo
     sub_e: true,
     ..ABCD_TOPOLOGY
 };
+/// Type2 owns K without L.
+pub(crate) const ABCDEHK_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
+    sub_k: true,
+    ..ABCDEH_TOPOLOGY
+};
 pub(crate) const ABCDEHKL_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
     sub_k: true,
     sub_l: true,
@@ -123,6 +128,7 @@ pub(crate) fn run_intro2_common_mover(
             | ABCDEH_TOPOLOGY
             | ABCD_TOPOLOGY
             | ABCDE_TOPOLOGY
+            | ABCDEHK_TOPOLOGY
             | ABCDEHKL_TOPOLOGY
     ) || metadata.common_mover_topology != RetailRuntimeValue::Known(frame.topology)
     {
@@ -226,11 +232,14 @@ pub(crate) fn run_intro2_common_mover(
                 }
             }
             CommonMoverFramePoll::Action(CommonMoverFrameAction::CommitPostSubDWrites(plan)) => {
-                let (Some(smoothed_raw), Some(exact_raw), None) =
+                let (Some(smoothed_raw), exact_raw, None) =
                     (plan.sub_k_smoothed_raw, plan.sub_l_exact_raw, plan.sub_f)
                 else {
                     return Err(Block::Runtime("unexpected post-Sub-D writes"));
                 };
+                if exact_raw.is_some() != frame.topology.sub_l {
+                    return Err(Block::Runtime("unexpected post-Sub-D writes"));
+                }
                 frame
                     .kl_components
                     .as_deref_mut()
@@ -355,7 +364,8 @@ pub(crate) fn run_intro2_common_mover(
                     .kl_components
                     .as_deref_mut()
                     .ok_or(Block::Runtime("Sub-L allocation"))?
-                    .advance_sub_l(snapshot.position_raw, basis);
+                    .advance_sub_l(snapshot.position_raw, basis)
+                    .ok_or(Block::Runtime("Sub-L allocation"))?;
                 CommonMoverFrameResume::ComponentReturned {
                     phase: CommonMoverDispatchPhase::SubL,
                     snapshot,

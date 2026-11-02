@@ -844,7 +844,7 @@ fn resolve(
             | 0x4c8158
     ) || (matches!(
         profile.entity_type,
-        16 | 128 | 26 | 56 | 18 | 77 | 14 | 31 | 105 | 73 | 109
+        16 | 128 | 26 | 56 | 18 | 77 | 14 | 31 | 105 | 73 | 109 | 2
     )
         && context.active_style().style_address() == 0x4c7e88)
         // Type14's Flocking search and route rows have null contact hooks.
@@ -856,6 +856,7 @@ fn resolve(
                 | 129
                 | 119
                 | 32
+                | 2
                 | 77
                 | 12
                 | 127
@@ -869,7 +870,7 @@ fn resolve(
         || (matches!(profile.entity_type, 15 | 87 | 108)
             && profile.retained_entry_model_id.is_some()
             && context.active_style().style_address() == 0x4c7420)
-        || (matches!(profile.entity_type, 13 | 14 | 39 | 43 | 38 | 119 | 32 | 12)
+        || (matches!(profile.entity_type, 13 | 14 | 39 | 43 | 38 | 119 | 32 | 2 | 12)
             && context.active_style().style_address() == 0x4c7150
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
         || (profile.entity_type == 43 && context.active_style().style_address() == 0x4c74f8)
@@ -1316,7 +1317,10 @@ fn contact_task_hook(
             Ok(NativeGroundStaticTaskHook::Null)
         }
         (0x4c7150, None, None)
-            if matches!(entity.entity_type, 13 | 14 | 39 | 43 | 38 | 119 | 32 | 12) =>
+            if matches!(
+                entity.entity_type,
+                13 | 14 | 39 | 43 | 38 | 119 | 32 | 2 | 12
+            ) =>
         {
             Ok(NativeGroundStaticTaskHook::Null)
         }

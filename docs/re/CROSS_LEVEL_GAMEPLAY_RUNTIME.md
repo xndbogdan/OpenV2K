@@ -205,6 +205,12 @@ join that owner with Wander Near Location6, Run Away10 and Defecate Virus4.
 Their `416820` damage modifier splits a lethal hit into two newborns of the
 same type, up to 25 bugs, before the quiet class2 death.
 
+World 47's two [Type2 walkers](TYPE2_TRACTOR_BEAM.md) are the Type38 owner's
+fifth row: K without L, Defecate Virus4, Aimless5 and, when hit, Search7,
+whose method-25 shots are Type69 tractor beams on their own owner. A beam
+times out after a second without a target, or holds one, pulling it and its
+shooter together beyond 1024 units and letting go beyond 2560.
+
 The six authored [Type25 sharks](TYPE25_SHARK.md) (worlds22, 23 and34) and
 world34's Hive births share the fish owner without its `0x2000` environment
 bit, so they hunt on coarse visits too. PlayerNearby draws class69 Shark
