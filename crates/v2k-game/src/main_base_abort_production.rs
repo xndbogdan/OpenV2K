@@ -136,6 +136,8 @@ pub enum MainBaseAbortActorDisposition {
     Type66Death,
     /// Type118's direct alternate class65 Geyser keeps the class0 owner.
     GeyserDeath,
+    /// Type36's direct alternate class16 reinstalls Generate Flares.
+    FlareDeath,
 }
 
 /// New owners published synchronously by actor callbacks and adopted for the
@@ -244,13 +246,16 @@ pub enum MainBaseAbortActorCallbackBlock {
     Type17(MainBaseType17DeathBlock),
     Type47(MainBaseType47DeathBlock),
     Type54(MainBaseType54DeathBlock),
-    Geyser(crate::entity::Class0ActorError),
+    /// Type118's Geyser or Type36's flares, 10C10's direct alternates.
+    Class0Alternate(crate::entity::Class0ActorError),
     Type60Custody(Type60ExplodingRingCustodyTakeBlock),
     Type60(MainBaseType60RingDeathBlock),
     Type61(MainBaseType61DeathBlock),
     Type61Request(MainBaseType61RequestBlock),
     Type66(MainBaseType66DeathBlock),
-    UnsupportedOrdinaryType { entity_type: u32 },
+    UnsupportedOrdinaryType {
+        entity_type: u32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1409,20 +1414,51 @@ fn dispatch_ordinary_actor(
                 extent,
             )
         }
+        crate::main_base_type54_abort::TYPE36_ENTITY_TYPE => {
+            let id = actor.lease.entity_id;
+            if !specialized_tasks.take_class0_actor_external_mutation(entities, id) {
+                return Err(callback_error(
+                    MainBaseAbortActorCallbackBlock::Class0Alternate(
+                        crate::entity::Class0ActorError::Allocation,
+                    ),
+                ));
+            }
+            let death = entities.apply_class0_flare_death(id);
+            // The dying body keeps class16 and the same owner family.
+            if let Ok(owner) = Class0ActorOwner::adopt(entities, id) {
+                specialized_tasks.register_class0_actor(owner);
+            }
+            death.map_err(|error| {
+                callback_error(MainBaseAbortActorCallbackBlock::Class0Alternate(error))
+            })?;
+            let (successor, successor_available) =
+                match entities.main_base_abort_successor_after_callback(id) {
+                    Ok(next_actor) => (next_actor, true),
+                    Err(()) => (None, false),
+                };
+            Ok(DispatchSuccess {
+                disposition: MainBaseAbortActorDisposition::FlareDeath,
+                successor,
+                successor_available,
+            })
+        }
         crate::main_base_type54_abort::TYPE118_ENTITY_TYPE => {
             let id = actor.lease.entity_id;
             if !specialized_tasks.take_class0_actor_external_mutation(entities, id) {
-                return Err(callback_error(MainBaseAbortActorCallbackBlock::Geyser(
-                    crate::entity::Class0ActorError::Allocation,
-                )));
+                return Err(callback_error(
+                    MainBaseAbortActorCallbackBlock::Class0Alternate(
+                        crate::entity::Class0ActorError::Allocation,
+                    ),
+                ));
             }
             let death = entities.apply_class0_geyser_death(id, terrain);
             // The living graph after a no-op or failure, else the Geyser.
             if let Ok(owner) = Class0ActorOwner::adopt(entities, id) {
                 specialized_tasks.register_class0_actor(owner);
             }
-            death
-                .map_err(|error| callback_error(MainBaseAbortActorCallbackBlock::Geyser(error)))?;
+            death.map_err(|error| {
+                callback_error(MainBaseAbortActorCallbackBlock::Class0Alternate(error))
+            })?;
             let (successor, successor_available) =
                 match entities.main_base_abort_successor_after_callback(id) {
                     Ok(next_actor) => (next_actor, true),

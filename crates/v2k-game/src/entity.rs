@@ -52,7 +52,9 @@ pub(crate) use instance_body::NativeCreationRecord;
 use instance_body::{native_instance_body, NativeInstanceBodyRequest};
 mod cargo_runtime;
 mod class0_actor;
-pub(crate) use class0_actor::{living_class as class0_living_class, Class0GeyserDeath};
+pub(crate) use class0_actor::{
+    living_class as class0_living_class, Class0FlareDeath, Class0GeyserDeath,
+};
 pub use class0_actor::{
     tick_class0_actor_owner, Class0ActorError, Class0ActorFrame, Class0ActorOutcome,
     Class0ActorOwner, Class0ActorTick, GeyserLift,
@@ -5068,6 +5070,7 @@ impl EntityManager {
                             | 32
                             | 33
                             | 35
+                            | 36
                             | 38
                             | 39
                             | 40
@@ -11234,7 +11237,7 @@ impl EntityManager {
             return Err(MainBaseType54DeathBlock::InitialBehaviorMismatch);
         };
         let living_class =
-            crate::main_base_type54_abort::sea_level_row_living_class(entity.entity_type)
+            crate::main_base_type54_abort::class0_host_living_class(entity.entity_type)
                 .ok_or(MainBaseType54DeathBlock::InitialBehaviorMismatch)?;
         if u32::from(initial_behavior.program.class_id) != living_class {
             return Err(MainBaseType54DeathBlock::InitialBehaviorMismatch);

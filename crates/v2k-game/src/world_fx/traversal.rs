@@ -85,6 +85,14 @@ pub trait ParticleTraversalHost {
     ) -> Result<AttachedParticleCascadeOwner, AttachedParticleUpdateBlock> {
         Err(AttachedParticleUpdateBlock::CachedOwnerAllocationUnavailable)
     }
+    /// `FUN_0043F660 -> FUN_00410D30`, synchronous before the next slot.
+    fn flare_damage(
+        &mut self,
+        _world_fx: &mut WorldFx,
+        _request: FlareDamageRequest,
+    ) -> Result<i32, crate::attached_particle_damage::AttachedParticleDamageBlock> {
+        Err(crate::attached_particle_damage::AttachedParticleDamageBlock::MutableOwnerUnavailable)
+    }
     /// 442950's post-hit allocation lookup, retaining dying/ineligible actors
     /// until unlink. Its pose/capability projection authorizes an offset, not
     /// the later 425D0 B2 writer or checked-damage admission.
@@ -133,6 +141,8 @@ enum ParticleSlotExit {
     },
     Static(ParticleStaticImpact),
     GroundProgram(CombatGroundProgramRequest),
+    /// F660 returns zero: the flare stays allocated after its delivery.
+    FlareHit(FlareDamageRequest),
 }
 
 struct BorrowedEventHost<'a, EntityHandler, TerrainHandler> {
@@ -337,6 +347,15 @@ impl WorldFx {
                         outcome.unhandled_ground_programs.push(request);
                     }
                 }
+                ParticleSlotExit::FlareHit(request) => {
+                    if let Err(reason) = host.flare_damage(self, request) {
+                        outcome.flare_damage_blocks.push(FlareDamageBlocked {
+                            physical_slot: slot,
+                            request,
+                            reason,
+                        });
+                    }
+                }
             }
             publish_terrain_mutations(host, &mut outcome, &mut committed_terrain_mutations);
         }
@@ -478,12 +497,7 @@ impl WorldFx {
                 };
                 particle.velocity[1] -= gravity * dt_secs;
             }
-        } else if matches!(
-            particle.source_class,
-            PRIMARY_ABOVE_WATER_IMPACT_CLASS
-                | STATIC_PUFF_ABOVE_WATER_CLASS
-                | STATIC_FLAME_ABOVE_WATER_CLASS
-        ) {
+        } else if uses_random_drift_update_callback(particle.source_class) {
             // `FUN_0043F450` advances the process-global MSVC RNG three
             // times per callback and perturbs raw Y, X, then Z velocity.
             // These increments are deliberately frame callbacks rather
@@ -623,6 +637,39 @@ impl WorldFx {
                 trail,
                 Some(birth_context),
             );
+        }
+
+        if particle_uses_flare_entity_hit(particle.source_class) {
+            // Mode 4 runs F980 alone: no terrain or static-model stage.
+            let (Some(entities), Some(model_pool)) = (collision_entities, collision_model_pool)
+            else {
+                return ParticleSlotExit::Done;
+            };
+            let Some(target_handle) = retail_swept_model_hit(
+                particle.step_start_position,
+                particle.position,
+                particle.collision_radius_raw,
+                particle.owner_id,
+                particle.age_ticks,
+                entities,
+                model_pool,
+            ) else {
+                return ParticleSlotExit::Done;
+            };
+            self.materialize_primary_impact_effect(
+                PrimaryImpactEffect::HitBurst(particle.position),
+                particle.suppresses_impact_damage,
+                birth_context,
+            );
+            if particle.suppresses_impact_damage {
+                return ParticleSlotExit::Done;
+            }
+            return ParticleSlotExit::FlareHit(FlareDamageRequest {
+                target_handle,
+                source_entity_type_raw: particle.source_entity_type_at_birth.map_or(0, u32::from),
+                owner_handle: particle.owner_id,
+                ratio_numerator: (elapsed_micros >> 2) as u16,
+            });
         }
 
         if virus_projectile

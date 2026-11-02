@@ -123,6 +123,13 @@ const STATIC_ROUTE_CLASS68_DAMAGE_PACKET_VA: u32 = 0x004C_C108;
 const STATIC_ROUTE_CLASS85_DAMAGE_PACKET_VA: u32 = 0x004C_C048;
 /// Static no-op shared by classes 52/68 (`+0x24`); class85 uses `FUN_0043F800`.
 const STATIC_ROUTE_NOOP_STATIC_CALLBACK_VA: u32 = 0x0042_E8E0;
+/// `FUN_0043F450`: three shared RNG words nudge raw Y, X then Z velocity
+/// (classes 20, 21, 34, 47 and 48).
+const RANDOM_DRIFT_UPDATE_CALLBACK_VA: u32 = 0x0043_F450;
+/// `FUN_0043F660`, the mode-4 entity callback of classes 47 and 48: F610's
+/// burst, then `FUN_00410D30` with packet `0x004CC060`; the particle flies on.
+const FLARE_ENTITY_CALLBACK_VA: u32 = 0x0043_F660;
+const FLARE_DAMAGE_PACKET_VA: u32 = 0x004C_C060;
 /// `FUN_004425D0` attached-follow update for classes 83/84/86: repositions at
 /// the owner each tick (directly, or basis-rotated when owner state
 /// `0x2000000` is set), kills on owner loss. Per-tick damage, effect spawns,
@@ -1019,9 +1026,30 @@ impl ParticleTerrainMutation {
     }
 }
 
+/// `FUN_00410D30`'s request from one `FUN_0043F660` flare hit. F980 stamped
+/// the descriptor packet with the particle's source type and owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FlareDamageRequest {
+    pub target_handle: u32,
+    pub source_entity_type_raw: u32,
+    pub owner_handle: Option<u32>,
+    /// `DAT_004D04E4 >> 2`, over 0xFFFF in `FUN_00415040`.
+    pub ratio_numerator: u16,
+}
+
+/// A flare hit whose delivery stopped; the flare itself flies on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlareDamageBlocked {
+    pub physical_slot: usize,
+    pub request: FlareDamageRequest,
+    pub reason: crate::attached_particle_damage::AttachedParticleDamageBlock,
+}
+
 /// Observable traversal trace and deferred terrain writes in physical-slot order.
 #[derive(Debug, Default, PartialEq)]
 pub struct ParticleUpdateOutcome {
+    /// `FUN_0043F660` deliveries the host refused, in physical-slot order.
+    pub flare_damage_blocks: Vec<FlareDamageBlocked>,
     /// Completed 425D0 callbacks whose checked-damage admission bit was clear.
     /// These are retrospective observations, never requests to replay.
     pub attached_updates: Vec<AttachedParticleUpdateObservation>,
@@ -5409,6 +5437,22 @@ fn uses_class_87_sweep_callbacks(source_class: u8) -> bool {
             && descriptor.raw_u32(0x1c) == CLASS_87_ENTITY_HIT_CALLBACK_VA
             && descriptor.raw_u32(0x20) == CLASS_87_DAMAGE_PACKET_VA
             && descriptor.raw_u32(0x24) == CLASS_87_STATIC_HIT_CALLBACK_VA
+    })
+}
+
+fn uses_random_drift_update_callback(source_class: u8) -> bool {
+    particle_descriptor(source_class)
+        .is_some_and(|descriptor| descriptor.raw_u32(0x14) == RANDOM_DRIFT_UPDATE_CALLBACK_VA)
+}
+
+/// Collision mode 4 (F980 only) with `FUN_0043F660` and packet `0x004CC060`:
+/// Type36's class-47 flares and class 48.
+pub fn particle_uses_flare_entity_hit(source_class: u8) -> bool {
+    particle_descriptor(source_class).is_some_and(|descriptor| {
+        descriptor.raw_byte(0x0e) == 4
+            && descriptor.raw_u32(0x14) == RANDOM_DRIFT_UPDATE_CALLBACK_VA
+            && descriptor.raw_u32(0x1c) == FLARE_ENTITY_CALLBACK_VA
+            && descriptor.raw_u32(0x20) == FLARE_DAMAGE_PACKET_VA
     })
 }
 

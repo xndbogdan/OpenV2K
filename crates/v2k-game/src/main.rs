@@ -7336,6 +7336,29 @@ fn run_game(
                                     v2k_game::world_fx::sample_attached_particle_cached_owner(em, request),
                                 );
                             }
+                            PlayingParticleActorEvent::FlareDamage(request) => {
+                                let result = v2k_game::flare_damage::apply_flare_particle_damage(
+                                    v2k_game::attached_particle_damage::AttachedParticleDamageFrame {
+                                        resources: cache, entities: em, world_fx, static_damage,
+                                        scheduler: &mut specialized_actor_tasks,
+                                        notifications: &mut gameplay_notifications, retail_tick,
+                                        world: v2k_game::attached_particle_damage::AttachedParticleDamageWorld::Playing { player_hull: &mut player_hull, extra_lives: RetailRuntimeValue::Known(player_campaign_progress.extra_lives()) },
+                                    }, request,
+                                );
+                                return PlayingParticleActorResponse::FlareDamage {
+                                    result,
+                                    refresh: v2k_game::playing_particle_host::PlayingParticleRefresh {
+                                        collision: ParticleCollisionCacheRefresh::Replace(build_particle_collision_models(
+                                            cache, em, player_model_id, &player_craft,
+                                            &mut particle_collision_error_reported,
+                                        )),
+                                        attachment_owners: em.iter_all().map(v2k_game::world_fx::ParticleAttachmentOwner::from_entity).collect(),
+                                        owner_motions: em.iter_all().map(|entity| ParticleOwnerMotion {
+                                            owner_id: entity.id, velocity: entity.velocity,
+                                        }).collect(),
+                                    },
+                                };
+                            }
                             PlayingParticleActorEvent::AttachedDamage(request) => {
                                 let result = v2k_game::attached_particle_damage::apply_attached_particle_damage(
                                     v2k_game::attached_particle_damage::AttachedParticleDamageFrame {
@@ -8006,6 +8029,10 @@ fn run_game(
                     if !matches!(impact, PrimaryImpact::StaticTile(_)) {
                         log!("Primary impact: {impact:?}");
                     }
+                }
+                // A refused 410D30 delivery: the flare itself flies on.
+                for blocked in outcome.flare_damage_blocks {
+                    eprintln!("Flare damage stopped at unresolved data: {blocked:?}");
                 }
                 // `ballistic_static_impacts` and primary StaticTile entries
                 // are retrospective F800 telemetry only. Their exact packets

@@ -6,7 +6,7 @@
 //! task omissions do not. Two rows on the same constructor live in another
 //! single-task program: Type50 in class36 Die When Moved, Type89 in class38
 //! Change Sea Level. Type118's death leaves its allocation running the
-//! class65 Geyser.
+//! class65 Geyser; Type36 lives and dies in class16 Generate Flares.
 
 use super::*;
 use crate::{
@@ -22,6 +22,8 @@ mod cargo_tests;
 mod live;
 mod zero_record;
 pub(crate) use zero_record::NativeType68ZeroRecordConstruction;
+#[cfg(test)]
+mod flare_tests;
 #[cfg(test)]
 mod later_world_tests;
 #[cfg(test)]
@@ -87,6 +89,13 @@ pub(super) fn authenticate_metadata(
         }
         118 => {
             if crate::main_base_type54_abort::geyser_metadata(entity_type, metadata) {
+                Ok(())
+            } else {
+                Err(Class0ActorError::Metadata)
+            }
+        }
+        36 => {
+            if crate::main_base_type54_abort::flare_generator_metadata(entity_type, metadata) {
                 Ok(())
             } else {
                 Err(Class0ActorError::Metadata)
@@ -165,7 +174,7 @@ fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
 /// The class of a row's singleton Always choice: class36 for Type50,
 /// class38 for Type89, class0 for every other row.
 pub(crate) fn living_class(entity_type: u32) -> u32 {
-    crate::main_base_type54_abort::sea_level_row_living_class(entity_type).unwrap_or(0)
+    crate::main_base_type54_abort::class0_host_living_class(entity_type).unwrap_or(0)
 }
 
 /// AC60's initializer for the row's living program. Class38's 40BDC0 needs
@@ -193,6 +202,9 @@ fn publish_living_graph(entity: &mut Entity, context: BehaviorContextRuntime, li
                         crate::die_when_moved::DieWhenMovedTaskState::new(entity.position_raw()),
                     )),
                 );
+            }
+            if living_class == 16 {
+                publish_generate_flares_tasks(entity);
             }
         }
     }
@@ -243,6 +255,116 @@ pub(super) fn initialize_living_change_sea_level(
         )),
     );
     Ok(())
+}
+
+/// FUN_0040B8B0 clears T then S; FUN_00406300 stores a Primary with no
+/// timeout or private data through 01020, without 06070's components.
+fn publish_generate_flares_tasks(entity: &mut Entity) {
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+    entity.actor_tasks.replace_prepared(
+        ActorTaskSlot::Primary,
+        PreparedActorTask::new(ActorTaskRuntime::GenerateFlares),
+    );
+}
+
+/// What 10C10 did to a Type36.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Class0FlareDeath {
+    /// Remote-owned or already dying: 10C10 returned at its entry.
+    NoOp,
+    /// Alternate class16 reinstalled Generate Flares on the dying body.
+    Republished,
+}
+
+impl EntityManager {
+    /// 10C10 on a living Type36: health zero and dying (no death sound or
+    /// attachment), class16's null death callback, then DB80's direct
+    /// alternate, class16 again. The caller owns scheduler custody.
+    pub(crate) fn apply_class0_flare_death(
+        &mut self,
+        id: u32,
+    ) -> Result<Class0FlareDeath, Class0ActorError> {
+        if !self.native_class0_allocation_authenticates(id)
+            || self.native_class0_has_pending_prefix(id)
+        {
+            return Err(Class0ActorError::Allocation);
+        }
+        let metadata = self
+            .type_metadata
+            .get(crate::main_base_type54_abort::TYPE36_ENTITY_TYPE as usize)
+            .cloned()
+            .ok_or(Class0ActorError::Metadata)?;
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .ok_or(Class0ActorError::Allocation)?;
+        if entity.entity_type != crate::main_base_type54_abort::TYPE36_ENTITY_TYPE {
+            return Err(Class0ActorError::Metadata);
+        }
+        authenticate_metadata(entity.entity_type, &metadata)?;
+        let route = classify_main_base_abort_actor(MainBaseAbortActorFacts {
+            entity_id: id,
+            entity_type: entity.entity_type,
+            capability_flags: entity.capability_flags,
+            state_flags: entity
+                .collision
+                .state_flags_at_0x08
+                .masked(ORDINARY_DEATH_STATE_SKIP_MASK),
+        });
+        if route != (MainBaseAbortActorRoute::OrdinaryDeath { entity_id: id }) {
+            return Err(Class0ActorError::Runtime("not an ordinary death"));
+        }
+        match entity
+            .collision
+            .state_flags_at_0x08
+            .masked(REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT)
+        {
+            RetailRuntimeValue::Known(0) => {}
+            RetailRuntimeValue::Known(_) => return Ok(Class0FlareDeath::NoOp),
+            RetailRuntimeValue::Unresolved => {
+                return Err(Class0ActorError::Runtime("generic death entry"))
+            }
+        }
+        let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+            return Err(Class0ActorError::Graph);
+        };
+        let program = behavior_program(16).ok_or(Class0ActorError::Graph)?;
+        let primary = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary);
+        if context.active_style().style_address() != program.initial_style.frame_address
+            || context.active_style().death_callback_policy() != DeathCallbackPolicy::None
+            || !primary.is_some_and(|primary| {
+                entity.actor_tasks.task_state(primary) == Some(&ActorTaskRuntime::GenerateFlares)
+                    && entity.actor_tasks.wrapper_flags(primary)
+                        == Some(crate::actor_task_owner::ActorTaskWrapperFlags {
+                            alive: true,
+                            in_callback: false,
+                        })
+            })
+            || entity
+                .actor_tasks
+                .task_in_slot(ActorTaskSlot::Secondary)
+                .is_some()
+            || entity
+                .actor_tasks
+                .task_in_slot(ActorTaskSlot::Tertiary)
+                .is_some()
+        {
+            return Err(Class0ActorError::Graph);
+        }
+        let selected = context
+            .reselect_audited_type_default(program, 0, program.initial_style)
+            .ok_or(Class0ActorError::Graph)?;
+        entity.collision.health_raw = RetailRuntimeValue::Known(0);
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
+        entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));
+        publish_generate_flares_tasks(entity);
+        Ok(Class0FlareDeath::Republished)
+    }
 }
 
 /// What 10C10 did to a Type118.

@@ -159,6 +159,7 @@ pub enum ActorTaskRuntimeFamily {
     Class0Timer,
     DieWhenMoved,
     Geyser,
+    GenerateFlares,
     Intro2GunTurret,
     ExplodingRing,
     HiveRadial,
@@ -218,6 +219,8 @@ pub enum ActorTaskRuntime {
     DieWhenMoved(crate::die_when_moved::DieWhenMovedTaskState),
     /// Class65's 07BC0/07CA0: no timeout; its private word is the sea delta.
     Geyser(crate::geyser::GeyserTaskState),
+    /// Class16's 06300/06390: no timeout and no private data.
+    GenerateFlares,
     Intro2GunTurret(crate::intro2_gun_turret::task::GunTurretTaskState),
     ExplodingRing(crate::type60_exploding_ring::Type60ExplodingRingTaskState),
     HiveRadial(HiveRadialTaskState),
@@ -283,6 +286,7 @@ impl ActorTaskRuntime {
             Self::Class0Timer(_) => ActorTaskRuntimeFamily::Class0Timer,
             Self::DieWhenMoved(_) => ActorTaskRuntimeFamily::DieWhenMoved,
             Self::Geyser(_) => ActorTaskRuntimeFamily::Geyser,
+            Self::GenerateFlares => ActorTaskRuntimeFamily::GenerateFlares,
             Self::Intro2GunTurret(_) => ActorTaskRuntimeFamily::Intro2GunTurret,
             Self::ExplodingRing(_) => ActorTaskRuntimeFamily::ExplodingRing,
             Self::HiveRadial(_) => ActorTaskRuntimeFamily::HiveRadial,
@@ -1874,6 +1878,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::Class0Timer(_)) => Some(ActorTaskRuntimeFamily::Class0Timer),
             Some(ActorTaskRuntime::DieWhenMoved(_)) => Some(ActorTaskRuntimeFamily::DieWhenMoved),
             Some(ActorTaskRuntime::Geyser(_)) => Some(ActorTaskRuntimeFamily::Geyser),
+            Some(ActorTaskRuntime::GenerateFlares) => Some(ActorTaskRuntimeFamily::GenerateFlares),
             Some(ActorTaskRuntime::ExplodingRing(_)) => Some(ActorTaskRuntimeFamily::ExplodingRing),
             Some(ActorTaskRuntime::HiveRadial(_)) => Some(ActorTaskRuntimeFamily::HiveRadial),
             Some(ActorTaskRuntime::BoulderRolling(_)) => {
@@ -1991,6 +1996,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntime::Class0Timer(_) => unreachable!("Class 0 timer requires its native visit"),
             ActorTaskRuntime::DieWhenMoved(_) => unreachable!("Die When Moved requires its native visit"),
             ActorTaskRuntime::Geyser(_) => unreachable!("Geyser requires its native visit"),
+            ActorTaskRuntime::GenerateFlares => unreachable!("Generate Flares requires its native visit"),
             ActorTaskRuntime::PortableRadar => unreachable!("Portable Radar requires its native visit"),
             ActorTaskRuntime::ExplodingRing(_) => {
                 unreachable!("Exploding-Ring was rejected before generic task traversal")
@@ -2260,6 +2266,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntimeFamily::Class0Timer => unreachable!("Class 0 timer requires its native visit"),
             ActorTaskRuntimeFamily::DieWhenMoved => unreachable!("Die When Moved requires its native visit"),
             ActorTaskRuntimeFamily::Geyser => unreachable!("Geyser requires its native visit"),
+            ActorTaskRuntimeFamily::GenerateFlares => unreachable!("Generate Flares requires its native visit"),
             ActorTaskRuntimeFamily::PortableRadar => unreachable!("Portable Radar requires its native visit"),
             ActorTaskRuntimeFamily::ExplodingRing => {
                 unreachable!("Exploding-Ring was rejected before generic task traversal")

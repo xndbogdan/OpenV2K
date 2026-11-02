@@ -142,14 +142,13 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (40, 121),
     // World 41 completes: its Type35 launchers republish their class7
     // alternate on the dying body.
-    // Type108 flyers die quietly and the Type83 radar through class49;
-    // Alien1's Type35s republish Search and its next is a Type36.
-    (42, 36),
-    // World 43's Type33 fireectos take class12; its next is a Type36.
-    (43, 36),
-    // Ordinary Type13 and the emitter-only Type43 take their native class1
-    // abort deaths, Type5 its class11 Tumble publication and Type35 Search.
-    (46, 36),
+    // World 42 completes: Type108 flyers die quietly, the Type83 radar
+    // through class49, Alien1's Type35s republish Search and its Type36
+    // flare generators republish class16.
+    // World 43 completes: its Type33 fireectos take class12.
+    // World 46 completes: ordinary Type13 and the emitter-only Type43 take
+    // their native class1 abort deaths, Type5 its class11 Tumble publication
+    // and Type35 Search.
     (47, 110),
 ];
 
@@ -380,7 +379,10 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     }
     assert_eq!(
         exact_worlds,
-        [13, 14, 15, 16, 17, 19, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 44, 45, 48]
+        [
+            13, 14, 15, 16, 17, 19, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 42, 43, 44, 45, 46,
+            48
+        ]
     );
     assert_eq!(
         bounded_worlds, FIRST_UNSUPPORTED,
