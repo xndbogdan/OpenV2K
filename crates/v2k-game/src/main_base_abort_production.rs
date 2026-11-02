@@ -140,6 +140,8 @@ pub enum MainBaseAbortActorDisposition {
     GeyserDeath,
     /// Type36's direct alternate class16 reinstalls Generate Flares.
     FlareDeath,
+    /// Type110's direct alternate class67 reinstalls the Queen, dying.
+    QueenDeath,
 }
 
 /// New owners published synchronously by actor callbacks and adopted for the
@@ -1416,7 +1418,8 @@ fn dispatch_ordinary_actor(
                 extent,
             )
         }
-        crate::main_base_type54_abort::TYPE36_ENTITY_TYPE => {
+        crate::main_base_type54_abort::TYPE36_ENTITY_TYPE
+        | crate::main_base_type54_abort::TYPE110_ENTITY_TYPE => {
             let id = actor.lease.entity_id;
             if !specialized_tasks.take_class0_actor_external_mutation(entities, id) {
                 return Err(callback_error(
@@ -1426,7 +1429,7 @@ fn dispatch_ordinary_actor(
                 ));
             }
             let death = entities.apply_class0_flare_death(id);
-            // The dying body keeps class16 and the same owner family.
+            // The dying body keeps class16 or class67 and the same owner family.
             if let Ok(owner) = Class0ActorOwner::adopt(entities, id) {
                 specialized_tasks.register_class0_actor(owner);
             }
@@ -1439,7 +1442,13 @@ fn dispatch_ordinary_actor(
                     Err(()) => (None, false),
                 };
             Ok(DispatchSuccess {
-                disposition: MainBaseAbortActorDisposition::FlareDeath,
+                disposition: if actor.entity_type
+                    == crate::main_base_type54_abort::TYPE110_ENTITY_TYPE
+                {
+                    MainBaseAbortActorDisposition::QueenDeath
+                } else {
+                    MainBaseAbortActorDisposition::FlareDeath
+                },
                 successor,
                 successor_available,
             })

@@ -95,6 +95,10 @@ pub struct LiveActorDeathResult<D> {
 /// Type73 and Type109.
 pub(crate) const LETHAL_SPLIT_DAMAGE_MODIFIER: u32 = 0x0041_6820;
 
+/// Instance damage modifier `FUN_00421910`, installed by `104B0` for Type110:
+/// the Queen's weak spot.
+pub(crate) const QUEEN_WEAK_SPOT_DAMAGE_MODIFIER: u32 = 0x0042_1910;
+
 /// `FUN_00416820`'s lethal branch, which the actor's own death owner runs:
 /// the capped births, the particle, the zeroed buffer and health, then 10C10.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,6 +225,11 @@ pub(crate) fn apply_live_actor_checked_damage_with_split<D, E>(
         damage_after_buffer_raw: 0,
         death_publication: None,
     };
+    // 421910 resolves the packet's owner (+14) for its capability bit 0.
+    let from_player = manager
+        .iter_all()
+        .find(|entity| entity.id == request.delivery.owner_handle)
+        .is_some_and(|owner| owner.capability_flags & 1 != 0);
     let Some(entity) = manager.entity_mut(request.entity_id) else {
         return Ok(outcome);
     };
@@ -303,6 +312,17 @@ pub(crate) fn apply_live_actor_checked_damage_with_split<D, E>(
                         return Ok(outcome);
                     }
                 }
+            }
+            // A peer's body (multiplayer) stays held, as for 416820.
+            Some(QUEEN_WEAK_SPOT_DAMAGE_MODIFIER)
+                if known(
+                    entity
+                        .collision
+                        .state_flags_at_0x08
+                        .masked(REMOTE_OWNED_STATE_BIT),
+                ) == Some(0) =>
+            {
+                crate::queen::weak_spot_gate(&mut entity.queen, from_player, filtered)
             }
             Some(address) => {
                 return Err(error(

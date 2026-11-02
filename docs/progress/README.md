@@ -10,19 +10,19 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,390 | |
-| Marked not needed (excluded below) | 353 | |
-| **Referenced by port code** | **1,014** | **49.8%** |
-| Referenced by code or RE notes | 2,037 | 100.0% |
+| Marked not needed (excluded below) | 354 | |
+| **Referenced by port code** | **1,028** | **50.5%** |
+| Referenced by code or RE notes | 2,036 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 243 |
+| implemented | 255 |
 | approximated | 6 |
-| documented | 2 |
-| not-needed | 353 |
+| documented | 3 |
+| not-needed | 354 |
 
 88 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,15 +41,15 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Platform](../re/PLATFORM_RUNTIME.md) | 151 | 22 | 10 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 150 | 22 | 11 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 130 | 6 | 49 |
 | [Menu system](../re/MENU_SYSTEM.md) | 106 | 26 | 76 |
-| [Controls](../re/CONTROLS.md) | 84 | 18 | 29 |
+| [Controls](../re/CONTROLS.md) | 84 | 18 | 28 |
 | [Software raster](../re/SOFTWARE_RASTER.md) | 79 | 1 | 56 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 67 | 15 | 67 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 63 | 16 | 89 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 55 | 15 | 74 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 48 | 6 | 63 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 36 | 9 | 37 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 34 | 8 | 37 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 32 | 8 | 24 |
 
 ## Omitted
@@ -69,6 +69,7 @@ denominator, each with its reason: the never-installed
 | not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts) | 21 |
 | replaced: the port's SDL platform (MCI CD audio, the message box, the command line; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 17 |
 | replaced: the port's UDP transport (DirectPlay 3's connection enumeration; docs/re/MULTIPLAYER.md#the-port) | 2 |
+| Queen aiming line; its caller's flag DAT_004DB0B8 is never written (docs/re/TYPE110_QUEEN.md) | 1 |
 | replaced: the port's UDP transport (DirectPlay 3's COM and event setup; docs/re/MULTIPLAYER.md#the-port) | 1 |
 | replaced: the port's UDP transport (DirectPlay 3's COM and event teardown; docs/re/MULTIPLAYER.md#the-port) | 1 |
 | replaced: the port's UDP transport (DirectPlay 3's connection initialization; docs/re/MULTIPLAYER.md#the-port) | 1 |

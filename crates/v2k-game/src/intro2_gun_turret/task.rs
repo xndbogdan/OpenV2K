@@ -9,7 +9,7 @@ use crate::{
     world_fx::WorldFx,
 };
 
-mod math;
+pub(crate) mod math;
 
 const NORMAL_PRIORITIES: [i32; 3] = [0x20000, 0x10000, 0]; //4C7098
 const INFECTED_PRIORITIES: [i32; 3] = [0, 0x30000, 0x20000]; //4C70A8

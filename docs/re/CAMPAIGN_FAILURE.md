@@ -266,7 +266,7 @@ later runtime graph or predecessor history.
 
 | Fresh-world exact sweep | Global OVLs |
 |---|---|
-| Complete | 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 48 |
+| Complete | 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48 |
 | No campaign controller or casualty record | 49, 50 |
 
 The remaining first unsupported ordinary callbacks are listed below. Each is
@@ -278,7 +278,6 @@ retail skips those actors.
 |---|---|
 | 41 | 22, 33, 34 |
 | 107 | 31 |
-| 110 | 47 |
 | 121 | 26 (reached by a Type49's class49 radial), 40 |
 
 Thus exact fresh-world actor cleanup is complete for 17 of the 21 casualty

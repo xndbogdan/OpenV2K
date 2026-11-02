@@ -6,7 +6,8 @@
 //! task omissions do not. Two rows on the same constructor live in another
 //! single-task program: Type50 in class36 Die When Moved, Type89 in class38
 //! Change Sea Level. Type118's death leaves its allocation running the
-//! class65 Geyser; Type36 lives and dies in class16 Generate Flares.
+//! class65 Geyser; Type36 lives and dies in class16 Generate Flares, and
+//! Type110, the Queen, in class67.
 
 use super::*;
 use crate::{
@@ -26,6 +27,8 @@ pub(crate) use zero_record::NativeType68ZeroRecordConstruction;
 mod flare_tests;
 #[cfg(test)]
 mod later_world_tests;
+#[cfg(test)]
+mod queen_tests;
 #[cfg(test)]
 mod remote_beamer_tests;
 #[cfg(test)]
@@ -110,6 +113,13 @@ pub(super) fn authenticate_metadata(
                 Err(Class0ActorError::Metadata)
             }
         }
+        110 => {
+            if crate::main_base_type54_abort::queen_metadata(entity_type, metadata) {
+                Ok(())
+            } else {
+                Err(Class0ActorError::Metadata)
+            }
+        }
         111 if gate_metadata_matches(metadata) => Ok(()),
         _ => Err(Class0ActorError::Metadata),
     }
@@ -181,8 +191,8 @@ fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
 }
 
 /// The class of a row's singleton Always choice: class36 for Type50,
-/// class38 for Type89, class16 for Type36, class59 for Type74, class0 for
-/// every other row.
+/// class38 for Type89, class16 for Type36, class59 for Type74, class67 for
+/// Type110, class0 for every other row.
 pub(crate) fn living_class(entity_type: u32) -> u32 {
     crate::main_base_type54_abort::class0_host_living_class(entity_type).unwrap_or(0)
 }
@@ -215,6 +225,9 @@ fn publish_living_graph(entity: &mut Entity, context: BehaviorContextRuntime, li
             }
             if living_class == 16 {
                 publish_generate_flares_tasks(entity);
+            }
+            if living_class == 67 {
+                publish_queen_tasks(entity);
             }
             if living_class == 59 {
                 // FUN_0040C530 clears T then S and FUN_00405420 stores a Primary with no
@@ -288,19 +301,33 @@ fn publish_generate_flares_tasks(entity: &mut Entity) {
     );
 }
 
-/// What 10C10 did to a Type36.
+/// `FUN_0040D210` clears S then T and stores class67's Primary through
+/// 01020: no timeout, no private data, tick `FUN_004222C0`. The Queen's
+/// record stays in her Sub-K.
+fn publish_queen_tasks(entity: &mut Entity) {
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+    entity.actor_tasks.replace_prepared(
+        ActorTaskSlot::Primary,
+        PreparedActorTask::new(ActorTaskRuntime::Queen),
+    );
+}
+
+/// What 10C10 did to a Type36 or a Type110.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Class0FlareDeath {
     /// Remote-owned or already dying: 10C10 returned at its entry.
     NoOp,
-    /// Alternate class16 reinstalled Generate Flares on the dying body.
+    /// The alternate, the living class again, was reinstalled on the dying
+    /// body: class16 Generate Flares or class67 Queen.
     Republished,
 }
 
 impl EntityManager {
-    /// 10C10 on a living Type36: health zero and dying (no death sound or
-    /// attachment), class16's null death callback, then DB80's direct
-    /// alternate, class16 again. The caller owns scheduler custody.
+    /// 10C10 on a living Type36 or Type110: health zero and dying (no death
+    /// sound or attachment), the style's null death callback, then DB80's
+    /// direct alternate, the living class again. The caller owns scheduler
+    /// custody.
     pub(crate) fn apply_class0_flare_death(
         &mut self,
         id: u32,
@@ -310,9 +337,22 @@ impl EntityManager {
         {
             return Err(Class0ActorError::Allocation);
         }
+        let entity_type = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == id)
+            .ok_or(Class0ActorError::Allocation)?
+            .entity_type;
+        if !matches!(
+            entity_type,
+            crate::main_base_type54_abort::TYPE36_ENTITY_TYPE
+                | crate::main_base_type54_abort::TYPE110_ENTITY_TYPE
+        ) {
+            return Err(Class0ActorError::Metadata);
+        }
         let metadata = self
             .type_metadata
-            .get(crate::main_base_type54_abort::TYPE36_ENTITY_TYPE as usize)
+            .get(entity_type as usize)
             .cloned()
             .ok_or(Class0ActorError::Metadata)?;
         let entity = self
@@ -320,9 +360,6 @@ impl EntityManager {
             .iter_mut()
             .find(|entity| entity.id == id)
             .ok_or(Class0ActorError::Allocation)?;
-        if entity.entity_type != crate::main_base_type54_abort::TYPE36_ENTITY_TYPE {
-            return Err(Class0ActorError::Metadata);
-        }
         authenticate_metadata(entity.entity_type, &metadata)?;
         let route = classify_main_base_abort_actor(MainBaseAbortActorFacts {
             entity_id: id,
@@ -350,12 +387,18 @@ impl EntityManager {
         let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
             return Err(Class0ActorError::Graph);
         };
-        let program = behavior_program(16).ok_or(Class0ActorError::Graph)?;
+        let living = living_class(entity_type);
+        let task = if living == 67 {
+            ActorTaskRuntime::Queen
+        } else {
+            ActorTaskRuntime::GenerateFlares
+        };
+        let program = behavior_program(living).ok_or(Class0ActorError::Graph)?;
         let primary = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary);
         if context.active_style().style_address() != program.initial_style.frame_address
             || context.active_style().death_callback_policy() != DeathCallbackPolicy::None
             || !primary.is_some_and(|primary| {
-                entity.actor_tasks.task_state(primary) == Some(&ActorTaskRuntime::GenerateFlares)
+                entity.actor_tasks.task_state(primary) == Some(&task)
                     && entity.actor_tasks.wrapper_flags(primary)
                         == Some(crate::actor_task_owner::ActorTaskWrapperFlags {
                             alive: true,
@@ -382,7 +425,11 @@ impl EntityManager {
             .state_flags_at_0x08
             .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
         entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));
-        publish_generate_flares_tasks(entity);
+        if living == 67 {
+            publish_queen_tasks(entity);
+        } else {
+            publish_generate_flares_tasks(entity);
+        }
         Ok(Class0FlareDeath::Republished)
     }
 }
@@ -767,6 +814,36 @@ impl EntityManager {
                     && entity.entity_type == runtime.entity_type
                     && entity.model_slots == runtime.model_slots
             })
+    }
+
+    /// `FUN_004225C0`'s `+A8` write on the Type68 the Queen holds: model
+    /// slot 0, which a living body draws, and the allocation receipt.
+    pub(crate) fn set_native_class0_model_slot0(
+        &mut self,
+        id: u32,
+        model: usize,
+    ) -> Result<(), Class0ActorError> {
+        if !self.native_class0_allocation_authenticates(id) {
+            return Err(Class0ActorError::Allocation);
+        }
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .ok_or(Class0ActorError::Allocation)?;
+        let RetailRuntimeValue::Known(slot) = entity.collision.active_model_slot() else {
+            return Err(Class0ActorError::Runtime("active model slot"));
+        };
+        entity.model_slots[0] = Some(model);
+        if slot == 0 {
+            entity.model_index = Some(model);
+        }
+        let slots = entity.model_slots;
+        self.native_class0_actors
+            .get_mut(&id)
+            .ok_or(Class0ActorError::Allocation)?
+            .model_slots = slots;
+        Ok(())
     }
 
     pub(crate) fn native_class0_has_pending_prefix(&self, id: u32) -> bool {

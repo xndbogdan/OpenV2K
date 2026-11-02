@@ -150,7 +150,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // World 46 completes: ordinary Type13 and the emitter-only Type43 take
     // their native class1 abort deaths, Type5 its class11 Tumble publication
     // and Type35 Search.
-    (47, 110),
+    // World 47 completes: its Type110 Queen takes class67 again, dying.
 ];
 
 /// Worlds whose first unported actor is reached by an earlier native actor's
@@ -419,7 +419,7 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
         exact_worlds,
         [
             13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39,
-            41, 42, 43, 44, 45, 46, 48
+            41, 42, 43, 44, 45, 46, 47, 48
         ]
     );
     assert_eq!(

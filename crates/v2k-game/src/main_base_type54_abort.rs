@@ -38,10 +38,12 @@ pub const TYPE89_ENTITY_TYPE: u32 = 89;
 pub const TYPE118_ENTITY_TYPE: u32 = 118;
 pub const TYPE36_ENTITY_TYPE: u32 = 36;
 pub const TYPE74_ENTITY_TYPE: u32 = 74;
+pub const TYPE110_ENTITY_TYPE: u32 = crate::queen::ENTITY_TYPE;
 
 /// A row on the class0 constructor whose single program is not class0's
 /// alone: class38 Change Sea Level (its alternate or its living program),
-/// class65 Geyser, class16 Generate Flares or class59 Remote Beamer.
+/// class65 Geyser, class16 Generate Flares, class59 Remote Beamer or
+/// class67 Queen.
 #[derive(Clone, Copy)]
 struct Class0HostRow {
     entity_type: u32,
@@ -56,8 +58,8 @@ struct Class0HostRow {
     alternate_class: u32,
     death_sound_id: Option<u16>,
     axis: CommonAxisDescriptor,
-    /// Sub-K alone, one model word at selector 1.
-    sub_k: bool,
+    /// Sub-K alone, with this many model words from selector 1.
+    sub_k_words: u8,
 }
 
 const NO_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
@@ -74,8 +76,9 @@ const NO_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
 /// Generate Flares, their alternate too. Every row but Type74 has null sounds
 /// and components and a default axis; the Remote Beamers of worlds 21, 31 and
 /// 36 carry Sub-K, death cue 62 and their own axis, and explode through
-/// class1.
-const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
+/// class1. World 47's Type110 Queen lives and dies in class67, with eight
+/// Sub-K words.
+const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
     Class0HostRow {
         entity_type: LEVEL_ONE_TYPE54_ENTITY_TYPE,
         model: LEVEL_ONE_TYPE54_MODEL_ID as u16,
@@ -88,7 +91,7 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k: false,
+        sub_k_words: 0,
     },
     Class0HostRow {
         entity_type: TYPE72_ENTITY_TYPE,
@@ -102,7 +105,7 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k: false,
+        sub_k_words: 0,
     },
     Class0HostRow {
         entity_type: TYPE85_ENTITY_TYPE,
@@ -116,7 +119,7 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k: false,
+        sub_k_words: 0,
     },
     Class0HostRow {
         entity_type: TYPE50_ENTITY_TYPE,
@@ -130,7 +133,7 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k: false,
+        sub_k_words: 0,
     },
     Class0HostRow {
         entity_type: TYPE89_ENTITY_TYPE,
@@ -144,7 +147,7 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
         alternate_class: 1,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k: false,
+        sub_k_words: 0,
     },
     Class0HostRow {
         entity_type: TYPE118_ENTITY_TYPE,
@@ -158,7 +161,7 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
         alternate_class: 65,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k: false,
+        sub_k_words: 0,
     },
     Class0HostRow {
         entity_type: TYPE36_ENTITY_TYPE,
@@ -172,7 +175,7 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
         alternate_class: 16,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k: false,
+        sub_k_words: 0,
     },
     Class0HostRow {
         entity_type: TYPE74_ENTITY_TYPE,
@@ -189,7 +192,21 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 8] = [
             strict_axis_limit_raw: 512,
             raw_word_at_0x04: 8,
         },
-        sub_k: true,
+        sub_k_words: 1,
+    },
+    Class0HostRow {
+        entity_type: TYPE110_ENTITY_TYPE,
+        model: 1113,
+        mass_raw: 1,
+        capability_flags: 8,
+        health_raw: 200,
+        initializer_state_flags_raw: 0x0002_4027,
+        behavior_rule_ref: 1,
+        living_class: 67,
+        alternate_class: 67,
+        death_sound_id: None,
+        axis: NO_AXIS,
+        sub_k_words: 8,
     },
 ];
 
@@ -246,7 +263,12 @@ pub(crate) fn remote_beamer_metadata(
     class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 59)
 }
 
-/// The living class of an authenticated row: 0, 16, 36, 38 or 59.
+/// Authenticate Type110's row: class67 Queen, living and alternate.
+pub(crate) fn queen_metadata(entity_type: u32, metadata: &EntityTypeRuntimeMetadata) -> bool {
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 67)
+}
+
+/// The living class of an authenticated row: 0, 16, 36, 38, 59 or 67.
 pub(crate) fn class0_host_living_class(entity_type: u32) -> Option<u32> {
     CLASS0_HOST_ROWS
         .iter()
@@ -281,15 +303,16 @@ fn class0_host_row_metadata(
         && metadata.generic_hit_sound_id == RetailRuntimeValue::Known(None)
         && metadata.common_mover_topology
             == RetailRuntimeValue::Known(CommonMoverComponentTopology {
-                sub_k: row.sub_k,
+                sub_k: row.sub_k_words != 0,
                 ..CommonMoverComponentTopology::default()
             })
-        && (!row.sub_k
-            || (metadata.model_variable_count_raw == RetailRuntimeValue::Known(1)
+        && (row.sub_k_words == 0
+            || (metadata.model_variable_count_raw
+                == RetailRuntimeValue::Known(u32::from(row.sub_k_words))
                 && metadata.common_mover_gkl_payloads
                     == RetailRuntimeValue::Known(CommonMoverGklPayloads {
                         sub_g: None,
-                        sub_k: Some([1, 0]),
+                        sub_k: Some([row.sub_k_words, 0]),
                         sub_l: None,
                     })))
         && initializer.common_axis_descriptor == row.axis)

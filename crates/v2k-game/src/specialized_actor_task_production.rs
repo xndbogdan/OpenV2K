@@ -6051,6 +6051,10 @@ impl SpecializedActorTaskScheduler {
                     if let Some(owner) = tick.retained_owner {
                         retained.push(SpecializedActorTaskOwner::Class0Actor(owner));
                     }
+                    // The Queen's held Type68, at the live list's tail: this walk reaches it.
+                    if let Some(owner) = tick.spawned_owner {
+                        pending.push(SpecializedActorTaskOwner::Class0Actor(owner));
+                    }
                     // Type50's Die When Moved death: class38 runs from the next pass.
                     if let Some(receipt) = tick.sea_level_receipt {
                         retained.push(SpecializedActorTaskOwner::MainBaseType54SeaLevel(receipt));
