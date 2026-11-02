@@ -1373,7 +1373,7 @@ fn apply_pair_checked_damage(
         && crate::native_type40::manager_allocation_authenticates(frame.entities, target))
         || (kind == 56
             && crate::native_type56::manager_allocation_authenticates(frame.entities, target))
-        || (matches!(kind, 31 | 105)
+        || (matches!(kind, 31 | 105 | 73 | 109)
             && crate::native_type31::manager_allocation_authenticates(frame.entities, target))
     {
         return apply_native_pair_checked_damage(

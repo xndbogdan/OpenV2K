@@ -1,6 +1,7 @@
-//! Sealed Type31/Type105 receipts over the shared ground task/mover/hit host.
-//! Neither row captures: the AbsentJ dispatch lends the task custody class18
-//! needs to publish its children inline; Type105's quiet death uses none.
+//! Sealed Type31/Type105/Type73/Type109 receipts over the shared ground
+//! task/mover/hit host. No row captures: the AbsentJ dispatch lends the task
+//! custody class18 and the 416820 split need to publish their children
+//! inline; the quiet class2 deaths use none.
 
 use super::*;
 use crate::{
@@ -31,8 +32,8 @@ fn store_sub_d_state(entity: &mut Entity, state: NativeGroundSubDState) {
     r.sub_d_owner = state.owner;
 }
 
-/// Living graphs of classes 4 (`4C7E88`), 5 (`4C7930`) and 10 (acquiring
-/// `4C7618`, running `4C7660`), restricted to the row's own choices.
+/// Living graphs of classes 4 (`4C7E88`), 5 (`4C7930`), 6 (`4C79C0`) and 10
+/// (acquiring `4C7618`, running `4C7660`), restricted to the row's own choices.
 fn graph_authenticates(row: Type31Row, entity: &Entity) -> bool {
     use crate::{
         actor_task_dispatcher::ActorTaskRuntime as Task, actor_task_owner::ActorTaskSlot as Slot,
@@ -50,7 +51,14 @@ fn graph_authenticates(row: Type31Row, entity: &Entity) -> bool {
         0x004c7e88 => {
             matches!(primary, Some(Task::DefecateVirusWander(_)))
                 && secondary.is_none()
-                && matches!(tertiary, Some(Task::DefecateVirusTerrain(task)) if task.lifetime_ms() == 0)
+                && matches!(tertiary, Some(Task::DefecateVirusTerrain(task))
+                    if task.lifetime_ms() == u32::from(row.terrain_contact_lifetime_ms()))
+        }
+        0x004c79c0 => {
+            matches!(row, Type31Row::Type73 | Type31Row::Type109)
+                && matches!(primary, Some(Task::OrdinaryType9Wander(_)))
+                && secondary.is_none()
+                && tertiary.is_none()
         }
         0x004c7930 => {
             row == Type31Row::Type31
@@ -102,6 +110,23 @@ macro_rules! type31_profile {
             }
             fn allocation_authenticates(entity: &Entity) -> bool {
                 type31_row(entity) == Some($row)
+            }
+            const LETHAL_SPLIT: bool = $row.splits_on_lethal_hit();
+            fn publish_lethal_split(
+                manager: &mut EntityManager,
+                id: u32,
+                context: &mut shared::NativeGroundDeathContext<'_>,
+                split: crate::live_actor_checked_damage::LethalSplitRequest,
+                notifications: Option<&mut crate::gameplay_notifications::GameplayNotifications>,
+            ) -> Result<
+                LiveActorDeathResult<NativeGroundTerminalPublication>,
+                crate::intro2_common_dying::Intro2CommonDyingBlock,
+            > {
+                super::split::publish_lethal_split($row, manager, id, context, split, notifications)
+            }
+            /// Entity `+0x90`: D4A0's placed constructor position.
+            fn wander_anchor(entity: &Entity) -> Option<[i16; 3]> {
+                entity.native_type31_runtime.map(|runtime| runtime.anchor_raw)
             }
             fn manager_authenticates(manager: &EntityManager, id: u32) -> bool {
                 manager_allocation_authenticates(manager, id)
@@ -192,7 +217,7 @@ macro_rules! type31_profile {
                 if entity.sub_j_attachment_runtime == RetailRuntimeValue::Known(None) {
                     Ok(())
                 } else {
-                    Err(NativeGroundActorBlock::Runtime("Type31 true absent Sub-J"))
+                    Err(NativeGroundActorBlock::Runtime("Type31-family true absent Sub-J"))
                 }
             }
         }
@@ -201,6 +226,8 @@ macro_rules! type31_profile {
 
 type31_profile!(Type31Profile, Type31Row::Type31, Type31, &[4, 5, 10]);
 type31_profile!(Type105Profile, Type31Row::Type105, Type105, &[4, 10]);
+type31_profile!(Type73Profile, Type31Row::Type73, Type73, &[4, 6, 10]);
+type31_profile!(Type109Profile, Type31Row::Type109, Type109, &[4, 6, 10]);
 
 fn publish_death(
     row: Type31Row,
@@ -213,8 +240,10 @@ fn publish_death(
 > {
     use crate::intro2_common_dying::Intro2CommonDyingBlock as Block;
     match row {
-        Type31Row::Type105 => super::death::begin_type105_standard_death(manager, id)
-            .map_err(|_| Block::Runtime("Type105 quiet death custody")),
+        Type31Row::Type105 | Type31Row::Type73 | Type31Row::Type109 => {
+            super::death::begin_quiet_standard_death(manager, id, row)
+                .map_err(|_| Block::Runtime("Type31-family quiet death custody"))
+        }
         Type31Row::Type31 => {
             let shared::NativeGroundDeathContext::Split {
                 resources,

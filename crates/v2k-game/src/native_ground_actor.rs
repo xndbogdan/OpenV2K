@@ -80,10 +80,10 @@ pub trait NativeGroundTaskCustody: crate::intro2_type17::capture::CaptureTaskCus
         &mut self,
         owner: crate::native_type56::Type56Owner,
     ) -> Result<(), &'static str>;
-    /// Type31's class18 Type105 child, as Type40's Type56.
-    fn register_split_type105_child(
+    /// Type31's class18 Type105 or a lethal 416820 split's newborn.
+    fn register_split_type31_family_child(
         &mut self,
-        owner: crate::native_type31::Type105Owner,
+        owner: crate::native_type31::Type31FamilyOwner,
     ) -> Result<(), &'static str>;
     /// Type27's class18 Type3 child, published before the next launch draw.
     fn register_split_rolling_boulder_child(
@@ -325,6 +325,23 @@ pub(crate) mod sealed {
         }
         fn store_kl_components(_: &mut Entity, _: crate::intro2_common_mover::Intro2KlComponents) {
             unreachable!("profile has no Sub-K/L allocation")
+        }
+        /// `104B0` installed `FUN_00416820` at `+44` (Type73/109).
+        const LETHAL_SPLIT: bool = false;
+        /// `416820`'s lethal branch: births, particle, zeroed health, 10C10.
+        fn publish_lethal_split(
+            _: &mut EntityManager,
+            _: u32,
+            _: &mut NativeGroundDeathContext<'_>,
+            _: crate::live_actor_checked_damage::LethalSplitRequest,
+            _: Option<&mut GameplayNotifications>,
+        ) -> Result<
+            crate::live_actor_checked_damage::LiveActorDeathResult<NativeGroundTerminalPublication>,
+            crate::intro2_common_dying::Intro2CommonDyingBlock,
+        > {
+            Err(crate::intro2_common_dying::Intro2CommonDyingBlock::Runtime(
+                "profile has no 416820 modifier",
+            ))
         }
         fn allocation_authenticates(entity: &Entity) -> bool;
         fn register_owner(

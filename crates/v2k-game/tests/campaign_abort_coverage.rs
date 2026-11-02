@@ -105,7 +105,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // die quietly, and its Type50 dies into class38's Change Sea Level.
     // Type40 splits into Type56s (class18), which die quietly; Type30 takes
     // class12 and Type72 Change Sea Level. Worlds 17 and 45 complete.
-    (18, 73),
+    // World 18 completes: its Type73 bugs die quietly through class2.
     // World 19 completes: its Type55 guard takes class11 Tumble.
     // Type14 flyers explode through their class1 terminal, Type15 wasps die
     // quietly through class2, and Type16 and Type94 enter class12.
@@ -120,7 +120,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (23, 117),
     // World 24 completes: its Type29 mobbers take class11 Tumble.
     // World 25 completes: its Type82 factory shares Type66's class39 owner.
-    (26, 109),
+    (26, 121),
     // Type27 boulders split into Type3s (class18), which explode (class1);
     // world 27 completes with its Type127 carriers' class63.
     // Native class29 turrets now complete; their finished class49 terminals
@@ -152,6 +152,22 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // and Type35 Search.
     (47, 110),
 ];
+
+/// Worlds whose first unported actor is reached by an earlier native actor's
+/// death radial: (world, the dying actor's type, the unported target's type).
+const RADIAL_BLOCKED: &[(u32, u32, u32)] = &[
+    // World 26's Type73/109 bugs die quietly; a Type49 turret's class49
+    // chain then reaches its neighbouring Type121.
+    (26, 49, 121),
+];
+
+/// The innermost retained radial target whose callbacks are unresolved.
+fn radial_unported_target(error: &str) -> Option<u32> {
+    let marker = "Retained(DynamicRadialUnresolved { target_id: ";
+    let start = error.rfind(marker)? + marker.len();
+    let rest = &error[start..];
+    rest[..rest.find(',')?].parse().ok()
+}
 
 fn actor_snapshot(manager: &EntityManager) -> Vec<String> {
     manager
@@ -276,12 +292,33 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
                 exact_worlds.push(world);
             }
             Err(failure) => {
-                let MainBaseAbortProductionDiagnostic::ActorCallbackBlocked {
-                    actor,
-                    error: MainBaseAbortActorCallbackBlock::UnsupportedOrdinaryType { entity_type },
-                } = failure.diagnostic.clone()
+                let MainBaseAbortProductionDiagnostic::ActorCallbackBlocked { actor, error } =
+                    failure.diagnostic.clone()
                 else {
                     panic!("world{world}: unexpected failure {:?}", failure.diagnostic);
+                };
+                let entity_type = match error {
+                    MainBaseAbortActorCallbackBlock::UnsupportedOrdinaryType { entity_type } => {
+                        entity_type
+                    }
+                    // A native actor's death radial reached an unported body.
+                    error => {
+                        let target =
+                            radial_unported_target(&format!("{error:?}")).unwrap_or_else(|| {
+                                panic!("world{world}: unexpected failure {error:?}")
+                            });
+                        let target_type = manager
+                            .iter_all()
+                            .find(|entity| entity.id == target)
+                            .unwrap()
+                            .entity_type;
+                        assert!(
+                            RADIAL_BLOCKED.contains(&(world, actor.entity_type, target_type)),
+                            "world{world}: Type{} radial blocked at Type{target_type}",
+                            actor.entity_type
+                        );
+                        target_type
+                    }
                 };
                 // Compare the complete observed matrix after every world has
                 // exercised its actor/terrain rollback and bounded fallback.
@@ -381,8 +418,8 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     assert_eq!(
         exact_worlds,
         [
-            13, 14, 15, 16, 17, 19, 20, 24, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 42, 43, 44,
-            45, 46, 48
+            13, 14, 15, 16, 17, 18, 19, 20, 24, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 42, 43,
+            44, 45, 46, 48
         ]
     );
     assert_eq!(

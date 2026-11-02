@@ -105,7 +105,7 @@ fn static_route_target_owned(entity: &crate::entity::Entity) -> bool {
         30 | 33 => entity.native_type30_runtime.is_some(),
         40 => entity.native_type40_runtime.is_some(),
         56 => entity.native_type56_runtime.is_some(),
-        31 | 105 => entity.native_type31_runtime.is_some(),
+        31 | 105 | 73 | 109 => entity.native_type31_runtime.is_some(),
         type_id => {
             crate::shared_fish::is_shared_fish_type(type_id) && entity.shared_fish_runtime.is_some()
         }
@@ -437,7 +437,7 @@ pub fn apply_shared_actor_particle_hit(
         30 | 33 if entity.native_type30_runtime.is_some() => 30,
         40 if entity.native_type40_runtime.is_some() => 40,
         56 if entity.native_type56_runtime.is_some() => 56,
-        31 | 105 if entity.native_type31_runtime.is_some() => 31,
+        31 | 105 | 73 | 109 if entity.native_type31_runtime.is_some() => 31,
         123 if entity.native_type123_runtime.is_some() => 123,
         type_id
             if NativeFourChoiceProfile::from_entity_type(type_id).is_some()

@@ -100,7 +100,7 @@ fn authored_type31_births_publish_defecate_or_aimless() {
             assert!(manager_allocation_authenticates(&manager, id));
             assert_eq!(type31_row(entity), Some(Type31Row::Type31));
             let runtime = entity.native_type31_runtime.unwrap();
-            assert_eq!(runtime.sub_e_runtime, emitter_constructor());
+            assert_eq!(runtime.sub_e_runtime, emitter_constructor(runtime.row));
             assert!(runtime.split_terminal.is_none() && runtime.birth.is_none());
             assert_eq!(
                 entity.collision.default_state_flags_at_0xc8,
@@ -293,7 +293,7 @@ fn class18_splits_type31_into_eight_owned_type105s() {
 
     // A child's lethal entry is class2's quiet terminal.
     let child = children[0];
-    let quiet = death::begin_type105_standard_death(&mut manager, child).unwrap();
+    let quiet = death::begin_quiet_standard_death(&mut manager, child, Type31Row::Type105).unwrap();
     assert!(quiet.returned_nonzero && quiet.publication.is_some());
     assert!(death::finished_terminal_authenticates(&manager, child));
     assert!(manager

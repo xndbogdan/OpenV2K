@@ -1,4 +1,5 @@
-//! Native Type31 virus slugs and the Type105 slugs their class18 splits.
+//! Native Type31 virus slugs, the Type105 slugs their class18 splits, and
+//! the Type73/Type109 splitting bugs (worlds 18 and 26).
 //!
 //! Type31 (worlds 16/31) is an authored A/B/C/D/E/H ground row; its weighted
 //! root is Run Away 10 (UnderAttack), Defecate Virus 4 and Move About
@@ -7,14 +8,22 @@
 //! the same body without H: Run Away 10 or Defecate Virus 4, dying through
 //! quiet class2. Neither row selects class7, so the 09A80 method30 Sub-E is
 //! allocated but never fires.
+//!
+//! Type73 (A/B/C/D) and Type109 (A/B/C/D/E) run Wander Near Location 6,
+//! Run Away 10 and Defecate Virus 4 and die through quiet class2. Their
+//! instance damage modifier `FUN_00416820` splits a lethal hit into two
+//! newborns of the same type (see [`split`]).
 
 pub(crate) mod construction;
 pub mod contact;
 pub mod death;
 pub mod impact;
 pub(crate) mod profile;
+pub mod split;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod type73_tests;
 pub(crate) use construction::{publish_native_type31, NativeType31ConstructionRequest};
 
 use crate::{
@@ -95,10 +104,47 @@ const TYPE105_CHOICES: [BehaviorChoice; 2] = [
         behavior_class_id: 4,
     },
 ];
+const TYPE73_CHOICES: [BehaviorChoice; 3] = [
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 20,
+        behavior_class_id: 6,
+    },
+    BehaviorChoice {
+        weight_rule_id: 2,
+        weight_multiplier: 100,
+        behavior_class_id: 10,
+    },
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 20,
+        behavior_class_id: 4,
+    },
+];
+const TYPE109_CHOICES: [BehaviorChoice; 3] = [
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 10,
+        behavior_class_id: 6,
+    },
+    BehaviorChoice {
+        weight_rule_id: 2,
+        weight_multiplier: 100,
+        behavior_class_id: 10,
+    },
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 20,
+        behavior_class_id: 4,
+    },
+];
 pub(crate) const TYPE31_TOPOLOGY: CommonMoverComponentTopology =
     crate::intro2_common_mover::ABCDEH_TOPOLOGY;
 pub(crate) const TYPE105_TOPOLOGY: CommonMoverComponentTopology =
     crate::intro2_common_mover::ABCDE_TOPOLOGY;
+/// Type73 owns no E: its 09A80 allocates A/B/C/D alone.
+pub(crate) const TYPE73_TOPOLOGY: CommonMoverComponentTopology =
+    crate::intro2_common_mover::ABCD_TOPOLOGY;
 
 /// Section-12 rows sharing this owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,6 +153,10 @@ pub enum Type31Row {
     Type31,
     /// Born only by Type31's split; alternate class2.
     Type105,
+    /// Authored in worlds 18 and 26, or born by a lethal `416820` split.
+    Type73,
+    /// Authored in world 26, or born by a lethal `416820` split.
+    Type109,
 }
 
 impl Type31Row {
@@ -114,6 +164,8 @@ impl Type31Row {
         match entity_type {
             31 => Some(Self::Type31),
             105 => Some(Self::Type105),
+            73 => Some(Self::Type73),
+            109 => Some(Self::Type109),
             _ => None,
         }
     }
@@ -121,87 +173,160 @@ impl Type31Row {
         match self {
             Self::Type31 => 31,
             Self::Type105 => 105,
+            Self::Type73 => 73,
+            Self::Type109 => 109,
         }
     }
     pub const fn model(self) -> usize {
         match self {
             Self::Type31 => 279,
             Self::Type105 => 280,
+            Self::Type73 => 303,
+            Self::Type109 => 304,
         }
     }
     pub const fn health(self) -> i32 {
         match self {
             Self::Type31 => 8000,
             Self::Type105 => 3000,
+            Self::Type73 | Self::Type109 => 1000,
         }
     }
     pub const fn axis(self) -> CommonAxisDescriptor {
-        CommonAxisDescriptor {
-            strict_axis_limit_raw: match self {
-                Self::Type31 => 2560,
-                Self::Type105 => 2048,
+        match self {
+            Self::Type31 => CommonAxisDescriptor {
+                strict_axis_limit_raw: 2560,
+                raw_word_at_0x04: 5,
             },
-            raw_word_at_0x04: 5,
+            Self::Type105 => CommonAxisDescriptor {
+                strict_axis_limit_raw: 2048,
+                raw_word_at_0x04: 5,
+            },
+            Self::Type73 | Self::Type109 => CommonAxisDescriptor {
+                strict_axis_limit_raw: 3584,
+                raw_word_at_0x04: 3,
+            },
         }
     }
-    /// `+C0`: 0x439 adds 0x400 to Type105's 0x39.
+    /// `+C0`: 0x439 adds 0x400 to 0x39.
     pub const fn default_flags(self) -> u32 {
         match self {
-            Self::Type31 => 0x439,
-            Self::Type105 => 0x39,
+            Self::Type31 | Self::Type109 => 0x439,
+            Self::Type105 | Self::Type73 => 0x39,
         }
     }
     pub const fn choices(self) -> &'static [BehaviorChoice] {
         match self {
             Self::Type31 => &TYPE31_CHOICES,
             Self::Type105 => &TYPE105_CHOICES,
+            Self::Type73 => &TYPE73_CHOICES,
+            Self::Type109 => &TYPE109_CHOICES,
         }
     }
     pub const fn topology(self) -> CommonMoverComponentTopology {
         match self {
             Self::Type31 => TYPE31_TOPOLOGY,
-            Self::Type105 => TYPE105_TOPOLOGY,
+            Self::Type105 | Self::Type109 => TYPE105_TOPOLOGY,
+            Self::Type73 => TYPE73_TOPOLOGY,
         }
     }
     pub const fn alternate_behavior_class(self) -> u32 {
         match self {
             Self::Type31 => 18,
-            Self::Type105 => 2,
+            Self::Type105 | Self::Type73 | Self::Type109 => 2,
         }
+    }
+    /// The rows whose `104B0` installs `FUN_00416820` at `+44`.
+    pub const fn splits_on_lethal_hit(self) -> bool {
+        matches!(self, Self::Type73 | Self::Type109)
     }
     const fn sub_a(self) -> v2k_formats::collision::SubAPropulsionDescriptor {
+        let (acceleration_raw, overspeed_correction_raw, target_speed_base_raw) = match self {
+            Self::Type31 => (2500, -3000, 200),
+            Self::Type105 => (2600, -3000, 300),
+            Self::Type73 => (1000, -1000, 400),
+            Self::Type109 => (1000, -1000, 800),
+        };
         v2k_formats::collision::SubAPropulsionDescriptor {
-            acceleration_raw: match self {
-                Self::Type31 => 2500,
-                Self::Type105 => 2600,
-            },
-            overspeed_correction_raw: -3000,
-            target_speed_base_raw: match self {
-                Self::Type31 => 200,
-                Self::Type105 => 300,
-            },
+            acceleration_raw,
+            overspeed_correction_raw,
+            target_speed_base_raw,
         }
     }
-    /// Classifier 6 is material and water; Type105's 4 is material alone.
+    /// Classifier 6 is material and water; Type105's 4 is material alone;
+    /// Type73's 0x11 is steepness and object, Type109's 0x15 adds material.
     pub(crate) const fn sub_d(self) -> v2k_formats::collision::SubDSteeringDescriptor {
         match self {
             Self::Type31 => crate::common_mover::sub_d::NATIVE_TYPE31_SUB_D,
             Self::Type105 => crate::common_mover::sub_d::NATIVE_TYPE105_SUB_D,
+            Self::Type73 => crate::common_mover::sub_d::NATIVE_TYPE73_SUB_D,
+            Self::Type109 => crate::common_mover::sub_d::NATIVE_TYPE109_SUB_D,
         }
     }
     const fn damage(self) -> crate::damage::DamageProfile {
-        crate::damage::DamageProfile {
-            thresholds_raw: match self {
-                Self::Type31 => [0, 4000, 200, 0, 200, 0, 0],
-                Self::Type105 => [0, 3000, 1500, 500, 200, 0, 0],
+        match self {
+            Self::Type31 => crate::damage::DamageProfile {
+                thresholds_raw: [0, 4000, 200, 0, 200, 0, 0],
+                multipliers_q8: [0, 256, 256, 512, 128, 0, 0],
             },
-            multipliers_q8: [0, 256, 256, 512, 128, 0, 0],
+            Self::Type105 => crate::damage::DamageProfile {
+                thresholds_raw: [0, 3000, 1500, 500, 200, 0, 0],
+                multipliers_q8: [0, 256, 256, 512, 128, 0, 0],
+            },
+            Self::Type73 | Self::Type109 => crate::damage::DamageProfile {
+                thresholds_raw: [0, 3000, 1000, 1000, 200, 0, 0],
+                multipliers_q8: [0, 256, 256, 256, 256, 0, 0],
+            },
         }
     }
-    const fn emitter_interval_us(self) -> u32 {
+    /// Healthy sound and its period: the slugs' 54 every four seconds, the
+    /// bugs' own cue twice a second.
+    const fn healthy_sound(self) -> (u16, i32) {
         match self {
-            Self::Type31 => 1_000_000,
-            Self::Type105 => 600_000,
+            Self::Type31 | Self::Type105 => (54, 4_000_000),
+            Self::Type73 => (92, 500_000),
+            Self::Type109 => (93, 500_000),
+        }
+    }
+    /// Sub-B rates and Sub-C `+0C`: the bugs also stand on the waved sea.
+    const fn lateral_rate_and_surface_mode(self) -> (i32, i8) {
+        match self {
+            Self::Type31 | Self::Type105 => (1_000_000, 0),
+            Self::Type73 | Self::Type109 => (1000, 1),
+        }
+    }
+    const fn emitter(self) -> Option<v2k_formats::collision::ProjectileEmitterDescriptor> {
+        use v2k_formats::collision::ProjectileEmitterDescriptor as E;
+        let (method, interval, spread, threshold, speed, tolerance, sound) = match self {
+            Self::Type31 => (30, 1_000_000, 256, 4000, 1500, 2560, 105),
+            Self::Type105 => (30, 600_000, 256, 4000, 1500, 2560, 105),
+            Self::Type73 => return None,
+            Self::Type109 => (16, 1_500_000, 100, 20_000, 0, 3072, 64),
+        };
+        Some(E {
+            projectile_method: method,
+            random_interval_us: interval,
+            spread_raw: spread,
+            aim_threshold_raw: threshold,
+            speed_override_raw: speed,
+            target_axis_tolerance_raw: tolerance,
+            sound_id: sound,
+            raw_word_at_0x12: 0,
+            alternate_emitter_raw: 0,
+            stochastic_gate_mode: 0,
+            auxiliary_command: 0,
+            variable_bindings: [0; 4],
+        })
+    }
+    /// Section-12 `+A4`: Defecate Virus's terrain task lifetime.
+    pub(crate) const fn terrain_contact_lifetime_ms(self) -> u16 {
+        self.bug_cues().0
+    }
+    /// Terrain-contact task lifetime, accepted-hit cue and Run Away audio.
+    const fn bug_cues(self) -> (u16, Option<u16>, Option<u16>, u32) {
+        match self {
+            Self::Type31 | Self::Type105 => (0, None, None, 0),
+            Self::Type73 | Self::Type109 => (64, Some(93), Some(86), 1_000_000),
         }
     }
 }
@@ -210,14 +335,15 @@ impl Type31Row {
 pub struct Type31Runtime {
     pub(crate) row: Type31Row,
     pub(crate) allocation: MainBaseAbortActorLease,
-    /// Type31's authored index; a Type105 child has none.
+    /// The authored index; a dynamic birth has none.
     pub(crate) spawn_index: Option<usize>,
-    /// Type105's split birth record.
+    /// A dynamic birth's record: Type31's class18 or a lethal 416820 split.
     pub(crate) birth: Option<SplitChildRequest>,
     pub(crate) anchor_raw: [i16; 3],
     pub(crate) sub_d_runtime: Type9SubDRuntime,
     pub(crate) sub_d_owner: Type9SubDFrameOwner,
-    pub(crate) sub_e_runtime: GenericEmitterRuntime,
+    /// The 09A80 E record; Type73 owns none.
+    pub(crate) sub_e_runtime: Option<GenericEmitterRuntime>,
     pub(crate) split_terminal: Option<death::Type31SplitTerminalState>,
     pub(crate) quiet_death_context: Option<BehaviorContextRuntime>,
 }
@@ -239,13 +365,28 @@ impl Type31Runtime {
 
 pub type Type31Owner = shared::NativeGroundActorOwner<profile::Type31Profile>;
 pub type Type105Owner = shared::NativeGroundActorOwner<profile::Type105Profile>;
+pub type Type73Owner = shared::NativeGroundActorOwner<profile::Type73Profile>;
+pub type Type109Owner = shared::NativeGroundActorOwner<profile::Type109Profile>;
 pub type Type31Outcome = shared::NativeGroundActorOutcome;
 
-/// One scheduler entry for both rows; each keeps its own framework profile.
+/// One scheduler entry for every row; each keeps its own framework profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type31FamilyOwner {
     Type31(Type31Owner),
     Type105(Type105Owner),
+    Type73(Type73Owner),
+    Type109(Type109Owner),
+}
+
+macro_rules! each_owner {
+    ($self:expr, $owner:ident => $body:expr) => {
+        match $self {
+            Type31FamilyOwner::Type31($owner) => $body,
+            Type31FamilyOwner::Type105($owner) => $body,
+            Type31FamilyOwner::Type73($owner) => $body,
+            Type31FamilyOwner::Type109($owner) => $body,
+        }
+    };
 }
 
 impl Type31FamilyOwner {
@@ -257,41 +398,28 @@ impl Type31FamilyOwner {
         {
             Some(Type31Row::Type31) => Type31Owner::adopt(manager, id).map(Self::Type31),
             Some(Type31Row::Type105) => Type105Owner::adopt(manager, id).map(Self::Type105),
+            Some(Type31Row::Type73) => Type73Owner::adopt(manager, id).map(Self::Type73),
+            Some(Type31Row::Type109) => Type109Owner::adopt(manager, id).map(Self::Type109),
             None => Err(shared::NativeGroundActorBlock::Allocation),
         }
     }
     pub const fn entity_id(self) -> u32 {
-        match self {
-            Self::Type31(owner) => owner.entity_id(),
-            Self::Type105(owner) => owner.entity_id(),
-        }
+        each_owner!(self, owner => owner.entity_id())
     }
     pub(crate) const fn actor_lease(self) -> MainBaseAbortActorLease {
-        match self {
-            Self::Type31(owner) => owner.actor_lease(),
-            Self::Type105(owner) => owner.actor_lease(),
-        }
+        each_owner!(self, owner => owner.actor_lease())
     }
     pub(crate) const fn has_pending_prefix(self) -> bool {
-        match self {
-            Self::Type31(owner) => owner.has_pending_prefix(),
-            Self::Type105(owner) => owner.has_pending_prefix(),
-        }
+        each_owner!(self, owner => owner.has_pending_prefix())
     }
     pub(crate) fn park_external_prefix(&mut self) {
-        match self {
-            Self::Type31(owner) => owner.park_external_prefix(),
-            Self::Type105(owner) => owner.park_external_prefix(),
-        }
+        each_owner!(self, owner => owner.park_external_prefix())
     }
     pub(crate) const fn fork_for_main_base_abort_transaction(self) -> Self {
         self
     }
     pub(crate) fn completed_mutation_boundary(self, manager: &EntityManager) -> bool {
-        match self {
-            Self::Type31(owner) => owner.completed_mutation_boundary(manager),
-            Self::Type105(owner) => owner.completed_mutation_boundary(manager),
-        }
+        each_owner!(self, owner => owner.completed_mutation_boundary(manager))
     }
 }
 
@@ -309,9 +437,10 @@ pub struct Type31Publication {
     pub initializer_fallback: bool,
 }
 
+/// A dynamic birth: Type31's class18 Type105, or a lethal split's newborn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Type105BirthPublication {
-    pub owner: Type105Owner,
+    pub owner: Type31FamilyOwner,
     pub publication: Type31Publication,
 }
 
@@ -354,23 +483,21 @@ pub fn tick_type31_family(
             notifications: frame.notifications,
         },
     };
+    macro_rules! tick {
+        ($owner:expr, $variant:ident) => {{
+            let tick = shared::tick_native_ground_actor(manager, $owner, shared_frame);
+            Type31FamilyTick {
+                outcome: tick.outcome,
+                retained_owner: tick.retained_owner.map(Type31FamilyOwner::$variant),
+                replacement_terminal: tick.replacement_terminal,
+            }
+        }};
+    }
     match owner {
-        Type31FamilyOwner::Type31(owner) => {
-            let tick = shared::tick_native_ground_actor(manager, owner, shared_frame);
-            Type31FamilyTick {
-                outcome: tick.outcome,
-                retained_owner: tick.retained_owner.map(Type31FamilyOwner::Type31),
-                replacement_terminal: tick.replacement_terminal,
-            }
-        }
-        Type31FamilyOwner::Type105(owner) => {
-            let tick = shared::tick_native_ground_actor(manager, owner, shared_frame);
-            Type31FamilyTick {
-                outcome: tick.outcome,
-                retained_owner: tick.retained_owner.map(Type31FamilyOwner::Type105),
-                replacement_terminal: tick.replacement_terminal,
-            }
-        }
+        Type31FamilyOwner::Type31(owner) => tick!(owner, Type31),
+        Type31FamilyOwner::Type105(owner) => tick!(owner, Type105),
+        Type31FamilyOwner::Type73(owner) => tick!(owner, Type73),
+        Type31FamilyOwner::Type109(owner) => tick!(owner, Type109),
     }
 }
 
@@ -383,6 +510,10 @@ pub(crate) fn allocation_authenticates(entity: &Entity) -> bool {
             && match runtime.row {
                 Type31Row::Type31 => runtime.spawn_index.is_some() && runtime.birth.is_none(),
                 Type31Row::Type105 => runtime.spawn_index.is_none() && runtime.birth.is_some(),
+                // Authored, or born by a lethal 416820 split.
+                Type31Row::Type73 | Type31Row::Type109 => {
+                    runtime.spawn_index.is_some() != runtime.birth.is_some()
+                }
             }
             && entity.model_slots == [Some(runtime.row.model()); 4]
             && entity.capability_flags == 8
@@ -415,9 +546,7 @@ pub(crate) fn authenticate_metadata(
 ) -> Result<(), Type31Block> {
     use crate::actor_detailed_sound::ActorDetailedSoundPolicy;
     use crate::entity_collision_state::{CommonMoverGklPayloads, CommonWorldEffectProfile};
-    use v2k_formats::collision::{
-        ProjectileEmitterDescriptor, SubBLateralDescriptor, SubCLiftDescriptor,
-    };
+    use v2k_formats::collision::{SubBLateralDescriptor, SubCLiftDescriptor};
     use RetailRuntimeValue::Known;
     let Some(initializer) = &metadata.initializer else {
         return Err(Type31Block::Metadata);
@@ -435,9 +564,12 @@ pub(crate) fn authenticate_metadata(
                         && record.dependencies == TYPE31_SUB_H_DEPENDENCIES[index]
                 })
         }
-        (Type31Row::Type105, Known(None)) => true,
+        (Type31Row::Type105 | Type31Row::Type73 | Type31Row::Type109, Known(None)) => true,
         _ => false,
     };
+    let (healthy_sound, healthy_period) = row.healthy_sound();
+    let (lateral_rate, surface_mode) = row.lateral_rate_and_surface_mode();
+    let (contact_lifetime, accepted_hit_sound, run_away_sound, run_away_period) = row.bug_cues();
     if !h_matches
         || metadata.model_slots != [row.model() as u16; 4]
         || metadata.model_variable_count_raw != Known(0)
@@ -449,14 +581,14 @@ pub(crate) fn authenticate_metadata(
             != Known(CommonWorldEffectProfile {
                 surface_selectors: [0, 0],
                 surface_lifetime_ms: 0,
-                low_health_effect_words: [54, 0, 0],
+                low_health_effect_words: [healthy_sound, 0, 0],
             })
         || metadata.detailed_sound_policy
             != Known(ActorDetailedSoundPolicy {
                 full_health_raw: row.health(),
-                healthy_sounds: [54, 0],
+                healthy_sounds: [healthy_sound, 0],
                 low_health_sound: 0,
-                periods_raw: [4_000_000, 0],
+                periods_raw: [healthy_period, 0],
             })
         || metadata.common_mover_topology != Known(row.topology())
         || metadata.common_mover_gkl_payloads
@@ -468,8 +600,8 @@ pub(crate) fn authenticate_metadata(
         || metadata.sub_a_propulsion_descriptor != Known(Some(row.sub_a()))
         || metadata.sub_b_lateral_descriptor
             != Known(Some(SubBLateralDescriptor {
-                projection_threshold_rate_raw: 1_000_000,
-                correction_rate_raw: 1_000_000,
+                projection_threshold_rate_raw: lateral_rate,
+                correction_rate_raw: lateral_rate,
             }))
         || metadata.sub_c_lift_descriptor
             != Known(Some(SubCLiftDescriptor {
@@ -478,35 +610,21 @@ pub(crate) fn authenticate_metadata(
                 strength_raw: 0x300000,
                 near_boost_range_raw: 100,
                 damping_range_raw: 200,
-                surface_mode_raw: 0,
+                surface_mode_raw: surface_mode,
                 offset_sample_raw: 0,
                 reserved_at_0x0e: [0; 2],
             }))
         || metadata.sub_d_steering_descriptor != Known(Some(row.sub_d()))
-        || metadata.projectile_emitter_descriptor
-            != Known(Some(ProjectileEmitterDescriptor {
-                projectile_method: 30,
-                random_interval_us: row.emitter_interval_us(),
-                spread_raw: 256,
-                aim_threshold_raw: 4000,
-                speed_override_raw: 1500,
-                target_axis_tolerance_raw: 2560,
-                sound_id: 105,
-                raw_word_at_0x12: 0,
-                alternate_emitter_raw: 0,
-                stochastic_gate_mode: 0,
-                auxiliary_command: 0,
-                variable_bindings: [0; 4],
-            }))
+        || metadata.projectile_emitter_descriptor != Known(row.emitter())
         || metadata.sub_f_swimming_descriptor != Known(None)
         || metadata.sub_j_attachment_descriptor != Known(None)
         || metadata.actor_animation_descriptor != Known(None)
         || metadata.status_component_descriptor != Known(None)
         || metadata.sub_n_payload.is_some()
-        || metadata.terrain_contact_task_lifetime_ms != Known(0)
+        || metadata.terrain_contact_task_lifetime_ms != Known(contact_lifetime)
         || metadata.constructor_sound_attachment_id != Known(None)
         || metadata.death_sound_id != Known(None)
-        || metadata.accepted_hit_presentation_sound_id != Known(None)
+        || metadata.accepted_hit_presentation_sound_id != Known(accepted_hit_sound)
         || metadata.infected_model_presentation_sound_id != Known(None)
         || metadata.cured_model_presentation_sound_id != Known(None)
         || metadata.generic_hit_sound_id != Known(None)
@@ -514,8 +632,8 @@ pub(crate) fn authenticate_metadata(
         || metadata.search_attack_optional_prelude_sound_id != Known(None)
         || metadata.search_attack_aim_sound_id != Known(None)
         || metadata.search_attack_aim_sound_period_raw != Known(0)
-        || metadata.run_away_optional_sound_id != Known(None)
-        || metadata.run_away_sound_period_raw != Known(0)
+        || metadata.run_away_optional_sound_id != Known(run_away_sound)
+        || metadata.run_away_sound_period_raw != Known(run_away_period)
         || initializer.initializer_state_flags_raw != row.default_flags()
         || initializer.common_axis_descriptor != row.axis()
         || initializer.behavior_choices.as_ref() != row.choices()
@@ -527,18 +645,18 @@ pub(crate) fn authenticate_metadata(
     Ok(())
 }
 
-/// 24E30 zeroes the record and copies method30 and sound105.
-pub(crate) fn emitter_constructor() -> GenericEmitterRuntime {
-    GenericEmitterRuntime {
+/// 24E30 zeroes the record and copies the row's method and sound.
+pub(crate) fn emitter_constructor(row: Type31Row) -> Option<GenericEmitterRuntime> {
+    row.emitter().map(|emitter| GenericEmitterRuntime {
         joint_bindings: [None; 2],
-        projectile_method: 30,
+        projectile_method: emitter.projectile_method,
         emitter_selector: 0,
-        sound_id: 105,
+        sound_id: u32::from(emitter.sound_id),
         direct_mode: 0,
         remaining_time_raw: 0,
         manual_step_raw: 0,
         remaining_bursts_raw: 0,
         cadence_raw: 0,
         basis_adjustment_identity: None,
-    }
+    })
 }

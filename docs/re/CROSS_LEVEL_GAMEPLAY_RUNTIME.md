@@ -200,6 +200,10 @@ children their class18 split births share the
 [slug owner](TYPE31_VIRUS_SLUG.md) on the ground host: Run Away10, Defecate
 Virus4 and Move About Aimlessly5. Type31's `C080` births eight Type105s inline,
 as Type40's births Type56s; a Type105 has no H and dies quietly through class2.
+The [Type73 and Type109 bugs](TYPE73_SPLITTING_BUGS.md) (worlds18 and26)
+join that owner with Wander Near Location6, Run Away10 and Defecate Virus4.
+Their `416820` damage modifier splits a lethal hit into two newborns of the
+same type, up to 25 bugs, before the quiet class2 death.
 
 The six authored [Type25 sharks](TYPE25_SHARK.md) (worlds22, 23 and34) and
 world34's Hive births share the fish owner without its `0x2000` environment

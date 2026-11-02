@@ -295,7 +295,9 @@ fn commit_plan(
                 &mut entity.native_type38_runtime.as_mut().unwrap().sub_d_runtime
             }
             12 | 127 => &mut entity.native_type12_runtime.as_mut().unwrap().sub_d_runtime,
-            31 | 105 => &mut entity.native_type31_runtime.as_mut().unwrap().sub_d_runtime,
+            31 | 105 | 73 | 109 => {
+                &mut entity.native_type31_runtime.as_mut().unwrap().sub_d_runtime
+            }
             13 => {
                 &mut entity
                     .intro2_type13_common_mover_runtime
@@ -595,7 +597,7 @@ fn contact_topology(
             56 => entity.native_type56_runtime.is_none(),
             38 | 129 | 119 | 32 => entity.native_type38_runtime.is_none(),
             12 | 127 => entity.native_type12_runtime.is_none(),
-            31 | 105 => entity.native_type31_runtime.is_none(),
+            31 | 105 | 73 | 109 => entity.native_type31_runtime.is_none(),
             13 => entity.intro2_type13_common_mover_runtime.is_none(),
             14 | 15 | 39 | 87 | 108 => entity.intro2_flyer_frame_owner.is_none(),
             10 | 5 | 80 | 126 | 55 | 81 | 29 => entity.intro2_type10_runtime.is_none(),
@@ -656,7 +658,7 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         43 => crate::native_type43::manager_allocation_authenticates(manager, id),
         38 | 129 | 119 | 32 => crate::native_type38::manager_allocation_authenticates(manager, id),
         12 | 127 => crate::native_type12::manager_allocation_authenticates(manager, id),
-        31 | 105 => crate::native_type31::manager_allocation_authenticates(manager, id),
+        31 | 105 | 73 | 109 => crate::native_type31::manager_allocation_authenticates(manager, id),
         13 => crate::intro2_type13_live::type13_manager_allocation_authenticates(manager, id),
         14 | 15 | 39 | 87 | 108 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
         10 | 5 | 80 | 126 | 55 | 81 | 29 => {
@@ -743,8 +745,8 @@ pub(crate) fn native_weapon_contact_owner_authenticates(
 
 fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool {
     match kind {
-        26 | 30 | 33 | 38 | 129 | 119 | 32 | 12 | 127 | 31 | 105 | 40 | 56 | 43 | 13 | 14 | 15
-        | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57 => {
+        26 | 30 | 33 | 38 | 129 | 119 | 32 | 12 | 127 | 31 | 105 | 73 | 109 | 40 | 56 | 43 | 13
+        | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57 => {
             native_insect_allocation_authenticates(manager, id)
         }
         kind if NativeWorkerProfile::from_entity_type(kind).is_some() => {

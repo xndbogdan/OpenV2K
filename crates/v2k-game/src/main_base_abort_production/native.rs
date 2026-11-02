@@ -286,7 +286,8 @@ pub(super) fn dispatch_native_actor(
         40 if entity.native_type40_runtime.is_some() => NativeActor::Type40,
         56 if entity.native_type56_runtime.is_some() => NativeActor::Type56,
         31 if entity.native_type31_runtime.is_some() => NativeActor::Type31,
-        105 if entity.native_type31_runtime.is_some() => NativeActor::Type105,
+        // 10C10 reaches the bugs' class2 directly; 416820 is a hit modifier.
+        105 | 73 | 109 if entity.native_type31_runtime.is_some() => NativeActor::Type105,
         27 if entity.rolling_boulder_runtime.is_some() => NativeActor::Type27,
         crate::native_type43::TYPE35_ENTITY_TYPE if entity.native_type43_runtime.is_some() => {
             NativeActor::Type35
@@ -552,7 +553,16 @@ fn dispatch(
         }
         NativeActor::Type105 => {
             // 10C10 -> DB80 -> class2's C470 quiet terminal.
-            let death = crate::native_type31::death::begin_type105_standard_death(entities, id)
+            let row = entities
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .and_then(crate::native_type31::type31_row)
+                .ok_or_else(|| {
+                    block(Block::Type31(
+                        crate::native_type31::death::Type31DeathBlock::Allocation,
+                    ))
+                })?;
+            let death = crate::native_type31::death::begin_quiet_standard_death(entities, id, row)
                 .map_err(|error| block(Block::Type31(error)))?;
             retire_native_ground_death(specialized_tasks, death.publication);
             MainBaseAbortActorDisposition::QuietDeath

@@ -279,6 +279,24 @@ pub const NATIVE_TYPE105_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor 
     ..NATIVE_TYPE31_SUB_D
 };
 
+/// Type73 (worlds 18/26): the no-pitch 1F660 path with divisor32, probes
+/// 512/256 and flags 0x11, the steepness then object arms.
+pub const NATIVE_TYPE73_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 32,
+    couple_yaw_into_roll_raw: 0,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 512,
+    lateral_probe_raw: 256,
+    classifier_flags: 0x11,
+    reserved_at_0x0b: 0,
+};
+
+/// Type109 (world 26): Type73's path with flags 0x15, adding the material arm.
+pub const NATIVE_TYPE109_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    classifier_flags: 0x15,
+    ..NATIVE_TYPE73_SUB_D
+};
+
 /// Ordinary Type33 (worlds 42/43/47): Type38's no-pitch path, divisor100 and
 /// probes512/256, with flags0 skipping the classifier as the flyers' does.
 pub const NATIVE_TYPE33_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
@@ -416,6 +434,8 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | NATIVE_TYPE119_SUB_D
             | NATIVE_TYPE31_SUB_D
             | NATIVE_TYPE105_SUB_D
+            | NATIVE_TYPE73_SUB_D
+            | NATIVE_TYPE109_SUB_D
             | NATIVE_TYPE18_SUB_D
             | NATIVE_TYPE28_SUB_D
             | INTRO2_TYPE10_SUB_D

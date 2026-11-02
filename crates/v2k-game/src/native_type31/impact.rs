@@ -16,6 +16,8 @@ pub(crate) fn apply_type31_family_particle_hit(
     match row {
         Some(super::Type31Row::Type31) => apply::<super::profile::Type31Profile>(frame, impact),
         Some(super::Type31Row::Type105) => apply::<super::profile::Type105Profile>(frame, impact),
+        Some(super::Type31Row::Type73) => apply::<super::profile::Type73Profile>(frame, impact),
+        Some(super::Type31Row::Type109) => apply::<super::profile::Type109Profile>(frame, impact),
         None => Type31ImpactOutcome::Blocked {
             reason: Type31ImpactBlock::Runtime("native allocation"),
             committed_prefix: false,

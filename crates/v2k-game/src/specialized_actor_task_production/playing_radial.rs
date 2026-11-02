@@ -146,7 +146,7 @@ impl SpecializedActorTaskScheduler {
                 76 | 77 => entity.native_type76_runtime.is_some(),
                 30 | 33 => entity.native_type30_runtime.is_some(),
                 40 => entity.native_type40_runtime.is_some(),
-                31 | 105 => entity.native_type31_runtime.is_some(),
+                31 | 105 | 73 | 109 => entity.native_type31_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
                 66 | 82 | 125 => entity.intro2_type66_runtime.is_some(),
                 22 | 23 | 24 | 62 | 124 | 25 | 37 | 20 => entity.shared_fish_runtime.is_some(),
@@ -345,6 +345,36 @@ pub(crate) struct PlayingNativeCallbacks<'a> {
     pub(crate) active_terminal_calls: &'a [crate::intro2_radial::Intro2RadialTerminalCall],
 }
 impl DynamicRadialLiveCallbacks for PlayingNativeCallbacks<'_> {
+    fn lethal_split_custody(&self) -> bool {
+        true
+    }
+    fn lethal_split(
+        &mut self,
+        entities: &mut EntityManager,
+        id: u32,
+        world_fx: &mut WorldFx,
+        retail_tick: u32,
+        notifications: &mut GameplayNotifications,
+        split: crate::live_actor_checked_damage::LethalSplitRequest,
+    ) -> Option<
+        Result<
+            crate::live_actor_checked_damage::LiveActorDeathResult<
+                crate::entity::DynamicRadialDeathPublication,
+            >,
+            crate::entity::DynamicRadialLiveBlockReason,
+        >,
+    > {
+        Some(crate::native_type31::split::radial_lethal_split(
+            entities,
+            id,
+            self.resources,
+            world_fx,
+            retail_tick,
+            self.scheduler,
+            notifications,
+            split,
+        ))
+    }
     fn active_terminal_call(&self, manager: &EntityManager, id: u32) -> bool {
         self.active_terminal_calls
             .iter()

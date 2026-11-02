@@ -1,5 +1,6 @@
 //! 10C10/DB80/AC60 terminals: Type31's synchronous class18 `C080` split into
-//! eight Type105 children, and Type105's quiet class2 `C470`.
+//! eight Type105 children, and the quiet class2 `C470` of Type105, Type73
+//! and Type109.
 
 use super::*;
 use crate::{
@@ -71,10 +72,12 @@ pub fn finished_terminal_authenticates(manager: &EntityManager, id: u32) -> bool
                         && t.context.active_style().style_address() == 0x004c73d8)
                         .then_some(t.context)
                 }),
-                Type31Row::Type105 => runtime.quiet_death_context.filter(|context| {
-                    context.descriptor()
-                        == BehaviorDescriptorIdentity::Named(&QUIET_DEATH_BEHAVIOR_PROGRAM)
-                }),
+                Type31Row::Type105 | Type31Row::Type73 | Type31Row::Type109 => {
+                    runtime.quiet_death_context.filter(|context| {
+                        context.descriptor()
+                            == BehaviorDescriptorIdentity::Named(&QUIET_DEATH_BEHAVIOR_PROGRAM)
+                    })
+                }
             };
             terminal.is_some_and(|context| {
                 e.current_behavior_context == RetailRuntimeValue::Known(Some(context))
@@ -149,7 +152,7 @@ fn living_entry(
     let style = context.active_style().audited().ok_or(B::Graph)?;
     if !matches!(
         (program.class_id, style.variant),
-        (4, 0) | (5, 0) | (10, 0 | 1)
+        (4, 0) | (5, 0) | (6, 0) | (10, 0 | 1)
     ) || !row
         .choices()
         .iter()
@@ -178,12 +181,16 @@ fn already_returned(
     }
 }
 
-/// Type105: class2 has no task; C470 clears the slots and marks 14990.
-pub fn begin_type105_standard_death(
+/// Type105/73/109: class2 has no task; C470 clears the slots and marks 14990.
+pub fn begin_quiet_standard_death(
     manager: &mut EntityManager,
     id: u32,
+    row: Type31Row,
 ) -> Result<LiveActorDeathResult<NativeGroundTerminalPublication>, Type31DeathBlock> {
-    let Some((context, allocation)) = living_entry(manager, id, Type31Row::Type105)? else {
+    if row.alternate_behavior_class() != 2 {
+        return Err(Type31DeathBlock::Allocation);
+    }
+    let Some((context, allocation)) = living_entry(manager, id, row)? else {
         return Ok(already_returned(manager, id));
     };
     let terminal = context
@@ -398,7 +405,7 @@ impl SplitAndExplodeHost for Type31SplitHost<'_, '_> {
     ) -> Result<SplitChildAttempt<Infallible>, Self::Block> {
         let birth = self
             .manager
-            .construct_native_type105(
+            .construct_native_type31_family_child(
                 request,
                 self.frame.resources,
                 self.frame.world_fx,
@@ -407,7 +414,7 @@ impl SplitAndExplodeHost for Type31SplitHost<'_, '_> {
             .map_err(Self::Block::Child)?;
         self.frame
             .tasks
-            .register_split_type105_child(birth.owner)
+            .register_split_type31_family_child(birth.owner)
             .map_err(Self::Block::Runtime)?;
         Ok(SplitChildAttempt::Created)
     }

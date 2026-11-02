@@ -2478,6 +2478,24 @@ impl WorldFx {
         self.global_elapsed_micros
     }
 
+    /// `416820`'s lethal particle (class 90 or 51) through `440A60`: the
+    /// body's position, its X/Z velocity with Y zero, its handle, sign zero.
+    pub fn emit_lethal_split_particle_raw(
+        &mut self,
+        particle_class: u8,
+        position_raw: [i16; 3],
+        velocity_raw: [i16; 3],
+        owner_id: u32,
+    ) {
+        let burst = single_descriptor_particle_burst(
+            raw_position_to_world(position_raw),
+            particle_class,
+            velocity_raw.map(i32::from),
+            Some(owner_id),
+        );
+        self.materialize_particle_burst(burst);
+    }
+
     /// Class69's `5E10` bubble through `440A60`: the bitten body's position,
     /// the shark's velocity, its handle and its state sign.
     pub fn emit_shark_bite_particle_raw(

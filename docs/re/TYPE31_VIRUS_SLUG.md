@@ -5,7 +5,8 @@ world 31), the Type105 rows their class18 split births, and their shared
 native owner, [`native_type31`](../../crates/v2k-game/src/native_type31.rs).
 Both rows run on the shared ground host. Static contact is in
 [INSECT_STATIC_CONTACT.md](INSECT_STATIC_CONTACT.md); the class18 kernel is in
-[ALPINE_INSECTS.md](ALPINE_INSECTS.md), whose Type40 split it shares.
+[ALPINE_INSECTS.md](ALPINE_INSECTS.md), whose Type40 split it shares. The owner also
+hosts the [Type73 and Type109 splitting bugs](TYPE73_SPLITTING_BUGS.md).
 
 ## Section-12 rows
 

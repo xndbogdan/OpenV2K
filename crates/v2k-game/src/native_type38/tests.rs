@@ -619,7 +619,7 @@ fn reselection_nearby_reads_the_live_axis() {
             _ => panic!("named"),
         }
     };
-    let mut reselect_once = |manager: &mut EntityManager, fx: &mut WorldFx| {
+    let reselect_once = |manager: &mut EntityManager, fx: &mut WorldFx| {
         reselect::<profile::Type38Profile>(
             manager,
             id,

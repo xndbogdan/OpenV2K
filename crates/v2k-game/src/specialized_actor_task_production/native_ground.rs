@@ -26,9 +26,9 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for SpecializedActorTas
         Ok(())
     }
 
-    fn register_split_type105_child(
+    fn register_split_type31_family_child(
         &mut self,
-        owner: crate::native_type31::Type105Owner,
+        owner: crate::native_type31::Type31FamilyOwner,
     ) -> Result<(), &'static str> {
         if self
             .owners
@@ -38,9 +38,7 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for SpecializedActorTas
             return Err("split child already owns a task");
         }
         self.owners
-            .push(SpecializedActorTaskOwner::NativeType31Family(
-                crate::native_type31::Type31FamilyOwner::Type105(owner),
-            ));
+            .push(SpecializedActorTaskOwner::NativeType31Family(owner));
         Ok(())
     }
 
@@ -80,9 +78,9 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for Intro2RadialCursorC
         Ok(())
     }
 
-    fn register_split_type105_child(
+    fn register_split_type31_family_child(
         &mut self,
-        owner: crate::native_type31::Type105Owner,
+        owner: crate::native_type31::Type31FamilyOwner,
     ) -> Result<(), &'static str> {
         if self
             .pending
@@ -94,9 +92,7 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for Intro2RadialCursorC
         }
         // As for Type56: the appended child is visited later in this pass.
         self.pending
-            .push(SpecializedActorTaskOwner::NativeType31Family(
-                crate::native_type31::Type31FamilyOwner::Type105(owner),
-            ));
+            .push(SpecializedActorTaskOwner::NativeType31Family(owner));
         Ok(())
     }
 

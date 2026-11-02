@@ -15,8 +15,8 @@ use crate::{
     },
     intro2_common_dying::Intro2CommonDyingBlock,
     live_actor_checked_damage::{
-        apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
-        LiveActorDamageOutcome, LiveActorDamageRequest,
+        apply_live_actor_checked_damage_with_split, LiveActorDamageEntry, LiveActorDamageError,
+        LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathEntry,
     },
     primary_hit::PrimaryHitCapabilityEmission,
     world_fx::ParticleEntityImpact,
@@ -335,7 +335,7 @@ fn run<P: NativeGroundActorProfile>(
     .map_err(|_| Block::Runtime("zero impact mass"))?;
     entity.set_velocity_raw(body.linear_velocity_xyz_raw);
     entity.set_rotation_heading_pitch_roll_raw(body.angular_heading_pitch_roll_raw);
-    let checked = apply_live_actor_checked_damage(
+    let checked = apply_live_actor_checked_damage_with_split(
         manager,
         world_fx,
         LiveActorDamageRequest {
@@ -349,10 +349,25 @@ fn run<P: NativeGroundActorProfile>(
             delivery,
             entry: LiveActorDamageEntry::Checked,
         },
-        |manager, world_fx, feedback| {
+        P::LETHAL_SPLIT,
+        |manager, world_fx, feedback, entry| {
             let feedback = feedback.ok_or(Intro2CommonDyingBlock::Runtime(
                 "ground actor death feedback",
             ))?;
+            if let LiveActorDeathEntry::LethalSplit(split) = entry {
+                return P::publish_lethal_split(
+                    manager,
+                    id,
+                    &mut NativeGroundDeathContext::Split {
+                        resources: resources.cache(),
+                        fx: world_fx,
+                        tick: feedback.retail_tick,
+                        tasks: scheduler,
+                    },
+                    split,
+                    Some(&mut *feedback.notifications),
+                );
+            }
             if P::TERMINAL_DEATH {
                 let HitResources::Terminal(world) = &mut resources else {
                     return Err(Intro2CommonDyingBlock::Runtime(
