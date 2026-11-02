@@ -12,18 +12,28 @@ use crate::{
     shared_retarget_mover::SharedRetargetTaskState,
 };
 
+/// The birth's 164D0 answers for each row's nearby rules.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct Nearby {
+    pub player: bool,
+    pub beacon: bool,
+    pub baddie: bool,
+    pub base: bool,
+}
+
 pub(super) fn select(
     row: Type38Row,
-    player_nearby: bool,
-    beacon_nearby: bool,
+    nearby: Nearby,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<BehaviorSelection, Type38Block> {
     select_initial_behavior(
         row.choices(),
         |rule| match rule {
             BehaviorWeightRule::Always => 1,
-            BehaviorWeightRule::PlayerNearby => i32::from(player_nearby),
-            BehaviorWeightRule::BeaconNearby => i32::from(beacon_nearby),
+            BehaviorWeightRule::PlayerNearby => i32::from(nearby.player),
+            BehaviorWeightRule::BeaconNearby => i32::from(nearby.beacon),
+            BehaviorWeightRule::BaddieNearby => i32::from(nearby.baddie),
+            BehaviorWeightRule::BaseNearby => i32::from(nearby.base),
             // A fresh +34 of zero: 16490 needs the tick both below 250 and,
             // signed, above 249.
             BehaviorWeightRule::UnderAttack => 0,
@@ -38,7 +48,7 @@ pub(super) fn select(
 pub(super) fn emitter_constructor(row: Type38Row) -> GenericEmitterRuntime {
     // 24E30 zeroes 0x3c and copies method/sound. E+12 is not a model binding.
     GenericEmitterRuntime {
-        joint_bindings: [None; 2],
+        joint_bindings: row.joint_bindings(),
         projectile_method: row.emitter().projectile_method,
         emitter_selector: 0,
         sound_id: u32::from(row.emitter().sound_id),
@@ -66,8 +76,11 @@ pub(super) fn initializer_storage_authenticates(entity: &Entity) -> bool {
     ) && matches!(
         entity.sub_a_propulsion_runtime,
         RetailRuntimeValue::Known(Some(_))
-    ) && matches!(&entity.sub_h_external_frame_runtime,
-        RetailRuntimeValue::Known(Some(h)) if h.records().len() == row.sub_h_records())
+    ) && match &entity.sub_h_external_frame_runtime {
+        RetailRuntimeValue::Known(Some(h)) => h.records().len() == row.sub_h_records(),
+        RetailRuntimeValue::Known(None) => row.sub_h_records() == 0,
+        RetailRuntimeValue::Unresolved => false,
+    }
 }
 
 /// ACD0/B6C0 initialize tasks only. Reselection never reconstructs the
@@ -82,6 +95,25 @@ pub(super) fn publish_acquiring(
     let Some(row) = entity.native_type38_runtime.as_ref().map(|r| r.row) else {
         return false;
     };
+    // The H-less turrets' Search7 is B6C0 on the shared host; their class29
+    // is D190's turret.
+    if row.turrets() {
+        return match selection.program.class_id {
+            7 => {
+                initializer_storage_authenticates(entity)
+                    && crate::native_ground_actor::publication::publish_shared_root_class(
+                        entity,
+                        metadata,
+                        selection,
+                        context,
+                        row.axis(),
+                        next_random,
+                    )
+            }
+            29 => super::turret::publish_class29(entity, selection, context),
+            _ => false,
+        };
+    }
     // Type32's Follow Beacons33 runs B740 and Type2's Defecate Virus4 B9E0
     // on the shared host's programs.
     if selection.program.class_id == 4 {

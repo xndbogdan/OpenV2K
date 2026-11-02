@@ -46,6 +46,13 @@ const MODEL1168_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
     sub_k: Some([1, 2]),
     sub_l: None,
 };
+/// Models 24/28 (Type107/Type121): L alone on selectors 1/2, its limits
+/// both (64, 31), in a four-word bank whose words 3 and 4 E's joints bind.
+const MODEL24_PAYLOADS: CommonMoverGklPayloads = CommonMoverGklPayloads {
+    sub_g: None,
+    sub_k: None,
+    sub_l: Some([1, 2, 64, 31, 64, 31]),
+};
 /// Model operands address callback values through six bits.
 const MODEL_ADDRESSABLE_VARIABLES: usize = 64;
 
@@ -62,7 +69,8 @@ pub enum Intro2KlConstructionError {
 /// and stores read/write the bank itself, preserving actual binding identity.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Intro2KlComponents {
-    sub_k_selectors: [u8; 2],
+    /// None for an L-only body (Type107/Type121), whose 09A80 allocates no K.
+    sub_k_selectors: Option<[u8; 2]>,
     /// None for a K-only body (Type2), whose 09A80 allocates no L.
     sub_l_descriptor: Option<[u8; 6]>,
     /// The type's `+0x110` words, zeroed by 09A80.
@@ -92,10 +100,11 @@ impl Intro2KlComponents {
 
     fn authenticate_profile(
         metadata: &EntityTypeRuntimeMetadata,
-    ) -> Result<([u8; 2], Option<[u8; 6]>, usize), Intro2KlConstructionError> {
-        let k_only = match metadata.common_mover_topology {
-            RetailRuntimeValue::Known(super::ABCDEHKL_TOPOLOGY) => false,
-            RetailRuntimeValue::Known(super::ABCDEHK_TOPOLOGY) => true,
+    ) -> Result<(Option<[u8; 2]>, Option<[u8; 6]>, usize), Intro2KlConstructionError> {
+        let (owns_k, owns_l) = match metadata.common_mover_topology {
+            RetailRuntimeValue::Known(super::ABCDEHKL_TOPOLOGY) => (true, true),
+            RetailRuntimeValue::Known(super::ABCDEHK_TOPOLOGY) => (true, false),
+            RetailRuntimeValue::Known(super::ABCDEL_TOPOLOGY) => (false, true),
             _ => return Err(Intro2KlConstructionError::ComponentTopology),
         };
         let RetailRuntimeValue::Known(count) = metadata.model_variable_count_raw else {
@@ -105,7 +114,8 @@ impl Intro2KlComponents {
             RetailRuntimeValue::Known(payloads)
                 if payloads == TYPE30_PAYLOADS
                     || payloads == MODEL1131_PAYLOADS
-                    || payloads == MODEL1171_PAYLOADS =>
+                    || payloads == MODEL1171_PAYLOADS
+                    || payloads == MODEL24_PAYLOADS =>
             {
                 4
             }
@@ -119,9 +129,11 @@ impl Intro2KlComponents {
         match metadata.common_mover_gkl_payloads {
             RetailRuntimeValue::Known(CommonMoverGklPayloads {
                 sub_g: None,
-                sub_k: Some(sub_k),
+                sub_k,
                 sub_l,
-            }) if sub_l.is_none() == k_only => Ok((sub_k, sub_l, count as usize)),
+            }) if sub_k.is_some() == owns_k && sub_l.is_some() == owns_l => {
+                Ok((sub_k, sub_l, count as usize))
+            }
             _ => Err(Intro2KlConstructionError::ComponentDescriptors),
         }
     }
@@ -149,8 +161,33 @@ impl Intro2KlComponents {
         }
     }
 
-    pub(crate) const fn sub_k_smoothed_raw(&self) -> i32 {
-        self.sub_k_smoothed_raw
+    /// None when the body owns no K.
+    pub(crate) const fn sub_k_smoothed_raw(&self) -> Option<i32> {
+        match self.sub_k_selectors {
+            Some(_) => Some(self.sub_k_smoothed_raw),
+            None => None,
+        }
+    }
+
+    /// A one-based bank word, as a model operand or an E joint reads it.
+    pub(crate) fn model_word(&self, selector: u8) -> Option<i16> {
+        self.model_variables_raw
+            .get(usize::from(selector).checked_sub(1)?)
+            .copied()
+    }
+
+    /// A direct write through a bound selector (the turret task's L outputs,
+    /// `24EE0`'s joint flag).
+    pub(crate) fn write_model_word(&mut self, selector: u8, value: i16) -> Option<()> {
+        *self
+            .model_variables_raw
+            .get_mut(usize::from(selector).checked_sub(1)?)? = value;
+        Some(())
+    }
+
+    /// L's two output selectors, for a body that owns L.
+    pub(crate) fn sub_l_output_selectors(&self) -> Option<[u8; 2]> {
+        self.sub_l_descriptor.map(|l| [l[0], l[1]])
     }
 
     #[cfg(test)]
@@ -167,8 +204,14 @@ impl Intro2KlComponents {
         self.sub_l_target_raw = target_raw;
     }
 
-    pub(super) fn commit_sub_d_writes(&mut self, smoothed_raw: i32, exact_raw: Option<i32>) {
-        self.sub_k_smoothed_raw = smoothed_raw;
+    pub(super) fn commit_sub_d_writes(
+        &mut self,
+        smoothed_raw: Option<i32>,
+        exact_raw: Option<i32>,
+    ) {
+        if let Some(smoothed_raw) = smoothed_raw {
+            self.sub_k_smoothed_raw = smoothed_raw;
+        }
         if let Some(exact_raw) = exact_raw {
             self.sub_l_exact_raw = exact_raw;
         }
@@ -184,13 +227,16 @@ impl Intro2KlComponents {
         }
     }
 
-    pub(super) fn advance_sub_k(&mut self, velocity_y_raw: i16) {
+    /// None when the body owns no K.
+    pub(super) fn advance_sub_k(&mut self, velocity_y_raw: i16) -> Option<()> {
+        let selectors = self.sub_k_selectors?;
         let outputs = component_outputs::advance_sub_k(
-            self.load_outputs(self.sub_k_selectors),
+            self.load_outputs(selectors),
             self.sub_k_smoothed_raw,
             velocity_y_raw,
         );
-        self.store_outputs(self.sub_k_selectors, outputs);
+        self.store_outputs(selectors, outputs);
+        Some(())
     }
 
     /// None when the body owns no L.

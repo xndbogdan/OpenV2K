@@ -114,7 +114,7 @@ impl Fixture {
         self.entity
             .set_motion_raw([10_000, -20, 10_000], [-9, -125, 13]);
         self.kl.commit_target([10_001, 50, 10_001]);
-        self.kl.commit_sub_d_writes(64, Some(128));
+        self.kl.commit_sub_d_writes(Some(64), Some(128));
     }
 }
 
@@ -125,10 +125,10 @@ fn type30_kl_constructor_owns_four_zeroed_words_and_real_one_based_bindings() {
     };
     let mut kl = Intro2KlComponents::from_native_constructor(&metadata).unwrap();
     assert_eq!(kl.model_variables_raw(), &[0; 4]);
-    assert_eq!(kl.sub_k_smoothed_raw(), 0);
+    assert_eq!(kl.sub_k_smoothed_raw(), Some(0));
     assert_eq!(kl.sub_l_target_raw(), [0; 3]);
     assert_eq!(kl.sub_l_exact_raw(), 0);
-    kl.commit_sub_d_writes(64, Some(128));
+    kl.commit_sub_d_writes(Some(64), Some(128));
     kl.advance_sub_k(80);
     // K+0 points at selector3; K+4 points at selector4.
     assert_eq!(kl.model_variables_raw(), &[0, 0, -256, -160]);
@@ -183,7 +183,7 @@ fn model1131_kl_binds_each_pair_the_other_way_round() {
         assert!(kl.authenticates(&metadata));
         // A bank bound for model 1131 is not Type30's.
         assert!(!kl.authenticates(&type30));
-        kl.commit_sub_d_writes(64, Some(128));
+        kl.commit_sub_d_writes(Some(64), Some(128));
         kl.advance_sub_k(80);
         // K+0 points at selector4; K+4 points at selector3.
         assert_eq!(kl.model_variables_raw(), &[0, 0, -160, -256]);
@@ -216,7 +216,7 @@ fn type30_kl_restricted_keeps_sub_d_writes_but_skips_h_k_l_callbacks() {
     let yaw = i32::from(normal.sub_d_runtime.last_yaw_step_raw);
     assert_ne!(yaw, 0);
     assert_eq!(normal.kl.sub_l_target_raw(), target.target_position_raw);
-    assert_eq!(normal.kl.sub_k_smoothed_raw(), yaw >> 4);
+    assert_eq!(normal.kl.sub_k_smoothed_raw(), Some(yaw >> 4));
     assert_eq!(normal.kl.sub_l_exact_raw(), yaw);
     assert_eq!(
         restricted.kl.sub_l_target_raw(),
@@ -266,7 +266,7 @@ fn type30_kl_null_target_retains_inputs_and_reads_motion_before_c_a_b() {
     let sub_d_before = (fixture.sub_d_runtime, fixture.sub_d_owner);
     assert!(fixture.run(CommonMoverDispatchMode::Normal, None).unwrap());
     assert_eq!(fixture.kl.sub_l_target_raw(), [10_001, 50, 10_001]);
-    assert_eq!(fixture.kl.sub_k_smoothed_raw(), 64);
+    assert_eq!(fixture.kl.sub_k_smoothed_raw(), Some(64));
     assert_eq!(fixture.kl.sub_l_exact_raw(), 128);
     assert_eq!((fixture.sub_d_runtime, fixture.sub_d_owner), sub_d_before);
     // K uses incoming Y velocity -125. L reads incoming height -20 against
@@ -298,7 +298,7 @@ fn type30_kl_h_block_preserves_target_steering_and_post_sub_d_prefix() {
     let yaw = i32::from(fixture.sub_d_runtime.last_yaw_step_raw);
     assert_ne!(yaw, 0);
     assert_eq!(fixture.kl.sub_l_target_raw(), target.target_position_raw);
-    assert_eq!(fixture.kl.sub_k_smoothed_raw(), yaw >> 4);
+    assert_eq!(fixture.kl.sub_k_smoothed_raw(), Some(yaw >> 4));
     assert_eq!(fixture.kl.sub_l_exact_raw(), yaw);
     assert_eq!(fixture.kl.model_variables_raw(), &[0; 4]);
     assert_eq!(
@@ -406,6 +406,6 @@ fn type30_kl_late_a_block_preserves_h_k_l_and_c_without_replaying_prefix() {
     // The caller receives the committed error and must park that callback.
     // No hidden retry or constructor reset is performed by the shared phase.
     assert_eq!(fixture.kl.sub_l_target_raw(), [10_001, 50, 10_001]);
-    assert_eq!(fixture.kl.sub_k_smoothed_raw(), 64);
+    assert_eq!(fixture.kl.sub_k_smoothed_raw(), Some(64));
     assert_eq!(fixture.kl.sub_l_exact_raw(), 128);
 }

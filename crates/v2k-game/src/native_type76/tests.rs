@@ -57,6 +57,10 @@ fn activate(manager: &mut EntityManager, ids: &[u32]) {
 /// Production's ordinary adoption set: every native owner `main` adopts.
 fn adopt_world(manager: &mut EntityManager) -> SpecializedActorTaskScheduler {
     let mut tasks = SpecializedActorTaskScheduler::new();
+    // World 31's Type47 guards meet its Type58 captors once the mobile
+    // turrets run; the pair walk needs their owners too.
+    tasks.adopt_fresh_level1_type47_scheduler(manager).unwrap();
+    tasks.adopt_intro2_type47_guards(manager);
     tasks.adopt_intro2_type53(manager);
     tasks.adopt_type122(manager);
     tasks.adopt_type18(manager);

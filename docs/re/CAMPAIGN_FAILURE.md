@@ -266,7 +266,7 @@ later runtime graph or predecessor history.
 
 | Fresh-world exact sweep | Global OVLs |
 |---|---|
-| Complete | 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 47, 48 |
+| Complete | 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 |
 | No campaign controller or casualty record | 49, 50 |
 
 The remaining first unsupported ordinary callbacks are listed below. Each is
@@ -277,14 +277,15 @@ retail skips those actors.
 | First unsupported entity type | Global OVLs |
 |---|---|
 | 41 | 22, 33, 34 |
-| 107 | 31 |
-| 121 | 26 (reached by a Type49's class49 radial), 40 |
 
-Thus exact fresh-world actor cleanup is complete for 17 of the 21 casualty
-worlds (13/14/15/16/17/18/19/21/24/32/35/36/37/39/42/43/46); the other four use the explicitly bounded transition.
-In world 26 the first unported body is not met by the walk itself: once its
-Type73 and Type109 bugs die quietly, a Type49 turret's class49 radial chain
-reaches the neighbouring Type121, whose callbacks are unresolved.
+Thus exact fresh-world actor cleanup is complete for 20 of the 21 casualty
+worlds (13/14/15/16/17/18/19/21/24/26/31/32/35/36/37/39/40/42/43/46); world 34
+uses the explicitly bounded transition.
+Worlds 26, 31 and 40 complete with their
+[Type107 and Type121 mobile turrets](TYPE107_MOBILE_TURRETS.md), which take
+class49 (`BAF0`, then `BD20`'s ring). In world 26 a Type49 turret's class49
+radial chain reaches the neighbouring Type121 first, once the Type73 and
+Type109 bugs have died quietly.
 The authored-threshold regression additionally verifies all 21 warning/loss
 boundaries, saved/aborted suppression, per-load latch reset, scientist-plus-
 peasant census, and the ordered selector's warning delivery.

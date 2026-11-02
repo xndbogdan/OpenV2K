@@ -85,6 +85,106 @@ pub fn tick_intro2_gun_turret_aim(
     manual_direction_raw: Option<[i32; 3]>,
     frame: Intro2GunTurretAimFrame<'_>,
 ) -> Result<Intro2GunTurretAimTickOutcome, Intro2GunTurretAimError> {
+    {
+        let entity = manager
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .ok_or(Intro2GunTurretAimError::Allocation)?;
+        if !super::task::graph_authenticates(entity) {
+            return Err(Intro2GunTurretAimError::Allocation);
+        }
+    }
+    tick_gun_turret_aim::<ElTurret>(manager, id, manual_direction_raw, frame)
+}
+
+/// The E/L turret's own receipt, outputs and FIFO.
+pub(crate) struct ElTurret;
+
+impl super::host::GunTurretHost for ElTurret {
+    fn manager_authenticates(manager: &EntityManager, id: u32) -> bool {
+        super::intro2_gun_turret_manager_allocation_authenticates(manager, id)
+    }
+    fn allocation_authenticates(entity: &Entity) -> bool {
+        intro2_gun_turret_allocation_authenticates(entity)
+    }
+    fn descriptor(entity: &Entity) -> Option<ProjectileEmitterDescriptor> {
+        profile_for_entity(entity).map(|profile| profile.emitter())
+    }
+    fn l_outputs(entity: &Entity) -> Option<[i16; 2]> {
+        entity
+            .intro2_gun_turret_runtime
+            .map(|runtime| runtime.sub_l_output_raw)
+    }
+    fn store_l_outputs(entity: &mut Entity, outputs: [i16; 2]) -> bool {
+        let Some(runtime) = entity.intro2_gun_turret_runtime.as_mut() else {
+            return false;
+        };
+        runtime.sub_l_output_raw = outputs;
+        true
+    }
+    fn with_aim<R>(
+        entity: &mut Entity,
+        f: impl FnOnce(
+            &mut dyn super::host::ShotQueue,
+            &mut crate::generic_projectile_emitter::GenericEmitterRuntime,
+            super::host::JointWriter<'_>,
+        ) -> R,
+    ) -> Option<R> {
+        if entity
+            .intro2_gun_turret_aim_runtime
+            .as_ref()
+            .is_some_and(|queue| !queue.authenticates(entity))
+        {
+            return None;
+        }
+        let descriptor = Self::descriptor(entity)?;
+        let id = entity.id;
+        let spawn_index = entity.authored_spawn_index?;
+        let origin = entity.intro2_gun_turret_runtime.as_ref()?.origin;
+        let Entity {
+            intro2_gun_turret_aim_runtime,
+            intro2_gun_turret_runtime,
+            ..
+        } = entity;
+        let queue =
+            intro2_gun_turret_aim_runtime.get_or_insert_with(|| Intro2GunTurretAimRuntime {
+                entity_id: id,
+                spawn_index,
+                origin,
+                descriptor,
+                shots: VecDeque::new(),
+            });
+        let super::Intro2GunTurretRuntime {
+            sub_e_runtime,
+            sub_e_joint_word_raw,
+            ..
+        } = intro2_gun_turret_runtime.as_mut()?;
+        // The E/L bank's only bound joint word is selector 3.
+        let mut joint = |binding: u64| {
+            if binding != 3 {
+                return false;
+            }
+            *sub_e_joint_word_raw = u16::MAX;
+            true
+        };
+        Some(f(&mut queue.shots, sub_e_runtime, &mut joint))
+    }
+    fn gravity_lead(entity: &Entity) -> bool {
+        entity
+            .intro2_gun_turret_runtime
+            .is_some_and(|runtime| runtime.profile.gravity_lead())
+    }
+}
+
+/// `425160` on any turret body: E's cadence, the stochastic gate, then per
+/// catch-up shot `24EE0`'s joint flag, the primary `4147A0` command, the
+/// method-15 auxiliary command when E `+17` is set, and the selector toggle.
+pub(crate) fn tick_gun_turret_aim<H: super::host::GunTurretHost>(
+    manager: &mut EntityManager,
+    id: u32,
+    manual_direction_raw: Option<[i32; 3]>,
+    frame: Intro2GunTurretAimFrame<'_>,
+) -> Result<Intro2GunTurretAimTickOutcome, Intro2GunTurretAimError> {
     let Intro2GunTurretAimFrame {
         world_fx,
         notifications,
@@ -92,157 +192,144 @@ pub fn tick_intro2_gun_turret_aim(
         global_elapsed_micros,
         retail_tick,
     } = frame;
-    if !super::intro2_gun_turret_manager_allocation_authenticates(manager, id) {
+    if !H::manager_authenticates(manager, id) {
         return Err(Intro2GunTurretAimError::Allocation);
     }
     let entity = manager
         .iter_all()
         .find(|entity| entity.id == id)
         .ok_or(Intro2GunTurretAimError::Allocation)?;
-    if !super::task::graph_authenticates(entity) {
-        return Err(Intro2GunTurretAimError::Allocation);
-    }
     let metadata = manager
         .type_runtime_metadata(entity.entity_type)
         .ok_or(Intro2GunTurretAimError::Descriptor)?;
-    let descriptor = profile_for_entity(entity)
-        .ok_or(Intro2GunTurretAimError::Descriptor)?
-        .emitter();
+    let descriptor = H::descriptor(entity).ok_or(Intro2GunTurretAimError::Descriptor)?;
     if metadata.projectile_emitter_descriptor != RetailRuntimeValue::Known(Some(descriptor)) {
         return Err(Intro2GunTurretAimError::Descriptor);
     }
-    if entity
-        .intro2_gun_turret_aim_runtime
-        .as_ref()
-        .is_some_and(|queue| !queue.authenticates(entity))
-    {
-        return Err(Intro2GunTurretAimError::QueueCustody);
-    }
+    let firing_feedback = if entity.capability_flags & 8 != 0 {
+        match entity.collision.state_flags_at_0x08.masked(0x0400_0000) {
+            RetailRuntimeValue::Known(bits) => bits != 0,
+            RetailRuntimeValue::Unresolved => {
+                return Err(Intro2GunTurretAimError::Runtime(
+                    "4147A0 firing feedback state",
+                ))
+            }
+        }
+    } else {
+        false
+    };
+    let position = entity.position_raw();
     let entity = manager
         .entity_mut(id)
         .ok_or(Intro2GunTurretAimError::Allocation)?;
-    let spawn_index = entity
-        .authored_spawn_index
-        .ok_or(Intro2GunTurretAimError::Allocation)?;
-    let origin = entity
-        .intro2_gun_turret_runtime
-        .as_ref()
-        .ok_or(Intro2GunTurretAimError::Allocation)?
-        .origin;
-    let queue =
-        entity
-            .intro2_gun_turret_aim_runtime
-            .get_or_insert_with(|| Intro2GunTurretAimRuntime {
-                entity_id: id,
-                spawn_index,
-                origin,
-                descriptor,
-                shots: VecDeque::new(),
-            });
-    let runtime = entity
-        .intro2_gun_turret_runtime
-        .as_mut()
-        .ok_or(Intro2GunTurretAimError::Allocation)?;
-    let emitter = &mut runtime.sub_e_runtime;
-    // This write occurs even with no target, disabled tracking, or a failed
-    // alignment test. Source uses global frame delta, not callback carry.
-    emitter.cadence_raw = if emitter.cadence_raw <= 0 {
-        (global_elapsed_micros as i32).wrapping_neg()
-    } else {
-        emitter
-            .cadence_raw
-            .wrapping_sub(global_elapsed_micros as i32)
-    };
-    let Some(direction) = manual_direction_raw else {
-        return Ok(Intro2GunTurretAimTickOutcome::default());
-    };
-    if global_elapsed_micros == 0 {
-        return Err(Intro2GunTurretAimError::Runtime(
-            "425160 global delta divisor",
-        ));
-    }
-    let divisor = (descriptor.random_interval_us / global_elapsed_micros).max(1);
-    if u32::from(world_fx.next_shared_retail_random_u16()) % divisor != 0 {
-        return Ok(Intro2GunTurretAimTickOutcome::default());
-    }
-    if emitter.projectile_method == 0 {
-        return Ok(Intro2GunTurretAimTickOutcome::default());
-    }
-    //425160 submits every method through4147A0. Type115's method16, Type100's
-    //method19 and the native turrets' methods 12, 13 and 14 retain their own
-    //descriptor rows; 44EA60 gives 12..14 no gravity lead and 16 and 19 one.
-    if emitter.projectile_method != u32::from(descriptor.projectile_method)
-        || !matches!(emitter.projectile_method, 12 | 13 | 14 | 16 | 19)
-    {
-        return Err(Intro2GunTurretAimError::Runtime("425160 projectile method"));
-    }
-    let direction = normalize_retail_vector_q31(direction);
-    let mut time_offset = 0_i32;
-    let mut outcome = Intro2GunTurretAimTickOutcome::default();
-    loop {
-        //24EE0 reverses the selector's binding index.09A80 maps authored
-        //byte+19=3 to runtime+00, so selector1 writes the retained word.
-        let binding_index = if emitter.emitter_selector == 0 { 1 } else { 0 };
-        if let Some(binding) = emitter.joint_bindings[binding_index] {
-            if binding != 3 {
-                return Err(Intro2GunTurretAimError::Runtime("425160 joint binding"));
-            }
-            runtime.sub_e_joint_word_raw = u16::MAX;
-        }
-        let request = GenericEmitterAppendRequest {
-            source_handle: id,
-            owner_handle: id,
-            projectile_method: emitter.projectile_method,
-            emitter_selector: emitter.emitter_selector as u16,
-            direction_raw: direction,
-            time_offset_raw: time_offset,
-            speed_field: GenericEmitterSpeedField::Explicit(descriptor.speed_override_raw),
-            auxiliary: false,
+    let result = H::with_aim(entity, |shots, emitter, joint| {
+        // This write occurs even with no target, disabled tracking, or a failed
+        // alignment test. Source uses global frame delta, not callback carry.
+        emitter.cadence_raw = if emitter.cadence_raw <= 0 {
+            (global_elapsed_micros as i32).wrapping_neg()
+        } else {
+            emitter
+                .cadence_raw
+                .wrapping_sub(global_elapsed_micros as i32)
         };
-        if queue.shots.try_reserve(1).is_ok() {
-            let firing_feedback = if entity.capability_flags & 8 != 0 {
-                match entity.collision.state_flags_at_0x08.masked(0x0400_0000) {
-                    RetailRuntimeValue::Known(bits) => bits != 0,
-                    RetailRuntimeValue::Unresolved => {
-                        return Err(Intro2GunTurretAimError::Runtime(
-                            "4147A0 firing feedback state",
-                        ))
-                    }
+        let Some(direction) = manual_direction_raw else {
+            return Ok(Intro2GunTurretAimTickOutcome::default());
+        };
+        if global_elapsed_micros == 0 {
+            return Err(Intro2GunTurretAimError::Runtime(
+                "425160 global delta divisor",
+            ));
+        }
+        let divisor = (descriptor.random_interval_us / global_elapsed_micros).max(1);
+        if u32::from(world_fx.next_shared_retail_random_u16()) % divisor != 0 {
+            return Ok(Intro2GunTurretAimTickOutcome::default());
+        }
+        if emitter.projectile_method == 0 {
+            return Ok(Intro2GunTurretAimTickOutcome::default());
+        }
+        //425160 submits every method through4147A0. Type115's method16, Type100's
+        //method19 and the turrets' methods 12, 13, 14 and 18 keep their own rows.
+        if emitter.projectile_method != u32::from(descriptor.projectile_method)
+            || !matches!(emitter.projectile_method, 12 | 13 | 14 | 16 | 18 | 19)
+        {
+            return Err(Intro2GunTurretAimError::Runtime("425160 projectile method"));
+        }
+        let direction = normalize_retail_vector_q31(direction);
+        let mut time_offset = 0_i32;
+        let mut outcome = Intro2GunTurretAimTickOutcome::default();
+        let mut append = |shots: &mut dyn super::host::ShotQueue,
+                          request: GenericEmitterAppendRequest,
+                          outcome: &mut Intro2GunTurretAimTickOutcome| {
+            if shots.try_append(request) {
+                outcome.queued_shots += 1;
+                //41483C follows each successful append.1B9D0 finds no Sub-G
+                //in these allocations;4568B0(9) uses the actual controller
+                //phase and retains the session's deduplicated resource slot.
+                if firing_feedback && notification_phase == GameplayNotificationPhase::Playing {
+                    notifications.queue_infected_firing_hint(retail_tick as i32);
                 }
             } else {
-                false
-            };
-            queue.shots.push_back(request);
-            outcome.queued_shots += 1;
-            //41483C follows successful append only.1B9D0 finds no Sub-G
-            //in this E/L allocation;4568B0(9) uses the actual controller
-            //phase and retains the session's deduplicated resource slot.
-            if firing_feedback && notification_phase == GameplayNotificationPhase::Playing {
-                notifications.queue_infected_firing_hint(retail_tick as i32);
+                outcome.rejected_appends += 1;
             }
-        } else {
-            outcome.rejected_appends += 1;
+        };
+        loop {
+            //24EE0: selector zero writes runtime+04's binding, otherwise +00.
+            let binding_index = if emitter.emitter_selector == 0 { 1 } else { 0 };
+            if let Some(binding) = emitter.joint_bindings[binding_index] {
+                if !joint(binding) {
+                    return Err(Intro2GunTurretAimError::Runtime("425160 joint binding"));
+                }
+            }
+            let request = GenericEmitterAppendRequest {
+                source_handle: id,
+                owner_handle: id,
+                projectile_method: emitter.projectile_method,
+                emitter_selector: emitter.emitter_selector as u16,
+                direction_raw: direction,
+                time_offset_raw: time_offset,
+                speed_field: GenericEmitterSpeedField::Explicit(descriptor.speed_override_raw),
+                auxiliary: false,
+            };
+            append(shots, request, &mut outcome);
+            if descriptor.auxiliary_command != 0 {
+                // The method-15 stack record: zero direction and time, the
+                // same selector, and an unwritten speed word.
+                append(
+                    shots,
+                    GenericEmitterAppendRequest {
+                        projectile_method:
+                            crate::generic_projectile_emitter::GENERIC_PROJECTILE_AUXILIARY_METHOD,
+                        direction_raw: [0; 3],
+                        time_offset_raw: 0,
+                        speed_field: GenericEmitterSpeedField::IndeterminateAuxiliaryStackWord,
+                        auxiliary: true,
+                        ..request
+                    },
+                    &mut outcome,
+                );
+            }
+            // 4252EA toggles only with a nonzero alternate muzzle word. Type92
+            // therefore keeps selector zero, even across a multi-shot catch-up.
+            if descriptor.alternate_emitter_raw != 0 {
+                emitter.emitter_selector = u32::from(emitter.emitter_selector == 0);
+            }
+            emitter.cadence_raw = emitter
+                .cadence_raw
+                .wrapping_add(descriptor.random_interval_us as i32);
+            time_offset = time_offset.wrapping_add(descriptor.random_interval_us as i32);
+            if emitter.cadence_raw > 0 {
+                break;
+            }
         }
-        // 4252EA toggles only with a nonzero alternate muzzle word. Type92
-        // therefore keeps selector zero, even across a multi-shot catch-up.
-        if descriptor.alternate_emitter_raw != 0 {
-            emitter.emitter_selector = u32::from(emitter.emitter_selector == 0);
+        let sound = emitter.sound_id;
+        if sound != 0 {
+            let sound = u16::try_from(sound)
+                .map_err(|_| Intro2GunTurretAimError::Runtime("425160 sound"))?;
+            world_fx.queue_networked_positional_sound_raw(sound, position);
         }
-        emitter.cadence_raw = emitter
-            .cadence_raw
-            .wrapping_add(descriptor.random_interval_us as i32);
-        time_offset = time_offset.wrapping_add(descriptor.random_interval_us as i32);
-        if emitter.cadence_raw > 0 {
-            break;
-        }
-    }
-    let sound = emitter.sound_id;
-    if sound != 0 {
-        let sound =
-            u16::try_from(sound).map_err(|_| Intro2GunTurretAimError::Runtime("425160 sound"))?;
-        world_fx.queue_networked_positional_sound_raw(sound, entity.position_raw());
-    }
-    Ok(outcome)
+        Ok(outcome)
+    });
+    result.ok_or(Intro2GunTurretAimError::QueueCustody)?
 }
 
 #[cfg(test)]

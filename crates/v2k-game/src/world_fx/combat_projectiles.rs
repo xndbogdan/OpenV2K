@@ -146,11 +146,15 @@ impl WorldFx {
         environment: ParticleEnvironment<'_>,
         retail_tick: u32,
     ) -> Option<CombatProjectileBirth> {
-        if !matches!(request.source_class, 38 | 49 | 55 | 56) {
+        // Method 18's class2 passes unchanged; the method-15 auxiliary's
+        // class32 is dropped at or below the sea plane (4410EB).
+        if !matches!(request.source_class, 2 | 32 | 38 | 49 | 55 | 56) {
             return None;
         }
         if flat_sea_raw(environment).is_some_and(|sea| request.position_raw[1] <= sea) {
             match request.source_class {
+                2 => {}
+                32 => return None,
                 38 => {
                     request.source_class = TYPE13_PROJECTILE_UNDERWATER_PARTICLE_CLASS;
                     request.position_raw[1] = request.position_raw[1].wrapping_sub(100);

@@ -227,6 +227,16 @@ fn run<P: NativeGroundActorProfile>(
         }
     } else {
         match context.active_style() {
+            // Class29 4C8230: C690 at infected+20, a null primary+28.
+            ActiveBehaviorStyle::Audited(style)
+                if style.frame_address == 0x004C_8230 && P::LIVING_CLASSES.contains(&29) =>
+            {
+                if infected || cured {
+                    ImpactCallbackPolicy::ReselectBehavior
+                } else {
+                    ImpactCallbackPolicy::None
+                }
+            }
             // These exact styles have matching +20/+24/+28 words in the executable.
             ActiveBehaviorStyle::Audited(style)
                 if matches!(

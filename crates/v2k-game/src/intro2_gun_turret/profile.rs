@@ -144,11 +144,7 @@ impl Intro2GunTurretProfile {
     }
 
     pub const fn gravity_lead(self) -> bool {
-        //44EA60 method16 uses jump index4 and method19 index6, both ->44EA7B (one).
-        matches!(
-            self,
-            Self::Type100 | Self::Type112 | Self::Type113 | Self::Type115
-        )
+        method_has_gravity_lead(self.emitter().projectile_method as u32)
     }
 
     pub const fn health(self) -> i32 {
@@ -322,4 +318,10 @@ pub(super) fn profile_for_entity(entity: &Entity) -> Option<Intro2GunTurretProfi
             ))
         .then_some(runtime.profile)
     })
+}
+
+/// `44EA60`: methods 5, 12-15, 17, 21 and 31 fly without gravity lead; every
+/// other method (16, 18 and 19 among the turrets') leads for gravity.
+pub(crate) const fn method_has_gravity_lead(method: u32) -> bool {
+    !matches!(method, 5 | 12..=15 | 17 | 21 | 31)
 }

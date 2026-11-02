@@ -5623,6 +5623,8 @@ impl SpecializedActorTaskScheduler {
                             world_fx,
                             elapsed_micros,
                             retail_tick,
+                            notifications,
+                            notification_phase,
                         },
                     );
                     if let Some(owner) = tick.retained_owner {

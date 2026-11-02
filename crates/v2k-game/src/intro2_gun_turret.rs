@@ -1,6 +1,7 @@
 //! Native E/L gun turrets, with distinct authored and campaign origins.
 
 pub mod aim;
+pub(crate) mod host;
 pub mod impact;
 mod live;
 pub(crate) mod native;
@@ -16,6 +17,7 @@ pub(crate) use native::{
     publish_ordinary_class29_turret_at_position, reselect_intro2_gun_turret,
     GunTurretAuthoredConstruction,
 };
+pub(crate) use profile::method_has_gravity_lead;
 use profile::profile_for_entity;
 pub use profile::Intro2GunTurretProfile;
 

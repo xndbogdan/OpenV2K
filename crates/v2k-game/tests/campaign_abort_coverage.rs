@@ -119,14 +119,15 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // its Type117 class63.
     // World 24 completes: its Type29 mobbers take class11 Tumble.
     // World 25 completes: its Type82 factory shares Type66's class39 owner.
-    (26, 121),
+    // World 26 completes: its Type73/109 bugs die quietly and its Type121
+    // mobile turrets take class49, as does world 40's.
     // Type27 boulders split into Type3s (class18), which explode (class1);
     // world 27 completes with its Type127 carriers' class63.
     // Native class29 turrets now complete; their finished class49 terminals
     // admit the later power-up radial, as 14AE0 does. World 29's Type55
     // guards take class11 Tumble, and it completes.
     // Worlds 30 and 39 complete: their Type83 radars take class49.
-    (31, 107),
+    // World 31 completes: its Type107/Type121 mobile turrets take class49.
     // World 32 completes: its Type55 guards take class11 Tumble, its Type82
     // factory class39 and its Type32s the ground host's terminal deaths.
     // The Type20 swimmer explodes through class1; next is the Type41 flyer.
@@ -140,7 +141,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // World 38 completes: its Type82 factory takes class39 too.
     // Type125 factories share Type66's class39 owner; Type50 dies into
     // class38's Change Sea Level and the Type118s into class65 Geysers.
-    (40, 121),
+    // World 40 completes: its Type121 mobile turrets take class49.
     // World 41 completes: its Type35 launchers republish their class7
     // alternate on the dying body.
     // World 42 completes: Type108 flyers die quietly, the Type83 radar
@@ -155,11 +156,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
 
 /// Worlds whose first unported actor is reached by an earlier native actor's
 /// death radial: (world, the dying actor's type, the unported target's type).
-const RADIAL_BLOCKED: &[(u32, u32, u32)] = &[
-    // World 26's Type73/109 bugs die quietly; a Type49 turret's class49
-    // chain then reaches its neighbouring Type121.
-    (26, 49, 121),
-];
+const RADIAL_BLOCKED: &[(u32, u32, u32)] = &[];
 
 /// The innermost retained radial target whose callbacks are unresolved.
 fn radial_unported_target(error: &str) -> Option<u32> {
@@ -418,8 +415,8 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     assert_eq!(
         exact_worlds,
         [
-            13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39,
-            41, 42, 43, 44, 45, 46, 47, 48
+            13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36, 37,
+            38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48
         ]
     );
     assert_eq!(
@@ -438,8 +435,8 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     let data = v2k_test_support::retail_dir();
     let mut session = GameSession::init(&data).unwrap();
     session.load_auxiliary_ovl(3, 1).unwrap();
-    // A one-factory world whose abort still stops early (world 31, at Type107).
-    const WORLD: u32 = 31;
+    // A one-factory world whose abort still stops early (world 34, at Type41).
+    const WORLD: u32 = 34;
     session.load_level_by_id(WORLD, 1).unwrap();
     let metadata: Vec<_> = session
         .cache

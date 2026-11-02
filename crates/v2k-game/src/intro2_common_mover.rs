@@ -72,6 +72,11 @@ pub(crate) const ABCDEHK_TOPOLOGY: CommonMoverComponentTopology = CommonMoverCom
     sub_k: true,
     ..ABCDEH_TOPOLOGY
 };
+/// Type107/Type121 own L without H or K.
+pub(crate) const ABCDEL_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
+    sub_l: true,
+    ..ABCDE_TOPOLOGY
+};
 pub(crate) const ABCDEHKL_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
     sub_k: true,
     sub_l: true,
@@ -129,12 +134,16 @@ pub(crate) fn run_intro2_common_mover(
             | ABCD_TOPOLOGY
             | ABCDE_TOPOLOGY
             | ABCDEHK_TOPOLOGY
+            | ABCDEL_TOPOLOGY
             | ABCDEHKL_TOPOLOGY
     ) || metadata.common_mover_topology != RetailRuntimeValue::Known(frame.topology)
     {
         return Err(Block::UnsupportedTopology);
     }
-    match (frame.topology.sub_k, frame.kl_components.as_deref()) {
+    match (
+        frame.topology.sub_k || frame.topology.sub_l,
+        frame.kl_components.as_deref(),
+    ) {
         (true, Some(components)) if components.authenticates(metadata) => {}
         (false, None) => {}
         _ => return Err(Block::Runtime("Sub-K/L allocation or variable bindings")),
@@ -172,7 +181,7 @@ pub(crate) fn run_intro2_common_mover(
         sub_k_smoothed_raw: frame
             .kl_components
             .as_deref()
-            .map(Intro2KlComponents::sub_k_smoothed_raw),
+            .and_then(Intro2KlComponents::sub_k_smoothed_raw),
         sub_n_accumulator_raw: None,
         sub_o_link_raw: 0,
     };
@@ -232,12 +241,14 @@ pub(crate) fn run_intro2_common_mover(
                 }
             }
             CommonMoverFramePoll::Action(CommonMoverFrameAction::CommitPostSubDWrites(plan)) => {
-                let (Some(smoothed_raw), exact_raw, None) =
+                let (smoothed_raw, exact_raw, None) =
                     (plan.sub_k_smoothed_raw, plan.sub_l_exact_raw, plan.sub_f)
                 else {
                     return Err(Block::Runtime("unexpected post-Sub-D writes"));
                 };
-                if exact_raw.is_some() != frame.topology.sub_l {
+                if exact_raw.is_some() != frame.topology.sub_l
+                    || smoothed_raw.is_some() != frame.topology.sub_k
+                {
                     return Err(Block::Runtime("unexpected post-Sub-D writes"));
                 }
                 frame
@@ -245,7 +256,7 @@ pub(crate) fn run_intro2_common_mover(
                     .as_deref_mut()
                     .ok_or(Block::Runtime("Sub-K/L post-Sub-D allocation"))?
                     .commit_sub_d_writes(smoothed_raw, exact_raw);
-                snapshot.sub_k_smoothed_raw = Some(smoothed_raw);
+                snapshot.sub_k_smoothed_raw = smoothed_raw;
                 CommonMoverFrameResume::Committed {
                     phase: CommonMoverFrameCommitPhase::PostSubDWrites,
                     snapshot,
@@ -348,7 +359,8 @@ pub(crate) fn run_intro2_common_mover(
                     .kl_components
                     .as_deref_mut()
                     .ok_or(Block::Runtime("Sub-K allocation"))?
-                    .advance_sub_k(snapshot.velocity_raw[1]);
+                    .advance_sub_k(snapshot.velocity_raw[1])
+                    .ok_or(Block::Runtime("Sub-K allocation"))?;
                 CommonMoverFrameResume::ComponentReturned {
                     phase: CommonMoverDispatchPhase::SubK,
                     snapshot,
