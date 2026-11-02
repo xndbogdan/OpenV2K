@@ -26,14 +26,13 @@ pub enum Intro2GunTurretProfile {
 impl Intro2GunTurretProfile {
     /// Authored104B0 allocations with the common D4A0/D190 E/L constructor.
     /// Type115 retains alternate1; sharing this birth does not grant class49.
-    /// Type100 shares the constructor, but its method19 has no live aim
-    /// owner yet.
     pub const fn for_native_authored(entity_type: u32) -> Option<Self> {
         match entity_type {
             92 => Some(Self::Type92),
             96 => Some(Self::Type96),
             97 => Some(Self::Type97),
             99 => Some(Self::Type99),
+            100 => Some(Self::Type100),
             102 => Some(Self::Type102),
             103 => Some(Self::Type103),
             112 => Some(Self::Type112),
@@ -145,8 +144,11 @@ impl Intro2GunTurretProfile {
     }
 
     pub const fn gravity_lead(self) -> bool {
-        //44EA60 method16 uses jump index4 ->44EA7B (one).
-        matches!(self, Self::Type112 | Self::Type113 | Self::Type115)
+        //44EA60 method16 uses jump index4 and method19 index6, both ->44EA7B (one).
+        matches!(
+            self,
+            Self::Type100 | Self::Type112 | Self::Type113 | Self::Type115
+        )
     }
 
     pub const fn health(self) -> i32 {

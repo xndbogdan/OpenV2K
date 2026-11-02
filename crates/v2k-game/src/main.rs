@@ -4907,6 +4907,9 @@ fn run_game(
                 }
                 let outcome = effects.particles;
                 debug_assert!(outcome.unhandled_ground_programs.is_empty());
+                for radial in &outcome.unrun_world_radials {
+                    eprintln!("Intro2 shell radial not run: {radial:?}");
+                }
                 let em = entity_manager
                     .as_mut()
                     .expect("Intro2 loaded without an entity manager");
@@ -7336,6 +7339,32 @@ fn run_game(
                                     v2k_game::world_fx::sample_attached_particle_cached_owner(em, request),
                                 );
                             }
+                            PlayingParticleActorEvent::WorldRadial(radial) => {
+                                apply_playing_world_radial(
+                                    PlayingWorldRadialFrame {
+                                        cache, entities: em, scheduler: static_damage, world_fx,
+                                        player_hull: &mut player_hull,
+                                        extra_lives: RetailRuntimeValue::Known(player_campaign_progress.extra_lives()),
+                                        actor_tasks: &mut specialized_actor_tasks,
+                                        notifications: &mut gameplay_notifications,
+                                        retail_tick,
+                                    },
+                                    radial.origin_raw,
+                                    radial.template,
+                                );
+                                return PlayingParticleActorResponse::WorldRadial(
+                                    v2k_game::playing_particle_host::PlayingParticleRefresh {
+                                        collision: ParticleCollisionCacheRefresh::Replace(build_particle_collision_models(
+                                            cache, em, player_model_id, &player_craft,
+                                            &mut particle_collision_error_reported,
+                                        )),
+                                        attachment_owners: em.iter_all().map(v2k_game::world_fx::ParticleAttachmentOwner::from_entity).collect(),
+                                        owner_motions: em.iter_all().map(|entity| ParticleOwnerMotion {
+                                            owner_id: entity.id, velocity: entity.velocity,
+                                        }).collect(),
+                                    },
+                                );
+                            }
                             PlayingParticleActorEvent::FlareDamage(request) => {
                                 let result = v2k_game::flare_damage::apply_flare_particle_damage(
                                     v2k_game::attached_particle_damage::AttachedParticleDamageFrame {
@@ -8033,6 +8062,9 @@ fn run_game(
                 // A refused 410D30 delivery: the flare itself flies on.
                 for blocked in outcome.flare_damage_blocks {
                     eprintln!("Flare damage stopped at unresolved data: {blocked:?}");
+                }
+                for radial in outcome.unrun_world_radials {
+                    eprintln!("Shell radial not run: {radial:?}");
                 }
                 // `ballistic_static_impacts` and primary StaticTile entries
                 // are retrospective F800 telemetry only. Their exact packets
@@ -13414,93 +13446,128 @@ fn apply_static_damage_actions(
                 origin_raw,
                 template,
             } => {
-                let (player_hull, extra_lives, actor_tasks, notifications, retail_tick) =
-                    match &mut world {
-                        StaticDamageWorldContext::Intro2 {
-                            actor_tasks,
-                            notifications,
-                            retail_tick,
-                        } => {
-                            let report = v2k_game::intro2_radial::apply_intro2_radial_damage(
-                                &mut v2k_game::intro2_radial::Intro2RadialFrame {
-                                    active_terminal_calls: Vec::new(),
-                                    entities,
-                                    resources: cache,
-                                    world_fx,
-                                    static_damage: scheduler,
-                                    notifications,
-                                    retail_tick: *retail_tick,
-                                    actor_tasks: &mut **actor_tasks,
-                                },
-                                origin_raw,
-                                template,
-                            );
-                            // Opcode12 returns to this node even when the port
-                            // cannot execute a later dynamic target. Never replay
-                            // its committed prefix; the caller consumes the batch.
-                            radial_reports.push(report);
-                            continue;
-                        }
-                        StaticDamageWorldContext::Playing {
-                            player_hull,
-                            extra_lives,
-                            actor_tasks,
-                            notifications,
-                            retail_tick,
-                        } => (
-                            &mut **player_hull,
-                            *extra_lives,
-                            &mut **actor_tasks,
-                            &mut **notifications,
-                            *retail_tick,
-                        ),
-                    };
-                let static_hits = cache.terrain().map_or_else(Vec::new, |terrain| {
-                    scan_static_radial(terrain, origin_raw, template, |cell| {
-                        resolve_current_static_damage_target(cache, cell)
-                            .ok()
-                            .flatten()
-                            .map(|target| target.state)
-                    })
-                });
-                // FUN_004566E0 always completes this X-outer/Z-inner static
-                // pass before entering its separate dynamic-entity pass.
-                for hit in static_hits {
-                    let outcome = scheduler.submit_hit(hit.target, hit.packet, &mut || {
-                        world_fx.next_shared_retail_random_u16()
-                    });
-                    apply_immediate_static_damage_outcome(outcome, cache, world_fx);
-                    log!(
-                        "Static radial: cell ({}, {}) distance {} {outcome:?}",
-                        hit.target.cell[0],
-                        hit.target.cell[1],
-                        hit.distance_raw
-                    );
-                }
-
-                // Each14AE0 callback and its RNG complete before sampling
-                // the next live target; an unsupported later target retains
-                // the already-completed prefix.
-                let result = actor_tasks.apply_playing_radial_damage(
-                    v2k_game::specialized_actor_task_production::PlayingRadialFrame {
-                        resources: cache,
-                        static_damage: scheduler,
-                        active_terminal_calls: Vec::new(),
-                        entities,
-                        player_hull,
-                        extra_lives,
-                        origin_raw,
-                        template,
-                        world_fx,
+                let frame = match &mut world {
+                    StaticDamageWorldContext::Intro2 {
+                        actor_tasks,
                         notifications,
                         retail_tick,
+                    } => {
+                        let report = v2k_game::intro2_radial::apply_intro2_radial_damage(
+                            &mut v2k_game::intro2_radial::Intro2RadialFrame {
+                                active_terminal_calls: Vec::new(),
+                                entities,
+                                resources: cache,
+                                world_fx,
+                                static_damage: scheduler,
+                                notifications,
+                                retail_tick: *retail_tick,
+                                actor_tasks: &mut **actor_tasks,
+                            },
+                            origin_raw,
+                            template,
+                        );
+                        // Opcode12 returns to this node even when the port
+                        // cannot execute a later dynamic target. Never replay
+                        // its committed prefix; the caller consumes the batch.
+                        radial_reports.push(report);
+                        continue;
+                    }
+                    StaticDamageWorldContext::Playing {
+                        player_hull,
+                        extra_lives,
+                        actor_tasks,
+                        notifications,
+                        retail_tick,
+                    } => PlayingWorldRadialFrame {
+                        cache: &mut *cache,
+                        entities: &mut *entities,
+                        scheduler: &mut *scheduler,
+                        world_fx: &mut *world_fx,
+                        player_hull: &mut **player_hull,
+                        extra_lives: *extra_lives,
+                        actor_tasks: &mut **actor_tasks,
+                        notifications: &mut **notifications,
+                        retail_tick: *retail_tick,
                     },
-                );
-                log!("Dynamic radial: {result:?}");
+                };
+                apply_playing_world_radial(frame, origin_raw, template);
             }
         }
     }
     radial_reports
+}
+
+struct PlayingWorldRadialFrame<'a> {
+    cache: &'a mut v2k_game::resource_cache::ResourceCache,
+    entities: &'a mut EntityManager,
+    scheduler: &'a mut StaticDamageScheduler,
+    world_fx: &'a mut WorldFx,
+    player_hull: &'a mut PlayerHull,
+    extra_lives: RetailRuntimeValue<u8>,
+    actor_tasks: &'a mut SpecializedActorTaskScheduler,
+    notifications: &'a mut GameplayNotifications,
+    retail_tick: u32,
+}
+
+/// `FUN_004566E0` in Playing: the static cells, then the live list.
+fn apply_playing_world_radial(
+    frame: PlayingWorldRadialFrame<'_>,
+    origin_raw: [i16; 3],
+    template: v2k_game::radial_damage::RadialDamageTemplate,
+) {
+    let PlayingWorldRadialFrame {
+        cache,
+        entities,
+        scheduler,
+        world_fx,
+        player_hull,
+        extra_lives,
+        actor_tasks,
+        notifications,
+        retail_tick,
+    } = frame;
+    let static_hits = cache.terrain().map_or_else(Vec::new, |terrain| {
+        scan_static_radial(terrain, origin_raw, template, |cell| {
+            resolve_current_static_damage_target(cache, cell)
+                .ok()
+                .flatten()
+                .map(|target| target.state)
+        })
+    });
+    // FUN_004566E0 always completes this X-outer/Z-inner static
+    // pass before entering its separate dynamic-entity pass.
+    for hit in static_hits {
+        let outcome = scheduler.submit_hit(hit.target, hit.packet, &mut || {
+            world_fx.next_shared_retail_random_u16()
+        });
+        apply_immediate_static_damage_outcome(outcome, cache, world_fx);
+        log!(
+            "Static radial: cell ({}, {}) distance {} {outcome:?}",
+            hit.target.cell[0],
+            hit.target.cell[1],
+            hit.distance_raw
+        );
+    }
+
+    // Each14AE0 callback and its RNG complete before sampling
+    // the next live target; an unsupported later target retains
+    // the already-completed prefix.
+    let result = actor_tasks.apply_playing_radial_damage(
+        v2k_game::specialized_actor_task_production::PlayingRadialFrame {
+            resources: cache,
+            static_damage: scheduler,
+            active_terminal_calls: Vec::new(),
+            entities,
+            player_hull,
+            extra_lives,
+            origin_raw,
+            template,
+            world_fx,
+            notifications,
+            retail_tick,
+        },
+    );
+    log!("Dynamic radial: {result:?}");
 }
 
 /// Per-world-model light-table shift from `FUN_004136C0` and

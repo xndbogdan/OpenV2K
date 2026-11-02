@@ -1045,11 +1045,45 @@ pub struct FlareDamageBlocked {
     pub reason: crate::attached_particle_damage::AttachedParticleDamageBlock,
 }
 
+/// `FUN_00441850`'s `FUN_004566E0` at a class-4 or class-54 shell's static
+/// hit: the template with the shell's source type and owner in its last words.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParticleWorldRadial {
+    pub origin_raw: [i16; 3],
+    pub template: crate::radial_damage::RadialDamageTemplate,
+}
+
+/// Templates `0x004CD818` (class 4) and `0x004CD7F8` (class 54).
+const FUN_00441850_CLASS_4_RADIAL: crate::radial_damage::RadialDamageTemplate =
+    crate::radial_damage::RadialDamageTemplate {
+        inner_radius_raw: 0xFF,
+        outer_radius_raw: 0x3FF,
+        impulse_raw: 1000,
+        packet: crate::damage::DamagePacket {
+            channels: [3, 2],
+            amounts_raw: [2000, 4000],
+        },
+        trailing_raw: [0, 0],
+    };
+const FUN_00441850_CLASS_54_RADIAL: crate::radial_damage::RadialDamageTemplate =
+    crate::radial_damage::RadialDamageTemplate {
+        inner_radius_raw: 0xFF,
+        outer_radius_raw: 0x3FF,
+        impulse_raw: 1000,
+        packet: crate::damage::DamagePacket {
+            channels: [3, 0],
+            amounts_raw: [8000, 0],
+        },
+        trailing_raw: [0, 0],
+    };
+
 /// Observable traversal trace and deferred terrain writes in physical-slot order.
 #[derive(Debug, Default, PartialEq)]
 pub struct ParticleUpdateOutcome {
     /// `FUN_0043F660` deliveries the host refused, in physical-slot order.
     pub flare_damage_blocks: Vec<FlareDamageBlocked>,
+    /// `FUN_00441850` radials no host ran; the shells' other effects did.
+    pub unrun_world_radials: Vec<ParticleWorldRadial>,
     /// Completed 425D0 callbacks whose checked-damage admission bit was clear.
     /// These are retrospective observations, never requests to replay.
     pub attached_updates: Vec<AttachedParticleUpdateObservation>,
@@ -3944,9 +3978,9 @@ impl WorldFx {
         }
     }
 
-    /// `FUN_00441850` class-54: skip `FUN_004566E0`, then `FUN_004410B0`
-    /// class `0x27`. Unsuppressed count is 1; suppressed count is
-    /// `DAT_004F72CC >> 12` and a non-positive result emits nothing.
+    /// `FUN_00441850` class-54's debris after its radial: `FUN_004410B0`
+    /// class `0x27`, `DAT_004F72CC >> 12` records whatever `+0x1D` says (zero
+    /// still takes one, a negative count none), each carrying that bit.
     /// Velocity is the packed direction dword `* 2` plus independent `Z * 2`.
     /// At or below the authored sea plane, `FUN_004410B0` substitutes class
     /// `0x2E` and subtracts 100 from Y.
@@ -3958,10 +3992,9 @@ impl WorldFx {
         suppresses_impact_damage: bool,
         birth_context: ParticleBirthContext<'_>,
     ) {
-        let remaining = if suppresses_impact_damage {
-            (self.frame_pacing.count_scale_q16 as i32) >> 12
-        } else {
-            1
+        let remaining = match (self.frame_pacing.count_scale_q16 as i32) >> 12 {
+            0 => 1,
+            count => count,
         };
         if remaining <= 0 {
             return;
@@ -6655,6 +6688,7 @@ mod tests {
     mod combat_sweep;
     mod live_host;
     mod rapid_primary;
+    mod shell_radial;
     mod static_burn;
     mod surface_transition;
     mod virus_projectile;

@@ -840,14 +840,17 @@ dispatches `FUN_00410EB0` (no `+0x1D` bit-0 skip) with packet `0x004CBFA0`
 `FUN_0044F450` / `FUN_004575A0` with scale `(rng16 >> 3) + 0x10000`. Null
 `+0x20` rows skip `FUN_00410EB0` instead of following retail's null deref.
 Solid-static `FUN_0043FF10` writes the refined probe, then `FUN_0043F890`
-runs F610. Class 4 then runs `FUN_00441850`'s sound-90 prologue and
-`FUN_00441A50` (class-1 debris, count `(0x13880 >> 10) * scale >> 16` min 1,
-velocity table X / `abs(Y >> 1)` / Z, no allocator abort) and F890 sound 62.
-Class 54 then runs that prologue and `FUN_004410B0` class `0x27` (packed
-table dword `* 2` plus independent `Z * 2`; unsuppressed count 1; suppressed
-`DAT_004F72CC >> 12`; at or below sea, class `0x2E` and Y-100) and F890
-sound 62. Class-4 `FUN_004566E0` template `0x004CD818`, class-54
-`0x004CD7F8`, and class-77/78 `FUN_00456710` stay fail-closed.
+runs F610. Classes 4 and 54 then run `FUN_00441850`: sound 90, then
+`FUN_004566E0` with the shell's source type and owner in the template's last
+words (class 4 `0x004CD818`: radii 255/1023, impulse 1000,
+`[3,2]/[2000,4000]`; class 54 `0x004CD7F8`: the same with `[3,0]/[8000,0]`).
+Class 4 then runs `FUN_00441A50` (class-1 debris, count
+`(0x13880 >> 10) * scale >> 16` min 1, velocity table X / `abs(Y >> 1)` / Z,
+no allocator abort); class 54 runs `FUN_004410B0` class `0x27`
+`DAT_004F72CC >> 12` times whatever `+0x1D` says (zero takes one; packed
+table dword `* 2` plus independent `Z * 2`; at or below sea, class `0x2E` and
+Y-100). F890 ends with sound 62. Class-77/78 `FUN_00456710` stays
+fail-closed.
 `FUN_004292B0` uses the descriptor `+0x10` high word as the HUD fallback
 sprite without a 518/519 whitelist.
 

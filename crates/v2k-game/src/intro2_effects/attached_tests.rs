@@ -179,6 +179,9 @@ fn run_class84(playing: bool, living: bool) {
                         PlayingParticleActorEvent::FlareDamage(_) => {
                             panic!("the isolated postdeath attachment has no flare")
                         }
+                        PlayingParticleActorEvent::WorldRadial(_) => {
+                            panic!("the isolated postdeath attachment has no shell")
+                        }
                     }
                 },
                 on_terrain_event: |_: &mut StaticDamageScheduler, _: &mut WorldFx, _| {

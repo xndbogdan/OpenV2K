@@ -85,6 +85,11 @@ pub trait ParticleTraversalHost {
     ) -> Result<AttachedParticleCascadeOwner, AttachedParticleUpdateBlock> {
         Err(AttachedParticleUpdateBlock::CachedOwnerAllocationUnavailable)
     }
+    /// `FUN_00441850`'s `FUN_004566E0`, between its sound 90 and its debris.
+    /// Returns false when the host cannot run it; the update then lists it.
+    fn world_radial(&mut self, _world_fx: &mut WorldFx, _request: ParticleWorldRadial) -> bool {
+        false
+    }
     /// `FUN_0043F660 -> FUN_00410D30`, synchronous before the next slot.
     fn flare_damage(
         &mut self,
@@ -143,6 +148,17 @@ enum ParticleSlotExit {
     GroundProgram(CombatGroundProgramRequest),
     /// F660 returns zero: the flare stays allocated after its delivery.
     FlareHit(FlareDamageRequest),
+    /// F890 after its F610 burst, for a shell whose 41850 runs a radial.
+    ShellTail(ShellTail),
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ShellTail {
+    position: [f32; 3],
+    source_class: u8,
+    owner_id: Option<u32>,
+    source_type: Option<u8>,
+    suppressed: bool,
 }
 
 struct BorrowedEventHost<'a, EntityHandler, TerrainHandler> {
@@ -355,6 +371,55 @@ impl WorldFx {
                             reason,
                         });
                     }
+                }
+                ParticleSlotExit::ShellTail(tail) => {
+                    // 41850: sound 90, the 4566E0 radial with the shell's
+                    // source in the template's last words, then the debris;
+                    // F890 ends with sound 62. The shell holds its slot.
+                    self.emit_fun_0044f450_hit_sound(90, tail.position);
+                    let base = if tail.source_class == FUN_0043F6E0_CLASS_4 {
+                        FUN_00441850_CLASS_4_RADIAL
+                    } else {
+                        FUN_00441850_CLASS_54_RADIAL
+                    };
+                    let radial = ParticleWorldRadial {
+                        origin_raw: world_position_to_raw(tail.position),
+                        template: crate::radial_damage::RadialDamageTemplate {
+                            trailing_raw: [
+                                i32::from(tail.source_type.unwrap_or(0)),
+                                tail.owner_id.unwrap_or(0) as i32,
+                            ],
+                            ..base
+                        },
+                    };
+                    if !host.world_radial(self, radial) {
+                        outcome.unrun_world_radials.push(radial);
+                    }
+                    let birth_context = ParticleBirthContext {
+                        environment: host.context().environment,
+                        retail_tick: timing.retail_tick,
+                    };
+                    if tail.source_class == FUN_0043F6E0_CLASS_4 {
+                        self.emit_fun_00441a50(
+                            tail.position,
+                            FUN_00441850_CLASS_4_DEBRIS_CLASS,
+                            FUN_00441A50_CLASS_4_COUNT_BASE,
+                            tail.owner_id,
+                            tail.source_type,
+                            tail.suppressed,
+                            birth_context,
+                        );
+                    } else {
+                        self.emit_fun_00441850_class_54_410b0(
+                            tail.position,
+                            tail.owner_id,
+                            tail.source_type,
+                            tail.suppressed,
+                            birth_context,
+                        );
+                    }
+                    self.emit_fun_0044f450_hit_sound(62, tail.position);
+                    self.particles.free(slot);
                 }
             }
             publish_terrain_mutations(host, &mut outcome, &mut committed_terrain_mutations);
@@ -765,11 +830,10 @@ impl WorldFx {
                     }
                 }
                 // FUN_0043FF10 writes the refined probe, then FUN_0043F890
-                // runs F610. Class 4 then runs FUN_00441850's sound-90
-                // prologue and FUN_00441A50. Class 54 runs that prologue
-                // and FUN_004410B0 class 0x27. FUN_004566E0 stays
-                // fail-closed. Sound 62 is the F890 tail. Class 77/78
-                // skip 41850.
+                // runs F610. Classes 4 and 54 then run FUN_00441850 (sound 90,
+                // the FUN_004566E0 radial, then FUN_00441A50 or class 0x27
+                // FUN_004410B0) and the F890 tail's sound 62 in the exit,
+                // where the host can run the radial. Class 77/78 skip 41850.
                 if let Some(context) = terrain_context {
                     if let Some(terrain_objects) = context.terrain_objects {
                         if let Some(static_hit) = retail_swept_static_tile_hit(
@@ -794,28 +858,15 @@ impl WorldFx {
                                 suppressed,
                                 birth_context,
                             );
-                            if source_class == FUN_0043F6E0_CLASS_4 {
-                                self.emit_fun_0044f450_hit_sound(90, position);
-                                self.emit_fun_00441a50(
+                            if matches!(source_class, FUN_0043F6E0_CLASS_4 | FUN_0043F6E0_CLASS_54)
+                            {
+                                return ParticleSlotExit::ShellTail(ShellTail {
                                     position,
-                                    FUN_00441850_CLASS_4_DEBRIS_CLASS,
-                                    FUN_00441A50_CLASS_4_COUNT_BASE,
+                                    source_class,
                                     owner_id,
                                     source_type,
                                     suppressed,
-                                    birth_context,
-                                );
-                                self.emit_fun_0044f450_hit_sound(62, position);
-                            } else if source_class == FUN_0043F6E0_CLASS_54 {
-                                self.emit_fun_0044f450_hit_sound(90, position);
-                                self.emit_fun_00441850_class_54_410b0(
-                                    position,
-                                    owner_id,
-                                    source_type,
-                                    suppressed,
-                                    birth_context,
-                                );
-                                self.emit_fun_0044f450_hit_sound(62, position);
+                                });
                             }
                             self.particles.free(slot);
                             return ParticleSlotExit::Done;
