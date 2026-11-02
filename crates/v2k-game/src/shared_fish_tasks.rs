@@ -65,11 +65,13 @@ impl<E> FishTaskError<E> {
     }
 }
 
-/// 425680's world rules. Fish choices are all Always; the shark adds
-/// PlayerNearby. Neither evaluation draws a word.
+/// 425680's world rules. Fish choices are all Always; the shark and Type37
+/// add PlayerNearby, Type19 and Type117 UnderAttack. No evaluation draws a
+/// word.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct FishRules {
     pub player_nearby: bool,
+    pub under_attack: bool,
 }
 
 impl FishRules {
@@ -78,7 +80,22 @@ impl FishRules {
     pub(crate) fn evaluate<'a>(
         entity: &Entity,
         candidates: impl Iterator<Item = &'a Entity>,
+        retail_tick: u32,
     ) -> Result<Self, FishTaskError> {
+        if crate::shared_fish::runs_when_attacked(entity.entity_type) {
+            // UnderAttack: a hit stamped +34 within the last 250 ticks, once
+            // the clock has passed 249.
+            let RetailRuntimeValue::Known(last_hit) =
+                entity.collision.last_hit_presentation_tick_at_0x34
+            else {
+                return Err(FishTaskError::Runtime("fish UnderAttack +34"));
+            };
+            return Ok(Self {
+                player_nearby: false,
+                under_attack: retail_tick.wrapping_sub(last_hit) < 250
+                    && (retail_tick as i32) > 249,
+            });
+        }
         if !crate::shared_fish::is_hostile_swimmer(entity.entity_type) {
             return Ok(Self::default());
         }
@@ -99,6 +116,7 @@ impl FishRules {
         .map_err(FishTaskError::Acquisition)?;
         Ok(Self {
             player_nearby: matches!(selection, GuardLocationCandidateSelection::Selected(_)),
+            under_attack: false,
         })
     }
 }
@@ -119,6 +137,7 @@ pub(crate) fn select_behavior(
         |rule| match rule {
             BehaviorWeightRule::Always => 1,
             BehaviorWeightRule::PlayerNearby => i32::from(rules.player_nearby),
+            BehaviorWeightRule::UnderAttack => i32::from(rules.under_attack),
             _ => unreachable!("authenticated swimmer rules"),
         },
         next_random,
@@ -179,6 +198,7 @@ fn publish_selection_with(
         25 => matches!(class, 5 | 6 | 69),
         37 => matches!(class, 4 | 5 | 10),
         20 => matches!(class, 4 | 5 | 6),
+        19 | 117 => matches!(class, 5 | 6 | 10),
         _ => matches!(class, 5 | 6 | 13),
     };
     if !admitted
@@ -487,6 +507,7 @@ pub(crate) fn reselect_after_task_result(
     manager: &mut EntityManager,
     id: u32,
     metadata: &EntityTypeRuntimeMetadata,
+    retail_tick: u32,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), FishTaskError> {
     let entity = manager.entity_mut(id).ok_or(FishTaskError::Allocation)?;
@@ -499,7 +520,7 @@ pub(crate) fn reselect_after_task_result(
     if suppressed != 0 {
         return Ok(());
     }
-    reselect_behavior(manager, id, metadata, next_random)
+    reselect_behavior(manager, id, metadata, retail_tick, next_random)
 }
 
 /// Direct C690/AC60 entry from a style callback. Unlike task-result dispatch,
@@ -508,13 +529,14 @@ pub(crate) fn reselect_behavior(
     manager: &mut EntityManager,
     id: u32,
     metadata: &EntityTypeRuntimeMetadata,
+    retail_tick: u32,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), FishTaskError> {
     let entity = manager
         .iter_all()
         .find(|entity| entity.id == id)
         .ok_or(FishTaskError::Allocation)?;
-    let rules = FishRules::evaluate(entity, manager.iter_all())?;
+    let rules = FishRules::evaluate(entity, manager.iter_all(), retail_tick)?;
     let entity = manager.entity_mut(id).ok_or(FishTaskError::Allocation)?;
     let RetailRuntimeValue::Known(flags) =
         entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)

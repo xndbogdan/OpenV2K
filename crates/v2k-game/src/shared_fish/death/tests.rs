@@ -115,6 +115,7 @@ fn absent_stale_executing_and_parked_owners_reject_before_death_writes() {
                     &mut manager,
                     id,
                     &metadata,
+                    1001,
                     &mut || 0,
                 )
                 .unwrap();

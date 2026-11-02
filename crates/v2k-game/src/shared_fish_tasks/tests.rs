@@ -381,7 +381,7 @@ fn target_loss_skips_mover_then_c690_preserves_context_target_and_one_selector_w
     let retained_state = entity.collision.state_flags_at_0x08;
     entity.collision.state_flags_at_0x08 =
         crate::entity_collision_state::RetailStateWord::from_known_bits(0x1000, 0x1000);
-    reselect_after_task_result(&mut manager, id, &metadata[22], &mut || {
+    reselect_after_task_result(&mut manager, id, &metadata[22], 1001, &mut || {
         panic!("suppression precedes dying read")
     })
     .unwrap();
@@ -391,14 +391,14 @@ fn target_loss_skips_mover_then_c690_preserves_context_target_and_one_selector_w
         .collision
         .state_flags_at_0x08
         .overwrite(0x5000, 0x1000);
-    reselect_after_task_result(&mut manager, id, &metadata[22], &mut || {
+    reselect_after_task_result(&mut manager, id, &metadata[22], 1001, &mut || {
         panic!("suppressed")
     })
     .unwrap();
     let entity = manager.entity_mut(id).unwrap();
     entity.collision.state_flags_at_0x08.overwrite(0x5000, 0);
     let mut draws = 0;
-    reselect_after_task_result(&mut manager, id, &metadata[22], &mut || {
+    reselect_after_task_result(&mut manager, id, &metadata[22], 1001, &mut || {
         draws += 1;
         65535
     })

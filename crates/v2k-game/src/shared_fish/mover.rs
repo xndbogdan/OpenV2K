@@ -47,6 +47,9 @@ pub(super) fn run(
     let RetailRuntimeValue::Known(Some(f)) = frame.metadata.sub_f_swimming_descriptor else {
         return Err(Block::Metadata);
     };
+    let RetailRuntimeValue::Known(gkl) = frame.metadata.common_mover_gkl_payloads else {
+        return Err(Block::Metadata);
+    };
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
         return Err(Block::Runtime("fish physical basis"));
     };
@@ -69,7 +72,7 @@ pub(super) fn run(
             sub_f_smoothed_raw: Some(fish.sub_f.smoothed_turn_raw),
             sub_g_runtime_angle_raw: 0,
             sub_g_state_byte_3c: 0,
-            sub_k_smoothed_raw: None,
+            sub_k_smoothed_raw: topology.sub_k.then_some(fish.sub_k_smoothed_raw),
             sub_n_accumulator_raw: None,
             sub_o_link_raw: 0,
         };
@@ -158,6 +161,10 @@ pub(super) fn run(
                     plan,
                 )) => {
                     let write = plan.sub_f.ok_or(Block::Runtime("fish post-D F write"))?;
+                    if let Some(smoothed) = plan.sub_k_smoothed_raw {
+                        fish.sub_k_smoothed_raw = smoothed;
+                        snapshot.sub_k_smoothed_raw = Some(smoothed);
+                    }
                     fish.sub_f.smoothed_turn_raw = write.smoothed_raw;
                     fish.sub_f.target_position_raw = write.target_position_raw;
                     snapshot.sub_f_smoothed_raw = Some(write.smoothed_raw);
@@ -208,6 +215,28 @@ pub(super) fn run(
                     commit_snapshot(entity, snapshot);
                     CommonMoverFrameResume::ComponentReturned {
                         phase: CommonMoverDispatchPhase::SubF,
+                        snapshot,
+                    }
+                }
+                CommonMoverFramePoll::Action(CommonMoverFrameAction::InvokeComponent {
+                    phase: CommonMoverDispatchPhase::SubK,
+                    ..
+                }) => {
+                    // 018A0 runs K after F: its second word reads F's vertical
+                    // velocity. Its two words are bank words bound by 0A950.
+                    let [a, b] = gkl
+                        .sub_k
+                        .ok_or(Block::Runtime("fish K payload"))?
+                        .map(usize::from);
+                    let output = crate::gkl_common_mover::component_outputs::advance_sub_k(
+                        [fish.variables[a] as i16, fish.variables[b] as i16],
+                        fish.sub_k_smoothed_raw,
+                        snapshot.velocity_raw[1],
+                    );
+                    fish.variables[a] = output[0] as u16;
+                    fish.variables[b] = output[1] as u16;
+                    CommonMoverFrameResume::ComponentReturned {
+                        phase: CommonMoverDispatchPhase::SubK,
                         snapshot,
                     }
                 }

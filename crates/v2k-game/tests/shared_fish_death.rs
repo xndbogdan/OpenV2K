@@ -72,7 +72,7 @@ fn infected_then_primary_hits_preserve_every_authored_fish_death_policy() {
             // Type124's class63 carriers and the C swimmers keep ticking.
             let survivors: Vec<_> = manager
                 .iter_all()
-                .filter(|entity| matches!(entity.entity_type, 124 | 25 | 37 | 20))
+                .filter(|entity| matches!(entity.entity_type, 124 | 25 | 37 | 20 | 19 | 117))
                 .map(|entity| entity.id)
                 .collect();
             assert!(!victims.is_empty());
@@ -240,5 +240,5 @@ fn infected_then_primary_hits_preserve_every_authored_fish_death_policy() {
         }
     }
     eprintln!("fish death (entry, world, class2, class63) census: {census:?}");
-    assert_eq!(census.iter().map(|row| row.2 + row.3).sum::<usize>(), 256);
+    assert_eq!(census.iter().map(|row| row.2 + row.3).sum::<usize>(), 262);
 }
