@@ -419,6 +419,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | NATIVE_TYPE18_SUB_D
             | NATIVE_TYPE28_SUB_D
             | INTRO2_TYPE10_SUB_D
+            | crate::intro2_type10::TYPE29_SUB_D
             | SHARED_FISH_SUB_D
             | TYPE62_SUB_D
             | TYPE25_SUB_D

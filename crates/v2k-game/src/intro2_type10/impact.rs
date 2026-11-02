@@ -1,8 +1,8 @@
 //! Native Type10 hits: 10EB0/11250/11320 -> DAC0/DA00/DA60 -> 11030 -> 15040.
 //!
-//! Both Search and both Guard styles authenticate C690 independently at
-//! +20/+28; Search completion, fallback and the two Tumble styles have null
-//! hit callbacks.
+//! Both Search and both Guard styles and Mobbing's three authenticate C690
+//! independently at +20/+28; Run Away's two hold it at +20/+24 only. Search
+//! completion, fallback and the two Tumble styles have null hit callbacks.
 //! Lethal checked damage publishes the exact alternate11 owner synchronously.
 
 use super::{intro2_type10_allocation_authenticates, Intro2Type10Block, Intro2Type10Owner};
@@ -63,6 +63,11 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
         (0x004C_7A98, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search Chase/Aim
         (0x004C_7BB8, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Guard searching
         (0x004C_7C00, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Guard Chase/Aim
+        (0x004C_7C48, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Mobbing searching
+        (0x004C_7C90, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Mobbing approach
+        (0x004C_7CD8, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Mobbing dive
+        (0x004C_7618, 0x0040_C690, 0x0040_C690, 0),           // Run Away searching
+        (0x004C_7660, 0x0040_C690, 0x0040_C690, 0),           // Run Away fleeing
         (0x004C_7AE0, 0, 0, 0),                               // Search completion
         (0x004C_7F60, 0, 0, 0),                               // tumble class11
         (0x004C_7FA8, 0, 0, 0),                               // tumble terminal

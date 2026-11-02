@@ -81,6 +81,19 @@ pub(crate) fn tick_native_guard_acquisition(
     metadata: &EntityTypeRuntimeMetadata,
     world_fx: &mut WorldFx,
 ) -> Result<bool, NativeGuardBlock> {
+    tick_native_guard_acquisition_with(manager, id, world_fx, |entity, target, world_fx| {
+        publish_native_guard_pursuit(entity, metadata, target, world_fx)
+    })
+}
+
+/// The same `01FB0` visit with the style's own `C7D0` continuation: Guard's
+/// pursuit above, or Mobbing Target's approach (class21's `B460` search).
+pub(crate) fn tick_native_guard_acquisition_with(
+    manager: &mut EntityManager,
+    id: u32,
+    world_fx: &mut WorldFx,
+    mut publish: impl FnMut(&mut Entity, u32, &mut WorldFx) -> Result<(), NativeGuardBlock>,
+) -> Result<bool, NativeGuardBlock> {
     let candidates: Vec<_> = manager.iter_all().map(type47_guard_entity_ref).collect();
     let entity = manager.entity_mut(id).ok_or(NativeGuardBlock::Graph)?;
     let RetailRuntimeValue::Known(axis) = entity.actor_common_axis_descriptor else {
@@ -125,7 +138,7 @@ pub(crate) fn tick_native_guard_acquisition(
         owner,
         &candidates,
         Some(|handoff: GuardLocationCandidateHandoff| {
-            match publish_native_guard_pursuit(entity, metadata, handoff.candidate.id, world_fx) {
+            match publish(entity, handoff.candidate.id, world_fx) {
                 Ok(()) => 0,
                 Err(reason) => {
                     handoff_error = Some(reason);

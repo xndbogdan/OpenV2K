@@ -152,6 +152,8 @@ pub enum ActorTaskRuntimeFamily {
     TrashFurniture,
     CommonDying,
     TumbleOutOfSky,
+    MobbingApproach,
+    MobbingDive,
     Intro2Type57Tumble,
     ChangeSeaLevel,
     WorkingFactory,
@@ -208,6 +210,10 @@ pub enum ActorTaskRuntime {
     TrashFurniture(crate::trash_furniture::TrashFurnitureTaskState),
     CommonDying(CommonDyingTaskState),
     TumbleOutOfSky(crate::intro2_type10::death::Intro2Type10TumbleTask),
+    /// Class21 variant1's `03900/03A00` lifetime-0 approach on its target.
+    MobbingApproach(crate::intro2_type10::mobbing::MobbingTaskState),
+    /// Class21 variant2's `04BE0/04D50` lifetime-0 dive at its target.
+    MobbingDive(crate::intro2_type10::mobbing::MobbingTaskState),
     Intro2Type57Tumble(crate::intro2_type57::death::Intro2Type57TumbleTask),
     ChangeSeaLevel(crate::main_base_type54_abort::MainBaseType54SeaLevelTaskState),
     WorkingFactory(crate::main_base_type66_abort::WorkingFactoryTaskState),
@@ -279,6 +285,8 @@ impl ActorTaskRuntime {
             Self::TrashFurniture(_) => ActorTaskRuntimeFamily::TrashFurniture,
             Self::CommonDying(_) => ActorTaskRuntimeFamily::CommonDying,
             Self::TumbleOutOfSky(_) => ActorTaskRuntimeFamily::TumbleOutOfSky,
+            Self::MobbingApproach(_) => ActorTaskRuntimeFamily::MobbingApproach,
+            Self::MobbingDive(_) => ActorTaskRuntimeFamily::MobbingDive,
             Self::Intro2Type57Tumble(_) => ActorTaskRuntimeFamily::Intro2Type57Tumble,
             Self::ChangeSeaLevel(_) => ActorTaskRuntimeFamily::ChangeSeaLevel,
             Self::WorkingFactory(_) => ActorTaskRuntimeFamily::WorkingFactory,
@@ -1894,6 +1902,10 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::TrashFurniture(_)) => {
                 Some(ActorTaskRuntimeFamily::TrashFurniture)
             }
+            Some(ActorTaskRuntime::MobbingApproach(_)) => {
+                Some(ActorTaskRuntimeFamily::MobbingApproach)
+            }
+            Some(ActorTaskRuntime::MobbingDive(_)) => Some(ActorTaskRuntimeFamily::MobbingDive),
             Some(ActorTaskRuntime::TumbleOutOfSky(_)) => {
                 Some(ActorTaskRuntimeFamily::TumbleOutOfSky)
             }
@@ -2016,6 +2028,9 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntime::TrashFurniture(_) => unreachable!("Furniture requires its exact native visit"),
             ActorTaskRuntime::TumbleOutOfSky(_) | ActorTaskRuntime::Intro2Type57Tumble(_) => {
                 unreachable!("Tumble requires its exact native visit")
+            }
+            ActorTaskRuntime::MobbingApproach(_) | ActorTaskRuntime::MobbingDive(_) => {
+                unreachable!("Mobbing requires its exact native visit")
             }
         },
         |adapter, owner, visit| match owner
@@ -2286,6 +2301,9 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntimeFamily::TrashFurniture => unreachable!("Furniture requires its exact native visit"),
             ActorTaskRuntimeFamily::TumbleOutOfSky | ActorTaskRuntimeFamily::Intro2Type57Tumble => {
                 unreachable!("Tumble requires its exact native visit")
+            }
+            ActorTaskRuntimeFamily::MobbingApproach | ActorTaskRuntimeFamily::MobbingDive => {
+                unreachable!("Mobbing requires its exact native visit")
             }
         },
         |adapter, owner, visit, before, callback| match (before, callback) {

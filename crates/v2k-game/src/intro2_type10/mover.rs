@@ -24,6 +24,8 @@ pub(super) struct MoverFrame<'a> {
     pub elapsed_micros: u32,
     pub global_elapsed_micros: u32,
     pub retail_tick: u32,
+    /// `DAT_004FECE4`, the world descriptor's `+84` wave flag.
+    pub waves_enabled: bool,
 }
 
 pub(super) fn run(
@@ -77,12 +79,12 @@ pub(super) fn run(
             global_elapsed_micros: frame.global_elapsed_micros,
         },
         GklCommonMoverProfile {
-            topology: TOPOLOGY,
+            topology: runtime.profile.topology(),
             sub_d: runtime.profile.sub_d(),
             gkl: CommonMoverGklPayloads {
                 sub_g: Some(*runtime.profile.sub_g()),
-                sub_k: Some(SUB_K),
-                sub_l: Some(SUB_L),
+                sub_k: runtime.profile.sub_k(),
+                sub_l: Some(runtime.profile.sub_l()),
             },
         },
         &mut || u32::from(world_fx.next_shared_retail_random_u16()),

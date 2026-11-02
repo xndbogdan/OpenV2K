@@ -892,6 +892,10 @@ fn resolve_player_active_segment(
         // or a parked committed prefix: a changed wrapper must not retry the
         // same allocation through this detached planning pass.
         .filter(|candidate| !native_weapon_owns_pair_lane(entities, candidate))
+        // Native Type29's Mobbing pair hook runs in the native pair lane.
+        .filter(|candidate| {
+            !(candidate.entity_type == 29 && candidate.intro2_type10_runtime.is_some())
+        })
         // Unresolved pair identity used to abort the whole pass, which made
         // every non-Level-1 world skip solids including Main Base. This
         // adapter only visits candidates whose constructor/census pair fields

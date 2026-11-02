@@ -176,7 +176,17 @@ pub fn publish_intro2_type10_standard_death(
     // alternate styles. An arbitrary null-looking foreign style is not admitted.
     if !matches!(
         context.active_style().style_address(),
-        0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c7bb8 | 0x4c7c00 | 0x4c74f8
+        0x4c7a50
+            | 0x4c7a98
+            | 0x4c7ae0
+            | 0x4c7bb8
+            | 0x4c7c00
+            | 0x4c74f8
+            | 0x4c7c48
+            | 0x4c7c90
+            | 0x4c7cd8
+            | 0x4c7618
+            | 0x4c7660
     ) {
         return Err(Block::Runtime("unaudited death style"));
     }
@@ -413,11 +423,14 @@ fn tick_detailed_components(
         .intro2_type10_runtime
         .as_mut()
         .ok_or(Block::Allocation)?;
-    runtime.sub_k_output_raw = crate::gkl_common_mover::component_outputs::advance_sub_k(
-        runtime.sub_k_output_raw,
-        runtime.sub_k_smoothed_raw,
-        velocity_y,
-    );
+    // 018A0 dispatches only the row's components: Type29 has no K.
+    if runtime.profile.sub_k().is_some() {
+        runtime.sub_k_output_raw = crate::gkl_common_mover::component_outputs::advance_sub_k(
+            runtime.sub_k_output_raw,
+            runtime.sub_k_smoothed_raw,
+            velocity_y,
+        );
+    }
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31 else {
         return Err(Block::Runtime("Sub-L retained basis"));
     };
@@ -427,7 +440,7 @@ fn tick_detailed_components(
         position,
         runtime.sub_l_target_raw,
         basis,
-        SUB_L,
+        runtime.profile.sub_l(),
     );
     Ok(())
 }

@@ -544,7 +544,7 @@ impl EntityManager {
             }
             // Type5, the power-up carriers 80/126 and the guards 55/81 share
             // the Type10 owner.
-            5 | 80 | 126 | 55 | 81 => {
+            5 | 80 | 126 | 55 | 81 | 29 => {
                 let sub_d = sub_d.ok_or("missing Type10-family Sub-D allocation")?;
                 let constructor_surface_bits =
                     crate::entity_initializer::constructor_surface_bits_at_tick(

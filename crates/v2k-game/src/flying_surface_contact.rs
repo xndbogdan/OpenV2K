@@ -79,6 +79,7 @@ pub(crate) fn resolve_null_hook_flying_surface<E, D: Copy>(
         Option<PlayingPlayerContact<'_>>,
         &mut bool,
     ) -> Result<(), E>,
+    mut solid_style_callback: impl FnMut(&mut Intro2ContactFrame<'_>, u32, &mut bool) -> Result<(), E>,
 ) -> Result<FlyingSurfaceContactOutcome<E, D>, FlyingSurfaceContactBlock<E, D>> {
     use FlyingSurfaceContactBlock as Block;
     let model = frame
@@ -110,6 +111,15 @@ pub(crate) fn resolve_null_hook_flying_surface<E, D: Copy>(
     let solid_contact = hit.is_some();
     let mut collision_damage_raw = 0;
     if let Some(hit) = hit {
+        // D7F0 runs the style's +10 before 141D0's response.
+        solid_style_callback(frame, id, committed).map_err(Block::SurfaceCallback)?;
+        let context = TerrainCollisionContext::from_current_level_cache(frame.resources)
+            .ok_or(Block::Runtime("terrain contact environment"))?;
+        let entity = frame
+            .entities
+            .iter_all()
+            .find(|e| e.id == id)
+            .ok_or(Block::Runtime("solid callback survivor"))?;
         let original = entity.position_raw();
         let material = nearest_cell_material_code(context.terrain, original[0], original[2]);
         // This pure planner implements the same 141D0 solid mode used by the

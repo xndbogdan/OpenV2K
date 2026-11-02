@@ -310,7 +310,7 @@ fn commit_plan(
                     .unwrap()
                     .sub_d_runtime
             }
-            10 | 5 | 80 | 126 | 55 | 81 => {
+            10 | 5 | 80 | 126 | 55 | 81 | 29 => {
                 &mut entity.intro2_type10_runtime.as_mut().unwrap().sub_d_runtime
             }
             57 => &mut entity.intro2_type57_runtime.as_mut().unwrap().sub_d_runtime,
@@ -535,7 +535,7 @@ fn contact_topology(
     let fish = crate::shared_fish::is_shared_fish_type(entity.entity_type);
     let flying = matches!(
         entity.entity_type,
-        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57
+        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
     );
     let person = matches!(entity.entity_type, 9 | 123)
         || NativeWorkerProfile::from_entity_type(entity.entity_type).is_some()
@@ -598,7 +598,7 @@ fn contact_topology(
             31 | 105 => entity.native_type31_runtime.is_none(),
             13 => entity.intro2_type13_common_mover_runtime.is_none(),
             14 | 15 | 39 | 87 | 108 => entity.intro2_flyer_frame_owner.is_none(),
-            10 | 5 | 80 | 126 | 55 | 81 => entity.intro2_type10_runtime.is_none(),
+            10 | 5 | 80 | 126 | 55 | 81 | 29 => entity.intro2_type10_runtime.is_none(),
             57 => entity.intro2_type57_runtime.is_none(),
             17 => entity.type17_sub_d_runtime.is_none(),
             47 | 71 => entity.intro2_type47_sub_d_runtime.is_none(),
@@ -659,7 +659,7 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         31 | 105 => crate::native_type31::manager_allocation_authenticates(manager, id),
         13 => crate::intro2_type13_live::type13_manager_allocation_authenticates(manager, id),
         14 | 15 | 39 | 87 | 108 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
-        10 | 5 | 80 | 126 | 55 | 81 => {
+        10 | 5 | 80 | 126 | 55 | 81 | 29 => {
             crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
         }
         57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
@@ -713,7 +713,7 @@ pub(crate) fn completed_contact_owner(
             crate::class49_death::finished_terminal_hit_authenticates(manager, id)
                 || tasks.intro2_flyer_completed_owner(manager, id)
         }
-        10 | 5 | 80 | 126 | 55 | 81 => {
+        10 | 5 | 80 | 126 | 55 | 81 | 29 => {
             !tasks.intro2_type10_has_pending_prefix(id)
                 && (tasks.intro2_type10_completed_owner(manager, id)
                     || tasks.intro2_type10_tumble_completed_owner(manager, id))
@@ -744,7 +744,7 @@ pub(crate) fn native_weapon_contact_owner_authenticates(
 fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool {
     match kind {
         26 | 30 | 33 | 38 | 129 | 119 | 32 | 12 | 127 | 31 | 105 | 40 | 56 | 43 | 13 | 14 | 15
-        | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57 => {
+        | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57 => {
             native_insect_allocation_authenticates(manager, id)
         }
         kind if NativeWorkerProfile::from_entity_type(kind).is_some() => {
@@ -818,6 +818,8 @@ pub(crate) fn task_has_null_contact(task: &ActorTaskRuntime) -> bool {
             | ActorTaskRuntime::TrashFurniture(_)
             | ActorTaskRuntime::DefecateVirusTerrain(_)
             | ActorTaskRuntime::HiveRadial(_)
+            // 04BE0's dive installs only the 07120 destructor.
+            | ActorTaskRuntime::MobbingDive(_)
     )
 }
 
@@ -841,6 +843,8 @@ pub(crate) fn task_has_descriptor_contact(task: &ActorTaskRuntime) -> bool {
             | ActorTaskRuntime::CapturePeopleFollowing(_)
             | ActorTaskRuntime::RunAway(_)
             | ActorTaskRuntime::FishTargetRoute(_)
+            // 03900's approach installs 02DA0 (and 02CA0) as Chase does.
+            | ActorTaskRuntime::MobbingApproach(_)
     )
 }
 
@@ -858,6 +862,7 @@ pub(crate) fn private_state(task: &ActorTaskRuntime) -> Option<WanderNearPrivate
         ActorTaskRuntime::FollowBeaconsFollowing(task)
         | ActorTaskRuntime::CapturePeopleFollowing(task) => task.private_state(),
         ActorTaskRuntime::RunAway(task) => task.private_state(),
+        ActorTaskRuntime::MobbingApproach(task) => task.private_state(),
         _ => return None,
     })
 }
@@ -901,6 +906,7 @@ pub(crate) fn commit_private(task: &mut ActorTaskRuntime, private: WanderNearPri
             *stage.private_state_mut() = private;
             stage.commit(task);
         }
+        ActorTaskRuntime::MobbingApproach(task) => task.replace_private_state(private),
         _ => unreachable!("authenticated descriptor task"),
     }
 }

@@ -325,6 +325,7 @@ fn resolve(
         },
         crate::native_flying_surface_contact::register_native_flying_death,
         |_, _, _, _| Ok(()),
+        |_, _, _| Ok(()),
     )
 }
 

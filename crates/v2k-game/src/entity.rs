@@ -2105,12 +2105,17 @@ impl Entity {
             vars.dynamic[1] = i32::from(runtime.sub_k1);
         }
         if let Some(runtime) = self.intro2_type10_runtime {
-            for (selector, value) in crate::intro2_type10::SUB_K
+            // 09A80 binds only the row's components: Type29 has no K.
+            let sub_l = runtime.profile.sub_l();
+            for (selector, value) in runtime
+                .profile
+                .sub_k()
                 .into_iter()
+                .flatten()
                 .map(usize::from)
                 .zip(runtime.sub_k_output_raw)
                 .chain(
-                    crate::intro2_type10::SUB_L[..2]
+                    sub_l[..2]
                         .iter()
                         .copied()
                         .map(usize::from)
@@ -5066,6 +5071,7 @@ impl EntityManager {
                             | 26
                             | 27
                             | 28
+                            | 29
                             | 30
                             | 31
                             | 32

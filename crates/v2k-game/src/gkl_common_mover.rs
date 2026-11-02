@@ -416,19 +416,20 @@ pub(crate) fn evaluate_gkl_common_mover(
                 CommonMoverFramePoll::Action(CommonMoverFrameAction::CommitPostSubDWrites(
                     plan,
                 )) => {
-                    let (Some(sub_k_smoothed_raw), Some(sub_l_exact_raw)) =
-                        (plan.sub_k_smoothed_raw, plan.sub_l_exact_raw)
-                    else {
+                    // A K-less row (Type29) receives only L's exact write.
+                    let Some(sub_l_exact_raw) = plan.sub_l_exact_raw else {
                         return Err(GklCommonMoverBlock::UnexpectedPostSubDWrites);
                     };
-                    if plan.sub_f.is_some() {
+                    if plan.sub_f.is_some() || plan.sub_k_smoothed_raw.is_some() != topology.sub_k {
                         return Err(GklCommonMoverBlock::UnexpectedPostSubDWrites);
                     }
-                    runtime.sub_k_smoothed_raw = sub_k_smoothed_raw;
+                    if let Some(sub_k_smoothed_raw) = plan.sub_k_smoothed_raw {
+                        runtime.sub_k_smoothed_raw = sub_k_smoothed_raw;
+                        prefix.sub_k_smoothed_raw = Some(sub_k_smoothed_raw);
+                        live.sub_k_smoothed_raw = Some(sub_k_smoothed_raw);
+                    }
                     runtime.sub_l_exact_raw = sub_l_exact_raw;
-                    prefix.sub_k_smoothed_raw = Some(sub_k_smoothed_raw);
                     prefix.sub_l_exact_raw = Some(sub_l_exact_raw);
-                    live.sub_k_smoothed_raw = Some(sub_k_smoothed_raw);
                     machine
                         .resume(CommonMoverFrameResume::Committed {
                             phase: CommonMoverFrameCommitPhase::PostSubDWrites,
