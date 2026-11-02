@@ -115,9 +115,9 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (21, 74),
     (22, 41),
     // Native22/23/24 fish execute the class2 quiet terminal and the Type25
-    // sharks and Type37s class12; Reef's next unsupported callback is its
-    // Type20 actor.
-    (23, 20),
+    // sharks and Type37s class12, and its Type20 explodes through class1;
+    // Reef's next unsupported callback is its Type117 actor.
+    (23, 117),
     (24, 29),
     // World 25 completes: its Type82 factory shares Type66's class39 owner.
     (26, 109),
@@ -130,7 +130,8 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     (31, 107),
     // World 32 completes: its Type55 guards take class11 Tumble, its Type82
     // factory class39 and its Type32s the ground host's terminal deaths.
-    (33, 20),
+    // The Type20 swimmer explodes through class1; next is the Type41 flyer.
+    (33, 41),
     // The Type25 shark takes class12; next is the Type117 carrier.
     (34, 117),
     // World 35 completes: its Type12s explode through class1.

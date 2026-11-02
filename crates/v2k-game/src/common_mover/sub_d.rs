@@ -328,6 +328,17 @@ pub const TYPE37_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     ..NATIVE_TYPE28_SUB_D
 };
 
+/// Type20's swimmer: divisor30, roll coupling, probes512/256, no classifier.
+pub const TYPE20_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 30,
+    couple_yaw_into_roll_raw: 1,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 512,
+    lateral_probe_raw: 256,
+    classifier_flags: 0,
+    reserved_at_0x0b: 0,
+};
+
 /// Type94's exact authored descriptor equals Type58's steering/probe values.
 /// Its independent constructor/first-query receipt below is not interchangeable.
 pub const INTRO2_TYPE94_SUB_D: SubDSteeringDescriptor = INTRO2_TYPE58_SUB_D;
@@ -412,6 +423,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | TYPE62_SUB_D
             | TYPE25_SUB_D
             | TYPE37_SUB_D
+            | TYPE20_SUB_D
             | CLEANSING_VEHICLE_SUB_D
             | FLYER_SUB_D
             | TYPE14_SUB_D

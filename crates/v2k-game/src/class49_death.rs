@@ -67,8 +67,8 @@ pub enum NativeExplosionSourceProfile {
     PowerUp61,
     Intro2Type13,
     EntityWeapon(crate::native_entity_weapons::EntityWeaponKind),
-    /// Type124's fish owner with alternate class63.
-    Fish124,
+    /// The fish owner's exploders: Type20 (class1) and Type124 (class63).
+    ExplodingFish(u32),
     /// Ordinary Type80/126 carriers on the Type10 owner, alternate class63.
     Type10Carrier(crate::intro2_type10::Type10Profile),
     /// Ordinary Type128 carriers on the Type16 owner, alternate class63.
@@ -100,7 +100,7 @@ impl NativeExplosionSourceProfile {
             Self::PowerUp61 => 61,
             Self::Intro2Type13 => 13,
             Self::EntityWeapon(kind) => kind.entity_type() as u32,
-            Self::Fish124 => 124,
+            Self::ExplodingFish(entity_type) => entity_type,
             Self::Type10Carrier(profile) => profile.entity_type(),
             Self::Type16Carrier(row) => row.entity_type(),
             Self::Type43 => crate::native_type43::ENTITY_TYPE,
@@ -140,10 +140,10 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(kind) => {
                 crate::native_entity_weapons::authenticate_weapon_metadata(kind, metadata).is_ok()
             }
-            Self::Fish124 => {
+            Self::ExplodingFish(entity_type) => {
                 crate::shared_fish::authenticate_metadata(metadata).is_ok()
                     && metadata.initializer.as_ref().is_some_and(|initializer| {
-                        initializer.behavior_rule_ref == 1
+                        initializer.behavior_rule_ref == if entity_type == 20 { 3 } else { 1 }
                             && initializer.alternate_behavior_class_ref
                                 == self.policy().behavior_class()
                     })
@@ -205,8 +205,12 @@ impl NativeExplosionSourceProfile {
                 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_7930 | 0x004c_7978 | 0x004c_74f8
             ),
             Self::EntityWeapon(kind) => style == 0x004c_74f8 || style == kind.living_style(),
+            // Aimless, Wander and Defecate Virus: +2C null.
+            Self::ExplodingFish(20) => matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7e88),
             // Aimless, Wander and both Flocking variants: all four +2C are null.
-            Self::Fish124 => matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40),
+            Self::ExplodingFish(_) => {
+                matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40)
+            }
             // Search acquiring, pursuing, completion, both Guard styles and the
             // fallback: +2C null.
             Self::Type10Carrier(_) => matches!(
@@ -292,8 +296,11 @@ impl NativeExplosionSourceProfile {
                 (10, [16, 16])
             }
             Self::EntityWeapon(_) => (16, [94, 95]),
+            // Type20 has no A/B/N/G, capability8, and is neither type49 nor
+            // 112..115: the 40BB9C default keeps ten class16 particles.
+            Self::ExplodingFish(20) => (10, [16, 16]),
             // Nonnull B takes 40BBB3.
-            Self::Fish124 => (10, [37, 37]),
+            Self::ExplodingFish(_) => (10, [37, 37]),
             // Nonnull G takes 40BBB3.
             Self::Type10Carrier(_) => (10, [37, 37]),
             // Nonnull A takes 40BBB3.
@@ -330,11 +337,12 @@ impl NativeExplosionSourceProfile {
             | Self::RollingBoulder
             | Self::ExplodingFlyer(_)
             | Self::Type89
+            | Self::ExplodingFish(20)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
                 NativeExplosionPolicy::Class1
             }
-            Self::Fish124
+            Self::ExplodingFish(_)
             | Self::Type10Carrier(_)
             | Self::Type16Carrier(_)
             | Self::Type71Gunner
@@ -361,8 +369,12 @@ pub(crate) fn source_profile(entity: &Entity) -> Option<NativeExplosionSourcePro
         Some(NativeExplosionSourceProfile::GunTurret(profile))
     } else if intro2_type13_explosion_source_authenticates(entity) {
         Some(NativeExplosionSourceProfile::Intro2Type13)
-    } else if entity.entity_type == 124 && entity.shared_fish_runtime.is_some() {
-        Some(NativeExplosionSourceProfile::Fish124)
+    } else if crate::shared_fish::explodes(entity.entity_type)
+        && entity.shared_fish_runtime.is_some()
+    {
+        Some(NativeExplosionSourceProfile::ExplodingFish(
+            entity.entity_type,
+        ))
     } else if let Some(profile) = crate::intro2_type10::type10_auto_pilot_profile(entity) {
         Some(NativeExplosionSourceProfile::Type10Carrier(profile))
     } else if crate::native_type43::allocation_authenticates(entity) {
@@ -433,7 +445,7 @@ pub(crate) fn allocation_authenticates(manager: &EntityManager, id: u32) -> bool
             .is_some_and(|observation| {
                 observation.lease == entity.native_entity_weapon_runtime.unwrap().allocation
             }),
-        Some(NativeExplosionSourceProfile::Fish124) => {
+        Some(NativeExplosionSourceProfile::ExplodingFish(_)) => {
             crate::shared_fish::allocation_authenticates(manager, id)
         }
         Some(NativeExplosionSourceProfile::Type10Carrier(_)) => {

@@ -89,7 +89,7 @@ pub(super) fn dispatch_native_class49(
             && entity.native_type12_runtime.is_some())
         // Type124 and the Type80/126 carriers enter class63, BC90: BAF0 then a
         // tail-appended Type61.
-        || (entity.entity_type == 124 && entity.shared_fish_runtime.is_some())
+        || (crate::shared_fish::explodes(entity.entity_type) && entity.shared_fish_runtime.is_some())
         || crate::intro2_type10::type10_auto_pilot_profile(entity).is_some()
         || crate::intro2_type16::type16_auto_pilot_row(entity).is_some()
         // A Type3 boulder (authored or split from a Type27) enters class1.

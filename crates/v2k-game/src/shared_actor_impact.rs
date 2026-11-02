@@ -134,9 +134,9 @@ pub fn apply_playing_actor_particle_hit(
     }
     // Type124's class63 terminal needs BAF0's mutable static world and the
     // lent player; the other fish keep the shared frame below.
-    if entity.entity_type == 124 && entity.shared_fish_runtime.is_some() {
+    if crate::shared_fish::explodes(entity.entity_type) && entity.shared_fish_runtime.is_some() {
         return Some(SharedActorImpactOutcome::Fish(
-            crate::shared_fish::impact::apply_playing_type124_particle_hit(frame, impact),
+            crate::shared_fish::impact::apply_playing_exploding_fish_particle_hit(frame, impact),
         ));
     }
     // Presence selects the owner before authentication, so a foreign receipt

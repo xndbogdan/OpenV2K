@@ -59,10 +59,27 @@ pub(crate) const TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTo
     sub_o: false,
 };
 
+/// The D/F Type20, which has no Sub-B.
+const TOPOLOGY_WITHOUT_B: CommonMoverComponentTopology = CommonMoverComponentTopology {
+    sub_b: false,
+    ..TOPOLOGY
+};
+
+pub(crate) fn is_fish_topology(topology: CommonMoverComponentTopology) -> bool {
+    topology == TOPOLOGY || topology == TOPOLOGY_WITHOUT_B
+}
+
+/// Swimmers whose alternate class explodes through BAF0: Type20 (class1)
+/// and Type124 (class63).
+pub(crate) const fn explodes(entity_type: u32) -> bool {
+    matches!(entity_type, 20 | 124)
+}
+
 /// B/D/F swimmers whose authored task graphs are owned here: the neutral
-/// fish and the hostile Type25 and Type37. Other swimmers are not admitted.
+/// fish, the hostile Type25 and Type37, and the D/F Type20. Other swimmers
+/// are not admitted.
 pub(crate) const fn is_shared_fish_type(entity_type: u32) -> bool {
-    matches!(entity_type, 22 | 23 | 24 | 62 | 124 | 25 | 37)
+    matches!(entity_type, 22 | 23 | 24 | 62 | 124 | 25 | 37 | 20)
 }
 
 /// Type25: C8 `0xC`, Wander x1, PlayerNearby x40 Shark Attack, Retarget x6,
@@ -82,7 +99,23 @@ const HOSTILE_CHOICES: [[(u32, u32, u32); 3]; 2] = [
     [(1, 4, 5), (1, 1, 4), (6, 15, 10)],
 ];
 
+/// Type20: C8 `0xC`, Retarget x5, Defecate Virus x1, Wander x1, alternate
+/// rule 3 class1.
+const TYPE20_CHOICES: [(u32, u32, u32); 3] = [(1, 5, 5), (1, 4, 4), (1, 1, 6)];
+
 fn is_hostile_row(init: &crate::entity_collision_state::EntityInitializerSpec) -> bool {
+    let choices = || {
+        init.behavior_choices
+            .iter()
+            .map(|c| (c.weight_rule_id, c.weight_multiplier, c.behavior_class_id))
+    };
+    if init.initializer_state_flags_raw == 0xc
+        && init.behavior_rule_ref == 3
+        && init.alternate_behavior_class_ref == 1
+        && choices().eq(TYPE20_CHOICES)
+    {
+        return true;
+    }
     init.initializer_state_flags_raw == 0xc
         && init.behavior_rule_ref == 1
         && init.alternate_behavior_class_ref == 12
@@ -137,11 +170,14 @@ pub(crate) fn authenticate_metadata(
     let RetailRuntimeValue::Known(variable_count) = metadata.model_variable_count_raw else {
         return Err(SharedFishError::Metadata);
     };
-    if metadata.common_mover_topology != RetailRuntimeValue::Known(TOPOLOGY)
-        || !matches!(
-            metadata.sub_b_lateral_descriptor,
-            RetailRuntimeValue::Known(Some(_))
-        )
+    let RetailRuntimeValue::Known(topology) = metadata.common_mover_topology else {
+        return Err(SharedFishError::Metadata);
+    };
+    let RetailRuntimeValue::Known(sub_b) = metadata.sub_b_lateral_descriptor else {
+        return Err(SharedFishError::Metadata);
+    };
+    if !is_fish_topology(topology)
+        || sub_b.is_some() != topology.sub_b
         || !matches!(
             metadata.sub_d_steering_descriptor,
             RetailRuntimeValue::Known(Some(_))

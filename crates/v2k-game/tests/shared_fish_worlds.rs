@@ -37,7 +37,8 @@ fn is_authored_neutral_swimmer(metadata: &EntityTypeRuntimeMetadata) -> bool {
                 .map(|c| (c.weight_rule_id, c.weight_multiplier, c.behavior_class_id))
         };
         let hostile = choices().eq([(1, 1, 6), (6, 40, 69), (1, 6, 5)])
-            || choices().eq([(1, 4, 5), (1, 1, 4), (6, 15, 10)]);
+            || choices().eq([(1, 4, 5), (1, 1, 4), (6, 15, 10)])
+            || choices().eq([(1, 5, 5), (1, 4, 4), (1, 1, 6)]);
         neutral || hostile
     })
 }
@@ -142,12 +143,14 @@ fn every_ordinary_world_publishes_and_runs_its_native_fish() {
             (13, 3),
             (14, 3),
             (18, 4),
-            // Worlds 22, 23 and 34 add their three, two and one sharks, and
-            // 22 and 23 their two and one Type37s.
-            (22, 16),
-            (23, 46),
+            // Worlds 22, 23 and 34 add their three, two and one sharks, 22
+            // and 23 their two and one Type37s, and 22, 23, 33 and 34 their
+            // two, one, one and two Type20s.
+            (22, 18),
+            (23, 47),
             (30, 20),
-            (34, 20),
+            (33, 1),
+            (34, 22),
             (36, 11)
         ]
     );

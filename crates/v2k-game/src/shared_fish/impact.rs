@@ -74,9 +74,9 @@ pub(crate) fn apply_shared_fish_particle_hit(
     )
 }
 
-/// Playing lends Type124 the class63 radial owner. Custody and the committed
+/// Playing lends Type20 and Type124 the BAF0 radial owner. Custody and the committed
 /// prefix park match the shared fish adapter.
-pub(crate) fn apply_playing_type124_particle_hit(
+pub(crate) fn apply_playing_exploding_fish_particle_hit(
     frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
     impact: ParticleEntityImpact,
 ) -> SharedFishImpactOutcome {
@@ -212,8 +212,8 @@ fn run(
         return Err(Block::Runtime("native allocation"));
     }
     let completed_death = super::death::completed_shared_fish_death(manager, id);
-    // BC90 retired Type124's owner but keeps its allocation hittable until
-    // 14990; only the finished class63 receipt replaces task custody.
+    // BAC0/BC90 retired Type20's or Type124's owner but keep the allocation
+    // hittable until 14990; only the finished receipt replaces task custody.
     let finished_auto_pilot =
         crate::class49_death::finished_terminal_hit_authenticates(manager, id);
     if !scheduler.shared_fish_completed_owner(manager, id)
@@ -310,13 +310,17 @@ fn run(
             if super::dying::dying_graph(manager.iter_all().find(|e| e.id == id).unwrap())
                 && address == crate::actor_death::COMMON_ACTOR_DYING_ACTIVE_STYLE.frame_address => {
         }
-        // Class63's style is zero apart from its +40 initializer.
+        // Class1's and class63's styles are zero apart from their +40
+        // initializers.
         address
             if finished_auto_pilot
-                && address
+                && (address
                     == crate::entity_behavior::AUTO_PILOT_BEHAVIOR_PROGRAM
                         .initial_style
-                        .frame_address => {}
+                        .frame_address
+                    || address
+                        == crate::class49_death::NativeExplosionPolicy::Class1.style_address()) => {
+        }
         _ => return Err(Block::Runtime("unaudited fish hit style")),
     }
     let entity = manager.entity_mut(id).unwrap();
@@ -366,7 +370,7 @@ fn run(
             entry: LiveActorDamageEntry::Checked,
         },
         |manager, world_fx, feedback| {
-            if entity_type != 124 {
+            if !super::explodes(entity_type) {
                 return super::death::begin_shared_fish_standard_death(
                     manager, id, world_fx, scheduler,
                 );
@@ -374,7 +378,7 @@ fn run(
             let (Some(world), Some(feedback)) = (auto_pilot, feedback) else {
                 return Err(SharedFishDeathBlock::Runtime("class63 radial owner"));
             };
-            super::death::run_type124_auto_pilot_death(
+            super::death::run_exploding_fish_death(
                 crate::class49_terminal::Class49TerminalFrame {
                     entities: manager,
                     resources: world.resources,
