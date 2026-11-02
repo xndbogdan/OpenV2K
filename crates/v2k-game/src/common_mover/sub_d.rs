@@ -297,6 +297,18 @@ pub const NATIVE_TYPE109_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor 
     ..NATIVE_TYPE73_SUB_D
 };
 
+/// Type107/Type121's mobile turrets: divisor64, probes256/128 and flags
+/// 0x15, Type109's steepness, material and object arms.
+pub const NATIVE_TYPE107_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 64,
+    couple_yaw_into_roll_raw: 0,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 256,
+    lateral_probe_raw: 128,
+    classifier_flags: 0x15,
+    reserved_at_0x0b: 0,
+};
+
 /// Ordinary Type33 (worlds 42/43/47): Type38's no-pitch path, divisor100 and
 /// probes512/256, with flags0 skipping the classifier as the flyers' does.
 pub const NATIVE_TYPE33_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
@@ -451,6 +463,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | NATIVE_TYPE105_SUB_D
             | NATIVE_TYPE73_SUB_D
             | NATIVE_TYPE109_SUB_D
+            | NATIVE_TYPE107_SUB_D
             | NATIVE_TYPE18_SUB_D
             | NATIVE_TYPE28_SUB_D
             | INTRO2_TYPE10_SUB_D

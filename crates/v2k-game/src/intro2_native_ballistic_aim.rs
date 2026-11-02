@@ -59,6 +59,11 @@ pub(crate) enum NativeBallisticProfileId {
     Type35,
     /// World 47's Type2 walkers: method 25 births a Type69 tractor beam.
     Type2,
+    /// Type107 (world 31) and Type121 (worlds 26/31/40): methods 18 and 13 at
+    /// their 2000 override, each primary followed by E +17's method-15
+    /// auxiliary command. Their E joints bind bank words 3 and 4.
+    Type107,
+    Type121,
     /// Ordinary Type38 ground shooters, the silent Type129 carriers and the
     /// Type119 walkers.
     Type38,
@@ -123,6 +128,8 @@ impl NativeBallisticProfileId {
             Self::Type40 => 1,
             Self::Type35 => 11,
             Self::Type2 => 25,
+            Self::Type107 => 18,
+            Self::Type121 => 13,
         }
     }
     const fn speed_override(self) -> i16 {
@@ -138,6 +145,7 @@ impl NativeBallisticProfileId {
             | Self::Type12
             | Self::Type127
             | Self::Type33 => 1500,
+            Self::Type107 | Self::Type121 => 2000,
             Self::Type5
             | Self::Type55
             | Self::Type81
@@ -179,6 +187,8 @@ impl NativeBallisticProfileId {
         match self {
             Self::Type40 | Self::Type128 | Self::Type81 | Self::Type35 => 0,
             Self::Type2 => 8,
+            Self::Type107 => 88,
+            Self::Type121 => 77,
             Self::Type10 | Self::Type5 | Self::Type80 | Self::Type55 => 81,
             Self::Type126 => 82,
             Self::Type43 => 68,
@@ -210,6 +220,8 @@ impl NativeBallisticProfileId {
             Self::Type43 => 0x5459_5034_3353_5243,
             Self::Type35 => 0x5459_5033_3553_5243,
             Self::Type2 => 0x5459_5030_3253_5243,
+            Self::Type107 => 0x5459_3130_3753_5243,
+            Self::Type121 => 0x5459_3132_3153_5243,
             Self::Type38 => 0x5459_5033_3853_5243,
             Self::Type129 => 0x5459_3132_3953_5243,
             Self::Type119 => 0x5459_3131_3953_5243,
@@ -244,6 +256,8 @@ impl NativeBallisticProfileId {
             Self::Type43 => 0x5459_5034_3354_4754,
             Self::Type35 => 0x5459_5033_3554_4754,
             Self::Type2 => 0x5459_5030_3254_4754,
+            Self::Type107 => 0x5459_3130_3754_4754,
+            Self::Type121 => 0x5459_3132_3154_4754,
             Self::Type38 => 0x5459_5033_3854_4754,
             Self::Type129 => 0x5459_3132_3954_4754,
             Self::Type119 => 0x5459_3131_3954_4754,
@@ -277,6 +291,8 @@ impl NativeBallisticProfileId {
             Self::Type43 => (300_000, 1024, 0, 65_535, 7680),
             Self::Type35 => (600_000, 65_535, 0, 65_535, 7680),
             Self::Type2 => (400_000, 256, 0, 30_000, 3072),
+            Self::Type107 => (500_000, 4000, 16, 4000, 2560),
+            Self::Type121 => (500_000, 4000, 8, 4000, 2560),
             Self::Type38 | Self::Type129 => (600_000, 256, 122, 4000, 5120),
             Self::Type119 | Self::Type32 => (800_000, 256, 48, 8000, 3840),
             Self::Type16 | Self::Type128 => (300_000, 100, 158, 16_000, 2560),
@@ -303,10 +319,28 @@ impl NativeBallisticProfileId {
             && descriptor.target_axis_tolerance_raw == axis
             && descriptor.raw_word_at_0x12 == raw_word
             && descriptor.stochastic_gate_mode == 0
-            && descriptor.variable_bindings == [0; 4]
+            && descriptor.variable_bindings == self.variable_bindings()
             && descriptor.alternate_emitter_raw == 0
-            && descriptor.auxiliary_command == 0
+            && descriptor.auxiliary_command == u8::from(self.auxiliary())
             && descriptor.speed_override_raw == self.speed_override()
+    }
+    /// E +17: a method-15 auxiliary command follows each primary.
+    const fn auxiliary(self) -> bool {
+        matches!(self, Self::Type107 | Self::Type121)
+    }
+    /// E +18..+1B, the bank words 09A80 binds to runtime +08/+00/+04/+0C.
+    const fn variable_bindings(self) -> [u8; 4] {
+        match self {
+            Self::Type107 | Self::Type121 => [2, 3, 4, 0],
+            _ => [0; 4],
+        }
+    }
+    /// Runtime dwords +00/+04: authored bytes +19 and +1A.
+    const fn joint_bindings(self) -> [Option<u64>; 2] {
+        match self {
+            Self::Type107 | Self::Type121 => [Some(3), Some(4)],
+            _ => [None; 2],
+        }
     }
 }
 
@@ -362,6 +396,11 @@ impl NativeBallisticAimRuntime {
 
     pub fn transient_shots(&self) -> &[GenericEmitterAppendRequest] {
         &self.transient_shots
+    }
+
+    /// The gun-turret task's `4147A0` appends on the same E queue.
+    pub(crate) fn transient_shots_mut(&mut self) -> &mut Vec<GenericEmitterAppendRequest> {
+        &mut self.transient_shots
     }
 
     fn take_transaction_pair(
@@ -659,13 +698,39 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
     }
     let NativeShotSolutions {
         solutions,
+        auxiliary,
         suppresses_impact_damage,
         owner_entity_type,
     } = take_native_shot_solutions::<P>(manager, source_entity_id)?;
     let consumed_requests = solutions.len();
     let mut materialized_particle_classes = Vec::with_capacity(solutions.len());
-    for solution in solutions {
+    for (solution, auxiliary) in solutions.into_iter().zip(auxiliary) {
         let particle_class = match P::ID {
+            // 4E770 sends methods 13, 15 and 18 through 410B0.
+            NativeBallisticProfileId::Type107 | NativeBallisticProfileId::Type121 => world_fx
+                .materialize_combat_projectile_410b0(
+                    DescriptorParticleRequest {
+                        source_class: if auxiliary {
+                            projectile_class_row(
+                                crate::generic_projectile_emitter::GENERIC_PROJECTILE_AUXILIARY_METHOD,
+                            )
+                            .expect("method 15 is an authored row")
+                            .particle_class
+                        } else {
+                            P::ID.particle_class()
+                        },
+                        position_raw: solution.position_raw,
+                        velocity_raw: solution.velocity_raw,
+                        owner: Some(ParticleOwnerAtBirth {
+                            entity_id: source_entity_id,
+                            entity_type: owner_entity_type,
+                        }),
+                        suppresses_impact_damage,
+                    },
+                    environment,
+                    retail_tick,
+                )
+                .map(|birth| birth.particle_class),
             // 410B0 precedes 40A60 for method 10. At/below the sea plane
             // it substitutes class 46 and subtracts 100 from the 40A60
             // input; class46's +0x28 bias restores those units.
@@ -741,6 +806,8 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
 /// The FIFO's 11400 solutions, consumed from the source allocation.
 pub(crate) struct NativeShotSolutions {
     pub solutions: Vec<crate::ordinary_type47_shot_math::Type47TransientDrainSolution>,
+    /// Which solutions are method-15 auxiliary commands.
+    pub auxiliary: Vec<bool>,
     pub suppresses_impact_damage: bool,
     pub owner_entity_type: u8,
 }
@@ -750,7 +817,7 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
     manager: &mut crate::entity::EntityManager,
     source_entity_id: u32,
 ) -> Result<NativeShotSolutions, NativeBallisticShotDrainError> {
-    let (solutions, suppresses_impact_damage, owner_entity_type) = {
+    let (solutions, auxiliary, suppresses_impact_damage, owner_entity_type) = {
         let entity = manager
             .iter_all()
             .find(|entity| entity.id == source_entity_id)
@@ -765,6 +832,7 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
         if runtime.transient_shots.is_empty() {
             return Ok(NativeShotSolutions {
                 solutions: Vec::new(),
+                auxiliary: Vec::new(),
                 suppresses_impact_damage: false,
                 owner_entity_type: entity.entity_type as u8,
             });
@@ -780,10 +848,24 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
             }
         };
         let mut solutions = Vec::with_capacity(runtime.transient_shots.len());
+        let mut auxiliary = Vec::with_capacity(runtime.transient_shots.len());
         for (index, request) in runtime.transient_shots.iter().copied().enumerate() {
             if !is_exact_transient_request::<P>(source_entity_id, request) {
                 return Err(NativeBallisticShotDrainError::MalformedTransientRequest { index });
             }
+            if request.auxiliary {
+                // Method 15's row {0, 1, 32, 0} adds the source's velocity
+                // to a zero direction: its unwritten speed never reaches it.
+                auxiliary.push(true);
+                solutions.push(
+                    crate::ordinary_type47_shot_math::Type47TransientDrainSolution {
+                        position_raw: entity.position_raw(),
+                        velocity_raw: entity.velocity_raw(),
+                    },
+                );
+                continue;
+            }
+            auxiliary.push(false);
             solutions.push(
                 match P::ID {
                     // Method 10's leading dword is 1: 4E770 applies only
@@ -842,11 +924,21 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                             projectile_class_row(25).expect("method 25 is an authored row"),
                         )
                     }
+                    // Method 18 adds source velocity (leading 0); method 13
+                    // boosts by the closing speed (leading 1).
+                    NativeBallisticProfileId::Type107 | NativeBallisticProfileId::Type121 => {
+                        crate::ordinary_type47_shot_math::drain_transient_with_method_row(
+                            request,
+                            entity.position_raw(),
+                            entity.velocity_raw(),
+                            projectile_class_row(P::ID.method()).expect("an authored row"),
+                        )
+                    }
                 }
                 .map_err(NativeBallisticShotDrainError::ShotMath)?,
             );
         }
-        (solutions, suppression, entity.entity_type as u8)
+        (solutions, auxiliary, suppression, entity.entity_type as u8)
     };
 
     let queued = {
@@ -861,6 +953,7 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
     debug_assert_eq!(queued.len(), solutions.len());
     Ok(NativeShotSolutions {
         solutions,
+        auxiliary,
         suppresses_impact_damage,
         owner_entity_type,
     })
@@ -1262,7 +1355,7 @@ fn native_emitter_shape<P: NativeBallisticProfile>(entity: &Entity) -> bool {
         let emitter = *emitter;
         emitter
             == GenericEmitterRuntime {
-                joint_bindings: [None; 2],
+                joint_bindings: P::ID.joint_bindings(),
                 projectile_method: P::ID.method(),
                 emitter_selector: 0,
                 sound_id: u32::from(P::ID.sound()),
@@ -1282,10 +1375,18 @@ fn is_exact_transient_request<P: NativeBallisticProfile>(
 ) -> bool {
     request.source_handle == source_entity_id
         && request.owner_handle == source_entity_id
-        && request.projectile_method == P::ID.method()
         && request.emitter_selector == 0
-        && request.speed_field == GenericEmitterSpeedField::Explicit(P::ID.launch_speed())
-        && !request.auxiliary
+        && if request.auxiliary {
+            P::ID.auxiliary()
+                && request.projectile_method
+                    == crate::generic_projectile_emitter::GENERIC_PROJECTILE_AUXILIARY_METHOD
+                && request.direction_raw == [0; 3]
+                && request.time_offset_raw == 0
+                && request.speed_field == GenericEmitterSpeedField::IndeterminateAuxiliaryStackWord
+        } else {
+            request.projectile_method == P::ID.method()
+                && request.speed_field == GenericEmitterSpeedField::Explicit(P::ID.launch_speed())
+        }
 }
 
 fn transaction_scoped_allocation_identity(seed: u64, handle: u32, discriminator: u64) -> u64 {

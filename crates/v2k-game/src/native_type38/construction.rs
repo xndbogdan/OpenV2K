@@ -170,11 +170,13 @@ fn publish_birth(
         unreachable!()
     };
     let row = runtime.row;
-    let h =
-        SubHRuntimeState::new(row.sub_h_records()).map_err(|_| Type38Block::ComponentStorage)?;
+    let h = match row.sub_h_records() {
+        0 => None,
+        records => Some(SubHRuntimeState::new(records).map_err(|_| Type38Block::ComponentStorage)?),
+    };
     let a = SubAPropulsionRuntime::from_20450_constructor(a, next_random() as u16);
     entity.set_position_raw(runtime.anchor_raw);
-    entity.sub_h_external_frame_runtime = RetailRuntimeValue::Known(Some(h));
+    entity.sub_h_external_frame_runtime = RetailRuntimeValue::Known(h);
     entity.sub_a_propulsion_runtime = RetailRuntimeValue::Known(Some(a));
     entity.native_type38_runtime = Some(runtime);
     // Labeled native allocation policy, shared with the actual authored
@@ -194,16 +196,43 @@ fn publish_birth(
     let player_nearby = match row {
         Type38Row::Type38 => shared::nearby::<profile::Type38Profile>(owner, &candidates, 1),
         Type38Row::Type129 => shared::nearby::<profile::Type129Profile>(owner, &candidates, 1),
-        Type38Row::Type119 | Type38Row::Type32 | Type38Row::Type2 => Ok(false),
+        Type38Row::Type119
+        | Type38Row::Type32
+        | Type38Row::Type2
+        | Type38Row::Type107
+        | Type38Row::Type121 => Ok(false),
     }
     .map_err(Type38Block::Ground)?;
+    // The turrets' rules 7 (BaddieNearby, 16560) and 12 (BaseNearby, 165B0)
+    // are 164D0 with masks 8 and 0x20.
+    let (baddie_nearby, base_nearby) = match row {
+        Type38Row::Type107 => (
+            shared::nearby::<profile::Type107Profile>(owner, &candidates, 8),
+            shared::nearby::<profile::Type107Profile>(owner, &candidates, 0x20),
+        ),
+        Type38Row::Type121 => (
+            shared::nearby::<profile::Type121Profile>(owner, &candidates, 8),
+            shared::nearby::<profile::Type121Profile>(owner, &candidates, 0x20),
+        ),
+        _ => (Ok(false), Ok(false)),
+    };
+    let nearby = tasks::Nearby {
+        player: player_nearby,
+        beacon: false,
+        baddie: baddie_nearby.map_err(Type38Block::Ground)?,
+        base: base_nearby.map_err(Type38Block::Ground)?,
+    };
     let beacon_nearby = match row {
         Type38Row::Type32 => shared::nearby::<profile::Type32Profile>(owner, &candidates, 0x100)
             .map_err(Type38Block::Ground)?,
         _ => false,
     };
+    let nearby = tasks::Nearby {
+        beacon: beacon_nearby,
+        ..nearby
+    };
     let mut selector_word = 0;
-    let selection = tasks::select(row, player_nearby, beacon_nearby, &mut || {
+    let selection = tasks::select(row, nearby, &mut || {
         selector_word = next_random();
         selector_word
     })?;

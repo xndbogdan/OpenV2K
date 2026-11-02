@@ -15,6 +15,11 @@
 //! Move About Aimlessly5, UnderAttack Search7, fourteen H legs, and a
 //! method25 gun whose shots are Type69 tractor beams
 //! ([`crate::native_type69`]).
+//! Type107 (world 31, model24) and Type121 (worlds 26/31/40, model28) own L
+//! without K or H: Always Search7, and BaddieNearby (rule7) or BaseNearby
+//! (rule12) class29, whose D190 stops them and runs the gun-turret task
+//! ([`turret`]) with their method18/method13 guns. Their alternate is
+//! class49.
 //! Every death is the shared class49 terminal (BAF0, then BAC0 or BC90).
 
 pub mod aim;
@@ -23,9 +28,12 @@ pub mod contact;
 pub mod impact;
 pub(crate) mod profile;
 mod tasks;
+pub(crate) mod turret;
 pub(crate) use construction::{publish_authored_type38, Type38AuthoredConstructionRequest};
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod type107_tests;
 #[cfg(test)]
 mod type2_tests;
 
@@ -90,6 +98,24 @@ pub(crate) const TYPE2_CHOICES: [BehaviorChoice; 3] = [
         behavior_class_id: 7,
     },
 ];
+/// Search7 always; class29 by BaddieNearby x10 or BaseNearby x32000.
+pub(crate) const TYPE107_CHOICES: [BehaviorChoice; 3] = [
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 1,
+        behavior_class_id: 7,
+    },
+    BehaviorChoice {
+        weight_rule_id: 7,
+        weight_multiplier: 10,
+        behavior_class_id: 29,
+    },
+    BehaviorChoice {
+        weight_rule_id: 12,
+        weight_multiplier: 32_000,
+        behavior_class_id: 29,
+    },
+];
 pub(crate) const CHOICES: [BehaviorChoice; 2] = [
     BehaviorChoice {
         weight_rule_id: 1,
@@ -130,6 +156,10 @@ pub enum Type38Row {
     Type32,
     /// World 47's model1168 tractor-beam walkers, alternate class1.
     Type2,
+    /// World 31's model24 mobile turrets: method18, alternate class49.
+    Type107,
+    /// Worlds 26/31/40's model28 mobile turrets: method13, alternate class49.
+    Type121,
 }
 
 impl Type38Row {
@@ -140,6 +170,8 @@ impl Type38Row {
             119 => Some(Self::Type119),
             32 => Some(Self::Type32),
             2 => Some(Self::Type2),
+            107 => Some(Self::Type107),
+            121 => Some(Self::Type121),
             _ => None,
         }
     }
@@ -150,7 +182,13 @@ impl Type38Row {
             Self::Type119 => 119,
             Self::Type32 => 32,
             Self::Type2 => 2,
+            Self::Type107 => 107,
+            Self::Type121 => 121,
         }
+    }
+    /// The mobile turrets' class29 runs the gun-turret task.
+    pub const fn turrets(self) -> bool {
+        matches!(self, Self::Type107 | Self::Type121)
     }
     pub const fn model(self) -> usize {
         match self {
@@ -158,6 +196,8 @@ impl Type38Row {
             Self::Type119 => 1161,
             Self::Type32 => 1098,
             Self::Type2 => 1168,
+            Self::Type107 => 24,
+            Self::Type121 => 28,
         }
     }
     pub const fn health(self) -> i32 {
@@ -166,12 +206,25 @@ impl Type38Row {
             Self::Type119 => 20_000,
             Self::Type32 => 10_000,
             Self::Type2 => 4000,
+            Self::Type107 => 6000,
+            Self::Type121 => 30_000,
+        }
+    }
+    /// 104B0's capability word: the turrets' 0x1004, everyone else's 8.
+    /// D190 swaps a turret's 0x1004 for 8 when it enters class29 infected.
+    pub const fn capability(self) -> u32 {
+        if self.turrets() {
+            0x1004
+        } else {
+            8
         }
     }
     pub const fn default_flags(self) -> u32 {
         match self {
             Self::Type38 | Self::Type129 | Self::Type2 => DEFAULT_FLAGS,
             Self::Type119 | Self::Type32 => TYPE119_DEFAULT_FLAGS,
+            // 0x8000 over Type38's 0x39.
+            Self::Type107 | Self::Type121 => 0x8039,
         }
     }
     pub const fn choices(self) -> &'static [BehaviorChoice] {
@@ -180,6 +233,7 @@ impl Type38Row {
             Self::Type119 => &TYPE119_CHOICES,
             Self::Type32 => &TYPE32_CHOICES,
             Self::Type2 => &TYPE2_CHOICES,
+            Self::Type107 | Self::Type121 => &TYPE107_CHOICES,
         }
     }
     /// 09A80 allocates one 0x3C-byte Sub-H record per authored leg.
@@ -188,12 +242,14 @@ impl Type38Row {
             Self::Type38 | Self::Type129 => 8,
             Self::Type119 | Self::Type32 => 4,
             Self::Type2 => 14,
+            Self::Type107 | Self::Type121 => 0,
         }
     }
     /// Type2's 09A80 allocates K without L.
     pub const fn topology(self) -> crate::entity_collision_state::CommonMoverComponentTopology {
         match self {
             Self::Type2 => crate::intro2_common_mover::ABCDEHK_TOPOLOGY,
+            Self::Type107 | Self::Type121 => crate::intro2_common_mover::ABCDEL_TOPOLOGY,
             _ => TOPOLOGY,
         }
     }
@@ -224,22 +280,63 @@ impl Type38Row {
                 raw_word_at_0x12: 0,
                 ..EMITTER
             },
+            // E +17 appends method15 after each shot; +19/+1A bind bank
+            // words 3/4 as the joints 24EE0 flags.
+            Self::Type107 => ProjectileEmitterDescriptor {
+                projectile_method: 18,
+                random_interval_us: 500_000,
+                spread_raw: 4000,
+                aim_threshold_raw: 4000,
+                speed_override_raw: 2000,
+                target_axis_tolerance_raw: 2560,
+                sound_id: 88,
+                raw_word_at_0x12: 16,
+                alternate_emitter_raw: 0,
+                stochastic_gate_mode: 0,
+                auxiliary_command: 1,
+                variable_bindings: [2, 3, 4, 0],
+            },
+            Self::Type121 => ProjectileEmitterDescriptor {
+                projectile_method: 13,
+                sound_id: 77,
+                raw_word_at_0x12: 8,
+                ..Self::Type107.emitter()
+            },
+        }
+    }
+    /// 09A80 binds E +19/+1A (runtime +00/+04) to bank words.
+    pub const fn joint_bindings(self) -> [Option<u64>; 2] {
+        if self.turrets() {
+            [Some(3), Some(4)]
+        } else {
+            [None; 2]
         }
     }
     pub const fn target_warning_sound(self) -> Option<u16> {
         match self {
             Self::Type38 => Some(87),
-            Self::Type129 | Self::Type119 | Self::Type32 | Self::Type2 => None,
+            Self::Type129
+            | Self::Type119
+            | Self::Type32
+            | Self::Type2
+            | Self::Type107
+            | Self::Type121 => None,
         }
     }
     pub const fn axis(self) -> CommonAxisDescriptor {
+        if self.turrets() {
+            return CommonAxisDescriptor {
+                strict_axis_limit_raw: 5120,
+                raw_word_at_0x04: 26,
+            };
+        }
         CommonAxisDescriptor {
             strict_axis_limit_raw: 3840,
             raw_word_at_0x04: match self {
                 Self::Type38 => 3109,
                 Self::Type129 => 3073,
                 Self::Type119 | Self::Type32 => 3077,
-                Self::Type2 => 1,
+                Self::Type2 | Self::Type107 | Self::Type121 => 1,
             },
         }
     }
@@ -247,6 +344,7 @@ impl Type38Row {
         match self {
             Self::Type38 | Self::Type119 | Self::Type32 | Self::Type2 => 1,
             Self::Type129 => 63,
+            Self::Type107 | Self::Type121 => 49,
         }
     }
 }
@@ -281,6 +379,8 @@ pub type Type129Owner = shared::NativeGroundActorOwner<profile::Type129Profile>;
 pub type Type119Owner = shared::NativeGroundActorOwner<profile::Type119Profile>;
 pub type Type32Owner = shared::NativeGroundActorOwner<profile::Type32Profile>;
 pub type Type2Owner = shared::NativeGroundActorOwner<profile::Type2Profile>;
+pub type Type107Owner = shared::NativeGroundActorOwner<profile::Type107Profile>;
+pub type Type121Owner = shared::NativeGroundActorOwner<profile::Type121Profile>;
 pub type Type38Outcome = shared::NativeGroundActorOutcome;
 
 /// One scheduler entry for every row; each keeps its own framework profile.
@@ -291,6 +391,8 @@ pub enum Type38FamilyOwner {
     Type119(Type119Owner),
     Type32(Type32Owner),
     Type2(Type2Owner),
+    Type107(Type107Owner),
+    Type121(Type121Owner),
 }
 
 macro_rules! each_owner {
@@ -301,6 +403,8 @@ macro_rules! each_owner {
             Type38FamilyOwner::Type119($owner) => $body,
             Type38FamilyOwner::Type32($owner) => $body,
             Type38FamilyOwner::Type2($owner) => $body,
+            Type38FamilyOwner::Type107($owner) => $body,
+            Type38FamilyOwner::Type121($owner) => $body,
         }
     };
 }
@@ -317,6 +421,8 @@ impl Type38FamilyOwner {
             Some(Type38Row::Type119) => Type119Owner::adopt(manager, id).map(Self::Type119),
             Some(Type38Row::Type32) => Type32Owner::adopt(manager, id).map(Self::Type32),
             Some(Type38Row::Type2) => Type2Owner::adopt(manager, id).map(Self::Type2),
+            Some(Type38Row::Type107) => Type107Owner::adopt(manager, id).map(Self::Type107),
+            Some(Type38Row::Type121) => Type121Owner::adopt(manager, id).map(Self::Type121),
             None => Err(shared::NativeGroundActorBlock::Allocation),
         }
     }
@@ -370,6 +476,9 @@ pub struct Type38Frame<'a> {
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
+    /// The turrets' 425160 hands 4147A0's infected firing hint here.
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    pub notification_phase: crate::gameplay_notifications::GameplayNotificationPhase,
 }
 
 pub fn tick_type38_family(
@@ -382,7 +491,15 @@ pub fn tick_type38_family(
         world_fx: frame.world_fx,
         elapsed_micros: frame.elapsed_micros,
         retail_tick: frame.retail_tick,
-        capture: shared::NativeCaptureDispatch::NoCapture,
+        capture: match owner {
+            Type38FamilyOwner::Type107(_) | Type38FamilyOwner::Type121(_) => {
+                shared::NativeCaptureDispatch::Turret {
+                    notifications: frame.notifications,
+                    notification_phase: frame.notification_phase,
+                }
+            }
+            _ => shared::NativeCaptureDispatch::NoCapture,
+        },
     };
     // No row has a class12 publication: a terminal death leaves no
     // replacement owner (E370's lifecycle death is a held boundary).
@@ -402,6 +519,8 @@ pub fn tick_type38_family(
         Type38FamilyOwner::Type119(owner) => tick!(owner, Type119),
         Type38FamilyOwner::Type32(owner) => tick!(owner, Type32),
         Type38FamilyOwner::Type2(owner) => tick!(owner, Type2),
+        Type38FamilyOwner::Type107(owner) => tick!(owner, Type107),
+        Type38FamilyOwner::Type121(owner) => tick!(owner, Type121),
     }
 }
 
@@ -415,7 +534,8 @@ pub(crate) fn allocation_authenticates(entity: &Entity) -> bool {
                 && entity.id == runtime.allocation.entity_id
                 && entity.authored_spawn_index == runtime.spawn_index
                 && entity.model_slots == [Some(runtime.row.model()); 4]
-                && entity.capability_flags == 8
+                && (entity.capability_flags == runtime.row.capability()
+                    || (runtime.row.turrets() && entity.capability_flags == 8))
         })
 }
 
@@ -517,6 +637,49 @@ fn row_record(row: Type38Row) -> RowRecord {
         reserved_at_0x0e: [0; 2],
     };
     match row {
+        Type38Row::Type107 | Type38Row::Type121 => RowRecord {
+            model_variable_count: 4,
+            surface_selectors: [0, 0],
+            mass_raw: 100,
+            damage: if row == Type38Row::Type107 {
+                DamageProfile {
+                    thresholds_raw: [0, 6000, 200, 0, 200, 0, 0],
+                    multipliers_q8: [0, 256, 256, 512, 128, 0, 64],
+                }
+            } else {
+                DamageProfile {
+                    thresholds_raw: [0, 8000, 2000, 500, 200, 0, 0],
+                    multipliers_q8: [0, 256, 256, 512, 128, 0, 64],
+                }
+            },
+            surface_lifetime_ms: 0,
+            payloads: CommonMoverGklPayloads {
+                sub_g: None,
+                sub_k: None,
+                sub_l: Some([1, 2, 64, 31, 64, 31]),
+            },
+            sub_a: SubAPropulsionDescriptor {
+                acceleration_raw: 1500,
+                overspeed_correction_raw: -3000,
+                target_speed_base_raw: 500,
+            },
+            sub_b: SubBLateralDescriptor {
+                projection_threshold_rate_raw: 100_000,
+                correction_rate_raw: 100_000,
+            },
+            // Mode1: the waved sea counts as ground.
+            sub_c: SubCLiftDescriptor {
+                base_clearance_raw: 100,
+                surface_mode_raw: 1,
+                ..sub_c
+            },
+            sub_d: crate::common_mover::sub_d::NATIVE_TYPE107_SUB_D,
+            death_sound: None,
+            hit_sound: None,
+            sub_h_completion_sound: None,
+            sub_h_phase_rate_raw: 0,
+            sub_h: &[],
+        },
         Type38Row::Type2 => RowRecord {
             model_variable_count: 2,
             surface_selectors: [0, 0],
@@ -641,14 +804,31 @@ pub(crate) fn authenticate_metadata(
     let Some(initializer) = &metadata.initializer else {
         return Err(Type38Block::Metadata);
     };
-    let Known(Some(h)) = &metadata.sub_h_external_frame_descriptor else {
-        return Err(Type38Block::Metadata);
-    };
     let record = row_record(row);
+    // The turrets' 09A80 allocates no H.
+    let h_matches = match &metadata.sub_h_external_frame_descriptor {
+        Known(None) => record.sub_h.is_empty(),
+        Known(Some(h)) => {
+            !record.sub_h.is_empty()
+                && h.completion_sound_id == record.sub_h_completion_sound
+                && h.records.len() == record.sub_h.len()
+                && h.records
+                    .iter()
+                    .zip(record.sub_h)
+                    .all(|(authored, (refs, dependencies))| {
+                        authored.phase_rate_raw == record.sub_h_phase_rate_raw
+                            && authored.resolver_flags_raw == 0x2000_0000
+                            && authored.axis_mode_raw == 0
+                            && authored.vertex_refs == *refs
+                            && authored.dependencies == *dependencies
+                    })
+        }
+        _ => false,
+    };
     if metadata.model_slots != [row.model() as u16; 4]
         || metadata.model_variable_count_raw != Known(record.model_variable_count)
         || metadata.mass_raw != record.mass_raw
-        || metadata.capability_flags != 8
+        || metadata.capability_flags != row.capability()
         || metadata.initial_health_raw != Some(row.health())
         || metadata.damage_profile != Some(record.damage)
         || metadata.common_world_effects
@@ -680,18 +860,7 @@ pub(crate) fn authenticate_metadata(
         || initializer.behavior_choices.as_ref() != row.choices()
         || initializer.behavior_rule_ref != 1
         || initializer.alternate_behavior_class_ref != row.alternate_behavior_class()
-        || h.completion_sound_id != record.sub_h_completion_sound
-        || h.records.len() != record.sub_h.len()
-        || h.records
-            .iter()
-            .zip(record.sub_h)
-            .any(|(authored, (refs, dependencies))| {
-                authored.phase_rate_raw != record.sub_h_phase_rate_raw
-                    || authored.resolver_flags_raw != 0x2000_0000
-                    || authored.axis_mode_raw != 0
-                    || authored.vertex_refs != *refs
-                    || authored.dependencies != *dependencies
-            })
+        || !h_matches
     {
         return Err(Type38Block::Metadata);
     }

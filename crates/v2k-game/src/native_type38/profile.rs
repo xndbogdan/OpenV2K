@@ -38,6 +38,12 @@ fn graph_authenticates<P: NativeGroundActorProfile>(entity: &Entity) -> bool {
                 && t.is_none()
         }
         0x4c7a98 => shared::search::pursuing_graph_authenticates::<P>(entity),
+        // The mobile turrets' class29: D190's turret task alone.
+        0x4c8230 if P::LIVING_CLASSES.contains(&29) => {
+            crate::intro2_gun_turret::task::turret_graph_authenticates::<super::turret::Type107Turret>(
+                entity,
+            )
+        }
         // Type32's Follow Beacons33: B740's acquiring pair, then the follow.
         0x4c7b28 if P::LIVING_CLASSES.contains(&33) => {
             matches!(p, Some(Task::SharedRetarget(_)))
@@ -92,8 +98,11 @@ macro_rules! type38_profile {
         impl NativeGroundActorProfile for $name {}
         impl shared::sealed::Sealed for $name {
             const ENTITY_TYPE: u32 = $row.entity_type();
-            const CAPTURE_POLICY: shared::NativeCapturePolicy =
-                shared::NativeCapturePolicy::NoCapture;
+            const CAPTURE_POLICY: shared::NativeCapturePolicy = if $row.turrets() {
+                shared::NativeCapturePolicy::Turret
+            } else {
+                shared::NativeCapturePolicy::NoCapture
+            };
             const DEFAULT_FLAGS: u32 = $row.default_flags();
             const TOPOLOGY: crate::entity_collision_state::CommonMoverComponentTopology =
                 $row.topology();
@@ -221,6 +230,33 @@ macro_rules! type38_profile {
             ) -> Result<(), NativeGroundActorBlock> {
                 update_attachment(manager, id)
             }
+            fn tick_turret(
+                manager: &mut EntityManager,
+                id: u32,
+                frame: crate::intro2_gun_turret::task::TurretTaskFrame<'_>,
+                fx: &mut WorldFx,
+            ) -> Result<bool, NativeGroundActorBlock> {
+                if !$row.turrets() {
+                    return Err(NativeGroundActorBlock::Graph);
+                }
+                // 425160 appends to the allocation's one E queue.
+                let metadata = manager
+                    .type_runtime_metadata($row.entity_type())
+                    .cloned()
+                    .ok_or(NativeGroundActorBlock::Metadata)?;
+                let entity = manager
+                    .entity_mut(id)
+                    .ok_or(NativeGroundActorBlock::Allocation)?;
+                super::aim::ensure_type38_family_aim_runtime(entity, Some(&metadata))
+                    .map_err(NativeGroundActorBlock::Aim)?;
+                crate::intro2_gun_turret::task::tick_gun_turret_task::<super::turret::Type107Turret>(
+                    manager, id, frame, fx,
+                )
+                .map(|outcome| {
+                    outcome == crate::intro2_gun_turret::task::TurretTaskOutcome::RetargetRequired
+                })
+                .map_err(NativeGroundActorBlock::Turret)
+            }
         }
     };
 }
@@ -230,3 +266,5 @@ type38_profile!(Type129Profile, Type38Row::Type129, Type129, &[5, 7]);
 type38_profile!(Type119Profile, Type38Row::Type119, Type119, &[5, 7]);
 type38_profile!(Type32Profile, Type38Row::Type32, Type32, &[5, 7, 33]);
 type38_profile!(Type2Profile, Type38Row::Type2, Type2, &[4, 5, 7]);
+type38_profile!(Type107Profile, Type38Row::Type107, Type107, &[7, 29]);
+type38_profile!(Type121Profile, Type38Row::Type121, Type121, &[7, 29]);

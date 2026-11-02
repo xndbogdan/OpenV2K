@@ -77,6 +77,7 @@ fn type38_family_lethal_pair_runs_the_row_terminal() {
                     .contains(&target));
             }
             Type38Row::Type129 => assert_eq!(drops, [payload]),
+            Type38Row::Type107 | Type38Row::Type121 => unreachable!("type107_tests"),
         }
         // The finished corpse stays pairable until 14990 without replaying
         // its terminal.

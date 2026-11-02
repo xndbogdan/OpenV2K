@@ -119,6 +119,19 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     } else {
         false
     };
+    // Rules 7 and 12 are 16560 and 165B0: 164D0 with masks 8 and 0x20.
+    let baddie = if needs(BehaviorWeightRule::BaddieNearby) {
+        nearby_within(owner, &candidates, 8, range)
+            .map_err(|_| Block::Runtime("baddie selector"))?
+    } else {
+        false
+    };
+    let base = if needs(BehaviorWeightRule::BaseNearby) {
+        nearby_within(owner, &candidates, 0x20, range)
+            .map_err(|_| Block::Runtime("base selector"))?
+    } else {
+        false
+    };
     let buildings = if needs(BehaviorWeightRule::BuildingsNearby) {
         buildings_nearby(
             entity,
@@ -137,6 +150,8 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
             BehaviorWeightRule::FurnitureNearby => i32::from(furniture),
             BehaviorWeightRule::BuildingsNearby => i32::from(buildings),
             BehaviorWeightRule::BeaconNearby => i32::from(beacon),
+            BehaviorWeightRule::BaddieNearby => i32::from(baddie),
+            BehaviorWeightRule::BaseNearby => i32::from(base),
             _ => unreachable!(),
         },
         || u32::from(world_fx.next_shared_retail_random_u16()),

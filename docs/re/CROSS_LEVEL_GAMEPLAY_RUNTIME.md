@@ -211,6 +211,12 @@ whose method-25 shots are Type69 tractor beams on their own owner. A beam
 times out after a second without a target, or holds one, pulling it and its
 shooter together beyond 1024 units and letting go beyond 2560.
 
+The [Type107 and Type121 mobile turrets](TYPE107_MOBILE_TURRETS.md) (worlds
+26, 31 and 40) are its sixth and seventh rows: L without K or H, Search7, and
+class29 when a baddie or a base is near, whose `FUN_0040D190` stops the walker
+and runs the gun turrets' task and fire on its own L and E: method 18 or 13,
+each shot followed by a method-15 auxiliary. They die through class49.
+
 The six authored [Type25 sharks](TYPE25_SHARK.md) (worlds22, 23 and34) and
 world34's Hive births share the fish owner without its `0x2000` environment
 bit, so they hunt on coarse visits too. PlayerNearby draws class69 Shark

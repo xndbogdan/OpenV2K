@@ -38,6 +38,7 @@ pub enum NativeGroundActorBlock {
     MoverAdvance(CommonMoverFrameAdvanceError),
     Acquisition(crate::search_attack_live::SearchAttackLiveAcquisitionBlock),
     Aim(crate::intro2_native_ballistic_aim::NativeBallisticAimError),
+    Turret(crate::intro2_gun_turret::task::TurretTaskBlock),
     Capture(crate::native_actor_capture::CaptureBlock),
     CaptureTask(Box<crate::native_actor_capture::carry_tasks::CaptureTaskBlock>),
     BehaviorTransition {
@@ -318,6 +319,9 @@ fn run_frame<P: NativeGroundActorProfile>(
         ) | (
             NativeCaptureDispatch::Transport { .. },
             NativeCapturePolicy::Transport
+        ) | (
+            NativeCaptureDispatch::Turret { .. },
+            NativeCapturePolicy::Turret
         )
     ) {
         return Err(Block::Runtime("capture dispatch custody"));
@@ -644,6 +648,38 @@ fn run_frame<P: NativeGroundActorProfile>(
             if P::tick_aim(manager, id, dt, mode, frame.world_fx)? {
                 // D7A0 -> current style+04 and D760 -> +00 both select C690
                 // for class7 variant1. Both use 16410's bit1000 gate.
+                super::behavior::reselect::<P>(
+                    manager,
+                    id,
+                    frame.retail_tick,
+                    frame.world_fx,
+                    Some(&frame.resources),
+                    super::behavior::ReselectionEntry::TaskResult,
+                )?;
+            }
+        }
+        // Class29 D190's 408BD0, which no Primary precedes.
+        Some(ActorTaskRuntime::Intro2GunTurret(_)) => {
+            let NativeCaptureDispatch::Turret {
+                notifications,
+                notification_phase,
+            } = &mut frame.capture
+            else {
+                return Err(Block::Runtime("turret notification custody"));
+            };
+            let retarget = P::tick_turret(
+                manager,
+                id,
+                crate::intro2_gun_turret::task::TurretTaskFrame {
+                    elapsed_micros: dt,
+                    global_elapsed_micros: frame.elapsed_micros,
+                    retail_tick: frame.retail_tick,
+                    notifications: &mut **notifications,
+                    notification_phase: *notification_phase,
+                },
+                frame.world_fx,
+            )?;
+            if retarget {
                 super::behavior::reselect::<P>(
                     manager,
                     id,

@@ -89,6 +89,18 @@ row_aim_profile!(
     Type38Row::Type2,
     super::profile::Type2Profile
 );
+row_aim_profile!(
+    Type107AimProfile,
+    Type107,
+    Type38Row::Type107,
+    super::profile::Type107Profile
+);
+row_aim_profile!(
+    Type121AimProfile,
+    Type121,
+    Type38Row::Type121,
+    super::profile::Type121Profile
+);
 
 fn manager_row(manager: &EntityManager, entity_id: u32) -> Option<Type38Row> {
     manager
@@ -113,6 +125,12 @@ pub fn ensure_type38_family_aim_runtime(
         }
         Some(Type38Row::Type2) => {
             shared::ensure_native_aim_runtime::<Type2AimProfile>(entity, metadata)
+        }
+        Some(Type38Row::Type107) => {
+            shared::ensure_native_aim_runtime::<Type107AimProfile>(entity, metadata)
+        }
+        Some(Type38Row::Type121) => {
+            shared::ensure_native_aim_runtime::<Type121AimProfile>(entity, metadata)
         }
         _ => shared::ensure_native_aim_runtime::<Type38AimProfile>(entity, metadata),
     }
@@ -168,6 +186,22 @@ pub fn tick_type38_family_aim(
             elapsed_micros,
             metadata,
         ),
+        Some(Type38Row::Type107) => shared::tick_native_aim::<Type107AimProfile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
+        Some(Type38Row::Type121) => shared::tick_native_aim::<Type121AimProfile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
         _ => shared::tick_native_aim::<Type38AimProfile>(
             dispatch_mode,
             manager,
@@ -209,6 +243,21 @@ pub fn drain_type38_family_shots(
             retail_tick,
         ),
         Some(Type38Row::Type2) => Err(shared::NativeBallisticShotDrainError::ActorBirthMethod),
+        // Search's and class29's commands share the queue and this drain.
+        Some(Type38Row::Type107) => shared::drain_native_shots::<Type107AimProfile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
+        Some(Type38Row::Type121) => shared::drain_native_shots::<Type121AimProfile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
         _ => shared::drain_native_shots::<Type38AimProfile>(
             manager,
             world_fx,

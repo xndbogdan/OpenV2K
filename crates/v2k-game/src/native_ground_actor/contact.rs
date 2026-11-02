@@ -899,6 +899,15 @@ fn resolve(
             ))
         || (matches!(profile.entity_type, 73 | 109)
             && context.active_style().style_address() == 0x4c79c0)
+        // The mobile turrets' class29 and their finished class49 (BD20):
+        // both styles' +1C and the turret task's hook are null.
+        || (matches!(profile.entity_type, 107 | 121)
+            && (context.active_style().style_address() == 0x4c8230
+                || (context.active_style().style_address() == 0x4c71e0
+                    && crate::class49_death::finished_terminal_hit_authenticates(
+                        frame.entities,
+                        id,
+                    ))))
         || (matches!(profile.entity_type, 80 | 126 | 81 | 128 | 129 | 127)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
@@ -978,11 +987,12 @@ fn apply_contact(
         .entities
         .entity_mut(id)
         .ok_or(Block::Runtime("allocation"))?;
-    // Boulders carry capability2000; 11760 and the null hooks never read it.
-    let capability = if matches!(profile.entity_type, 3 | 27) {
-        0x2000
-    } else {
-        8
+    // Boulders carry capability2000 and the mobile turrets 1004 (8 once
+    // D190 saw them infected); 11760 and the null hooks never read it.
+    let capability = match profile.entity_type {
+        3 | 27 => 0x2000,
+        107 | 121 if entity.capability_flags == 0x1004 => 0x1004,
+        _ => 8,
     };
     if entity.capability_flags != capability
         || entity.collision.default_state_flags_at_0xc8
@@ -1099,6 +1109,9 @@ fn apply_contact(
         | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 | 0x4c76f0 | 0x4c7bb8 | 0x4c7c00 | 0x4c7c48
         | 0x4c7c90 | 0x4c7cd8 => profile.default_flags,
         0x4c7978 => (profile.default_flags | 0x80) & !2,
+        // Class29's +34 sets 4027; class49's BD20 style has zero masks.
+        0x4c8230 => profile.default_flags | 0x4027,
+        0x4c71e0 => profile.default_flags,
         // Wander Near Location's +38 clears 21000.
         0x4c79c0 => profile.default_flags & !0x21000,
         0x4c78a0 | 0x4c78e8 if matches!(profile.entity_type, 3 | 27) => {
@@ -1293,6 +1306,8 @@ fn contact_task_hook(
         Some(Task::DefecateVirusTerrain(_)) => {
             matches!(primary, Some(Task::DefecateVirusWander(_)))
         }
+        // 4086D0's descriptor has no contact hook.
+        Some(Task::Intro2GunTurret(_)) => primary.is_none() && secondary.is_none(),
         _ => false,
     };
     if !chase_tertiary {
@@ -1320,6 +1335,9 @@ fn contact_task_hook(
             Ok(NativeGroundStaticTaskHook::Furniture)
         }
         (0x4c74f8, None, None) => Ok(NativeGroundStaticTaskHook::Null),
+        (0x4c8230 | 0x4c71e0, None, None) if matches!(entity.entity_type, 107 | 121) => {
+            Ok(NativeGroundStaticTaskHook::Null)
+        }
         (0x4c78a0, Some(Task::BoulderRolling(_)), None)
         | (0x4c78e8, Some(Task::BoulderResting(_)), None)
         | (0x4c7150 | 0x4c73d8, None, None)

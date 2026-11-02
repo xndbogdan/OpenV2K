@@ -65,6 +65,8 @@ pub(crate) fn apply_playing_type38_family_particle_hit(
         super::Type38Row::Type119 => apply::<super::profile::Type119Profile>(lent, impact),
         super::Type38Row::Type32 => apply::<super::profile::Type32Profile>(lent, impact),
         super::Type38Row::Type2 => apply::<super::profile::Type2Profile>(lent, impact),
+        super::Type38Row::Type107 => apply::<super::profile::Type107Profile>(lent, impact),
+        super::Type38Row::Type121 => apply::<super::profile::Type121Profile>(lent, impact),
     };
     if matches!(
         result,

@@ -83,6 +83,7 @@ fn type38_family_abort_runs_class1_and_class63() {
                     .unwrap();
                 assert_eq!(drop.power_up_payload_packed, payload);
             }
+            Type38Row::Type107 | Type38Row::Type121 => unreachable!("type107_tests"),
         }
     }
 }

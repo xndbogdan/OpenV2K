@@ -1,6 +1,6 @@
 //! Native Gun Turret private state and the exact408770/408BD0 task visit.
 
-use super::{aim, intro2_gun_turret_allocation_authenticates};
+use super::{aim, host::GunTurretHost, intro2_gun_turret_allocation_authenticates};
 use crate::{
     actor_task_dispatcher::ActorTaskRuntime,
     actor_task_owner::{ActorTaskSlot, ActorTaskVisit},
@@ -162,17 +162,47 @@ pub(crate) fn tick_flower_idle_task(
 pub fn tick_intro2_gun_turret_task(
     manager: &mut EntityManager,
     id: u32,
+    frame: TurretTaskFrame<'_>,
+    world_fx: &mut WorldFx,
+) -> Result<TurretTaskOutcome, TurretTaskBlock> {
+    if !manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .is_some_and(graph_authenticates)
+    {
+        return Err(TurretTaskBlock::Graph);
+    }
+    tick_gun_turret_task::<super::aim::ElTurret>(manager, id, frame, world_fx)
+}
+
+/// Class29's graph on any turret body: style `4C8230`, no Primary or
+/// Secondary, and the `408BD0` task in Tertiary.
+pub(crate) fn turret_graph_authenticates<H: GunTurretHost>(entity: &Entity) -> bool {
+    H::allocation_authenticates(entity)
+        && matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(context)) if context.active_style().style_address() == 0x004c8230)
+        && entity.actor_task_state(ActorTaskSlot::Primary).is_none()
+        && entity.actor_task_state(ActorTaskSlot::Secondary).is_none()
+        && matches!(
+            entity.actor_task_state(ActorTaskSlot::Tertiary),
+            Some(ActorTaskRuntime::Intro2GunTurret(_))
+        )
+}
+
+/// One `01120 -> 408BD0` visit of a body's class29 task.
+pub(crate) fn tick_gun_turret_task<H: GunTurretHost>(
+    manager: &mut EntityManager,
+    id: u32,
     mut frame: TurretTaskFrame<'_>,
     world_fx: &mut WorldFx,
 ) -> Result<TurretTaskOutcome, TurretTaskBlock> {
-    if !super::intro2_gun_turret_manager_allocation_authenticates(manager, id) {
+    if !H::manager_authenticates(manager, id) {
         return Err(TurretTaskBlock::Allocation);
     }
     let entity = manager
         .iter_all()
         .find(|entity| entity.id == id)
         .ok_or(TurretTaskBlock::Allocation)?;
-    if !graph_authenticates(entity) {
+    if !turret_graph_authenticates::<H>(entity) {
         return Err(TurretTaskBlock::Graph);
     }
     let visit = ActorTaskVisit {
@@ -197,7 +227,7 @@ pub fn tick_intro2_gun_turret_task(
     // Every partial callback prefix belongs to this exact wrapper, including
     // selection RNG and an emitter failure after cadence or joint writes.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        callback(manager, id, &mut state, &mut frame, world_fx)
+        callback::<H>(manager, id, &mut state, &mut frame, world_fx)
     }));
     let entity = manager.entity_mut(id).ok_or(TurretTaskBlock::Allocation)?;
     if let Some(ActorTaskRuntime::Intro2GunTurret(current)) =
@@ -227,7 +257,7 @@ pub fn tick_intro2_gun_turret_task(
     Ok(outcome)
 }
 
-fn callback(
+fn callback<H: GunTurretHost>(
     manager: &mut EntityManager,
     id: u32,
     state: &mut GunTurretTaskState,
@@ -302,7 +332,7 @@ fn callback(
         state.target_age_us = 0;
         state.tracking_disabled = true;
     }
-    aim::tick_intro2_gun_turret_aim(
+    aim::tick_gun_turret_aim::<H>(
         manager,
         id,
         direction,
@@ -316,14 +346,15 @@ fn callback(
     )
     .map_err(TurretTaskBlock::Aim)?;
     let entity = manager.entity_mut(id).ok_or(TurretTaskBlock::Allocation)?;
-    let runtime = entity
-        .intro2_gun_turret_runtime
-        .as_mut()
-        .ok_or(TurretTaskBlock::Allocation)?;
-    runtime.sub_l_output_raw = [
-        (state.yaw_raw as i16).wrapping_neg(),
-        state.pitch_raw as i16,
-    ];
+    if !H::store_l_outputs(
+        entity,
+        [
+            (state.yaw_raw as i16).wrapping_neg(),
+            state.pitch_raw as i16,
+        ],
+    ) {
+        return Err(TurretTaskBlock::Allocation);
+    }
     Ok(TurretTaskOutcome::Continue)
 }
 

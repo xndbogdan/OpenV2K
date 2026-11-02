@@ -63,6 +63,12 @@ pub enum NativeCaptureDispatch<'a> {
         tasks: &'a mut dyn crate::intro2_type17::capture::CaptureTaskCustody,
         notifications: &'a mut GameplayNotifications,
     },
+    /// No capture; class29's turret task lends `425160` the notification
+    /// sink for `4147A0`'s infected firing hint.
+    Turret {
+        notifications: &'a mut GameplayNotifications,
+        notification_phase: crate::gameplay_notifications::GameplayNotificationPhase,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +77,7 @@ pub enum NativeCapturePolicy {
     AbsentJ,
     PursuitOnly,
     Transport,
+    Turret,
 }
 
 /// Ground-family task ownership, including source-inline class18 children.
@@ -402,6 +409,16 @@ pub(crate) mod sealed {
             manager: &mut EntityManager,
             id: u32,
         ) -> Result<(), NativeGroundActorBlock>;
+        /// One visit of class29's `408BD0` turret task in Tertiary. Returns
+        /// whether it asks for `C690`.
+        fn tick_turret(
+            _: &mut EntityManager,
+            _: u32,
+            _: crate::intro2_gun_turret::task::TurretTaskFrame<'_>,
+            _: &mut WorldFx,
+        ) -> Result<bool, NativeGroundActorBlock> {
+            Err(NativeGroundActorBlock::Graph)
+        }
     }
 }
 #[doc(hidden)]

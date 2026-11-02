@@ -89,15 +89,28 @@ pub fn drain_intro2_gun_turret_shots(
     let method = projectile_class_row(u32::from(descriptor.projectile_method))
         .ok_or(Intro2GunTurretShotDrainError::Queue)?;
     let mut solutions = Vec::with_capacity(queue.queued_shot_count());
+    let auxiliary_method = projectile_class_row(
+        crate::generic_projectile_emitter::GENERIC_PROJECTILE_AUXILIARY_METHOD,
+    )
+    .ok_or(Intro2GunTurretShotDrainError::Queue)?;
     for (index, request) in queue.transient_shots().iter().copied().enumerate() {
+        let shape = if request.auxiliary {
+            descriptor.auxiliary_command != 0
+                && request.projectile_method
+                    == crate::generic_projectile_emitter::GENERIC_PROJECTILE_AUXILIARY_METHOD
+                && request.direction_raw == [0; 3]
+                && request.time_offset_raw == 0
+                && request.speed_field == GenericEmitterSpeedField::IndeterminateAuxiliaryStackWord
+        } else {
+            request.projectile_method == u32::from(descriptor.projectile_method)
+                && request.speed_field
+                    == GenericEmitterSpeedField::Explicit(descriptor.speed_override_raw)
+        };
         if request.source_handle != id
             || request.owner_handle != id
-            || request.projectile_method != u32::from(descriptor.projectile_method)
             || request.emitter_selector > 1
             || (request.emitter_selector != 0 && descriptor.alternate_emitter_raw == 0)
-            || request.speed_field
-                != GenericEmitterSpeedField::Explicit(descriptor.speed_override_raw)
-            || request.auxiliary
+            || !shape
         {
             return Err(Intro2GunTurretShotDrainError::MalformedRequest { index });
         }
@@ -106,20 +119,33 @@ pub fn drain_intro2_gun_turret_shots(
         // detailed traversal remain errors instead of changing that branch.
         let position =
             muzzles[usize::from(request.emitter_selector)].unwrap_or(entity.position_raw());
-        solutions.push(
-            drain_transient_with_method_row(request, position, entity.velocity_raw(), method)
-                .map_err(Intro2GunTurretShotDrainError::ShotMath)?,
-        );
+        // Method 15's row {0, 1, 32, 0} adds the source's velocity to a zero
+        // direction, so its unwritten speed word never reaches the shot.
+        solutions.push(if request.auxiliary {
+            (
+                auxiliary_method.particle_class,
+                crate::ordinary_type47_shot_math::Type47TransientDrainSolution {
+                    position_raw: position,
+                    velocity_raw: entity.velocity_raw(),
+                },
+            )
+        } else {
+            (
+                method.particle_class,
+                drain_transient_with_method_row(request, position, entity.velocity_raw(), method)
+                    .map_err(Intro2GunTurretShotDrainError::ShotMath)?,
+            )
+        });
     }
     let mut outcome = Intro2GunTurretShotDrainOutcome {
         consumed_requests: 0,
         materialized_particle_classes: Vec::new(),
     };
-    for solution in solutions {
+    for (source_class, solution) in solutions {
         //40A60 cannot invoke an actor callback; the allocated source/queue
         //remains the same across this materialization and list-node removal.
         let particle_request = DescriptorParticleRequest {
-            source_class: method.particle_class,
+            source_class,
             position_raw: solution.position_raw,
             velocity_raw: solution.velocity_raw,
             owner: Some(ParticleOwnerAtBirth {
@@ -130,7 +156,7 @@ pub fn drain_intro2_gun_turret_shots(
         };
         //4E770 method16 reaches410B0's unchanged-class50 fallthrough to
         //40A60, with no defensive-bolt underwater descriptor replacement.
-        let particle_class = if descriptor.projectile_method == 16 {
+        let particle_class = if descriptor.projectile_method == 16 && source_class != 32 {
             world_fx
                 .materialize_descriptor_particle_request(particle_request, environment, retail_tick)
                 .map(|_| method.particle_class)

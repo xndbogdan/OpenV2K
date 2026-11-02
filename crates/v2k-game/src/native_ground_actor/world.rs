@@ -28,6 +28,11 @@ pub(crate) fn effective_flags<P: NativeGroundActorProfile>(
     if context.active_style().style_address() == 0x4c79c0 {
         return Ok(P::DEFAULT_FLAGS & !0x21000);
     }
+    // Class29's Gun Turret 4C8230 sets 4027: no gravity, a kept basis and
+    // DF70's grounding.
+    if context.active_style().style_address() == 0x4c8230 {
+        return Ok(P::DEFAULT_FLAGS | 0x4027);
+    }
     if !carrying
         && !matches!(
             context.active_style().style_address(),
@@ -128,12 +133,18 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
         effective_elapsed_micros: dt,
     });
     entity.set_rotation_heading_pitch_roll_raw([heading, attitude.pitch_raw, attitude.roll_raw]);
-    entity.physical_body_basis_q31 =
-        RetailRuntimeValue::Known(attitude.rebuild_body_basis(heading));
-    entity
-        .collision
-        .state_flags_at_0x08
-        .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
+    // 13F70 rebuilds the matrix unless the effective policy keeps it (4000).
+    let basis = if effective_flags & 0x4000 == 0 {
+        let rebuilt = attitude.rebuild_body_basis(heading);
+        entity.physical_body_basis_q31 = RetailRuntimeValue::Known(rebuilt);
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
+        rebuilt
+    } else {
+        basis
+    };
     let mut velocity = entity.velocity_raw();
     // 31/39/439/431 have gravity and no ground-snap bit2. E100's water
     // response reads Sub-C +0C against the solid-or-sea cell height.
@@ -160,7 +171,7 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
             CommonWindDragFrame {
                 terrain,
                 position_raw: entity.position_raw(),
-                basis: attitude.rebuild_body_basis(heading),
+                basis,
                 callback_mass_raw: std::num::NonZeroU16::new(entity.mass_raw)
                     .ok_or(Block::Runtime("zero environment mass"))?,
                 elapsed_micros: dt,
@@ -169,6 +180,24 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
     }
     entity.set_velocity_raw(velocity);
     entity.set_rotation_heading_pitch_roll_raw(angles);
+    // DF70 grounds the body at its current X/Z (effective bit 2).
+    if effective_flags & 2 != 0 {
+        let mut position = entity.position_raw();
+        let mut velocity = entity.velocity_raw();
+        let mut grounded = 0;
+        crate::common_mover::type9_tail::apply_type9_ground_snap_raw(
+            &mut position,
+            &mut velocity,
+            &mut grounded,
+            terrain,
+        );
+        entity.set_position_raw(position);
+        entity.set_velocity_raw(velocity);
+        entity.collision.state_flags_at_0x08.overwrite(
+            crate::common_mover::type9_tail::MASTER_GROUNDED_STATE_BIT,
+            grounded,
+        );
+    }
     run_surface::<P>(
         manager,
         id,
@@ -212,7 +241,9 @@ fn run_surface<P: NativeGroundActorProfile>(
 ) -> Result<(), NativeGroundActorBlock> {
     if matches!(
         capture,
-        NativeCaptureDispatch::NoCapture | NativeCaptureDispatch::PursuitOnly
+        NativeCaptureDispatch::NoCapture
+            | NativeCaptureDispatch::PursuitOnly
+            | NativeCaptureDispatch::Turret { .. }
     ) {
         if !P::manager_authenticates(manager, id) {
             return Err(NativeGroundActorBlock::Allocation);

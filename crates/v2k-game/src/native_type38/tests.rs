@@ -36,6 +36,7 @@ fn row_index(row: Type38Row) -> usize {
         Type38Row::Type119 => 2,
         Type38Row::Type32 => 3,
         Type38Row::Type2 => 4,
+        Type38Row::Type107 | Type38Row::Type121 => unreachable!("type107_tests"),
     }
 }
 
@@ -154,6 +155,7 @@ fn type38_family_births_publish_their_rows_on_the_ground_host() {
                         NativeExplosionPolicy::Class1
                     }
                     Type38Row::Type129 => NativeExplosionPolicy::Class63,
+                    Type38Row::Type107 | Type38Row::Type121 => unreachable!("type107_tests"),
                 }
             );
             if row == Type38Row::Type129 {
@@ -380,6 +382,7 @@ fn lethal_playing_hits_run_class1_and_class63() {
                 assert_eq!(drop.position_raw(), position);
                 assert_eq!(drop.power_up_payload_packed, payload);
             }
+            Type38Row::Type107 | Type38Row::Type121 => unreachable!("type107_tests"),
         }
         // The corpse stays in the late static walk until 14990.
         let outcome = contact::resolve_type38_family_static_contact(

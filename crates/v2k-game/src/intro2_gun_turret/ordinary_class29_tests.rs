@@ -167,8 +167,14 @@ fn ordinary_class29_turrets_fire_their_own_emitter_method_and_drain_once() {
             .overwrite(0x0200_0000, 0x0200_0000);
         let queue = entity.intro2_gun_turret_aim_runtime.as_ref().unwrap();
         assert_eq!(queue.projectile_descriptor(), profile.emitter());
+        // An E +17 auxiliary command follows each primary with method 15.
         for command in queue.transient_shots() {
-            assert_eq!(u32::from(command.projectile_method), method);
+            let expected = if command.auxiliary { 15 } else { method };
+            assert_eq!(u32::from(command.projectile_method), expected);
+            assert_eq!(
+                command.auxiliary,
+                profile.emitter().auxiliary_command != 0 && command.auxiliary
+            );
         }
         let drained = aim::drain_intro2_gun_turret_shots(
             &mut manager,
@@ -183,7 +189,7 @@ fn ordinary_class29_turrets_fire_their_own_emitter_method_and_drain_once() {
         assert!(drained
             .materialized_particle_classes
             .iter()
-            .all(|&materialized| materialized == class));
+            .all(|&materialized| materialized == class || materialized == 32));
         let again = aim::drain_intro2_gun_turret_shots(
             &mut manager,
             &mut fx,
