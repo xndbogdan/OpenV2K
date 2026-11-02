@@ -288,11 +288,12 @@ fn run(
     let ActiveBehaviorStyle::Audited(style) = context.active_style() else {
         return Err(Block::Runtime("hit style"));
     };
-    // PE tables4C7930/79C0/7DF8/7E40 and the shark's 4C7D20: +20,+24 and
-    // +28 are40C690. This direct style call omits task-result dispatch's
-    // 416410 suppression.
+    // PE tables4C7930/79C0/7DF8/7E40, the shark's 4C7D20 and Search &
+    // Attack's 4C7A50/4C7A98: +20,+24 and +28 are40C690. This direct style
+    // call omits task-result dispatch's 416410 suppression.
     match style.frame_address {
-        0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7d20 | 0x004c_7e88 => {
+        0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7d20 | 0x004c_7e88
+        | 0x004c_7a50 | 0x004c_7a98 => {
             crate::shared_fish_tasks::reselect_behavior(
                 manager,
                 id,

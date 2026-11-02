@@ -45,6 +45,7 @@ pub enum SharedFishBlock {
     MoverAction(CommonMoverFrameAction),
     MoverAdvance(CommonMoverFrameAdvanceError),
     Acquisition(GuardLocationCandidateSelectionError),
+    Aim(super::aim::FishAimError),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,7 +73,7 @@ impl SharedFishOwner {
         };
         if !matches!(
             (program.class_id, context.style_table_index_raw_at_0x10()),
-            (4 | 5 | 6 | 69, 0) | (10 | 13, 0 | 1)
+            (4 | 5 | 6 | 69, 0) | (7 | 10 | 13, 0 | 1)
         ) && !super::dying::dying_graph(entity)
         {
             return Err(SharedFishBlock::Graph);
@@ -333,14 +334,13 @@ fn run_frame(
         .ok_or(Block::Runtime("fish cell"))?
         .height as i8;
     {
-        let fleeing = matches!(
-            manager
-                .iter_all()
-                .find(|entity| entity.id == id)
-                .ok_or(Block::Allocation)?
-                .actor_task_state(ActorTaskSlot::Primary),
-            Some(ActorTaskRuntime::RunAway(_))
-        );
+        let primary = manager
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .ok_or(Block::Allocation)?
+            .actor_task_state(ActorTaskSlot::Primary);
+        let fleeing = matches!(primary, Some(ActorTaskRuntime::RunAway(_)));
+        let chasing = matches!(primary, Some(ActorTaskRuntime::ChaseTarget(_)));
         let fish_frame = super::mover::FishMoverFrame {
             metadata: &metadata,
             terrain,
@@ -371,6 +371,38 @@ fn run_frame(
                     },
                 )
                 .map_err(map_run_away)?,
+            )
+        } else if chasing {
+            // Class7's 03490 around the fish mover; its tag reaches 4C7A98's
+            // +00/+04 C690.
+            if !manager
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .is_some_and(super::aim::pursuing_graph_authenticates)
+            {
+                return Err(Block::Graph);
+            }
+            let world_fx = &mut *frame.world_fx;
+            Some(
+                crate::chase_target::live_primary::tick_chase_target_live_primary(
+                    manager,
+                    crate::chase_target::live_primary::ChaseTargetLivePrimaryFrame {
+                        entity_id: id,
+                        elapsed_micros: dt,
+                        dispatch_mode: mode,
+                    },
+                    |request| {
+                        super::mover::run(
+                            request.entity,
+                            fish_frame,
+                            Some(request.target),
+                            request.tracked_target,
+                            &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+                        )
+                    },
+                )
+                .map(|transition| transition.is_some())
+                .map_err(map_chase)?,
             )
         } else {
             None
@@ -431,23 +463,42 @@ fn run_frame(
                 tasks::acquire(manager, id, &mut next_random).map_err(map_plain_task)?
             }
             Some(ActorTaskRuntime::TargetAcquisition(_)) => {
-                tasks::acquire_flee_target(manager, id, &metadata).map_err(map_plain_task)?
+                tasks::acquire_target(manager, id, &metadata, frame.world_fx)
+                    .map_err(map_plain_task)?
             }
             Some(_) => return Err(Block::Graph),
         }
     }
     // Slot2 is read after the Secondary; class4's terrain task can write the
     // coarse cell before the tail reads it.
-    let terrain_task = match manager
+    let (terrain_task, aiming) = match manager
         .iter_all()
         .find(|entity| entity.id == id)
         .ok_or(Block::Allocation)?
         .actor_task_state(ActorTaskSlot::Tertiary)
     {
-        None => false,
-        Some(ActorTaskRuntime::DefecateVirusTerrain(_)) => true,
+        None => (false, false),
+        Some(ActorTaskRuntime::DefecateVirusTerrain(_)) => (true, false),
+        Some(ActorTaskRuntime::AimAndFire(_)) => (false, true),
         Some(_) => return Err(Block::Graph),
     };
+    // A newborn Aim runs once on the pass that acquired its target. D7A0
+    // (style +04) and D760 (+00) both select C690 for 4C7A98.
+    if aiming
+        && matches!(
+            super::aim::tick_fish_aim(mode, manager, frame.world_fx, id, dt, &metadata)
+                .map_err(Block::Aim)?
+                .resolution
+                .outcome,
+            crate::aim_and_fire::AimAndFireFrameOutcome::RequestOwnerTransition { .. }
+        )
+    {
+        let tick = frame.retail_tick;
+        tasks::reselect_after_task_result(manager, id, &metadata, tick, &mut || {
+            u32::from(frame.world_fx.next_shared_retail_random_u16())
+        })
+        .map_err(map_plain_task)?;
+    }
     if terrain_task && defecate_terrain(manager, id, &mut frame, mode, dt)? {
         let tick = frame.retail_tick;
         tasks::reselect_after_task_result(manager, id, &metadata, tick, &mut || {
@@ -472,10 +523,15 @@ fn effective_flags(entity: &Entity) -> Result<u32, SharedFishBlock> {
     // changes these defaults. Zebra fish omit E100's independent drag bit8.
     // The C swimmers keep 4 and 8: Shark Attack's 4C7D20, Defecate Virus's
     // 4C7E88 and Run Away's 4C7618/4C7660 have zero masks. Type19/117's 4
-    // has no drag bit8.
+    // has no drag bit8. Search & Attack's 4C7A50/4C7A98 clear 21080 and 80,
+    // neither of which is 4 or 8.
     let style = context.active_style().style_address();
     if !matches!(style, 0x4c7930 | 0x4c79c0 | 0x4c7df8 | 0x4c7e40)
-        && !(flags == 0xc && matches!(style, 0x4c7d20 | 0x4c7e88 | 0x4c7618 | 0x4c7660))
+        && !(flags == 0xc
+            && matches!(
+                style,
+                0x4c7d20 | 0x4c7e88 | 0x4c7618 | 0x4c7660 | 0x4c7a50 | 0x4c7a98
+            ))
         && !(flags == 0x4 && matches!(style, 0x4c7618 | 0x4c7660))
     {
         return Err(SharedFishBlock::Graph);
@@ -650,6 +706,18 @@ fn map_task(error: FishTaskError<SharedFishBlock>) -> SharedFishBlock {
 
 fn map_plain_task(error: FishTaskError<Infallible>) -> SharedFishBlock {
     map_task(error.map_mover(|never| match never {}))
+}
+
+fn map_chase(
+    error: crate::chase_target::live_primary::ChaseTargetLivePrimaryError<SharedFishBlock>,
+) -> SharedFishBlock {
+    use crate::chase_target::live_primary::ChaseTargetLivePrimaryError as Chase;
+    match error {
+        Chase::Allocation => SharedFishBlock::Allocation,
+        Chase::Graph => SharedFishBlock::Graph,
+        Chase::Runtime(reason) => SharedFishBlock::Runtime(reason),
+        Chase::Mover(reason) => reason,
+    }
 }
 
 fn map_run_away(

@@ -604,3 +604,5 @@ address,status,note
 0x00405420,implemented,Remote Beamer Primary constructor for the Type74 beamers (docs/re/CLASS0_RUNTIME.md)
 0x004243B0,implemented,Sub-K animation words on the Type19/117 swimmers (docs/re/FISH_RUNTIME.md#type19-and-type117)
 0x00424450,implemented,Sub-K constructor: zeroed, no random word (docs/re/FISH_RUNTIME.md#type19-and-type117)
+0x0040ADE0,implemented,Search & Attack pursuit initializer, with a swimmer's Sub-F resets (docs/re/FISH_RUNTIME.md#type21)
+0x00403360,implemented,Chase constructor and its Sub-F follow suffix on the Type21 swimmer (docs/re/FISH_RUNTIME.md#type21)

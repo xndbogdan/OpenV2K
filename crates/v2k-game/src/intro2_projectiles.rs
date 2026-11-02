@@ -39,6 +39,7 @@ pub enum Intro2ShotDrainError {
     Type38Family(crate::native_type38::aim::Type38ShotDrainError),
     Type12Family(crate::native_type12::aim::Type12ShotDrainError),
     Type94(crate::intro2_type94::aim::Intro2Type94ShotDrainError),
+    Fish(crate::shared_fish::aim::FishShotDrainError),
 }
 
 #[derive(Clone, Copy)]
@@ -61,6 +62,7 @@ enum EmitterFamily {
     Type38Family,
     Type12Family,
     Type94,
+    Fish,
 }
 
 pub fn drain_intro2_projectiles(
@@ -227,6 +229,12 @@ fn emitter_family(entity: &crate::entity::Entity) -> Option<EmitterFamily> {
         .is_some_and(|runtime| runtime.queued_shot_count() > 0)
     {
         EmitterFamily::Type94
+    } else if entity
+        .shared_fish_aim_runtime
+        .as_ref()
+        .is_some_and(|runtime| runtime.queued_shot_count() > 0)
+    {
+        EmitterFamily::Fish
     } else {
         return None;
     };
@@ -416,6 +424,15 @@ fn drain_emitter_family(
         )
         .map(|outcome| outcome.consumed_requests)
         .map_err(Intro2ShotDrainError::Type12Family),
+        EmitterFamily::Fish => crate::shared_fish::aim::drain_fish_shots(
+            entities,
+            world_fx,
+            id,
+            environment,
+            retail_tick,
+        )
+        .map(|outcome| outcome.consumed_requests)
+        .map_err(Intro2ShotDrainError::Fish),
         EmitterFamily::Type94 => crate::intro2_type94::aim::drain_intro2_type94_shots(
             entities,
             world_fx,

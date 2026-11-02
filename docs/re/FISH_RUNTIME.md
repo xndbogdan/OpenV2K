@@ -2,8 +2,8 @@
 
 Types22,23,24,62,124 share B/D/F components and authored neutral swimming tasks.
 Types23/62 are `zebrafsh`, with environment2004;22/24/124 use200C.
-The hostile [Type25 shark](TYPE25_SHARK.md), [Type37](#type37) and
-[Type20](#type20) share this owner with `0xC`, and
+The hostile [Type25 shark](TYPE25_SHARK.md), [Type37](#type37),
+[Type20](#type20) and [Type21](#type21) share this owner with `0xC`, and
 [Type19 and Type117](#type19-and-type117) with `0x4`.
 The aquatic resource catalog is overlay11; Reef is gameplay23 and Cistern30.
 Zebra Type62 uses common model38 and occurs in13/14/18/36. Its former
@@ -293,6 +293,49 @@ units): world 22's Type19 moved on 633 of 1,761 ticks, median 46.0, p90
 63.1, p99 93.5; the port's on 569 of 1,611, median 48.4, p90 80.0, p99
 97.1. World 34's Type117 moved on 1,044 of 2,927, median 44.1, p90 73.2,
 p99 88.1; the port's on 1,046 of 2,928, median 46.1, p90 71.8, p99 90.6.
+
+## Type21
+
+Type21 (three in world 22, four in 34) is a B/D/E/F swimmer with C8 `0xC`,
+health 4000 and model 1234. Its row: Retarget x4 (class5), PlayerNearby x40
+and Always x1 Search & Attack (class7), rule 1, alternate class12. Its Sub-D
+has divisor 150, no roll coupling, probes 512/256 and a zero classifier; its
+axis is 3840 with filter word `0x485`. E (`24E30`, no word drawn) holds
+method 24 and sound 40: interval 1.2 s, spread 100, aim threshold 4000, axis
+tolerance 3072, speed from the method table.
+
+- Class7's `4C7A50` runs `FUN_0040B6C0`, as Run Away does: the authored axis
+  `+04`, slot2 cleared, `FUN_00402050`'s acquisition (slot1, argument 0) and
+  a 500-ms retarget (slot0). A body found by `FUN_00422CD0` (quartered
+  squared distance against the squared axis, so 7680 units) reaches
+  `FUN_0040C7D0`; `FUN_0040C6B0` publishes `4C7A98` and sets state `0x8000`.
+- `FUN_0040ADE0` plays no prelude cue (Type21's `+9A` is zero), installs
+  `FUN_00402220`'s Aim in slot2 (5000 ms), clears slot1, then
+  `FUN_00403360`'s Chase in slot0 (5000 ms). Each `06070` resets Sub-F and
+  each constructor then sets follow mode 1 (`FUN_00424390`).
+- `FUN_00403490` runs the fish mover against the target; its tags and its
+  lifetime reach `4C7A98`'s `+00`/`+04` `C690`. The Aim runs after the
+  Secondary on every pass, the acquiring one included, and fires E through
+  `24650`; its result also reselects. Method 24 sends class68 particles
+  (channels 2 and 6, 2000 each).
+- Both class7 styles hold `C690` at `+20`/`+24`/`+28` and null `+18` and
+  `+2C`. Their masks (`0x21080`, `0x80`) leave `0xC` alone.
+- The native pair lane owns player-Type21 pairs as it does the shark's: the
+  player's `447D70` feeds the pad, Type21's Chase and Retarget take `02DA0`,
+  and `12760` responds and hits both ways (kind 21 on the player, kind 46
+  on Type21). Both channel-1 thresholds filter ordinary rams.
+- Death takes the shark's class12; the Main Base abort reaches it.
+
+Retail lab, world 34 from Skip to World with an idle player: two Type21s
+wander to the player and then pursue it to the end of the run (step median
+12.0 and 15.7 raw units on moving ticks), ramming it with 10-15 unit
+contacts that the player's threshold filters; their particles hit it three
+times, 5,822 health each. The port's Type21s wander out of step with
+retail's random words and did not reach the player from that arrival.
+Started 4,000 units from a Type21, the port's acquires the player, pursues
+it with a step median of 13.6 and hits it once for 5,822 in 1,300 ticks.
+Away from the player, retail's moved on 1,018 and 1,042 of 2,927 ticks
+(median 43.0 and 49.8), the port's on 1,020-1,035 of 2,928 (39.3-50.4).
 
 ## Acceptance boundaries
 

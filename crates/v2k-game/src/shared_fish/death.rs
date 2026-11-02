@@ -167,7 +167,8 @@ pub(crate) fn begin_shared_fish_standard_death(
         .type_runtime_metadata(entity.entity_type)
         .ok_or(Block::Metadata)?;
     super::authenticate_metadata(metadata).map_err(|_| Block::Metadata)?;
-    // Type25's and Type37's alternate is class12, which keeps the owner ticking.
+    // Type25's, Type37's and Type21's alternate is class12, which keeps the
+    // owner ticking.
     if super::is_hostile_swimmer(entity.entity_type) {
         if !scheduler.shared_fish_completed_owner(manager, id) {
             return Err(Block::Runtime("completed native allocation/task custody"));

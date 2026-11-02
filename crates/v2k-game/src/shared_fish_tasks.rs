@@ -199,6 +199,7 @@ fn publish_selection_with(
         37 => matches!(class, 4 | 5 | 10),
         20 => matches!(class, 4 | 5 | 6),
         19 | 117 => matches!(class, 5 | 6 | 10),
+        21 => matches!(class, 5 | 7),
         _ => matches!(class, 5 | 6 | 13),
     };
     if !admitted
@@ -242,7 +243,8 @@ fn publish_selection_with(
         if class == 4 {
             return publish_defecate_virus(entity, metadata, position);
         }
-        if class == 10 {
+        // Search & Attack's 4C7A50 and Run Away's 4C7618 both run B6C0.
+        if matches!(class, 7 | 10) {
             let RetailRuntimeValue::Known(filter) = selection.program.initializer_argument_raw
             else {
                 return Err(FishTaskError::Metadata);
@@ -428,12 +430,14 @@ fn publish_fleeing(
     Ok(())
 }
 
-/// Class10's Secondary: 02080 over the live list; a found body reaches the
-/// style's `+04` C7D0 and the swimmer flees it.
-pub(crate) fn acquire_flee_target(
+/// Class7's and class10's Secondary: 02080 over the live list; a found body
+/// reaches the style's `+04` C7D0, and the swimmer flees it (class10) or
+/// chases and aims at it (class7).
+pub(crate) fn acquire_target(
     manager: &mut EntityManager,
     id: u32,
     metadata: &EntityTypeRuntimeMetadata,
+    world_fx: &mut crate::world_fx::WorldFx,
 ) -> Result<(), FishTaskError> {
     use crate::search_attack_acquisition::{
         evaluate_target_acquisition_callback, TargetAcquisitionCallbackResult,
@@ -443,9 +447,10 @@ pub(crate) fn acquire_flee_target(
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(FishTaskError::Graph);
     };
-    if context.descriptor() != BehaviorDescriptorIdentity::Named(behavior_program(10).unwrap())
-        || context.style_table_index_raw_at_0x10() != 0
-    {
+    let BehaviorDescriptorIdentity::Named(program) = context.descriptor() else {
+        return Err(FishTaskError::Graph);
+    };
+    if !matches!(program.class_id, 7 | 10) || context.style_table_index_raw_at_0x10() != 0 {
         return Err(FishTaskError::Graph);
     }
     let task_id = entity
@@ -492,15 +497,36 @@ pub(crate) fn acquire_flee_target(
     let result = match selected {
         Ok(TargetAcquisitionCallbackResult::Zero(
             TargetAcquisitionZeroReason::BehaviorHandoffAbsent { target },
-        )) => publish_fleeing(entity, metadata, target.id),
+        )) if program.class_id == 10 => publish_fleeing(entity, metadata, target.id),
+        Ok(TargetAcquisitionCallbackResult::Zero(
+            TargetAcquisitionZeroReason::BehaviorHandoffAbsent { target },
+        )) => publish_pursuit(entity, metadata, target, world_fx),
         Ok(TargetAcquisitionCallbackResult::Zero(
             TargetAcquisitionZeroReason::SelectorTagConsumed { .. },
         )) => Ok(()),
         Ok(_) => unreachable!("selection-only evaluator cannot invoke handoff"),
-        Err(_) => Err(FishTaskError::Runtime("Run Away acquisition")),
+        Err(_) => Err(FishTaskError::Runtime("fish target acquisition")),
     };
     entity.actor_tasks.finish_exact_visit(visit);
     result
+}
+
+/// C7D0 -> C6B0 (variant1, `4C7A98`, entity bit `0x8000`) then ADE0: no
+/// prelude cue for Type21, 02220's Aim in slot2, clear slot1, then 03360's
+/// Chase in slot0. Each 06070 resets Sub-F and each suffix sets follow mode 1.
+fn publish_pursuit(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    target: crate::search_attack::SearchAttackTarget,
+    world_fx: &mut crate::world_fx::WorldFx,
+) -> Result<(), FishTaskError> {
+    use crate::search_attack_live::{
+        apply_search_attack_ade0_without_mover, apply_search_attack_c7d0_c6b0_without_mover,
+    };
+    let handoff = apply_search_attack_c7d0_c6b0_without_mover(entity, target)
+        .map_err(|_| FishTaskError::Runtime("class7 C7D0 handoff"))?;
+    apply_search_attack_ade0_without_mover(entity, metadata, handoff.target_id, world_fx)
+        .map_err(|_| FishTaskError::Runtime("class7 ADE0"))
 }
 
 pub(crate) fn reselect_after_task_result(
@@ -746,8 +772,9 @@ where
     let position = entity.position_raw();
     match entity.actor_tasks.task_state(task_id) {
         Some(ActorTaskRuntime::SharedRetarget(_)) => {
-            // Class10's acquiring phase wanders through the same 02BA0.
-            if !matches!(program.class_id, 5 | 10 | 13)
+            // Class7's and class10's acquiring phase wanders through the
+            // same 02BA0.
+            if !matches!(program.class_id, 5 | 7 | 10 | 13)
                 || context.style_table_index_raw_at_0x10() != 0
             {
                 return Err(FishTaskError::Graph);

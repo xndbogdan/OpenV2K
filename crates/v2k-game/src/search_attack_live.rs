@@ -377,7 +377,8 @@ pub fn apply_search_attack_ade0_without_mover(
             return Err(SearchAttackLiveAcquisitionBlock::Ade0TopologyUnresolved);
         }
     };
-    if topology.sub_f {
+    // A swimmer's Sub-F lives in the fish owner's allocation.
+    if topology.sub_f && entity.shared_fish_runtime.is_none() {
         return Err(SearchAttackLiveAcquisitionBlock::Ade0SubFUnsupported);
     }
     if topology.sub_a
@@ -426,12 +427,21 @@ pub fn apply_search_attack_ade0_without_mover(
         metadata,
     )
     .map_err(|_| SearchAttackLiveAcquisitionBlock::Ade0AimPrepare)?;
+    let Entity {
+        actor_tasks,
+        shared_fish_runtime,
+        ..
+    } = &mut *entity;
+    // 06070 resets Sub-F, then 02220's suffix sets follow mode 1.
     let aim_task = aim.apply_suffix(|_, suffix| {
-        debug_assert!(!suffix.enables_sub_f());
+        if let Some(fish) = shared_fish_runtime.as_mut() {
+            fish.sub_f.reset_shared_task();
+            if suffix.enables_sub_f() {
+                fish.sub_f.set_follow_target_mode_raw(1);
+            }
+        }
     });
-    entity
-        .actor_tasks
-        .replace_prepared(ActorTaskSlot::Tertiary, aim_task);
+    actor_tasks.replace_prepared(ActorTaskSlot::Tertiary, aim_task);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
 
     let chase = match ChaseTargetTaskState::prepare_after_allocation(
@@ -446,12 +456,19 @@ pub fn apply_search_attack_ade0_without_mover(
     let Entity {
         actor_tasks,
         sub_a_propulsion_runtime,
+        shared_fish_runtime,
         ..
     } = entity;
     let chase_task = chase
         .map_task(ActorTaskRuntime::ChaseTarget)
         .apply_suffix(|_, suffix| {
-            debug_assert!(!suffix.enables_sub_f());
+            // 06070 resets Sub-F, then 03360's suffix sets follow mode 1.
+            if let Some(fish) = shared_fish_runtime.as_mut() {
+                fish.sub_f.reset_shared_task();
+                if suffix.enables_sub_f() {
+                    fish.sub_f.set_follow_target_mode_raw(1);
+                }
+            }
             if let Some(speed) = suffix.sub_a_target_speed_raw() {
                 if let RetailRuntimeValue::Known(Some(sub_a)) = sub_a_propulsion_runtime {
                     sub_a.apply_shared_initializer_target_speed_write(speed);

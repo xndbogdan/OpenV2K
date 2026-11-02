@@ -15,7 +15,10 @@ use crate::{
     world_fx::WorldFx,
 };
 
-fn world(level_id: u32, player: Option<[i16; 3]>) -> (GameSession, EntityManager, WorldFx) {
+pub(super) fn world(
+    level_id: u32,
+    player: Option<[i16; 3]>,
+) -> (GameSession, EntityManager, WorldFx) {
     let path = v2k_test_support::retail_dir();
     let mut session = GameSession::init(&path).unwrap();
     session.load_auxiliary_ovl(3, 1).unwrap();
@@ -60,7 +63,7 @@ fn sharks(manager: &EntityManager) -> Vec<u32> {
         .collect()
 }
 
-fn class(manager: &EntityManager, id: u32) -> u8 {
+pub(super) fn class(manager: &EntityManager, id: u32) -> u8 {
     let entity = manager.iter_all().find(|e| e.id == id).unwrap();
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         panic!("shark context")
@@ -81,7 +84,7 @@ fn shark_task(manager: &EntityManager, id: u32) -> crate::shark_attack::SharkAtt
     *task
 }
 
-fn pass(
+pub(super) fn pass(
     session: &mut GameSession,
     manager: &mut EntityManager,
     fx: &mut WorldFx,

@@ -1599,6 +1599,7 @@ pub struct Entity {
     /// Ordinary Type18's authored allocation and its method20 shot FIFO.
     pub native_type18_runtime: Option<crate::native_type18::Type18Runtime>,
     pub native_type18_aim_runtime: Option<crate::native_type18::aim::Type18AimRuntime>,
+    pub shared_fish_aim_runtime: Option<crate::shared_fish::aim::FishAimRuntime>,
     /// Ordinary Type28's authored allocation (no emitter).
     pub native_type28_runtime: Option<crate::native_type28::Type28Runtime>,
     /// Ordinary Type76/Type77's authored allocation and its shot FIFO.
@@ -1796,6 +1797,7 @@ impl Entity {
             native_type69_runtime: self.native_type69_runtime,
             native_type18_runtime: self.native_type18_runtime,
             native_type18_aim_runtime: self.native_type18_aim_runtime.clone(),
+            shared_fish_aim_runtime: self.shared_fish_aim_runtime.clone(),
             native_type28_runtime: self.native_type28_runtime,
             native_type76_runtime: self.native_type76_runtime,
             native_type76_aim_runtime: self.native_type76_aim_runtime.clone(),
@@ -1918,6 +1920,7 @@ impl Entity {
             native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
+            shared_fish_aim_runtime: None,
             native_type28_runtime: None,
             native_type76_runtime: None,
             native_type76_aim_runtime: None,
@@ -3237,6 +3240,7 @@ fn build_type93_materialiser_entity(
         native_type69_runtime: None,
         native_type18_runtime: None,
         native_type18_aim_runtime: None,
+        shared_fish_aim_runtime: None,
         native_type28_runtime: None,
         native_type76_runtime: None,
         native_type76_aim_runtime: None,
@@ -5109,6 +5113,7 @@ impl EntityManager {
                             | 20
                             | 19
                             | 117
+                            | 21
                             | 26
                             | 27
                             | 28
@@ -5600,6 +5605,7 @@ impl EntityManager {
                 native_type69_runtime: None,
                 native_type18_runtime: None,
                 native_type18_aim_runtime: None,
+                shared_fish_aim_runtime: None,
                 native_type28_runtime: None,
                 native_type76_runtime: None,
                 native_type76_aim_runtime: None,
@@ -6084,6 +6090,7 @@ impl EntityManager {
             native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
+            shared_fish_aim_runtime: None,
             native_type28_runtime: None,
             native_type76_runtime: None,
             native_type76_aim_runtime: None,
@@ -6899,6 +6906,7 @@ impl EntityManager {
             native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
+            shared_fish_aim_runtime: None,
             native_type28_runtime: None,
             native_type76_runtime: None,
             native_type76_aim_runtime: None,
@@ -8389,6 +8397,7 @@ impl EntityManager {
             native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
+            shared_fish_aim_runtime: None,
             native_type28_runtime: None,
             native_type76_runtime: None,
             native_type76_aim_runtime: None,
