@@ -410,8 +410,14 @@ fn run_frame(
             .map_err(map_task)?
         };
         if changed {
-            tasks::reselect_after_task_result(manager, id, &metadata, &mut next_random)
-                .map_err(map_plain_task)?;
+            tasks::reselect_after_task_result(
+                manager,
+                id,
+                &metadata,
+                frame.retail_tick,
+                &mut next_random,
+            )
+            .map_err(map_plain_task)?;
         }
         // Read Secondary after Primary and C690. C7D0 may install a new
         // Primary; that new task waits for the next actor visit.
@@ -443,7 +449,8 @@ fn run_frame(
         Some(_) => return Err(Block::Graph),
     };
     if terrain_task && defecate_terrain(manager, id, &mut frame, mode, dt)? {
-        tasks::reselect_after_task_result(manager, id, &metadata, &mut || {
+        let tick = frame.retail_tick;
+        tasks::reselect_after_task_result(manager, id, &metadata, tick, &mut || {
             u32::from(frame.world_fx.next_shared_retail_random_u16())
         })
         .map_err(map_plain_task)?;
@@ -453,7 +460,7 @@ fn run_frame(
 }
 
 fn effective_flags(entity: &Entity) -> Result<u32, SharedFishBlock> {
-    let RetailRuntimeValue::Known(flags @ (0x2004 | 0x200c | 0xc)) =
+    let RetailRuntimeValue::Known(flags @ (0x2004 | 0x200c | 0xc | 0x4)) =
         entity.collision.default_state_flags_at_0xc8
     else {
         return Err(SharedFishBlock::Runtime("fish default environment"));
@@ -464,10 +471,12 @@ fn effective_flags(entity: &Entity) -> Result<u32, SharedFishBlock> {
     // PE styles5/6/13: +34=0; +38=0 except Wander21000. Neither policy
     // changes these defaults. Zebra fish omit E100's independent drag bit8.
     // The C swimmers keep 4 and 8: Shark Attack's 4C7D20, Defecate Virus's
-    // 4C7E88 and Run Away's 4C7618/4C7660 have zero masks.
+    // 4C7E88 and Run Away's 4C7618/4C7660 have zero masks. Type19/117's 4
+    // has no drag bit8.
     let style = context.active_style().style_address();
     if !matches!(style, 0x4c7930 | 0x4c79c0 | 0x4c7df8 | 0x4c7e40)
         && !(flags == 0xc && matches!(style, 0x4c7d20 | 0x4c7e88 | 0x4c7618 | 0x4c7660))
+        && !(flags == 0x4 && matches!(style, 0x4c7618 | 0x4c7660))
     {
         return Err(SharedFishBlock::Graph);
     }

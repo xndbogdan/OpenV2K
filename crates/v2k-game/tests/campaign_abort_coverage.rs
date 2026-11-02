@@ -114,10 +114,9 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // abort death, and Flood's Type89s leave class38 and its Type74 Remote
     // Beamer class59 for their class1 explosions.
     (22, 41),
-    // Native22/23/24 fish execute the class2 quiet terminal and the Type25
-    // sharks and Type37s class12, and its Type20 explodes through class1;
-    // Reef's next unsupported callback is its Type117 actor.
-    (23, 117),
+    // World 23 completes: its Native22/23/24 fish take the class2 quiet
+    // terminal, its Type25 sharks and Type37 class12, its Type20 class1 and
+    // its Type117 class63.
     // World 24 completes: its Type29 mobbers take class11 Tumble.
     // World 25 completes: its Type82 factory shares Type66's class39 owner.
     (26, 121),
@@ -132,8 +131,9 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // factory class39 and its Type32s the ground host's terminal deaths.
     // The Type20 swimmer explodes through class1; next is the Type41 flyer.
     (33, 41),
-    // The Type25 shark takes class12; next is the Type117 carrier.
-    (34, 117),
+    // The Type25 shark takes class12 and the Type117 carrier class63; next
+    // is the Type41 flyer.
+    (34, 41),
     // World 35 completes: its Type12s explode through class1.
     // World 36 completes: its Type74 Remote Beamers explode through class1.
     // World 37 completes: its Type106 dies quietly through class2.
@@ -418,8 +418,8 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     assert_eq!(
         exact_worlds,
         [
-            13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39, 41,
-            42, 43, 44, 45, 46, 48
+            13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39,
+            41, 42, 43, 44, 45, 46, 48
         ]
     );
     assert_eq!(

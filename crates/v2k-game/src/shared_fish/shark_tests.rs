@@ -768,3 +768,155 @@ fn a_lethal_burn_takes_type20_through_class1() {
         .iter_all()
         .any(|e| e.id > newest && e.entity_type == 61));
 }
+
+fn of_type(manager: &EntityManager, entity_type: u32) -> Vec<u32> {
+    manager
+        .iter_all()
+        .filter(|e| e.entity_type == entity_type)
+        .map(|e| e.id)
+        .collect()
+}
+
+#[v2k_test_support::retail_test]
+fn type19_and_type117_swim_with_their_k_words_on_the_fish_owner() {
+    for (level, entity_type, count) in [(22, 19, 1), (23, 117, 1), (34, 117, 1)] {
+        let (mut session, mut manager, mut fx) = world(level, None);
+        let ids = of_type(&manager, entity_type);
+        assert_eq!(ids.len(), count, "world{level}");
+        let id = ids[0];
+        assert!(allocation_authenticates(&manager, id));
+        // A newborn's +34 is zero: UnderAttack cannot draw Run Away.
+        assert!(matches!(class(&manager, id), 5 | 6), "world{level}");
+        let before = manager
+            .iter_all()
+            .find(|e| e.id == id)
+            .unwrap()
+            .position_raw();
+        let mut scheduler = SpecializedActorTaskScheduler::new();
+        scheduler.adopt_shared_fish(&manager);
+        let mut k_moved = false;
+        for tick in 1001..1501 {
+            pass(&mut session, &mut manager, &mut fx, &mut scheduler, tick);
+            let fish = manager
+                .iter_all()
+                .find(|e| e.id == id)
+                .unwrap()
+                .shared_fish_runtime
+                .clone()
+                .unwrap();
+            k_moved |= fish.variables[2] != 0 || fish.variables[3] != 0;
+        }
+        assert_ne!(
+            manager
+                .iter_all()
+                .find(|e| e.id == id)
+                .unwrap()
+                .position_raw(),
+            before,
+            "world{level}"
+        );
+        assert!(k_moved, "world{level}: K never wrote its words");
+    }
+}
+
+/// UnderAttack holds for 250 ticks after a hit stamps +34; only then can
+/// AC60 draw Run Away, and the swimmer flees its attacker's acquisition.
+#[v2k_test_support::retail_test]
+fn a_recent_hit_lets_type19_draw_run_away() {
+    let (_, mut manager, mut fx) = world(22, None);
+    let id = of_type(&manager, 19)[0];
+    let metadata = manager.type_runtime_metadata(19).unwrap().clone();
+    let draws = |manager: &mut EntityManager, fx: &mut WorldFx, tick: u32| {
+        (0..40)
+            .map(|_| {
+                crate::shared_fish_tasks::reselect_behavior(
+                    manager,
+                    id,
+                    &metadata,
+                    tick,
+                    &mut || u32::from(fx.next_shared_retail_random_u16()),
+                )
+                .unwrap();
+                class(manager, id)
+            })
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    manager
+        .entity_mut(id)
+        .unwrap()
+        .collision
+        .last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(1000);
+    assert!(!draws(&mut manager, &mut fx, 1250).contains(&10));
+    assert!(draws(&mut manager, &mut fx, 1249).contains(&10));
+}
+
+#[v2k_test_support::retail_test]
+fn lethal_burns_take_type19_through_class1_and_type117_through_class63() {
+    use crate::{
+        class49_death::{finished_terminal_hit_authenticates, NativeExplosionPolicy},
+        entity_collision_state::{DEFERRED_DESTROY_PENDING_STATE_BIT, DYING_STATE_BIT},
+    };
+    for (level, entity_type, policy) in [
+        (22, 19, NativeExplosionPolicy::Class1),
+        (34, 117, NativeExplosionPolicy::Class63),
+    ] {
+        let (mut session, mut manager, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(level);
+        manager.cleanup_pending_actor_deferred_destroys();
+        let id = of_type(&manager, entity_type)[0];
+        let mut scheduler = SpecializedActorTaskScheduler::new();
+        assert!(scheduler.adopt_shared_fish(&manager) > 0);
+        manager.entity_mut(id).unwrap().collision.health_raw = RetailRuntimeValue::Known(1);
+        let newest = manager.iter_all().map(|entity| entity.id).max().unwrap();
+        let mut hull = PlayerHull::default();
+        let result = crate::attached_particle_damage::apply_attached_particle_damage(
+            crate::attached_particle_damage::AttachedParticleDamageFrame {
+                entities: &mut manager,
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                static_damage: &mut StaticDamageScheduler::new(),
+                scheduler: &mut scheduler,
+                notifications: &mut GameplayNotifications::new(),
+                retail_tick: 81,
+                world: crate::attached_particle_damage::AttachedParticleDamageWorld::Playing {
+                    player_hull: &mut hull,
+                    extra_lives: RetailRuntimeValue::Known(2),
+                },
+            },
+            crate::world_fx::AttachedParticleDamageRequest {
+                target_handle: id,
+                packet_va: 0x004c_c048,
+                source_entity_type_raw: (-5_i32) as u32,
+                current_emitter: None,
+                ratio_numerator: 255,
+                ratio_denominator: 255,
+            },
+        );
+        assert!(matches!(result, Ok(damage) if damage > 0), "{result:?}");
+        let entity = manager.iter_all().find(|e| e.id == id).unwrap();
+        let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+            panic!("terminal context")
+        };
+        assert_eq!(
+            context.active_style().style_address(),
+            policy.style_address()
+        );
+        assert_eq!(
+            entity
+                .collision
+                .state_flags_at_0x08
+                .masked(DYING_STATE_BIT | DEFERRED_DESTROY_PENDING_STATE_BIT),
+            RetailRuntimeValue::Known(DYING_STATE_BIT | DEFERRED_DESTROY_PENDING_STATE_BIT)
+        );
+        assert!(finished_terminal_hit_authenticates(&manager, id));
+        assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
+        // BC90 drops the carrier's authored Type61; BAC0 drops nothing.
+        assert_eq!(
+            manager
+                .iter_all()
+                .any(|e| e.id > newest && e.entity_type == 61),
+            policy == NativeExplosionPolicy::Class63,
+            "world{level}"
+        );
+    }
+}

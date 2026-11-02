@@ -65,21 +65,37 @@ const TOPOLOGY_WITHOUT_B: CommonMoverComponentTopology = CommonMoverComponentTop
     ..TOPOLOGY
 };
 
+/// Type19 and Type117 add an emitter E, which none of their tasks fires,
+/// and a K that animates two model words.
+const TOPOLOGY_WITH_EK: CommonMoverComponentTopology = CommonMoverComponentTopology {
+    sub_e: true,
+    sub_k: true,
+    ..TOPOLOGY
+};
+
 pub(crate) fn is_fish_topology(topology: CommonMoverComponentTopology) -> bool {
-    topology == TOPOLOGY || topology == TOPOLOGY_WITHOUT_B
+    topology == TOPOLOGY || topology == TOPOLOGY_WITHOUT_B || topology == TOPOLOGY_WITH_EK
 }
 
-/// Swimmers whose alternate class explodes through BAF0: Type20 (class1)
-/// and Type124 (class63).
+/// Swimmers whose alternate class explodes through BAF0: Type19 and Type20
+/// (class1), Type117 and Type124 (class63).
 pub(crate) const fn explodes(entity_type: u32) -> bool {
-    matches!(entity_type, 20 | 124)
+    matches!(entity_type, 19 | 20 | 117 | 124)
+}
+
+/// Type19 and Type117 weigh Run Away by UnderAttack (rule 2).
+pub(crate) const fn runs_when_attacked(entity_type: u32) -> bool {
+    matches!(entity_type, 19 | 117)
 }
 
 /// B/D/F swimmers whose authored task graphs are owned here: the neutral
 /// fish, the hostile Type25 and Type37, and the D/F Type20. Other swimmers
 /// are not admitted.
 pub(crate) const fn is_shared_fish_type(entity_type: u32) -> bool {
-    matches!(entity_type, 22 | 23 | 24 | 62 | 124 | 25 | 37 | 20)
+    matches!(
+        entity_type,
+        22 | 23 | 24 | 62 | 124 | 25 | 37 | 20 | 19 | 117
+    )
 }
 
 /// Type25: C8 `0xC`, Wander x1, PlayerNearby x40 Shark Attack, Retarget x6,
@@ -103,12 +119,28 @@ const HOSTILE_CHOICES: [[(u32, u32, u32); 3]; 2] = [
 /// rule 3 class1.
 const TYPE20_CHOICES: [(u32, u32, u32); 3] = [(1, 5, 5), (1, 4, 4), (1, 1, 6)];
 
+/// Type19 and Type117: C8 `0x4`, Retarget x3 or x5, UnderAttack x6 Run
+/// Away, Wander x1; alternate class1 or class63.
+const UNDER_ATTACK_CHOICES: [[(u32, u32, u32); 3]; 2] = [
+    [(1, 3, 5), (2, 6, 10), (1, 1, 6)],
+    [(1, 5, 5), (2, 6, 10), (1, 1, 6)],
+];
+
 fn is_hostile_row(init: &crate::entity_collision_state::EntityInitializerSpec) -> bool {
     let choices = || {
         init.behavior_choices
             .iter()
             .map(|c| (c.weight_rule_id, c.weight_multiplier, c.behavior_class_id))
     };
+    if init.initializer_state_flags_raw == 4
+        && init.behavior_rule_ref == 1
+        && matches!(init.alternate_behavior_class_ref, 1 | 63)
+        && UNDER_ATTACK_CHOICES
+            .iter()
+            .any(|choices_row| choices().eq(*choices_row))
+    {
+        return true;
+    }
     if init.initializer_state_flags_raw == 0xc
         && init.behavior_rule_ref == 3
         && init.alternate_behavior_class_ref == 1
@@ -141,6 +173,8 @@ pub(crate) struct SharedFishRuntime {
     /// Indexed by the one-based callback selector, matching AnimVars::dynamic.
     /// Index0 is unused; the source pointer is bank+(selector-1)*2.
     pub(crate) variables: [u16; 64],
+    /// K's `+0C`, written after Sub-D; 24450 allocates K zeroed.
+    pub(crate) sub_k_smoothed_raw: i32,
     /// Published only after the complete native class2 callback has staged
     /// this allocation. Retains repeated-hit custody until the later sweep.
     pub(crate) quiet_death_context: Option<BehaviorContextRuntime>,
@@ -176,8 +210,20 @@ pub(crate) fn authenticate_metadata(
     let RetailRuntimeValue::Known(sub_b) = metadata.sub_b_lateral_descriptor else {
         return Err(SharedFishError::Metadata);
     };
+    let RetailRuntimeValue::Known(emitter) = metadata.projectile_emitter_descriptor else {
+        return Err(SharedFishError::Metadata);
+    };
+    let RetailRuntimeValue::Known(gkl) = metadata.common_mover_gkl_payloads else {
+        return Err(SharedFishError::Metadata);
+    };
     if !is_fish_topology(topology)
         || sub_b.is_some() != topology.sub_b
+        || emitter.is_some() != topology.sub_e
+        || gkl.sub_k.is_some() != topology.sub_k
+        || gkl.sub_k.is_some_and(|k| {
+            k.iter()
+                .any(|&selector| selector == 0 || u32::from(selector) > variable_count)
+        })
         || !matches!(
             metadata.sub_d_steering_descriptor,
             RetailRuntimeValue::Known(Some(_))
@@ -340,11 +386,13 @@ pub(crate) fn publish_authored_fish(
         sub_d_owner: sub_d.frame_owner,
         sub_f,
         variables: [0; 64],
+        sub_k_smoothed_raw: 0,
         quiet_death_context: None,
         impact_prefix_pending: false,
     });
     // 425680 reads PlayerNearby over the earlier allocations; no word.
-    let rules = crate::shared_fish_tasks::FishRules::evaluate(entity, preceding.iter())
+    // A newborn's +34 is zero, so UnderAttack's window cannot hold.
+    let rules = crate::shared_fish_tasks::FishRules::evaluate(entity, preceding.iter(), 0)
         .map_err(|_| SharedFishError::Graph)?;
     let selection = crate::shared_fish_tasks::select_behavior(metadata, rules, next_random)
         .map_err(|_| SharedFishError::Graph)?;

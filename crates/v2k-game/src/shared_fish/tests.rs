@@ -48,9 +48,9 @@ pub(super) fn fixture(level_id: u32) -> (GameSession, EntityManager, WorldFx) {
 
 #[v2k_test_support::retail_test]
 fn native_fish_preserve_instance_identity_and_publish_all_authored_families() {
-    // World23's two sharks (spawns15/16), its Type37 (41) and its Type20
-    // share the owner.
-    for (world, count) in [(13, 3), (23, 47), (30, 20)] {
+    // World23's two sharks (spawns15/16), its Type37 (41), its Type20 and
+    // its Type117 share the owner.
+    for (world, count) in [(13, 3), (23, 48), (30, 20)] {
         let (session, mut manager, _fx) = fixture(world);
         let ids: Vec<_> = manager
             .iter_all()
@@ -81,6 +81,7 @@ fn native_fish_preserve_instance_identity_and_publish_all_authored_families() {
                 (25, 5 | 6 | 69)
                     | (37, 4 | 5 | 10)
                     | (20, 4 | 5 | 6)
+                    | (19 | 117, 5 | 6)
                     | (22 | 23 | 24 | 62 | 124, 5 | 6 | 13)
             ));
             assert!(entity.actor_task_state(ActorTaskSlot::Primary).is_some());
@@ -277,8 +278,10 @@ fn detailed_fish_swim_then_coarse_parking_preserves_tasks_pose_and_animation() {
         let mut parked = Vec::new();
         for id in ids {
             let e = manager.entity_mut(id).unwrap();
-            // The C swimmers have no 2000: their coarse visits still run tasks.
-            if e.collision.default_state_flags_at_0xc8 == RetailRuntimeValue::Known(0xc) {
+            // Swimmers without 2000 still run their tasks on coarse visits.
+            if matches!(e.collision.default_state_flags_at_0xc8,
+                RetailRuntimeValue::Known(flags) if flags & 0x2000 == 0)
+            {
                 continue;
             }
             e.collision.state_flags_at_0x08.overwrite(0x0200_0000, 0);

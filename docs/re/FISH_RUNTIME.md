@@ -3,7 +3,8 @@
 Types22,23,24,62,124 share B/D/F components and authored neutral swimming tasks.
 Types23/62 are `zebrafsh`, with environment2004;22/24/124 use200C.
 The hostile [Type25 shark](TYPE25_SHARK.md), [Type37](#type37) and
-[Type20](#type20) share this owner with `0xC`.
+[Type20](#type20) share this owner with `0xC`, and
+[Type19 and Type117](#type19-and-type117) with `0x4`.
 The aquatic resource catalog is overlay11; Reef is gameplay23 and Cistern30.
 Zebra Type62 uses common model38 and occurs in13/14/18/36. Its former
 constructor-only path classified it as furniture, omitted Sub-F construction
@@ -261,6 +262,37 @@ tick 1,468, when one of its sharks killed the idle player; retail's sharks
 did not reach the player in that run. The sharks' wander is random and out of
 step. Up to then the port's Type20 moved on 509 ticks with a median step of
 7.3 (max 72), against retail's 996 of 2,928 with 7.6 (max 76).
+
+## Type19 and Type117
+
+Type19 (one in world 22) and Type117 (one each in 23 and 34) share model
+1198 and a B/D/E/F/K row with C8 `0x4`: Retarget (x3 for Type19, x5 for
+Type117, class5), UnderAttack x6 Run Away (class10) and Wander x1 (class6),
+alternate rule 1 with class1 (Type19) or class63 (Type117). Their Sub-D has
+divisor 400, roll coupling, probes 512/256 and a zero classifier.
+
+- UnderAttack (rule 2) holds while a hit stamped `+34` lies within the last
+  250 ticks, once the clock has passed 249. An ordinary hit (neither infecting
+  nor curing) stamps `+34` before the style's `+28` reselection, so the hit
+  swimmer can draw Run Away at once. A newborn's `+34` is zero, so births never draw it. Run Away is
+  Type37's class10.
+- Without `0x8`, `E100` never runs `44EC60`: no drag or wind. Without
+  `0x2000`, coarse visits still run the tasks.
+- K (`FUN_00424450`, zeroed, no word drawn) runs after F in `018A0`
+  (`FUN_004243B0`): its first word follows the smoothed Sub-D step written
+  after Sub-D, its second the vertical velocity F has just written. Its
+  payload binds model words 2 and 3, beside F's word 1.
+- E (`24E30`, no word drawn) is never fired: none of their tasks visits an
+  emitter, and lab runs of worlds 22 and 34 logged no emitter visit
+  (`425160`) by any actor after arrival.
+- Type19's class1 scatters ten class37 particles (its B is present);
+  Type117's class63 then drops the Type61 authored in its `+88`.
+
+Retail lab, Skip to World with an idle player, steps on moving ticks (raw
+units): world 22's Type19 moved on 633 of 1,761 ticks, median 46.0, p90
+63.1, p99 93.5; the port's on 569 of 1,611, median 48.4, p90 80.0, p99
+97.1. World 34's Type117 moved on 1,044 of 2,927, median 44.1, p90 73.2,
+p99 88.1; the port's on 1,046 of 2,928, median 46.1, p90 71.8, p99 90.6.
 
 ## Acceptance boundaries
 

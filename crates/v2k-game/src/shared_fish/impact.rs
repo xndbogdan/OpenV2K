@@ -293,9 +293,13 @@ fn run(
     // 416410 suppression.
     match style.frame_address {
         0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7d20 | 0x004c_7e88 => {
-            crate::shared_fish_tasks::reselect_behavior(manager, id, &metadata, &mut || {
-                u32::from(world_fx.next_shared_retail_random_u16())
-            })
+            crate::shared_fish_tasks::reselect_behavior(
+                manager,
+                id,
+                &metadata,
+                retail_tick,
+                &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+            )
             .map_err(|_| Block::Runtime("hit C690 selection"))?;
             let owner = super::SharedFishOwner::adopt(manager, id)
                 .map_err(|_| Block::Runtime("reselected fish graph"))?;

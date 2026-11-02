@@ -67,7 +67,8 @@ pub enum NativeExplosionSourceProfile {
     PowerUp61,
     Intro2Type13,
     EntityWeapon(crate::native_entity_weapons::EntityWeaponKind),
-    /// The fish owner's exploders: Type20 (class1) and Type124 (class63).
+    /// The fish owner's exploders: Type19 and Type20 (class1), Type117 and
+    /// Type124 (class63).
     ExplodingFish(u32),
     /// Ordinary Type80/126 carriers on the Type10 owner, alternate class63.
     Type10Carrier(crate::intro2_type10::Type10Profile),
@@ -207,6 +208,10 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(kind) => style == 0x004c_74f8 || style == kind.living_style(),
             // Aimless, Wander and Defecate Virus: +2C null.
             Self::ExplodingFish(20) => matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7e88),
+            // Aimless, Wander and both Run Away variants: +2C null.
+            Self::ExplodingFish(19 | 117) => {
+                matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7618 | 0x004c_7660)
+            }
             // Aimless, Wander and both Flocking variants: all four +2C are null.
             Self::ExplodingFish(_) => {
                 matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40)
@@ -355,7 +360,7 @@ impl NativeExplosionSourceProfile {
             | Self::RollingBoulder
             | Self::ExplodingFlyer(_)
             | Self::Class0Host(_)
-            | Self::ExplodingFish(20)
+            | Self::ExplodingFish(19 | 20)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
                 NativeExplosionPolicy::Class1
