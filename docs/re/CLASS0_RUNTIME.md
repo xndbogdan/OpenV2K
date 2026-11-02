@@ -226,20 +226,20 @@ handle `04B30001`, at pass 1300) reads state `0x0042C005` and health 0 after
 the hit, and the sea word `0xFFFCB100` falls to `0xFFFA2000` (delta `-168192`)
 in 690 paced updates, through pass 1989. The port matches each of these.
 
-## Rows outside class0: Type50, Type89, Type118 and Type36
+## Rows outside class0: Type50, Type89, Type118, Type36 and Type74
 
-Four rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
+Five rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
 draw, the `+88` sea word) but not its living program. One owner runs all
 their visits, through the same `12DA0` prefix and DCA0/E870 tail.
 
-| Field | Type50 | Type89 | Type118 | Type36 |
-|---|---|---|---|---|
-| Worlds | 16, 40 | 21 (two) | 40 (two) | 42, 43, 46, 47 |
-| Default model slots | `[647;4]` | `[0;4]` | `[676;4]` | `[0;4]` |
-| Mass / health | 100 / 1000 | 1000 / 1000 | 1000 / 1000 | 1000 / 1000 |
-| Type+C0 | `4067` | `21A7` | `20027` | `201A7` |
-| Root / alternate | Always `(1,1,36)`, rule3 / class38 | Always `(1,1,38)` / class1 | Always `(1,1,0)` / class65 | Always `(1,1,16)` / class16 |
-| Authored `+88` | world16 -1068, world40 0 | 3249 | 1000 | unread |
+| Field | Type50 | Type89 | Type118 | Type36 | Type74 |
+|---|---|---|---|---|---|
+| Worlds | 16, 40 | 21 (two) | 40 (two) | 42, 43, 46, 47 | 21, 31, 36 |
+| Default model slots | `[647;4]` | `[0;4]` | `[676;4]` | `[0;4]` | `[253;4]` |
+| Mass / health | 100 / 1000 | 1000 / 1000 | 1000 / 1000 | 1000 / 1000 | 10 / 50000 |
+| Type+C0 | `4067` | `21A7` | `20027` | `201A7` | `26025` |
+| Root / alternate | Always `(1,1,36)`, rule3 / class38 | Always `(1,1,38)` / class1 | Always `(1,1,0)` / class65 | Always `(1,1,16)` / class16 | Always `(1,1,59)` / class1 |
+| Authored `+88` | world16 -1068, world40 0 | 3249 | 1000 | unread | unread |
 
 **Type50, Die When Moved.** `FUN_0040B980` clears T then S and
 `FUN_00404A20` publishes a Primary without timeout; `FUN_00401350/FUN_004012E0`
@@ -310,12 +310,47 @@ throttle, the sound unless dying, the capability-8 class-5 puff). It returns
 class 48 radius 100 and 20 ticks. A 20-ms touch costs the player 938, as in
 retail's world 43, whose player took 69 such hits from 247 ticks in.
 
-Hits reach all four through `class0_impact`: classes 36, 38 and 16 have null
-hit callbacks, like class0. A lethal hit, like the Main Base abort, runs
-class38 for Type50, class1 for Type89, the Geyser for Type118 and class16
-for Type36. Regression coverage is in
-`entity/class0_actor/{sea_level_tests,flare_tests}.rs`, `die_when_moved.rs`,
-`geyser.rs`, `generate_flares.rs` and `flare_damage.rs`.
+**Type74, the Remote Beamer.** Unlike the others it carries Sub-K (one
+model word, payload `[1, 0]`), death cue 62, capability `0x1224` and an axis
+of 512/8. `FUN_0040C530` clears T then S and `FUN_00405420` publishes a
+Primary with no timeout: while the body is not held (`0x1000`),
+`FUN_004054C0` adds the visit's microseconds over 16 to Sub-K word 1,
+saturating at `0xFFFF`, which it then keeps; a held body's word drops to 0,
+and the destructor `FUN_004054A0` zeroes it with the task. Its `+C0` has
+`0x2000`, so coarse visits skip the walk and the next detailed one charges
+the time since the last. The model reads that word in selector 1 and, as
+`FUN_00410090` gives every row the `{40D320, 40D350}` pair, the 50-Hz clock
+in selector 0. Style `0x004C72B8` has a null attach (`+08`), `FUN_0040D1C0`
+as its release (`+0C`), so a carried beamer attaches and releases as
+Type68's weight does and a drop reselects class59 with a fresh word, and
+`FUN_0040CAF0`
+as its pair callback (`+18`). A lethal hit or the Main Base abort explodes it
+through class1. Retail's world-21 Type74 reads `(-14080, 3008, 32512)`,
+50000 health and `0x08468805` at its first visit.
+
+`FUN_0040CAF0` is the beam. Against a body whose live capability has
+`0xC00` (a person) it takes the beamer's `+60` relation as the receiver, or
+else the first Type6 in the live list (never the list's last node, which
+the walk does not test), whose `+60` it then sets to its own handle. With no
+receiver it returns null and the pair bounces as usual. Otherwise it
+constructs a Type93 at the receiver's X, Z minus 0x100, on the terrain
+there, plays sound 8 at the person, attaches the person to the Type93
+through `FUN_00408F00`, plays sound 8 at the Type93 and returns the `0xA300`
+object `0x004BE330`, whose vtable entry is the same RET as capture's: the
+pair's physical response is cancelled, while the person's behavior callback
+and both task chains still run. The port does not run this yet: a living
+Type74 touching a person is skipped whole (no callbacks, sounds or
+bounce) and logged once per pair as a held beam. In a retail run of world 21
+from the Skip to World arrival to its casualty loss 1,774 ticks in, no Type93
+was born, so no beam happened there.
+
+Hits reach all five through `class0_impact`: classes 36, 38, 16 and 59 have
+null hit callbacks, like class0. A lethal hit, like the Main Base abort, runs
+class38 for Type50, class1 for Type89 and Type74, the Geyser for Type118 and
+class16 for Type36. Regression coverage is in
+`entity/class0_actor/{sea_level_tests,flare_tests,remote_beamer_tests}.rs`,
+`die_when_moved.rs`, `geyser.rs`, `generate_flares.rs` and
+`flare_damage.rs`.
 
 ## Quiet death and remaining boundaries
 

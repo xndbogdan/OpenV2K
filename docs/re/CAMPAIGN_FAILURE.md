@@ -266,7 +266,7 @@ later runtime graph or predecessor history.
 
 | Fresh-world exact sweep | Global OVLs |
 |---|---|
-| Complete | 13, 14, 15, 16, 17, 18, 19, 20, 24, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 42, 43, 44, 45, 46, 48 |
+| Complete | 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 25, 27, 28, 29, 30, 32, 35, 36, 37, 38, 39, 41, 42, 43, 44, 45, 46, 48 |
 | No campaign controller or casualty record | 49, 50 |
 
 The remaining first unsupported ordinary callbacks are listed below. Each is
@@ -277,14 +277,13 @@ retail skips those actors.
 | First unsupported entity type | Global OVLs |
 |---|---|
 | 41 | 22, 33 |
-| 74 | 21, 36 |
 | 107 | 31 |
 | 110 | 47 |
 | 117 | 23, 34 |
 | 121 | 26 (reached by a Type49's class49 radial), 40 |
 
-Thus exact fresh-world actor cleanup is complete for 15 of the 21 casualty
-worlds (13/14/15/16/17/18/19/24/32/35/37/39/42/43/46); the other six use the explicitly bounded transition.
+Thus exact fresh-world actor cleanup is complete for 17 of the 21 casualty
+worlds (13/14/15/16/17/18/19/21/24/32/35/36/37/39/42/43/46); the other four use the explicitly bounded transition.
 In world 26 the first unported body is not met by the walk itself: once its
 Type73 and Type109 bugs die quietly, a Type49 turret's class49 radial chain
 reaches the neighbouring Type121, whose callbacks are unresolved.

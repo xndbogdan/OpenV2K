@@ -8,7 +8,8 @@
 //! hands the class38 Change Sea Level task to its own owner. Type89's visits
 //! run that class38 task from birth, moving the level's sea. A dead Type118
 //! keeps this owner for its class65 Geyser; Type36 keeps it, living or
-//! dying, for class16's flares.
+//! dying, for class16's flares. Type74's detailed visits charge class59's
+//! Sub-K word; its coarse ones skip the walk.
 
 use super::{authenticate_metadata, living_class, reselect_class0_actor, Class0ActorError};
 use crate::{
@@ -98,6 +99,7 @@ impl Class0ActorOwner {
                     | (38, Some(ActorTaskRuntime::ChangeSeaLevel(_)))
                     | (65, Some(ActorTaskRuntime::Geyser(_)))
                     | (16, Some(ActorTaskRuntime::GenerateFlares))
+                    | (59, Some(ActorTaskRuntime::RemoteBeamer(_)))
             )
             // A finished class38 has staged its removal.
             || (living == 38 && bits(entity, DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0)
@@ -602,6 +604,28 @@ fn run_callback(
             let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
             match entity.actor_tasks.exact_callback_state_mut(visit) {
                 Some(ActorTaskRuntime::Geyser(state)) => state.step_sea(terrain, dt),
+                _ => return Err(Class0ActorError::Graph),
+            }
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+        }
+        Some(ActorTaskRuntime::RemoteBeamer(_)) => {
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            // FUN_004054C0: a held beamer's word drops to zero; otherwise it charges
+            // by dt >> 4 up to 0xFFFF, which it then keeps. It returns 0.
+            let held = bits(entity, 0x1000)? != 0;
+            match entity.actor_tasks.exact_callback_state_mut(visit) {
+                Some(ActorTaskRuntime::RemoteBeamer(k1)) => {
+                    if held {
+                        *k1 = 0;
+                    } else if *k1 != u16::MAX {
+                        *k1 = (u32::from(*k1) + (dt >> 4)).min(u32::from(u16::MAX)) as u16;
+                    }
+                }
                 _ => return Err(Class0ActorError::Graph),
             }
             if !entity.actor_tasks.finish_exact_visit(visit) {

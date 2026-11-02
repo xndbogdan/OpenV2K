@@ -135,13 +135,14 @@ pub(super) fn attach_native_class0(
             .iter_all()
             .find(|entity| entity.id == cargo)
             .unwrap();
-        if entity.entity_type != 68 {
+        // Type68's style 4C7468 and Type74's 4C72B8 share the null attach.
+        if !matches!(entity.entity_type, 68 | 74) {
             return Err(Class0ActorError::Runtime("player class0 cargo type"));
         }
         super::super::class0_actor::authenticate_metadata(
-            68,
+            entity.entity_type,
             manager
-                .type_runtime_metadata(68)
+                .type_runtime_metadata(entity.entity_type)
                 .ok_or(Class0ActorError::Metadata)?,
         )?;
         let owner = Class0ActorOwner::adopt(manager, cargo)?;
@@ -176,7 +177,7 @@ pub(super) fn attach_native_class0(
         reason: format!("{reason:?}"),
         prefix_committed: true,
     })?;
-    // DBF0 style4C7468+08 is null: no timer replacement, age reset or RNG draw.
+    // DBF0 styles 4C7468/4C72B8 +08 are null: no task replacement, age reset or RNG draw.
     debug_assert_eq!(Class0ActorOwner::adopt(manager, cargo), Ok(owner));
     Ok(())
 }

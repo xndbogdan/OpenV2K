@@ -8,6 +8,8 @@
 pub(crate) mod carry_tasks;
 pub mod pair;
 #[cfg(test)]
+mod pair_remote_beam_tests;
+#[cfg(test)]
 mod pair_type40_tests;
 #[cfg(test)]
 pub(crate) mod tests;

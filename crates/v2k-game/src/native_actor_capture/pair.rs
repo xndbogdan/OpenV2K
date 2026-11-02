@@ -162,6 +162,13 @@ pub enum NativeCaptorPairStage {
     DispatchCaptureAccepted,
     /// 4BEAA8 shares the same single-RET vtable entry as capture's A300.
     DispatchPowerUpUnsupportedRecipient,
+    /// A living Type74's class59 `FUN_0040CAF0` would beam this person to a
+    /// Type93 at the Main Base. The port does not run it yet: the pair is
+    /// skipped whole, before any callback, sound or physical write.
+    RemoteBeamHeld {
+        beamer: u32,
+        person: u32,
+    },
     Component {
         owner: u32,
         slot: ActorTaskSlot,
@@ -457,6 +464,43 @@ fn is_native_type40_person_pair(first: &Entity, second: &Entity) -> bool {
         })
 }
 
+/// A native Type74 still in class59 (style `4C72B8`, pair callback
+/// `FUN_0040CAF0`) and a person (live capability `0xC00`), in either seat.
+fn native_remote_beam_pair(
+    manager: &EntityManager,
+    first: &Entity,
+    second: &Entity,
+) -> Option<(u32, u32)> {
+    [(first, second), (second, first)]
+        .into_iter()
+        .find(|(beamer, person)| {
+            beamer.entity_type == crate::main_base_type54_abort::TYPE74_ENTITY_TYPE
+                && manager.native_class0_construction_present(beamer.id)
+                && matches!(beamer.current_behavior_context, RetailRuntimeValue::Known(Some(context))
+                    if context.active_style().pair_contact_callback_policy()
+                        == PairContactCallbackPolicy::UnknownAddress(0x0040_caf0))
+                && person.capability_flags & 0xc00 != 0
+        })
+        .map(|(beamer, person)| (beamer.id, person.id))
+}
+
+/// The Type74/person contacts of one pass whose beam the port held.
+pub fn held_remote_beams(outcome: &NativeCaptorPairOutcome) -> Vec<(u32, u32)> {
+    let (NativeCaptorPairOutcome::Resolved { visits }
+    | NativeCaptorPairOutcome::Blocked { visits, .. }) = outcome
+    else {
+        return Vec::new();
+    };
+    visits
+        .iter()
+        .flat_map(|visit| &visit.stages)
+        .filter_map(|stage| match *stage {
+            NativeCaptorPairStage::RemoteBeamHeld { beamer, person } => Some((beamer, person)),
+            _ => None,
+        })
+        .collect()
+}
+
 fn resolve(
     frame: &mut Intro2ContactFrame<'_>,
     id: u32,
@@ -522,6 +566,7 @@ fn resolve(
             && !is_native_type9_peer_pair(subject, candidate)
             && !is_native_type40_person_pair(subject, candidate)
             && hive_impact_counterpart(subject, candidate).is_none()
+            && native_remote_beam_pair(frame.entities, subject, candidate).is_none()
         {
             continue;
         }
@@ -542,6 +587,18 @@ fn resolve(
             || bits(candidate, REMOTE_OWNED_STATE_BIT)? != 0
         {
             return Err(NativeCaptorPairBlock::Runtime("local pair callbacks"));
+        }
+        // Held: 40CAF0's Type93 birth and 408F00 attach are not ported, so
+        // the pair takes none of 11AD0's callbacks or physical response.
+        if let Some((beamer, person)) = native_remote_beam_pair(frame.entities, subject, candidate)
+        {
+            visits.push(NativeCaptorPairVisit {
+                candidate_id,
+                contact,
+                stages: vec![NativeCaptorPairStage::RemoteBeamHeld { beamer, person }],
+                physical_suppressed: false,
+            });
+            continue;
         }
         if let Some(counterpart) = hive_impact_counterpart(subject, candidate) {
             let opposite = actor(frame.entities, counterpart)?;

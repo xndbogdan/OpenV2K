@@ -7229,10 +7229,11 @@ fn prepare_intro2_radial_actor_mutation(
                     });
         }
     }
-    // Type89's class1 takes its class0 visit's completed custody.
-    if crate::class49_death::source_profile(entity)
-        == Some(crate::class49_death::NativeExplosionSourceProfile::Type89)
-    {
+    // Type89's and Type74's class1 takes its class0 visit's completed custody.
+    if matches!(
+        crate::class49_death::source_profile(entity),
+        Some(crate::class49_death::NativeExplosionSourceProfile::Class0Host(_))
+    ) {
         let current = crate::entity::Class0ActorOwner::adopt(manager, entity_id);
         return owners.iter().any(|owner| {
             matches!(owner, SpecializedActorTaskOwner::Class0Actor(owner) if current == Ok(*owner))
@@ -7698,8 +7699,10 @@ fn park_class49_terminal_owner(
                 || crate::portable_radar::allocation_authenticates(entity)
                 || entity.rolling_boulder_runtime.is_some()
                 || crate::class49_death::intro2_type13_explosion_source_authenticates(entity)
-                || crate::class49_death::source_profile(entity)
-                    == Some(crate::class49_death::NativeExplosionSourceProfile::Type89))
+                || matches!(
+                    crate::class49_death::source_profile(entity),
+                    Some(crate::class49_death::NativeExplosionSourceProfile::Class0Host(_))
+                ))
     }) {
         contact_prefix::park_native_contact_prefix(owners, manager, id);
         return;

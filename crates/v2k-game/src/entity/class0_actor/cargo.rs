@@ -1,4 +1,5 @@
-//! Type68's null class0 attach and D1C0 terrain-align/reselection release.
+//! Type68's null class0 attach and D1C0 terrain-align/reselection release,
+//! which Type74's class59 style `4C72B8` shares (+08 null, +0C D1C0).
 //!
 //! DC50 at40DC76/40DC85 passes entity+C0 as the second callback argument;
 //! the packaged parent is the third argument. D1C0 at40D1CB/40D1D2 reads
@@ -35,7 +36,7 @@ fn relation_owner(
         .iter_all()
         .find(|entity| entity.id == cargo)
         .ok_or(Class0ActorError::Allocation)?;
-    if entity.entity_type != 68 {
+    if !matches!(entity.entity_type, 68 | 74) {
         return Err(Class0ActorError::Runtime("class0 cargo type"));
     }
     authenticate_metadata(
@@ -97,7 +98,7 @@ pub(crate) fn commit_attach(
 ) {
     assert_eq!(Class0ActorOwner::adopt(manager, plan.cargo), Ok(plan.owner));
     publish_sub_j(manager);
-    // 16700 writes membership/parent. Class0 style4C7468+08 is null:
+    // 16700 writes membership/parent. Styles 4C7468 and 4C72B8 have null +08:
     // DBF0 returns zero without replacing the timer or adding a Sub-I task.
     project_relation_attach(manager.entity_mut(plan.cargo).unwrap(), plan.parent);
 }

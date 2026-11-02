@@ -27,6 +27,8 @@ mod flare_tests;
 #[cfg(test)]
 mod later_world_tests;
 #[cfg(test)]
+mod remote_beamer_tests;
+#[cfg(test)]
 mod sea_level_tests;
 #[cfg(test)]
 mod tests;
@@ -96,6 +98,13 @@ pub(super) fn authenticate_metadata(
         }
         36 => {
             if crate::main_base_type54_abort::flare_generator_metadata(entity_type, metadata) {
+                Ok(())
+            } else {
+                Err(Class0ActorError::Metadata)
+            }
+        }
+        74 => {
+            if crate::main_base_type54_abort::remote_beamer_metadata(entity_type, metadata) {
                 Ok(())
             } else {
                 Err(Class0ActorError::Metadata)
@@ -172,7 +181,8 @@ fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
 }
 
 /// The class of a row's singleton Always choice: class36 for Type50,
-/// class38 for Type89, class0 for every other row.
+/// class38 for Type89, class16 for Type36, class59 for Type74, class0 for
+/// every other row.
 pub(crate) fn living_class(entity_type: u32) -> u32 {
     crate::main_base_type54_abort::class0_host_living_class(entity_type).unwrap_or(0)
 }
@@ -205,6 +215,16 @@ fn publish_living_graph(entity: &mut Entity, context: BehaviorContextRuntime, li
             }
             if living_class == 16 {
                 publish_generate_flares_tasks(entity);
+            }
+            if living_class == 59 {
+                // FUN_0040C530 clears T then S and FUN_00405420 stores a Primary with no
+                // timeout; the Sub-K word it charges starts at zero.
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::RemoteBeamer(0)),
+                );
             }
         }
     }
@@ -504,7 +524,8 @@ pub(super) fn reselect_class0_actor(
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Class0ActorError::Graph);
     };
-    let program = behavior_program(0).ok_or(Class0ActorError::Metadata)?;
+    let living = living_class(entity.entity_type);
+    let program = behavior_program(living).ok_or(Class0ActorError::Metadata)?;
     let context = context
         .reselect_named_type_default(program, 0, program.initial_style)
         .ok_or(Class0ActorError::Graph)?;
@@ -518,10 +539,10 @@ pub(super) fn reselect_class0_actor(
     )
     .map_err(|_| Class0ActorError::Metadata)?;
     debug_assert_eq!(
-        selected.map(|selection| selection.program.class_id),
-        Some(0)
+        selected.map(|selection| u32::from(selection.program.class_id)),
+        Some(living)
     );
-    publish_class0_graph(entity, context);
+    publish_living_graph(entity, context, living);
     Ok(())
 }
 

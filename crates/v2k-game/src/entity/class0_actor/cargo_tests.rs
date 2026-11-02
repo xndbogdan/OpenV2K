@@ -25,6 +25,10 @@ struct World {
 
 impl World {
     fn load(level_id: u32) -> Self {
+        Self::load_cargo(level_id, 68)
+    }
+
+    fn load_cargo(level_id: u32, cargo_type: u32) -> Self {
         let data = v2k_test_support::retail_dir();
         assert!(
             data.join("PRELOAD.DAT").is_file(),
@@ -68,7 +72,7 @@ impl World {
         .unwrap();
         let weight = manager
             .iter_all()
-            .find(|entity| entity.entity_type == 68)
+            .find(|entity| entity.entity_type == cargo_type)
             .unwrap()
             .id;
         let position = manager.entity_mut(weight).unwrap().position;
@@ -517,4 +521,45 @@ fn native_weight_release_requires_the_actual_parent_attachment_row() {
         world.manager.entity_mut(world.weight).unwrap().collision,
         collision
     );
+}
+
+/// Type74's class59 style shares the null attach and D1C0 release: carried,
+/// its word drops to zero (held); each release from the player and later
+/// from the Type93 reselects class59 with a fresh Primary.
+#[v2k_test_support::retail_test]
+fn remote_beamer_carries_and_drops_through_d1c0() {
+    let mut world = World::load_cargo(21, 74);
+    let k1 = |world: &World| match world
+        .manager
+        .iter_all()
+        .find(|entity| entity.id == world.weight)
+        .unwrap()
+        .actor_task_state(ActorTaskSlot::Primary)
+    {
+        Some(&ActorTaskRuntime::RemoteBeamer(k1)) => k1,
+        other => panic!("class59 Primary: {other:?}"),
+    };
+    world.tick_actors();
+    assert_eq!(k1(&world), 1250);
+    world.collect();
+    let player = world.manager.player().map(|player| player.id);
+    assert_eq!(
+        world.manager.entity_mut(world.weight).unwrap().attached_to,
+        player
+    );
+    assert!(world
+        .scheduler
+        .prepare_class0_actor_external_mutation(&world.manager, world.weight));
+    // The walk still runs while held: FUN_004054C0 zeroes the word.
+    assert!(matches!(
+        world.tick_actors(),
+        Class0ActorOutcome::Advanced { .. }
+    ));
+    assert_eq!(k1(&world), 0);
+    let proxy = world.drop();
+    assert_eq!(
+        world.manager.entity_mut(world.weight).unwrap().attached_to,
+        Some(proxy)
+    );
+    assert_eq!(k1(&world), 0, "the release published a fresh class59 task");
 }
