@@ -923,3 +923,78 @@ fn lethal_burns_take_type19_through_class1_and_type117_through_class63() {
         );
     }
 }
+
+/// Run Away's styles hold C690 at +20/+24 and a null +28: an infected hit
+/// reselects a fleeing Type19, a primary hit leaves its graph alone.
+#[v2k_test_support::retail_test]
+fn infected_hits_reselect_type19s_run_away_and_primary_hits_do_not() {
+    use crate::{
+        damage::{DamagePacket, FUN_0043F780_DAMAGE_PACKET},
+        world_fx::{BallisticDamageRequest, ParticleEntityImpact},
+    };
+    let (session, mut manager, mut fx) = world(22, None);
+    let id = of_type(&manager, 19)[0];
+    let metadata = manager.type_runtime_metadata(19).unwrap().clone();
+    manager
+        .entity_mut(id)
+        .unwrap()
+        .collision
+        .last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(1000);
+    for _ in 0..40 {
+        crate::shared_fish_tasks::reselect_behavior(&mut manager, id, &metadata, 1001, &mut || {
+            u32::from(fx.next_shared_retail_random_u16())
+        })
+        .unwrap();
+        if class(&manager, id) == 10 {
+            break;
+        }
+    }
+    assert_eq!(class(&manager, id), 10);
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    scheduler.adopt_shared_fish(&manager);
+    let mut notifications = GameplayNotifications::new();
+    let mut hit = |manager: &mut EntityManager, fx: &mut WorldFx, class: u8| {
+        crate::shared_actor_impact::apply_shared_actor_particle_hit(
+            crate::shared_actor_impact::SharedActorImpactFrame {
+                resources: &session.cache,
+                entities: manager,
+                world_fx: fx,
+                scheduler: &mut scheduler,
+                notifications: &mut notifications,
+                retail_tick: 1002,
+            },
+            ParticleEntityImpact {
+                source_particle_class: class,
+                impact_position_argument_va: if class == 5 { 0x004D_CF48 } else { 0 },
+                target_entity_id: id,
+                position_world: [0.0; 3],
+                velocity_raw: [0, 0, 8192],
+                damage: Some(BallisticDamageRequest {
+                    packet: if class == 5 {
+                        FUN_0043F780_DAMAGE_PACKET
+                    } else {
+                        DamagePacket {
+                            channels: [1, 0],
+                            amounts_raw: [100, 0],
+                        }
+                    },
+                    source_entity_type_at_birth: Some(34),
+                    source_owner_id: Some(35),
+                }),
+            },
+        )
+    };
+    let primary = |manager: &EntityManager| {
+        manager
+            .iter_all()
+            .find(|e| e.id == id)
+            .unwrap()
+            .actor_tasks
+            .task_in_slot(ActorTaskSlot::Primary)
+    };
+    let before = primary(&manager);
+    hit(&mut manager, &mut fx, 16).unwrap();
+    assert_eq!(primary(&manager), before, "primary +28 is null");
+    hit(&mut manager, &mut fx, 5).unwrap();
+    assert_ne!(primary(&manager), before, "infected +20 is C690");
+}

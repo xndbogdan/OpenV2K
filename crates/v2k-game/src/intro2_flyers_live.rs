@@ -98,6 +98,11 @@ pub const TYPE39_MODEL_ID: u16 = 287;
 /// and 3.
 pub const TYPE39_SUB_K: [u8; 2] = [2, 3];
 
+/// A D/G flyer without B or E: it defecates virus, wanders, retargets and
+/// runs away when hit, and falls through class12 when it dies.
+pub const TYPE41_ENTITY_TYPE: u32 = 41;
+pub const TYPE41_MODEL_ID: u16 = 1291;
+
 pub const INTRO2_TYPE15_POSITION_RAW: [i16; 3] = [-17152, 0, 32256];
 pub const INTRO2_TYPE87_POSITION_RAW: [i16; 3] = [-18176, 1024, 4864];
 
@@ -142,6 +147,12 @@ pub const TYPE14_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
     raw_word_at_0x04: 0x801,
 };
 
+/// Type41's axis: radius 512, filter word zero (same type).
+pub const TYPE41_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 512,
+    raw_word_at_0x04: 0,
+};
+
 /// The type's common axis, which B6C0 copies into the actor-local word.
 pub(crate) const fn flyer_common_axis(entity_type: u32) -> Option<CommonAxisDescriptor> {
     match entity_type {
@@ -149,6 +160,7 @@ pub(crate) const fn flyer_common_axis(entity_type: u32) -> Option<CommonAxisDesc
         TYPE108_ENTITY_TYPE => Some(TYPE108_COMMON_AXIS),
         TYPE14_ENTITY_TYPE => Some(TYPE14_COMMON_AXIS),
         TYPE39_ENTITY_TYPE => Some(TYPE39_COMMON_AXIS),
+        TYPE41_ENTITY_TYPE => Some(TYPE41_COMMON_AXIS),
         _ => None,
     }
 }
@@ -180,24 +192,50 @@ pub const TYPE14_COMMON_MOVER_TOPOLOGY: CommonMoverComponentTopology =
         ..FLYER_COMMON_MOVER_TOPOLOGY
     };
 
+/// Type41 authors neither Sub-B nor Sub-E.
+pub const TYPE41_COMMON_MOVER_TOPOLOGY: CommonMoverComponentTopology =
+    CommonMoverComponentTopology {
+        sub_b: false,
+        sub_e: false,
+        ..FLYER_COMMON_MOVER_TOPOLOGY
+    };
+
 pub(crate) const fn flyer_topology(entity_type: u32) -> CommonMoverComponentTopology {
     match entity_type {
         TYPE14_ENTITY_TYPE => TYPE14_COMMON_MOVER_TOPOLOGY,
         TYPE39_ENTITY_TYPE => TYPE39_COMMON_MOVER_TOPOLOGY,
+        TYPE41_ENTITY_TYPE => TYPE41_COMMON_MOVER_TOPOLOGY,
         _ => FLYER_COMMON_MOVER_TOPOLOGY,
+    }
+}
+
+/// The authored Sub-B; Sub-G suppresses its tail either way.
+pub(crate) const fn flyer_sub_b(entity_type: u32) -> Option<SubBLateralDescriptor> {
+    match entity_type {
+        TYPE41_ENTITY_TYPE => None,
+        _ => Some(FLYER_SUB_B),
     }
 }
 
 pub(crate) const fn flyer_sub_d(entity_type: u32) -> SubDSteeringDescriptor {
     match entity_type {
         TYPE14_ENTITY_TYPE => TYPE14_SUB_D,
+        TYPE41_ENTITY_TYPE => crate::common_mover::sub_d::TYPE41_SUB_D,
         _ => FLYER_SUB_D,
     }
 }
 
-/// Types 15/87/108/39 shoot through Sub-E; Type14 has none.
+/// Types 15/87/108/39 shoot through Sub-E; Type14 and Type41 have none.
 pub(crate) const fn flyer_has_emitter(entity_type: u32) -> bool {
-    entity_type != TYPE14_ENTITY_TYPE
+    !matches!(entity_type, TYPE14_ENTITY_TYPE | TYPE41_ENTITY_TYPE)
+}
+
+/// Section-12 mass: 50 for Type41, 100 for the others.
+pub(crate) const fn flyer_mass(entity_type: u32) -> u16 {
+    match entity_type {
+        TYPE41_ENTITY_TYPE => 50,
+        _ => 100,
+    }
 }
 
 /// The constructor's attached sound 11, which Type14 and Type39 do not author.
@@ -213,10 +251,12 @@ pub(crate) const fn flyer_explodes(entity_type: u32) -> bool {
     matches!(entity_type, TYPE14_ENTITY_TYPE | TYPE39_ENTITY_TYPE)
 }
 
-/// Alternate class 2 dies quietly; class 1 explodes.
+/// Alternate class 2 dies quietly; class 1 explodes; Type41's class12 falls.
 pub(crate) const fn flyer_alternate_class(entity_type: u32) -> u32 {
     if flyer_explodes(entity_type) {
         1
+    } else if entity_type == TYPE41_ENTITY_TYPE {
+        12
     } else {
         2
     }
@@ -233,6 +273,12 @@ const fn flyer_choice_classes(entity_type: u32) -> &'static [u8] {
             DEFECATE_VIRUS_CLASS_ID,
             MOVE_ABOUT_AIMLESSLY_CLASS_ID,
             FLOCKING_CLASS_ID,
+        ],
+        TYPE41_ENTITY_TYPE => &[
+            DEFECATE_VIRUS_CLASS_ID,
+            MOVE_ABOUT_AIMLESSLY_CLASS_ID,
+            type41::WANDER_CLASS_ID,
+            type41::RUN_AWAY_CLASS_ID,
         ],
         _ => &[SEARCH_ATTACK_BEHAVIOR_CLASS_ID],
     }
@@ -276,6 +322,15 @@ pub const TYPE39_SUB_G_DESCRIPTOR: [u8; 104] = [
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
+/// Type41's table: no first force, clearance 40, wing-beat sound 26 at
+/// `+0x0E`, rates 30/130, speed cap 1000 and surface mode 1 at `+0x2B`.
+pub const TYPE41_SUB_G_DESCRIPTOR: [u8; 104] = [
+    0, 0, 0, 0, 50, 0, 0, 0, 0, 0, 0, 0, 40, 0, 26, 0, 30, 0, 0, 0, 130, 0, 0, 0, 44, 1, 0, 0, 0,
+    64, 0, 0, 232, 3, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 16, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
 const FLYER_WANDER_LIFETIME_MS: u32 = 500;
 /// ACD0's `FUN_00402B10(entity, 0, 5000)`.
 const FLYER_AIMLESS_LIFETIME_MS: u32 = 5000;
@@ -291,6 +346,9 @@ pub struct Intro2FlyerFrameOwner {
     /// output words; zero for a flyer without Sub-K.
     pub sub_k_smoothed_raw: i32,
     pub sub_k_output_raw: [i16; 2],
+    /// The immutable `+90` anchor: the birth position, which Wander's
+    /// `402EB0` retargets around.
+    pub anchor_raw: [i16; 3],
 }
 
 /// The authored Intro2 subset and a native zero-record flyer keep distinct
@@ -485,8 +543,9 @@ fn publish_flyer_behavior_phase(
     sub_d_frame_owner: Type9SubDFrameOwner,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), Intro2FlyerPublicationError> {
-    // 425680 consumes a selector word even for a sole Always choice.
-    let selection = select_flyer_behavior(entity.entity_type, metadata, next_random)?;
+    // 425680 consumes a selector word even for a sole Always choice. A
+    // newborn's +34 is zero, so UnderAttack cannot hold at birth.
+    let selection = select_flyer_behavior(entity.entity_type, metadata, false, next_random)?;
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(Intro2FlyerPublicationError::BehaviorContextUnavailable)?;
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
@@ -502,6 +561,7 @@ fn publish_flyer_behavior_phase(
         // 24450 clears K's state; its bank words start at zero too.
         sub_k_smoothed_raw: 0,
         sub_k_output_raw: [0; 2],
+        anchor_raw: entity.position_raw(),
     });
     // Native birth policy for retail's unwritten heap word +B2:
     // initialize the transient callback-mass offset deterministically once.
@@ -533,7 +593,11 @@ fn authenticate_flyer_choices(
     if Some(initializer.common_axis_descriptor) != flyer_common_axis(entity_type)
         || initializer.behavior_choices.is_empty()
         || initializer.behavior_choices.iter().any(|choice| {
-            choice.weight_rule_id != 1
+            // Type41 weighs its Run Away by UnderAttack (rule 2).
+            !(choice.weight_rule_id == 1
+                || (entity_type == TYPE41_ENTITY_TYPE
+                    && choice.weight_rule_id == 2
+                    && choice.behavior_class_id == u32::from(type41::RUN_AWAY_CLASS_ID)))
                 || choice.weight_multiplier == 0
                 || !classes
                     .iter()
@@ -548,14 +612,18 @@ fn authenticate_flyer_choices(
 fn select_flyer_behavior(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
+    under_attack: bool,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<BehaviorSelection, Intro2FlyerPublicationError> {
     authenticate_flyer_choices(entity_type, metadata)?;
     select_initial_behavior(
         &metadata.initializer.as_ref().unwrap().behavior_choices,
-        |rule| {
-            debug_assert_eq!(rule, BehaviorWeightRule::Always);
-            1
+        |rule| match rule {
+            BehaviorWeightRule::UnderAttack => i32::from(under_attack),
+            _ => {
+                debug_assert_eq!(rule, BehaviorWeightRule::Always);
+                1
+            }
         },
         next_random,
     )
@@ -572,10 +640,15 @@ fn publish_flyer_selection(
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), Intro2FlyerPublicationError> {
     match context.active_style() {
+        // Search's 4C7A50 and Run Away's 4C7618 both run B6C0.
         ActiveBehaviorStyle::Audited(style)
-            if style.class_id == SEARCH_ATTACK_BEHAVIOR_CLASS_ID =>
+            if style.class_id == SEARCH_ATTACK_BEHAVIOR_CLASS_ID
+                || style.class_id == type41::RUN_AWAY_CLASS_ID =>
         {
-            publish_flyer_acquiring(entity, metadata, context, next_random)
+            publish_flyer_acquiring(entity, metadata, style.class_id, context, next_random)
+        }
+        ActiveBehaviorStyle::Audited(style) if style.class_id == type41::WANDER_CLASS_ID => {
+            type41::publish_wander(entity, metadata, context, next_random)
         }
         ActiveBehaviorStyle::Audited(style) if style.class_id == MOVE_ABOUT_AIMLESSLY_CLASS_ID => {
             publish_flyer_aimless(entity, metadata, context, next_random)
@@ -644,6 +717,7 @@ fn publish_flyer_aimless(
 fn publish_flyer_acquiring(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
+    class_id: u8,
     context: BehaviorContextRuntime,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<(), Intro2FlyerPublicationError> {
@@ -655,7 +729,7 @@ fn publish_flyer_acquiring(
     let RetailRuntimeValue::Known(Some(mut sub_g)) = entity.sub_g_06070_runtime else {
         return Err(Intro2FlyerPublicationError::SubGRuntimeUnavailable);
     };
-    let program = behavior_program(u32::from(SEARCH_ATTACK_BEHAVIOR_CLASS_ID))
+    let program = behavior_program(u32::from(class_id))
         .ok_or(Intro2FlyerPublicationError::BehaviorProgramUnavailable)?;
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
     let policy = initial_behavior_state_policy(program);
@@ -865,6 +939,14 @@ pub enum Intro2FlyerSchedulerProductionOutcome {
         /// commits before the next actor.
         infection_write: Option<crate::infection_evolution::InfectionCellWrite>,
     },
+    /// A visit of one of Type41's graphs; `terminal` when class12's
+    /// `04220` staged its removal.
+    Type41Visit {
+        entity_id: u32,
+        reselected: bool,
+        infection_write: Option<crate::infection_evolution::InfectionCellWrite>,
+        terminal: bool,
+    },
     Blocked {
         entity_id: u32,
         reason: Intro2FlyerRuntimeBlock,
@@ -884,6 +966,7 @@ impl Intro2FlyerSchedulerProductionOutcome {
             | Self::PursuingVisit { entity_id, .. }
             | Self::AimlessVisit { entity_id, .. }
             | Self::Type14Visit { entity_id, .. }
+            | Self::Type41Visit { entity_id, .. }
             | Self::Blocked { entity_id, .. }
             | Self::Dropped { entity_id, .. } => *entity_id,
         }
@@ -935,6 +1018,10 @@ impl Intro2FlyerSchedulerOwner {
             && !type14::defecate_graph_authenticates(entity)
             && !type14::flocking_graph_authenticates(entity)
             && !type14::route_graph_authenticates(entity)
+            && !type41::wander_graph_authenticates(entity)
+            && !type41::acquiring_graph_authenticates(entity)
+            && !type41::fleeing_graph_authenticates(entity)
+            && !type41::dying_graph_authenticates(entity)
         {
             return Err(Intro2FlyerSchedulerAdoptionError::GraphUnavailable {
                 entity_id: entity.id,
@@ -1118,6 +1205,7 @@ fn park_flyer(
 pub(crate) fn reselect_flyer(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,
+    retail_tick: u32,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<bool, Intro2FlyerRuntimeBlock> {
     let RetailRuntimeValue::Known(flags) =
@@ -1135,15 +1223,22 @@ pub(crate) fn reselect_flyer(
         && !flyer_context_authenticates(entity, SearchAttackVariant::Pursuing)
         && !flyer_aimless_context_authenticates(entity)
         && !type14::context_authenticates(entity)
+        && !type41::context_authenticates(entity)
     {
         return Err(Intro2FlyerRuntimeBlock::MetadataMismatch);
     }
+    let under_attack = if type41::weighs_under_attack(metadata) {
+        type41::under_attack(entity, retail_tick)
+            .ok_or(Intro2FlyerRuntimeBlock::StateUnavailable)?
+    } else {
+        false
+    };
     authenticate_flyer_choices(entity.entity_type, metadata)
         .map_err(|_| Intro2FlyerRuntimeBlock::MetadataMismatch)?;
     let RetailRuntimeValue::Known(Some(previous)) = entity.current_behavior_context else {
         return Err(Intro2FlyerRuntimeBlock::StateUnavailable);
     };
-    let selection = select_flyer_behavior(entity.entity_type, metadata, next_random)
+    let selection = select_flyer_behavior(entity.entity_type, metadata, under_attack, next_random)
         .map_err(|_| Intro2FlyerRuntimeBlock::Publication)?;
     let context = previous
         .reselect_named_type_default(
@@ -1440,6 +1535,9 @@ fn tick_flyer_tasks(
             retained_owner: None,
         };
     };
+    if entity.entity_type == TYPE41_ENTITY_TYPE {
+        return type41::tick_tasks(manager, owner, frame, world_fx, next_random);
+    }
     let aimless = intro2_flyer_aimless_graph_authenticates(entity);
     let acquiring = intro2_flyer_acquiring_graph_authenticates(entity);
     let defecating = type14::defecate_graph_authenticates(entity);
@@ -1513,6 +1611,7 @@ fn tick_flyer_tasks(
         match reselect_flyer(
             manager.intro2_flyer_entity_mut(entity_id).unwrap(),
             frame.metadata,
+            frame.retail_tick,
             &mut || next_random(world_fx),
         ) {
             Ok(applied) => reselected |= applied,
@@ -1590,6 +1689,7 @@ fn tick_flyer_tasks(
             match reselect_flyer(
                 manager.intro2_flyer_entity_mut(entity_id).unwrap(),
                 frame.metadata,
+                frame.retail_tick,
                 &mut || next_random(world_fx),
             ) {
                 Ok(applied) => reselected |= applied,
@@ -1659,6 +1759,7 @@ pub(crate) fn tick_intro2_flyer_scheduler_owner_with_random(
 mod birth;
 mod mover;
 mod type14;
+mod type41;
 mod world;
 pub(crate) use birth::{
     authenticate_native_flyer_body, authenticate_native_flyer_metadata, native_flyer_model_id,
@@ -1668,5 +1769,9 @@ pub(crate) use mover::authenticate_flyer_mover_metadata;
 pub use mover::{
     evaluate_intro2_flyer_common_mover, Intro2FlyerCommonMoverBlock, Intro2FlyerCommonMoverOutcome,
     Intro2FlyerCommonMoverRequest,
+};
+pub(crate) use type41::{
+    finished_dying_authenticates as type41_finished_dying_authenticates,
+    publish_standard_death as publish_type41_standard_death,
 };
 pub use world::Intro2FlyerWorldBlock;

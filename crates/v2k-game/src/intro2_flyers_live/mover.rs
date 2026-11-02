@@ -2,10 +2,11 @@
 //! The caller owns task lifetime, publication and the 12DA0 world suffix.
 
 use super::{
-    flyer_sub_d, flyer_sub_k, flyer_topology, Intro2FlyerFrameOwner, FLYER_SUB_B,
+    flyer_sub_b, flyer_sub_d, flyer_sub_k, flyer_topology, Intro2FlyerFrameOwner,
     INTRO2_TYPE15_ENTITY_TYPE, INTRO2_TYPE87_ENTITY_TYPE, TYPE108_ENTITY_TYPE,
     TYPE108_SUB_G_DESCRIPTOR, TYPE14_ENTITY_TYPE, TYPE14_SUB_G_DESCRIPTOR, TYPE15_SUB_G_DESCRIPTOR,
-    TYPE39_ENTITY_TYPE, TYPE39_SUB_G_DESCRIPTOR, TYPE87_SUB_G_DESCRIPTOR,
+    TYPE39_ENTITY_TYPE, TYPE39_SUB_G_DESCRIPTOR, TYPE41_ENTITY_TYPE, TYPE41_SUB_G_DESCRIPTOR,
+    TYPE87_SUB_G_DESCRIPTOR,
 };
 use crate::chase_target::ChaseTargetCommonMoverReturn;
 use crate::common_mover::component_dispatch::{CommonMoverDispatchMode, CommonMoverDispatchPhase};
@@ -88,6 +89,7 @@ pub(super) fn flyer_sub_g_descriptor(entity_type: u32) -> Option<&'static [u8; 1
         TYPE108_ENTITY_TYPE => Some(&TYPE108_SUB_G_DESCRIPTOR),
         TYPE14_ENTITY_TYPE => Some(&TYPE14_SUB_G_DESCRIPTOR),
         TYPE39_ENTITY_TYPE => Some(&TYPE39_SUB_G_DESCRIPTOR),
+        TYPE41_ENTITY_TYPE => Some(&TYPE41_SUB_G_DESCRIPTOR),
         _ => None,
     }
 }
@@ -99,7 +101,7 @@ pub(crate) fn authenticate_flyer_mover_metadata(
     let descriptor =
         flyer_sub_g_descriptor(entity_type).ok_or(Intro2FlyerCommonMoverBlock::MetadataMismatch)?;
     if metadata.common_mover_topology != RetailRuntimeValue::Known(flyer_topology(entity_type))
-        || metadata.sub_b_lateral_descriptor != RetailRuntimeValue::Known(Some(FLYER_SUB_B))
+        || metadata.sub_b_lateral_descriptor != RetailRuntimeValue::Known(flyer_sub_b(entity_type))
         || metadata.sub_d_steering_descriptor
             != RetailRuntimeValue::Known(Some(flyer_sub_d(entity_type)))
         || !matches!(metadata.common_mover_gkl_payloads, RetailRuntimeValue::Known(payloads)
@@ -159,7 +161,7 @@ pub fn evaluate_intro2_flyer_common_mover(
                 dispatch_mode: request.dispatch_mode,
                 elapsed_micros: request.elapsed_micros,
                 sub_a_descriptor: None,
-                sub_b_descriptor: Some(FLYER_SUB_B),
+                sub_b_descriptor: flyer_sub_b(entity_type),
                 sub_c_descriptor: None,
                 sub_d_descriptor: Some(CommonMoverPreludeSubD {
                     steering_divisor_raw: sub_d.steering_divisor_raw,
@@ -340,6 +342,7 @@ pub fn evaluate_intro2_flyer_common_mover(
 
 #[cfg(test)]
 mod tests {
+    use super::super::FLYER_SUB_B;
     use super::*;
     use crate::common_mover::apply_sub_b_lateral_raw;
     use crate::common_mover::sub_d::{Type9SubDFrameOwner, Type9SubDRuntime};
@@ -409,6 +412,7 @@ mod tests {
                 wing_var1: 0,
                 sub_k_smoothed_raw: 0,
                 sub_k_output_raw: [0; 2],
+                anchor_raw: [0; 3],
             },
             sub_g_runtime: sub_g,
             target_private,

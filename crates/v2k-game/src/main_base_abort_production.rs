@@ -117,6 +117,8 @@ pub enum MainBaseAbortActorDisposition {
     Type37Death,
     /// The native Type21 swimmer: alternate class12 on the same owner.
     Type21Death,
+    /// The native Type41 flyer: alternate class12 on its flyer owner.
+    Type41Death,
     /// The native Type94: alternate class12.
     Type94Death,
     /// The native Type30: alternate class12.

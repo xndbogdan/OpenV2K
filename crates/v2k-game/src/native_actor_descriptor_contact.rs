@@ -305,7 +305,7 @@ fn commit_plan(
                     .unwrap()
                     .sub_d_runtime
             }
-            14 | 15 | 39 | 87 | 108 => {
+            14 | 15 | 39 | 41 | 87 | 108 => {
                 &mut entity
                     .intro2_flyer_frame_owner
                     .as_mut()
@@ -537,7 +537,7 @@ fn contact_topology(
     let fish = crate::shared_fish::is_shared_fish_type(entity.entity_type);
     let flying = matches!(
         entity.entity_type,
-        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
+        13 | 14 | 15 | 39 | 41 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
     );
     let person = matches!(entity.entity_type, 9 | 123)
         || NativeWorkerProfile::from_entity_type(entity.entity_type).is_some()
@@ -599,7 +599,7 @@ fn contact_topology(
             12 | 127 => entity.native_type12_runtime.is_none(),
             31 | 105 | 73 | 109 => entity.native_type31_runtime.is_none(),
             13 => entity.intro2_type13_common_mover_runtime.is_none(),
-            14 | 15 | 39 | 87 | 108 => entity.intro2_flyer_frame_owner.is_none(),
+            14 | 15 | 39 | 41 | 87 | 108 => entity.intro2_flyer_frame_owner.is_none(),
             10 | 5 | 80 | 126 | 55 | 81 | 29 => entity.intro2_type10_runtime.is_none(),
             57 => entity.intro2_type57_runtime.is_none(),
             17 => entity.type17_sub_d_runtime.is_none(),
@@ -664,7 +664,9 @@ pub(crate) fn native_insect_allocation_authenticates(manager: &EntityManager, id
         12 | 127 => crate::native_type12::manager_allocation_authenticates(manager, id),
         31 | 105 | 73 | 109 => crate::native_type31::manager_allocation_authenticates(manager, id),
         13 => crate::intro2_type13_live::type13_manager_allocation_authenticates(manager, id),
-        14 | 15 | 39 | 87 | 108 => crate::intro2_flyers_live::flyer_identity_authenticates(entity),
+        14 | 15 | 39 | 41 | 87 | 108 => {
+            crate::intro2_flyers_live::flyer_identity_authenticates(entity)
+        }
         10 | 5 | 80 | 126 | 55 | 81 | 29 => {
             crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
         }
@@ -713,7 +715,7 @@ pub(crate) fn completed_contact_owner(
             crate::class49_death::finished_terminal_hit_authenticates(manager, id)
                 || tasks.prepare_native_actor_mutation(manager, id)
         }
-        15 | 87 | 108 => tasks.intro2_flyer_completed_owner(manager, id),
+        15 | 41 | 87 | 108 => tasks.intro2_flyer_completed_owner(manager, id),
         // A class1 flyer's corpse keeps only its Finished receipt until 14990.
         14 | 39 => {
             crate::class49_death::finished_terminal_hit_authenticates(manager, id)
@@ -750,9 +752,8 @@ pub(crate) fn native_weapon_contact_owner_authenticates(
 fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool {
     match kind {
         26 | 30 | 33 | 38 | 129 | 119 | 32 | 2 | 107 | 121 | 12 | 127 | 31 | 105 | 73 | 109
-        | 40 | 56 | 43 | 13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57 => {
-            native_insect_allocation_authenticates(manager, id)
-        }
+        | 40 | 56 | 43 | 13 | 14 | 15 | 39 | 41 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29
+        | 57 => native_insect_allocation_authenticates(manager, id),
         kind if NativeWorkerProfile::from_entity_type(kind).is_some() => {
             crate::intro2_type8::intro2_type8_manager_allocation_authenticates(manager, id)
         }

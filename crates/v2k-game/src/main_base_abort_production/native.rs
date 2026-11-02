@@ -279,11 +279,12 @@ pub(super) fn dispatch_native_actor(
         {
             NativeActor::Type10Family
         }
-        22 | 23 | 24 | 62 | 25 | 37 if entity.shared_fish_runtime.is_some() => {
+        22 | 23 | 24 | 62 | 25 | 37 | 21 if entity.shared_fish_runtime.is_some() => {
             NativeActor::SharedFish
         }
         // Type14's alternate class1 belongs to the class49 dispatch above.
-        15 | 87 | 108 if entity.intro2_flyer_frame_owner.is_some() => NativeActor::Flyer,
+        // Type41's alternate class12 keeps its flyer owner ticking the fall.
+        15 | 87 | 108 | 41 if entity.intro2_flyer_frame_owner.is_some() => NativeActor::Flyer,
         // Type128's class63 Auto Pilot belongs to the class49 dispatch above.
         16 if entity.intro2_type16_runtime.is_some() => NativeActor::Type16,
         94 if entity.intro2_type94_runtime.is_some() => NativeActor::Type94,
@@ -666,13 +667,21 @@ fn dispatch(
                 entities, id, world_fx,
             )
             .map_err(|error| block(Block::Flyer(error)))?;
+            let falls = matches!(
+                death.publication,
+                Some(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathPublication::Type41(_))
+            );
             if let Some(publication) = death.publication {
                 crate::native_flying_surface_contact::register_native_flying_death(
                     specialized_tasks,
                     publication,
                 );
             }
-            MainBaseAbortActorDisposition::QuietDeath
+            if falls {
+                MainBaseAbortActorDisposition::Type41Death
+            } else {
+                MainBaseAbortActorDisposition::QuietDeath
+            }
         }
         NativeActor::SharedFish => {
             // These B/D/F swimmers can move away from the authored anchor.

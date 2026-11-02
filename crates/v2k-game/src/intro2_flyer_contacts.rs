@@ -80,7 +80,7 @@ pub fn resolve_native_flyer_contacts_with_playing(
             && entity
                 .intro2_type10_runtime
                 .is_some_and(|runtime| runtime.ordinary_allocation.is_some());
-    if !matches!(entity.entity_type, 14 | 15 | 39 | 87 | 108)
+    if !matches!(entity.entity_type, 14 | 15 | 39 | 41 | 87 | 108)
         && !ordinary_type13
         && !ordinary_type10_family
     {
@@ -255,7 +255,7 @@ fn resolve(
         .iter_all()
         .find(|e| e.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if !entity.active || !matches!(entity.entity_type, 14 | 15 | 39 | 87 | 108) {
+    if !entity.active || !matches!(entity.entity_type, 14 | 15 | 39 | 41 | 87 | 108) {
         return Ok(Intro2FlyerContactOutcome::Ineligible);
     }
     let entity_type = entity.entity_type;
@@ -282,10 +282,16 @@ fn resolve(
     let RetailRuntimeValue::Known(Some(style)) = entity.current_behavior_context else {
         return Err(Block::Runtime("current style"));
     };
+    // Type41's living and class12 styles hold null +0C/+10 hooks too.
     if !matches!(
         style.active_style().style_address(),
         0x004c7a50 | 0x004c7a98 | 0x004c7420
-    ) {
+    ) && !(entity_type == 41
+        && matches!(
+            style.active_style().style_address(),
+            0x004c7930 | 0x004c79c0 | 0x004c7e88 | 0x004c7618 | 0x004c7660 | 0x004c7ed0
+        ))
+    {
         return Err(Block::Runtime("native flyer solid/water style hooks"));
     }
     if style.active_style().style_address() == 0x004c7420 {

@@ -73,6 +73,11 @@ fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<Impact
         (0x004C_7E88, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Defecate Virus
         (0x004C_7DF8, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Flocking search
         (0x004C_7E40, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Flocking route
+        (0x004C_79C0, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Wander
+        (0x004C_7618, 0x0040_C690, 0x0040_C690, 0),           // Run Away acquiring
+        (0x004C_7660, 0x0040_C690, 0x0040_C690, 0),           // Run Away fleeing
+        (0x004C_7ED0, 0, 0, 0),                               // class12 dying
+        (0x004C_7F18, 0, 0, 0),                               // completed class12
         (0x004C_7420, 0, 0, 0),                               // completed quiet death
         (0x004C_7150, 0, 0, 0),                               // completed Class1 terminal
     ]
@@ -175,7 +180,7 @@ fn apply(
 ) -> NativeFlyerImpactOutcome {
     if !entities.iter_all().any(|entity| {
         entity.id == impact.target_entity_id
-            && matches!(entity.entity_type, 14 | 15 | 39 | 87 | 108)
+            && matches!(entity.entity_type, 14 | 15 | 39 | 41 | 87 | 108)
     }) {
         return NativeFlyerImpactOutcome::NotApplicable;
     }
@@ -244,7 +249,7 @@ fn run(
     }
     authenticate_flyer_mover_metadata(entity.entity_type, &metadata)
         .map_err(|_| Block::Runtime("flyer metadata"))?;
-    if metadata.mass_raw != 100
+    if metadata.mass_raw != crate::intro2_flyers_live::flyer_mass(entity.entity_type)
         || metadata.capability_flags != 8
         || metadata.model_slots.map(usize::from).map(Some) != entity.model_slots
         || metadata.constructor_sound_attachment_id
@@ -256,6 +261,10 @@ fn run(
     // removal. Otherwise only an unparked, completed Search graph may mutate.
     if !native_flyer_quiet_death_authenticates(manager, id)
         && !(explodes && crate::class49_death::finished_terminal_hit_authenticates(manager, id))
+        && !manager
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .is_some_and(crate::intro2_flyers_live::type41_finished_dying_authenticates)
         && !scheduler.intro2_flyer_completed_owner(manager, id)
     {
         return Err(Block::Runtime("completed native flyer custody"));
@@ -297,9 +306,12 @@ fn run(
     {
         ImpactCallbackPolicy::None => {}
         ImpactCallbackPolicy::ReselectBehavior => {
-            reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, &mut || {
-                u32::from(world_fx.next_shared_retail_random_u16())
-            })
+            reselect_flyer(
+                manager.entity_mut(id).unwrap(),
+                &metadata,
+                retail_tick,
+                &mut || u32::from(world_fx.next_shared_retail_random_u16()),
+            )
             .map_err(Block::Behavior)?;
             let owner = Intro2FlyerSchedulerOwner::adopt_published(manager.entity_mut(id).unwrap())
                 .map_err(|_| Block::Runtime("replacement flyer graph"))?;

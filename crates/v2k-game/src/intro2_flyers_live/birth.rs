@@ -28,6 +28,7 @@ pub(crate) const fn native_flyer_model_id(entity_type: u32) -> Option<u16> {
         TYPE108_ENTITY_TYPE => Some(TYPE108_MODEL_ID),
         TYPE14_ENTITY_TYPE => Some(TYPE14_MODEL_ID),
         TYPE39_ENTITY_TYPE => Some(TYPE39_MODEL_ID),
+        TYPE41_ENTITY_TYPE => Some(TYPE41_MODEL_ID),
         _ => None,
     }
 }
@@ -43,7 +44,7 @@ pub(crate) fn authenticate_native_flyer_metadata(
         .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
     authenticate_flyer_choices(entity_type, metadata)?;
     if metadata.model_slots != [model; 4]
-        || metadata.mass_raw != 100
+        || metadata.mass_raw != flyer_mass(entity_type)
         || metadata.capability_flags != 8
         || metadata.initial_health_raw.is_none()
         || metadata.damage_profile.is_none()

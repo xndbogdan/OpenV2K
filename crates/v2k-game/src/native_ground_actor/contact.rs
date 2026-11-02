@@ -599,7 +599,7 @@ fn resolve_flying_static_contact_entry(
     let kind = entity.entity_type;
     if !matches!(
         kind,
-        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
+        13 | 14 | 15 | 39 | 41 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
     ) {
         return NativeGroundContactOutcome::Ineligible;
     }
@@ -640,7 +640,7 @@ fn resolve_flying_static_contact_entry(
                         crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
                     }
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
-                    14 | 15 | 39 | 87 | 108 => {
+                    14 | 15 | 39 | 41 | 87 | 108 => {
                         crate::intro2_flyers_live::flyer_identity_authenticates(entity)
                     }
                     _ => false,
@@ -686,6 +686,7 @@ fn resolve_flying_static_contact_entry(
                         manager, id,
                     ) || tasks.intro2_flyer_completed_owner(manager, id)
                 }
+                41 => tasks.intro2_flyer_completed_owner(manager, id),
                 _ => false,
             }
         },
@@ -736,7 +737,7 @@ fn resolve_profile_static_contact(
             if committed {
                 // A completed death publication has already replaced the living
                 // owner. The scheduler parks whichever exact prefix survived.
-                if matches!(profile.entity_type, 14 | 15 | 39 | 87 | 108) {
+                if matches!(profile.entity_type, 14 | 15 | 39 | 41 | 87 | 108) {
                     if !frame
                         .actor_tasks
                         .park_native_contact_prefix(frame.entities, id)
@@ -858,15 +859,38 @@ fn resolve(
             | 0x4c8158
     ) || (matches!(
         profile.entity_type,
-        16 | 128 | 26 | 56 | 18 | 77 | 14 | 31 | 105 | 73 | 109 | 2
+        16 | 128 | 26 | 56 | 18 | 77 | 14 | 41 | 31 | 105 | 73 | 109 | 2
     )
         && context.active_style().style_address() == 0x4c7e88)
+        // Type41's Wander and both Run Away styles hold null contact hooks.
+        || (profile.entity_type == 41
+            && matches!(
+                context.active_style().style_address(),
+                0x4c79c0 | 0x4c7618 | 0x4c7660
+            ))
         // Type14's Flocking search and route rows have null contact hooks.
         || (profile.entity_type == 14
             && matches!(context.active_style().style_address(), 0x4c7df8 | 0x4c7e40))
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38
+            13 | 10
+                | 5
+                | 80
+                | 126
+                | 55
+                | 81
+                | 29
+                | 57
+                | 16
+                | 128
+                | 14
+                | 15
+                | 39
+                | 41
+                | 87
+                | 108
+                | 94
+                | 38
                 | 129
                 | 119
                 | 32

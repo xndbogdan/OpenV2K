@@ -276,6 +276,9 @@ divisor 400, roll coupling, probes 512/256 and a zero classifier.
   nor curing) stamps `+34` before the style's `+28` reselection, so the hit
   swimmer can draw Run Away at once. A newborn's `+34` is zero, so births never draw it. Run Away is
   Type37's class10.
+- Run Away's styles `4C7618`/`4C7660` hold `C690` at `+20`/`+24`: an
+  infected or cured hit reselects a fleeing swimmer; a primary hit (`+28`,
+  null) does not.
 - Without `0x8`, `E100` never runs `44EC60`: no drag or wind. Without
   `0x2000`, coarse visits still run the tasks.
 - K (`FUN_00424450`, zeroed, no word drawn) runs after F in `018A0`

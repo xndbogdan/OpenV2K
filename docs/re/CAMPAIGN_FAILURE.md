@@ -266,21 +266,14 @@ later runtime graph or predecessor history.
 
 | Fresh-world exact sweep | Global OVLs |
 |---|---|
-| Complete | 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48 |
+| Complete | 13-48 (every campaign world) |
 | No campaign controller or casualty record | 49, 50 |
 
-The remaining first unsupported ordinary callbacks are listed below. Each is
-the first blocker in the real authored live-list order; resolving it can expose
-later missing families. These are implementation boundaries, not evidence that
-retail skips those actors.
+No authored world meets an unsupported ordinary callback any more; the
+bounded transition above is still reached by an unported actor born later
+(its regression retypes a world-34 actor to stand in for one).
 
-| First unsupported entity type | Global OVLs |
-|---|---|
-| 41 | 22, 33, 34 |
-
-Thus exact fresh-world actor cleanup is complete for 20 of the 21 casualty
-worlds (13/14/15/16/17/18/19/21/24/26/31/32/35/36/37/39/40/42/43/46); world 34
-uses the explicitly bounded transition.
+Thus exact fresh-world actor cleanup is complete for all 21 casualty worlds.
 Worlds 26, 31 and 40 complete with their
 [Type107 and Type121 mobile turrets](TYPE107_MOBILE_TURRETS.md), which take
 class49 (`BAF0`, then `BD20`'s ring). In world 26 a Type49 turret's class49

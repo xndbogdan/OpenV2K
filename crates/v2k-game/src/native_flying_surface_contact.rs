@@ -38,6 +38,8 @@ pub enum NativeFlyingSurfaceDeathPublication {
     Type10(Intro2Type10TumbleOwner),
     Type57(Intro2Type57TumbleOwner),
     QuietDeath(crate::main_base_abort::MainBaseAbortActorLease),
+    /// Type41's class12 graph, which its flyer owner keeps ticking.
+    Type41(crate::intro2_flyers_live::Intro2FlyerSchedulerOwner),
 }
 
 pub type NativeFlyingSurfaceContactBlock =
@@ -67,6 +69,11 @@ pub(crate) fn publish_native_flying_standard_death(
             .map_err(NativeFlyingSurfaceDeathBlock::Type57)?,
         15 | 87 | 108 => publish_native_flyer_quiet_death(manager, id, world_fx)?
             .map(NativeFlyingSurfaceDeathPublication::QuietDeath),
+        // Type41's alternate class12 keeps the flyer owner ticking its fall.
+        41 => crate::intro2_flyers_live::publish_type41_standard_death(manager, id, world_fx)
+            .map_err(NativeFlyingSurfaceDeathBlock::Runtime)?
+            .publication
+            .map(NativeFlyingSurfaceDeathPublication::Type41),
         13 | 14 | 39 => return Err(NativeFlyingSurfaceDeathBlock::RuntimeClass1ContextUnavailable),
         80 | 126 | 81 => {
             return Err(NativeFlyingSurfaceDeathBlock::RuntimeAutoPilotContextUnavailable)
@@ -123,6 +130,9 @@ pub(crate) fn register_native_flying_death(
         }
         NativeFlyingSurfaceDeathPublication::Type57(owner) => {
             scheduler.register_intro2_type57_tumble(owner)
+        }
+        NativeFlyingSurfaceDeathPublication::Type41(owner) => {
+            scheduler.register_intro2_flyer(owner)
         }
         NativeFlyingSurfaceDeathPublication::QuietDeath(allocation) => {
             scheduler.retire_native_flyer_quiet_death(allocation)

@@ -276,31 +276,33 @@
 <g><title>Retail data integrity (RETAIL_DATA_INTEGRITY.md): 4 notes</title>
 <rect x="1130.7" y="698.2" width="24.1" height="20.8" fill="#d4a72c"/>
 </g>
-<g><title>Fish (FISH_RUNTIME.md): 5 code, 1 notes</title>
-<rect x="1156.8" y="675" width="20.7" height="18.8" fill="#2da44e"/>
-<rect x="1177.5" y="675" width="5.8" height="18.8" fill="#d4a72c"/>
+<g><title>Fish (FISH_RUNTIME.md): 5 code</title>
+<rect x="1156.8" y="675" width="23.9" height="15.9" fill="#2da44e"/>
 </g>
 <g><title>Type17 capture (TYPE17_CAPTURE.md): 1 code, 3 notes</title>
-<rect x="1185.3" y="675" width="13.7" height="12.7" fill="#2da44e"/>
-<rect x="1185.3" y="687.7" width="13.7" height="6.1" fill="#d4a72c"/>
+<rect x="1182.8" y="675" width="11" height="15.9" fill="#2da44e"/>
+<rect x="1193.7" y="675" width="5.3" height="15.9" fill="#d4a72c"/>
 </g>
 <g><title>Rolling boulder (ROLLING_BOULDER.md): 1 code</title>
-<rect x="1156.8" y="695.8" width="10.9" height="23.2" fill="#2da44e"/>
+<rect x="1156.8" y="692.9" width="20.1" height="12.7" fill="#2da44e"/>
 </g>
 <g><title>Type12 building trasher (TYPE12_BUILDING_TRASHER.md): 2 code, 1 notes</title>
-<rect x="1169.7" y="695.8" width="8.9" height="13.5" fill="#2da44e"/>
-<rect x="1178.7" y="695.8" width="8.2" height="13.5" fill="#d4a72c"/>
+<rect x="1156.8" y="707.6" width="10.5" height="11.4" fill="#2da44e"/>
+<rect x="1167.3" y="707.6" width="9.6" height="11.4" fill="#d4a72c"/>
 </g>
 <g><title>Type39 (TYPE39_RUNTIME.md): 1 code</title>
-<rect x="1169.7" y="711.3" width="17.1" height="7.7" fill="#2da44e"/>
+<rect x="1178.9" y="692.9" width="9.4" height="14.3" fill="#2da44e"/>
 </g>
 <g><title>Gate helpers (GATE_HELPERS.md): 5 notes</title>
-<rect x="1188.9" y="695.8" width="10.1" height="12.3" fill="#d4a72c"/>
+<rect x="1190.3" y="692.9" width="8.7" height="14.3" fill="#d4a72c"/>
+</g>
+<g><title>Type41 (TYPE41_RUNTIME.md): 1 notes</title>
+<rect x="1178.9" y="709.1" width="9" height="9.9" fill="#d4a72c"/>
 </g>
 <g><title>Numeric wrap audit (NUMERIC_WRAP_AUDIT.md): 1 notes</title>
-<rect x="1188.9" y="710.2" width="8" height="8.8" fill="#d4a72c"/>
+<rect x="1189.9" y="709.1" width="9.1" height="7.8" fill="#d4a72c"/>
 </g>
 <g><title>Type38 ground shooter (TYPE38_GROUND_SHOOTER.md): 1 notes</title>
-<rect x="1198.9" y="710.2" width="0.1" height="8.8" fill="#d4a72c"/>
+<rect x="1189.9" y="718.9" width="9.1" height="0.1" fill="#d4a72c"/>
 </g>
 </svg>
