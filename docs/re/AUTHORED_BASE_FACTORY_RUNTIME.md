@@ -114,7 +114,10 @@ custody. A copied receipt, an unadopted worker, or a pending callback cannot
 staff the factory. Prepared delivery retains worker type, allocation, current
 Primary/context and native receipt through commit; deferred destruction accepts
 the same authenticated worker family. The legacy Type8 fixture remains a
-separate path and does not authorize later worker types. See
+separate path and does not authorize later worker types. A factory wreck's
+class 0 style (`0x4C7468`) has a null pair callback, so `FUN_0040D8D0` returns
+0 and its pair walk delivers nothing; the port passes over it the same way.
+See
 [factory_pair_live.rs](../../crates/v2k-game/src/factory_pair_live.rs) and
 [factory_activation_live.rs](../../crates/v2k-game/src/factory_activation_live.rs).
 

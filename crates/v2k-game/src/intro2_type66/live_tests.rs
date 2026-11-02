@@ -439,6 +439,23 @@ fn native_type66_fast_and_ordinary_death_retain_dormant_next_primary() {
                 .scientist_capacity_raw,
             0
         );
+        // The wreck's class0 style has no pair callback: no deliveries.
+        assert_eq!(
+            crate::factory_pair_live::resolve_factory_pair_arrivals(
+                &manager,
+                &session.cache,
+                crate::factory_pair_live::FactoryPairRequest {
+                    factory_id: id,
+                    retail_tick: 0,
+                },
+            ),
+            Ok(crate::factory_pair_live::FactoryPairPassResult::Resolved(
+                crate::factory_pair_live::FactoryPairPass {
+                    factory_id: id,
+                    contacts: Vec::new(),
+                }
+            ))
+        );
         let mut expected = fx.fork_for_main_base_abort_transaction();
         let tick = step(
             &mut manager,
