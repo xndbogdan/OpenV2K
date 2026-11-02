@@ -40,7 +40,12 @@ const FLOCKING_ROUTE_STYLE_ADDRESS: u32 = 0x004C_7E40;
 /// `B640`'s `402B10(entity, 0, 5000)`, the aimless retarget beside the search.
 const FLOCKING_RETARGET_LIFETIME_MS: u32 = 5000;
 
-fn named_context(entity: &Entity, class_id: u8, style_index: u32, style_address: u32) -> bool {
+pub(super) fn named_context(
+    entity: &Entity,
+    class_id: u8,
+    style_index: u32,
+    style_address: u32,
+) -> bool {
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return false;
     };
@@ -142,7 +147,7 @@ fn sub_g_for_constructors(
     Ok((descriptor, sub_g))
 }
 
-fn enter_class(
+pub(super) fn enter_class(
     entity: &mut Entity,
     class_id: u8,
     context: BehaviorContextRuntime,

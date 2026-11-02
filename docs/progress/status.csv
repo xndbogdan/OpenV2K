@@ -627,3 +627,6 @@ address,status,note
 0x004165B0,implemented,rule 12 BaseNearby: 164D0 with mask 0x20 (docs/re/TYPE107_MOBILE_TURRETS.md)
 0x0044EA60,implemented,gravity-lead method table (docs/re/TYPE107_MOBILE_TURRETS.md)
 0x0040DF70,implemented,ground snap for effective bit 2 (docs/re/TYPE107_MOBILE_TURRETS.md)
+0x0040C620,implemented,Class12 initializer on the Type41 flyer (docs/re/TYPE41_RUNTIME.md#death)
+0x00404120,implemented,Class12 dying task constructor with the Sub-G mode write (docs/re/TYPE41_RUNTIME.md#death)
+0x00404220,implemented,Class12 dying task on a Sub-G flyer: flip, null-target mover, X/Z damping (docs/re/TYPE41_RUNTIME.md#death)

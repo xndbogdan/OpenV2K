@@ -5381,6 +5381,10 @@ impl SpecializedActorTaskScheduler {
                     if let Intro2FlyerSchedulerProductionOutcome::Type14Visit {
                         infection_write: Some(write),
                         ..
+                    }
+                    | Intro2FlyerSchedulerProductionOutcome::Type41Visit {
+                        infection_write: Some(write),
+                        ..
                     } = tick.outcome
                     {
                         // The flyer frame already required the level terrain.

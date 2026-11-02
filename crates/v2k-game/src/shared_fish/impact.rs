@@ -291,9 +291,21 @@ fn run(
     // PE tables4C7930/79C0/7DF8/7E40, the shark's 4C7D20 and Search &
     // Attack's 4C7A50/4C7A98: +20,+24 and +28 are40C690. This direct style
     // call omits task-result dispatch's 416410 suppression.
+    // Run Away's 4C7618/4C7660 hold C690 at +20/+24 but a null +28.
     match style.frame_address {
-        0x004c_7930 | 0x004c_79c0 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7d20 | 0x004c_7e88
-        | 0x004c_7a50 | 0x004c_7a98 => {
+        address
+            if matches!(
+                address,
+                0x004c_7930
+                    | 0x004c_79c0
+                    | 0x004c_7df8
+                    | 0x004c_7e40
+                    | 0x004c_7d20
+                    | 0x004c_7e88
+                    | 0x004c_7a50
+                    | 0x004c_7a98
+            ) || (matches!(address, 0x004c_7618 | 0x004c_7660) && (infected || cured)) =>
+        {
             crate::shared_fish_tasks::reselect_behavior(
                 manager,
                 id,
@@ -309,7 +321,7 @@ fn run(
         address
             if completed_death
                 && address == crate::entity_behavior::QUIET_DEATH_STYLE.frame_address => {}
-        // Run Away's two styles and class12's dying style have a null +28.
+        // Run Away's primary hit and class12's dying style: null hooks.
         0x004c_7618 | 0x004c_7660 => {}
         address
             if super::dying::dying_graph(manager.iter_all().find(|e| e.id == id).unwrap())

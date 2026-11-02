@@ -13,7 +13,7 @@ use crate::common_mover::type9_surface::{
 use crate::common_mover::type9_tail::{
     plan_common_master_motion, COMMON_MASTER_MOTION_REQUIRED_STATE_MASK,
 };
-use crate::entity::{apply_type13_common_environment_raw, commit_common_master_motion};
+use crate::entity::{apply_effective8_flyer_environment, commit_common_master_motion};
 use crate::entity_collision_state::{
     CommonWorldEffectProfile, BODY_BASIS_REBUILT_STATE_BIT, REMOTE_OWNED_STATE_BIT,
 };
@@ -67,11 +67,15 @@ fn effective_flags(entity: &Entity) -> Result<u32, Intro2FlyerWorldBlock> {
         return Err(Intro2FlyerWorldBlock::UnsupportedEffectiveFlags);
     };
     // Style +38. Move About Aimlessly and Type14's Defecate Virus and both
-    // Flocking styles mask nothing.
+    // Flocking styles mask nothing; nor do Run Away's. Wander clears 21000
+    // and class12's two styles 2015 and 2011: none clears 8.
     let disable = match context.active_style().style_address() {
         0x004c_7a50 => 0x0002_1080,
         0x004c_7a98 => 0x80,
-        0x004c_7930 | 0x004c_7e88 | 0x004c_7df8 | 0x004c_7e40 => 0,
+        0x004c_7930 | 0x004c_7e88 | 0x004c_7df8 | 0x004c_7e40 | 0x004c_7618 | 0x004c_7660 => 0,
+        0x004c_79c0 => 0x0002_1000,
+        0x004c_7ed0 => 0x2015,
+        0x004c_7f18 => 0x2011,
         _ => return Err(Intro2FlyerWorldBlock::UnsupportedEffectiveFlags),
     };
     let flags = default & !disable;
@@ -137,7 +141,8 @@ fn preflight_suffix(
         return Err(Intro2FlyerWorldBlock::UnsupportedMetadata);
     }
     effective_flags(entity)?;
-    if wind_mode != 0 {
+    // 44EB40 admits only modes 0-2; E100's bit8 takes 44EC60 in all three.
+    if wind_mode > 2 {
         return Err(Intro2FlyerWorldBlock::UnsupportedWindMode { actual: wind_mode });
     }
     let RetailRuntimeValue::Known(disabled) = entity
@@ -213,6 +218,7 @@ pub(super) fn tick_world(
     let callback_enabled = state & COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT != 0;
     let metadata = manager.type_runtime_metadata(entity.entity_type).cloned();
     let environment = manager.intro2_type13_environment();
+    let physics = manager.common_environment_physics();
     // This latch precedes A800. The environment policy is read again after
     // all slots; both acquiring/pursuing styles currently retain bit8.
     let basis_flags = if callback_enabled {
@@ -316,6 +322,7 @@ pub(super) fn tick_world(
             | Intro2FlyerSchedulerProductionOutcome::PursuingVisit { .. }
             | Intro2FlyerSchedulerProductionOutcome::AimlessVisit { .. }
             | Intro2FlyerSchedulerProductionOutcome::Type14Visit { .. }
+            | Intro2FlyerSchedulerProductionOutcome::Type41Visit { .. }
     );
     if !completed {
         return tick;
@@ -362,16 +369,23 @@ pub(super) fn tick_world(
             .state_flags_at_0x08
             .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
     }
-    let mut velocity = entity.velocity_raw();
-    // The shared no-SubC effective8 profile has no type-specific constants.
-    apply_type13_common_environment_raw(
-        &mut velocity,
+    // The shared no-SubC effective8 profile has no type-specific constants:
+    // gravity, then 44EC60's drag, with the current wind in modes 1 and 2.
+    if apply_effective8_flyer_environment(
+        entity,
+        physics,
+        frame.resources.level_terrain(),
         callback_elapsed_us,
-        entity.mass_raw,
-        environment.0,
-        environment.1,
-    );
-    entity.set_velocity_raw(velocity);
+    )
+    .is_err()
+    {
+        return park_flyer(
+            tick.retained_owner.unwrap_or(owner),
+            Intro2FlyerRuntimeBlock::World(Intro2FlyerWorldBlock::UnsupportedWindMode {
+                actual: environment.0,
+            }),
+        );
+    }
     if entity
         .collision
         .state_flags_at_0x08

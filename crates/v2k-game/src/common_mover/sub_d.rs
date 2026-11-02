@@ -407,6 +407,12 @@ pub const TYPE14_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     ..FLYER_SUB_D
 };
 
+/// Type41's flyer steering: the wasp's probes with divisor 100.
+pub const TYPE41_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 100,
+    ..FLYER_SUB_D
+};
+
 /// Type10's own Section12 steering divisor. `41F660 -> 20260` divides by
 /// this signed word; flags0 take41FC90 without querying the cache origin.
 pub const INTRO2_TYPE10_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
@@ -478,6 +484,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | CLEANSING_VEHICLE_SUB_D
             | FLYER_SUB_D
             | TYPE14_SUB_D
+            | TYPE41_SUB_D
     )
 }
 

@@ -378,7 +378,7 @@ fn type108_class5_publishes_acd0_visits_aimlessly_and_reselects_class7() {
         .unwrap();
     let mut words = [0xFFFF_u32, 0].into_iter();
     assert_eq!(
-        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, &mut || {
+        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, 0, &mut || {
             words.next().unwrap()
         }),
         Ok(true)
@@ -425,7 +425,7 @@ fn type108_class5_publishes_acd0_visits_aimlessly_and_reselects_class7() {
     );
     let mut words = [0_u32, 0, 0].into_iter();
     assert_eq!(
-        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, &mut || {
+        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, 0, &mut || {
             words.next().unwrap()
         }),
         Ok(true)
@@ -561,7 +561,7 @@ fn reselect_type14_with(manager: &mut EntityManager, id: u32, selector: u32) -> 
         .unwrap();
     let mut consumed = 0;
     assert_eq!(
-        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, &mut || {
+        reselect_flyer(manager.entity_mut(id).unwrap(), &metadata, 0, &mut || {
             consumed += 1;
             if consumed == 1 {
                 selector

@@ -4221,7 +4221,10 @@ impl EntityManager {
                         context.retail_tick,
                         level_desc.raw_u32(0x84)? != 0,
                     )
-                } else if matches!(spawn.entity_type, 13 | 10 | 57 | 15 | 87 | 108 | 14 | 39) {
+                } else if matches!(
+                    spawn.entity_type,
+                    13 | 10 | 57 | 15 | 87 | 108 | 14 | 39 | 41
+                ) {
                     crate::entity_initializer::constructor_surface_bits_without_wave(
                         position, terrain,
                     )
@@ -5140,6 +5143,7 @@ impl EntityManager {
                             | 38
                             | 39
                             | 40
+                            | 41
                             | 43
                             | 47
                             | 49

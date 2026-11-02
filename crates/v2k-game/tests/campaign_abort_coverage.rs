@@ -113,7 +113,8 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // World 21 completes: native Type18/28 take Type122's captor class12
     // abort death, and Flood's Type89s leave class38 and its Type74 Remote
     // Beamer class59 for their class1 explosions.
-    (22, 41),
+    // World 22 completes: its Type41 flyer falls through class12 on the
+    // flyer owner, and its Type21 swimmers take the fish owner's class12.
     // World 23 completes: its Native22/23/24 fish take the class2 quiet
     // terminal, its Type25 sharks and Type37 class12, its Type20 class1 and
     // its Type117 class63.
@@ -130,11 +131,10 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // World 31 completes: its Type107/Type121 mobile turrets take class49.
     // World 32 completes: its Type55 guards take class11 Tumble, its Type82
     // factory class39 and its Type32s the ground host's terminal deaths.
-    // The Type20 swimmer explodes through class1; next is the Type41 flyer.
-    (33, 41),
-    // The Type25 shark takes class12 and the Type117 carrier class63; next
-    // is the Type41 flyer.
-    (34, 41),
+    // World 33 completes: its Type20 swimmer explodes through class1 and its
+    // Type41 flyers fall through class12.
+    // World 34 completes: its Type25 shark and Type21 swimmers take class12,
+    // its Type117 carrier class63 and its Type41 flyers class12.
     // World 35 completes: its Type12s explode through class1.
     // World 36 completes: its Type74 Remote Beamers explode through class1.
     // World 37 completes: its Type106 dies quietly through class2.
@@ -415,8 +415,8 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     assert_eq!(
         exact_worlds,
         [
-            13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 35, 36, 37,
-            38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48
+            13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34,
+            35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48
         ]
     );
     assert_eq!(
@@ -435,7 +435,8 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     let data = v2k_test_support::retail_dir();
     let mut session = GameSession::init(&data).unwrap();
     session.load_auxiliary_ovl(3, 1).unwrap();
-    // A one-factory world whose abort still stops early (world 34, at Type41).
+    // A one-factory world. Every authored abort now completes, so a Type41
+    // retyped to the unported Type65 stands in for an unsupported actor.
     const WORLD: u32 = 34;
     session.load_level_by_id(WORLD, 1).unwrap();
     let metadata: Vec<_> = session
@@ -458,6 +459,12 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     let mut fx = WorldFx::new();
     let mut manager = construct_world(&session, &metadata, WORLD, &mut fx);
     let mut tasks = adopt_authored_tasks(&mut manager);
+    let flyer = manager
+        .iter_all()
+        .find(|entity| entity.entity_type == 41)
+        .unwrap()
+        .id;
+    manager.entity_mut(flyer).unwrap().entity_type = 65;
     let mut progress = PlayerCampaignProgress::new();
     progress.set_current_control_slot(Some((WORLD - 12) as usize));
     let (mut controller, _) = MainBaseAbortControllerStorage::from_loaded_level(

@@ -247,6 +247,10 @@ emitter: Defecate Virus4, Move About Aimlessly5 and Flocking13. They
 explode through class1. So do world31's two [Type39 flyers](TYPE39_RUNTIME.md)
 and their Hive births, which shoot (method20) and drive two model variables
 through Sub-K.
+The seven [Type41 flyers](TYPE41_RUNTIME.md) (one in world 22, two in 33,
+four in 34), a D/G row without B or E, take the same owner: Defecate Virus4,
+Move About Aimlessly5, Wander6 and UnderAttack Run Away10. They fall through
+class12.
 
 The [shared Type47 gunner](TYPE47_RUNTIME.md) extends that construction policy
 to all eight ordinary actors (three in13, one in14, two each in15/31) and the

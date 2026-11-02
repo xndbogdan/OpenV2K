@@ -1505,7 +1505,7 @@ fn apply_pair_checked_damage(
     }
     if matches!(
         kind,
-        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
+        13 | 14 | 15 | 39 | 41 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
     ) {
         let result = crate::live_actor_checked_damage::apply_live_actor_checked_damage(
             frame.entities,
