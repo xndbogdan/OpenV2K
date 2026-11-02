@@ -78,6 +78,8 @@ pub(crate) enum NativeBallisticProfileId {
     Type33,
     /// Ordinary Type29 on the Type10 owner: method24 at table speed.
     Type29,
+    /// The Type21 swimmer on the fish owner: method24 at table speed.
+    Type21,
     Type56,
     Type40,
     Type18,
@@ -115,7 +117,8 @@ impl NativeBallisticProfileId {
             | Self::Type12
             | Self::Type127
             | Self::Type33
-            | Self::Type29 => 24,
+            | Self::Type29
+            | Self::Type21 => 24,
             Self::Type56 | Self::Type77 => 30,
             Self::Type40 => 1,
             Self::Type35 => 11,
@@ -151,6 +154,7 @@ impl NativeBallisticProfileId {
             | Self::Type76
             | Self::Type77
             | Self::Type29
+            | Self::Type21
             | Self::Type35
             | Self::Type2 => 0,
         }
@@ -189,6 +193,7 @@ impl NativeBallisticProfileId {
             Self::Type30 => 75,
             Self::Type33 => 105,
             Self::Type29 => 70,
+            Self::Type21 => 40,
             Self::Type18 => 69,
             Self::Type76 | Self::Type77 => 70,
             Self::Type12 | Self::Type127 => 82,
@@ -220,6 +225,7 @@ impl NativeBallisticProfileId {
             Self::Type30 => 0x5459_5033_3053_5243,
             Self::Type33 => 0x5459_5033_3353_5243,
             Self::Type29 => 0x5459_5032_3953_5243,
+            Self::Type21 => 0x5459_5032_3153_5243,
             Self::Type18 => 0x5459_5031_3853_5243,
             Self::Type76 => 0x5459_5037_3653_5243,
             Self::Type12 => 0x5459_5031_3253_5243,
@@ -253,6 +259,7 @@ impl NativeBallisticProfileId {
             Self::Type30 => 0x5459_5033_3054_4754,
             Self::Type33 => 0x5459_5033_3354_4754,
             Self::Type29 => 0x5459_5032_3954_4754,
+            Self::Type21 => 0x5459_5032_3154_4754,
             Self::Type18 => 0x5459_5031_3854_4754,
             Self::Type76 => 0x5459_5037_3654_4754,
             Self::Type12 => 0x5459_5031_3254_4754,
@@ -282,6 +289,7 @@ impl NativeBallisticProfileId {
             Self::Type30 => (500_000, 512, 50, 25_000, 3840),
             Self::Type33 => (400_000, 256, 48, 12_000, 3072),
             Self::Type29 => (300_000, 200, 44, 8000, 3840),
+            Self::Type21 => (1_200_000, 100, 38, 4000, 3072),
             Self::Type18 => (500_000, 100, 156, 30_000, 3072),
             Self::Type76 => (150_000, 256, 114, 8000, 5120),
             Self::Type12 | Self::Type127 => (200_000, 256, 56, 4000, 3072),
@@ -699,7 +707,8 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
             | NativeBallisticProfileId::Type12
             | NativeBallisticProfileId::Type127
             | NativeBallisticProfileId::Type33
-            | NativeBallisticProfileId::Type29 => world_fx
+            | NativeBallisticProfileId::Type29
+            | NativeBallisticProfileId::Type21 => world_fx
                 .materialize_descriptor_particle_request(
                     DescriptorParticleRequest {
                         source_class: P::ID.particle_class(),
@@ -809,7 +818,8 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                     | NativeBallisticProfileId::Type12
                     | NativeBallisticProfileId::Type127
                     | NativeBallisticProfileId::Type33
-                    | NativeBallisticProfileId::Type29 => drain_intro2_flyer_transient_request(
+                    | NativeBallisticProfileId::Type29
+                    | NativeBallisticProfileId::Type21 => drain_intro2_flyer_transient_request(
                         request,
                         entity.position_raw(),
                         entity.velocity_raw(),

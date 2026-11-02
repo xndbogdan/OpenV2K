@@ -149,7 +149,7 @@ impl SpecializedActorTaskScheduler {
                 31 | 105 | 73 | 109 => entity.native_type31_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
                 66 | 82 | 125 => entity.intro2_type66_runtime.is_some(),
-                22 | 23 | 24 | 62 | 124 | 25 | 37 | 20 | 19 | 117 => {
+                22 | 23 | 24 | 62 | 124 | 25 | 37 | 20 | 19 | 117 | 21 => {
                     entity.shared_fish_runtime.is_some()
                 }
                 3 | 27 => entity.rolling_boulder_runtime.is_some(),

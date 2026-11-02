@@ -336,14 +336,16 @@ fn owns_native_weapon_contact(entity: &Entity) -> bool {
     entity.native_entity_weapon_runtime.is_some()
 }
 
-/// The player and a native shark: class69's 5E10 hook bites through this
-/// lane. Other shark pairs stay with their existing subsystem.
+/// The player and a native shark or Type21: class69's 5E10 hook bites
+/// through this lane, and Type21 rams through 12760's collision damage.
+/// Other fish pairs stay with their existing subsystem.
 fn is_native_shark_player_pair(manager: &EntityManager, first: &Entity, second: &Entity) -> bool {
     let player = manager.player().map(|player| player.id);
     [(first, second), (second, first)]
         .into_iter()
         .any(|(shark, other)| {
-            crate::shared_fish::is_shark(shark.entity_type)
+            (crate::shared_fish::is_shark(shark.entity_type)
+                || crate::shared_fish::searches_and_attacks(shark.entity_type))
                 && shark.shared_fish_runtime.is_some()
                 && Some(other.id) == player
         })

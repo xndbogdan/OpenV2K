@@ -681,6 +681,8 @@ fn dispatch(
                 MainBaseAbortActorDisposition::Type25Death
             } else if actor.entity_type == 37 {
                 MainBaseAbortActorDisposition::Type37Death
+            } else if actor.entity_type == 21 {
+                MainBaseAbortActorDisposition::Type21Death
             } else {
                 MainBaseAbortActorDisposition::QuietDeath
             }

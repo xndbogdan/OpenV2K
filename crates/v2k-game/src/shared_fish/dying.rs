@@ -98,10 +98,11 @@ pub(crate) fn publish_shark_death(
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Error::Graph);
     };
-    // Styles 4C7930/79C0/7D20/7E88/7618/7660 hold null +2C death hooks.
+    // Styles 4C7930/79C0/7D20/7E88/7618/7660/7A50/7A98 hold null +2C death
+    // hooks.
     if !matches!(
         context.active_style().style_address(),
-        0x4c7930 | 0x4c79c0 | 0x4c7d20 | 0x4c7e88 | 0x4c7618 | 0x4c7660
+        0x4c7930 | 0x4c79c0 | 0x4c7d20 | 0x4c7e88 | 0x4c7618 | 0x4c7660 | 0x4c7a50 | 0x4c7a98
     ) {
         return Err(Error::Graph);
     }

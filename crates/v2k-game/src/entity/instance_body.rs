@@ -194,6 +194,7 @@ pub(crate) fn native_instance_body(
         native_type69_runtime: None,
         native_type18_runtime: None,
         native_type18_aim_runtime: None,
+        shared_fish_aim_runtime: None,
         native_type28_runtime: None,
         native_type76_runtime: None,
         native_type76_aim_runtime: None,

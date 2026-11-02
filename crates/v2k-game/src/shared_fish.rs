@@ -6,6 +6,7 @@
 //! Type25 sharks share the B/D/F allocation without the 2000 environment
 //! bit, so their coarse visits run tasks; they add class69 Shark Attack.
 
+pub mod aim;
 #[cfg(test)]
 mod auto_pilot_tests;
 pub(crate) mod death;
@@ -19,6 +20,8 @@ mod shark_tests;
 mod surface;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod type21_tests;
 pub use live::{
     tick_shared_fish, SharedFishBlock, SharedFishFrame, SharedFishOutcome, SharedFishOwner,
     SharedFishTick,
@@ -73,8 +76,17 @@ const TOPOLOGY_WITH_EK: CommonMoverComponentTopology = CommonMoverComponentTopol
     ..TOPOLOGY
 };
 
+/// Type21 adds the emitter E alone, which its Search & Attack aims.
+const TOPOLOGY_WITH_E: CommonMoverComponentTopology = CommonMoverComponentTopology {
+    sub_e: true,
+    ..TOPOLOGY
+};
+
 pub(crate) fn is_fish_topology(topology: CommonMoverComponentTopology) -> bool {
-    topology == TOPOLOGY || topology == TOPOLOGY_WITHOUT_B || topology == TOPOLOGY_WITH_EK
+    topology == TOPOLOGY
+        || topology == TOPOLOGY_WITHOUT_B
+        || topology == TOPOLOGY_WITH_EK
+        || topology == TOPOLOGY_WITH_E
 }
 
 /// Swimmers whose alternate class explodes through BAF0: Type19 and Type20
@@ -94,7 +106,7 @@ pub(crate) const fn runs_when_attacked(entity_type: u32) -> bool {
 pub(crate) const fn is_shared_fish_type(entity_type: u32) -> bool {
     matches!(
         entity_type,
-        22 | 23 | 24 | 62 | 124 | 25 | 37 | 20 | 19 | 117
+        22 | 23 | 24 | 62 | 124 | 25 | 37 | 20 | 19 | 117 | 21
     )
 }
 
@@ -104,15 +116,22 @@ pub(crate) const fn is_shark(entity_type: u32) -> bool {
     entity_type == 25
 }
 
-/// The C8 `0xC` swimmers with PlayerNearby and alternate class12: the shark
-/// and Type37 (Retarget x4, Defecate Virus x1, PlayerNearby x15 Run Away).
+/// The C8 `0xC` swimmers with PlayerNearby and alternate class12: the shark,
+/// Type37 (Retarget x4, Defecate Virus x1, PlayerNearby x15 Run Away) and
+/// Type21 (Retarget x4, PlayerNearby x40 and Always x1 Search & Attack).
 pub(crate) const fn is_hostile_swimmer(entity_type: u32) -> bool {
-    matches!(entity_type, 25 | 37)
+    matches!(entity_type, 25 | 37 | 21)
 }
 
-const HOSTILE_CHOICES: [[(u32, u32, u32); 3]; 2] = [
+/// Type21: class7 Search & Attack, aiming its E at the target it chases.
+pub(crate) const fn searches_and_attacks(entity_type: u32) -> bool {
+    entity_type == 21
+}
+
+const HOSTILE_CHOICES: [[(u32, u32, u32); 3]; 3] = [
     [(1, 1, 6), (6, 40, 69), (1, 6, 5)],
     [(1, 4, 5), (1, 1, 4), (6, 15, 10)],
+    [(1, 4, 5), (6, 40, 7), (1, 1, 7)],
 ];
 
 /// Type20: C8 `0xC`, Retarget x5, Defecate Virus x1, Wander x1, alternate
@@ -175,6 +194,9 @@ pub(crate) struct SharedFishRuntime {
     pub(crate) variables: [u16; 64],
     /// K's `+0C`, written after Sub-D; 24450 allocates K zeroed.
     pub(crate) sub_k_smoothed_raw: i32,
+    /// E (`24E30`, no word drawn): the row's method and sound. Only Type21's
+    /// Search & Attack aims it.
+    pub(crate) sub_e: Option<crate::generic_projectile_emitter::GenericEmitterRuntime>,
     /// Published only after the complete native class2 callback has staged
     /// this allocation. Retains repeated-hit custody until the later sweep.
     pub(crate) quiet_death_context: Option<BehaviorContextRuntime>,
@@ -387,6 +409,23 @@ pub(crate) fn publish_authored_fish(
         sub_f,
         variables: [0; 64],
         sub_k_smoothed_raw: 0,
+        sub_e: match metadata.projectile_emitter_descriptor {
+            RetailRuntimeValue::Known(Some(e)) => {
+                Some(crate::generic_projectile_emitter::GenericEmitterRuntime {
+                    joint_bindings: [None; 2],
+                    projectile_method: e.projectile_method,
+                    emitter_selector: 0,
+                    sound_id: u32::from(e.sound_id),
+                    direct_mode: 0,
+                    remaining_time_raw: 0,
+                    manual_step_raw: 0,
+                    remaining_bursts_raw: 0,
+                    cadence_raw: 0,
+                    basis_adjustment_identity: None,
+                })
+            }
+            _ => None,
+        },
         quiet_death_context: None,
         impact_prefix_pending: false,
     });

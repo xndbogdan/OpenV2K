@@ -40,7 +40,8 @@ fn is_authored_neutral_swimmer(metadata: &EntityTypeRuntimeMetadata) -> bool {
             || choices().eq([(1, 4, 5), (1, 1, 4), (6, 15, 10)])
             || choices().eq([(1, 5, 5), (1, 4, 4), (1, 1, 6)])
             || choices().eq([(1, 3, 5), (2, 6, 10), (1, 1, 6)])
-            || choices().eq([(1, 5, 5), (2, 6, 10), (1, 1, 6)]);
+            || choices().eq([(1, 5, 5), (2, 6, 10), (1, 1, 6)])
+            || choices().eq([(1, 4, 5), (6, 40, 7), (1, 1, 7)]);
         neutral || hostile
     })
 }
@@ -148,12 +149,12 @@ fn every_ordinary_world_publishes_and_runs_its_native_fish() {
             // Worlds 22, 23 and 34 add their three, two and one sharks, 22
             // and 23 their two and one Type37s, and 22, 23, 33 and 34 their
             // two, one, one and two Type20s; 22 its Type19, 23 and 34 a
-            // Type117 each.
-            (22, 19),
+            // Type117 each; 22 and 34 their three and four Type21s.
+            (22, 22),
             (23, 48),
             (30, 20),
             (33, 1),
-            (34, 23),
+            (34, 27),
             (36, 11)
         ]
     );
