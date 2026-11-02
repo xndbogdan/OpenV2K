@@ -56,6 +56,7 @@ mod cargo_runtime;
 mod class0_actor;
 pub(crate) use class0_actor::{
     living_class as class0_living_class, Class0FlareDeath, Class0GeyserDeath,
+    NativeType68ZeroRecordConstruction,
 };
 pub use class0_actor::{
     tick_class0_actor_owner, Class0ActorError, Class0ActorFrame, Class0ActorOutcome,
@@ -1165,8 +1166,8 @@ impl BaseFactoryRuntimeState {
 /// so the loader gives it the same pair. The native Type83 radar's row gets
 /// it too; its selector 1 is the Sub-K word 405610 counts. The loader sets
 /// every row's pair (`FUN_00410090` writes `+0x78` for each row), so Type33
-/// on the Type30 owner, the Type100 mortar and the Type74 Remote Beamer read
-/// the same clock.
+/// on the Type30 owner, the Type100 mortar, the Type74 Remote Beamer and the
+/// Type110 Queen read the same clock.
 /// Keeping this as an explicit evidence policy prevents an unobserved type
 /// from acquiring animation merely because its model happens to look similar.
 pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool {
@@ -1191,6 +1192,7 @@ pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool 
             | 100
             | 102
             | 103
+            | 110
     )
 }
 
@@ -1576,6 +1578,8 @@ pub struct Entity {
     pub native_type30_runtime: Option<crate::native_type30::Type30Runtime>,
     /// Native Rolling Boulder class20 allocation receipt (Type3/Type27).
     pub rolling_boulder_runtime: Option<crate::rolling_boulder::RollingBoulderRuntime>,
+    /// Type110's Sub-K: its eight model words and the Queen's record.
+    pub queen: crate::queen::QueenSubK,
     pub native_type30_aim_runtime: Option<crate::native_type30::aim::Type30AimRuntime>,
     pub native_type40_runtime: Option<crate::native_type40::Type40Runtime>,
     pub native_type40_aim_runtime: Option<crate::native_type40::aim::Type40AimRuntime>,
@@ -1782,6 +1786,7 @@ impl Entity {
             native_type122_runtime: self.native_type122_runtime,
             native_type30_runtime: self.native_type30_runtime.clone(),
             rolling_boulder_runtime: self.rolling_boulder_runtime,
+            queen: self.queen.clone(),
             native_type30_aim_runtime: self.native_type30_aim_runtime.clone(),
             native_type40_runtime: self.native_type40_runtime,
             native_type40_aim_runtime: self.native_type40_aim_runtime.clone(),
@@ -1905,6 +1910,7 @@ impl Entity {
             native_type122_runtime: None,
             native_type30_runtime: None,
             rolling_boulder_runtime: None,
+            queen: Default::default(),
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -2132,6 +2138,12 @@ impl Entity {
         if let Some(runtime) = self.portable_radar_runtime {
             // 40D320's selector 1 is Sub-K word 1, 405610's deployment count.
             vars.dynamic[1] = i32::from(runtime.sub_k1);
+        }
+        if self.entity_type == crate::queen::ENTITY_TYPE {
+            // 40D320's selectors 1..=8 are the Queen's Sub-K words.
+            for (selector, word) in self.queen.words.iter().enumerate() {
+                vars.dynamic[selector + 1] = i32::from(*word);
+            }
         }
         if let Some(ActorTaskRuntime::RemoteBeamer(k1)) =
             self.actor_task_state(ActorTaskSlot::Primary)
@@ -3225,6 +3237,7 @@ fn build_type93_materialiser_entity(
         native_type122_runtime: None,
         native_type30_runtime: None,
         rolling_boulder_runtime: None,
+        queen: Default::default(),
         native_type30_aim_runtime: None,
         native_type40_runtime: None,
         native_type40_aim_runtime: None,
@@ -5161,6 +5174,7 @@ impl EntityManager {
                             | 104
                             | 108
                             | 109
+                            | 110
                             | 112
                             | 113
                             | 115
@@ -5590,6 +5604,7 @@ impl EntityManager {
                 native_type122_runtime: None,
                 native_type30_runtime: None,
                 rolling_boulder_runtime: None,
+                queen: Default::default(),
                 native_type30_aim_runtime: None,
                 native_type40_runtime: None,
                 native_type40_aim_runtime: None,
@@ -6075,6 +6090,7 @@ impl EntityManager {
             native_type122_runtime: None,
             native_type30_runtime: None,
             rolling_boulder_runtime: None,
+            queen: Default::default(),
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -6891,6 +6907,7 @@ impl EntityManager {
             native_type122_runtime: None,
             native_type30_runtime: None,
             rolling_boulder_runtime: None,
+            queen: Default::default(),
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,
@@ -8382,6 +8399,7 @@ impl EntityManager {
             native_type122_runtime: None,
             native_type30_runtime: None,
             rolling_boulder_runtime: None,
+            queen: Default::default(),
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,

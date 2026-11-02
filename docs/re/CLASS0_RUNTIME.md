@@ -226,20 +226,20 @@ handle `04B30001`, at pass 1300) reads state `0x0042C005` and health 0 after
 the hit, and the sea word `0xFFFCB100` falls to `0xFFFA2000` (delta `-168192`)
 in 690 paced updates, through pass 1989. The port matches each of these.
 
-## Rows outside class0: Type50, Type89, Type118, Type36 and Type74
+## Rows outside class0: Type50, Type89, Type118, Type36, Type74 and Type110
 
-Five rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
+Six rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
 draw, the `+88` sea word) but not its living program. One owner runs all
 their visits, through the same `12DA0` prefix and DCA0/E870 tail.
 
-| Field | Type50 | Type89 | Type118 | Type36 | Type74 |
-|---|---|---|---|---|---|
-| Worlds | 16, 40 | 21 (two) | 40 (two) | 42, 43, 46, 47 | 21, 31, 36 |
-| Default model slots | `[647;4]` | `[0;4]` | `[676;4]` | `[0;4]` | `[253;4]` |
-| Mass / health | 100 / 1000 | 1000 / 1000 | 1000 / 1000 | 1000 / 1000 | 10 / 50000 |
-| Type+C0 | `4067` | `21A7` | `20027` | `201A7` | `26025` |
-| Root / alternate | Always `(1,1,36)`, rule3 / class38 | Always `(1,1,38)` / class1 | Always `(1,1,0)` / class65 | Always `(1,1,16)` / class16 | Always `(1,1,59)` / class1 |
-| Authored `+88` | world16 -1068, world40 0 | 3249 | 1000 | unread | unread |
+| Field | Type50 | Type89 | Type118 | Type36 | Type74 | Type110 |
+|---|---|---|---|---|---|---|
+| Worlds | 16, 40 | 21 (two) | 40 (two) | 42, 43, 46, 47 | 21, 31, 36 | 47 |
+| Default model slots | `[647;4]` | `[0;4]` | `[676;4]` | `[0;4]` | `[253;4]` | `[1113;4]` |
+| Mass / health | 100 / 1000 | 1000 / 1000 | 1000 / 1000 | 1000 / 1000 | 10 / 50000 | 1 / 200 |
+| Type+C0 | `4067` | `21A7` | `20027` | `201A7` | `26025` | `24027` |
+| Root / alternate | Always `(1,1,36)`, rule3 / class38 | Always `(1,1,38)` / class1 | Always `(1,1,0)` / class65 | Always `(1,1,16)` / class16 | Always `(1,1,59)` / class1 | Always `(1,1,67)` / class67 |
+| Authored `+88` | world16 -1068, world40 0 | 3249 | 1000 | unread | unread | unread |
 
 **Type50, Die When Moved.** `FUN_0040B980` clears T then S and
 `FUN_00404A20` publishes a Primary without timeout; `FUN_00401350/FUN_004012E0`
@@ -344,11 +344,17 @@ bounce) and logged once per pair as a held beam. In a retail run of world 21
 from the Skip to World arrival to its casualty loss 1,774 ticks in, no Type93
 was born, so no beam happened there.
 
-Hits reach all five through `class0_impact`: classes 36, 38, 16 and 59 have
-null hit callbacks, like class0. A lethal hit, like the Main Base abort, runs
-class38 for Type50, class1 for Type89 and Type74, the Geyser for Type118 and
-class16 for Type36. Regression coverage is in
-`entity/class0_actor/{sea_level_tests,flare_tests,remote_beamer_tests}.rs`,
+**Type110, the Queen.** Class67 runs from birth and is her alternate too;
+her eight Sub-K words carry her joints. Her guns, her held Type68, her weak
+spot and her dying are in [TYPE110_QUEEN.md](TYPE110_QUEEN.md).
+
+Hits reach all six through `class0_impact`: classes 36, 38, 16 and 59 have
+null hit callbacks, like class0; class67's `+28` is the Queen's
+`FUN_00421990`. A lethal hit, like the Main Base abort, runs
+class38 for Type50, class1 for Type89 and Type74, the Geyser for Type118,
+class16 for Type36 and class67 for Type110. Regression coverage is in
+`entity/class0_actor/{sea_level_tests,flare_tests,remote_beamer_tests,queen_tests}.rs`,
+`queen/tests.rs`,
 `die_when_moved.rs`, `geyser.rs`, `generate_flares.rs` and
 `flare_damage.rs`.
 

@@ -5,11 +5,11 @@ use v2k_formats::fixed_math::{retail_integer_sqrt, retail_sine_q15};
 
 mod asin_table;
 
-pub(super) fn q31(a: i32, b: i32) -> i32 {
+pub(crate) fn q31(a: i32, b: i32) -> i32 {
     ((i64::from(a) * i64::from(b)) >> 31) as i32
 }
 
-pub(super) fn displacement(owner: [i16; 3], target: [i16; 3]) -> ([i16; 3], i32) {
+pub(crate) fn displacement(owner: [i16; 3], target: [i16; 3]) -> ([i16; 3], i32) {
     let vector = std::array::from_fn(|axis| target[axis].wrapping_sub(owner[axis]));
     //425370 uses the largest absolute component plus half of the other
     //two. Only the subsequent angle normalization calls457730's sqrt.
@@ -19,14 +19,14 @@ pub(super) fn displacement(owner: [i16; 3], target: [i16; 3]) -> ([i16; 3], i32)
     (vector, distance)
 }
 
-fn length(vector: [i16; 3]) -> i32 {
+pub(crate) fn length(vector: [i16; 3]) -> i32 {
     retail_integer_sqrt(vector.into_iter().fold(0_u32, |sum, value| {
         sum.wrapping_add((i32::from(value) * i32::from(value)) as u32)
     }) as i32) as i32
 }
 
 /// 457680's bitwise signed quotient, including its source saturation.
-fn ratio(numerator: i32, denominator: i32) -> i32 {
+pub(crate) fn ratio(numerator: i32, denominator: i32) -> i32 {
     let negative = numerator ^ denominator < 0;
     let mut numerator = if numerator < 0 {
         numerator.wrapping_neg()
@@ -61,10 +61,18 @@ fn ratio(numerator: i32, denominator: i32) -> i32 {
     }
 }
 
-fn angle(component: i32, length: i32, behind: bool) -> i32 {
-    let fraction = ratio(component, length);
+/// 457F70: the signed angle word of a Q31 sine.
+pub(crate) fn asin(fraction: i32) -> i32 {
     let value = i32::from(asin_table::ASIN[(fraction.unsigned_abs() >> 21) as usize]);
-    let value = if fraction < 0 { -value } else { value };
+    if fraction < 0 {
+        -value
+    } else {
+        value
+    }
+}
+
+fn angle(component: i32, length: i32, behind: bool) -> i32 {
+    let value = asin(ratio(component, length));
     // The nonpositive rear branch replaces the angle; it does not subtract
     // 0x2000 from it (EXE408AA9/408AED).
     if behind {
@@ -89,7 +97,7 @@ fn sine_q31(angle: i32) -> i32 {
     }
 }
 
-fn rotate(first: &mut [i32; 3], second: &mut [i32; 3], angle: i32) {
+pub(crate) fn rotate(first: &mut [i32; 3], second: &mut [i32; 3], angle: i32) {
     let sine = sine_q31(angle);
     let cosine = sine_q31(angle.wrapping_add(0x4000));
     let old_first = *first;

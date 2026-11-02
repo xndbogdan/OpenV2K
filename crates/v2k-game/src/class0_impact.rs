@@ -6,7 +6,8 @@
 //! and Type50, exactly as the Main Base abort does, Type89's class1
 //! explosion, Type118's class65 Geyser and Type36's class16 again. Flags,
 //! weights, Type106 and gates have zero multipliers, so no shot is lethal to
-//! them.
+//! them. Type110's class67 style is the one with a `+28` hook, `FUN_00421990`,
+//! and its body the one with capability 8; its lethal hit takes class67 again.
 
 use crate::{
     entity::{Class0ActorOwner, Entity, EntityManager},
@@ -57,7 +58,8 @@ pub enum Class0Death {
     Geyser {
         sea_delta_raw: i32,
     },
-    /// Type36's alternate class16 Generate Flares, reinstalled.
+    /// Type36's alternate class16 Generate Flares or Type110's class67 Queen,
+    /// reinstalled.
     Flares,
 }
 
@@ -184,6 +186,21 @@ fn run(
     {
         return Err(Block::Runtime("unaudited style hit slot"));
     }
+    let primary = !matches!(
+        hit_entry,
+        crate::damage::EntityHitEntry::Infected | crate::damage::EntityHitEntry::Cured
+    );
+    if primary && entity_type == crate::queen::ENTITY_TYPE {
+        // DAC0 calls class67's style +28, FUN_00421990, with the particle's
+        // position (particle +8) before 11030.
+        let mut velocity = entity.velocity_raw();
+        crate::queen::hit(
+            &mut entity.queen,
+            &mut velocity,
+            crate::entity::world_position_raw(impact.position_world),
+        );
+        entity.set_velocity_raw(velocity);
+    }
     // 11030 jolts only a detailed body (0x04000000) not held by 0x08000000.
     let mut flags = state_bits(entity, IMPACT_REACTION_ENABLED_STATE_BIT)?;
     if flags != 0 {
@@ -259,7 +276,11 @@ fn run(
             if entity_type == crate::main_base_type54_abort::TYPE118_ENTITY_TYPE {
                 return geyser_death(manager, scheduler, resources, id);
             }
-            if entity_type == crate::main_base_type54_abort::TYPE36_ENTITY_TYPE {
+            if matches!(
+                entity_type,
+                crate::main_base_type54_abort::TYPE36_ENTITY_TYPE
+                    | crate::main_base_type54_abort::TYPE110_ENTITY_TYPE
+            ) {
                 return flare_death(manager, scheduler, id);
             }
             if !is_change_sea_level_type(entity_type) {
@@ -272,8 +293,34 @@ fn run(
         *committed |= error.committed_prefix;
         Block::Damage(error)
     })?;
-    // 10EB0's accepted-hit suffix is empty: these rows have no +80 sound and
-    // no capability 8, so neither the cue nor the class5 particle.
+    // 10EB0's accepted-hit suffix: no row has a +80 sound; Type110 alone has
+    // capability 8, which emits class 5 from its model's +08 below it.
+    if primary && checked.filtered_damage_raw != 0 {
+        let entity = manager.entity_mut(id).unwrap();
+        if entity.capability_flags & 8 != 0 {
+            let flags = state_bits(entity, 0x2000 | 0x4000 | 0x8000_0000)?;
+            let slot = crate::entity_collision_state::active_model_slot_from_state_flags(flags);
+            let model = entity.model_slots[slot].ok_or(Block::Runtime("accepted-hit model"))?;
+            let extent = resources
+                .global_model(model)
+                .ok_or(Block::Runtime("accepted-hit model extent"))?
+                .radius;
+            let mut position = entity.position_raw();
+            position[2] = position[2].wrapping_sub(extent as i16);
+            world_fx.emit_primary_hit_capability_follow_up_raw(
+                crate::primary_hit::PrimaryHitCapabilityEmission {
+                    target_handle: id,
+                    target_allocation_identity: u64::from(id),
+                    selected_model_slot: slot,
+                    selected_global_model_id: model as u16,
+                    position_raw: position,
+                    particle_class: 5,
+                    particle_scale_raw: 0x800,
+                    owner_sign: flags >> 31,
+                },
+            );
+        }
+    }
     Ok(checked)
 }
 
@@ -305,8 +352,8 @@ fn geyser_death(
     }
 }
 
-/// 10C10's alternate class16: the class0 owner readopts the dying body,
-/// which keeps generating flares.
+/// 10C10's alternate class16 or class67: the class0 owner readopts the dying
+/// body, which keeps generating flares or runs the dying Queen.
 fn flare_death(
     manager: &mut EntityManager,
     scheduler: &mut SpecializedActorTaskScheduler,

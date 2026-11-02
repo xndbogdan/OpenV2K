@@ -10312,6 +10312,15 @@ fn draw_gameplay_world(
                 )
             });
             let mut emitter_boundary = None;
+            // 40A9F0's Queen selectors reach 421AE0, which stamps a drawn gun.
+            let queen_selectors =
+                entity.entity_type == v2k_game::queen::ENTITY_TYPE && entity.queen.record.is_some();
+            let mut queen_stamps = Vec::new();
+            let mut queen_stamp =
+                |point: v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePoint| {
+                    queen_stamps.push((point.emitter_index, point.position_words));
+                };
+            let mut queen_boundary = None;
             let mut stamp_error = None;
             let mut stamp_origin = |point| {
                 if let Some(runtime) = entity.ordinary_type47_aim_and_fire_runtime.as_mut() {
@@ -10364,6 +10373,30 @@ fn draw_gameplay_world(
                 tree =
                     tree.with_native_external_frame(ExternalFrameMode::Raw, native_context.clone());
             }
+            if let (true, Some((frame, viewport)), Some(root_model)) = (
+                queen_selectors,
+                native_context.clone(),
+                cache.global_model(model_id),
+            ) {
+                tree = tree.with_actor_emitter_presentation(
+                    v2k_game::actor_emitter_external_frame::ActorEmitterModelPresentation {
+                        emitter:
+                            v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePresentation {
+                                descriptor: v2k_game::queen::draw_selector_descriptor(),
+                                root_model,
+                                root_vars: &entity_anim_vars,
+                                frame,
+                                viewport,
+                                stamp_origin: &mut queen_stamp,
+                                last_boundary: &mut queen_boundary,
+                                current_node_owned: true,
+                                current_source_points_view: None,
+                            },
+                        actor_origin_raw: origin_raw,
+                        actor_draw_origin: draw_pos,
+                    },
+                );
+            }
             if let (Some(descriptor), Some(model), RetailRuntimeValue::Known(Some(runtime))) = (
                 descriptor.as_ref(),
                 cache.global_model(model_id),
@@ -10403,6 +10436,13 @@ fn draw_gameplay_world(
             drop(tree);
             drop(stamp_origin);
             drop(random_u16);
+            drop(queen_stamp);
+            for (selector, position_raw) in queen_stamps {
+                v2k_game::queen::stamp_drawn_muzzle(&mut entity.queen, selector, position_raw);
+            }
+            if let Some(boundary) = queen_boundary {
+                report_actor_emitter_boundary(entity_id, model_id, boundary);
+            }
             if let Some(boundary) = emitter_boundary {
                 report_actor_emitter_boundary(entity_id, model_id, boundary);
             }

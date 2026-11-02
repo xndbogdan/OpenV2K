@@ -984,6 +984,7 @@ mod tests {
             native_type122_runtime: None,
             native_type30_runtime: None,
             rolling_boulder_runtime: None,
+            queen: Default::default(),
             native_type30_aim_runtime: None,
             native_type40_runtime: None,
             native_type40_aim_runtime: None,

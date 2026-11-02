@@ -9,7 +9,8 @@
 //! run that class38 task from birth, moving the level's sea. A dead Type118
 //! keeps this owner for its class65 Geyser; Type36 keeps it, living or
 //! dying, for class16's flares. Type74's detailed visits charge class59's
-//! Sub-K word; its coarse ones skip the walk.
+//! Sub-K word; its coarse ones skip the walk. Type110, the Queen, keeps it
+//! living and dying for class67, whose visits may spawn the Type68 she holds.
 
 use super::{authenticate_metadata, living_class, reselect_class0_actor, Class0ActorError};
 use crate::{
@@ -75,8 +76,9 @@ impl Class0ActorOwner {
             || context.auxiliary_word_at_0x0c() != RetailRuntimeValue::Known(0)
             || match living {
                 65 => bits(entity, DYING_STATE_BIT)? == 0,
-                // Class16 is Type36's alternate too: the dying body keeps it.
-                16 => false,
+                // Class16 is Type36's alternate too, class67 Type110's: the
+                // dying body keeps it.
+                16 | 67 => false,
                 _ => bits(entity, DYING_STATE_BIT)? != 0,
             }
         {
@@ -100,6 +102,7 @@ impl Class0ActorOwner {
                     | (65, Some(ActorTaskRuntime::Geyser(_)))
                     | (16, Some(ActorTaskRuntime::GenerateFlares))
                     | (59, Some(ActorTaskRuntime::RemoteBeamer(_)))
+                    | (67, Some(ActorTaskRuntime::Queen))
             )
             // A finished class38 has staged its removal.
             || (living == 38 && bits(entity, DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0)
@@ -200,6 +203,8 @@ pub struct Class0ActorTick {
     pub sea_level_receipt: Option<crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt>,
     /// A Geyser visit's lift of the bodies above it.
     pub geyser_lift: Option<GeyserLift>,
+    /// The Type68 a Queen's visit spawned at the live list's tail.
+    pub spawned_owner: Option<Class0ActorOwner>,
 }
 
 pub fn tick_class0_actor_owner(
@@ -218,6 +223,7 @@ pub fn tick_class0_actor_owner(
             retained_owner: None,
             sea_level_receipt: None,
             geyser_lift: None,
+            spawned_owner: None,
         };
     }
     if manager.native_class0_has_pending_prefix(id) {
@@ -226,6 +232,7 @@ pub fn tick_class0_actor_owner(
             retained_owner: Some(owner),
             sea_level_receipt: None,
             geyser_lift: None,
+            spawned_owner: None,
         };
     }
     if Class0ActorOwner::adopt(manager, id) != Ok(owner) {
@@ -234,16 +241,19 @@ pub fn tick_class0_actor_owner(
             retained_owner: None,
             sea_level_receipt: None,
             geyser_lift: None,
+            spawned_owner: None,
         };
     }
     let mut sea_level_receipt = None;
     let mut geyser_lift = None;
+    let mut spawned_owner = None;
     let result = run_frame(
         manager,
         owner,
         &mut frame,
         &mut sea_level_receipt,
         &mut geyser_lift,
+        &mut spawned_owner,
     );
     match result {
         Ok(outcome) => {
@@ -253,6 +263,7 @@ pub fn tick_class0_actor_owner(
                 retained_owner: Class0ActorOwner::adopt(manager, id).ok(),
                 sea_level_receipt,
                 geyser_lift,
+                spawned_owner,
             }
         }
         Err(reason) => Class0ActorTick {
@@ -265,6 +276,7 @@ pub fn tick_class0_actor_owner(
             retained_owner: sea_level_receipt.is_none().then_some(owner),
             sea_level_receipt,
             geyser_lift: None,
+            spawned_owner,
         },
     }
 }
@@ -284,6 +296,7 @@ fn run_frame(
         crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt,
     >,
     geyser_lift: &mut Option<GeyserLift>,
+    spawned_owner: &mut Option<Class0ActorOwner>,
 ) -> Result<Class0ActorOutcome, Class0ActorError> {
     let id = owner.entity_id();
     let entity = manager
@@ -359,6 +372,7 @@ fn run_frame(
             detailed,
             sea_level_receipt,
             geyser_lift,
+            spawned_owner,
         )?;
     }
     let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
@@ -476,6 +490,7 @@ fn run_callback(
         crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt,
     >,
     geyser_lift: &mut Option<GeyserLift>,
+    spawned_owner: &mut Option<Class0ActorOwner>,
 ) -> Result<(), Class0ActorError> {
     let id = owner.entity_id();
     let program =
@@ -606,6 +621,29 @@ fn run_callback(
                 Some(ActorTaskRuntime::Geyser(state)) => state.step_sea(terrain, dt),
                 _ => return Err(Class0ActorError::Graph),
             }
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+        }
+        Some(ActorTaskRuntime::Queen) => {
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            // 4222C0 ignores the coarse argument: every callback runs whole.
+            let tick = crate::queen::tick(
+                manager,
+                id,
+                &mut crate::queen::QueenFrame {
+                    resources: &*frame.resources,
+                    world_fx: &mut *frame.world_fx,
+                    frame_dt: frame.elapsed_micros,
+                    dt,
+                    retail_tick: frame.retail_tick,
+                },
+            )?;
+            *spawned_owner = tick.held_owner;
+            let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
             if !entity.actor_tasks.finish_exact_visit(visit) {
                 return Err(Class0ActorError::Graph);
             }

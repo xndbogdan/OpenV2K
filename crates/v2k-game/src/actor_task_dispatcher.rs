@@ -163,6 +163,7 @@ pub enum ActorTaskRuntimeFamily {
     Geyser,
     GenerateFlares,
     RemoteBeamer,
+    Queen,
     Intro2GunTurret,
     ExplodingRing,
     HiveRadial,
@@ -232,6 +233,9 @@ pub enum ActorTaskRuntime {
     /// Class59 FUN_00405420/FUN_004054C0: no timeout. The word is the body's Sub-K
     /// word 1, which FUN_004054A0 zeroes when the task goes.
     RemoteBeamer(u16),
+    /// Class67's FUN_0040D210 Primary: no timeout and no private data. The
+    /// Queen's record lives in her Sub-K, which outlives the task.
+    Queen,
     Intro2GunTurret(crate::intro2_gun_turret::task::GunTurretTaskState),
     ExplodingRing(crate::type60_exploding_ring::Type60ExplodingRingTaskState),
     HiveRadial(HiveRadialTaskState),
@@ -303,6 +307,7 @@ impl ActorTaskRuntime {
             Self::Geyser(_) => ActorTaskRuntimeFamily::Geyser,
             Self::GenerateFlares => ActorTaskRuntimeFamily::GenerateFlares,
             Self::RemoteBeamer(_) => ActorTaskRuntimeFamily::RemoteBeamer,
+            Self::Queen => ActorTaskRuntimeFamily::Queen,
             Self::Intro2GunTurret(_) => ActorTaskRuntimeFamily::Intro2GunTurret,
             Self::ExplodingRing(_) => ActorTaskRuntimeFamily::ExplodingRing,
             Self::HiveRadial(_) => ActorTaskRuntimeFamily::HiveRadial,
@@ -1897,6 +1902,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::Geyser(_)) => Some(ActorTaskRuntimeFamily::Geyser),
             Some(ActorTaskRuntime::GenerateFlares) => Some(ActorTaskRuntimeFamily::GenerateFlares),
             Some(ActorTaskRuntime::RemoteBeamer(_)) => Some(ActorTaskRuntimeFamily::RemoteBeamer),
+            Some(ActorTaskRuntime::Queen) => Some(ActorTaskRuntimeFamily::Queen),
             Some(ActorTaskRuntime::ExplodingRing(_)) => Some(ActorTaskRuntimeFamily::ExplodingRing),
             Some(ActorTaskRuntime::HiveRadial(_)) => Some(ActorTaskRuntimeFamily::HiveRadial),
             Some(ActorTaskRuntime::BoulderRolling(_)) => {
@@ -2021,6 +2027,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntime::Geyser(_) => unreachable!("Geyser requires its native visit"),
             ActorTaskRuntime::GenerateFlares => unreachable!("Generate Flares requires its native visit"),
             ActorTaskRuntime::RemoteBeamer(_) => unreachable!("Remote Beamer requires its native visit"),
+            ActorTaskRuntime::Queen => unreachable!("Queen requires its native visit"),
             ActorTaskRuntime::PortableRadar => unreachable!("Portable Radar requires its native visit"),
             ActorTaskRuntime::TractorBeam(_) => unreachable!("Tractor Beam requires its native visit"),
             ActorTaskRuntime::ExplodingRing(_) => {
@@ -2296,6 +2303,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntimeFamily::Geyser => unreachable!("Geyser requires its native visit"),
             ActorTaskRuntimeFamily::GenerateFlares => unreachable!("Generate Flares requires its native visit"),
             ActorTaskRuntimeFamily::RemoteBeamer => unreachable!("Remote Beamer requires its native visit"),
+            ActorTaskRuntimeFamily::Queen => unreachable!("Queen requires its native visit"),
             ActorTaskRuntimeFamily::PortableRadar => unreachable!("Portable Radar requires its native visit"),
             ActorTaskRuntimeFamily::TractorBeam => unreachable!("Tractor Beam requires its native visit"),
             ActorTaskRuntimeFamily::ExplodingRing => {
