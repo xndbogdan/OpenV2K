@@ -35,6 +35,7 @@ fn row_index(row: Type38Row) -> usize {
         Type38Row::Type129 => 1,
         Type38Row::Type119 => 2,
         Type38Row::Type32 => 3,
+        Type38Row::Type2 => 4,
     }
 }
 
@@ -146,7 +147,10 @@ fn type38_family_births_publish_their_rows_on_the_ground_host() {
             assert_eq!(
                 profile.policy(),
                 match row {
-                    Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 => {
+                    Type38Row::Type38
+                    | Type38Row::Type119
+                    | Type38Row::Type32
+                    | Type38Row::Type2 => {
                         NativeExplosionPolicy::Class1
                     }
                     Type38Row::Type129 => NativeExplosionPolicy::Class63,
@@ -362,7 +366,7 @@ fn lethal_playing_hits_run_class1_and_class63() {
             .actor_tasks
             .task_in_slot(ActorTaskSlot::Primary);
         match row {
-            Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 => {
+            Type38Row::Type38 | Type38Row::Type119 | Type38Row::Type32 | Type38Row::Type2 => {
                 assert_eq!(style(&manager, id), 0x004c_7150);
                 assert!(primary.is_none(), "BAC0 runs A860");
             }

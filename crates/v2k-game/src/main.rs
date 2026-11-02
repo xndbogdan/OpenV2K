@@ -4747,6 +4747,9 @@ fn run_game(
                             | SpecializedActorTaskProductionOutcome::NativeType31Family(
                                 v2k_game::native_type31::Type31Outcome::Blocked { .. },
                             )
+                            | SpecializedActorTaskProductionOutcome::NativeType69(
+                                v2k_game::native_type69::Type69Outcome::Blocked { .. },
+                            )
                             | SpecializedActorTaskProductionOutcome::SharedFish(
                                 v2k_game::shared_fish::SharedFishOutcome::Blocked { .. },
                             )

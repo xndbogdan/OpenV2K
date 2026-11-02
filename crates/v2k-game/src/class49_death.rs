@@ -234,10 +234,18 @@ impl NativeExplosionSourceProfile {
             // Search acquiring, pursuing, completion and the fallback: +2C null.
             Self::Type43 => matches!(style, 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8),
             // Aimless, Move completion, Search and the fallback: +2C null.
-            Self::Type38Family(_) => matches!(
-                style,
-                0x004c_7930 | 0x004c_7978 | 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_74f8
-            ),
+            // Type2 adds Defecate Virus, whose +2C is null too.
+            Self::Type38Family(row) => {
+                matches!(
+                    style,
+                    0x004c_7930
+                        | 0x004c_7978
+                        | 0x004c_7a50
+                        | 0x004c_7a98
+                        | 0x004c_7ae0
+                        | 0x004c_74f8
+                ) || (row == crate::native_type38::Type38Row::Type2 && style == 0x004c_7e88)
+            }
             // Follow Beacons, Search, Capture's people pursuit, Trash
             // Buildings and the fallback: +2C null. Without a J the carrying
             // Capture variants are never reached.
@@ -333,6 +341,7 @@ impl NativeExplosionSourceProfile {
             | Self::Type38Family(crate::native_type38::Type38Row::Type38)
             | Self::Type38Family(crate::native_type38::Type38Row::Type119)
             | Self::Type38Family(crate::native_type38::Type38Row::Type32)
+            | Self::Type38Family(crate::native_type38::Type38Row::Type2)
             | Self::Type12Family(crate::native_type12::Type12Row::Type12)
             | Self::RollingBoulder
             | Self::ExplodingFlyer(_)

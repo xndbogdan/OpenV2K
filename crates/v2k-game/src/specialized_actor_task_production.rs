@@ -209,6 +209,7 @@ pub enum SpecializedActorTaskFamily {
     NativeType38Family,
     NativeType12Family,
     NativeType31Family,
+    NativeType69,
     NativeType123,
     NativeType86,
     SharedFish,
@@ -281,6 +282,7 @@ enum SpecializedActorTaskOwner {
     NativeType38Family(crate::native_type38::Type38FamilyOwner),
     NativeType12Family(crate::native_type12::Type12FamilyOwner),
     NativeType31Family(crate::native_type31::Type31FamilyOwner),
+    NativeType69(crate::native_type69::Type69Owner),
     NativeType123(crate::native_type123::Type123Owner),
     NativeType86(crate::native_type86::Type86Owner),
     SharedFish(crate::shared_fish::SharedFishOwner),
@@ -460,6 +462,7 @@ impl SpecializedActorTaskOwner {
             Self::NativeType38Family(owner) => owner.entity_id(),
             Self::NativeType12Family(owner) => owner.entity_id(),
             Self::NativeType31Family(owner) => owner.entity_id(),
+            Self::NativeType69(owner) => owner.entity_id(),
             Self::NativeType123(owner) => owner.entity_id(),
             Self::NativeType86(owner) => owner.entity_id(),
             Self::SharedFish(owner) => owner.entity_id(),
@@ -528,6 +531,7 @@ impl SpecializedActorTaskOwner {
             Self::NativeType38Family(_) => SpecializedActorTaskFamily::NativeType38Family,
             Self::NativeType12Family(_) => SpecializedActorTaskFamily::NativeType12Family,
             Self::NativeType31Family(_) => SpecializedActorTaskFamily::NativeType31Family,
+            Self::NativeType69(_) => SpecializedActorTaskFamily::NativeType69,
             Self::NativeType123(_) => SpecializedActorTaskFamily::NativeType123,
             Self::NativeType86(_) => SpecializedActorTaskFamily::NativeType86,
             Self::SharedFish(_) => SpecializedActorTaskFamily::SharedFish,
@@ -662,6 +666,9 @@ impl SpecializedActorTaskOwner {
             }
             Self::NativeType12Family(owner) => {
                 Self::NativeType12Family(owner.fork_for_main_base_abort_transaction())
+            }
+            Self::NativeType69(owner) => {
+                Self::NativeType69(owner.fork_for_main_base_abort_transaction())
             }
             Self::NativeType31Family(owner) => {
                 Self::NativeType31Family(owner.fork_for_main_base_abort_transaction())
@@ -1021,6 +1028,7 @@ pub enum SpecializedActorTaskProductionOutcome {
     NativeType38Family(crate::native_type38::Type38Outcome),
     NativeType12Family(crate::native_type12::Type12Outcome),
     NativeType31Family(crate::native_type31::Type31Outcome),
+    NativeType69(crate::native_type69::Type69Outcome),
     NativeType123(crate::native_type123::Type123Outcome),
     NativeType86(crate::native_type86::Type86Outcome),
     SharedFish(crate::shared_fish::SharedFishOutcome),
@@ -1092,6 +1100,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::NativeType38Family(_) => SpecializedActorTaskFamily::NativeType38Family,
             Self::NativeType12Family(_) => SpecializedActorTaskFamily::NativeType12Family,
             Self::NativeType31Family(_) => SpecializedActorTaskFamily::NativeType31Family,
+            Self::NativeType69(_) => SpecializedActorTaskFamily::NativeType69,
             Self::NativeType123(_) => SpecializedActorTaskFamily::NativeType123,
             Self::NativeType86(_) => SpecializedActorTaskFamily::NativeType86,
             Self::SharedFish(_) => SpecializedActorTaskFamily::SharedFish,
@@ -1195,6 +1204,7 @@ impl SpecializedActorTaskProductionOutcome {
             Self::NativeType38Family(outcome) => outcome.entity_id(),
             Self::NativeType12Family(outcome) => outcome.entity_id(),
             Self::NativeType31Family(outcome) => outcome.entity_id(),
+            Self::NativeType69(outcome) => outcome.entity_id(),
             Self::NativeType123(outcome) => outcome.entity_id(),
             Self::NativeType86(outcome) => outcome.entity_id(),
             Self::SharedFish(outcome) => outcome.entity_id(),
@@ -2471,6 +2481,12 @@ impl SpecializedActorTaskScheduler {
             .retain(|present| present.entity_id() != owner.entity_id());
         self.owners
             .push(SpecializedActorTaskOwner::Class0Actor(owner));
+    }
+    pub(crate) fn register_native_type69(&mut self, owner: crate::native_type69::Type69Owner) {
+        self.owners
+            .retain(|present| present.entity_id() != owner.entity_id());
+        self.owners
+            .push(SpecializedActorTaskOwner::NativeType69(owner));
     }
     pub fn adopt_portable_radars(&mut self, manager: &EntityManager) -> usize {
         let owners: Vec<_> = manager
@@ -4564,6 +4580,10 @@ impl SpecializedActorTaskScheduler {
             notification_phase,
             main_base_abort_active,
         } = frame;
+        // Beams a Type2 drain linked tick from here too.
+        for owner in manager.take_born_native_type69() {
+            self.register_native_type69(owner);
+        }
         // Meteors a Type35 drain linked during presentation tick from here.
         for owner in manager.take_born_native_weapons() {
             if let Err(reason) = self.register_native_weapon(manager, owner) {
@@ -5612,6 +5632,22 @@ impl SpecializedActorTaskScheduler {
                         tick.outcome,
                     ));
                 }
+                SpecializedActorTaskOwner::NativeType69(owner) => {
+                    let tick = crate::native_type69::tick_type69(
+                        manager,
+                        owner,
+                        crate::native_type69::Type69Frame {
+                            world_fx,
+                            elapsed_micros,
+                        },
+                    );
+                    if let Some(owner) = tick.retained_owner {
+                        retained.push(SpecializedActorTaskOwner::NativeType69(owner));
+                    }
+                    outcomes.push(SpecializedActorTaskProductionOutcome::NativeType69(
+                        tick.outcome,
+                    ));
+                }
                 SpecializedActorTaskOwner::NativeType31Family(owner) => {
                     let tick = crate::native_type31::tick_type31_family(
                         manager,
@@ -6535,6 +6571,13 @@ impl SpecializedActorTaskScheduler {
                     },
                 )
             }
+            SpecializedActorTaskOwner::NativeType69(owner) => {
+                SpecializedActorTaskProductionOutcome::NativeType69(
+                    crate::native_type69::Type69Outcome::Dropped {
+                        entity_id: owner.entity_id(),
+                    },
+                )
+            }
             SpecializedActorTaskOwner::NativeType123(owner) => {
                 SpecializedActorTaskProductionOutcome::NativeType123(
                     crate::native_type123::Type123Outcome::Dropped {
@@ -7322,6 +7365,14 @@ fn prepare_intro2_radial_actor_mutation(
             matches!(owner,
             SpecializedActorTaskOwner::NativeType12Family(owner)
                 if owner.entity_id() == entity_id && owner.completed_mutation_boundary(manager))
+        });
+    }
+    if entity.native_type69_runtime.is_some() {
+        return owners.iter().any(|owner| {
+            matches!(owner,
+            SpecializedActorTaskOwner::NativeType69(owner)
+                if owner.entity_id() == entity_id
+                    && crate::native_type69::Type69Owner::adopt(manager, entity_id).ok() == Some(*owner))
         });
     }
     if entity.native_type31_runtime.is_some() {

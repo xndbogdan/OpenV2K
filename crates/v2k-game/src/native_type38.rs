@@ -11,6 +11,10 @@
 //! Type32 (world 32, model1098) is Type119's data with its own mass, health,
 //! armour no hit reaches, a six-second surface breath and a third choice:
 //! BeaconNearby (rule11, `16570`) Follow Beacons33.
+//! Type2 (world 47, model1168) owns K without L: Always Defecate Virus4 and
+//! Move About Aimlessly5, UnderAttack Search7, fourteen H legs, and a
+//! method25 gun whose shots are Type69 tractor beams
+//! ([`crate::native_type69`]).
 //! Every death is the shared class49 terminal (BAF0, then BAC0 or BC90).
 
 pub mod aim;
@@ -22,6 +26,8 @@ mod tasks;
 pub(crate) use construction::{publish_authored_type38, Type38AuthoredConstructionRequest};
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod type2_tests;
 
 use crate::{
     common_mover::sub_d::{Type9SubDFrameOwner, Type9SubDRuntime},
@@ -67,6 +73,23 @@ pub(crate) const TYPE32_CHOICES: [BehaviorChoice; 3] = [
         behavior_class_id: 33,
     },
 ];
+pub(crate) const TYPE2_CHOICES: [BehaviorChoice; 3] = [
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 1,
+        behavior_class_id: 4,
+    },
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 1,
+        behavior_class_id: 5,
+    },
+    BehaviorChoice {
+        weight_rule_id: 2,
+        weight_multiplier: 1,
+        behavior_class_id: 7,
+    },
+];
 pub(crate) const CHOICES: [BehaviorChoice; 2] = [
     BehaviorChoice {
         weight_rule_id: 1,
@@ -105,6 +128,8 @@ pub enum Type38Row {
     Type119,
     /// World 32's model1098 walkers, alternate class1.
     Type32,
+    /// World 47's model1168 tractor-beam walkers, alternate class1.
+    Type2,
 }
 
 impl Type38Row {
@@ -114,6 +139,7 @@ impl Type38Row {
             129 => Some(Self::Type129),
             119 => Some(Self::Type119),
             32 => Some(Self::Type32),
+            2 => Some(Self::Type2),
             _ => None,
         }
     }
@@ -123,6 +149,7 @@ impl Type38Row {
             Self::Type129 => 129,
             Self::Type119 => 119,
             Self::Type32 => 32,
+            Self::Type2 => 2,
         }
     }
     pub const fn model(self) -> usize {
@@ -130,6 +157,7 @@ impl Type38Row {
             Self::Type38 | Self::Type129 => MODEL,
             Self::Type119 => 1161,
             Self::Type32 => 1098,
+            Self::Type2 => 1168,
         }
     }
     pub const fn health(self) -> i32 {
@@ -137,11 +165,12 @@ impl Type38Row {
             Self::Type38 | Self::Type129 => HEALTH,
             Self::Type119 => 20_000,
             Self::Type32 => 10_000,
+            Self::Type2 => 4000,
         }
     }
     pub const fn default_flags(self) -> u32 {
         match self {
-            Self::Type38 | Self::Type129 => DEFAULT_FLAGS,
+            Self::Type38 | Self::Type129 | Self::Type2 => DEFAULT_FLAGS,
             Self::Type119 | Self::Type32 => TYPE119_DEFAULT_FLAGS,
         }
     }
@@ -150,6 +179,7 @@ impl Type38Row {
             Self::Type38 | Self::Type129 => &CHOICES,
             Self::Type119 => &TYPE119_CHOICES,
             Self::Type32 => &TYPE32_CHOICES,
+            Self::Type2 => &TYPE2_CHOICES,
         }
     }
     /// 09A80 allocates one 0x3C-byte Sub-H record per authored leg.
@@ -157,6 +187,14 @@ impl Type38Row {
         match self {
             Self::Type38 | Self::Type129 => 8,
             Self::Type119 | Self::Type32 => 4,
+            Self::Type2 => 14,
+        }
+    }
+    /// Type2's 09A80 allocates K without L.
+    pub const fn topology(self) -> crate::entity_collision_state::CommonMoverComponentTopology {
+        match self {
+            Self::Type2 => crate::intro2_common_mover::ABCDEHK_TOPOLOGY,
+            _ => TOPOLOGY,
         }
     }
     /// 24E30 copies this sound into Sub-E; Type129's emitter is silent.
@@ -174,12 +212,24 @@ impl Type38Row {
                 raw_word_at_0x12: 48,
                 ..EMITTER
             },
+            // Method25 births a Type69 beam at the table's speed 1.
+            Self::Type2 => ProjectileEmitterDescriptor {
+                projectile_method: 25,
+                random_interval_us: 400_000,
+                spread_raw: 256,
+                aim_threshold_raw: 30_000,
+                speed_override_raw: 0,
+                target_axis_tolerance_raw: 3072,
+                sound_id: 8,
+                raw_word_at_0x12: 0,
+                ..EMITTER
+            },
         }
     }
     pub const fn target_warning_sound(self) -> Option<u16> {
         match self {
             Self::Type38 => Some(87),
-            Self::Type129 | Self::Type119 | Self::Type32 => None,
+            Self::Type129 | Self::Type119 | Self::Type32 | Self::Type2 => None,
         }
     }
     pub const fn axis(self) -> CommonAxisDescriptor {
@@ -189,12 +239,13 @@ impl Type38Row {
                 Self::Type38 => 3109,
                 Self::Type129 => 3073,
                 Self::Type119 | Self::Type32 => 3077,
+                Self::Type2 => 1,
             },
         }
     }
     pub const fn alternate_behavior_class(self) -> u32 {
         match self {
-            Self::Type38 | Self::Type119 | Self::Type32 => 1,
+            Self::Type38 | Self::Type119 | Self::Type32 | Self::Type2 => 1,
             Self::Type129 => 63,
         }
     }
@@ -229,15 +280,29 @@ pub type Type38Owner = shared::NativeGroundActorOwner<profile::Type38Profile>;
 pub type Type129Owner = shared::NativeGroundActorOwner<profile::Type129Profile>;
 pub type Type119Owner = shared::NativeGroundActorOwner<profile::Type119Profile>;
 pub type Type32Owner = shared::NativeGroundActorOwner<profile::Type32Profile>;
+pub type Type2Owner = shared::NativeGroundActorOwner<profile::Type2Profile>;
 pub type Type38Outcome = shared::NativeGroundActorOutcome;
 
-/// One scheduler entry for both rows; each keeps its own framework profile.
+/// One scheduler entry for every row; each keeps its own framework profile.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type38FamilyOwner {
     Type38(Type38Owner),
     Type129(Type129Owner),
     Type119(Type119Owner),
     Type32(Type32Owner),
+    Type2(Type2Owner),
+}
+
+macro_rules! each_owner {
+    ($self:expr, $owner:ident => $body:expr) => {
+        match $self {
+            Type38FamilyOwner::Type38($owner) => $body,
+            Type38FamilyOwner::Type129($owner) => $body,
+            Type38FamilyOwner::Type119($owner) => $body,
+            Type38FamilyOwner::Type32($owner) => $body,
+            Type38FamilyOwner::Type2($owner) => $body,
+        }
+    };
 }
 
 impl Type38FamilyOwner {
@@ -251,51 +316,27 @@ impl Type38FamilyOwner {
             Some(Type38Row::Type129) => Type129Owner::adopt(manager, id).map(Self::Type129),
             Some(Type38Row::Type119) => Type119Owner::adopt(manager, id).map(Self::Type119),
             Some(Type38Row::Type32) => Type32Owner::adopt(manager, id).map(Self::Type32),
+            Some(Type38Row::Type2) => Type2Owner::adopt(manager, id).map(Self::Type2),
             None => Err(shared::NativeGroundActorBlock::Allocation),
         }
     }
     pub const fn entity_id(self) -> u32 {
-        match self {
-            Self::Type38(owner) => owner.entity_id(),
-            Self::Type129(owner) => owner.entity_id(),
-            Self::Type119(owner) => owner.entity_id(),
-            Self::Type32(owner) => owner.entity_id(),
-        }
+        each_owner!(self, owner => owner.entity_id())
     }
     pub(crate) const fn actor_lease(self) -> MainBaseAbortActorLease {
-        match self {
-            Self::Type38(owner) => owner.actor_lease(),
-            Self::Type129(owner) => owner.actor_lease(),
-            Self::Type119(owner) => owner.actor_lease(),
-            Self::Type32(owner) => owner.actor_lease(),
-        }
+        each_owner!(self, owner => owner.actor_lease())
     }
     pub(crate) const fn has_pending_prefix(self) -> bool {
-        match self {
-            Self::Type38(owner) => owner.has_pending_prefix(),
-            Self::Type129(owner) => owner.has_pending_prefix(),
-            Self::Type119(owner) => owner.has_pending_prefix(),
-            Self::Type32(owner) => owner.has_pending_prefix(),
-        }
+        each_owner!(self, owner => owner.has_pending_prefix())
     }
     pub(crate) fn park_external_prefix(&mut self) {
-        match self {
-            Self::Type38(owner) => owner.park_external_prefix(),
-            Self::Type129(owner) => owner.park_external_prefix(),
-            Self::Type119(owner) => owner.park_external_prefix(),
-            Self::Type32(owner) => owner.park_external_prefix(),
-        }
+        each_owner!(self, owner => owner.park_external_prefix())
     }
     pub(crate) const fn fork_for_main_base_abort_transaction(self) -> Self {
         self
     }
     pub(crate) fn completed_mutation_boundary(self, manager: &EntityManager) -> bool {
-        match self {
-            Self::Type38(owner) => owner.completed_mutation_boundary(manager),
-            Self::Type129(owner) => owner.completed_mutation_boundary(manager),
-            Self::Type119(owner) => owner.completed_mutation_boundary(manager),
-            Self::Type32(owner) => owner.completed_mutation_boundary(manager),
-        }
+        each_owner!(self, owner => owner.completed_mutation_boundary(manager))
     }
 }
 
@@ -343,41 +384,24 @@ pub fn tick_type38_family(
         retail_tick: frame.retail_tick,
         capture: shared::NativeCaptureDispatch::NoCapture,
     };
-    // Neither row has a class12 publication: a terminal death leaves no
+    // No row has a class12 publication: a terminal death leaves no
     // replacement owner (E370's lifecycle death is a held boundary).
+    macro_rules! tick {
+        ($owner:expr, $variant:ident) => {{
+            let tick = shared::tick_native_ground_actor(manager, $owner, shared_frame);
+            debug_assert!(tick.replacement_terminal.is_none());
+            Type38FamilyTick {
+                outcome: tick.outcome,
+                retained_owner: tick.retained_owner.map(Type38FamilyOwner::$variant),
+            }
+        }};
+    }
     match owner {
-        Type38FamilyOwner::Type38(owner) => {
-            let tick = shared::tick_native_ground_actor(manager, owner, shared_frame);
-            debug_assert!(tick.replacement_terminal.is_none());
-            Type38FamilyTick {
-                outcome: tick.outcome,
-                retained_owner: tick.retained_owner.map(Type38FamilyOwner::Type38),
-            }
-        }
-        Type38FamilyOwner::Type129(owner) => {
-            let tick = shared::tick_native_ground_actor(manager, owner, shared_frame);
-            debug_assert!(tick.replacement_terminal.is_none());
-            Type38FamilyTick {
-                outcome: tick.outcome,
-                retained_owner: tick.retained_owner.map(Type38FamilyOwner::Type129),
-            }
-        }
-        Type38FamilyOwner::Type119(owner) => {
-            let tick = shared::tick_native_ground_actor(manager, owner, shared_frame);
-            debug_assert!(tick.replacement_terminal.is_none());
-            Type38FamilyTick {
-                outcome: tick.outcome,
-                retained_owner: tick.retained_owner.map(Type38FamilyOwner::Type119),
-            }
-        }
-        Type38FamilyOwner::Type32(owner) => {
-            let tick = shared::tick_native_ground_actor(manager, owner, shared_frame);
-            debug_assert!(tick.replacement_terminal.is_none());
-            Type38FamilyTick {
-                outcome: tick.outcome,
-                retained_owner: tick.retained_owner.map(Type38FamilyOwner::Type32),
-            }
-        }
+        Type38FamilyOwner::Type38(owner) => tick!(owner, Type38),
+        Type38FamilyOwner::Type129(owner) => tick!(owner, Type129),
+        Type38FamilyOwner::Type119(owner) => tick!(owner, Type119),
+        Type38FamilyOwner::Type32(owner) => tick!(owner, Type32),
+        Type38FamilyOwner::Type2(owner) => tick!(owner, Type2),
     }
 }
 
@@ -438,8 +462,28 @@ const MODEL1161_SUB_H: [([u16; 3], [u8; 4]); 4] = [
     ([29, 33, 35], [1, 1, 2, 2]),
 ];
 
+/// Model1168's fourteen legs (Type2).
+const MODEL1168_SUB_H: [([u16; 3], [u8; 4]); 14] = [
+    ([2, 54, 60], [1, 2, 3, 4]),
+    ([3, 55, 61], [0, 2, 3, 5]),
+    ([52, 56, 62], [0, 1, 4, 5]),
+    ([53, 57, 63], [0, 1, 4, 5]),
+    ([0, 58, 64], [2, 5, 6, 7]),
+    ([1, 59, 65], [1, 2, 3, 4]),
+    ([44, 46, 54], [7, 8, 9, 9]),
+    ([45, 47, 55], [6, 8, 9, 9]),
+    ([20, 48, 56], [6, 7, 9, 9]),
+    ([21, 49, 57], [6, 7, 8, 8]),
+    ([42, 50, 58], [12, 12, 13, 13]),
+    ([43, 51, 59], [10, 12, 13, 13]),
+    ([30, 52, 60], [10, 11, 13, 13]),
+    ([31, 53, 61], [10, 11, 12, 12]),
+];
+
 /// The Section-12 words each row authors beyond its shared shape.
 struct RowRecord {
+    model_variable_count: u32,
+    surface_selectors: [u8; 2],
     mass_raw: u16,
     damage: crate::damage::DamageProfile,
     surface_lifetime_ms: u32,
@@ -473,7 +517,43 @@ fn row_record(row: Type38Row) -> RowRecord {
         reserved_at_0x0e: [0; 2],
     };
     match row {
+        Type38Row::Type2 => RowRecord {
+            model_variable_count: 2,
+            surface_selectors: [0, 0],
+            mass_raw: 100,
+            damage: DamageProfile {
+                thresholds_raw: [0, 8000, 6000, 5000, 200, 0, 0],
+                multipliers_q8: [0, 256, 256, 128, 128, 512, 0],
+            },
+            surface_lifetime_ms: 0,
+            payloads: CommonMoverGklPayloads {
+                sub_g: None,
+                sub_k: Some([1, 2]),
+                sub_l: None,
+            },
+            sub_a: SubAPropulsionDescriptor {
+                acceleration_raw: 1500,
+                overspeed_correction_raw: -3000,
+                target_speed_base_raw: 200,
+            },
+            sub_b: SubBLateralDescriptor {
+                projection_threshold_rate_raw: 10_000,
+                correction_rate_raw: 10_000,
+            },
+            sub_c: SubCLiftDescriptor {
+                base_clearance_raw: 75,
+                ..sub_c
+            },
+            sub_d: NATIVE_TYPE38_SUB_D,
+            death_sound: None,
+            hit_sound: None,
+            sub_h_completion_sound: None,
+            sub_h_phase_rate_raw: 0x2000_0000,
+            sub_h: &MODEL1168_SUB_H,
+        },
         Type38Row::Type38 | Type38Row::Type129 => RowRecord {
+            model_variable_count: 4,
+            surface_selectors: [1, 0],
             mass_raw: 100,
             damage: DamageProfile {
                 thresholds_raw: [0, 10_000, 5000, 10_000, 200, 500, 0],
@@ -513,6 +593,8 @@ fn row_record(row: Type38Row) -> RowRecord {
             ..row_record(Type38Row::Type119)
         },
         Type38Row::Type119 => RowRecord {
+            model_variable_count: 4,
+            surface_selectors: [1, 0],
             mass_raw: 500,
             // Only channel 3 reaches its health.
             damage: DamageProfile {
@@ -564,18 +646,18 @@ pub(crate) fn authenticate_metadata(
     };
     let record = row_record(row);
     if metadata.model_slots != [row.model() as u16; 4]
-        || metadata.model_variable_count_raw != Known(4)
+        || metadata.model_variable_count_raw != Known(record.model_variable_count)
         || metadata.mass_raw != record.mass_raw
         || metadata.capability_flags != 8
         || metadata.initial_health_raw != Some(row.health())
         || metadata.damage_profile != Some(record.damage)
         || metadata.common_world_effects
             != Known(CommonWorldEffectProfile {
-                surface_selectors: [1, 0],
+                surface_selectors: record.surface_selectors,
                 surface_lifetime_ms: record.surface_lifetime_ms,
                 low_health_effect_words: [0; 3],
             })
-        || metadata.common_mover_topology != Known(TOPOLOGY)
+        || metadata.common_mover_topology != Known(row.topology())
         || metadata.common_mover_gkl_payloads != Known(record.payloads)
         || Intro2KlComponents::from_native_constructor(metadata).is_err()
         || metadata.sub_a_propulsion_descriptor != Known(Some(record.sub_a))

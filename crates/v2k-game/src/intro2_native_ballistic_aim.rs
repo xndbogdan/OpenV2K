@@ -57,6 +57,8 @@ pub(crate) enum NativeBallisticProfileId {
     Type43,
     /// Ordinary Type35 meteor launchers: method 11 births a Type34 actor.
     Type35,
+    /// World 47's Type2 walkers: method 25 births a Type69 tractor beam.
+    Type2,
     /// Ordinary Type38 ground shooters, the silent Type129 carriers and the
     /// Type119 walkers.
     Type38,
@@ -117,6 +119,7 @@ impl NativeBallisticProfileId {
             Self::Type56 | Self::Type77 => 30,
             Self::Type40 => 1,
             Self::Type35 => 11,
+            Self::Type2 => 25,
         }
     }
     const fn speed_override(self) -> i16 {
@@ -148,7 +151,8 @@ impl NativeBallisticProfileId {
             | Self::Type76
             | Self::Type77
             | Self::Type29
-            | Self::Type35 => 0,
+            | Self::Type35
+            | Self::Type2 => 0,
         }
     }
     fn table_speed(self) -> i16 {
@@ -170,6 +174,7 @@ impl NativeBallisticProfileId {
     const fn sound(self) -> u16 {
         match self {
             Self::Type40 | Self::Type128 | Self::Type81 | Self::Type35 => 0,
+            Self::Type2 => 8,
             Self::Type10 | Self::Type5 | Self::Type80 | Self::Type55 => 81,
             Self::Type126 => 82,
             Self::Type43 => 68,
@@ -199,6 +204,7 @@ impl NativeBallisticProfileId {
             Self::Type81 => 0x5459_5038_3153_5243,
             Self::Type43 => 0x5459_5034_3353_5243,
             Self::Type35 => 0x5459_5033_3553_5243,
+            Self::Type2 => 0x5459_5030_3253_5243,
             Self::Type38 => 0x5459_5033_3853_5243,
             Self::Type129 => 0x5459_3132_3953_5243,
             Self::Type119 => 0x5459_3131_3953_5243,
@@ -231,6 +237,7 @@ impl NativeBallisticProfileId {
             Self::Type81 => 0x5459_5038_3154_4754,
             Self::Type43 => 0x5459_5034_3354_4754,
             Self::Type35 => 0x5459_5033_3554_4754,
+            Self::Type2 => 0x5459_5030_3254_4754,
             Self::Type38 => 0x5459_5033_3854_4754,
             Self::Type129 => 0x5459_3132_3954_4754,
             Self::Type119 => 0x5459_3131_3954_4754,
@@ -262,6 +269,7 @@ impl NativeBallisticProfileId {
             Self::Type81 => (600_000, 256, 46, 24_000, 7680),
             Self::Type43 => (300_000, 1024, 0, 65_535, 7680),
             Self::Type35 => (600_000, 65_535, 0, 65_535, 7680),
+            Self::Type2 => (400_000, 256, 0, 30_000, 3072),
             Self::Type38 | Self::Type129 => (600_000, 256, 122, 4000, 5120),
             Self::Type119 | Self::Type32 => (800_000, 256, 48, 8000, 3840),
             Self::Type16 | Self::Type128 => (300_000, 100, 158, 16_000, 2560),
@@ -635,7 +643,10 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
     environment: ParticleEnvironment<'_>,
     retail_tick: u32,
 ) -> Result<NativeBallisticShotDrainOutcome, NativeBallisticShotDrainError> {
-    if P::ID == NativeBallisticProfileId::Type35 {
+    if matches!(
+        P::ID,
+        NativeBallisticProfileId::Type35 | NativeBallisticProfileId::Type2
+    ) {
         return Err(NativeBallisticShotDrainError::ActorBirthMethod);
     }
     let NativeShotSolutions {
@@ -704,7 +715,9 @@ pub(crate) fn drain_native_shots<P: NativeBallisticProfile>(
                     retail_tick,
                 )
                 .map(|_| P::ID.particle_class()),
-            NativeBallisticProfileId::Type35 => unreachable!("rejected above"),
+            NativeBallisticProfileId::Type35 | NativeBallisticProfileId::Type2 => {
+                unreachable!("rejected above")
+            }
         };
         if let Some(particle_class) = particle_class {
             materialized_particle_classes.push(particle_class);
@@ -808,6 +821,15 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                             entity.position_raw(),
                             entity.velocity_raw(),
                             projectile_class_row(11).expect("method 11 is an authored row"),
+                        )
+                    }
+                    // Method 25's leading dword is 0 too, at the table's speed 1.
+                    NativeBallisticProfileId::Type2 => {
+                        crate::ordinary_type47_shot_math::drain_transient_with_method_row(
+                            request,
+                            entity.position_raw(),
+                            entity.velocity_raw(),
+                            projectile_class_row(25).expect("method 25 is an authored row"),
                         )
                     }
                 }

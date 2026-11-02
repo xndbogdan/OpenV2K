@@ -35,6 +35,7 @@ pub enum Intro2ShotDrainError {
     Type40(crate::native_type40::aim::Type40ShotDrainError),
     Type43(crate::native_type43::aim::Type43ShotDrainError),
     Type35(crate::native_type43::aim::Type35ShotDrainError),
+    Type2(crate::native_type38::aim::Type2ShotDrainError),
     Type38Family(crate::native_type38::aim::Type38ShotDrainError),
     Type12Family(crate::native_type12::aim::Type12ShotDrainError),
     Type94(crate::intro2_type94::aim::Intro2Type94ShotDrainError),
@@ -381,6 +382,22 @@ fn drain_emitter_family(
         )
         .map(|outcome| outcome.consumed_requests)
         .map_err(Intro2ShotDrainError::Type43),
+        EmitterFamily::Type38Family
+            if entities
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .and_then(crate::native_type38::type38_row)
+                == Some(crate::native_type38::Type38Row::Type2) =>
+        {
+            crate::native_type38::aim::drain_type2_shots(
+                entities,
+                world_fx,
+                resources,
+                id,
+                retail_tick,
+            )
+            .map_err(Intro2ShotDrainError::Type2)
+        }
         EmitterFamily::Type38Family => crate::native_type38::aim::drain_type38_family_shots(
             entities,
             world_fx,

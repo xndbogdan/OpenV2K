@@ -171,6 +171,7 @@ pub enum ActorTaskRuntimeFamily {
     RocketFlight,
     RocketTrail,
     PortableRadar,
+    TractorBeam,
 }
 
 /// Inner state stored by the shared retail-style task owner.
@@ -240,6 +241,8 @@ pub enum ActorTaskRuntime {
     /// 405540's lifetime-0 405610 callback. Sub-K word 1 is the entity's,
     /// so the wrapper keeps no private state.
     PortableRadar,
+    /// Class58's 4051B0/405240: lifetime 0, the held target's handle.
+    TractorBeam(crate::native_type69::TractorBeamTaskState),
 }
 
 impl ActorTaskRuntime {
@@ -304,6 +307,7 @@ impl ActorTaskRuntime {
             Self::RocketFlight(_) => ActorTaskRuntimeFamily::RocketFlight,
             Self::RocketTrail => ActorTaskRuntimeFamily::RocketTrail,
             Self::PortableRadar => ActorTaskRuntimeFamily::PortableRadar,
+            Self::TractorBeam(_) => ActorTaskRuntimeFamily::TractorBeam,
         }
     }
 }
@@ -1899,6 +1903,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::RocketFlight(_)) => Some(ActorTaskRuntimeFamily::RocketFlight),
             Some(ActorTaskRuntime::RocketTrail) => Some(ActorTaskRuntimeFamily::RocketTrail),
             Some(ActorTaskRuntime::PortableRadar) => Some(ActorTaskRuntimeFamily::PortableRadar),
+            Some(ActorTaskRuntime::TractorBeam(_)) => Some(ActorTaskRuntimeFamily::TractorBeam),
             Some(ActorTaskRuntime::TrashFurniture(_)) => {
                 Some(ActorTaskRuntimeFamily::TrashFurniture)
             }
@@ -2010,6 +2015,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntime::Geyser(_) => unreachable!("Geyser requires its native visit"),
             ActorTaskRuntime::GenerateFlares => unreachable!("Generate Flares requires its native visit"),
             ActorTaskRuntime::PortableRadar => unreachable!("Portable Radar requires its native visit"),
+            ActorTaskRuntime::TractorBeam(_) => unreachable!("Tractor Beam requires its native visit"),
             ActorTaskRuntime::ExplodingRing(_) => {
                 unreachable!("Exploding-Ring was rejected before generic task traversal")
             }
@@ -2283,6 +2289,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntimeFamily::Geyser => unreachable!("Geyser requires its native visit"),
             ActorTaskRuntimeFamily::GenerateFlares => unreachable!("Generate Flares requires its native visit"),
             ActorTaskRuntimeFamily::PortableRadar => unreachable!("Portable Radar requires its native visit"),
+            ActorTaskRuntimeFamily::TractorBeam => unreachable!("Tractor Beam requires its native visit"),
             ActorTaskRuntimeFamily::ExplodingRing => {
                 unreachable!("Exploding-Ring was rejected before generic task traversal")
             }

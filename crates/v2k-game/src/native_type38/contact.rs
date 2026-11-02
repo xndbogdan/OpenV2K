@@ -30,6 +30,9 @@ pub fn resolve_type38_family_static_contact(
         Some(super::Type38Row::Type32) => {
             resolve::<super::profile::Type32Profile>(frame, id, playing)
         }
+        Some(super::Type38Row::Type2) => {
+            resolve::<super::profile::Type2Profile>(frame, id, playing)
+        }
         None => Type38ContactOutcome::Ineligible,
     }
 }

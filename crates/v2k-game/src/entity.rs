@@ -37,6 +37,8 @@ mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
 mod native_type105_construction;
+mod native_type69_construction;
+pub use native_type69_construction::Type69BirthRequest;
 mod native_type56_construction;
 pub mod network_body;
 mod rolling_boulder_construction;
@@ -1590,6 +1592,8 @@ pub struct Entity {
     pub native_type12_runtime: Option<crate::native_type12::Type12Runtime>,
     pub native_type12_aim_runtime: Option<crate::native_type12::aim::Type12AimRuntime>,
     pub native_type31_runtime: Option<crate::native_type31::Type31Runtime>,
+    /// A Type2's method-25 tractor beam.
+    pub native_type69_runtime: Option<crate::native_type69::Type69Runtime>,
     /// Ordinary Type18's authored allocation and its method20 shot FIFO.
     pub native_type18_runtime: Option<crate::native_type18::Type18Runtime>,
     pub native_type18_aim_runtime: Option<crate::native_type18::aim::Type18AimRuntime>,
@@ -1787,6 +1791,7 @@ impl Entity {
             native_type12_runtime: self.native_type12_runtime.clone(),
             native_type12_aim_runtime: self.native_type12_aim_runtime.clone(),
             native_type31_runtime: self.native_type31_runtime,
+            native_type69_runtime: self.native_type69_runtime,
             native_type18_runtime: self.native_type18_runtime,
             native_type18_aim_runtime: self.native_type18_aim_runtime.clone(),
             native_type28_runtime: self.native_type28_runtime,
@@ -1908,6 +1913,7 @@ impl Entity {
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
             native_type31_runtime: None,
+            native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
@@ -2699,6 +2705,8 @@ pub struct EntityManager {
     /// Meteors a Type35 drain linked during presentation; the scheduler
     /// registers their owners before its next pass.
     born_native_weapons: Vec<crate::native_entity_weapons::NativeEntityWeaponOwner>,
+    /// Type69 beams a Type2 drain linked; the scheduler owns them next pass.
+    born_native_type69: Vec<crate::native_type69::Type69Owner>,
     player_id: Option<u32>,
     player_dying_contact_runtime: Option<player_hit::PlayerDyingContactRuntime>,
     /// In a network game, each damage the local player took
@@ -3217,6 +3225,7 @@ fn build_type93_materialiser_entity(
         native_type12_runtime: None,
         native_type12_aim_runtime: None,
         native_type31_runtime: None,
+        native_type69_runtime: None,
         native_type18_runtime: None,
         native_type18_aim_runtime: None,
         native_type28_runtime: None,
@@ -3856,6 +3865,7 @@ impl EntityManager {
                 .clone(),
             pending_actor_deferred_destroy_ids: self.pending_actor_deferred_destroy_ids.clone(),
             born_native_weapons: self.born_native_weapons.clone(),
+            born_native_type69: self.born_native_type69.clone(),
             player_id: self.player_id,
             player_dying_contact_runtime: self.player_dying_contact_runtime,
             network_player_hits: self.network_player_hits.clone(),
@@ -4908,6 +4918,7 @@ impl EntityManager {
             pending_factory_scientist_destroy_ids: Vec::new(),
             pending_actor_deferred_destroy_ids: Vec::new(),
             born_native_weapons: Vec::new(),
+            born_native_type69: Vec::new(),
             player_id: None,
             player_dying_contact_runtime: None,
             network_player_hits: None,
@@ -5070,7 +5081,8 @@ impl EntityManager {
                     .is_some()
                     || matches!(
                         spawn.entity_type,
-                        3 | 5
+                        2 | 3
+                            | 5
                             | 6
                             | 9
                             | 12
@@ -5573,6 +5585,7 @@ impl EntityManager {
                 native_type12_runtime: None,
                 native_type12_aim_runtime: None,
                 native_type31_runtime: None,
+                native_type69_runtime: None,
                 native_type18_runtime: None,
                 native_type18_aim_runtime: None,
                 native_type28_runtime: None,
@@ -6056,6 +6069,7 @@ impl EntityManager {
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
             native_type31_runtime: None,
+            native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
@@ -6870,6 +6884,7 @@ impl EntityManager {
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
             native_type31_runtime: None,
+            native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
@@ -8359,6 +8374,7 @@ impl EntityManager {
             native_type12_runtime: None,
             native_type12_aim_runtime: None,
             native_type31_runtime: None,
+            native_type69_runtime: None,
             native_type18_runtime: None,
             native_type18_aim_runtime: None,
             native_type28_runtime: None,
@@ -12840,6 +12856,7 @@ impl EntityManager {
             pending_factory_scientist_destroy_ids: Vec::new(),
             pending_actor_deferred_destroy_ids: Vec::new(),
             born_native_weapons: Vec::new(),
+            born_native_type69: Vec::new(),
             player_id,
             player_dying_contact_runtime: None,
             network_player_hits: None,
