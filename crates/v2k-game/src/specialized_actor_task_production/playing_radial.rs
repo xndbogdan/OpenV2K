@@ -149,7 +149,7 @@ impl SpecializedActorTaskScheduler {
                 31 | 105 => entity.native_type31_runtime.is_some(),
                 56 => entity.native_type56_runtime.is_some(),
                 66 | 82 | 125 => entity.intro2_type66_runtime.is_some(),
-                22 | 23 | 24 | 62 | 124 | 25 | 37 => entity.shared_fish_runtime.is_some(),
+                22 | 23 | 24 | 62 | 124 | 25 | 37 | 20 => entity.shared_fish_runtime.is_some(),
                 3 | 27 => entity.rolling_boulder_runtime.is_some(),
                 // Mass 1 takes no 14AE0 impulse; its zero multipliers filter
                 // every packet.
@@ -364,12 +364,13 @@ impl DynamicRadialLiveCallbacks for PlayingNativeCallbacks<'_> {
             crate::entity::DynamicRadialLiveBlockReason,
         >,
     > {
-        if entities
-            .iter_all()
-            .any(|entity| entity.id == id && entity.shared_fish_runtime.is_some() && kind == 124)
-        {
+        if entities.iter_all().any(|entity| {
+            entity.id == id
+                && entity.shared_fish_runtime.is_some()
+                && crate::shared_fish::explodes(kind)
+        }) {
             return Some(
-                crate::shared_fish::death::run_type124_auto_pilot_death(
+                crate::shared_fish::death::run_exploding_fish_death(
                     crate::class49_terminal::Class49TerminalFrame {
                         entities,
                         resources: self.resources,

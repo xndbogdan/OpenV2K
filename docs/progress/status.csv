@@ -577,3 +577,4 @@ address,status,note
 0x00406390,implemented,Generate Flares visit: a still class-47 flare near the player (docs/re/CLASS0_RUNTIME.md)
 0x0043F660,implemented,flare entity hit: the burst then FUN_00410D30 (docs/re/CLASS0_RUNTIME.md)
 0x00410D30,implemented,flare frame-scaled checked damage and its hit presentation (docs/re/CLASS0_RUNTIME.md)
+0x0040BAC0,implemented,class1 explosion terminal; the Type20 swimmer joins the shared class1/49/63 owner (docs/re/FISH_RUNTIME.md#type20)

@@ -548,6 +548,7 @@ pub(super) fn apply_environment(
 ) -> Result<(), SharedFishBlock> {
     use SharedFishBlock as Block;
     let environment = manager.intro2_type13_environment();
+    let physics = manager.common_environment_physics();
     let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     let wind = match environment.0 {
@@ -572,7 +573,13 @@ pub(super) fn apply_environment(
                 above_sea: field(0x80)? != 0,
             })
         }
-        _ => return Err(Block::Runtime("fish oscillating or unknown wind mode")),
+        // 44EBD0's gust, advanced once a world frame before the actors.
+        2 => Some(environment::SteadyWind {
+            vector_raw: physics.current_wind_raw,
+            height_limit_raw: physics.maximum_wind_height_raw,
+            above_sea: physics.wind_above_sea,
+        }),
+        _ => return Err(Block::Runtime("fish unknown wind mode")),
     };
     let mass = NonZeroU16::new(entity.mass_raw).ok_or(Block::Runtime("fish nonzero drag mass"))?;
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {

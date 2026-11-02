@@ -645,3 +645,126 @@ fn a_dead_type37_takes_the_swimmer_class12() {
             < 500
     );
 }
+
+fn type20s(manager: &EntityManager) -> Vec<u32> {
+    manager
+        .iter_all()
+        .filter(|e| e.entity_type == 20)
+        .map(|e| e.id)
+        .collect()
+}
+
+#[v2k_test_support::retail_test]
+fn type20s_are_born_on_the_fish_owner_and_swim_without_a_sub_b() {
+    for (level, count) in [(22, 2), (23, 1), (33, 1), (34, 2)] {
+        let (mut session, mut manager, mut fx) = world(level, None);
+        let ids = type20s(&manager);
+        assert_eq!(ids.len(), count, "world{level}");
+        let metadata = manager.type_runtime_metadata(20).unwrap();
+        assert_eq!(
+            metadata.sub_b_lateral_descriptor,
+            RetailRuntimeValue::Known(None)
+        );
+        assert_eq!(
+            metadata.sub_d_steering_descriptor,
+            RetailRuntimeValue::Known(Some(crate::common_mover::sub_d::TYPE20_SUB_D))
+        );
+        let before: Vec<_> = ids
+            .iter()
+            .map(|&id| {
+                manager
+                    .iter_all()
+                    .find(|e| e.id == id)
+                    .unwrap()
+                    .position_raw()
+            })
+            .collect();
+        for &id in &ids {
+            assert!(allocation_authenticates(&manager, id));
+            assert!(matches!(class(&manager, id), 4 | 5 | 6), "world{level}");
+        }
+        let mut scheduler = SpecializedActorTaskScheduler::new();
+        scheduler.adopt_shared_fish(&manager);
+        for tick in 1001..1501 {
+            pass(&mut session, &mut manager, &mut fx, &mut scheduler, tick);
+        }
+        assert!(
+            ids.iter().zip(&before).any(|(&id, &position)| {
+                manager
+                    .iter_all()
+                    .find(|e| e.id == id)
+                    .unwrap()
+                    .position_raw()
+                    != position
+            }),
+            "world{level}: no Type20 moved"
+        );
+    }
+}
+
+/// Alternate rule 3 class1: BAF0's ten class16 particles and radial, then
+/// BAC0's A860 and staged removal, with no drop.
+#[v2k_test_support::retail_test]
+fn a_lethal_burn_takes_type20_through_class1() {
+    use crate::{
+        class49_death::{finished_terminal_hit_authenticates, NativeExplosionPolicy},
+        entity_collision_state::{DEFERRED_DESTROY_PENDING_STATE_BIT, DYING_STATE_BIT},
+    };
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(23);
+    manager.cleanup_pending_actor_deferred_destroys();
+    let id = type20s(&manager)[0];
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    assert!(scheduler.adopt_shared_fish(&manager) > 0);
+    manager.entity_mut(id).unwrap().collision.health_raw = RetailRuntimeValue::Known(1);
+    let newest = manager.iter_all().map(|entity| entity.id).max().unwrap();
+    let mut hull = PlayerHull::default();
+    let result = crate::attached_particle_damage::apply_attached_particle_damage(
+        crate::attached_particle_damage::AttachedParticleDamageFrame {
+            entities: &mut manager,
+            resources: &mut session.cache,
+            world_fx: &mut fx,
+            static_damage: &mut StaticDamageScheduler::new(),
+            scheduler: &mut scheduler,
+            notifications: &mut GameplayNotifications::new(),
+            retail_tick: 81,
+            world: crate::attached_particle_damage::AttachedParticleDamageWorld::Playing {
+                player_hull: &mut hull,
+                extra_lives: RetailRuntimeValue::Known(2),
+            },
+        },
+        crate::world_fx::AttachedParticleDamageRequest {
+            target_handle: id,
+            packet_va: 0x004c_c048,
+            source_entity_type_raw: (-5_i32) as u32,
+            current_emitter: None,
+            ratio_numerator: 255,
+            ratio_denominator: 255,
+        },
+    );
+    assert!(matches!(result, Ok(damage) if damage > 0), "{result:?}");
+    let entity = manager.iter_all().find(|e| e.id == id).unwrap();
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        panic!("class1 context")
+    };
+    assert_eq!(
+        context.active_style().style_address(),
+        NativeExplosionPolicy::Class1.style_address()
+    );
+    assert_eq!(
+        entity
+            .collision
+            .state_flags_at_0x08
+            .masked(DYING_STATE_BIT | DEFERRED_DESTROY_PENDING_STATE_BIT),
+        RetailRuntimeValue::Known(DYING_STATE_BIT | DEFERRED_DESTROY_PENDING_STATE_BIT)
+    );
+    assert!(ActorTaskSlot::IN_RETAIL_TICK_ORDER
+        .into_iter()
+        .all(|slot| entity.actor_tasks.task_in_slot(slot).is_none()));
+    assert!(finished_terminal_hit_authenticates(&manager, id));
+    assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
+    assert!(!scheduler.shared_fish_completed_owner(&manager, id));
+    assert!(!manager
+        .iter_all()
+        .any(|e| e.id > newest && e.entity_type == 61));
+}

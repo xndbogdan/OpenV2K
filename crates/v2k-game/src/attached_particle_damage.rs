@@ -241,7 +241,7 @@ fn apply_actor_damage(
         let auto_pilot = frame
             .entities
             .iter_all()
-            .any(|entity| entity.id == id && entity.entity_type == 124);
+            .any(|entity| entity.id == id && crate::shared_fish::explodes(entity.entity_type));
         let result = apply_live_actor_checked_damage(
             frame.entities,
             frame.world_fx,
@@ -257,7 +257,7 @@ fn apply_actor_damage(
                 }
                 // Type124's class63 takes BAF0's radial with this frame's world.
                 use crate::class49_terminal::Class49WorldContext;
-                crate::shared_fish::death::run_type124_auto_pilot_death(
+                crate::shared_fish::death::run_exploding_fish_death(
                     crate::class49_terminal::Class49TerminalFrame {
                         entities,
                         resources: &mut *frame.resources,

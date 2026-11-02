@@ -37,7 +37,8 @@ pub(super) fn run(
     let RetailRuntimeValue::Known(topology) = frame.metadata.common_mover_topology else {
         return Err(Block::Metadata);
     };
-    let RetailRuntimeValue::Known(Some(b)) = frame.metadata.sub_b_lateral_descriptor else {
+    // Type20 has no Sub-B: 01430's tail then skips it.
+    let RetailRuntimeValue::Known(b) = frame.metadata.sub_b_lateral_descriptor else {
         return Err(Block::Metadata);
     };
     let RetailRuntimeValue::Known(Some(d)) = frame.metadata.sub_d_steering_descriptor else {
@@ -80,7 +81,7 @@ pub(super) fn run(
                     dispatch_mode: frame.dispatch_mode,
                     elapsed_micros: frame.elapsed_micros,
                     sub_a_descriptor: None,
-                    sub_b_descriptor: Some(b),
+                    sub_b_descriptor: b,
                     sub_c_descriptor: None,
                     // Class12's null target skips the prelude and Sub-D.
                     sub_d_descriptor: target.is_some().then_some(CommonMoverPreludeSubD {

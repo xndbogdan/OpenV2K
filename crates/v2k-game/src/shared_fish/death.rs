@@ -76,7 +76,7 @@ pub(crate) fn completed_shared_fish_death(manager: &EntityManager, id: u32) -> b
 /// Type124's 10C10 -> DB80 -> AC60 selects alternate class63 directly. The
 /// fish's own remote/dying no-ops and completed task custody precede the shared
 /// BAF0/BC90 terminal, whose finish retires this scheduler owner.
-pub(crate) fn run_type124_auto_pilot_death(
+pub(crate) fn run_exploding_fish_death(
     mut frame: crate::class49_terminal::Class49TerminalFrame<'_>,
     id: u32,
 ) -> Result<LiveActorDeathResult<()>, SharedFishDeathBlock> {
@@ -106,7 +106,7 @@ pub(crate) fn run_type124_auto_pilot_death(
             publication: None,
         });
     }
-    if entity.entity_type != 124 {
+    if !super::explodes(entity.entity_type) {
         return Err(Block::Metadata);
     }
     if bits(DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0

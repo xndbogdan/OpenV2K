@@ -1,7 +1,7 @@
 //! `44EC60` mode-zero drag and steady wind/current, after DCA0's basis write.
 //!
-//! Mode2's oscillating vector needs the separate global44EBD0 clock owner.
-//! The caller admits the authored static modes before invoking this leaf.
+//! Mode2 passes the current vector of the process-global 44EBD0 gust,
+//! which the manager advances once a world frame before the actors.
 
 use crate::{
     common_mover::type9_tail::{apply_type9_environment_drag_raw, Type9ModeZeroDrag},

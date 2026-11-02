@@ -178,6 +178,7 @@ fn publish_selection_with(
     let admitted = match entity.entity_type {
         25 => matches!(class, 5 | 6 | 69),
         37 => matches!(class, 4 | 5 | 10),
+        20 => matches!(class, 4 | 5 | 6),
         _ => matches!(class, 5 | 6 | 13),
     };
     if !admitted

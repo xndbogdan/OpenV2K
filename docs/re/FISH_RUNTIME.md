@@ -2,8 +2,8 @@
 
 Types22,23,24,62,124 share B/D/F components and authored neutral swimming tasks.
 Types23/62 are `zebrafsh`, with environment2004;22/24/124 use200C.
-The hostile [Type25 shark](TYPE25_SHARK.md) and [Type37](#type37) share this
-owner with `0xC`.
+The hostile [Type25 shark](TYPE25_SHARK.md), [Type37](#type37) and
+[Type20](#type20) share this owner with `0xC`.
 The aquatic resource catalog is overlay11; Reef is gameplay23 and Cistern30.
 Zebra Type62 uses common model38 and occurs in13/14/18/36. Its former
 constructor-only path classified it as furniture, omitted Sub-F construction
@@ -234,6 +234,34 @@ retail's Type37 moved on 1,007 ticks with a median step of 44.8 raw units
 throughout, keeping full health. Paths part, since the random words are not
 in step.
 
+## Type20
+
+Type20 (two in world 22, one in 23, one in 33, two in 34) is a `0xC` swimmer
+with Sub-D and Sub-F but no Sub-B: `01430`'s tail skips the lateral
+component. Its row: Retarget x5 (class5), Defecate Virus x4 (class4) and
+Wander x1 (class6), all rule 1, and alternate rule 3 class1. Its Sub-D has
+divisor 30, roll coupling, probes 512/256 and a zero classifier. Defecate
+Virus runs as for [Type37](#type37).
+
+- Death takes class1 (`FUN_0040BAC0`): `FUN_0040BAF0`'s burst and radial,
+  then `FUN_0040A860` and staged removal. With no A/B/N/G component,
+  capability 8 and a type outside 49 and 112..115, BAF0 scatters ten class16
+  particles. The style `4C7150` is null apart from its `+40`, so a later hit
+  on the finished body changes nothing. Hits, radials, attached particles
+  and the Main Base abort reach it through the shared terminal, as Type124's
+  class63 does.
+- World 33 blows an oscillating wind (mode 2). `44EC60` reads the vector
+  that `44EBD0` writes once a world frame before the actors, so the fish
+  environment takes the current gust vector there.
+
+Retail lab, Skip to World with an idle player: in world 33 retail's Type20
+moved on 1,005 of 2,928 ticks with a median step of 6.7 raw units (max 69),
+the port's on 974 with 7.8 (max 77). In world 23 the port's run ended at
+tick 1,468, when one of its sharks killed the idle player; retail's sharks
+did not reach the player in that run. The sharks' wander is random and out of
+step. Up to then the port's Type20 moved on 509 ticks with a median step of
+7.3 (max 72), against retail's 996 of 2,928 with 7.6 (max 76).
+
 ## Acceptance boundaries
 
 Constructor, graph and native scheduler regressions live in
@@ -297,5 +325,5 @@ than repeating the production type list. Across normal-tier overlays13–49 it
 finds114: three in13, three in14, four in18, eleven in22,43 in23, twenty in30,
 nineteen in34 and eleven in36. The dedicated Level1 regression covers all
 three actual fish, swimming/model animation, the first detailed sea cap and
-coarse-to-detailed resumption. Oscillating wind requires its separate global
-phase owner for200C actors;2004 zebra fish never enter that callback.
+coarse-to-detailed resumption. Oscillating wind takes the global 44EBD0
+gust vector for200C and `0xC` actors;2004 zebra fish never enter that callback.

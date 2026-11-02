@@ -340,9 +340,9 @@ impl crate::entity::DynamicRadialLiveCallbacks for Intro2RadialCallbacks<'_> {
         {
             return None;
         }
-        if kind == 124 {
+        if crate::shared_fish::explodes(kind) {
             return Some(
-                crate::shared_fish::death::run_type124_auto_pilot_death(
+                crate::shared_fish::death::run_exploding_fish_death(
                     crate::class49_terminal::Class49TerminalFrame::from_cinematic(
                         Intro2RadialFrame {
                             active_terminal_calls: self.active_terminal_calls.to_vec(),
