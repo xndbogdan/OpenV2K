@@ -218,6 +218,36 @@ pub(crate) struct Intro2RadialCallbacks<'a> {
 }
 
 impl crate::entity::DynamicRadialLiveCallbacks for Intro2RadialCallbacks<'_> {
+    fn lethal_split_custody(&self) -> bool {
+        true
+    }
+    fn lethal_split(
+        &mut self,
+        entities: &mut EntityManager,
+        id: u32,
+        world_fx: &mut WorldFx,
+        retail_tick: u32,
+        notifications: &mut GameplayNotifications,
+        split: crate::live_actor_checked_damage::LethalSplitRequest,
+    ) -> Option<
+        Result<
+            crate::live_actor_checked_damage::LiveActorDeathResult<
+                crate::entity::DynamicRadialDeathPublication,
+            >,
+            crate::entity::DynamicRadialLiveBlockReason,
+        >,
+    > {
+        Some(crate::native_type31::split::radial_lethal_split(
+            entities,
+            id,
+            self.resources,
+            world_fx,
+            retail_tick,
+            self.actor_tasks,
+            notifications,
+            split,
+        ))
+    }
     fn capture_task_custody(
         &mut self,
     ) -> Option<&mut dyn crate::intro2_type17::capture::CaptureTaskCustody> {

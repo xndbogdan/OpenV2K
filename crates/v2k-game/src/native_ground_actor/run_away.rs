@@ -191,8 +191,13 @@ fn publish_fleeing(
     let RetailRuntimeValue::Known(Some(a)) = sub_a_propulsion_runtime else {
         return Err(Block::Runtime("Sub-A"));
     };
-    let RetailRuntimeValue::Known(Some(h)) = sub_h_external_frame_runtime else {
-        return Err(Block::Runtime("Sub-H"));
+    // 06070 writes H only for a type that owns one (Type105/73/109 do not).
+    let owns_h = matches!(metadata.common_mover_topology,
+        RetailRuntimeValue::Known(topology) if topology.sub_h);
+    let mut h = match sub_h_external_frame_runtime {
+        RetailRuntimeValue::Known(Some(h)) if owns_h => Some(h),
+        RetailRuntimeValue::Known(None) if !owns_h => None,
+        _ => return Err(Block::Runtime("Sub-H")),
     };
     let result = apply_run_away_task_setup(
         actor_tasks,
@@ -204,7 +209,11 @@ fn publish_fleeing(
                     |effect| match effect {
                         RunAwayRuntimeConstructorEffect::Generic(
                             SharedGenericConstructorEffect::WriteSubHState08 { value },
-                        ) => h.set_enabled(value != 0),
+                        ) => {
+                            if let Some(h) = h.as_deref_mut() {
+                                h.set_enabled(value != 0)
+                            }
+                        }
                         RunAwayRuntimeConstructorEffect::Generic(
                             SharedGenericConstructorEffect::WriteSubADirection {
                                 direction_multiplier,

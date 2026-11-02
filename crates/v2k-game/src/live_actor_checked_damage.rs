@@ -91,6 +91,84 @@ pub struct LiveActorDeathResult<D> {
     pub publication: Option<D>,
 }
 
+/// Instance damage modifier `FUN_00416820`, installed by `104B0` for
+/// Type73 and Type109.
+pub(crate) const LETHAL_SPLIT_DAMAGE_MODIFIER: u32 = 0x0041_6820;
+
+/// `FUN_00416820`'s lethal branch, which the actor's own death owner runs:
+/// the capped births, the particle, the zeroed buffer and health, then 10C10.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LethalSplitRequest {
+    /// 90 when channel 3 carried more than four times the other channels
+    /// (no births), else 51.
+    pub particle_class: u8,
+    /// Packet `+14`: a source with capability bit 1 meeting the cap queues
+    /// hint 24.
+    pub owner_handle: u32,
+}
+
+impl LethalSplitRequest {
+    pub const fn births(self) -> bool {
+        self.particle_class == 51
+    }
+}
+
+/// Which call reaches the actor's death owner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiveActorDeathEntry {
+    /// 14E90's lethal health write calls 10C10.
+    Health,
+    /// The `416820` modifier took a lethal hit before 14E90.
+    LethalSplit(LethalSplitRequest),
+}
+
+enum LethalSplitGate {
+    Return(i32),
+    Lethal(LethalSplitRequest),
+}
+
+/// `416820`'s gates. A body whose `+68` age is still zero absorbs the hit;
+/// a dying or surviving body takes it unchanged.
+fn lethal_split_gate(
+    entity: &crate::entity::Entity,
+    delivery: &DamageDeliveryRecord,
+    filtered: i32,
+) -> Option<LethalSplitGate> {
+    if known(entity.collision.recent_relation_elapsed_us_at_0x68)? == 0 {
+        return Some(LethalSplitGate::Return(0));
+    }
+    if known(entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT))? != 0 {
+        return Some(LethalSplitGate::Return(filtered));
+    }
+    let buffer = known(entity.collision.pre_health_damage_buffer_raw)?;
+    let health = known(entity.collision.health_raw)?;
+    if filtered < buffer.wrapping_add(health) {
+        return Some(LethalSplitGate::Return(filtered));
+    }
+    // The raw packet, before the channel filter.
+    let (mut channel3, mut other) = (0i32, 0i32);
+    for (channel, amount) in delivery
+        .packet
+        .channels
+        .into_iter()
+        .zip(delivery.packet.amounts_raw)
+    {
+        if channel == 3 {
+            channel3 = channel3.wrapping_add(amount);
+        } else {
+            other = other.wrapping_add(amount);
+        }
+    }
+    Some(LethalSplitGate::Lethal(LethalSplitRequest {
+        particle_class: if other.wrapping_mul(4) < channel3 {
+            90
+        } else {
+            51
+        },
+        owner_handle: delivery.owner_handle,
+    }))
+}
+
 /// Explicit post-filter ratio. A peer's body sends the damage to its owner
 /// (kind 9). A present modifier or generic hit callback requires its own live
 /// owner; neither is treated as identity. The death closure is entered after the lethal health write and
@@ -98,11 +176,35 @@ pub struct LiveActorDeathResult<D> {
 pub(crate) fn apply_live_actor_checked_damage<D, E>(
     manager: &mut EntityManager,
     world_fx: &mut WorldFx,
-    mut request: LiveActorDamageRequest<'_>,
+    request: LiveActorDamageRequest<'_>,
     death: impl FnOnce(
         &mut EntityManager,
         &mut WorldFx,
         Option<&mut LiveActorDamageFeedback<'_>>,
+    ) -> Result<LiveActorDeathResult<D>, E>,
+) -> Result<LiveActorDamageOutcome<D>, LiveActorDamageError<E, D>> {
+    apply_live_actor_checked_damage_with_split(
+        manager,
+        world_fx,
+        request,
+        false,
+        |manager, world_fx, feedback, _| death(manager, world_fx, feedback),
+    )
+}
+
+/// As [`apply_live_actor_checked_damage`], for a caller whose death owner
+/// also runs `416820`'s lethal split (`split_custody`). Without it a body
+/// carrying that modifier fails closed at the modifier phase.
+pub(crate) fn apply_live_actor_checked_damage_with_split<D, E>(
+    manager: &mut EntityManager,
+    world_fx: &mut WorldFx,
+    mut request: LiveActorDamageRequest<'_>,
+    split_custody: bool,
+    death: impl FnOnce(
+        &mut EntityManager,
+        &mut WorldFx,
+        Option<&mut LiveActorDamageFeedback<'_>>,
+        LiveActorDeathEntry,
     ) -> Result<LiveActorDeathResult<D>, E>,
 ) -> Result<LiveActorDamageOutcome<D>, LiveActorDamageError<E, D>> {
     use LiveActorDamagePhase as Phase;
@@ -158,16 +260,58 @@ pub(crate) fn apply_live_actor_checked_damage<D, E>(
             }
             return Ok(outcome);
         }
-        if let Some(address) = known(entity.collision.pair_callbacks.damage_modifier_address)
+        match known(entity.collision.pair_callbacks.damage_modifier_address)
             .ok_or_else(|| unresolved(Phase::Modifier, false, "damage modifier"))?
         {
-            return Err(error(
-                Phase::Modifier,
-                false,
-                LiveActorDamageBlock::Callback(address),
-            ));
+            None => filtered,
+            // A peer's body (multiplayer) stays held: its kind-9 send is unported.
+            Some(LETHAL_SPLIT_DAMAGE_MODIFIER)
+                if split_custody
+                    && known(
+                        entity
+                            .collision
+                            .state_flags_at_0x08
+                            .masked(REMOTE_OWNED_STATE_BIT),
+                    ) == Some(0) =>
+            {
+                match lethal_split_gate(entity, &request.delivery, filtered)
+                    .ok_or_else(|| unresolved(Phase::Modifier, false, "416820 body"))?
+                {
+                    LethalSplitGate::Return(amount) => amount,
+                    LethalSplitGate::Lethal(split) => {
+                        let id = request.entity_id;
+                        let death_result = death(
+                            manager,
+                            world_fx,
+                            request.feedback.as_mut(),
+                            LiveActorDeathEntry::LethalSplit(split),
+                        )
+                        .map_err(|reason| {
+                            error(Phase::Death, true, LiveActorDamageBlock::Death(reason))
+                        })?;
+                        outcome.death_publication = death_result.publication;
+                        // 416820 returns 0: 14E90 meets the dying body and stops.
+                        let dying = manager.entity_mut(id).and_then(|entity| {
+                            known(entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT))
+                        });
+                        if dying.is_none_or(|bits| bits == 0) {
+                            let mut failure =
+                                unresolved(Phase::Death, true, "416820 left a living body");
+                            failure.death_publication = outcome.death_publication;
+                            return Err(failure);
+                        }
+                        return Ok(outcome);
+                    }
+                }
+            }
+            Some(address) => {
+                return Err(error(
+                    Phase::Modifier,
+                    false,
+                    LiveActorDamageBlock::Callback(address),
+                ))
+            }
         }
-        filtered
     };
     outcome.filtered_damage_raw = filtered;
     if known(
@@ -223,8 +367,13 @@ pub(crate) fn apply_live_actor_checked_damage<D, E>(
     if after > 0 {
         return Ok(outcome);
     }
-    let death_result = death(manager, world_fx, request.feedback.as_mut())
-        .map_err(|reason| error(Phase::Death, true, LiveActorDamageBlock::Death(reason)))?;
+    let death_result = death(
+        manager,
+        world_fx,
+        request.feedback.as_mut(),
+        LiveActorDeathEntry::Health,
+    )
+    .map_err(|reason| error(Phase::Death, true, LiveActorDamageBlock::Death(reason)))?;
     outcome.death_publication = death_result.publication;
     // 14E90 reads the target bit after successful10C10, then calls568B0(4)
     // for source46. This local resource hint is separate from the following

@@ -19,6 +19,8 @@ pub fn resolve_type31_family_static_contact(
     match row {
         Some(super::Type31Row::Type31) => resolve::<super::profile::Type31Profile>(frame, id),
         Some(super::Type31Row::Type105) => resolve::<super::profile::Type105Profile>(frame, id),
+        Some(super::Type31Row::Type73) => resolve::<super::profile::Type73Profile>(frame, id),
+        Some(super::Type31Row::Type109) => resolve::<super::profile::Type109Profile>(frame, id),
         None => Type31ContactOutcome::Ineligible,
     }
 }

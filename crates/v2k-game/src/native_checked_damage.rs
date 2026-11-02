@@ -10,8 +10,8 @@ use crate::entity_collision_state::RetailRuntimeValue;
 use crate::gameplay_notifications::GameplayNotifications;
 use crate::intro2_type8::NativeWorkerProfile;
 use crate::live_actor_checked_damage::{
-    apply_live_actor_checked_damage, LiveActorDamageError, LiveActorDamageFeedback,
-    LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathResult,
+    apply_live_actor_checked_damage_with_split, LiveActorDamageError, LiveActorDamageFeedback,
+    LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathEntry, LiveActorDeathResult,
 };
 use crate::main_base_type9_abort::MainBaseType9ResultScreenState;
 use crate::native_type86::NativeFourChoiceProfile;
@@ -68,16 +68,26 @@ pub(crate) fn apply_native_actor_checked_damage(
         ratio_denominator: request.ratio_denominator,
         feedback: Some(feedback),
     };
-    let result = apply_live_actor_checked_damage(
+    let split_custody = callbacks.lethal_split_custody();
+    let result = apply_live_actor_checked_damage_with_split(
         manager,
         world_fx,
         request,
-        |manager, world_fx, feedback| {
+        split_custody,
+        |manager, world_fx, feedback, entry| {
             let feedback = feedback.expect("native checked frame owns feedback");
             let notifications = match death_notifications.as_deref_mut() {
                 Some(notifications) => notifications,
                 None => &mut *feedback.notifications,
             };
+            if let LiveActorDeathEntry::LethalSplit(split) = entry {
+                return callbacks
+                    .lethal_split(manager, id, world_fx, retail_tick, notifications, split)
+                    .unwrap_or(Err(DynamicRadialLiveBlockReason::UnsupportedDeath {
+                        entity_type: kind,
+                        alternate_class: None,
+                    }));
+            }
             if let Some(result) =
                 callbacks.standard_death(manager, id, kind, world_fx, retail_tick, notifications)
             {
@@ -128,8 +138,9 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::NativeType56)
         }
-        105 if crate::native_type31::manager_allocation_authenticates(manager, id) => {
-            crate::native_type31::death::begin_type105_standard_death(manager, id)
+        105 | 73 | 109 if crate::native_type31::manager_allocation_authenticates(manager, id) => {
+            let row = crate::native_type31::Type31Row::from_entity_type(kind).unwrap();
+            crate::native_type31::death::begin_quiet_standard_death(manager, id, row)
                 .map(|result| LiveActorDeathResult {
                     returned_nonzero: result.returned_nonzero,
                     publication: result.publication.map(|terminal| match terminal {

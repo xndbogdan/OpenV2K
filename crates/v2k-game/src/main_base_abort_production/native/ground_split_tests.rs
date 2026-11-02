@@ -136,6 +136,40 @@ fn type31_abort_splits_into_type105s_that_die_quietly() {
     }
 }
 
+/// 10C10 takes Type73 and Type109 straight to class2: the 416820 split is a
+/// hit modifier, so the abort births nothing.
+#[v2k_test_support::retail_test]
+fn splitting_bug_abort_dies_quietly_without_births() {
+    for level in [18, 26] {
+        let (session, mut entities, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(level);
+        let mut tasks = SpecializedActorTaskScheduler::new();
+        assert!(tasks.adopt_type31_family(&entities) > 0);
+        let mut publications = MainBaseAbortPublicationCounts::default();
+        let before = entities.iter_all().count();
+        let bugs: Vec<_> = ids(&entities, 73)
+            .into_iter()
+            .chain(ids(&entities, 109))
+            .collect();
+        for &id in &bugs {
+            assert_eq!(
+                abort_visit(
+                    &mut entities,
+                    &mut fx,
+                    &mut tasks,
+                    &mut publications,
+                    &session.cache,
+                    id
+                ),
+                MainBaseAbortActorDisposition::QuietDeath
+            );
+            assert!(entities.pending_actor_deferred_destroy_ids().contains(&id));
+            assert!(crate::native_type31::death::finished_terminal_authenticates(&entities, id));
+        }
+        assert_eq!(entities.iter_all().count(), before, "world{level}");
+    }
+}
+
 /// Type30's and Type33's 10C10 take class12 once, as a lethal hit's
 /// publisher does.
 #[v2k_test_support::retail_test]

@@ -36,8 +36,9 @@ use crate::{
     intro2_contacts::Intro2ContactFrame,
     intro2_radial::Intro2RadialTaskCustody,
     live_actor_checked_damage::{
-        apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageError,
-        LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathResult,
+        apply_live_actor_checked_damage_with_split, LethalSplitRequest, LiveActorDamageEntry,
+        LiveActorDamageError, LiveActorDamageOutcome, LiveActorDamageRequest, LiveActorDeathEntry,
+        LiveActorDeathResult,
     },
     native_actor_capture::pair::PlayingPlayerContact,
     static_contact::{
@@ -114,6 +115,7 @@ pub(crate) fn resolve_native_ground_static_contact_with_playing<P: NativeGroundA
         frame,
         id,
         StaticActorProfile {
+            publish_lethal_split: P::LETHAL_SPLIT.then_some(static_lethal_split::<P> as _),
             entity_type: P::ENTITY_TYPE,
             default_flags: P::DEFAULT_FLAGS,
             retained_entry_model_id: None,
@@ -196,6 +198,7 @@ pub fn resolve_insect_static_contact_with_playing(
     }
     let profile = match entity.entity_type {
         16 => StaticActorProfile {
+            publish_lethal_split: None,
             entity_type: 16,
             default_flags: 0x439,
             retained_entry_model_id: None,
@@ -227,6 +230,7 @@ pub fn resolve_insect_static_contact_with_playing(
         // shared BAF0/BC90 terminal through this walk's lent radial owner, and
         // a finished corpse keeps its tasks until 14990.
         128 => StaticActorProfile {
+            publish_lethal_split: None,
             entity_type: 128,
             default_flags: 0x439,
             retained_entry_model_id: None,
@@ -271,6 +275,7 @@ pub fn resolve_insect_static_contact_with_playing(
             },
         },
         26 => StaticActorProfile {
+            publish_lethal_split: None,
             entity_type: 26,
             default_flags: 0x439,
             retained_entry_model_id: None,
@@ -291,6 +296,7 @@ pub fn resolve_insect_static_contact_with_playing(
             },
         },
         94 => StaticActorProfile {
+            publish_lethal_split: None,
             entity_type: 94,
             default_flags: 0x439,
             retained_entry_model_id: None,
@@ -318,6 +324,7 @@ pub fn resolve_insect_static_contact_with_playing(
         // keeps 0x8000 and a clear 0x08000000: 11AD0 scans it. Its lethal
         // collision damage publishes class1 through the shared terminal.
         43 => StaticActorProfile {
+            publish_lethal_split: None,
             entity_type: crate::native_type43::ENTITY_TYPE,
             default_flags: crate::native_type43::DEFAULT_FLAGS,
             retained_entry_model_id: None,
@@ -440,6 +447,7 @@ fn rolling_boulder_static_profile(
     >,
 ) -> StaticActorProfile {
     StaticActorProfile {
+        publish_lethal_split: None,
         entity_type,
         default_flags: crate::rolling_boulder::DEFAULT_STATE_POLICY,
         retained_entry_model_id: None,
@@ -449,6 +457,27 @@ fn rolling_boulder_static_profile(
         completed_owner: |tasks, manager, id| tasks.prepare_native_actor_mutation(manager, id),
         publish_standard_death,
     }
+}
+
+fn static_lethal_split<P: NativeGroundActorProfile>(
+    manager: &mut EntityManager,
+    id: u32,
+    context: &mut StaticDeathContext<'_>,
+    split: LethalSplitRequest,
+) -> Result<LiveActorDeathResult<NativeGroundTerminalPublication>, NativeStaticActorDeathBlock> {
+    P::publish_lethal_split(
+        manager,
+        id,
+        &mut NativeGroundDeathContext::Split {
+            resources: context.resources,
+            fx: context.world_fx,
+            tick: context.retail_tick,
+            tasks: context.tasks,
+        },
+        split,
+        Some(&mut *context.notifications),
+    )
+    .map_err(NativeStaticActorDeathBlock::Common)
 }
 
 #[derive(Clone, Copy)]
@@ -470,6 +499,18 @@ struct StaticActorProfile {
     ) -> Result<
         LiveActorDeathResult<NativeGroundTerminalPublication>,
         NativeStaticActorDeathBlock,
+    >,
+    /// `416820`'s lethal branch, for a profile whose `+44` holds it.
+    publish_lethal_split: Option<
+        fn(
+            &mut EntityManager,
+            u32,
+            &mut StaticDeathContext<'_>,
+            LethalSplitRequest,
+        ) -> Result<
+            LiveActorDeathResult<NativeGroundTerminalPublication>,
+            NativeStaticActorDeathBlock,
+        >,
     >,
 }
 
@@ -571,6 +612,7 @@ fn resolve_flying_static_contact_entry(
         };
     };
     let profile = StaticActorProfile {
+        publish_lethal_split: None,
         entity_type: kind,
         default_flags: initializer.initializer_state_flags_raw,
         retained_entry_model_id,
@@ -800,7 +842,10 @@ fn resolve(
             | 0x4c80c8
             | 0x4c8110
             | 0x4c8158
-    ) || (matches!(profile.entity_type, 16 | 128 | 26 | 56 | 18 | 77 | 14 | 31 | 105)
+    ) || (matches!(
+        profile.entity_type,
+        16 | 128 | 26 | 56 | 18 | 77 | 14 | 31 | 105 | 73 | 109
+    )
         && context.active_style().style_address() == 0x4c7e88)
         // Type14's Flocking search and route rows have null contact hooks.
         || (profile.entity_type == 14
@@ -837,6 +882,8 @@ fn resolve(
                 context.active_style().style_address(),
                 0x4c79c0 | 0x4c7bb8 | 0x4c7c00
             ))
+        || (matches!(profile.entity_type, 73 | 109)
+            && context.active_style().style_address() == 0x4c79c0)
         || (matches!(profile.entity_type, 80 | 126 | 81 | 128 | 129 | 127)
             && context.active_style().style_address() == 0x4c7198
             && crate::class49_death::finished_terminal_hit_authenticates(frame.entities, id))
@@ -855,7 +902,7 @@ fn resolve(
         // Type28's class10 Run Away shares Type56's acquiring and fleeing styles.
         || (profile.entity_type == 28
             && matches!(context.active_style().style_address(), 0x4c7618 | 0x4c7660))
-        || (matches!(profile.entity_type, 56 | 31 | 105)
+        || (matches!(profile.entity_type, 56 | 31 | 105 | 73 | 109)
             && matches!(
                 context.active_style().style_address(),
                 0x4c7618 | 0x4c7660 | 0x4c74f8
@@ -1130,7 +1177,7 @@ fn apply_contact(
             owner_handle: id,
         };
         applied.static_damage = deliver_static(frame, contact.cell, delivery.packet)?;
-        let result = apply_live_actor_checked_damage(
+        let result = apply_live_actor_checked_damage_with_split(
             frame.entities,
             frame.world_fx,
             LiveActorDamageRequest {
@@ -1141,8 +1188,28 @@ fn apply_contact(
                 entry: LiveActorDamageEntry::Checked,
                 feedback: None,
             },
-            |manager, world_fx, _feedback| {
-                (profile.publish_standard_death)(
+            profile.publish_lethal_split.is_some(),
+            |manager, world_fx, _feedback, entry| {
+                let death = match (entry, profile.publish_lethal_split) {
+                    (LiveActorDeathEntry::LethalSplit(split), Some(publish)) => {
+                        return publish(
+                            manager,
+                            id,
+                            &mut StaticDeathContext {
+                                resources: frame.resources,
+                                static_damage: frame.static_damage,
+                                tasks: frame.actor_tasks,
+                                world_fx,
+                                notifications: frame.notifications,
+                                retail_tick: frame.retail_tick,
+                                player: playing.as_mut().map(PlayingPlayerContact::reborrow),
+                            },
+                            split,
+                        )
+                    }
+                    _ => profile.publish_standard_death,
+                };
+                (death)(
                     manager,
                     id,
                     &mut StaticDeathContext {

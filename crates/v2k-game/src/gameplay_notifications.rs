@@ -104,6 +104,10 @@ pub const FACTORY_PRODUCT_READY_TEXT_ID: usize = 0xd1;
 /// Direct string `Factory under attack`, emitted by Working Factory's first
 /// eligible under-attack callback.
 pub const FACTORY_UNDER_ATTACK_TEXT_ID: usize = 0xd3;
+/// `FUN_00416820` queues event 24 when a player's lethal hit on a Type73 or
+/// Type109 meets the 25-body cap. `DAT_004CAD80[0x18]` is global Section-2
+/// string `0xF8`.
+pub const SPLIT_CAP_HINT_EVENT_ID: u8 = 0x18;
 /// `FUN_0041BEB0` lethal/dying continuation `FUN_004568B0(3)`.
 /// `DAT_004CAD80[3]` is global Section-2 string `0xE4`.
 pub const HIVE_DESTROYED_HINT_EVENT_ID: u8 = 3;
@@ -392,6 +396,12 @@ impl GameplayNotifications {
 
     pub fn queue_spider_capture(&mut self, retail_tick: i32) {
         self.queue_resource(SPIDER_CAPTURE_HINT_EVENT_ID, retail_tick);
+    }
+
+    /// Queue `FUN_00416820`'s cap event 24. The splitter owns the cap and
+    /// the source's capability-1 predicate.
+    pub fn queue_split_cap_hint(&mut self, retail_tick: i32) {
+        self.queue_resource(SPLIT_CAP_HINT_EVENT_ID, retail_tick);
     }
 
     /// Queue `FUN_004147A0`'s successful infected firing hint. The firing

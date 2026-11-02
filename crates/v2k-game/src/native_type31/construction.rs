@@ -1,5 +1,5 @@
-//! Shared authored 104B0/09A80/D4A0 entry for Type31, and the weighted
-//! publication both rows run once their components exist.
+//! Shared authored 104B0/09A80/D4A0 entry for Type31, Type73 and Type109,
+//! and the weighted publication every row runs once its components exist.
 
 use super::*;
 use crate::{
@@ -40,7 +40,10 @@ pub(crate) fn publish_native_type31(
         retail_tick,
         sub_d,
     } = request;
-    let row = Type31Row::Type31;
+    let row = match Type31Row::from_entity_type(u32::from(spawn.entity_type)) {
+        Some(row @ (Type31Row::Type31 | Type31Row::Type73 | Type31Row::Type109)) => row,
+        _ => return Err(Type31Block::Identity),
+    };
     authenticate_metadata(row, metadata)?;
     let slots = std::array::from_fn(|slot| {
         let model = if spawn.model_overrides[slot] == 0 {
@@ -75,7 +78,7 @@ pub(crate) fn publish_native_type31(
     {
         return Err(Type31Block::AlreadyPublished);
     }
-    // Type31 evaluates only UnderAttack and Always: no candidate scan.
+    // Every row evaluates only UnderAttack and Always: no candidate scan.
     if preceding.iter().any(|candidate| {
         candidate.id == entity.id
             || candidate
@@ -139,17 +142,22 @@ pub(crate) fn publish_native_type31(
     state.overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     entity.collision.state_flags_at_0x08 = state;
     entity.model_index = Some(row.model());
-    // Common 104B0 +44 and the type-vtable +30 are both null.
-    entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
+    // 104B0's +44 is 416820 for Type73/109, else null; type-vtable +30 is null.
+    entity.collision.pair_callbacks.damage_modifier_address =
+        RetailRuntimeValue::Known(row.splits_on_lethal_hit().then_some(0x0041_6820));
     entity
         .collision
         .pair_callbacks
         .damage_modifier_identity_context_empty = RetailRuntimeValue::Known(true);
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
-    entity.sub_h_external_frame_runtime = RetailRuntimeValue::Known(Some(
-        crate::sub_h_external_frame::SubHRuntimeState::new(TYPE31_SUB_H_REFS.len())
-            .map_err(|_| Type31Block::ComponentStorage)?,
-    ));
+    entity.sub_h_external_frame_runtime = if row == Type31Row::Type31 {
+        RetailRuntimeValue::Known(Some(
+            crate::sub_h_external_frame::SubHRuntimeState::new(TYPE31_SUB_H_REFS.len())
+                .map_err(|_| Type31Block::ComponentStorage)?,
+        ))
+    } else {
+        RetailRuntimeValue::Known(None)
+    };
     let runtime = Type31Runtime {
         row,
         allocation,
@@ -158,7 +166,7 @@ pub(crate) fn publish_native_type31(
         anchor_raw,
         sub_d_runtime: sub_d.runtime,
         sub_d_owner: sub_d.frame_owner,
-        sub_e_runtime: emitter_constructor(),
+        sub_e_runtime: emitter_constructor(row),
         split_terminal: None,
         quiet_death_context: None,
     };
@@ -201,7 +209,7 @@ pub(crate) fn publish_birth(
         |rule| match rule {
             BehaviorWeightRule::Always => 1,
             BehaviorWeightRule::UnderAttack => i32::from(under_attack),
-            _ => unreachable!("authenticated Type31 rule list"),
+            _ => unreachable!("authenticated Type31-family rule list"),
         },
         || {
             selector_word = next_random();

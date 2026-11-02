@@ -1,5 +1,6 @@
-//! Real 438080 -> 104B0/09A80/D4A0 -> D720 Type105 allocations for Type31's
-//! class18 split.
+//! Real 438080 -> 104B0/09A80/D4A0 -> D720 dynamic allocations of the Type31
+//! family: Type31's class18 Type105s and the Type73/Type109 newborns of a
+//! lethal `416820` split.
 
 use super::*;
 use crate::{
@@ -12,25 +13,26 @@ impl EntityManager {
     /// Each child is appended synchronously before D720 returns. The birth
     /// record has no authored index, relation, health buffer, score or model
     /// overrides, and its null handle selects 104B0's fresh `43A290` handle.
-    pub fn construct_native_type105(
+    pub fn construct_native_type31_family_child(
         &mut self,
         request: SplitChildRequest,
         resources: &ResourceCache,
         fx: &mut WorldFx,
         retail_tick: u32,
     ) -> Result<Type105BirthPublication, Type31Block> {
-        let row = Type31Row::Type105;
-        if request.entity_type != row.entity_type() {
-            return Err(Type31Block::Identity);
-        }
+        let row = match Type31Row::from_entity_type(request.entity_type) {
+            Some(row @ (Type31Row::Type105 | Type31Row::Type73 | Type31Row::Type109)) => row,
+            _ => return Err(Type31Block::Identity),
+        };
+        let entity_type = row.entity_type();
         if request.requested_entity_handle_raw != 0 {
             return Err(Type31Block::Runtime("nonzero requested native handle"));
         }
         let metadata = resources
-            .global_entity_type(105)
+            .global_entity_type(entity_type as usize)
             .map(EntityTypeRuntimeMetadata::from_section12)
             .ok_or(Type31Block::Metadata)?;
-        if self.type_metadata.get(105) != Some(&metadata) {
+        if self.type_metadata.get(entity_type as usize) != Some(&metadata) {
             return Err(Type31Block::Metadata);
         }
         native_type31::authenticate_metadata(row, &metadata)?;
@@ -68,7 +70,8 @@ impl EntityManager {
             return Err(Type31Block::Allocation);
         }
         let stamp = self.begin_common_body_attempt();
-        let mut entity = Entity::unresolved_port_entity(id, EntityKind::from_type(105), 105);
+        let mut entity =
+            Entity::unresolved_port_entity(id, EntityKind::from_type(entity_type), entity_type);
         entity.construction_stamp_at_0xb4 = stamp;
         entity.set_motion_raw(request.position_raw, request.velocity_raw);
         entity.set_rotation_heading_pitch_roll_raw(
@@ -88,7 +91,7 @@ impl EntityManager {
             None,
         );
         entity.base_factory_runtime =
-            base_factory_runtime_from_constructor(105, Some(&metadata), None);
+            base_factory_runtime_from_constructor(entity_type, Some(&metadata), None);
         entity.actor_animation_runtime = actor_animation_runtime_from_constructor(Some(&metadata));
         entity.sub_g_06070_runtime = sub_g_06070_runtime_from_constructor(Some(&metadata));
         entity.sub_h_external_frame_runtime =
@@ -121,6 +124,9 @@ impl EntityManager {
             Some(0x0040_2DA0),
             RetailRuntimeValue::Unresolved,
         );
+        // 104B0's type switch installs 416820 at +44 for Type73 and Type109.
+        entity.collision.pair_callbacks.damage_modifier_address =
+            RetailRuntimeValue::Known(row.splits_on_lethal_hit().then_some(0x0041_6820));
         entity.model_index = model_for_constructor_state(entity.model_slots, flags);
         let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
         let receipt = Type31Runtime {
@@ -131,7 +137,7 @@ impl EntityManager {
             anchor_raw: anchor,
             sub_d_runtime: sub_d.runtime,
             sub_d_owner: sub_d.frame_owner,
-            sub_e_runtime: native_type31::emitter_constructor(),
+            sub_e_runtime: native_type31::emitter_constructor(row),
             split_terminal: None,
             quiet_death_context: None,
         };
@@ -150,7 +156,8 @@ impl EntityManager {
         entity.physical_body_basis_q31 =
             RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(heading, pitch, roll));
         entity.collision.state_flags_at_0x08.overwrite(4, 4);
-        let owner = native_type31::Type105Owner::adopt(self, id).map_err(Type31Block::Ground)?;
+        let owner =
+            native_type31::Type31FamilyOwner::adopt(self, id).map_err(Type31Block::Ground)?;
         Ok(Type105BirthPublication { owner, publication })
     }
 }

@@ -57,7 +57,7 @@ pub(crate) const ABCDEH_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComp
     sub_j: false,
     ..ABCDEHJ_TOPOLOGY
 };
-const ABCD_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
+pub(crate) const ABCD_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
     sub_h: false,
     sub_j: false,
     ..ABCDHJ_TOPOLOGY

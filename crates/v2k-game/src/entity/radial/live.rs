@@ -65,6 +65,27 @@ pub trait DynamicRadialLiveCallbacks {
         None
     }
 
+    /// Whether [`Self::lethal_split`] lends `416820` its inline birth custody.
+    fn lethal_split_custody(&self) -> bool {
+        false
+    }
+
+    /// `FUN_00416820`'s lethal branch for a Type73/109 body.
+    #[allow(clippy::too_many_arguments)]
+    fn lethal_split(
+        &mut self,
+        _manager: &mut EntityManager,
+        _id: u32,
+        _world_fx: &mut WorldFx,
+        _retail_tick: u32,
+        _notifications: &mut GameplayNotifications,
+        _split: crate::live_actor_checked_damage::LethalSplitRequest,
+    ) -> Option<
+        Result<LiveActorDeathResult<DynamicRadialDeathPublication>, DynamicRadialLiveBlockReason>,
+    > {
+        None
+    }
+
     /// Section-8 header `+08` for a Hive67 dying model, used by `FUN_00440950`.
     fn hive_dying_burst_model_extent_raw(&self, _model_id: usize) -> Option<u16> {
         None
