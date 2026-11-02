@@ -72,6 +72,18 @@ pub fn resolve_factory_pair_arrivals<P: CollisionModelPool + ?Sized>(
             RetailRuntimeValue::Known(Some(context))
                 if context.active_style().pair_contact_callback_policy()
                     == PairContactCallbackPolicy::LifterDelivery => {}
+            // A wreck's class0 style (`0x4C7468`, installed by `FUN_00419B50`'s
+            // finish) has no pair callback: `FUN_0040D8D0` returns 0 and
+            // nothing is delivered.
+            RetailRuntimeValue::Known(Some(context))
+                if context.active_style().pair_contact_callback_policy()
+                    == PairContactCallbackPolicy::None =>
+            {
+                return Ok(FactoryPairPassResult::Resolved(FactoryPairPass {
+                    factory_id,
+                    contacts: Vec::new(),
+                }));
+            }
             RetailRuntimeValue::Known(_) => {
                 return Err(FactoryPairUnresolved::FactoryBehaviorMismatch { factory_id })
             }
