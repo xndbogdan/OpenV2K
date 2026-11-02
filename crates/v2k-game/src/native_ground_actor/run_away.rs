@@ -168,6 +168,18 @@ fn publish_fleeing(
     ) else {
         return Err(Block::Runtime("Run Away audio"));
     };
+    let audio = RunAwayAuthoredAudio {
+        sound_id: sound.unwrap_or(0),
+        period_raw,
+    };
+    let RetailRuntimeValue::Known(topology) = metadata.common_mover_topology else {
+        return Err(Block::Runtime("Run Away topology"));
+    };
+    // Type29 flies with G and neither A nor H: 06070's G branch is the
+    // constructor suffix's only word.
+    if topology.sub_g && !topology.sub_a && !topology.sub_h {
+        return publish_fleeing_sub_g(entity, metadata, target_id, audio, context, world_fx);
+    }
     let id = entity.id;
     let position = entity.position_raw();
     let Entity {
@@ -184,13 +196,7 @@ fn publish_fleeing(
     };
     let result = apply_run_away_task_setup(
         actor_tasks,
-        RunAwayTaskSetupRequest::Fleeing {
-            target_id,
-            audio: RunAwayAuthoredAudio {
-                sound_id: sound.unwrap_or(0),
-                period_raw,
-            },
-        },
+        RunAwayTaskSetupRequest::Fleeing { target_id, audio },
         |preparation| {
             prepare_run_away_runtime_task(preparation, id, position, metadata).map(|prepared| {
                 prepared.apply_suffix(
@@ -221,6 +227,74 @@ fn publish_fleeing(
                     },
                 )
             })
+        },
+    );
+    if result.is_err() {
+        entity.publish_behavior_initializer_failure_fallback(context);
+        return Err(Block::Runtime("Run Away initializer fallback"));
+    }
+    Ok(())
+}
+
+/// `B3F0` for a G-only body: `03E20`'s flee, `06030 -> 06070`'s G branch
+/// (`1B970(0)`, `1B940(0)`'s word, `1B980(0)`, `24380(0)`), and no A speed.
+fn publish_fleeing_sub_g(
+    entity: &mut Entity,
+    metadata: &EntityTypeRuntimeMetadata,
+    target_id: u32,
+    audio: RunAwayAuthoredAudio,
+    context: BehaviorContextRuntime,
+    world_fx: &mut WorldFx,
+) -> Result<(), NativeRunAwayBlock<std::convert::Infallible>> {
+    use NativeRunAwayBlock as Block;
+    let RetailRuntimeValue::Known(crate::entity_collision_state::CommonMoverGklPayloads {
+        sub_g: Some(descriptor),
+        ..
+    }) = metadata.common_mover_gkl_payloads
+    else {
+        return Err(Block::Runtime("Run Away Sub-G descriptor"));
+    };
+    let id = entity.id;
+    let position = entity.position_raw();
+    let Entity {
+        actor_tasks,
+        sub_g_06070_runtime,
+        ..
+    } = entity;
+    let RetailRuntimeValue::Known(Some(sub_g)) = sub_g_06070_runtime else {
+        return Err(Block::Runtime("Sub-G"));
+    };
+    let result = apply_run_away_task_setup(
+        actor_tasks,
+        RunAwayTaskSetupRequest::Fleeing { target_id, audio },
+        |preparation| {
+            let task = preparation.task;
+            if preparation.phase_index != 0
+                || task.role != RunAwayTaskRole::Flee
+                || task.slot != ActorTaskSlot::Primary
+                || task.constructor_address != RUN_AWAY_TASK_CONSTRUCTOR_ADDRESS
+                || task.tick_address != RUN_AWAY_TASK_TICK_ADDRESS
+                || task.lifetime
+                    != RunAwayTaskLifetime::FixedMilliseconds(RUN_AWAY_TASK_LIFETIME_MS)
+            {
+                return Err(());
+            }
+            let (task, _, suffix) = RunAwayTaskState::prepare_after_allocation(
+                id, position, target_id, audio, metadata,
+            )
+            .map_err(drop)?
+            .map_task(ActorTaskRuntime::RunAway)
+            .into_generic_task();
+            if suffix.sub_a_target_speed_raw().is_some() {
+                return Err(());
+            }
+            let word = world_fx.next_shared_retail_random_u16();
+            let base = i16::from_le_bytes([descriptor[0x0c], descriptor[0x0d]]);
+            sub_g.apply_shared_06070_sub_g_branch(
+                i32::from(base) + i32::from(word >> 8),
+                u32::from_le_bytes([descriptor[0], descriptor[1], descriptor[2], descriptor[3]]),
+            );
+            Ok(task)
         },
     );
     if result.is_err() {

@@ -5,13 +5,17 @@
 //! model, damage thresholds, Sub-D divisor, two Sub-G words, emitter and axis.
 //! The Type55/Type81 guards add UnderAttack Search beside Always class32
 //! Guard Location ([`guard`]), with their own health, multipliers and sounds.
+//! Type29 omits K and weighs class21 Mobbing Target ([`mobbing`]), UnderAttack
+//! class10 Run Away ([`flee`]) and Search.
 
 pub mod aim;
 pub mod contact;
 pub mod death;
+mod flee;
 mod guard;
 pub mod impact;
 mod live;
+pub(crate) mod mobbing;
 mod mover;
 mod native;
 mod search;
@@ -23,6 +27,8 @@ mod carrier_tests;
 mod guard_tests;
 #[cfg(test)]
 mod live_tests;
+#[cfg(test)]
+mod mobbing_tests;
 #[cfg(test)]
 mod ordinary_tests;
 
@@ -197,6 +203,55 @@ pub const TYPE81_CHOICES: [BehaviorChoice; 2] = [
     TYPE55_CHOICES[1],
 ];
 
+/// Type29 (worlds 20/24 and world 48's Hive): model 258 with Type5's G words
+/// apart from `+04` = 125, its own L bank and no K.
+pub const TYPE29_MODEL: usize = 258;
+pub const TYPE29_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 0x1900,
+    raw_word_at_0x04: 7,
+};
+pub const TYPE29_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
+    sub_k: false,
+    ..TOPOLOGY
+};
+pub const TYPE29_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 32,
+    ..crate::common_mover::sub_d::FLYER_SUB_D
+};
+pub const TYPE29_SUB_G: [u8; 104] = {
+    let mut words = TYPE5_SUB_G;
+    words[4] = 125;
+    words
+};
+pub const TYPE29_SUB_L: [u8; 6] = [6, 7, 0x40, 0x1f, 0xa0, 0x0f];
+/// Method 24 at table speed, sound 70.
+pub const TYPE29_EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    projectile_method: 24,
+    spread_raw: 200,
+    aim_threshold_raw: 8000,
+    speed_override_raw: 0,
+    sound_id: 70,
+    ..EMITTER
+};
+/// Always x1 Mobbing Target, UnderAttack x9 Run Away, Always x4 Search.
+pub const TYPE29_CHOICES: [BehaviorChoice; 3] = [
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 1,
+        behavior_class_id: 21,
+    },
+    BehaviorChoice {
+        weight_rule_id: 2,
+        weight_multiplier: 9,
+        behavior_class_id: 10,
+    },
+    BehaviorChoice {
+        weight_rule_id: 1,
+        weight_multiplier: 4,
+        behavior_class_id: 7,
+    },
+];
+
 /// Section-12 rows sharing this D/E/G/K/L Search And Attack owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Type10Profile {
@@ -212,6 +267,8 @@ pub enum Type10Profile {
     Type55,
     /// Ordinary-world Type81 guarding power-up carriers.
     Type81,
+    /// Ordinary-world Type29 mobbers (no K).
+    Type29,
 }
 
 impl Type10Profile {
@@ -223,6 +280,7 @@ impl Type10Profile {
             126 => Some(Self::Type126),
             55 => Some(Self::Type55),
             81 => Some(Self::Type81),
+            29 => Some(Self::Type29),
             _ => None,
         }
     }
@@ -234,6 +292,7 @@ impl Type10Profile {
             Self::Type126 => 126,
             Self::Type55 => 55,
             Self::Type81 => 81,
+            Self::Type29 => 29,
         }
     }
     pub const fn model(self) -> usize {
@@ -241,6 +300,7 @@ impl Type10Profile {
             Self::Type10 | Self::Type80 | Self::Type126 => MODEL,
             Self::Type5 => TYPE5_MODEL,
             Self::Type55 | Self::Type81 => TYPE55_MODEL,
+            Self::Type29 => TYPE29_MODEL,
         }
     }
     pub const fn axis(self) -> CommonAxisDescriptor {
@@ -250,12 +310,14 @@ impl Type10Profile {
             Self::Type126 => TYPE126_AXIS,
             Self::Type55 => TYPE55_AXIS,
             Self::Type81 => TYPE81_AXIS,
+            Self::Type29 => TYPE29_AXIS,
         }
     }
     pub const fn sub_d(self) -> SubDSteeringDescriptor {
         match self {
             Self::Type10 | Self::Type80 | Self::Type126 => SUB_D,
             Self::Type5 | Self::Type55 | Self::Type81 => crate::common_mover::sub_d::FLYER_SUB_D,
+            Self::Type29 => TYPE29_SUB_D,
         }
     }
     pub const fn sub_g(self) -> &'static [u8; 104] {
@@ -263,6 +325,7 @@ impl Type10Profile {
             Self::Type10 => &SUB_G,
             Self::Type5 | Self::Type55 | Self::Type81 => &TYPE5_SUB_G,
             Self::Type80 | Self::Type126 => &CARRIER_SUB_G,
+            Self::Type29 => &TYPE29_SUB_G,
         }
     }
     pub const fn emitter(self) -> ProjectileEmitterDescriptor {
@@ -273,19 +336,20 @@ impl Type10Profile {
             Self::Type126 => TYPE126_EMITTER,
             Self::Type55 => TYPE55_EMITTER,
             Self::Type81 => TYPE81_EMITTER,
+            Self::Type29 => TYPE29_EMITTER,
         }
     }
     pub const fn damage_thresholds_raw(self) -> [i32; 7] {
         match self {
             Self::Type10 | Self::Type80 | Self::Type126 => [0, 9000, 2200, 0, 200, 0, 0],
             Self::Type5 => [0, 2000, 1800, 0, 200, 0, 0],
-            Self::Type55 => [0, 8000, 2500, 0, 200, 0, 0],
+            Self::Type55 | Self::Type29 => [0, 8000, 2500, 0, 200, 0, 0],
             Self::Type81 => [0, 2000, 200, 2000, 200, 0, 0],
         }
     }
     pub const fn damage_multipliers_q8(self) -> [i32; 7] {
         match self {
-            Self::Type55 => [0, 256, 256, 512, 128, 0, 0],
+            Self::Type55 | Self::Type29 => [0, 256, 256, 512, 128, 0, 0],
             Self::Type81 => [0, 256, 256, 128, 128, 0, 0],
             _ => [0, 256, 256, 0, 750, 512, 0],
         }
@@ -293,6 +357,7 @@ impl Type10Profile {
     pub const fn initial_health_raw(self) -> i32 {
         match self {
             Self::Type55 => 10_000,
+            Self::Type29 => 8000,
             _ => 32_000,
         }
     }
@@ -307,14 +372,41 @@ impl Type10Profile {
         match self {
             Self::Type55 => &TYPE55_CHOICES,
             Self::Type81 => &TYPE81_CHOICES,
+            Self::Type29 => &TYPE29_CHOICES,
             _ => &INITIAL_CHOICES,
         }
     }
     /// AC60's direct alternate: Tumble for 10/5/55, Auto Pilot for the carriers.
     pub const fn alternate_behavior_class(self) -> u32 {
         match self {
-            Self::Type10 | Self::Type5 | Self::Type55 => 11,
+            Self::Type10 | Self::Type5 | Self::Type55 | Self::Type29 => 11,
             Self::Type80 | Self::Type126 | Self::Type81 => 63,
+        }
+    }
+    /// Type29 alone omits K.
+    pub const fn topology(self) -> CommonMoverComponentTopology {
+        match self {
+            Self::Type29 => TYPE29_TOPOLOGY,
+            _ => TOPOLOGY,
+        }
+    }
+    pub const fn sub_k(self) -> Option<[u8; 2]> {
+        match self {
+            Self::Type29 => None,
+            _ => Some(SUB_K),
+        }
+    }
+    pub const fn sub_l(self) -> [u8; 6] {
+        match self {
+            Self::Type29 => TYPE29_SUB_L,
+            _ => SUB_L,
+        }
+    }
+    /// Header `+0x11C`: only gates the loader's `+0x124` resolution.
+    pub const fn behavior_rule_ref(self) -> u32 {
+        match self {
+            Self::Type29 => 3,
+            _ => 1,
         }
     }
     /// G payload +0C: B6C0's 06070 randomized target base (700 for both).

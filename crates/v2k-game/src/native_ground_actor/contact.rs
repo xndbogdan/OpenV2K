@@ -544,7 +544,7 @@ fn resolve_flying_static_contact_entry(
     let kind = entity.entity_type;
     if !matches!(
         kind,
-        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57
+        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
     ) {
         return NativeGroundContactOutcome::Ineligible;
     }
@@ -580,7 +580,7 @@ fn resolve_flying_static_contact_entry(
                 .find(|entity| entity.id == id)
                 .is_some_and(|entity| match entity.entity_type {
                     13 => crate::intro2_type13_live::authenticate_intro2_type13(entity).is_ok(),
-                    10 | 5 | 80 | 126 | 55 | 81 => {
+                    10 | 5 | 80 | 126 | 55 | 81 | 29 => {
                         crate::intro2_type10::intro2_type10_allocation_authenticates(entity)
                     }
                     57 => crate::intro2_type57::intro2_type57_allocation_authenticates(entity),
@@ -607,7 +607,7 @@ fn resolve_flying_static_contact_entry(
                         || (!tasks.intro2_type13_has_pending_prefix(id)
                             && tasks.intro2_type13_completed_owner(manager, id))
                 }
-                10 | 5 | 55 => {
+                10 | 5 | 55 | 29 => {
                     !tasks.intro2_type10_has_pending_prefix(id)
                         && tasks.intro2_type10_completed_owner(manager, id)
                 }
@@ -807,7 +807,7 @@ fn resolve(
             && matches!(context.active_style().style_address(), 0x4c7df8 | 0x4c7e40))
         || (matches!(
             profile.entity_type,
-            13 | 10 | 5 | 80 | 126 | 55 | 81 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38
+            13 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57 | 16 | 128 | 14 | 15 | 39 | 87 | 108 | 94 | 38
                 | 129
                 | 119
                 | 32
@@ -846,6 +846,12 @@ fn resolve(
             && context.active_style().style_address() == 0x4c76f0)
         || (crate::native_type30::allocation_authenticates(entity)
             && matches!(context.active_style().style_address(), 0x4c7930 | 0x4c7738))
+        // Type29's Mobbing styles and class10 Run Away.
+        || (profile.entity_type == 29
+            && matches!(
+                context.active_style().style_address(),
+                0x4c7c48 | 0x4c7c90 | 0x4c7cd8 | 0x4c7618 | 0x4c7660
+            ))
         // Type28's class10 Run Away shares Type56's acquiring and fleeing styles.
         || (profile.entity_type == 28
             && matches!(context.active_style().style_address(), 0x4c7618 | 0x4c7660))
@@ -999,6 +1005,9 @@ fn apply_contact(
                 *stage.private_state_mut() = plan.private_state_after;
                 stage.commit(task);
             }
+            ActorTaskRuntime::MobbingApproach(task) => {
+                task.replace_private_state(plan.private_state_after)
+            }
             ActorTaskRuntime::CapturePeoplePursuit(task) => {
                 let mut stage = task.stage_callback();
                 *stage.private_state_mut() = plan.private_state_after;
@@ -1025,9 +1034,8 @@ fn apply_contact(
         0x4c7ed0 => profile.default_flags & !0x2015,
         0x4c7a50 | 0x4c7a98 | 0x4c7ae0 | 0x4c7ff0 | 0x4c8038 | 0x4c7b28 | 0x4c7b70 | 0x4c8080
         | 0x4c80c8 | 0x4c8110 | 0x4c8158 | 0x4c7e88 | 0x4c7930 | 0x4c7738 | 0x4c74f8 | 0x4c7420
-        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 | 0x4c76f0 | 0x4c7bb8 | 0x4c7c00 => {
-            profile.default_flags
-        }
+        | 0x4c7150 | 0x4c7198 | 0x4c7618 | 0x4c7660 | 0x4c76f0 | 0x4c7bb8 | 0x4c7c00 | 0x4c7c48
+        | 0x4c7c90 | 0x4c7cd8 => profile.default_flags,
         0x4c7978 => (profile.default_flags | 0x80) & !2,
         // Wander Near Location's +38 clears 21000.
         0x4c79c0 => profile.default_flags & !0x21000,
@@ -1074,6 +1082,16 @@ fn apply_contact(
     } else {
         None
     };
+    // Mobbing's dive holds C750 at +1C: C6B0(1) returns it to the approach.
+    if style.active_style().style_address() == crate::intro2_type10::mobbing::DIVE_STYLE_ADDRESS {
+        *committed = true;
+        let entity = frame
+            .entities
+            .entity_mut(id)
+            .ok_or(Block::Runtime("Mobbing dive static allocation"))?;
+        crate::intro2_type10::mobbing::dive_contact_returns_to_approach(entity, frame.world_fx)
+            .map_err(|_| Block::Runtime("Mobbing dive static C750"))?;
+    }
     // C890 has completed above; all other admitted style+1C hooks are null.
     // Re-resolve the survivor after D9B0,
     // then11760 uses the retained plane with the current motion and mass.
@@ -1282,6 +1300,19 @@ fn contact_task_hook(
             Some(Task::TrashFurniture(_)) => Ok(NativeGroundStaticTaskHook::Null),
             _ => Err(Block::Runtime("contact task graph")),
         },
+        // Mobbing's B460 search: 02B10's Primary hook; 01F80 keeps 05FF0's
+        // null hook. Its approach 03900 installs 02CA0; the dive 04BE0 none.
+        (0x4c7c48, Some(Task::SharedRetarget(task)), Some(Task::GuardLocationAcquisition(_)))
+            if crate::intro2_type10::mobbing::is_type29(entity) =>
+        {
+            Ok(NativeGroundStaticTaskHook::WanderPrivate(
+                task.private_state(),
+            ))
+        }
+        (0x4c7c90, Some(Task::MobbingApproach(task)), None) => Ok(
+            NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
+        ),
+        (0x4c7cd8, Some(Task::MobbingDive(_)), None) => Ok(NativeGroundStaticTaskHook::Null),
         (0x4c7b28, Some(Task::SharedRetarget(task)), Some(Task::FollowBeaconAcquisition(_))) => Ok(
             NativeGroundStaticTaskHook::WanderPrivate(task.private_state()),
         ),

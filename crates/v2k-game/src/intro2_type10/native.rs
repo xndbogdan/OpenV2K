@@ -41,12 +41,12 @@ pub(crate) fn authenticate_metadata(
                 thresholds_raw: profile.damage_thresholds_raw(),
                 multipliers_q8: profile.damage_multipliers_q8(),
             })
-        || metadata.common_mover_topology != RetailRuntimeValue::Known(TOPOLOGY)
+        || metadata.common_mover_topology != RetailRuntimeValue::Known(profile.topology())
         || metadata.common_mover_gkl_payloads
             != RetailRuntimeValue::Known(CommonMoverGklPayloads {
                 sub_g: Some(*profile.sub_g()),
-                sub_k: Some(SUB_K),
-                sub_l: Some(SUB_L),
+                sub_k: profile.sub_k(),
+                sub_l: Some(profile.sub_l()),
             })
         || metadata.sub_a_propulsion_descriptor != RetailRuntimeValue::Known(None)
         || metadata.sub_b_lateral_descriptor != RetailRuntimeValue::Known(None)
@@ -66,6 +66,14 @@ pub(crate) fn authenticate_metadata(
         || metadata.death_sound_id != RetailRuntimeValue::Known(death_sound)
         || metadata.target_warning_sound_id != RetailRuntimeValue::Known(None)
         || metadata.terrain_contact_task_lifetime_ms != RetailRuntimeValue::Known(0)
+        // Type29's B340/04BE0 and B3F0 read these; its row authors none.
+        || (profile == Type10Profile::Type29
+            && (metadata.search_attack_optional_prelude_sound_id
+                != RetailRuntimeValue::Known(None)
+                || metadata.search_attack_aim_sound_id != RetailRuntimeValue::Known(None)
+                || metadata.search_attack_aim_sound_period_raw != RetailRuntimeValue::Known(0)
+                || metadata.run_away_optional_sound_id != RetailRuntimeValue::Known(None)
+                || metadata.run_away_sound_period_raw != RetailRuntimeValue::Known(0)))
         || !matches!(metadata.common_world_effects, RetailRuntimeValue::Known(profile)
             if profile.surface_selectors == [0, 0]
                 && profile.surface_lifetime_ms == 0
@@ -73,7 +81,7 @@ pub(crate) fn authenticate_metadata(
         || initializer.initializer_state_flags_raw != 8
         || initializer.common_axis_descriptor != profile.axis()
         || initializer.behavior_choices.as_ref() != profile.choices()
-        || initializer.behavior_rule_ref != 1
+        || initializer.behavior_rule_ref != profile.behavior_rule_ref()
         || initializer.alternate_behavior_class_ref != profile.alternate_behavior_class()
     {
         return Err(Intro2Type10Error::Metadata);
@@ -487,7 +495,25 @@ fn publish_acquiring(
         }
         return true;
     }
-    debug_assert_eq!(selection.program.class_id, 7);
+    if selection.program.class_id == 21 {
+        // B460: B5A0's shape with slot0 02B10's 5000-ms retarget.
+        let result =
+            super::mobbing::apply_searching_setup(actor_tasks, axis, position, |prepared| {
+                let word = next_random() as u16;
+                sub_g.apply_shared_06070_sub_g_branch(
+                    profile.sub_g_randomized_target_base() + i32::from(word >> 8),
+                    0,
+                );
+                Ok(prepared)
+            });
+        if result.is_err() {
+            entity.publish_behavior_initializer_failure_fallback(context);
+            return false;
+        }
+        return true;
+    }
+    // Search's 4C7A50 and Run Away's 4C7618 both run B6C0 with a zero +44.
+    debug_assert!(matches!(selection.program.class_id, 7 | 10));
     let result = apply_search_attack_task_setup(
         actor_tasks,
         SearchAttackTaskSetupRequest::Acquiring,

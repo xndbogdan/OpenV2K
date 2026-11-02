@@ -109,7 +109,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // World 19 completes: its Type55 guard takes class11 Tumble.
     // Type14 flyers explode through their class1 terminal, Type15 wasps die
     // quietly through class2, and Type16 and Type94 enter class12.
-    (20, 29),
+    // World 20 completes: its Type29 mobbers take class11 Tumble.
     // Native Type18/28 take Type122's captor class12 abort death; Flood's
     // Type89s leave class38 for their class1 explosion.
     (21, 74),
@@ -118,7 +118,7 @@ const FIRST_UNSUPPORTED: &[(u32, u32)] = &[
     // sharks and Type37s class12, and its Type20 explodes through class1;
     // Reef's next unsupported callback is its Type117 actor.
     (23, 117),
-    (24, 29),
+    // World 24 completes: its Type29 mobbers take class11 Tumble.
     // World 25 completes: its Type82 factory shares Type66's class39 owner.
     (26, 109),
     // Type27 boulders split into Type3s (class18), which explode (class1);
@@ -381,8 +381,8 @@ fn every_authored_casualty_world_has_a_loss_transition_and_explicit_actor_cleanu
     assert_eq!(
         exact_worlds,
         [
-            13, 14, 15, 16, 17, 19, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 42, 43, 44, 45, 46,
-            48
+            13, 14, 15, 16, 17, 19, 20, 24, 25, 27, 28, 29, 30, 32, 35, 37, 38, 39, 41, 42, 43, 44,
+            45, 46, 48
         ]
     );
     assert_eq!(

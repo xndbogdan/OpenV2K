@@ -2,7 +2,7 @@
 
 This document owns the Type10 actors at authored spawns 55 and 56: native
 construction, Search and Attack, fire emission, and Tumble To Death. Ordinary
-Type5, Type80/126, Type55 and Type81 rows share the same owner through a row
+Type5, Type80/126, Type55, Type81 and Type29 rows share the same owner through a row
 profile (see the last sections). Shared
 task dispatch and component arithmetic remain in [ACTOR_RUNTIME.md](ACTOR_RUNTIME.md);
 damage ownership remains in [ENTITY_DAMAGE_AND_DEATH.md](ENTITY_DAMAGE_AND_DEATH.md).
@@ -362,3 +362,109 @@ Retail lab runs (`compare.py`, idle player after Skip to World):
   Type32 and Type82 rows are not native yet, does not lose it, so its Type81
   births at 30 s have no retail counterpart in this run. Before the loss, both
   sides' Type55s take terrain, pair and Type99 turret hits.
+
+## Ordinary Type29 mobbers
+
+Type29 (two rows in world 20, three in world 24, and world 48's Hive row)
+flies model 258 on this owner. Its row has no K component: the mover runs D,
+E, G and L, `09A80` binds only L's selectors 6 and 7 and G's seven words, and
+the Tumble's direct `018A0` skips K.
+
+| Field | Type29 |
+|---|---|
+| Health / damage thresholds | 8000 / `[0, 8000, 2500, 0, 200, 0, 0]` |
+| Multipliers (Q8) | `[0, 256, 256, 512, 128, 0, 0]` |
+| Sub-D | divisor 32, yaw-into-roll, probes 512/256, classifier flags 0 |
+| Sub-G | Type5's words with `+04` = 125 (`+0C` 700, `+18` 300) |
+| Sub-L | `[6, 7, 0x40, 0x1F, 0xA0, 0x0F]` |
+| Emitter | method 24, 300000 µs, spread 200, threshold 8000, table speed, tolerance 3840, sound 70, `+12` 44 |
+| Axis / `+04` | 6400 / 7 |
+| Choices | Always ×1 class21, UnderAttack ×9 class10, Always ×4 class7 |
+| Rule reference / alternate | 3 / class11 Tumble |
+| Sounds `+9A`/`+9C`/`+9E`, periods `+A8`/`+AC` | none |
+
+A newborn is never under attack, so `25680`'s word takes Mobbing Target one
+time in five and Search otherwise. `C690` later weighs Run Away ×9 within 250
+ticks of a hit.
+
+**Mobbing Target (class21, descriptor `4C8910`).**
+
+- **Searching, style `4C7C48`.** `FUN_0040B460` is `FUN_0040B5A0`'s shape: the
+  axis `+04` copy, slot 2 cleared, slot 1's `FUN_00401F80` search, then slot
+  0's 5000-ms `FUN_00402B10` retarget (not `02E20`'s anchor wander), each
+  through `06070`'s Sub-G word. `FUN_00401FB0`'s one-in-four gate hands its
+  first eligible candidate to `C7D0`, which stores it and selects style 1.
+- **Approach, style `4C7C90`.** `FUN_0040B2C0` clears slots 1 and 2 and, since
+  the row has a G, installs `FUN_00403900`'s lifetime-0 task on the context
+  target: Chase's `01350` record and its `02DA0`/`02CA0` hooks, then `06030`.
+  `FUN_00403A00` runs `01430` first. A zero mover (`4BE0F8`), a missing,
+  dying or zero-state target (`4BE100`) or `FUN_00423030`'s axis cube failing
+  (`4BE110`) returns `9C01`, so `C690` reselects. Within 0x200 in X and Z,
+  more than 300 above the target, with `FUN_0041E930`'s forward half-space
+  holding the record's route point, it returns `4BE108` (`9C00`): `C770`
+  selects the dive. Otherwise `FUN_0041B940` sets G `+38` to the target's Y
+  + 500; a zero sum would draw a word for `+0C` instead.
+- **Dive, style `4C7CD8`.** `FUN_0040B340` plays type `+9A` (none here),
+  clears slots 1 and 2 and installs `FUN_00404BE0`'s lifetime-0 dive: `06030`,
+  then `FUN_0041B980(G, 1)`, which writes `+40` = 1, `+24` = 0 and `+20` =
+  descriptor `+08` (zero). `FUN_00404D50` returns `4BE178` if the target's
+  allocation is gone (a dying target is kept), and `4BE180` when the body's
+  underside (Y minus the model's `+08`) is within 200 of the surface (the
+  bilinear ground, or the waved sea under `DAT_004FECE4`), or below the
+  target's Y. Otherwise it runs `01430`, ignores its result, and returns
+  `4BE188` once the target is more than 0x300 away in X or Z. All three are
+  `9C00`: `C750` returns to the approach. The record's `+1C` cue is type
+  `+9C`, zero for Type29, so the period gate never draws.
+- **G's dive branch.** `FUN_0041A690` takes `41A9CB`'s branch whenever `+40`
+  is nonzero: `+34` climbs by 10 a frame to descriptor `+18`,
+  `FUN_0041AA60` publishes and phases the animation at that rate, the pitch
+  loses `q31((dt << 13) * (pitch + 0x3000))`, vertical speed is held at -1000
+  or above, and `FUN_0041B210` runs with both forces zero, so it writes
+  nothing. Gravity alone pulls the body down. The Tumble's `06030` resets
+  `+40`, so a body killed mid-dive tumbles normally.
+- **Hooks.** All three styles hold `C690` at `+20/+24/+28`. Both later styles
+  hold `FUN_0040CF00` at `+18`: a touched body with capability bit 0 takes a
+  checked `{1, 6000}` packet of kind 29 through `15040`. The craft's channel-1
+  threshold is 6000, so the filter leaves the player's hull untouched. The
+  dive holds `C750` at `+10`, `+14` and `+1C`, so terrain, water and static
+  contacts return it to the approach before their responses.
+
+**Run Away (class10).** Style `4C7618` runs Search's `B6C0` with a zero
+`+44`. `02080`'s target reaches `C7D0`, and style `4C7660`'s `FUN_0040B3F0`
+installs `03E20`'s 2000-ms flee. With no A or H component, `06030`'s only
+write is `06070`'s G branch and its word. Both styles hold `C690` at
+`+20/+24` and nothing at `+28`.
+
+The native pair lane owns every player–Type29 pair, as it does a shark's: the
+player's `447D70` gives relative-speed feedback against capability 8, and
+`CF00` runs from the approach and dive styles. A Hive child takes the same
+`09A80` from the zeroed record.
+
+[Mobbing tests](../../crates/v2k-game/src/intro2_type10/mobbing_tests.rs) cover:
+
+- the row and the five births with their AC60 selection;
+- twenty-second cohorts in worlds 20 and 24 under the scheduler and late
+  contacts;
+- an approach on the player that dives and returns;
+- the `CF00` hit through the player's pair lane, filtered at the craft's
+  threshold and delivered below it;
+- rule 2 tipping a Type29 into Run Away from the player;
+- a lethal hit mid-dive publishing Tumble with `+40` cleared.
+
+The [abort coverage](../../crates/v2k-game/tests/campaign_abort_coverage.rs)
+now completes worlds 20 and 24, and a
+[Hive test](../../crates/v2k-game/src/specialized_actor_task_production/hive/tests.rs)
+checks world 48's Type29 birth.
+
+Retail lab runs (`compare.py`, idle player after Skip to World):
+
+- **World 48.** The Hive's Type29 births 750 ticks after its Type10, as the
+  port's does (ticks 1001 and 251 in the Hive test).
+- **Worlds 20 and 24.** The tracks part within the first ten ticks, where
+  the port's AC60 word is not retail's. Retail's mobbers then take terrain
+  contacts the port's do not reproduce: one in world 20 (clock 25, Y -8) and
+  one in world 24 (clock 706, Y -2138) take a solid response that wraps Y
+  past 32767, fall for some 400 ticks and crash (checked terrain damage,
+  source -2), the second fall killing them. The port's mobbers reach Y -2231
+  in world 24 without that response. This is the shared flyer surface lane,
+  not Mobbing's code, and stays open.

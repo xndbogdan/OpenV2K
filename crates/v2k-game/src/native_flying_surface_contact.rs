@@ -57,7 +57,7 @@ pub(crate) fn publish_native_flying_standard_death(
         .ok_or(NativeFlyingSurfaceDeathBlock::Runtime("death allocation"))?
         .entity_type;
     let publication = match entity_type {
-        10 | 5 | 55 => {
+        10 | 5 | 55 | 29 => {
             crate::intro2_type10::death::publish_intro2_type10_standard_death(manager, id, world_fx)
                 .map(|owner| owner.map(NativeFlyingSurfaceDeathPublication::Type10))
                 .map_err(NativeFlyingSurfaceDeathBlock::Type10)?
@@ -283,7 +283,12 @@ fn resolve(
         .iter_all()
         .find(|e| e.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if !entity.active || !matches!(entity.entity_type, 13 | 10 | 5 | 80 | 126 | 55 | 81 | 57) {
+    if !entity.active
+        || !matches!(
+            entity.entity_type,
+            13 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
+        )
+    {
         return Ok(FlyingSurfaceContactOutcome::Ineligible);
     }
     let entity_type = entity.entity_type;
@@ -329,10 +334,16 @@ fn resolve(
             | 0x004c7ae0
             | 0x004c7bb8
             | 0x004c7c00
+            | 0x004c7c48
+            | 0x004c7c90
+            | 0x004c7618
+            | 0x004c7660
             | 0x004c7930
             | 0x004c7978
             | 0x004c74f8
-    ) || (finished && matches!(style, 0x004c7150 | 0x004c7198));
+    ) || (finished && matches!(style, 0x004c7150 | 0x004c7198))
+        // Mobbing's dive holds C750 at +10/+14, run by the callbacks below.
+        || (entity_type == 29 && style == crate::intro2_type10::mobbing::DIVE_STYLE_ADDRESS);
     if !null_hooks {
         return Err(Block::Runtime("unaudited solid/water style hooks"));
     }
@@ -341,7 +352,7 @@ fn resolve(
         .type_runtime_metadata(entity_type)
         .ok_or(Block::Runtime("metadata"))?;
     let (allocation, pending, completed) = match entity_type {
-        10 | 5 | 80 | 126 | 55 | 81 => {
+        10 | 5 | 80 | 126 | 55 | 81 | 29 => {
             let profile = crate::intro2_type10::Type10Profile::from_entity_type(entity_type)
                 .expect("matched Type10-family row");
             crate::intro2_type10::authenticate_metadata(profile, metadata)
@@ -405,12 +416,17 @@ fn resolve(
                     "water callback style",
                 ));
             };
+            if context.active_style().style_address()
+                == crate::intro2_type10::mobbing::DIVE_STYLE_ADDRESS
+            {
+                return dive_returns_to_approach(frame, id, committed);
+            }
             if context.active_style().style_address() != 0x004c7f60 {
                 return Ok(());
             }
             let mut playing = playing;
             match entity_type {
-                10 | 5 | 80 | 126 | 55 | 81 => {
+                10 | 5 | 80 | 126 | 55 | 81 | 29 => {
                     let owner = Intro2Type10TumbleOwner::adopt(frame.entities, id)
                         .map_err(NativeFlyingSurfaceDeathBlock::Type10)?;
                     crate::intro2_type10::contact::terminal_callback(
@@ -444,7 +460,41 @@ fn resolve(
                 _ => Ok(()),
             }
         },
+        |frame, id, committed| {
+            let style = frame
+                .entities
+                .iter_all()
+                .find(|e| e.id == id)
+                .and_then(|entity| match entity.current_behavior_context {
+                    RetailRuntimeValue::Known(Some(context)) => {
+                        Some(context.active_style().style_address())
+                    }
+                    _ => None,
+                });
+            if style == Some(crate::intro2_type10::mobbing::DIVE_STYLE_ADDRESS) {
+                dive_returns_to_approach(frame, id, committed)
+            } else {
+                Ok(())
+            }
+        },
     )
+}
+
+/// The dive's `+10`/`+14` hook `C750`: `C6B0(1)` back to the approach.
+fn dive_returns_to_approach(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    committed: &mut bool,
+) -> Result<(), NativeFlyingSurfaceDeathBlock> {
+    let entity = frame
+        .entities
+        .entity_mut(id)
+        .ok_or(NativeFlyingSurfaceDeathBlock::Runtime(
+            "Mobbing dive allocation",
+        ))?;
+    *committed = true;
+    crate::intro2_type10::mobbing::dive_contact_returns_to_approach(entity, frame.world_fx)
+        .map_err(|_| NativeFlyingSurfaceDeathBlock::Runtime("Mobbing dive C750"))
 }
 
 #[cfg(test)]

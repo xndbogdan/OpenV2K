@@ -1035,6 +1035,30 @@ fn hive_births_type5_and_type10_through_the_type10_family_constructor() {
     }
 }
 
+/// World48's Hive authors a Type29 row (20 s, then 60 s, cap 20, flags 1)
+/// beside its Type10 row. The child takes the Type10 family's 09A80 from the
+/// zeroed record and AC60's Mobbing or Search like an authored Type29.
+#[v2k_test_support::retail_test]
+fn world48_hive_births_type29_through_the_type10_family_constructor() {
+    let (manager, scheduler, births) = hive_world_births(48, 1010);
+    let born: Vec<_> = births.iter().filter(|birth| birth.1 == 29).collect();
+    assert_eq!(born.len(), 1, "{births:?}");
+    assert_eq!(born[0].0, 1001);
+    let id = born[0].2;
+    assert_hive_child(
+        &manager,
+        &scheduler,
+        id,
+        crate::intro2_type10::type10_manager_allocation_authenticates,
+    );
+    let child = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    assert!(matches!(
+        child.current_behavior_context,
+        RetailRuntimeValue::Known(Some(context))
+            if matches!(context.active_style().style_address(), 0x004c_7c48 | 0x004c_7a50)
+    ));
+}
+
 /// Retail: world21's Hive gives birth to a Type87 (deathwas) at ticks 151, 401
 /// and 653, through the same class7 flyer constructor as the Type15 Wasp.
 #[v2k_test_support::retail_test]

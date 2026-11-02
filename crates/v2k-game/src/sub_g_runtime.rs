@@ -163,6 +163,32 @@ impl SubG06070RuntimeState {
         self.invert_target_at_0x3c = RetailRuntimeValue::Known(0);
     }
 
+    /// `FUN_0041B940(G, descriptor, y)`: a nonzero `y` is the new `+38`
+    /// target; zero draws one word for descriptor `+0C` plus its high byte.
+    pub fn apply_1b940_target(
+        &mut self,
+        descriptor: &[u8; 104],
+        target_raw: i32,
+        next_random: impl FnOnce() -> u32,
+    ) {
+        let target_raw = if target_raw == 0 {
+            let word = next_random() as u16;
+            i32::from(read_i16(descriptor, 0x0c)) + i32::from(word >> 8)
+        } else {
+            target_raw
+        };
+        self.randomized_target_raw_at_0x38 = RetailRuntimeValue::Known(target_raw);
+    }
+
+    /// `FUN_0041B980(G, descriptor, mode)`: `+40` = mode, `+24` = 0, and `+20`
+    /// takes descriptor dword `+08` for a nonzero mode, else `+00`.
+    pub fn apply_1b980_mode(&mut self, descriptor: &[u8; 104], mode: u8) {
+        self.mode_at_0x40 = RetailRuntimeValue::Known(mode);
+        self.accumulator_raw_at_0x24 = RetailRuntimeValue::Known(0);
+        let source = read_i32(descriptor, if mode != 0 { 0x08 } else { 0x00 });
+        self.source_raw_at_0x20 = RetailRuntimeValue::Known(source as u32);
+    }
+
     pub const fn word_at_0x1c(self) -> RetailRuntimeValue<u16> {
         self.word_at_0x1c
     }
@@ -357,6 +383,10 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
             });
         }
 
+        if override_mode != 0 {
+            return plan_1a690_override_mode(request, &mut prefix);
+        }
+
         let (
             RetailRuntimeValue::Known(mut phases),
             RetailRuntimeValue::Known(mut decaying_output_raw),
@@ -410,54 +440,18 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
             invert_target_raw = u8::from(reverse);
         }
 
+        let (animation_outputs_raw, sound) = advance_1aa60(
+            descriptor,
+            &mut phases,
+            &mut decaying_output_raw,
+            &mut audio_gate_raw,
+            prior_rate_raw,
+            position_raw,
+            elapsed_micros,
+        );
         let bindings: [u8; 7] = descriptor[0x24..=0x2a]
             .try_into()
             .expect("fixed Sub-G descriptor binding range");
-        let mut animation_outputs_raw = [0i16; 7];
-        if bindings[5] != 0 {
-            animation_outputs_raw[5] = 0;
-        }
-        if bindings[6] != 0 {
-            animation_outputs_raw[6] = decaying_output_raw as i16;
-            if decaying_output_raw > 0x100 {
-                let decay = ((elapsed_micros >> 4) as i32).wrapping_mul(decaying_output_raw) >> 15;
-                decaying_output_raw = decaying_output_raw.wrapping_sub(decay as i16 as i32);
-            }
-        }
-        for channel in 0..5 {
-            if bindings[channel] == 0 {
-                continue;
-            }
-            let record_offset = 0x2c + channel * 0x0c;
-            if read_i32(descriptor, record_offset + 8) == 1 {
-                let phase_step = prior_rate_raw.wrapping_mul((elapsed_micros >> 12) as i32) >> 6;
-                phases[channel] = phases[channel].wrapping_add(phase_step as u8);
-                let base_raw = read_i16(descriptor, record_offset);
-                let amplitude_raw = read_u16(descriptor, record_offset + 2);
-                let sine_q31 =
-                    retail_sine_q15(u32::from(phases[channel]) << 8).wrapping_mul(0x1_0001);
-                let oscillation_raw =
-                    ((i64::from(amplitude_raw) * i64::from(sine_q31)) >> 31) as i32;
-                animation_outputs_raw[channel] = base_raw.wrapping_add(oscillation_raw as i16);
-            }
-        }
-
-        let sound_id = read_u16(descriptor, 0x0e);
-        let sound = if (0x61..=0x9f).contains(&phases[0]) {
-            if audio_gate_raw == 0 {
-                audio_gate_raw = 1;
-                (sound_id != 0).then_some(Type13SubGSound {
-                    sound_id,
-                    position_raw,
-                    rate_q16: 0x0000_aaaa,
-                })
-            } else {
-                None
-            }
-        } else {
-            audio_gate_raw = 0;
-            None
-        };
         runtime.table_bytes_at_0x28 = RetailRuntimeValue::Known(phases);
         runtime.decaying_output_raw_at_0x30 = RetailRuntimeValue::Known(decaying_output_raw);
         runtime.invert_target_at_0x3c = RetailRuntimeValue::Known(invert_target_raw);
@@ -581,6 +575,176 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
         })
     })();
     result.map_err(|reason| SubGFrameFailure { reason, prefix })
+}
+
+/// `FUN_0041AA60`: publish the seven bound words, advance the five phase
+/// channels at `rate_raw`, and play descriptor `+0E` once per window.
+fn advance_1aa60(
+    descriptor: &[u8; 104],
+    phases: &mut [u8; 5],
+    decaying_output_raw: &mut i32,
+    audio_gate_raw: &mut u8,
+    rate_raw: i32,
+    position_raw: [i16; 3],
+    elapsed_micros: u32,
+) -> ([i16; 7], Option<Type13SubGSound>) {
+    let bindings: [u8; 7] = descriptor[0x24..=0x2a]
+        .try_into()
+        .expect("fixed Sub-G descriptor binding range");
+    let mut animation_outputs_raw = [0i16; 7];
+    if bindings[5] != 0 {
+        animation_outputs_raw[5] = 0;
+    }
+    if bindings[6] != 0 {
+        animation_outputs_raw[6] = *decaying_output_raw as i16;
+        if *decaying_output_raw > 0x100 {
+            let decay = ((elapsed_micros >> 4) as i32).wrapping_mul(*decaying_output_raw) >> 15;
+            *decaying_output_raw = decaying_output_raw.wrapping_sub(decay as i16 as i32);
+        }
+    }
+    for channel in 0..5 {
+        if bindings[channel] == 0 {
+            continue;
+        }
+        let record_offset = 0x2c + channel * 0x0c;
+        if read_i32(descriptor, record_offset + 8) == 1 {
+            let phase_step = rate_raw.wrapping_mul((elapsed_micros >> 12) as i32) >> 6;
+            phases[channel] = phases[channel].wrapping_add(phase_step as u8);
+            let base_raw = read_i16(descriptor, record_offset);
+            let amplitude_raw = read_u16(descriptor, record_offset + 2);
+            let sine_q31 = retail_sine_q15(u32::from(phases[channel]) << 8).wrapping_mul(0x1_0001);
+            let oscillation_raw = ((i64::from(amplitude_raw) * i64::from(sine_q31)) >> 31) as i32;
+            animation_outputs_raw[channel] = base_raw.wrapping_add(oscillation_raw as i16);
+        }
+    }
+
+    let sound_id = read_u16(descriptor, 0x0e);
+    let sound = if (0x61..=0x9f).contains(&phases[0]) {
+        if *audio_gate_raw == 0 {
+            *audio_gate_raw = 1;
+            (sound_id != 0).then_some(Type13SubGSound {
+                sound_id,
+                position_raw,
+                rate_q16: 0x0000_aaaa,
+            })
+        } else {
+            None
+        }
+    } else {
+        *audio_gate_raw = 0;
+        None
+    };
+    (animation_outputs_raw, sound)
+}
+
+/// `41A9CB`'s nonzero-`+40` branch (class21's dive, `1B980(..., 1)`): the
+/// rate climbs 10 a frame to descriptor `+18`, `1AA60` runs at that rate, the
+/// pitch falls toward `-0x3000`, vertical speed stops at -1000, then `B210`.
+/// No terrain sample, `AC40` or self-righting write occurs.
+fn plan_1a690_override_mode(
+    request: Type13SubGFrameRequest<'_>,
+    prefix: &mut SubGFramePrefix,
+) -> Result<Type13SubGFrameOutcome, Type13SubGFrameBlock> {
+    let Type13SubGFrameRequest {
+        descriptor,
+        mut runtime,
+        reverse_write,
+        position_raw,
+        mut velocity_raw,
+        pitch_raw,
+        roll_raw,
+        retained_body_basis,
+        active_model_extent_raw,
+        self_mass_raw,
+        attached_cargo_mass,
+        capability_flags,
+        terrain,
+        retail_tick,
+        elapsed_micros,
+    } = request;
+    let (
+        RetailRuntimeValue::Known(mut phases),
+        RetailRuntimeValue::Known(mut decaying_output_raw),
+        RetailRuntimeValue::Known(prior_rate_raw),
+        RetailRuntimeValue::Known(mut audio_gate_raw),
+        RetailRuntimeValue::Known(clearance_flag_raw),
+        RetailRuntimeValue::Known(source_raw),
+        RetailRuntimeValue::Known(accumulator_raw),
+        RetailRuntimeValue::Known(terrain_attitude_mode),
+    ) = (
+        runtime.table_bytes_at_0x28,
+        runtime.decaying_output_raw_at_0x30,
+        runtime.rate_raw_at_0x34,
+        runtime.audio_gate_at_0x3e,
+        runtime.clearance_flag_at_0x3d,
+        runtime.source_raw_at_0x20,
+        runtime.accumulator_raw_at_0x24,
+        runtime.terrain_attitude_mode_at_0x42,
+    )
+    else {
+        return Err(Type13SubGFrameBlock::RuntimeUnavailable);
+    };
+    // B210's +42 clause and the player's probe policy stay explicit gates.
+    if capability_flags & 1 != 0 {
+        return Err(Type13SubGFrameBlock::PlayerProjectionUnsupported);
+    }
+    if terrain_attitude_mode != 0 {
+        return Err(Type13SubGFrameBlock::UnsupportedMode);
+    }
+    if let Some(reverse) = reverse_write {
+        runtime.invert_target_at_0x3c = RetailRuntimeValue::Known(u8::from(reverse));
+    }
+    let rate_raw = prior_rate_raw
+        .wrapping_add(10)
+        .min(read_i32(descriptor, 0x18));
+    let (animation_outputs_raw, sound) = advance_1aa60(
+        descriptor,
+        &mut phases,
+        &mut decaying_output_raw,
+        &mut audio_gate_raw,
+        rate_raw,
+        position_raw,
+        elapsed_micros,
+    );
+    runtime.rate_raw_at_0x34 = RetailRuntimeValue::Known(rate_raw);
+    runtime.table_bytes_at_0x28 = RetailRuntimeValue::Known(phases);
+    runtime.decaying_output_raw_at_0x30 = RetailRuntimeValue::Known(decaying_output_raw);
+    runtime.audio_gate_at_0x3e = RetailRuntimeValue::Known(audio_gate_raw);
+    runtime.animation_outputs_raw = RetailRuntimeValue::Known(animation_outputs_raw);
+    // 41AA0B: pitch -= q31((dt << 13) * (pitch + 0x3000)).
+    let product =
+        i64::from((elapsed_micros << 13) as i32) * i64::from(i32::from(pitch_raw) + 0x3000);
+    let pitch_raw = pitch_raw.wrapping_sub((product >> 31) as i16);
+    if velocity_raw[1] < -1000 {
+        velocity_raw[1] = -1000;
+    }
+    prefix.runtime = Some(runtime);
+    prefix.sound = sound;
+    prefix.pitch_raw = Some(pitch_raw);
+    prefix.velocity_raw = Some(velocity_raw);
+    apply_type13_b210_projection(Type13B210ProjectionRequest {
+        position_raw,
+        velocity_raw: &mut velocity_raw,
+        body_up_q31: retained_body_basis.up,
+        active_model_extent_raw,
+        self_mass_raw,
+        attached_cargo_mass,
+        manual_force_raw: source_raw as i32,
+        assist_force_raw: accumulator_raw as i32,
+        rate_raw,
+        clearance_flag: clearance_flag_raw != 0,
+        surface_mode: descriptor[0x2b],
+        terrain,
+        retail_tick,
+        elapsed_micros,
+    })?;
+    Ok(Type13SubGFrameOutcome {
+        runtime,
+        velocity_raw,
+        pitch_raw,
+        roll_raw,
+        sound,
+    })
 }
 
 struct Type13B210ProjectionRequest<'a> {

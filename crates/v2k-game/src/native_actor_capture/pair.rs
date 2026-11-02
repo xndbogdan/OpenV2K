@@ -342,6 +342,19 @@ fn is_native_shark_player_pair(manager: &EntityManager, first: &Entity, second: 
         })
 }
 
+/// The player and a native Type29: Mobbing's `40CF00` pair hook hits the
+/// player through this lane, whatever the Type29's current style.
+fn is_native_type29_player_pair(manager: &EntityManager, first: &Entity, second: &Entity) -> bool {
+    let player = manager.player().map(|player| player.id);
+    [(first, second), (second, first)]
+        .into_iter()
+        .any(|(actor, other)| {
+            actor.entity_type == 29
+                && actor.intro2_type10_runtime.is_some()
+                && Some(other.id) == player
+        })
+}
+
 /// Native gunner side of the gunner/hive separation pair.
 ///
 /// Bounded to native Type47 construction (ordinary worlds share this receipt
@@ -487,7 +500,8 @@ fn resolve(
         let pair_weapon = [subject, candidate]
             .into_iter()
             .any(owns_native_weapon_contact);
-        let pair_shark = is_native_shark_player_pair(frame.entities, subject, candidate);
+        let pair_shark = is_native_shark_player_pair(frame.entities, subject, candidate)
+            || is_native_type29_player_pair(frame.entities, subject, candidate);
         if player == Some(id) && !pair_weapon && !pair_shark {
             continue;
         }
@@ -719,10 +733,15 @@ fn behavior(
                 frame.entities,
                 entity,
                 actor(frame.entities, opposite)?,
+            )
+            || is_native_type29_player_pair(
+                frame.entities,
+                entity,
+                actor(frame.entities, opposite)?,
             ))
     {
         //447D70: the actual local controller bound to this player satisfies
-        //43AF0. A weapon's capability40 and a shark's 8 exclude the c00
+        //43AF0. A weapon's capability40 and a shark's or Type29's 8 exclude the c00
         //consumable branch, leaving the two bodies' relative-speed feedback.
         //It neither changes body/task state nor returns an A300 suppression.
         let body = actor(frame.entities, opposite)?;
@@ -872,6 +891,34 @@ fn behavior(
             }
             finish_capture_selection(frame, owner)?;
             Ok(NativeCaptorPairBehaviorResult::CaptureAcceptedA300)
+        }
+        // Mobbing's approach and dive: 40CF00 hits a capability-bit0 body
+        // (the player) with a checked {1, 6000} of this row's kind, then
+        // returns zero. Any other body is untouched.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_cf00)
+            if crate::intro2_type10::mobbing::is_type29(entity) =>
+        {
+            if actor(frame.entities, opposite)?.capability_flags & 1 == 0 {
+                return Ok(NativeCaptorPairBehaviorResult::Null);
+            }
+            if frame.entities.player().map(|player| player.id) != Some(opposite) {
+                return Err(NativeCaptorPairBlock::Runtime(
+                    "Mobbing hit on a non-player",
+                ));
+            }
+            *committed = true;
+            apply_native_pair_checked_damage(
+                frame,
+                opposite,
+                crate::damage::DamageDeliveryRecord {
+                    packet: crate::intro2_type10::mobbing::pair_hit_packet(),
+                    source_entity_type_raw: 29,
+                    owner_handle: owner,
+                },
+                playing_player,
+                committed,
+            )?;
+            Ok(NativeCaptorPairBehaviorResult::Null)
         }
         PairContactCallbackPolicy::UnknownAddress(0x0040_cd50) if entity.entity_type == 30 => {
             if style != 0x004c7930
@@ -1084,6 +1131,10 @@ fn physical(
         .any(|id| actor(frame.entities, id).is_ok_and(owns_native_weapon_contact));
     // The shark lane's player is lent with the Playing world like a weapon's.
     let shark_pair = is_native_shark_player_pair(
+        frame.entities,
+        actor(frame.entities, id)?,
+        actor(frame.entities, candidate)?,
+    ) || is_native_type29_player_pair(
         frame.entities,
         actor(frame.entities, id)?,
         actor(frame.entities, candidate)?,
@@ -1380,7 +1431,7 @@ fn apply_pair_checked_damage(
     }
     if matches!(
         kind,
-        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 57
+        13 | 14 | 15 | 39 | 87 | 108 | 10 | 5 | 80 | 126 | 55 | 81 | 29 | 57
     ) {
         let result = crate::live_actor_checked_damage::apply_live_actor_checked_damage(
             frame.entities,

@@ -337,6 +337,12 @@ fn run_frame(
         elapsed_micros: dt,
         global_elapsed_micros: frame.elapsed_micros,
         retail_tick: frame.retail_tick,
+        waves_enabled: frame
+            .resources
+            .level_desc()
+            .and_then(|level| level.raw_u32(0x84))
+            .ok_or(Block::Runtime("world wave flag"))?
+            != 0,
     };
     let changed = match primary {
         Some(ActorTaskRuntime::ChaseTarget(_)) => {
@@ -344,6 +350,12 @@ fn run_frame(
         }
         Some(ActorTaskRuntime::OrdinaryType9Wander(_)) => {
             super::guard::tick_wander_primary(entity, mover_frame, frame.world_fx)?
+        }
+        Some(ActorTaskRuntime::MobbingApproach(_) | ActorTaskRuntime::MobbingDive(_)) => {
+            super::mobbing::tick_primary(manager, id, mover_frame, frame.world_fx)?
+        }
+        Some(ActorTaskRuntime::RunAway(_)) => {
+            super::flee::tick_primary(manager, id, mover_frame, frame.world_fx)?
         }
         _ => tick_retarget_primary(entity, mover_frame, frame.world_fx)?,
     };
@@ -369,6 +381,12 @@ fn run_frame(
             }
             32 => {
                 super::guard::acquire(manager, id, &metadata, frame.world_fx)?;
+            }
+            21 => {
+                super::mobbing::acquire(manager, id, frame.world_fx)?;
+            }
+            10 => {
+                super::flee::acquire(manager, id, &metadata, frame.world_fx)?;
             }
             _ => return Err(Block::Graph),
         }

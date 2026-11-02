@@ -24,6 +24,7 @@ fn mover_frame<'a>(
         elapsed_micros: 20_000,
         global_elapsed_micros: 20_000,
         retail_tick: 1,
+        waves_enabled: false,
     }
 }
 

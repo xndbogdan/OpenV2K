@@ -1248,6 +1248,27 @@ pub static AUDITED_NON_INITIAL_BEHAVIOR_STYLES: &[BehaviorStyle] = &[
         impact_callback_address: Some(0x0040_C730),
         death_callback_address: None,
     },
+    // Mobbing Target's approach and dive: +18 pair 40CF00 (a checked
+    // 6,000-damage hit on a capability-bit0 body) and +28 C690. The dive's
+    // terrain/static/state hooks (+10/+14/+1C) are 40C750, owned natively.
+    BehaviorStyle {
+        class_id: 21,
+        variant: 1,
+        frame_address: 0x004C_7C90,
+        release_callback_address: None,
+        pair_contact_callback_address: Some(0x0040_CF00),
+        impact_callback_address: Some(0x0040_C690),
+        death_callback_address: None,
+    },
+    BehaviorStyle {
+        class_id: 21,
+        variant: 2,
+        frame_address: 0x004C_7CD8,
+        release_callback_address: None,
+        pair_contact_callback_address: Some(0x0040_CF00),
+        impact_callback_address: Some(0x0040_C690),
+        death_callback_address: None,
+    },
     BehaviorStyle {
         class_id: 32,
         variant: 1,

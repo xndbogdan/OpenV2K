@@ -8093,7 +8093,7 @@ fn run_game(
                         .is_some_and(|entity| {
                             matches!(
                                 entity.entity_type,
-                                5 | 10 | 13 | 15 | 55 | 80 | 81 | 87 | 126
+                                5 | 10 | 13 | 15 | 29 | 55 | 80 | 81 | 87 | 126
                             )
                         });
                     if native_flyer {

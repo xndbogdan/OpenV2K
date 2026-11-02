@@ -1,4 +1,4 @@
-//! Native Type10-family method10 Aim: actor-specific custody over the shared transaction.
+//! Native Type10-family Aim (method 10; Type29 method 24): actor-specific custody over the shared transaction.
 
 use super::{search::pursuing_graph_authenticates, type10_profile, Type10Profile};
 use crate::{
@@ -63,6 +63,7 @@ family_aim_profile!(Type80AimProfile, Type80, Type10Profile::Type80);
 family_aim_profile!(Type126AimProfile, Type126, Type10Profile::Type126);
 family_aim_profile!(Type55AimProfile, Type55, Type10Profile::Type55);
 family_aim_profile!(Type81AimProfile, Type81, Type10Profile::Type81);
+family_aim_profile!(Type29AimProfile, Type29, Type10Profile::Type29);
 
 fn manager_profile(manager: &EntityManager, entity_id: u32) -> Option<Type10Profile> {
     manager
@@ -90,6 +91,9 @@ pub fn ensure_intro2_type10_aim_runtime(
         }
         Some(Type10Profile::Type81) => {
             shared::ensure_native_aim_runtime::<Type81AimProfile>(entity, metadata)
+        }
+        Some(Type10Profile::Type29) => {
+            shared::ensure_native_aim_runtime::<Type29AimProfile>(entity, metadata)
         }
         _ => shared::ensure_native_aim_runtime::<Type10AimProfile>(entity, metadata),
     }
@@ -136,6 +140,14 @@ pub fn tick_intro2_type10_aim(
             metadata,
         ),
         Some(Type10Profile::Type81) => shared::tick_native_aim::<Type81AimProfile>(
+            dispatch_mode,
+            manager,
+            world_fx,
+            entity_id,
+            elapsed_micros,
+            metadata,
+        ),
+        Some(Type10Profile::Type29) => shared::tick_native_aim::<Type29AimProfile>(
             dispatch_mode,
             manager,
             world_fx,
@@ -190,6 +202,13 @@ pub fn drain_intro2_type10_shots(
             retail_tick,
         ),
         Some(Type10Profile::Type81) => shared::drain_native_shots::<Type81AimProfile>(
+            manager,
+            world_fx,
+            source_entity_id,
+            environment,
+            retail_tick,
+        ),
+        Some(Type10Profile::Type29) => shared::drain_native_shots::<Type29AimProfile>(
             manager,
             world_fx,
             source_entity_id,
