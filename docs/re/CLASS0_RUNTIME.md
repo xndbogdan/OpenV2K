@@ -226,20 +226,20 @@ handle `04B30001`, at pass 1300) reads state `0x0042C005` and health 0 after
 the hit, and the sea word `0xFFFCB100` falls to `0xFFFA2000` (delta `-168192`)
 in 690 paced updates, through pass 1989. The port matches each of these.
 
-## Rows outside class0: Type50, Type89 and Type118
+## Rows outside class0: Type50, Type89, Type118 and Type36
 
-Three rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
+Four rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
 draw, the `+88` sea word) but not its living program. One owner runs all
 their visits, through the same `12DA0` prefix and DCA0/E870 tail.
 
-| Field | Type50 | Type89 | Type118 |
-|---|---|---|---|
-| Worlds | 16, 40 | 21 (two) | 40 (two) |
-| Default model slots | `[647;4]` | `[0;4]` | `[676;4]` |
-| Mass / health | 100 / 1000 | 1000 / 1000 | 1000 / 1000 |
-| Type+C0 | `4067` | `21A7` | `20027` |
-| Root / alternate | Always `(1,1,36)`, rule3 / class38 | Always `(1,1,38)` / class1 | Always `(1,1,0)` / class65 |
-| Authored `+88` | world16 -1068, world40 0 | 3249 | 1000 |
+| Field | Type50 | Type89 | Type118 | Type36 |
+|---|---|---|---|---|
+| Worlds | 16, 40 | 21 (two) | 40 (two) | 42, 43, 46, 47 |
+| Default model slots | `[647;4]` | `[0;4]` | `[676;4]` | `[0;4]` |
+| Mass / health | 100 / 1000 | 1000 / 1000 | 1000 / 1000 | 1000 / 1000 |
+| Type+C0 | `4067` | `21A7` | `20027` | `201A7` |
+| Root / alternate | Always `(1,1,36)`, rule3 / class38 | Always `(1,1,38)` / class1 | Always `(1,1,0)` / class65 | Always `(1,1,16)` / class16 |
+| Authored `+88` | world16 -1068, world40 0 | 3249 | 1000 | unread |
 
 **Type50, Die When Moved.** `FUN_0040B980` clears T then S and
 `FUN_00404A20` publishes a Primary without timeout; `FUN_00401350/FUN_004012E0`
@@ -261,7 +261,10 @@ tick: two rising half steps of 122 raw. Retail's world 21 reads the sea at
 -1035008 on arrival and -1027932 29 ticks later, 24400 every 100 ticks, until
 its casualty loss 1774 ticks in; the abort explodes both Type89s through
 class1 (`FUN_0040BAC0`), which ends the rise. The port's sea matches tick for
-tick. A finished task stages the body's removal (`FUN_00410B70`).
+tick. The loss itself is chance: four more retail runs differing only in menu
+timing lost between 1051 and 1745 ticks in, the first native drowning between
+818 and 872, as the people's wandering and the Type18 hunting them decide the
+second casualty. A finished task stages the body's removal (`FUN_00410B70`).
 
 **Type118, the Geyser.** It lives in class0 until `FUN_00410C10` selects its
 direct alternate class65: `FUN_0040C500` clears T then S and `FUN_00407BC0`
@@ -284,11 +287,35 @@ callbacks or policy words, so unlike class0 its effective `0x20027` lacks
 Retail's world-40 Type118s read `(25856, -3296, 23552)` and
 `(10752, -2848, 30208)` with `0x08468805` at their first visit.
 
-Hits reach all three through `class0_impact`: classes 36 and 38 have null
+**Type36, Generate Flares.** Class16 runs from birth: `FUN_0040B8B0` clears T
+then S and `FUN_00406300` publishes a Primary with no timeout or private data.
+Its style `0x004C77C8` has no policy words, so coarse visits run E870's walk
+too, and `FUN_00406390` ignores the visit's detail argument and returns 0.
+Every visit draws twice around the player (`FUN_00456F90`): X gains
+`((r >> 3) & 0x1FFF) - 0x1000`, Z gains `((r >> 4) & 0xFFF) - 0x400`. A point
+whose nearest cell's material has ground response selector 7
+(`FUN_0042EA30`), or whose containing cell lies under the sea, gets a still
+class-47 particle owned by the generator, on the higher of the ground and the
+waved sea (the sea itself with waves off). `FUN_00410C10` takes the direct
+alternate, class16 again: a dead Type36 keeps generating. Retail's world-43
+Type36 reads `(-32512, 2112, -31744)` and `0x0E460005` at its first visit.
+
+Flares (classes 47 and 48) sweep entities only (descriptor mode 4, through
+`FUN_0043F980`) and drift on the shared RNG (`0x0043F450`). A touch runs
+`FUN_0043F660`: the F610 burst, then `FUN_00410D30` with packet `0x004CC060`
+(channel 2 500, channel 3 6000) at a ratio of `elapsed >> 2` over 0xFFFF,
+four times the amount on Type119, with 410D30's presentation (the `+0x34`
+throttle, the sound unless dying, the capability-8 class-5 puff). It returns
+0, so the flare lives on. Class 47 has radius 600 and 43 ticks of life,
+class 48 radius 100 and 20 ticks. A 20-ms touch costs the player 938, as in
+retail's world 43, whose player took 69 such hits from 247 ticks in.
+
+Hits reach all four through `class0_impact`: classes 36, 38 and 16 have null
 hit callbacks, like class0. A lethal hit, like the Main Base abort, runs
-class38 for Type50, class1 for Type89 and the Geyser for Type118. Regression
-coverage is in `entity/class0_actor/sea_level_tests.rs`, `die_when_moved.rs`
-and `geyser.rs`.
+class38 for Type50, class1 for Type89, the Geyser for Type118 and class16
+for Type36. Regression coverage is in
+`entity/class0_actor/{sea_level_tests,flare_tests}.rs`, `die_when_moved.rs`,
+`geyser.rs`, `generate_flares.rs` and `flare_damage.rs`.
 
 ## Quiet death and remaining boundaries
 

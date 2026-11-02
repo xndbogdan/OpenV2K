@@ -7,7 +7,8 @@
 //! class36's Die When Moved Primary instead; its death inside the callback
 //! hands the class38 Change Sea Level task to its own owner. Type89's visits
 //! run that class38 task from birth, moving the level's sea. A dead Type118
-//! keeps this owner for its class65 Geyser.
+//! keeps this owner for its class65 Geyser; Type36 keeps it, living or
+//! dying, for class16's flares.
 
 use super::{authenticate_metadata, living_class, reselect_class0_actor, Class0ActorError};
 use crate::{
@@ -71,7 +72,12 @@ impl Class0ActorOwner {
                 != RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeDefault)
             || context.target_handle_at_0x08() != RetailRuntimeValue::Known(None)
             || context.auxiliary_word_at_0x0c() != RetailRuntimeValue::Known(0)
-            || bits(entity, DYING_STATE_BIT)? != if living == 65 { DYING_STATE_BIT } else { 0 }
+            || match living {
+                65 => bits(entity, DYING_STATE_BIT)? == 0,
+                // Class16 is Type36's alternate too: the dying body keeps it.
+                16 => false,
+                _ => bits(entity, DYING_STATE_BIT)? != 0,
+            }
         {
             return Err(Class0ActorError::Graph);
         }
@@ -91,6 +97,7 @@ impl Class0ActorOwner {
                     | (36, Some(ActorTaskRuntime::DieWhenMoved(_)))
                     | (38, Some(ActorTaskRuntime::ChangeSeaLevel(_)))
                     | (65, Some(ActorTaskRuntime::Geyser(_)))
+                    | (16, Some(ActorTaskRuntime::GenerateFlares))
             )
             // A finished class38 has staged its removal.
             || (living == 38 && bits(entity, DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0)
@@ -597,6 +604,60 @@ fn run_callback(
                 Some(ActorTaskRuntime::Geyser(state)) => state.step_sea(terrain, dt),
                 _ => return Err(Class0ActorError::Graph),
             }
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+        }
+        Some(ActorTaskRuntime::GenerateFlares) => {
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            let remote = bits(entity, REMOTE_OWNED_STATE_BIT)? != 0;
+            // 06390 ignores the coarse argument: every callback draws twice.
+            let player = manager
+                .player()
+                .map(|player| player.position_raw())
+                .ok_or(Class0ActorError::Runtime("flare origin player"))?;
+            let terrain = frame
+                .resources
+                .level_terrain()
+                .ok_or(Class0ActorError::Runtime("terrain"))?;
+            let level = frame
+                .resources
+                .level_desc()
+                .ok_or(Class0ActorError::Runtime("level descriptor"))?;
+            let world = crate::generate_flares::FlareWorld {
+                ground_response_selectors: level.ground_response_selectors(),
+                waves_enabled: level.raw_u32(0x84).unwrap_or(0) != 0,
+                wave_tick: frame.retail_tick as i32,
+            };
+            let site = crate::generate_flares::flare_site(player, terrain, world, &mut || {
+                frame.world_fx.next_shared_retail_random_u16()
+            });
+            if let Some(position_raw) = site {
+                let environment = crate::world_fx::ParticleEnvironment::Terrain(
+                    crate::world_fx::TerrainCollisionContext::from_current_level_cache(
+                        frame.resources,
+                    )
+                    .ok_or(Class0ActorError::Runtime("particle terrain context"))?,
+                );
+                frame.world_fx.materialize_descriptor_particle_request(
+                    crate::world_fx::DescriptorParticleRequest {
+                        source_class: crate::generate_flares::FLARE_PARTICLE_CLASS,
+                        position_raw,
+                        velocity_raw: [0; 3],
+                        owner: Some(crate::world_fx::ParticleOwnerAtBirth {
+                            entity_id: id,
+                            entity_type: crate::main_base_type54_abort::TYPE36_ENTITY_TYPE as u8,
+                        }),
+                        suppresses_impact_damage: remote,
+                    },
+                    environment,
+                    frame.retail_tick,
+                );
+            }
+            let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
             if !entity.actor_tasks.finish_exact_visit(visit) {
                 return Err(Class0ActorError::Graph);
             }

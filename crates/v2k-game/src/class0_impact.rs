@@ -4,8 +4,9 @@
 //! so do Type50's class36 4C7390 and Type89's class38 4C7348. Lethal checked
 //! damage runs 10C10's class38 Change Sea Level for Type54, Type72, Type85
 //! and Type50, exactly as the Main Base abort does, Type89's class1
-//! explosion and Type118's class65 Geyser. Flags, weights, Type106 and gates
-//! have zero multipliers, so no shot is lethal to them.
+//! explosion, Type118's class65 Geyser and Type36's class16 again. Flags,
+//! weights, Type106 and gates have zero multipliers, so no shot is lethal to
+//! them.
 
 use crate::{
     entity::{Class0ActorOwner, Entity, EntityManager},
@@ -39,7 +40,8 @@ pub enum Class0DeathBlock {
     Type54(MainBaseType54DeathBlock),
     SeaLevelRegistration,
     Class1(Box<crate::class49_terminal::Class49TerminalBlock>),
-    Geyser(crate::entity::Class0ActorError),
+    /// Type118's Geyser or Type36's flares, 10C10's direct alternates.
+    Class0Alternate(crate::entity::Class0ActorError),
 }
 
 /// What 10C10 published: the class38 delta, or a no-op entry.
@@ -55,6 +57,8 @@ pub enum Class0Death {
     Geyser {
         sea_delta_raw: i32,
     },
+    /// Type36's alternate class16 Generate Flares, reinstalled.
+    Flares,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -251,6 +255,9 @@ fn run(
             if entity_type == crate::main_base_type54_abort::TYPE118_ENTITY_TYPE {
                 return geyser_death(manager, scheduler, resources, id);
             }
+            if entity_type == crate::main_base_type54_abort::TYPE36_ENTITY_TYPE {
+                return flare_death(manager, scheduler, id);
+            }
             if !is_change_sea_level_type(entity_type) {
                 return Err(Class0DeathBlock::UnsupportedAlternate { entity_type });
             }
@@ -282,12 +289,37 @@ fn geyser_death(
     // Either the living graph or the new Geyser: both adopt.
     let owner = Class0ActorOwner::adopt(manager, id).map_err(|_| Class0DeathBlock::Custody)?;
     scheduler.register_class0_actor(owner);
-    match death.map_err(Class0DeathBlock::Geyser)? {
+    match death.map_err(Class0DeathBlock::Class0Alternate)? {
         crate::entity::Class0GeyserDeath::Published { sea_delta_raw } => Ok(LiveActorDeathResult {
             returned_nonzero: true,
             publication: Some(Class0Death::Geyser { sea_delta_raw }),
         }),
         crate::entity::Class0GeyserDeath::NoOp => Ok(LiveActorDeathResult {
+            returned_nonzero: false,
+            publication: None,
+        }),
+    }
+}
+
+/// 10C10's alternate class16: the class0 owner readopts the dying body,
+/// which keeps generating flares.
+fn flare_death(
+    manager: &mut EntityManager,
+    scheduler: &mut SpecializedActorTaskScheduler,
+    id: u32,
+) -> Result<LiveActorDeathResult<Class0Death>, Class0DeathBlock> {
+    if !scheduler.take_class0_actor_external_mutation(manager, id) {
+        return Err(Class0DeathBlock::Custody);
+    }
+    let death = manager.apply_class0_flare_death(id);
+    let owner = Class0ActorOwner::adopt(manager, id).map_err(|_| Class0DeathBlock::Custody)?;
+    scheduler.register_class0_actor(owner);
+    match death.map_err(Class0DeathBlock::Class0Alternate)? {
+        crate::entity::Class0FlareDeath::Republished => Ok(LiveActorDeathResult {
+            returned_nonzero: true,
+            publication: Some(Class0Death::Flares),
+        }),
+        crate::entity::Class0FlareDeath::NoOp => Ok(LiveActorDeathResult {
             returned_nonzero: false,
             publication: None,
         }),

@@ -176,6 +176,9 @@ fn run_class84(playing: bool, living: bool) {
                             PlayingParticleActorResponse::AttachedCascadeOwner(
                                 crate::world_fx::sample_attached_particle_cached_owner(&entities, request))
                         }
+                        PlayingParticleActorEvent::FlareDamage(_) => {
+                            panic!("the isolated postdeath attachment has no flare")
+                        }
                     }
                 },
                 on_terrain_event: |_: &mut StaticDamageScheduler, _: &mut WorldFx, _| {

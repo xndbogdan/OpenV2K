@@ -35,11 +35,13 @@ pub const TYPE85_ENTITY_TYPE: u32 = 85;
 pub const TYPE50_ENTITY_TYPE: u32 = 50;
 pub const TYPE89_ENTITY_TYPE: u32 = 89;
 pub const TYPE118_ENTITY_TYPE: u32 = 118;
+pub const TYPE36_ENTITY_TYPE: u32 = 36;
 
-/// A class0-constructor row whose program moves the sea: class38 Change Sea
-/// Level (its alternate or its living program) or class65 Geyser.
+/// A row on the class0 constructor whose single program is not class0's
+/// alone: class38 Change Sea Level (its alternate or its living program),
+/// class65 Geyser, or class16 Generate Flares.
 #[derive(Clone, Copy)]
-struct SeaLevelRow {
+struct Class0HostRow {
     entity_type: u32,
     model: u16,
     mass_raw: u16,
@@ -57,10 +59,11 @@ struct SeaLevelRow {
 /// lives in class36 Die When Moved; all four change the sea when they die.
 /// The two Type89s of world 21 (Flood) run class38 from birth and explode
 /// through class1. World 40's two Type118s live in class0 and die into the
-/// class65 Geyser. Every row has null sounds and components and a default
-/// axis.
-const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
-    SeaLevelRow {
+/// class65 Geyser. The Type36s of worlds 42, 43, 46 and 47 live in class16
+/// Generate Flares, their alternate too. Every row has null sounds and
+/// components and a default axis.
+const CLASS0_HOST_ROWS: [Class0HostRow; 7] = [
+    Class0HostRow {
         entity_type: LEVEL_ONE_TYPE54_ENTITY_TYPE,
         model: LEVEL_ONE_TYPE54_MODEL_ID as u16,
         mass_raw: LEVEL_ONE_TYPE54_MASS_RAW,
@@ -71,7 +74,7 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
         living_class: 0,
         alternate_class: 38,
     },
-    SeaLevelRow {
+    Class0HostRow {
         entity_type: TYPE72_ENTITY_TYPE,
         model: 1104,
         mass_raw: 1,
@@ -82,7 +85,7 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
         living_class: 0,
         alternate_class: 38,
     },
-    SeaLevelRow {
+    Class0HostRow {
         entity_type: TYPE85_ENTITY_TYPE,
         model: 140,
         mass_raw: 1,
@@ -93,7 +96,7 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
         living_class: 0,
         alternate_class: 38,
     },
-    SeaLevelRow {
+    Class0HostRow {
         entity_type: TYPE50_ENTITY_TYPE,
         model: 647,
         mass_raw: 100,
@@ -104,7 +107,7 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
         living_class: 36,
         alternate_class: 38,
     },
-    SeaLevelRow {
+    Class0HostRow {
         entity_type: TYPE89_ENTITY_TYPE,
         model: 0,
         mass_raw: 1_000,
@@ -115,7 +118,7 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
         living_class: 38,
         alternate_class: 1,
     },
-    SeaLevelRow {
+    Class0HostRow {
         entity_type: TYPE118_ENTITY_TYPE,
         model: 676,
         mass_raw: 1_000,
@@ -126,11 +129,22 @@ const SEA_LEVEL_ROWS: [SeaLevelRow; 6] = [
         living_class: 0,
         alternate_class: 65,
     },
+    Class0HostRow {
+        entity_type: TYPE36_ENTITY_TYPE,
+        model: 0,
+        mass_raw: 1_000,
+        capability_flags: 0,
+        health_raw: 1_000,
+        initializer_state_flags_raw: 0x0002_01A7,
+        behavior_rule_ref: 1,
+        living_class: 16,
+        alternate_class: 16,
+    },
 ];
 
 /// A row whose death enters class38 Change Sea Level.
 pub(crate) fn is_change_sea_level_type(entity_type: u32) -> bool {
-    SEA_LEVEL_ROWS
+    CLASS0_HOST_ROWS
         .iter()
         .any(|row| row.entity_type == entity_type && row.alternate_class == 38)
 }
@@ -141,7 +155,7 @@ pub(crate) fn change_sea_level_metadata(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> bool {
-    sea_level_row_metadata(entity_type, metadata).is_some_and(|row| row.alternate_class == 38)
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.alternate_class == 38)
 }
 
 /// Authenticate Type89's row, which runs class38 from birth.
@@ -149,27 +163,35 @@ pub(crate) fn living_change_sea_level_metadata(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> bool {
-    sea_level_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 38)
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 38)
 }
 
 /// Authenticate Type118's row, whose alternate is the class65 Geyser.
 pub(crate) fn geyser_metadata(entity_type: u32, metadata: &EntityTypeRuntimeMetadata) -> bool {
-    sea_level_row_metadata(entity_type, metadata).is_some_and(|row| row.alternate_class == 65)
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.alternate_class == 65)
 }
 
-/// The living class of an authenticated row: 0, 36 or 38.
-pub(crate) fn sea_level_row_living_class(entity_type: u32) -> Option<u32> {
-    SEA_LEVEL_ROWS
+/// Authenticate Type36's row: class16 living and alternate.
+pub(crate) fn flare_generator_metadata(
+    entity_type: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> bool {
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 16)
+}
+
+/// The living class of an authenticated row: 0, 16, 36 or 38.
+pub(crate) fn class0_host_living_class(entity_type: u32) -> Option<u32> {
+    CLASS0_HOST_ROWS
         .iter()
         .find(|row| row.entity_type == entity_type)
         .map(|row| row.living_class)
 }
 
-fn sea_level_row_metadata(
+fn class0_host_row_metadata(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
-) -> Option<SeaLevelRow> {
-    let row = *SEA_LEVEL_ROWS
+) -> Option<Class0HostRow> {
+    let row = *CLASS0_HOST_ROWS
         .iter()
         .find(|row| row.entity_type == entity_type)?;
     let initializer = metadata.initializer.as_ref()?;

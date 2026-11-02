@@ -76,8 +76,25 @@ pub fn apply_attached_particle_damage(
     frame: AttachedParticleDamageFrame<'_>,
     request: AttachedParticleDamageRequest,
 ) -> Result<i32, AttachedParticleDamageBlock> {
-    let id = request.target_handle;
     let delivery = request.delivery()?;
+    apply_scaled_checked_damage(
+        frame,
+        request.target_handle,
+        delivery,
+        request.ratio_numerator,
+        request.ratio_denominator,
+    )
+}
+
+/// `FUN_00415040` with an explicit ratio on the player, a native actor or a
+/// fish, shared by 425D0's attached damage and 410D30's flare hits.
+pub(crate) fn apply_scaled_checked_damage(
+    frame: AttachedParticleDamageFrame<'_>,
+    id: u32,
+    delivery: DamageDeliveryRecord,
+    ratio_numerator: u16,
+    ratio_denominator: u16,
+) -> Result<i32, AttachedParticleDamageBlock> {
     if frame
         .entities
         .player()
@@ -98,8 +115,8 @@ pub fn apply_attached_particle_damage(
                 target_id: id,
                 entry: crate::entity::PlayerDamageEntry::Checked,
                 delivery,
-                ratio_numerator: u32::from(request.ratio_numerator),
-                ratio_denominator: request.ratio_denominator,
+                ratio_numerator: u32::from(ratio_numerator),
+                ratio_denominator,
             },
             crate::entity::PlayerCheckedDamageFrame {
                 hull: player_hull,
@@ -130,8 +147,8 @@ pub fn apply_attached_particle_damage(
             entity_id: id,
             delivery,
             entry: LiveActorDamageEntry::Checked,
-            ratio_numerator: u32::from(request.ratio_numerator),
-            ratio_denominator: request.ratio_denominator,
+            ratio_numerator: u32::from(ratio_numerator),
+            ratio_denominator,
             // Attached's source-5 cannot reach either player feedback branch.
             feedback: None,
         },

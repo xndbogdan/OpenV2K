@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,390 | |
 | Marked not needed (excluded below) | 353 | |
-| **Referenced by port code** | **1,005** | **49.3%** |
+| **Referenced by port code** | **1,008** | **49.5%** |
 | Referenced by code or RE notes | 2,037 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 211 |
+| implemented | 215 |
 | approximated | 6 |
 | documented | 1 |
 | not-needed | 353 |
@@ -46,10 +46,10 @@ Where the code's references are thinnest:
 | [Menu system](../re/MENU_SYSTEM.md) | 106 | 26 | 76 |
 | [Controls](../re/CONTROLS.md) | 84 | 18 | 29 |
 | [Software raster](../re/SOFTWARE_RASTER.md) | 79 | 1 | 56 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 76 | 16 | 69 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 73 | 15 | 69 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 63 | 16 | 90 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 48 | 6 | 66 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 37 | 10 | 37 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 48 | 6 | 64 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 36 | 9 | 37 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 32 | 8 | 24 |
 
 ## Omitted

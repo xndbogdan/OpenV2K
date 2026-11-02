@@ -43,6 +43,7 @@ pub enum PlayingParticleActorEvent {
     AttachedUpdate(crate::world_fx::AttachedParticleOwnerRequest),
     AttachedDamage(crate::world_fx::AttachedParticleDamageRequest),
     AttachedCascadeOwner(crate::world_fx::AttachedParticleCascadeOwnerRequest),
+    FlareDamage(crate::world_fx::FlareDamageRequest),
 }
 
 pub enum PlayingParticleActorResponse {
@@ -58,6 +59,10 @@ pub enum PlayingParticleActorResponse {
             crate::world_fx::AttachedParticleUpdateBlock,
         >,
     ),
+    FlareDamage {
+        result: Result<i32, crate::attached_particle_damage::AttachedParticleDamageBlock>,
+        refresh: PlayingParticleRefresh,
+    },
 }
 
 impl<EntityHandler, TerrainHandler> ParticleTraversalHost
@@ -159,6 +164,26 @@ where
             PlayingParticleActorEvent::AttachedDamage(request),
         ) else {
             panic!("Playing attached damage must return its matching response");
+        };
+        if let ParticleCollisionCacheRefresh::Replace(models) = refresh.collision {
+            self.collision_models = models;
+        }
+        self.owner_motions = refresh.owner_motions;
+        self.attachment_owners = refresh.attachment_owners;
+        result
+    }
+    fn flare_damage(
+        &mut self,
+        world_fx: &mut WorldFx,
+        request: crate::world_fx::FlareDamageRequest,
+    ) -> Result<i32, crate::attached_particle_damage::AttachedParticleDamageBlock> {
+        let PlayingParticleActorResponse::FlareDamage { result, refresh } = (self.on_actor_event)(
+            self.cache,
+            self.static_damage,
+            world_fx,
+            PlayingParticleActorEvent::FlareDamage(request),
+        ) else {
+            panic!("Playing flare damage must return its matching response");
         };
         if let ParticleCollisionCacheRefresh::Replace(models) = refresh.collision {
             self.collision_models = models;
