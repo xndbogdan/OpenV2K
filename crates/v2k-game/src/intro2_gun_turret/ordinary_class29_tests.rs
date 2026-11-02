@@ -1,4 +1,4 @@
-//! Ordinary Type92/96/99/102/103 births share Type97's 104B0 -> D4A0/D190
+//! Ordinary Type92/96/99/100/102/103 births share Type97's 104B0 -> D4A0/D190
 //! E/L owner.
 
 use super::authored_tests::fixture;
@@ -8,7 +8,7 @@ use crate::{
     entity_collision_state::RetailRuntimeValue, world_fx::ParticleEnvironment,
 };
 
-const WORLDS: [(u32, u32); 21] = [
+const WORLDS: [(u32, u32); 22] = [
     (26, 92),
     (38, 92),
     (39, 92),
@@ -22,6 +22,7 @@ const WORLDS: [(u32, u32); 21] = [
     (40, 103),
     (43, 103),
     (26, 99),
+    (26, 100),
     (32, 99),
     (46, 99),
     (48, 99),
@@ -72,7 +73,7 @@ fn ordinary_class29_births_publish_their_own_native_owner() {
             );
         }
     }
-    assert_eq!(births, 3 + 2 + 10 + 9 + 15);
+    assert_eq!(births, 3 + 2 + 10 + 1 + 9 + 15);
 }
 
 #[v2k_test_support::retail_test]
@@ -123,7 +124,14 @@ fn ordinary_class29_turrets_run_their_owner_for_64_ticks() {
 
 #[v2k_test_support::retail_test]
 fn ordinary_class29_turrets_fire_their_own_emitter_method_and_drain_once() {
-    for (level, entity_type) in [(26, 92), (26, 96), (26, 99), (19, 102), (21, 103)] {
+    for (level, entity_type) in [
+        (26, 92),
+        (26, 96),
+        (26, 99),
+        (26, 100),
+        (19, 102),
+        (21, 103),
+    ] {
         let mut notifications = crate::gameplay_notifications::GameplayNotifications::default();
         let (session, mut manager, mut fx) = fixture(level);
         let profile = Intro2GunTurretProfile::for_native_authored(entity_type).unwrap();
@@ -141,7 +149,8 @@ fn ordinary_class29_turrets_fire_their_own_emitter_method_and_drain_once() {
             id,
             Some([0, 0, 1024]),
             aim::Intro2GunTurretAimFrame {
-                global_elapsed_micros: 400_000,
+                // One whole interval: 425160's divisor is then one.
+                global_elapsed_micros: profile.emitter().random_interval_us,
                 world_fx: &mut fx,
                 notifications: &mut notifications,
                 notification_phase:
@@ -216,4 +225,27 @@ fn ordinary_type112_113_flowers_publish_their_own_native_owner() {
         }
     }
     assert_eq!(births, 4 + 2);
+}
+
+/// Retail's world-26 Type100 mortar reads `(-17152, 3712, 27648)`, 32000
+/// health and state `0x0942892D` at its first visit, after `FUN_00411400`
+/// has cleared the two view-detail bits the birth sets.
+#[v2k_test_support::retail_test]
+fn world26_type100_is_born_as_retail_reads_it() {
+    let (_, manager, _) = fixture(26);
+    let mut mortars = manager.iter_all().filter(|e| e.entity_type == 100);
+    let mortar = mortars.next().unwrap();
+    assert!(mortars.next().is_none());
+    assert_eq!(mortar.position_raw(), [-17152, 3712, 27648]);
+    assert_eq!(
+        mortar.collision.health_raw,
+        RetailRuntimeValue::Known(32000)
+    );
+    assert_eq!(
+        mortar.collision.state_flags_at_0x08.masked(
+            !(crate::entity_view_detail::BROADER_DETAIL_STATE_BIT
+                | crate::entity_view_detail::FULL_DETAIL_STATE_BIT)
+        ),
+        RetailRuntimeValue::Known(0x0942_892D)
+    );
 }

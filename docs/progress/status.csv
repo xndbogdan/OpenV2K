@@ -592,3 +592,4 @@ address,status,note
 0x0041B980,implemented,Sub-G mode +40 setter (docs/re/INTRO2_TYPE10.md)
 0x0041B970,implemented,Sub-G mode +3F setter (docs/re/INTRO2_TYPE10.md)
 0x00416820,implemented,Type73/Type109 lethal-hit splitter: capped births through 438080 and class2 death (docs/re/TYPE73_SPLITTING_BUGS.md)
+0x00441850,implemented,class-4 and class-54 shell static hits: sound 90, the FUN_004566E0 radial, then the debris (docs/re/PLAYER_CRAFT.md)

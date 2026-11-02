@@ -64,7 +64,7 @@ pub(super) fn dispatch_native_class49(
     // with explicit class1/class49/class63 suffix policies and distinct allocations.
     let admitted = (matches!(
         entity.entity_type,
-        92 | 96 | 97 | 99 | 102 | 103 | 104 | 112 | 113 | 115
+        92 | 96 | 97 | 99 | 100 | 102 | 103 | 104 | 112 | 113 | 115
     )
         && entity.intro2_gun_turret_runtime.is_some())
         || (entity.entity_type == 49 && entity.cleansing_vehicle_runtime.is_some())

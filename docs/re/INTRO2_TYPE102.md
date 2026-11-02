@@ -163,7 +163,7 @@ singleton Always1/Class29, alternate49, rule1, mass100, initializer state
 | 99 | 165 | 5000 | `0x44` | 3 | 12 / 76 | worlds 26, 32, 46, 48 (10) |
 | 102 | 162 | 4000 | `0x44` | 3 | 14 / 78 | worlds 19, 25, 37, 39, 40 (9) |
 | 96 | 175 | 5000 | `0x1044` | 2 | 13 / 77 | worlds 26, 36 (2) |
-| 100 | 152 | 32000 | `0x1044` | 3 | 19 / 7 | world 26 (1), not yet ported |
+| 100 | 152 | 32000 | `0x1044` | 3 | 19 / 7 | world 26 (1) |
 | 103 | 168 | 5000 | `0x44` | 3 | 13 / 77 | worlds 21, 25, 29, 31, 38, 40, 43 (15) |
 
 Ordinary 92/96/99/102/103 now take the same `104B0 -> D4A0/D190` birth,
@@ -173,8 +173,16 @@ class-29 owner, aim and FIFO drain, pair damage and class49 dispatch as Type97.
 no gravity lead, so method 13 drains like 12 and 14, into class56 (class82
 underwater). Ownership is decided by construction origin, not type number:
 Intro2's 92/102 identities keep their cinematic owners and campaign
-reconstruction stays separate. Type100's method19 (class54, two variable
-bindings) has no live aim owner, so it still constructs without a context.
+reconstruction stays separate. Type100's method19 (index 6 in `44EA60`'s
+table) leads its target with gravity, as method16 does, and fires class54
+mortar shells at speed 2000: a body hit runs F6E0's `410EB0`, a static hit
+`FUN_00441850`'s radial and its class `0x27` records. Retail's world-26
+Type100 reads `(-17152, 3712, 27648)`, 32000 health and `0x0942892D` at its
+first visit, as the port's birth does once `FUN_00411400` has cleared the two
+view-detail bits. It chooses the Type66 factory beside it (`408BD0`) and, in
+two 36-second lab runs with the player near it and a 78-second one from the
+Skip to World arrival, never fires; the port's never fires either, so the
+shot path has no retail comparison yet.
 
 ### Ordinary Type112 and Type113 flowers
 
