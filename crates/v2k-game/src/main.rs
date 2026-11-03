@@ -4823,6 +4823,7 @@ fn run_game(
                         world_fx.set_network_client(
                             network_game.as_ref().is_some_and(|net| !net.is_host()),
                         );
+                        static_damage.set_network_starts(true);
                         // FUN_00438880 subscribes FUN_00438F60 to the cell lists.
                         let journal = session.cache.take_network_cell_journal();
                         session

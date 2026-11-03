@@ -152,6 +152,26 @@ pub struct StaticDamageChanceSample {
     pub roll: u16,
 }
 
+/// `FUN_00428910`'s outcome for a peer's kind 6.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StaticNetworkDestruction {
+    Started,
+    /// A program already runs at the cell.
+    Duplicate,
+    /// The cell holds no static object.
+    NoObject,
+    /// Flag `0x08`: the object is already burned.
+    Burned,
+    UnsupportedKind {
+        kind_index: u32,
+    },
+    /// Retail would start a node with no program; never sent for such a
+    /// kind, since the sender burns it instead.
+    NullProgram {
+        kind_index: u32,
+    },
+}
+
 /// Result of attempting to start one admitted static program.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StaticDamageOutcome {
@@ -502,6 +522,9 @@ pub struct StaticDamageScheduler {
     next_program_id: u64,
     pending_advance: Option<PendingAdvance>,
     in_flight: Option<InFlightProgram>,
+    /// In network play, the cells whose program `FUN_00427950` or
+    /// `FUN_00427B20` started, each sent as kind 6; `None` outside one.
+    network_starts: Option<Vec<[u8; 2]>>,
 }
 
 impl StaticDamageScheduler {
@@ -518,6 +541,76 @@ impl StaticDamageScheduler {
             next_program_id: self.next_program_id,
             pending_advance: self.pending_advance.clone(),
             in_flight: self.in_flight,
+            network_starts: self.network_starts.clone(),
+        }
+    }
+
+    /// Start (or stop) recording the programs a network game sends.
+    pub fn set_network_starts(&mut self, enabled: bool) {
+        self.network_starts = enabled.then(Vec::new);
+    }
+
+    /// The cells whose programs started since the last call.
+    pub fn take_network_starts(&mut self) -> Vec<[u8; 2]> {
+        self.network_starts
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+
+    /// `FUN_00428720`: append a program for the cell unless one runs there.
+    fn start_program(&mut self, cell: [u8; 2], program_va: u32) -> bool {
+        if self.contains_cell(cell) {
+            return false;
+        }
+        let id = self.next_program_id;
+        self.next_program_id = self.next_program_id.wrapping_add(1);
+        self.active.push_back(ActiveStaticProgram {
+            id,
+            cell,
+            // The admitted programs contain no opcode5. Their position
+            // consumers read the current cell exactly as the hit entry does.
+            submitted_position_raw: None,
+            elapsed_us: 0,
+            record_index: 0,
+            require_static_raw: 0,
+            program_va,
+        });
+        true
+    }
+
+    fn note_network_start(&mut self, cell: [u8; 2]) {
+        if let Some(starts) = self.network_starts.as_mut() {
+            starts.push(cell);
+        }
+    }
+
+    /// `FUN_00428910`: a peer's kind 6 starts the cell's program here too,
+    /// unless the cell is burned (`0x08`) or has no static object; nothing
+    /// is sent on.
+    pub fn submit_network_destruction(
+        &mut self,
+        cell: [u8; 2],
+        attribute: u8,
+        terrain_type: u8,
+        kind_index: Option<u32>,
+    ) -> StaticNetworkDestruction {
+        let Some(kind_index) = kind_index.filter(|_| attribute != 0) else {
+            return StaticNetworkDestruction::NoObject;
+        };
+        if terrain_type & BURNED_TERRAIN_TYPE_BIT != 0 {
+            return StaticNetworkDestruction::Burned;
+        }
+        let Some(catalog) = admitted_static_catalog(kind_index) else {
+            return StaticNetworkDestruction::UnsupportedKind { kind_index };
+        };
+        if catalog.program_va == 0 {
+            return StaticNetworkDestruction::NullProgram { kind_index };
+        }
+        if self.start_program(cell, catalog.program_va) {
+            StaticNetworkDestruction::Started
+        } else {
+            StaticNetworkDestruction::Duplicate
         }
     }
 
@@ -598,24 +691,14 @@ impl StaticDamageScheduler {
             };
         }
 
-        if self.contains_cell(target.cell) {
+        if !self.start_program(target.cell, catalog.program_va) {
             return StaticDamageOutcome::Duplicate {
                 severity_raw,
                 sample,
             };
         }
-
-        let id = self.next_program_id;
-        self.next_program_id = self.next_program_id.wrapping_add(1);
-        self.active.push_back(ActiveStaticProgram {
-            id,
-            cell: target.cell,
-            submitted_position_raw: None,
-            elapsed_us: 0,
-            record_index: 0,
-            require_static_raw: 0,
-            program_va: catalog.program_va,
-        });
+        // FUN_00427950 sends kind 6 once FUN_00428720 accepts the program.
+        self.note_network_start(target.cell);
         StaticDamageOutcome::Started {
             severity_raw,
             sample,
@@ -638,22 +721,11 @@ impl StaticDamageScheduler {
         let Some(catalog) = admitted_static_catalog(kind_index) else {
             return StaticCraterOutcome::UnsupportedKind { kind_index };
         };
-        if self.contains_cell(cell) {
+        if !self.start_program(cell, catalog.program_va) {
             return StaticCraterOutcome::Duplicate;
         }
-        let id = self.next_program_id;
-        self.next_program_id = self.next_program_id.wrapping_add(1);
-        self.active.push_back(ActiveStaticProgram {
-            id,
-            cell,
-            // The admitted programs contain no opcode5. Their position
-            // consumers read the current cell exactly as the hit entry does.
-            submitted_position_raw: None,
-            elapsed_us: 0,
-            record_index: 0,
-            require_static_raw: 0,
-            program_va: catalog.program_va,
-        });
+        // FUN_00427B20 sends kind 6 as FUN_00427950 does.
+        self.note_network_start(cell);
         StaticCraterOutcome::Started
     }
 
@@ -2738,5 +2810,49 @@ mod tests {
             static_radial_vertical_position_raw(32_000, 32_100, 1_000),
             32_000_i16.wrapping_add(1_000)
         );
+    }
+
+    #[test]
+    fn network_play_sends_started_programs_and_a_peers_start_is_not_sent_on() {
+        let kind = (0..64)
+            .find(|&kind| {
+                admitted_static_catalog(kind).is_some_and(|catalog| catalog.program_va != 0)
+            })
+            .expect("a kind with a timed program");
+        let mut scheduler = StaticDamageScheduler::new();
+        assert_eq!(
+            scheduler.submit_crater_destruction([1, 2], kind),
+            StaticCraterOutcome::Started
+        );
+        assert!(scheduler.take_network_starts().is_empty());
+        scheduler.set_network_starts(true);
+        assert_eq!(
+            scheduler.submit_crater_destruction([3, 4], kind),
+            StaticCraterOutcome::Started
+        );
+        assert_eq!(
+            scheduler.submit_crater_destruction([3, 4], kind),
+            StaticCraterOutcome::Duplicate
+        );
+        assert_eq!(scheduler.take_network_starts(), vec![[3, 4]]);
+        // FUN_00428910: a peer's start runs here without a send.
+        assert_eq!(
+            scheduler.submit_network_destruction([5, 6], 7, 0, Some(kind)),
+            StaticNetworkDestruction::Started
+        );
+        assert_eq!(scheduler.active_program_count(), 3);
+        assert_eq!(
+            scheduler.submit_network_destruction([5, 6], 7, 0, Some(kind)),
+            StaticNetworkDestruction::Duplicate
+        );
+        assert_eq!(
+            scheduler.submit_network_destruction([7, 8], 7, BURNED_TERRAIN_TYPE_BIT, Some(kind)),
+            StaticNetworkDestruction::Burned
+        );
+        assert_eq!(
+            scheduler.submit_network_destruction([7, 8], 0, 0, Some(kind)),
+            StaticNetworkDestruction::NoObject
+        );
+        assert!(scheduler.take_network_starts().is_empty());
     }
 }

@@ -130,7 +130,8 @@ send kind 10 for network-owned bodies, and the session tick sends kinds 3, 7,
 | `FUN_004379C0` | applies a received run of cells from (x, z), advancing X then Z with wrap: sets each cell's infection bit to the run's (`FUN_00433720`) and, on a cell whose attribute byte is set, flag `0x08` to the run's (`FUN_004337E0`), clearing the attribute byte when the run's bit 4 says so (`FUN_00433860`) |
 | `FUN_00437B60` | syncs one cell: its material through `FUN_00433900` and its flags `0x10` (`FUN_00433720`) and `0x08` (`FUN_004337E0`) when they differ |
 | `FUN_00437CB0` | the host applies a client's cell request: set or clear flag `0x10` (`FUN_00433720`) or `0x08` (`FUN_004337E0`), or set the material (`FUN_00433900`) |
-| `FUN_00428910` | destroys the cell's static object, unless it carries `0x800`, through `FUN_00428720` with its kind's template (`004C9E40`) |
+| `FUN_00428910` | starts the cell's static-object program here too, unless the cell has no object or its flag `0x08` is set (bit `0x800` of the cell word), through `FUN_00428720` with its kind's program (`004C9E40`); nothing is sent on |
+| `FUN_00428720` | starts a static program at a cell unless one runs there (returning 0), which `FUN_00427950` (a hit) and `FUN_00427B20` (a crater) answer with kind 6, the cell's X in the low byte and Z above it |
 | `FUN_00417240` | packs a body's sync record: handle, the word at `+7C` and a flag word that selects the optional fields that follow (position, velocity, Euler attitude, a basis compressed to two rows of 13 bits, the capability word and the `+88`/`+50` payloads), returning -1 when the buffer is too small; a successful pack clears the change words (`+84`, state bits 0-10) |
 | `FUN_00417DB0` | packs a damage message: the target handle, the amount and the kind word, with the local slot (`004F7378`) in its high byte |
 | `FUN_00417E10` | applies a damage message to a local body through `FUN_00414E90` |
@@ -330,7 +331,9 @@ Terrain and cells follow [Terrain and cells](#terrain-and-cells). The level
 cache journals each notification its writers make while a network game runs,
 with the cell's bytes right after it, and the frame sends the journal as kinds
 4 or 5 after its effects' records, and again after the records it applied, so
-a host's answer to a request leaves in the same frame as in retail. A host's
+a host's answer to a request leaves in the same frame as in retail. The
+static scheduler likewise records each program a hit or crater starts, sent
+as kind 6. A host's
 record is applied with the journal set aside (`004DC9B4`). Kind 5's last byte
 is 0 for operations 0-3. Not sent: burns made while a world is built, which
 the port writes to a private copy of the terrain (retail notifies them too).
@@ -345,11 +348,11 @@ Held, each with a logged stop ("Network: ... is held"):
   and the deploy `FUN_00444400` builds three. The port has no Type65, so it
   refuses the pickup and the power-up stays; with no count, a dying player
   here never drops one;
-- sending kind 6 (static objects) and kinds 13 to 15 (attachments), and
-  kind 10: `FUN_00414AE0`'s, whose handle is stale (above), and
+- sending kinds 13 to 15 (attachments), and kind 10: `FUN_00414AE0`'s, whose handle is stale (above), and
   `FUN_00411030`'s, since the port runs no particle hit wrapper
   (`FUN_00411180`, `FUN_00411250`) on a peer's body, only its damage;
-- receiving kinds 6 and 13 to 15;
+- receiving kinds 13 to 15, and a peer's kind 6 for a kind whose program
+  the port does not run ("a peer's kind 6 for a static of kind N");
 - a particle's damage to a peer's body of type 73, 109 or 110, whose modifier
   `FUN_00415040` would run first;
 - a peer's damage to an owned creature whose type's hit callback or death the

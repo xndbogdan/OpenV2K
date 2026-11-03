@@ -157,9 +157,9 @@ pub fn advance_network_world(
         retail_tick,
         removals,
     } = frame;
-    // The world owners' own sends: static objects (6), impacts on a peer's
-    // body (10) and attachments (13 to 15).
-    report_held("sending record kinds 6, 10, 13, 14 and 15".into());
+    // The world owners' own sends: impacts on a peer's body (10) and
+    // attachments (13 to 15).
+    report_held("sending record kinds 10, 13, 14 and 15".into());
     // This frame's sends from the effects, in call order: FUN_00440A60's
     // kind 1, FUN_00440950's kind 2 and FUN_0044F480's kinds 22 and 23.
     for send in world_fx.take_network_sends() {
@@ -206,7 +206,7 @@ pub fn advance_network_world(
             net.send(GameRecord::Removed(handle));
         }
     }
-    send_cell_changes(net, cache);
+    send_cell_changes(net, cache, static_damage);
     for reason in em.take_refused_network_drops() {
         report_held(format!("a dropped power-up ({reason})"));
     }
@@ -409,6 +409,34 @@ pub fn advance_network_world(
                 host_record: false,
             }
             .apply_cell_request(record),
+            NetworkEvent::StaticDestroyed(cell) => {
+                use v2k_game::static_damage::StaticNetworkDestruction as Outcome;
+                let Some(now) = cache
+                    .level_terrain()
+                    .and_then(|terrain| terrain.cell(usize::from(cell[0]), usize::from(cell[1])))
+                    .copied()
+                else {
+                    continue;
+                };
+                let kind_index = cache
+                    .terrain_objects()
+                    .and_then(|objects| objects.records.get(usize::from(now.attribute)))
+                    .map(|object| object.kind_index);
+                let outcome = static_damage.submit_network_destruction(
+                    cell,
+                    now.attribute,
+                    now.terrain_type,
+                    kind_index,
+                );
+                verbose(format_args!(
+                    "Network: a peer's static program at {cell:?}: {outcome:?}"
+                ));
+                if let Outcome::UnsupportedKind { kind_index }
+                | Outcome::NullProgram { kind_index } = outcome
+                {
+                    report_held(format!("a peer's kind 6 for a static of kind {kind_index}"));
+                }
+            }
             NetworkEvent::Held { kind } => report_held(format!("record kind {kind}")),
             NetworkEvent::UnknownRestState => {
                 report_held("the rest period of a body with unknown state bits".into())
@@ -435,13 +463,24 @@ pub fn advance_network_world(
     }
     // What the records just applied changed goes out with this frame's
     // message, as retail's drain sends it at once.
-    send_cell_changes(net, cache);
+    send_cell_changes(net, cache, static_damage);
     outcome
 }
 
 /// `FUN_00438F60` for each cell change the frame made: the host's kind 4,
 /// a client's kind 5.
-fn send_cell_changes(net: &mut NetworkGame, cache: &mut v2k_game::resource_cache::ResourceCache) {
+fn send_cell_changes(
+    net: &mut NetworkGame,
+    cache: &mut v2k_game::resource_cache::ResourceCache,
+    static_damage: &mut v2k_game::static_damage::StaticDamageScheduler,
+) {
+    // FUN_00427950 and FUN_00427B20's kind 6: the cell's X, then Z.
+    for cell in static_damage.take_network_starts() {
+        verbose(format_args!("Network: static program at {cell:?} sent"));
+        net.send(GameRecord::StaticDestroyed(
+            u32::from(cell[0]) | u32::from(cell[1]) << 8,
+        ));
+    }
     let host = net.is_host();
     for change in cache.take_network_cell_changes() {
         let record = v2k_game::network::terrain::cell_change_record(change, host);
