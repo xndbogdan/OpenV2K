@@ -101,6 +101,7 @@ use v2k_game::hive_controller::{objective_hostile_present, HIVE_ENTITY_TYPE};
 use v2k_game::hive_death::hive_death_radial_template;
 use v2k_game::hover::{HoverPhysicsConfig, RETAIL_FRAME_DELTA_MAX_US};
 use v2k_game::infection_evolution::infected_cell_count;
+use v2k_game::level_weather::LevelWeather;
 use v2k_game::main_base_abort::{
     MainBaseAbortActorLease, MainBaseAbortControllerStorage, MainBaseAbortFrameRequest,
     MainBaseAbortTransactionId, MainBaseAbortWorldControlLease, MainBaseTerminalAbortOrigin,
@@ -245,12 +246,11 @@ use v2k_render::{
 /// the ~50% alpha is applied in the renderer to match the engine's blend.
 const WATER_COLOR: [f32; 3] = [0.12, 0.32, 0.52];
 
-/// Stored render-context far words consumed by `FUN_0043D410`, as captured in
-/// the stable retail Intro2 and Level-1 world contexts. These are deliberately
+/// The render-context far word `FUN_0043D410` reads in Intro2, as captured
+/// (`0x004D0560`; Intro2's Section-13 +0x88 is 24 cells). It is deliberately
 /// separate from the transient menu/iris values seen before Intro2 becomes
-/// visible.
+/// visible; gameplay reads its world's far plane.
 const INTRO2_PARTICLE_FAR_DEPTH_RAW: i32 = 0x1800;
-const GAMEPLAY_PARTICLE_FAR_DEPTH_RAW: i32 = 0x1800;
 
 /// Retail session control slots resolve their world OVL as `slot + 12`.
 /// New Game enters slot 1, which therefore loads Level-1 overlay 13.
@@ -6339,6 +6339,9 @@ fn run_game(
                         );
                     }
                 }
+                if let Some(weather) = session.cache.level_desc().map(LevelWeather::from_level) {
+                    weather.advance_clock(&mut world_fx, elapsed_micros);
+                }
                 world_fx.advance_frame_pacing(uncapped_elapsed_micros);
                 world_fx.set_global_elapsed_micros(elapsed_micros);
                 if entity_manager
@@ -11318,13 +11321,21 @@ fn draw_gameplay_world(
     // FUN_00453A60 runs the particle draw traversal here (FUN_0043DCB0 walks
     // the two particle list groups, FUN_0043DCD0 then FUN_0043DDC0); FUN_004536A0 then
     // draws the terrain and static objects below.
+    let live_particles = matches!(particles, GameplayWorldParticles::Live);
     let particle_presentation = match particles {
         GameplayWorldParticles::Live => prepare_particle_presentation(
             renderer,
             camera,
             world_fx,
             em,
-            GAMEPLAY_PARTICLE_FAR_DEPTH_RAW,
+            // D410's far word is the view's fog far plane (0x004D0560), the
+            // world's Section-13 +0x88 cells: 0x1500 in Level 1, 0x1200 in
+            // WindyIce. Without a record the draw below reports the gap.
+            cache
+                .level_desc()
+                .map_or(INTRO2_PARTICLE_FAR_DEPTH_RAW, |descriptor| {
+                    descriptor.fog_planes_raw().far_raw
+                }),
         ),
         GameplayWorldParticles::Frozen(frame) => {
             let (width, height) = renderer.viewport_size();
@@ -11339,6 +11350,16 @@ fn draw_gameplay_world(
     };
     if let Some(terrain) = cache.terrain() {
         accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation);
+    }
+    // 536A0 runs the world's weather (42DB70) before terrain and statics.
+    if let Some(weather) = cache.level_desc().map(LevelWeather::from_level) {
+        weather.present(
+            terrain_lights,
+            world_fx,
+            live_particles,
+            [camera.position[0], camera.position[1], camera.position[2]]
+                .map(|component| (component * 256.0).round() as i32 as i16),
+        );
     }
     if let Some(terrain) = cache.terrain() {
         let colors = cache.color_palettes().map(|c| c.as_slice()).unwrap_or(&[]);
@@ -11428,7 +11449,7 @@ fn draw_gameplay_world(
         descriptor.terrain_draw_depth,
         descriptor.fog_width_cells(),
     );
-    let spray_presented = draw_world_fx(
+    let (spray_presented, on_screen) = draw_world_fx(
         renderer,
         cache,
         face_colors,
@@ -11436,6 +11457,9 @@ fn draw_gameplay_world(
         &particle_presentation,
         particle_fog,
     );
+    if live_particles {
+        world_fx.mark_particles_on_screen(&on_screen);
+    }
     world_fx.note_spray_presented(spray_presented);
     GameplayWorldPresentation {
         shield: presented_shield,
@@ -11850,7 +11874,7 @@ fn render_opening_cinematic(
         }
     }
 
-    let _ = draw_world_fx(
+    let (_, on_screen) = draw_world_fx(
         renderer,
         cache,
         face_colors,
@@ -11858,6 +11882,7 @@ fn render_opening_cinematic(
         &particle_presentation,
         ParticleSpriteFogPlanes::INTRO2,
     );
+    world_fx.mark_particles_on_screen(&on_screen);
     finish_opening_cinematic_frame(
         renderer,
         cache,
@@ -12242,9 +12267,10 @@ fn draw_world_fx(
     camera: &Camera,
     presentation: &ParticlePresentationFrame,
     fog_planes: ParticleSpriteFogPlanes,
-) -> u32 {
+) -> (u32, Vec<usize>) {
     let mut sprites = Vec::with_capacity(presentation.particles().len());
     let mut spray_presented = 0u32;
+    let mut on_screen = Vec::new();
     let (viewport_width, viewport_height) = renderer.viewport_size();
     let viewport = [viewport_width, viewport_height];
     for presented in presentation.particles() {
@@ -12269,6 +12295,11 @@ fn draw_world_fx(
         );
         if !presentation.sprite_visible(presented, half_extent) {
             continue;
+        }
+        if presented.draw_record_address
+            == v2k_game::world_fx::ParticleDrawRecordAddress::LivePoolSlot
+        {
+            on_screen.push(presented.slot);
         }
         let Some(fog) = fog_planes.at_depth_raw(presented.projection.depth_raw) else {
             continue;
@@ -12324,7 +12355,7 @@ fn draw_world_fx(
         });
     }
     renderer.draw_world_sprites(&sprites);
-    spray_presented
+    (spray_presented, on_screen)
 }
 
 /// `FUN_0043DB60` for a drawn particle: the terrain height under it,

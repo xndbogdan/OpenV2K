@@ -31,6 +31,7 @@ pub use traversal::{
     ParticleTraversalContext, ParticleTraversalHost, ParticleTraversalTiming,
 };
 mod virus_projectile;
+mod weather;
 mod whole_body_contact;
 pub(crate) use whole_body_contact::WholeBodyContactScatter;
 
@@ -1383,6 +1384,12 @@ pub struct WorldParticle {
     pub animation_rate_raw: u8,
     pub draw_scale_raw: u16,
     pub size_jitter_divisor_raw: u8,
+    /// Particle `+0x1D` bit `0x10`: allocation sets it, the draw sweep clears
+    /// it and `FUN_0043D410` sets it again for a sprite on screen.
+    pub on_screen: bool,
+    /// Particle `+0x18`, the ground height `FUN_0043DB60` caches on its
+    /// first sample (bit `0x20`); read by class 35's update.
+    pub ground_sample_raw: Option<i16>,
 }
 
 /// Live type-60 `Exploding Ring` presentation.
@@ -2271,6 +2278,8 @@ pub struct WorldFx {
     /// `FUN_00440A60` with network byte 1 refuses a class whose descriptor
     /// flags hold 2; set only while such a burst is born.
     client_births: bool,
+    /// The level weather's process-global words.
+    weather: weather::WeatherState,
 }
 
 /// What these effects send to the other machines of a network game.
@@ -2367,6 +2376,7 @@ impl WorldFx {
             network_sends: self.network_sends.clone(),
             network_client: self.network_client,
             client_births: self.client_births,
+            weather: self.weather,
         }
     }
 
@@ -5146,6 +5156,8 @@ fn world_particle(origin: [f32; 3], spawn: ParticleSpawn) -> WorldParticle {
         animation_rate_raw: spawn.animation_rate_raw,
         draw_scale_raw: spawn.draw_scale_raw,
         size_jitter_divisor_raw: spawn.size_jitter_divisor_raw,
+        on_screen: true,
+        ground_sample_raw: None,
     }
 }
 

@@ -100,7 +100,14 @@ fn all_six_authored_d300_descriptors_draw_ten_copies_of_the_same_frame() {
             assert!(frame.sprite_visible(prepared, [8, 8]));
             assert_eq!(prepared.particle.terrain_light_emission(&terrain), None);
         }
-        assert_eq!(fx.particles.slots[slot], Some(original));
+        // The sweep clears only the live record's on-screen bit (DCD0).
+        assert_eq!(
+            fx.particles.slots[slot],
+            Some(WorldParticle {
+                on_screen: false,
+                ..original
+            })
+        );
         assert_eq!(fx.particle_count(), 1);
         assert_eq!(fx.rng_state, rng);
     }
@@ -119,7 +126,14 @@ fn d300_position_steps_wrap_all_three_signed_words_without_moving_live_state() {
     assert_eq!(positions[0], [32760, -32760, 32760]);
     assert_eq!(positions[1], [-32762, 32761, -32762]);
     assert_eq!(positions[9], [-32650, 32641, -32650]);
-    assert_eq!(fx.particles.slots[slot], Some(original));
+    // The sweep clears only the live record's on-screen bit (DCD0).
+    assert_eq!(
+        fx.particles.slots[slot],
+        Some(WorldParticle {
+            on_screen: false,
+            ..original
+        })
+    );
 }
 
 #[test]
@@ -155,7 +169,14 @@ fn d300_hard_hidden_samples_do_not_stop_later_samples_or_trigger_class81_cleanup
             .collect::<Vec<_>>(),
         [false, false, false, true, true, true, true]
     );
-    assert_eq!(fx.particles.slots[slot], Some(original));
+    // The sweep clears only the live record's on-screen bit (DCD0).
+    assert_eq!(
+        fx.particles.slots[slot],
+        Some(WorldParticle {
+            on_screen: false,
+            ..original
+        })
+    );
     assert_eq!(
         fx.particle_count(),
         1,
@@ -164,7 +185,14 @@ fn d300_hard_hidden_samples_do_not_stop_later_samples_or_trigger_class81_cleanup
     assert_eq!(fx.rng_state, rng);
     let hidden = fx.prepare_presentation(VIEWPORT, FAR, |_| center(-1, 0x40));
     assert_eq!(hidden.particles().len(), 0);
-    assert_eq!(fx.particles.slots[slot], Some(original));
+    // The sweep clears only the live record's on-screen bit (DCD0).
+    assert_eq!(
+        fx.particles.slots[slot],
+        Some(WorldParticle {
+            on_screen: false,
+            ..original
+        })
+    );
 }
 
 #[test]
@@ -305,7 +333,14 @@ fn all_six_authored_442240_descriptors_draw_the_native_live_and_backward_trail()
                 }
             }
         }
-        assert_eq!(fx.particles.slots[slot], Some(original));
+        // The sweep clears only the live record's on-screen bit (DCD0).
+        assert_eq!(
+            fx.particles.slots[slot],
+            Some(WorldParticle {
+                on_screen: false,
+                ..original
+            })
+        );
         assert_eq!(
             fx.particle_count(),
             1,
@@ -346,7 +381,14 @@ fn backward_streak_address_phase_is_supplied_explicitly_and_shared_by_all_copies
         };
         assert_eq!(sample.native_effective_draw_scale_raw(), Ok(expected));
     }
-    assert_eq!(fx.particles.slots[slot], Some(original));
+    // The sweep clears only the live record's on-screen bit (DCD0).
+    assert_eq!(
+        fx.particles.slots[slot],
+        Some(WorldParticle {
+            on_screen: false,
+            ..original
+        })
+    );
 }
 
 #[test]
@@ -376,7 +418,14 @@ fn backward_streak_signed_negative_steps_wrap_source_words_and_leave_live_motion
         frame.particles().next().unwrap().particle.position,
         raw_position_to_world(positions[0])
     );
-    assert_eq!(fx.particles.slots[slot], Some(original));
+    // The sweep clears only the live record's on-screen bit (DCD0).
+    assert_eq!(
+        fx.particles.slots[slot],
+        Some(WorldParticle {
+            on_screen: false,
+            ..original
+        })
+    );
 }
 
 #[test]
@@ -413,7 +462,14 @@ fn backward_streak_hidden_live_and_copied_samples_continue_without_removing_the_
                 .collect::<Vec<_>>(),
             [true, false, true, true]
         );
-        assert_eq!(fx.particles.slots[slot], Some(original));
+        // The sweep clears only the live record's on-screen bit (DCD0).
+        assert_eq!(
+            fx.particles.slots[slot],
+            Some(WorldParticle {
+                on_screen: false,
+                ..original
+            })
+        );
         assert_eq!(fx.particle_count(), 1);
         assert_eq!(fx.rng_state, rng);
     }

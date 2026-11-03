@@ -267,6 +267,8 @@ impl WorldFx {
             .last_retail_tick
             .map_or(0, |previous| timing.retail_tick.wrapping_sub(previous));
         self.last_retail_tick = Some(timing.retail_tick);
+        // 440120 zeroes DAT_004DE844 before the walk; class 35 counts into it.
+        self.reset_weather_falling_count();
         let mut outcome = ParticleUpdateOutcome::default();
         let mut committed_terrain_mutations = Vec::new();
         // Do not snapshot active slots: callback allocations in a later slot
@@ -487,6 +489,7 @@ impl WorldFx {
         let combat_program = CombatProjectileProgram::for_class(particle.source_class);
         let virus_projectile = uses_virus_projectile_callbacks(particle.source_class);
         let attached_update = particle_uses_attached_follow_update(particle.source_class);
+        let weather_fall = weather::uses_weather_fall_update_callback(particle.source_class);
         if attached_update {
             // 40D5C's nonzero descriptor model word sets particle+1D bit40;
             // 40120 at4401E4 skips generic integration. The stored +E/+10/+12
@@ -497,7 +500,7 @@ impl WorldFx {
                     .raw_u16(0x04),
                 0
             );
-        } else if combat_program.is_some() || virus_projectile {
+        } else if combat_program.is_some() || virus_projectile || weather_fall {
             integrate_particle_words(&mut particle, elapsed_micros);
         } else {
             particle.position[0] =
@@ -532,6 +535,12 @@ impl WorldFx {
             );
         } else if virus_projectile {
             apply_virus_projectile_gravity(&mut particle, elapsed_micros);
+        } else if weather_fall {
+            self.update_weather_fall(
+                &mut particle,
+                terrain_context.map(|context| context.terrain),
+                elapsed_micros,
+            );
         } else if matches!(
             particle.source_class,
             PRIMARY_BULLET_PARTICLE_CLASS | RAPID_PRIMARY_PARTICLE_CLASS
