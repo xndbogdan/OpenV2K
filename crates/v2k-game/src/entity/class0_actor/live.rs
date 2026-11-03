@@ -158,6 +158,8 @@ pub struct Class0ActorFrame<'a> {
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
+    /// `FUN_00410C10` on other bodies, for the dying Queen's sweep.
+    pub generic_death: Option<&'a mut crate::queen::GenericDeath<'a>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -205,6 +207,8 @@ pub struct Class0ActorTick {
     pub geyser_lift: Option<GeyserLift>,
     /// The Type68 a Queen's visit spawned at the live list's tail.
     pub spawned_owner: Option<Class0ActorOwner>,
+    /// The dying Queen's `FUN_00456F20`.
+    pub closing_scene: Option<crate::queen::ClosingSceneMove>,
 }
 
 pub fn tick_class0_actor_owner(
@@ -224,6 +228,7 @@ pub fn tick_class0_actor_owner(
             sea_level_receipt: None,
             geyser_lift: None,
             spawned_owner: None,
+            closing_scene: None,
         };
     }
     if manager.native_class0_has_pending_prefix(id) {
@@ -233,6 +238,7 @@ pub fn tick_class0_actor_owner(
             sea_level_receipt: None,
             geyser_lift: None,
             spawned_owner: None,
+            closing_scene: None,
         };
     }
     if Class0ActorOwner::adopt(manager, id) != Ok(owner) {
@@ -242,18 +248,19 @@ pub fn tick_class0_actor_owner(
             sea_level_receipt: None,
             geyser_lift: None,
             spawned_owner: None,
+            closing_scene: None,
         };
     }
     let mut sea_level_receipt = None;
     let mut geyser_lift = None;
-    let mut spawned_owner = None;
+    let mut queen = crate::queen::QueenTick::default();
     let result = run_frame(
         manager,
         owner,
         &mut frame,
         &mut sea_level_receipt,
         &mut geyser_lift,
-        &mut spawned_owner,
+        &mut queen,
     );
     match result {
         Ok(outcome) => {
@@ -263,7 +270,8 @@ pub fn tick_class0_actor_owner(
                 retained_owner: Class0ActorOwner::adopt(manager, id).ok(),
                 sea_level_receipt,
                 geyser_lift,
-                spawned_owner,
+                spawned_owner: queen.held_owner,
+                closing_scene: queen.closing_scene,
             }
         }
         Err(reason) => Class0ActorTick {
@@ -276,7 +284,8 @@ pub fn tick_class0_actor_owner(
             retained_owner: sea_level_receipt.is_none().then_some(owner),
             sea_level_receipt,
             geyser_lift: None,
-            spawned_owner,
+            spawned_owner: queen.held_owner,
+            closing_scene: queen.closing_scene,
         },
     }
 }
@@ -296,7 +305,7 @@ fn run_frame(
         crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt,
     >,
     geyser_lift: &mut Option<GeyserLift>,
-    spawned_owner: &mut Option<Class0ActorOwner>,
+    queen: &mut crate::queen::QueenTick,
 ) -> Result<Class0ActorOutcome, Class0ActorError> {
     let id = owner.entity_id();
     let entity = manager
@@ -372,7 +381,7 @@ fn run_frame(
             detailed,
             sea_level_receipt,
             geyser_lift,
-            spawned_owner,
+            queen,
         )?;
     }
     let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
@@ -490,7 +499,7 @@ fn run_callback(
         crate::main_base_type54_abort::MainBaseType54SeaLevelTickReceipt,
     >,
     geyser_lift: &mut Option<GeyserLift>,
-    spawned_owner: &mut Option<Class0ActorOwner>,
+    queen: &mut crate::queen::QueenTick,
 ) -> Result<(), Class0ActorError> {
     let id = owner.entity_id();
     let program =
@@ -631,18 +640,18 @@ fn run_callback(
                 .begin_exact_visit_with(visit, |_| ())
                 .ok_or(Class0ActorError::Graph)?;
             // 4222C0 ignores the coarse argument: every callback runs whole.
-            let tick = crate::queen::tick(
+            *queen = crate::queen::tick(
                 manager,
                 id,
                 &mut crate::queen::QueenFrame {
-                    resources: &*frame.resources,
+                    resources: &mut *frame.resources,
                     world_fx: &mut *frame.world_fx,
                     frame_dt: frame.elapsed_micros,
                     dt,
                     retail_tick: frame.retail_tick,
+                    generic_death: frame.generic_death.as_deref_mut(),
                 },
             )?;
-            *spawned_owner = tick.held_owner;
             let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
             if !entity.actor_tasks.finish_exact_visit(visit) {
                 return Err(Class0ActorError::Graph);

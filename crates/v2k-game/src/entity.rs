@@ -36,6 +36,7 @@ mod gate_helpers;
 mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
+pub use hive_runtime::{HiveGenericDeath, HiveGenericDeathBlock};
 mod native_type105_construction;
 mod native_type69_construction;
 pub use native_type69_construction::Type69BirthRequest;
@@ -10590,7 +10591,11 @@ impl EntityManager {
                 && (metadata.model_slots != profile.model_slots
                     || entity.model_slots != fresh_level_one_quiet_death_model_slots(profile)))
             || entity.mass_raw != profile.mass_raw
-            || entity.capability_flags != profile.capability_flags
+            || (entity.capability_flags != profile.capability_flags
+                // The Queen's held Type68 (FUN_004225C0) trades 0x1000 for 8.
+                && !(native_class0
+                    && entity.entity_type == 68
+                    && entity.capability_flags == profile.capability_flags & !0x1000 | 8))
         {
             return Err(MainBaseAbortQuietDeathBlock::TypeMetadataMismatch);
         }

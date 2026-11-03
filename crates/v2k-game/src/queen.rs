@@ -349,16 +349,55 @@ impl QueenSubK {
 pub struct QueenTick {
     /// The Type68 `FUN_004225C0` spawned, which this frame's walk reaches.
     pub held_owner: Option<crate::entity::Class0ActorOwner>,
+    /// `FUN_00456F20`: thirty seconds after her death, the move to the
+    /// closing scene.
+    pub closing_scene: Option<ClosingSceneMove>,
 }
 
-pub struct QueenFrame<'a> {
-    pub resources: &'a crate::resource_cache::ResourceCache,
+/// `FUN_00456F20`'s logical world, `0x25`: overlay 49, the closing scene.
+pub const CLOSING_SCENE_LOGICAL_WORLD: u32 = 0x25;
+/// `FUN_00456F20`'s session phase `+296` for it.
+pub const CLOSING_SCENE_PHASE: u8 = 3;
+/// The cheats `FUN_00456F20` switches on, in call order: Weapons Menu, then
+/// Skip to World.
+pub const CLOSING_SCENE_CHEATS: [u32; 2] = [1, 0];
+/// `FUN_00450FC0` plays this through `FUN_0042A860` for each cheat it
+/// switches on outside a network game.
+pub const CHEAT_ENABLE_SOUND_ID: usize = 0x57;
+
+/// `FUN_00456F20`, from the dying visit: session `+290` leaves the world,
+/// `FUN_00456750` requests the full-frame flash, cheats 1 then 0 are
+/// switched on, and the session moves to logical world `0x25` in phase 3.
+/// The Queen lives only in campaign world 47, so `FUN_00450FC0` always takes
+/// its single-player branch; its two sounds resolve here, in the visit's
+/// RNG order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClosingSceneMove {
+    pub cheat_sounds: [Result<
+        v2k_render::sound::ResolvedSoundPlayback,
+        v2k_formats::anim_sound::SoundResolutionError,
+    >; 2],
+}
+
+/// `FUN_00410C10` on another body, through that body's own death owner.
+pub type GenericDeath<'a> = dyn FnMut(
+        &mut EntityManager,
+        &mut crate::resource_cache::ResourceCache,
+        &mut WorldFx,
+        u32,
+    ) -> Result<(), Class0ActorError>
+    + 'a;
+
+pub struct QueenFrame<'a, 'h> {
+    pub resources: &'a mut crate::resource_cache::ResourceCache,
     pub world_fx: &'a mut WorldFx,
     /// `DAT_004D04E4`, the frame's microseconds.
     pub frame_dt: u32,
     /// The callback's microseconds since the last.
     pub dt: u32,
     pub retail_tick: u32,
+    /// The dying visit's sweep; without it a victim stops her visit.
+    pub generic_death: Option<&'a mut GenericDeath<'h>>,
 }
 
 fn known_state(manager: &EntityManager, id: u32) -> Result<u32, Class0ActorError> {
@@ -376,7 +415,7 @@ fn known_state(manager: &EntityManager, id: u32) -> Result<u32, Class0ActorError
 pub(crate) fn tick(
     manager: &mut EntityManager,
     id: u32,
-    frame: &mut QueenFrame<'_>,
+    frame: &mut QueenFrame<'_, '_>,
 ) -> Result<QueenTick, Class0ActorError> {
     let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
     entity.set_velocity_raw([0; 3]);
@@ -406,7 +445,7 @@ pub(crate) fn tick(
         record.cycle_words(&mut words, frame.dt);
         tick.held_owner = keep_held_body(manager, &mut record, frame)?;
     } else {
-        die(manager, id, &mut record, &mut words, frame)?;
+        tick.closing_scene = die(manager, id, &mut record, &mut words, frame)?;
     }
     record.write_model_words(&mut words);
     let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
@@ -516,7 +555,7 @@ fn shoot(
     record: &mut QueenRecord,
     which: Gun,
     side: i32,
-    frame: &mut QueenFrame<'_>,
+    frame: &mut QueenFrame<'_, '_>,
 ) -> Result<(), Class0ActorError> {
     // 421E00 reads the target's velocity afresh; its position is 6A0's copy.
     let target_velocity = record.target.and_then(|target| {
@@ -648,11 +687,11 @@ fn aim(
 
 /// `FUN_00440A60` for one of her particles.
 fn emit(
-    frame: &mut QueenFrame<'_>,
+    frame: &mut QueenFrame<'_, '_>,
     request: DescriptorParticleRequest,
 ) -> Result<(), Class0ActorError> {
     let environment = crate::world_fx::ParticleEnvironment::Terrain(
-        crate::world_fx::TerrainCollisionContext::from_current_level_cache(frame.resources)
+        crate::world_fx::TerrainCollisionContext::from_current_level_cache(&*frame.resources)
             .ok_or(Class0ActorError::Runtime("particle terrain context"))?,
     );
     frame
@@ -668,14 +707,14 @@ fn emit(
 fn keep_held_body(
     manager: &mut EntityManager,
     record: &mut QueenRecord,
-    frame: &mut QueenFrame<'_>,
+    frame: &mut QueenFrame<'_, '_>,
 ) -> Result<Option<crate::entity::Class0ActorOwner>, Class0ActorError> {
     let present = record
         .held
         .is_some_and(|held| manager.iter_all().any(|entity| entity.id == held));
     let mut owner = None;
     if !present {
-        let resources = frame.resources;
+        let resources = &*frame.resources;
         let extent = |model: usize| resources.global_model(model).map(|model| model.radius);
         let waves_enabled = resources
             .level_desc()
@@ -724,43 +763,63 @@ fn keep_held_body(
     Ok(owner)
 }
 
-/// `FUN_00422840`: thirty seconds of dying, then `FUN_00456F20`.
+/// `FUN_00422840`: thirty seconds of dying, then `FUN_00456F20`. Returns
+/// that move when this visit makes it; retail never asks whether the world
+/// was lost.
 fn die(
     manager: &mut EntityManager,
     id: u32,
     record: &mut QueenRecord,
     words: &mut [i16; 8],
-    frame: &mut QueenFrame<'_>,
-) -> Result<(), Class0ActorError> {
+    frame: &mut QueenFrame<'_, '_>,
+) -> Result<Option<ClosingSceneMove>, Class0ActorError> {
     record.target_distance = 0;
     record.target_lateral = 0;
     if record.dying_us > DEATH_END_US {
-        // Held: the move to the closing scene (session +290, the flash, two
-        // cheats switched on, world 0x25, phase 3) is not ported.
-        return Err(Class0ActorError::Runtime(
-            "Queen death end: FUN_00456F20 is not ported",
-        ));
+        let pool =
+            v2k_formats::anim_sound::SoundPool::from_tables(&frame.resources.global_sound_tables());
+        let world_fx = &mut *frame.world_fx;
+        return Ok(Some(ClosingSceneMove {
+            cheat_sounds: CLOSING_SCENE_CHEATS.map(|_| {
+                v2k_render::sound::resolve_sound_playback(
+                    &pool,
+                    v2k_render::sound::SoundPlaybackRequest::centered(CHEAT_ENABLE_SOUND_ID),
+                    &mut || world_fx.next_shared_retail_random_u16(),
+                )
+            }),
+        }));
     }
-    // Every visit runs 10C10 on each other living body with capability 8.
-    for other in manager.retail_live_order_ids() {
-        if other == id {
-            continue;
-        }
+    // Every visit runs 10C10 on each other living body with capability 8,
+    // reading each successor after the death: a tail a death appends is
+    // visited too.
+    let mut current = manager.retail_live_order_ids().next();
+    while let Some(other) = current {
         let entity = manager
             .iter_all()
             .find(|entity| entity.id == other)
             .ok_or(Class0ActorError::Runtime("live list"))?;
-        let RetailRuntimeValue::Known(state) =
-            entity.collision.state_flags_at_0x08.masked(u32::MAX)
-        else {
-            return Err(Class0ActorError::Runtime("Queen death sweep state"));
-        };
-        if state & DYING_STATE_BIT == 0 && state != 0 && entity.capability_flags & 8 != 0 {
-            // Held: a generic 10C10 on another actor's own death owner.
-            return Err(Class0ActorError::Runtime(
-                "Queen death sweep: FUN_00410C10 on a living capability-8 body is not ported",
-            ));
+        let word = entity.collision.state_flags_at_0x08;
+        let victim = other != id
+            && entity.capability_flags & 8 != 0
+            && match (word.masked(DYING_STATE_BIT), word.masked(u32::MAX)) {
+                (RetailRuntimeValue::Known(0), RetailRuntimeValue::Known(state)) => state != 0,
+                // A partly known word is nonzero through any known set bit.
+                (RetailRuntimeValue::Known(0), _) if word.known_value_bits() != 0 => true,
+                (RetailRuntimeValue::Known(_), _) => false,
+                _ => return Err(Class0ActorError::Runtime("Queen death sweep state")),
+            };
+        if victim {
+            let death = frame
+                .generic_death
+                .as_deref_mut()
+                .ok_or(Class0ActorError::Runtime(
+                    "Queen death sweep: no FUN_00410C10 owner outside play",
+                ))?;
+            death(manager, &mut *frame.resources, &mut *frame.world_fx, other)?;
         }
+        current = manager
+            .retail_live_successor_id(other)
+            .map_err(|()| Class0ActorError::Runtime("Queen death sweep: victim removed"))?;
     }
     let dt = frame.dt;
     record.dying_us = record.dying_us.wrapping_add(dt as i32);
@@ -837,7 +896,7 @@ fn die(
         }
     }
     if dt as i32 <= i32::from(frame.world_fx.next_shared_retail_random_u16()) {
-        return Ok(());
+        return Ok(None);
     }
     // Four class-5 sparks from the first gun's muzzle, their velocity a
     // random walk from its forward axis.
@@ -862,7 +921,7 @@ fn die(
             },
         )?;
     }
-    Ok(())
+    Ok(None)
 }
 
 /// `FUN_00421990`, class67's style `+28` hook: the hit stops her, and a hit

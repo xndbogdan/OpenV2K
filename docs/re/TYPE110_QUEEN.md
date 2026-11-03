@@ -121,10 +121,10 @@ class67 again.
 The target distance and offset clear. Then:
 
 - past 30 seconds (`+00 > 29,999,999`) it calls `FUN_00456F20`, the move to
-  the closing scene (session `+290`, `FUN_00456750`'s flash, cheats 1 and 0
-  on, world `0x25`, phase 3), and returns;
-- every other living body (state nonzero, `0x4000` clear) with capability 8
-  goes through `FUN_00410C10`;
+  the closing scene, and returns (below);
+- it walks the live list, reading each successor after the call, and every
+  other living body (state nonzero, `0x4000` clear) with capability 8 goes
+  through `FUN_00410C10`;
 - before 10 s the joints drift back inside their limits (`FUN_00422B40`)
   and sound 75 plays on a 1 in 8 draw; from 10 s they sag (pitch `-0x1000`)
   with sound 99 on a 1 in 12; word 7 swings between 1,000 and 6,000;
@@ -134,12 +134,59 @@ The target distance and offset clear. Then:
   leave the first gun's muzzle, their velocity a random walk from its
   forward row.
 
-**Held in the port** (each a typed, logged stop of her visit, which then
-stays parked): the 10C10 sweep, while any other living capability-8 body
-remains (`Queen death sweep`), since a generic 10C10 on another actor's own
-death owner is not ported; and `FUN_00456F20` (`Queen death end`). After the
-Main Base abort the sweep still meets the Hive (capability `0x18`, kept by
-the abort), so a dying Queen stops there.
+Retail never asks whether the world was lost: a Queen the Main Base abort
+killed sweeps and moves on the same way.
+
+### The sweep
+
+In world 47 the sweep's victims are the two Type2s, Type5s, Type13s and
+Hives (Type67, capability `0x18`), the three Type33s, four Type43s and the
+Type68 she holds; all die on her first dying visit, after which the sweep
+finds nothing. Each victim's `10C10` runs through that body's own death
+owner, the same per-type owners as the Main Base abort walk's ordinary
+route, with the playing world's player and scheduler: the Type13s, Type43s
+and Type2s explode through class1, the Type5s take class11 Tumble, the
+Type33s class12, and the held Type68 (capability `0x48` after
+`FUN_004225C0`) dies quietly through class2.
+
+The abort walk never kills a Hive (its capability bit `0x10` sends it to the
+alternate cleanup), so the sweep is the Hive's only `10C10`: health 0 and the
+dying bit (its active model moves to its pair's dying slot), the type's death
+sound and the `+8C` sound record released, then the live style's
+`FUN_00425790`: task slots 2 and 1 cleared and `FUN_00425F60`'s dying slot 0
+(tick `FUN_004260F0`), then the shared `FUN_00440950` burst at the Hive with
+the dying model's extent and `FUN_004566E0`'s radial (`0x55F0` to each other
+Hive in range). `10C10` does not change the Hive's style.
+
+The port runs the visit with every scheduler owner reunited, as a weapon's
+blast does, and repartitions them against the live list afterwards. A
+victim whose owner refuses its death stops her visit with a typed, logged
+stop naming that victim.
+
+### The move to the closing scene (`FUN_00456F20`)
+
+`FUN_00456F20` sets session `+290` (leave this world at the next gameplay
+frame), calls `FUN_00456750` (`+295`, the full-frame flash), switches cheats
+1 (Weapons Menu) and 0 (Skip to World) on through `FUN_00450FC0`, and sets
+the session's logical world `+34` to `0x25` (overlay 49) and its phase
+`+296` to 3. Outside a network game, which world 47 never is,
+`FUN_00450FC0` sets the cheat's bit in session `+1C4`, plays sound `0x57`
+through `FUN_0042A860`, and shows the cheat's Cheats row
+(`4D0F20 + id * 0x1C`: flags lose 8, gain 2) and the pause menu's Cheats
+row (`4D1154`). The port resolves both sounds in the visit's RNG order and
+applies the rest after the pass: the flash, the cheat word and the rows the
+pause menus show.
+
+Overlay 49 in phase 3 is the closing scene: its Section-2 records caption
+"WELL DONE!", "You've completed V2000 by killing the Alien Queen." and the
+rest, move the camera over its actors, and at 290 s command `0x40`
+(`FUN_00452770`), in phase 3, sets the next world to 1 and leaves; the player
+then arrives in world 13 in ordinary play (phase 5) with both cheats on.
+
+**Held in the port:** the closing scene. No port owner plays overlay 49 as a
+phase-3 cinematic, so after `FUN_00456F20` the port logs `Closing scene
+held` once and world 47 keeps running under the pending exit; the Queen's
+later visits repeat the call, which the port applies once.
 
 ## Evidence
 
@@ -154,3 +201,13 @@ the next tick, aim and fire (three second-gun shots in a run from the east);
 consecutive records there match the port's visit exactly, frames, joints and
 timers, given the player's logged velocity. Before the port had her, world
 47's Main Base loss stopped at her; it now completes.
+
+A tampered lab run of world 47 from Skip to World calls `FUN_00410C10` on
+her at tick 842. Her first dying visit, at tick 845, kills every living
+capability-8 body: class1 bursts for the Type13s, Type43s and Type2s, the
+Hives' radials hitting each other, the Type33s, Type5s and her Type68 dying.
+At tick 2345, 1,500 ticks later, `FUN_00450FC0` switches cheats 1 and 0 on,
+`+34` reads `0x25` and `+296` 3, and the next pass loads overlay 49, whose
+captions and credits run until it leaves for world 13 about 291 s later.
+The port's world 47 reproduces the victims and calls `FUN_00456F20` on the
+same tick after her first dying visit.

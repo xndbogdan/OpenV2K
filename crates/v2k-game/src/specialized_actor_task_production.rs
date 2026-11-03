@@ -1261,6 +1261,8 @@ pub struct SpecializedActorTaskProductionPass {
     pub explosion_lights: Vec<TerrainExplosionLight>,
     pub progressive_death_presentation_requested: bool,
     pub terrain_changed: bool,
+    /// The dying Queen's `FUN_00456F20`, when it ran in this pass.
+    pub closing_scene: Option<crate::queen::ClosingSceneMove>,
 }
 
 /// Receipt scheduler whose storage order is never execution order.
@@ -4603,6 +4605,7 @@ impl SpecializedActorTaskScheduler {
                 explosion_lights: Vec::new(),
                 progressive_death_presentation_requested: false,
                 terrain_changed: false,
+                closing_scene: None,
             };
         }
         let actor_resource_block = if resources.level_terrain().is_none() {
@@ -4657,6 +4660,7 @@ impl SpecializedActorTaskScheduler {
         let mut explosion_lights = Vec::new();
         let mut progressive_death_presentation_requested = false;
         let mut terrain_changed = false;
+        let mut closing_scene = None;
 
         // 13500 reloads current->next after 12DA0 returns, including new tails.
         let mut previous_id = None;
@@ -6084,6 +6088,59 @@ impl SpecializedActorTaskScheduler {
                 }
                 SpecializedActorTaskOwner::Class0Actor(owner) => {
                     let sea_before = resources.level_terrain().map(|terrain| terrain.header[0]);
+                    // The dying Queen's sweep runs 10C10 on other bodies, whose
+                    // owners must be in the scheduler: reunite the cursor, then
+                    // repartition against the live list, as a weapon's blast does.
+                    let queen = manager.iter_all().any(|entity| {
+                        entity.id == owner.entity_id()
+                            && entity.entity_type == crate::queen::ENTITY_TYPE
+                    });
+                    if queen {
+                        debug_assert!(self.owners.is_empty());
+                        self.owners.append(&mut pending);
+                        self.owners.append(&mut retained);
+                    }
+                    let mut sweep_terrain_changed = false;
+                    let mut generic_death =
+                        |manager: &mut EntityManager,
+                         resources: &mut crate::resource_cache::ResourceCache,
+                         world_fx: &mut WorldFx,
+                         victim: u32|
+                         -> Result<(), crate::entity::Class0ActorError> {
+                            let SpecializedActorTaskWorld::Playing {
+                                player_hull,
+                                extra_lives,
+                            } = &mut world
+                            else {
+                                return Err(crate::entity::Class0ActorError::Runtime(
+                                    "Queen death sweep: no player world",
+                                ));
+                            };
+                            let changed = crate::main_base_abort_production::run_generic_death(
+                                victim,
+                                crate::main_base_abort_production::GenericDeathFrame {
+                                    entities: manager,
+                                    resources,
+                                    static_damage: &mut *static_damage,
+                                    player_hull,
+                                    world_fx,
+                                    scheduler: &mut *self,
+                                    notifications: &mut *notifications,
+                                    retail_tick,
+                                    extra_lives: *extra_lives,
+                                },
+                            )
+                            .map_err(|block| {
+                                eprintln!(
+                                    "Queen death sweep: 10C10 on actor {victim} stopped: {block:?}"
+                                );
+                                crate::entity::Class0ActorError::Runtime(
+                                    "Queen death sweep: a victim's FUN_00410C10 stopped",
+                                )
+                            })?;
+                            sweep_terrain_changed |= changed;
+                            Ok(())
+                        };
                     let tick = crate::entity::tick_class0_actor_owner(
                         manager,
                         owner,
@@ -6092,8 +6149,32 @@ impl SpecializedActorTaskScheduler {
                             world_fx,
                             elapsed_micros,
                             retail_tick,
+                            generic_death: if queen {
+                                Some(&mut generic_death)
+                            } else {
+                                None
+                            },
                         },
                     );
+                    if queen {
+                        let live_order: Vec<_> = manager.retail_live_order_ids().collect();
+                        let current = live_order.iter().position(|&id| id == owner.entity_id());
+                        for scheduled in std::mem::take(&mut self.owners) {
+                            let index = live_order
+                                .iter()
+                                .position(|&id| id == scheduled.entity_id());
+                            if matches!((current, index), (Some(current), Some(index)) if index <= current)
+                            {
+                                retained.push(scheduled);
+                            } else {
+                                pending.push(scheduled);
+                            }
+                        }
+                    }
+                    terrain_changed |= sweep_terrain_changed;
+                    if tick.closing_scene.is_some() {
+                        closing_scene = tick.closing_scene;
+                    }
                     sea_level_changed |=
                         resources.level_terrain().map(|terrain| terrain.header[0]) != sea_before;
                     let mut outcome = tick.outcome;
@@ -6800,6 +6881,7 @@ impl SpecializedActorTaskScheduler {
             explosion_lights,
             progressive_death_presentation_requested,
             terrain_changed,
+            closing_scene,
         }
     }
 }
@@ -7837,6 +7919,7 @@ fn blocked_production_pass(
         explosion_lights: Vec::new(),
         progressive_death_presentation_requested: false,
         terrain_changed: false,
+        closing_scene: None,
     }
 }
 
@@ -11287,6 +11370,7 @@ mod tests {
                 explosion_lights: Vec::new(),
                 progressive_death_presentation_requested: false,
                 terrain_changed: false,
+                closing_scene: None,
             }
         );
         assert_eq!(

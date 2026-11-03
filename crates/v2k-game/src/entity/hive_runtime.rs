@@ -306,3 +306,100 @@ impl EntityManager {
         retry_requested
     }
 }
+
+/// Why `FUN_00410C10` could not run on a Hive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HiveGenericDeathBlock {
+    EntityMissing,
+    WrongEntityType,
+    StateUnresolved,
+    /// The death callback is `FUN_00425790` only in the Hive's live style.
+    UnauthenticatedLiveStyle,
+    DyingModelUnavailable,
+    DeathSoundUnresolved,
+    SoundAttachmentUnresolved,
+}
+
+/// A Hive's `10C10`, waiting for `FUN_00425F60`'s burst and radial.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HiveGenericDeath {
+    pub blast: crate::hive_death::HiveDeathBlast,
+}
+
+impl EntityManager {
+    /// `FUN_00410C10` on a Hive: health 0 and the dying bit (the active model
+    /// moves to its pair's dying slot), the type's death sound and the `+8C`
+    /// sound record released, then the live style's `FUN_00425790`: slots 2
+    /// and 1 cleared and `FUN_00425F60`'s dying slot 0. The caller runs 25F60's
+    /// burst and radial. A remote or dying Hive is 10C10's no-op.
+    pub(crate) fn apply_hive_generic_death(
+        &mut self,
+        id: u32,
+        world_fx: &mut WorldFx,
+    ) -> Result<Option<HiveGenericDeath>, HiveGenericDeathBlock> {
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .ok_or(HiveGenericDeathBlock::EntityMissing)?;
+        if entity.entity_type != crate::hive_controller::HIVE_ENTITY_TYPE {
+            return Err(HiveGenericDeathBlock::WrongEntityType);
+        }
+        let RetailRuntimeValue::Known(state) = entity
+            .collision
+            .state_flags_at_0x08
+            .masked(REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT | ACTIVE_MODEL_SLOT_HIGH_STATE_BIT)
+        else {
+            return Err(HiveGenericDeathBlock::StateUnresolved);
+        };
+        if state & (REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT) != 0 {
+            return Ok(None);
+        }
+        let live_style = audited_behavior_style(46, 0).expect("Alien Hive initial style");
+        let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+            return Err(HiveGenericDeathBlock::UnauthenticatedLiveStyle);
+        };
+        if context.active_style().audited() != Some(*live_style) {
+            return Err(HiveGenericDeathBlock::UnauthenticatedLiveStyle);
+        }
+        let RetailRuntimeValue::Known(death_sound) = entity.collision.death_sound_id else {
+            return Err(HiveGenericDeathBlock::DeathSoundUnresolved);
+        };
+        let RetailRuntimeValue::Known(attachment) =
+            entity.collision.constructor_sound_attachment_id_at_0x8c
+        else {
+            return Err(HiveGenericDeathBlock::SoundAttachmentUnresolved);
+        };
+        let dying_slot = crate::entity_collision_state::active_model_slot_from_state_flags(
+            state | DYING_STATE_BIT,
+        );
+        let model_after = entity
+            .model_in_slot(dying_slot)
+            .ok_or(HiveGenericDeathBlock::DyingModelUnavailable)?;
+        let position_raw = entity.position_raw();
+        entity.collision.health_raw = RetailRuntimeValue::Known(0);
+        entity.select_active_model_slot(dying_slot);
+        if let Some(sound_id) = death_sound {
+            world_fx.queue_networked_positional_sound_raw(sound_id, position_raw);
+        }
+        if attachment.is_some() {
+            entity.collision.constructor_sound_attachment_id_at_0x8c =
+                RetailRuntimeValue::Known(None);
+        }
+        entity.publish_hive_radial_slot0(HiveRadialTaskState::dying());
+        let wreck_contact = hive_wreck_contact_origin(entity).is_some();
+        if let Some(emitter) = entity.authored_radial_emitter.as_mut() {
+            emitter.enter_dying_slot0();
+            if wreck_contact {
+                emitter.arm_wreck_suction();
+            }
+        }
+        Ok(Some(HiveGenericDeath {
+            blast: crate::hive_death::HiveDeathBlast {
+                target_id: id,
+                position_raw,
+                model_after,
+            },
+        }))
+    }
+}

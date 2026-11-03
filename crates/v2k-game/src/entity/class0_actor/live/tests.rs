@@ -82,6 +82,7 @@ impl World {
                 world_fx: &mut self.fx,
                 elapsed_micros,
                 retail_tick: 77,
+                generic_death: None,
             },
         )
     }
@@ -108,12 +109,13 @@ impl World {
                 world_fx: &mut self.fx,
                 elapsed_micros: dt,
                 retail_tick: 77,
+                generic_death: None,
             },
             dt,
             detailed,
             &mut None,
             &mut None,
-            &mut None,
+            &mut crate::queen::QueenTick::default(),
         )
         .unwrap();
     }

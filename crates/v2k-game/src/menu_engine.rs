@@ -168,6 +168,12 @@ impl MenuEngine {
         Self::new(MAIN_RING, VIS_FRONTEND)
     }
 
+    /// Show the Cheats rows the session's cheat word `+1C4` has on
+    /// (`FUN_00450FC0`).
+    pub fn apply_cheat_enables(&mut self, cheats: u32) {
+        self.tree.apply_cheat_enables(cheats);
+    }
+
     // ── Stack access ──
 
     pub fn depth(&self) -> usize {
