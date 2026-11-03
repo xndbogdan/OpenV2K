@@ -338,11 +338,32 @@ there, plays sound 8 at the person, attaches the person to the Type93
 through `FUN_00408F00`, plays sound 8 at the Type93 and returns the `0xA300`
 object `0x004BE330`, whose vtable entry is the same RET as capture's: the
 pair's physical response is cancelled, while the person's behavior callback
-and both task chains still run. The port does not run this yet: a living
-Type74 touching a person is skipped whole (no callbacks, sounds or
-bounce) and logged once per pair as a held beam. In a retail run of world 21
-from the Skip to World arrival to its casualty loss 1,774 ticks in, no Type93
-was born, so no beam happened there.
+and both task chains still run (the beamer's Primary keeps `05FF0`'s null
+`+18`). `08F00` attaches without a release, so an already attached person
+stops with a logged block. `08F00`'s bit `0x800` and `0x40000` clears now
+apply to every cargo, people included, as its instructions do.
+
+The Type93 is born 256 units from the Base's centre, inside its body. The
+Base's own 11AD0 pass meets it as a successor: `258A0` returns at once for a
+body without capability `0x800`, and the Materialiser style `4C82C0` and
+both Primaries (`25CD0`, `090C0`) have null pair hooks, so only 12760 runs
+and the fixed Base pushes the Type93 out (`main_base_conversion_live`, after
+the conversions of the same pass). Each push is a movement for `091B0`, which
+keeps resetting the settle timer, so the person stays held longer than at a
+drop on open ground.
+
+A tampered retail run of world 21 (Skip to World, then the person
+`04870001` written onto the beamer `048F0001` for ten passes) beams it at
+tick 846: a Type93 at `(-14592, 3008, -31744)`, the Type6's `+60` set to
+`04860001`, the person's state `0x00C68825 -> 0x00C21025` and its parent
+the Type93. The Base pushes the Type93 to Z -31931 (Y 3228), -32052,
+-32090, -32098 and -32100; the person is let go there at tick 943 (Y 3009),
+walks, and is converted at the Base at tick 1197. The port's [beam test](../../crates/v2k-game/src/native_actor_capture/pair_remote_beam_tests.rs) repeats
+the beam and the pushes (-31932, -32054, -32092, -32100, -32101) and the
+release where the Type93 settled; the Base's visits come at RNG-driven
+intervals in both, so the release tick is not compared. In an untampered
+retail run of world 21 from the Skip to World arrival to its casualty loss
+1,774 ticks in, no Type93 was born, so no beam happened there.
 
 **Type110, the Queen.** Class67 runs from birth and is her alternate too;
 her eight Sub-K words carry her joints. Her guns, her held Type68, her weak

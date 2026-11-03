@@ -827,6 +827,8 @@ pub(crate) fn task_has_null_contact(task: &ActorTaskRuntime) -> bool {
             | ActorTaskRuntime::HiveRadial(_)
             // 04BE0's dive installs only the 07120 destructor.
             | ActorTaskRuntime::MobbingDive(_)
+            // 05420 writes only the 054A0 destructor (+14) after 05FF0.
+            | ActorTaskRuntime::RemoteBeamer(_)
     )
 }
 

@@ -141,18 +141,7 @@ pub fn resolve_first_world_main_base_conversions<P: CollisionModelPool + ?Sized>
         retail_tick,
         world_style,
     } = frame;
-    let Some(main_base_id) = entities
-        .iter_all()
-        .find(|entity| {
-            entity.entity_type == FIRST_WORLD_MAIN_BASE_ENTITY_TYPE
-                && (crate::main_base_runtime::main_base_manager_allocation_authenticates(
-                    entities, entity.id,
-                ) || (entity.main_base_runtime.is_none()
-                    && entities.has_captured_first_world_construction()
-                    && entity.authored_spawn_index == Some(FIRST_WORLD_MAIN_BASE_SPAWN_INDEX)))
-        })
-        .map(|entity| entity.id)
-    else {
+    let Some(main_base_id) = main_base_id(entities) else {
         return Ok(FirstWorldMainBaseConversionPass::MainBaseAbsent);
     };
     let mut host = FirstWorldMainBaseConversionHost {
@@ -172,6 +161,88 @@ pub fn resolve_first_world_main_base_conversions<P: CollisionModelPool + ?Sized>
         },
     )
     .map(FirstWorldMainBaseConversionPass::Resolved)
+}
+
+fn main_base_id(entities: &EntityManager) -> Option<u32> {
+    entities
+        .iter_all()
+        .find(|entity| {
+            entity.entity_type == FIRST_WORLD_MAIN_BASE_ENTITY_TYPE
+                && (crate::main_base_runtime::main_base_manager_allocation_authenticates(
+                    entities, entity.id,
+                ) || (entity.main_base_runtime.is_none()
+                    && entities.has_captured_first_world_construction()
+                    && entity.authored_spawn_index == Some(FIRST_WORLD_MAIN_BASE_SPAWN_INDEX)))
+        })
+        .map(|entity| entity.id)
+}
+
+/// A Type93 materialiser the Main Base's 11AD0 pass could not push.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MainBaseMaterialiserBlock {
+    Behavior,
+    ActivePair(ActivePairUnresolved),
+    Physical(MainBaseType9PhysicalPlanError),
+}
+
+/// The Main Base's 11AD0 pass against each Type93 materialiser, a tail
+/// allocation and so always its successor. 258A0 returns at once for a body
+/// without capability 0x800; the Materialiser style `4C82C0` and both
+/// Primaries (`25CD0`, `090C0`) have null pair hooks. Only 12760 remains:
+/// the fixed Base pushes the Type93 out of its body. Returns the pushed ids.
+pub fn resolve_main_base_materialiser_contacts<P: CollisionModelPool + ?Sized>(
+    entities: &mut EntityManager,
+    model_pool: &P,
+    retail_tick: u32,
+) -> Result<Vec<u32>, (u32, MainBaseMaterialiserBlock)> {
+    let Some(main_base_id) = main_base_id(entities) else {
+        return Ok(Vec::new());
+    };
+    let mut pushed = Vec::new();
+    for id in entities.native_materialiser_ids() {
+        let base = entities
+            .iter_all()
+            .find(|entity| entity.id == main_base_id)
+            .unwrap();
+        let proxy = entities.iter_all().find(|entity| entity.id == id).unwrap();
+        let block = |reason| (id, reason);
+        if !matches!(base.current_behavior_context, RetailRuntimeValue::Known(Some(context))
+            if context.active_style().pair_contact_callback_policy()
+                == PairContactCallbackPolicy::MainBaseConversion)
+            || proxy.capability_flags & MAIN_BASE_TARGET_CAPABILITY != 0
+            || !matches!(proxy.current_behavior_context, RetailRuntimeValue::Known(Some(context))
+                if context.active_style().pair_contact_callback_policy()
+                    == PairContactCallbackPolicy::None)
+        {
+            return Err(block(MainBaseMaterialiserBlock::Behavior));
+        }
+        let Some(contact) = classify_oriented_active_pair_contact(
+            crate::player_active_contact::OrientedActivePairContactRequest {
+                subject: base,
+                candidate: proxy,
+                subject_entry: &active_pair_body_from_entity(base, model_pool),
+                retail_tick,
+            },
+            model_pool,
+        )
+        .map_err(|error| block(MainBaseMaterialiserBlock::ActivePair(error)))?
+        else {
+            continue;
+        };
+        let plan = plan_main_base_type9_physical_bodies(
+            active_pair_body_from_entity(base, model_pool),
+            active_pair_body_from_entity(proxy, model_pool),
+            contact,
+        )
+        .map_err(|error| block(MainBaseMaterialiserBlock::Physical(error)))?;
+        let resolved = plan.resolved_source();
+        entities
+            .entity_mut(id)
+            .unwrap()
+            .set_motion_raw(resolved.position_raw, resolved.velocity_raw);
+        pushed.push(id);
+    }
+    Ok(pushed)
 }
 
 struct FirstWorldMainBaseConversionHost<'a, P: CollisionModelPool + ?Sized> {
