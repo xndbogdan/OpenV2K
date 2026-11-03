@@ -79,6 +79,7 @@ mod type61_abort_live;
 #[cfg(test)]
 mod type93_abort_tests;
 use crate::ordinary_type9_cargo::Type9CargoReleasePosition;
+pub(crate) use cargo_runtime::RemoteBeamFrame;
 use cargo_runtime::{AttachmentProjectionCallbacks, CargoRelationCallbacks};
 pub use cargo_runtime::{
     LateTailMaterialiserFrame, PlayerCargoAttachmentError, PlayerCargoAttachmentFrame,
@@ -2925,6 +2926,8 @@ pub(crate) struct Type17MaterialiserAttempt {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Type93LifecyclePurpose {
     PlayerCargoDrop,
+    /// `FUN_0040CAF0`: a Remote Beamer sent a person to its receiver.
+    RemoteBeam,
     Type17MissingRelation {
         type_default_state_flags_at_0xc0: u32,
     },
@@ -2948,7 +2951,7 @@ impl Type93UpdatePhase {
                 Type93LifecyclePurpose::PlayerCargoDrop
             ) | (
                 Self::LateTailMaterialiser,
-                Type93LifecyclePurpose::PlayerCargoDrop
+                Type93LifecyclePurpose::PlayerCargoDrop | Type93LifecyclePurpose::RemoteBeam
             ) | (
                 Self::LateTailMaterialiser,
                 Type93LifecyclePurpose::Type17MissingRelation { .. }
@@ -13332,6 +13335,7 @@ impl EntityManager {
             let callback_plan = if matches!(
                 purpose,
                 Type93LifecyclePurpose::PlayerCargoDrop
+                    | Type93LifecyclePurpose::RemoteBeam
                     | Type93LifecyclePurpose::FactoryConvertedOutput { .. }
             ) {
                 let Some(plan) = callbacks.prepare_release(
@@ -13375,6 +13379,7 @@ impl EntityManager {
                 }
                 match purpose {
                     Type93LifecyclePurpose::PlayerCargoDrop
+                    | Type93LifecyclePurpose::RemoteBeam
                     | Type93LifecyclePurpose::FactoryConvertedOutput { .. } => {
                         unreachable!("native cargo uses its prepared relation callback");
                     }
@@ -13425,6 +13430,25 @@ impl EntityManager {
                     .iter()
                     .any(|(proxy_id, _)| proxy.proxy_id == *proxy_id)
         });
+    }
+
+    /// Live constructor-built Type93s whose Materialiser task still runs.
+    pub(crate) fn native_materialiser_ids(&self) -> Vec<u32> {
+        self.cargo_drop_proxies
+            .iter()
+            .filter(|proxy| {
+                proxy.task_active
+                    && matches!(
+                        proxy.construction,
+                        Type93MaterialiserConstruction::Native(_)
+                    )
+                    && self
+                        .entities
+                        .iter()
+                        .any(|entity| entity.id == proxy.proxy_id)
+            })
+            .map(|proxy| proxy.proxy_id)
+            .collect()
     }
 
     /// Sum `FUN_004185C0`'s attached u16 +0xB0 masses in a wide accumulator.
@@ -13706,8 +13730,6 @@ impl EntityManager {
             return BeamOutcome::DropConstructionUnavailable;
         };
         let proxy_id = materialiser.entity_id;
-        let mut raised_raw = target_raw;
-        raised_raw[1] = raised_raw[1].wrapping_add(1);
         let Some(release) = callbacks.prepare_release(
             self,
             cargo_id,
@@ -13728,6 +13750,44 @@ impl EntityManager {
         let attach = callbacks
             .prepare_attach(self, cargo_id, proxy_id)
             .expect("release publishes an authored style with a supported attach callback");
+        self.link_cargo_to_materialiser(
+            callbacks,
+            attach,
+            cargo_id,
+            materialiser,
+            target_raw,
+            Type93LifecyclePurpose::PlayerCargoDrop,
+        );
+        self.cargo_proxy_events.push(CargoProxyEvent::Spawned {
+            proxy_id,
+            cargo_id,
+            target: raw_position_world(target_raw),
+            sound_id: CARGO_DROP_SOUND_ID,
+        });
+
+        BeamOutcome::DropStarted { cargo_id, proxy_id }
+    }
+
+    /// `FUN_00408F00(materialiser, cargo)`: the Sub-J row, 16700 and the
+    /// cargo's attach callback, the bit800 clears, the borrowed model, the
+    /// one-unit raise and the cleared master motion.
+    fn link_cargo_to_materialiser<C: CargoRelationCallbacks>(
+        &mut self,
+        callbacks: &mut C,
+        attach: C::AttachPlan,
+        cargo_id: u32,
+        materialiser: Type93MaterialiserSpawn,
+        target_raw: [i16; 3],
+        purpose: Type93LifecyclePurpose,
+    ) {
+        let proxy_id = materialiser.entity_id;
+        let cargo_index = self
+            .entities
+            .iter()
+            .position(|entity| entity.id == cargo_id)
+            .expect("prepared cargo");
+        let mut raised_raw = target_raw;
+        raised_raw[1] = raised_raw[1].wrapping_add(1);
         // FUN_00408F00 publishes the Type-93 Sub-J row before FUN_00416700
         // sets the child's relation bit and parent handle.
         callbacks.commit_attach(self, attach, |manager| {
@@ -13737,30 +13797,18 @@ impl EntityManager {
                 .sub_j_attachment_runtime =
                 RetailRuntimeValue::Known(Some(type93_attachment_runtime(cargo_id)));
         });
-        let native_type8_cargo = self.entities[cargo_index]
-            .intro2_type8_runtime
-            .is_some_and(|runtime| runtime.is_native_construction())
-            && crate::intro2_type8::intro2_type8_manager_allocation_authenticates(self, cargo_id);
-        let native_radar_cargo =
-            crate::portable_radar::allocation_authenticates(&self.entities[cargo_index]);
         // FUN_00408F00 clears child/proxy body bit800 after the attach
         // callback, then borrows the selected model before clearing child
-        // master motion. Native workers share this suffix; replay stays bounded.
-        if self.entities[cargo_index].entity_type == 9
-            || self.native_class0_construction_present(cargo_id)
-            || native_type8_cargo
-            || native_radar_cargo
-        {
-            self.entities[cargo_index]
-                .collision
-                .state_flags_at_0x08
-                .overwrite(0x800, 0);
-            self.entity_mut(proxy_id)
-                .unwrap()
-                .collision
-                .state_flags_at_0x08
-                .overwrite(0x800, 0);
-        }
+        // master motion, whatever the cargo.
+        self.entities[cargo_index]
+            .collision
+            .state_flags_at_0x08
+            .overwrite(0x800, 0);
+        self.entity_mut(proxy_id)
+            .unwrap()
+            .collision
+            .state_flags_at_0x08
+            .overwrite(0x800, 0);
         let active_model = match self.entities[cargo_index].collision.active_model_slot() {
             RetailRuntimeValue::Known(slot) => self.entities[cargo_index].model_slots[slot],
             RetailRuntimeValue::Unresolved => unreachable!("prepared cargo callback model"),
@@ -13769,34 +13817,20 @@ impl EntityManager {
         proxy.model_slots = [active_model, None, active_model, None];
         proxy.model_index = active_model;
         proxy.position = raw_position_world(raised_raw);
-        if self.entities[cargo_index].entity_type == 9
-            || self.native_class0_construction_present(cargo_id)
-            || native_type8_cargo
-            || native_radar_cargo
-        {
-            self.entities[cargo_index]
-                .collision
-                .state_flags_at_0x08
-                .overwrite(0x40000, 0);
-        }
+        self.entities[cargo_index]
+            .collision
+            .state_flags_at_0x08
+            .overwrite(0x40000, 0);
         self.cargo_drop_proxies.push(CargoDropProxy {
             proxy_id,
             cargo_id,
             construction: materialiser.construction,
-            purpose: Type93LifecyclePurpose::PlayerCargoDrop,
+            purpose,
             task_active: true,
             observed_position_raw: target_raw,
             stable_us: 0,
             movement_counter: 0,
         });
-        self.cargo_proxy_events.push(CargoProxyEvent::Spawned {
-            proxy_id,
-            cargo_id,
-            target: raw_position_world(target_raw),
-            sound_id: CARGO_DROP_SOUND_ID,
-        });
-
-        BeamOutcome::DropStarted { cargo_id, proxy_id }
     }
 
     /// Per-frame update: integrate player velocity and apply the ride controller.

@@ -2308,8 +2308,8 @@ fn run_game(
     let mut static_contact_error_reported = false;
     let mut active_pair_contact_error_reported = false;
     let mut main_base_conversion_error_reported = false;
+    let mut main_base_materialiser_error_reported = false;
     // Type74/person contacts whose 40CAF0 beam the port holds, logged once each.
-    let mut held_remote_beams_reported = std::collections::HashSet::new();
     let mut factory_pair_error_reported = false;
     let mut power_up_contact_error_reported = false;
     let mut primary_weapon = PrimaryWeapon::new();
@@ -4273,6 +4273,7 @@ fn run_game(
                 static_contact_error_reported = false;
                 active_pair_contact_error_reported = false;
                 main_base_conversion_error_reported = false;
+                main_base_materialiser_error_reported = false;
                 factory_pair_error_reported = false;
                 power_up_contact_error_reported = false;
                 log!(
@@ -8540,13 +8541,6 @@ fn run_game(
                             }
                             if let OrdinaryType9PairSuffix::Visited(pairs) = late.pair_suffix {
                                 use v2k_game::intro2_type17::pair::Type17PairOutcome;
-                                for held in
-                                    v2k_game::native_actor_capture::pair::held_remote_beams(&pairs)
-                                {
-                                    if held_remote_beams_reported.insert(held) {
-                                        eprintln!("Remote Beamer {} beam of person {} held: FUN_0040CAF0 is not ported", held.0, held.1);
-                                    }
-                                }
                                 if matches!(&pairs, Type17PairOutcome::Blocked { .. })
                                     || matches!(&pairs, Type17PairOutcome::Resolved { visits } if !visits.is_empty())
                                 {
@@ -8576,12 +8570,6 @@ fn run_game(
                                 ),
                             }),
                         );
-                        for held in v2k_game::native_actor_capture::pair::held_remote_beams(&pairs)
-                        {
-                            if held_remote_beams_reported.insert(held) {
-                                eprintln!("Remote Beamer {} beam of person {} held: FUN_0040CAF0 is not ported", held.0, held.1);
-                            }
-                        }
                         if matches!(&pairs, Type17PairOutcome::Blocked { .. })
                             || matches!(&pairs, Type17PairOutcome::Resolved { visits } if !visits.is_empty())
                         {
@@ -8675,6 +8663,19 @@ fn run_game(
                         Err(error) if !main_base_conversion_error_reported => {
                             eprintln!("Main Base conversion stopped at unresolved data: {error:?}");
                             main_base_conversion_error_reported = true;
+                        }
+                        Err(_) => {}
+                    }
+                    // The same Main Base pass pushes any Type93 out of its body.
+                    match v2k_game::main_base_conversion_live::resolve_main_base_materialiser_contacts(
+                        em,
+                        &session.cache,
+                        retail_tick,
+                    ) {
+                        Ok(_) => {}
+                        Err((id, block)) if !main_base_materialiser_error_reported => {
+                            eprintln!("Main Base contact with Type93 {id} stopped: {block:?}");
+                            main_base_materialiser_error_reported = true;
                         }
                         Err(_) => {}
                     }

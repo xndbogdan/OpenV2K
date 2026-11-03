@@ -104,6 +104,122 @@ impl EntityManager {
     }
 }
 
+/// The world a Remote Beamer's pair callback lends `FUN_0040CAF0`.
+pub(crate) struct RemoteBeamFrame<'a> {
+    pub scheduler: &'a mut SpecializedActorTaskScheduler,
+    pub world_fx: &'a mut WorldFx,
+    pub notifications: &'a mut GameplayNotifications,
+    pub retail_tick: u32,
+    pub terrain: &'a TerrainGrid,
+}
+
+/// `FUN_0040CAF0`'s sound at both ends of the beam.
+const REMOTE_BEAM_SOUND_ID: u16 = 8;
+
+impl EntityManager {
+    /// `FUN_0040CAF0` once its pair callback has a person: the receiver is
+    /// the beamer's `+60` relation, else the first Type6 in the live list
+    /// (never the last node, which the walk does not test), whose `+60` is
+    /// set to its own handle. A Type93 is built at the receiver's X and
+    /// Z - 0x100 on the terrain, sound 8 plays at the person, `08F00`
+    /// attaches the person and sound 8 plays at the Type93. `Ok(None)`: no
+    /// receiver, so the callback returns null and the pair bounces.
+    pub(crate) fn beam_person_to_receiver(
+        &mut self,
+        beamer: u32,
+        person: u32,
+        frame: RemoteBeamFrame<'_>,
+    ) -> Result<Option<u32>, String> {
+        let beamer_entity = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == beamer)
+            .ok_or("beamer allocation")?;
+        let relation = match beamer_entity.collision.recent_relation_id_at_0x60 {
+            RetailRuntimeValue::Known(relation) => {
+                relation.filter(|id| self.entities.iter().any(|entity| entity.id == *id))
+            }
+            RetailRuntimeValue::Unresolved => return Err("beamer +60 relation".into()),
+        };
+        let receiver = match relation {
+            Some(receiver) => receiver,
+            None => {
+                let live: Vec<u32> = self.retail_live_order_ids().collect();
+                let Some(base) = live
+                    .iter()
+                    .take(live.len().saturating_sub(1))
+                    .copied()
+                    .find(|id| {
+                        self.entities
+                            .iter()
+                            .any(|e| e.id == *id && e.entity_type == 6)
+                    })
+                else {
+                    return Ok(None);
+                };
+                self.entity_mut(base)
+                    .unwrap()
+                    .collision
+                    .recent_relation_id_at_0x60 = RetailRuntimeValue::Known(Some(base));
+                base
+            }
+        };
+        let [x, _, z] = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == receiver)
+            .unwrap()
+            .position_raw();
+        let z = z.wrapping_sub(0x100);
+        let target = [x, frame.terrain.bilinear_height_raw(x, z), z];
+        let person_entity = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == person)
+            .ok_or("person allocation")?;
+        if person_entity.attached_to.is_some() {
+            // 40CAF0 never releases: 16700 would overwrite a live relation.
+            return Err("beamed person already attached".into());
+        }
+        if person_entity.collision.active_model_slot() == RetailRuntimeValue::Unresolved {
+            return Err("beamed person model".into());
+        }
+        let person_position = person_entity.position_raw();
+        let mut callbacks = LiveCargoCallbacks {
+            scheduler: frame.scheduler,
+            world_fx: frame.world_fx,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            terrain: Some(frame.terrain),
+            radar: None,
+            blocked: Vec::new(),
+        };
+        let Some(materialiser) = callbacks.spawn_materialiser(self, person, target, frame.terrain)
+        else {
+            return Err(format!("Type93 construction: {:?}", callbacks.blocked));
+        };
+        callbacks
+            .world_fx
+            .queue_networked_positional_sound_raw(REMOTE_BEAM_SOUND_ID, person_position);
+        let Some(attach) = callbacks.prepare_attach(self, person, materialiser.entity_id) else {
+            self.remove_live_entity_ids(&[materialiser.entity_id]);
+            return Err(format!("08F00 attach callback: {:?}", callbacks.blocked));
+        };
+        self.link_cargo_to_materialiser(
+            &mut callbacks,
+            attach,
+            person,
+            materialiser,
+            target,
+            Type93LifecyclePurpose::RemoteBeam,
+        );
+        callbacks
+            .world_fx
+            .queue_networked_positional_sound_raw(REMOTE_BEAM_SOUND_ID, target);
+        Ok(Some(materialiser.entity_id))
+    }
+}
+
 /// The beam geometry owns Sub-J publication. Its callback owner prepares
 /// immutable reads first, then commits exactly at 16700/16750, without an
 /// intervening actor update or shared-RNG consumer.

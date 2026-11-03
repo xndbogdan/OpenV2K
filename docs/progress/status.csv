@@ -600,7 +600,7 @@ address,status,note
 0x0040CEF0,implemented,class58 search timeout: 10C10 (docs/re/TYPE2_TRACTOR_BEAM.md)
 0x0040C530,implemented,Remote Beamer class59 initializer for the Type74 beamers (docs/re/CLASS0_RUNTIME.md)
 0x004054C0,implemented,Remote Beamer tick: Sub-K word 1 charges unless held (docs/re/CLASS0_RUNTIME.md)
-0x0040CAF0,documented,Remote Beamer beam pair callback; held behind a logged skip in the port (docs/re/CLASS0_RUNTIME.md)
+0x0040CAF0,implemented,Remote Beamer beam pair callback: Type93 at the receiver, 08F00 attach, sound 8 at both ends (docs/re/CLASS0_RUNTIME.md)
 0x00405420,implemented,Remote Beamer Primary constructor for the Type74 beamers (docs/re/CLASS0_RUNTIME.md)
 0x004243B0,implemented,Sub-K animation words on the Type19/117 swimmers (docs/re/FISH_RUNTIME.md#type19-and-type117)
 0x00424450,implemented,Sub-K constructor: zeroed, no random word (docs/re/FISH_RUNTIME.md#type19-and-type117)
