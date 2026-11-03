@@ -2044,7 +2044,7 @@ impl Entity {
 
     /// Publish the shared outer behavior-initializer failure result.
     ///
-    /// Full-game `FUN_0040C6B0` and demo `FUN_0040C6C0` replace the selected
+    /// Full-game `FUN_0040C6B0` and demo `DEMO_0040C6C0` replace the selected
     /// descriptor/style first, apply fallback policy `0x1280`, then invoke
     /// `FUN_0040C4D0`'s Secondary -> Tertiary -> Primary clears. Component
     /// effects which preceded a later initializer failure are intentionally
@@ -2679,7 +2679,8 @@ pub struct EntityManager {
     /// entries carry stable ids. `FUN_004104B0` inserts only after a successful
     /// initializer and `FUN_004149F0` splices removals without reordering the
     /// survivors. All allocation/removal paths therefore go through the
-    /// helpers below rather than mutating this vector directly.
+    /// helpers below rather than mutating this vector directly. Retail callers
+    /// reach the list through FUN_00414920.
     entities: Vec<Entity>,
     /// Opaque identity of this level-load allocation domain. Entity ids restart
     /// at zero for each manager, so leases must bind both values to reject a
@@ -2834,6 +2835,7 @@ pub(crate) struct CommonEnvironmentPhysics {
     pub(crate) configured_wind_raw: [i16; 3],
     pub(crate) current_wind_raw: [i16; 3],
     pub(crate) maximum_wind_height_raw: i32,
+    /// The world record's word `+0x80` (FUN_0042ED00), the wind's sea-side gate.
     pub(crate) wind_above_sea: bool,
     pub(crate) waves_enabled: bool,
 }
@@ -3042,9 +3044,10 @@ struct CargoDropProxy {
     purpose: Type93LifecyclePurpose,
     /// Host projection of the Materialiser's Primary callback task. Class-2
     /// death clears that task but deliberately leaves Sub-J custody intact for
-    /// the later component destructor.
+    /// the later component destructor. Retail builds it in `FUN_004090C0`.
     task_active: bool,
-    /// Type-93 component's comparison position. It is initialized before
+    /// Type-93 component's comparison position, the record `FUN_00409150`
+    /// stores with a zeroed counter. It is initialized before
     /// FUN_00408F00 raises the proxy by one raw Y unit.
     observed_position_raw: [i16; 3],
     stable_us: u32,
@@ -5938,7 +5941,9 @@ impl EntityManager {
     }
 
     /// Restore the campaign controller's persistent type-46 allocation in a
-    /// destination world and commit the route-specific birth pose atomically.
+    /// destination world and commit the route-specific birth pose atomically:
+    /// retail builds the body (`FUN_004438A0`) and then applies the staged
+    /// position, velocity, attitude and health (`FUN_00447F70`).
     ///
     /// Level 1 already receives the persistent player through its recovered
     /// first-world constructor. Secret worlds do not author type 46 in Section
@@ -7758,7 +7763,7 @@ impl EntityManager {
 
         // FUN_00414990 rescans the live list after a removal. That matters for
         // a Type-93 proxy: its cargo normally precedes the tail-appended proxy,
-        // so LAB_004090B0 marks the child during proxy component teardown and
+        // so FUN_004090B0 marks the child during proxy component teardown and
         // the next scan pass removes that newly pending earlier allocation.
         loop {
             let scan_order = self
@@ -8563,6 +8568,7 @@ impl EntityManager {
         self.hover_physics = hover_physics;
     }
 
+    /// The player's body, as retail reads the controller's handle (`FUN_00443AC0`).
     pub fn player(&self) -> Option<&Entity> {
         self.player_id
             .and_then(|pid| self.entities.iter().find(|e| e.id == pid))
@@ -12619,9 +12625,11 @@ impl EntityManager {
 
     /// Remove the dead player and allocations directly attached to it.
     ///
-    /// Retail's `"Dead:"` initializer also kills owned subordinate entities.
-    /// The entity-owned Sub-J array is the exact ordered teardown authority;
-    /// inverse relation backlinks cannot add or recover membership.
+    /// Retail's `"Dead:"` initializer (`FUN_004478E0`) also kills owned
+    /// subordinate entities.
+    /// The entity-owned Sub-J array is the exact ordered teardown authority
+    /// (retail pops every row through FUN_004183D0); inverse relation
+    /// backlinks cannot add or recover membership.
     pub fn remove_player_and_attached_entities(&mut self) -> bool {
         let Some(player_id) = self.player_id else {
             return false;
@@ -13016,6 +13024,7 @@ impl EntityManager {
     /// Apply the retail edge transition to the single signed timer byte.
     /// Repeating the same command does not refresh it; the opposite command
     /// cancels the pending action instead of immediately scheduling its own.
+    /// These are the C and D callbacks `FUN_004440A0` and `FUN_00444070`.
     pub fn queue_beam(&mut self, command: BeamCommand) {
         match (command, self.beam_timer_ms.cmp(&0)) {
             (BeamCommand::Collect, std::cmp::Ordering::Equal) => {
@@ -13583,6 +13592,8 @@ impl EntityManager {
             .map_or(0, SubJAttachmentRuntime::authored_slot_count)
     }
 
+    /// The beam-in collection `FUN_00446BD0`: the nearest eligible body joins
+    /// the player.
     fn collect_nearest_cargo<C: CargoRelationCallbacks>(
         &mut self,
         callbacks: &mut C,
@@ -28802,7 +28813,7 @@ fn is_retail_intro2(level: &LevelDescriptor) -> bool {
 /// Resolve the only constructor surface bits whose animated-water branch is
 /// statically unreachable for the authenticated fresh first-world actors.
 ///
-/// Retail `FUN_004104B0` and demo `FUN_00410440` compare the authored Y with
+/// Retail `FUN_004104B0` and demo `DEMO_00410440` compare the authored Y with
 /// the sea surface. They consult the tick-dependent wave only when terrain is
 /// strictly below sea level. For Level-1 spawns 17--20 the exact cells are at
 /// or above sea level and clear terrain-type bit `0x10`, so the surface stays

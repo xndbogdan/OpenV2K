@@ -1,7 +1,7 @@
 //! C910's captor-owned row and the distinct D040/D0B0/CF90 consumers.
 //!
-//! The row callbacks are CAD0 (16750 with the captor argument) and 443D10
-//! (16750 with the child argument, then 10B70 on success). These are not the
+//! The row callbacks are CAD0 (FUN_0040CAD0: 16750 with the captor argument) and
+//! 443D10 (FUN_00443D10: 16750 with the child argument, then 10B70 on success). These are not the
 //! player's materialiser callback. All child work is synchronous, including
 //! while the actor-list cursor owns the child in its pending/retained storage.
 
@@ -468,6 +468,8 @@ fn reselect(
     }
 }
 
+/// FUN_0040CF90 (ReleaseOrKill) and D040 (Cleanup): drop the last carried body,
+/// a quarter of CF90's drops killed, then reselect.
 pub fn execute_capture_root(
     manager: &mut EntityManager,
     id: u32,
@@ -493,6 +495,8 @@ pub fn execute_capture_root(
     reselect(manager, id, context)
 }
 
+/// FUN_0040D0B0: a captor touching a base (capability 0x10) delivers its last
+/// carried body, then reselects.
 pub fn execute_capture_delivery(
     manager: &mut EntityManager,
     id: u32,

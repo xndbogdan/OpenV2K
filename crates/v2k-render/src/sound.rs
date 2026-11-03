@@ -34,6 +34,7 @@ pub use positional::{
 };
 
 /// Number of simultaneous voices (original: max 24 DirectSound buffers).
+/// Retail counts its voice list (`FUN_00468D00`) against this cap.
 const MAX_VOICES: usize = 24;
 
 /// The original world coordinate period: signed 8.8 positions wrap after
@@ -718,7 +719,9 @@ impl SoundManager {
     /// The original's Sound slider (0-15) maps to linear buffer gain
     /// s·17/255 then to DirectSound dB via 10000·ln(lin)/ln(65536), which
     /// works out to amplitude ≈ lin^1.038 — effectively linear, so a plain
-    /// s/15 master here matches the original curve.
+    /// s/15 master here matches the original curve. Retail sets the master
+    /// with `FUN_00495910`, which rescales every playing voice through
+    /// `FUN_00495830`; the mixer applies the master to every voice instead.
     pub fn set_master_volume(&mut self, vol: f32) {
         let mut mixer = self.device.lock();
         mixer.master_volume = vol.clamp(0.0, 1.0);

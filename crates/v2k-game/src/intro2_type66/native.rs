@@ -214,7 +214,7 @@ fn publish_working_factory_graph(
     allocation_identity: u64,
 ) {
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
-    // 257C0 clears T thenS, then25BD0 publishes its zero-lifetime Primary.
+    // 257C0 clears T thenS, then FUN_00425BD0 publishes its zero-lifetime Primary.
     // The class39 style has zero+34/+38 policy words and no06070 suffix.
     entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);

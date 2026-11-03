@@ -10,7 +10,8 @@
 /// Extract null-terminated strings from section data, one entry per NUL
 /// terminator (empty entries preserved). Authored horizontal tabs are retained
 /// because gameplay text uses them before its `<...>` layout prefix;
-/// unsupported non-ASCII/control bytes are replaced.
+/// unsupported non-ASCII/control bytes are replaced. Retail's Section-2 loader
+/// `FUN_004ABF40` keeps one pointer per NUL-terminated string the same way.
 pub fn extract_strings(data: &[u8]) -> Vec<String> {
     let mut strings = Vec::new();
     let mut pos = 0usize;

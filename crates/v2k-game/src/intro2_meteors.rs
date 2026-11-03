@@ -78,7 +78,8 @@ impl BoulderRollingTaskState {
         }
     }
 
-    /// One callback only; the shared wrapper tests lifetime after unwind.
+    /// Retail FUN_00404690. One callback only; the shared wrapper tests
+    /// lifetime after unwind.
     pub fn step(
         &mut self,
         position_raw: [i16; 3],
@@ -116,7 +117,7 @@ impl BoulderRollingTaskState {
     }
 }
 
-/// 4069E0's private payload is a class number, not an allocated structure.
+/// `FUN_004069E0`'s private payload is a class number, not an allocated structure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TrailingFireTaskState {
     pub particle_class: u8,

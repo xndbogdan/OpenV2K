@@ -112,7 +112,7 @@ const BALLISTIC_DAMAGE_PACKET_VA: u32 = 0x004C_C000;
 const BALLISTIC_STATIC_CALLBACK_VA: u32 = 0x0043_F800;
 /// `FUN_00442950` entity-hit slot shared by the static-route family
 /// (particle classes 52/68/85). Unlike `FUN_0043F590`, it first runs the
-/// `FUN_00441180` damage sequence, then the `FUN_0043F610` visual, then an
+/// `FUN_00411180` damage sequence, then the `FUN_0043F610` visual, then an
 /// attached-class allocation unless suppressed.
 const STATIC_ROUTE_ENTITY_CALLBACK_VA: u32 = 0x0044_2950;
 /// Class52's `+0x20` packet; its row is shared with Type-47 class-87 fire.
@@ -282,7 +282,7 @@ pub const PLAYER_DOWNWASH_RESPONSE_COUNT: usize = 8;
 pub const BALLISTIC_WATER_RESPONSE_COUNT: usize = 8;
 
 /// Cargo-transfer/settling particle emitted by the type-93 drop proxy and by
-/// a successful player collection (`FUN_004091B0`/`FUN_00443AE0`).
+/// a successful player collection (`FUN_004091B0`/`FUN_00443B50`).
 pub const CARGO_TRANSFER_PARTICLE_CLASS: u8 = 0x33;
 pub const CARGO_TRANSFER_LIFETIME_TICKS: u16 =
     PARTICLE_DESCRIPTORS[CARGO_TRANSFER_PARTICLE_CLASS as usize].lifetime_ticks();
@@ -4577,6 +4577,7 @@ impl WorldFx {
     /// layer. Existing mixer voices and owner-held persistent loops live
     /// outside this queue. Retaining every non-sound event preserves particle
     /// order and does not consume the shared random stream.
+    /// Each dropped request is one row `FUN_0044C7D0` unlinks and frees.
     pub fn garbage_collect_disposable_positional_sounds(&mut self) {
         self.pending
             .retain(|event| !matches!(event, WorldEvent::PositionalSound(_)));
@@ -4611,6 +4612,7 @@ impl WorldFx {
     /// playback rate. Retail `FUN_0044F450` receives gain and rate as its
     /// third and fourth arguments; this helper models the common full-gain
     /// calls without misrepresenting those values as a randomized range.
+    /// The queued one-shot is retail FUN_0044C790's logical append.
     pub fn queue_fixed_positional_sound_raw_at_rate(
         &mut self,
         sound_id: u16,
@@ -6306,7 +6308,8 @@ fn static_collision_anim_vars(retail_tick: u32) -> AnimVars {
     vars
 }
 
-/// F920/F950 call27DE0/27E00 with probe+1C/+20 tile-center words.
+/// F920/F950 call27DE0/27E00 (`FUN_00427E00`) with probe+1C/+20 tile-center
+/// words.
 ///
 /// Those words are `FUN_00427410`'s tile-center 8.8 pair (`cell<<8|0x7F`).
 /// Matched C closes27DE0/27E00 as33720(x,z,1/0); the extra cdecl
@@ -6595,6 +6598,8 @@ fn swept_model_hit_with_owner_gate<P: CollisionModelPool + ?Sized>(
     Some(target)
 }
 
+/// Retail FUN_0043FCE0: the first candidate whose bounding sphere and model
+/// both admit the probe.
 fn exact_model_probe<P: CollisionModelPool + ?Sized>(
     candidates: &[&EntityCollisionModel],
     model_pool: &P,

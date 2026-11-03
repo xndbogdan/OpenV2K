@@ -1,7 +1,8 @@
 //! Ordinary Type-9 relation callbacks, distinct from Type-68 release.
 //!
 //! `16700 -> DBF0 -> CD50/CE70 -> CD70` switches the existing behavior
-//! context to its carrying style. `ADB0` clears slots 2/1 and constructs a
+//! context to its carrying style (`FUN_0040CE70` selects variant 2 for Run
+//! Away and Attract Attention). `ADB0` clears slots 2/1 and constructs a
 //! real None Primary (`3230`, tick `3250`). The paired `16750 -> DC50 -> CE90`
 //! resets Sub-I and invokes AC60 from context +0, the retained type-default
 //! choice list. It does not resume the task graph destroyed at collection.

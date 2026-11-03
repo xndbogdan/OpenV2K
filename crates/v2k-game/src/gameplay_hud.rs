@@ -346,6 +346,8 @@ pub enum GameplayHudLayerRole {
 }
 
 /// One ordered sprite submission in the authored composition space.
+/// Retail queues each masked layer through `FUN_0042A690`: one unscaled
+/// sprite (fill slot `+0x1030`) at the layout base plus the layer's point.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GameplayHudLayer {
     pub role: GameplayHudLayerRole,
@@ -514,7 +516,7 @@ impl GameplayHudCargoFrame {
     }
 }
 
-/// Values returned by retail's cargo-model callback at `0x42A520`.
+/// Values returned by retail's cargo-model callback (`FUN_0042A520`).
 ///
 /// Keeping these values on the presentation request makes the distinction
 /// between live cargo materialization and the separately recovered static

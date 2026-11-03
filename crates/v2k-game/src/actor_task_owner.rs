@@ -603,6 +603,8 @@ impl<T> ActorTaskOwner<T> {
             if let Some(state) = wrapper.state.as_ref() {
                 retire(state);
             }
+            // Freeing the private record is the task destructor's job
+            // (FUN_00407120, or FUN_004086A0 which also clears the field).
             drop(wrapper.state.take());
             !wrapper.flags.in_callback
         };

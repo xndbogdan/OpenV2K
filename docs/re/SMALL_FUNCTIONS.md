@@ -18,8 +18,11 @@ These census entries are not functions; the progress report omits them.
   (`FUN_00427760`), `0x0043F230` (`FUN_0043F180`), `0x00456FE0`
   (`FUN_00456FB0`), `0x00493654` (`FUN_00493640`, which loads an overlay),
   `0x004956D7` (`FUN_004956B0`), `0x0046C5F1` (the exit of `FUN_0046C570`),
-  and `0x0048D159` and `0x0048FADE`, the ends of the Direct3D handlers
+  `0x0048D159` and `0x0048FADE`, the ends of the Direct3D handlers
   `FUN_0048CB90` and `FUN_0048F160`.
+- `0x00453AF0` starts inside an instruction of `FUN_00453AD0`, and
+  `0x00437AC0` is the last byte of an instruction in `FUN_004379C0` (a
+  demo-build address a note once cited); nothing reaches either.
 
 Six of them (`0x004167BA`, `0x0042776E`, `0x0043B3D5`, `0x0046C5F1`,
 `0x0048D159` and `0x0048FADE`) are values of the span-reciprocal table at
@@ -222,7 +225,7 @@ when the buffer is too small.
 | `FUN_0043CF90` | at most every 50 world ticks, runs `FUN_0043D070` and walks with `FUN_0043CFD0` (`FUN_0046C9A0`) |
 | `FUN_00447C20` | discards the controller's player (flag and sweep, `FUN_00414990`), stores the new type at `+0x190` and builds the player again (`FUN_004438A0`) |
 | `FUN_00449080` | copies a save slot's name, or the default string at `0x004CE01C`, into a buffer, after probing the slot (`FUN_00448E70`; status 4 is occupied) |
-| `FUN_004490D0` | an occupied slot's level name (`FUN_00456E50` of its `+0x24` word), else the empty string at `0x004DAFC8` |
+| `FUN_004490D0` | an occupied slot's rank name (`FUN_00456E50` of its `+0x24` word), else the empty string at `0x004DAFC8` |
 | `FUN_0044A850` / `FUN_0044A890` | call `FUN_0044A5C0` with an x/z pair, its cell coordinates and the current terrain record |
 | `FUN_0044AFB0` | stores four values at `0x004DF110`, `0x004DF114`, `0x004EF128` and `0x004EF12C`, runs `FUN_0044AB20(0)` and returns 0 |
 | `FUN_0044C7D0` | unlinks a node, frees its `+0x20` buffer, runs `FUN_0044C810` on it and frees it |

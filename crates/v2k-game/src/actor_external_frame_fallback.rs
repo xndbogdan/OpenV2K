@@ -1,4 +1,4 @@
-//! Terminal actor selector routing from retail `FUN_0040A9F0` and `40A980`.
+//! Terminal actor selector routing from retail `FUN_0040A9F0` and `FUN_0040A980`.
 //!
 //! Earlier Sub-H, joint, Sub-M and live Sub-G callbacks retain their owners.
 //! Call this only when an executed type-14 slot reaches the terminal suffix,

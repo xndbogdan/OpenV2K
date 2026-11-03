@@ -590,7 +590,9 @@ impl SoftwareRaster {
     /// words. Equal words use the one-row filler with that word at Graph2D
     /// `+0x18`; otherwise `FUN_0047D1A0` selects shaded row 6 (+4 keyed,
     /// +12 half, +24 additive) and each vertex takes the word's bytes as
-    /// 16.16 attributes.
+    /// 16.16 attributes. `FUN_004804C0` writes corners 1..3 through
+    /// `FUN_0047D600` (shade bytes, screen point, explicit UV), as done here;
+    /// the other textured slots fill each vertex through `FUN_0047C740`.
     fn shaded(
         &mut self,
         packet: &Packet<'_>,

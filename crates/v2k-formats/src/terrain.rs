@@ -293,7 +293,8 @@ pub fn wave_surface_y(x_cell: f32, z_cell: f32, tick: f32, sea_y: f32, terrain_y
     )) / 256.0
 }
 
-/// Parse Section 10 terrain heightmap data.
+/// Parse Section 10 terrain heightmap data: one 0x30014-byte grid, the
+/// stride retail's Section-10 loader `FUN_00437E60` keeps.
 pub fn parse_terrain(data: &[u8]) -> Result<TerrainGrid> {
     if data.len() != EXPECTED_SIZE {
         return Err(V2kError::section(

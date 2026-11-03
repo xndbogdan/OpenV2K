@@ -274,6 +274,7 @@ const RETAIL_QUARTER_SINE: [i16; 4096] = [
 /// The angle is the engine's wrapping 16-bit domain (full turn = `0x10000`).
 /// Its low two bits are deliberately discarded because the executable masks a
 /// byte offset before dividing by four to index the word table.
+/// Retail FUN_00412CC0: this lookup as one routine.
 pub fn retail_sine_q15(angle: u32) -> i32 {
     let mut folded = angle & 0x3ffc;
     if angle & 0x4000 != 0 {

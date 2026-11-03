@@ -4,7 +4,8 @@
 //! then invokes type callback `FUN_0040DB80`. That callback first dispatches
 //! the current style's `+0x2C` hook and, for the ordinary null-hook type-17
 //! path, re-resolves the entity before selecting its Section-12 `+0x124`
-//! alternate class. Full-game and demo code then run class-12 initializer
+//! alternate class (the owner hook FUN_0040AC40 that style installs leave).
+//! Full-game and demo code then run class-12 initializer
 //! `FUN_0040C620` synchronously inside the same checked-damage receipt.
 //!
 //! This module binds that static chain to the exact four captured fresh-Level-1

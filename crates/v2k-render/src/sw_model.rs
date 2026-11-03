@@ -470,6 +470,8 @@ pub(crate) fn prepare_model_body(
             Some(world) if admitted || scene.native.is_some() => {
                 // A source-owned VIEW point is the vertex cache itself.
                 // Otherwise callback world points are projected on their own.
+                // Every corner is projected here; retail projects a mirror
+                // slot only when a face fetches it (FUN_0045B320).
                 let native = scene.native_vertex_view(mesh.vertex_view_raw, index);
                 let view = match (native, mesh.vertex_projection.get(index)) {
                     (Some(view), _) => view,

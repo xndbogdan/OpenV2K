@@ -1,7 +1,7 @@
 //! Detached core for constructor-attached sound 11's playback-rate warble.
 //!
-//! Retail `FUN_0044CD90` and demo `FUN_0044C590` construct the same 0x24-byte
-//! state. Their update helpers (`FUN_0044CCA0` / `FUN_0044C4A0`) also match:
+//! Retail `FUN_0044CD90` and demo `DEMO_0044C590` construct the same 0x24-byte
+//! state. Their update helpers (`FUN_0044CCA0` / `DEMO_0044C4A0`) also match:
 //! elapsed time advances only while the logical mixer finds the emitter
 //! audible, interpolation consumes no random words, and a segment rollover
 //! consumes exactly two words from the process-global retail RNG.
@@ -135,7 +135,7 @@ fn reflect_upward(current: i32, step: i32, lower: i32, upper: i32) -> i32 {
     }
 }
 
-/// `FUN_00457680` / demo `FUN_00456FE0`, including signed saturation.
+/// `FUN_00457680` / demo `DEMO_00456FE0`, including signed saturation.
 fn retail_signed_ratio_q31(numerator: i32, denominator: i32) -> i32 {
     let sign = numerator ^ denominator;
     let mut numerator = if numerator < 0 {

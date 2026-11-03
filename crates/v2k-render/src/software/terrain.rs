@@ -251,7 +251,10 @@ impl GroundProjection {
 
     /// Project an already transformed VIEW point: outcode (0x40 behind the
     /// near plane), screen point and fade byte. The model vertex cache uses
-    /// this with its node's own axes.
+    /// this with its node's own axes; dry, this is the far-pass model
+    /// projector `FUN_0046CEB0`. Under the wet clock this is the
+    /// underwater model projector pair `FUN_00435E70` (near) / `FUN_00436010`
+    /// (fog, with the fade byte).
     pub(crate) fn project_view(&self, view: [i32; 3]) -> GroundPoint {
         let mut point = GroundPoint::default();
         let [x, y, depth] = view;

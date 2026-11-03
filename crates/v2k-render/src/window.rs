@@ -109,8 +109,8 @@ pub enum PointerMode {
 
 impl PointerMode {
     /// Capture during focused gameplay unless a diagnostics window needs the
-    /// pointer. Otherwise hide it over a focused full-screen game, as V2000
-    /// does, and show it everywhere else.
+    /// pointer. Otherwise hide it over a focused full-screen game, as V2000's
+    /// window procedure `FUN_00495A00` does, and show it everywhere else.
     pub fn for_frame(
         gameplay: bool,
         focused: bool,
@@ -539,7 +539,9 @@ impl GameWindow {
         Ok(window)
     }
 
-    /// Poll all pending SDL2 events, returning game-level events.
+    /// Poll all pending SDL2 events, returning game-level events. Retail
+    /// FUN_0042D780 pumps one waiting window message; its quit message ends
+    /// the game, as `Quit` does here.
     pub fn poll_events(&mut self) -> Vec<GameEvent> {
         // Collect raw SDL events first to avoid borrow conflicts
         let sdl_events: Vec<Event> = self.event_pump.poll_iter().collect();

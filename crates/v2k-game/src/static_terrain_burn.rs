@@ -186,6 +186,7 @@ pub fn apply_immediate_static_burn(
     Ok(outcome)
 }
 
+/// Retail FUN_00427760: the burn-change listener's crater and scatter suffix.
 /// Apply one opcode10 burn while its source node remains registered. Crater
 /// child programs use the same scheduler and cannot restart the in-flight cell.
 /// The caller must apply this before the next action in that source program.
@@ -242,7 +243,8 @@ fn apply_terrain_burn(
     if current.terrain_type & 0x08 != 0 {
         return Ok(outcome);
     }
-    // 4337E0 commits the bit before invoking any subscriber.
+    // 4337E0 commits the bit before invoking any subscriber (FUN_004337A0
+    // calls each listener of the list in turn).
     resources.or_level_terrain_type_bits(cell, 0x08);
     outcome.burn_changed = true;
     outcome.terrain_changed = true;

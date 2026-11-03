@@ -13,8 +13,8 @@
 //!   retarget's `01430` has no component to move, so the wrapper times out
 //!   after 1000 ms and style `+00` (`CEF0`) calls `10C10`. A candidate
 //!   inside the 512-unit box goes through `C7D0` to the tractor style.
-//! - `4C7270` (tractor): `C5E0` clears Secondary and Tertiary and installs
-//!   `4051B0`'s tractor in Primary. Its `405240` (detailed visits only) puts
+//! - `4C7270` (tractor): `FUN_0040C5E0` clears Secondary and Tertiary and installs
+//!   `FUN_004051B0`'s tractor in Primary. Its `405240` (detailed visits only) puts
 //!   the beam on its target; beyond 1024 units from the shooter it pulls the
 //!   two together, beyond 2560 it calls `10C10`. A missing or dying target
 //!   returns nonzero, and style `+00` (`C690`) searches again.
@@ -797,7 +797,7 @@ fn search(
     }
 }
 
-/// `405240`, run only on a detailed visit (`0A800` mode 0).
+/// `FUN_00405240`, run only on a detailed visit (`0A800` mode 0).
 fn tractor(
     manager: &mut EntityManager,
     id: u32,

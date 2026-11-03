@@ -262,7 +262,8 @@ pub enum CampaignSelectorStep {
 }
 
 /// Controller requests sampled at selector entry. `+1F4` is raised by the
-/// aborted wreck's `456D10`; `+1F8` is the separate Main Base loss request.
+/// aborted wreck's `456D10` (through `FUN_0042F140`); `+1F8` is the separate
+/// Main Base loss request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CampaignSelectorEntry {
     pub main_base_request: bool,

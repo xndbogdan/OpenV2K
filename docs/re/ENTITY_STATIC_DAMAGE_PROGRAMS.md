@@ -341,11 +341,11 @@ Z-inner order. It does not round this to a symmetric cell box. The scheduler
 also tests the next record's deadline before reacquiring the current static; a
 removed require-static target retains its FIFO/dedup node until that deadline.
 
-Side-by-side retail/demo scheduler bodies (`FUN_004281A0` / `FUN_00428070`)
+Side-by-side retail/demo scheduler bodies (`FUN_004281A0` / `DEMO_00428070`)
 have the same switch, timing, and mutation order after accounting for build-
 specific globals and sound indices. The opcode-6 wrapper `FUN_0040F9A0`,
-wrapped-distance helpers (`FUN_00425370` / `FUN_00425240`), and full-frame
-setters (`FUN_00456750` / `FUN_004560B0`) additionally have accepted
+wrapped-distance helpers (`FUN_00425370` / `DEMO_00425240`), and full-frame
+setters (`FUN_00456750` / `DEMO_004560B0`) additionally have accepted
 instruction/byte-exact pairs. Together they close the remaining ownership
 statically. The demo descriptor/profile/program/radial/auxiliary counterparts
 are `0x004C42DC`, `0x004C3DE0`, `0x004C39A8`, `0x004C38B8`, and `0x004C3E28`.

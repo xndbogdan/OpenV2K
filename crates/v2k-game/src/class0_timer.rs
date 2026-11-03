@@ -1,4 +1,4 @@
-//! Shared timer data for class 0's `C490 -> 02800 -> 05F80` Primary task.
+//! Shared timer data for class 0's `C490 -> FUN_00402800 -> 05F80` Primary task.
 //!
 //! The task has zero private bytes and a null callback. Its wrapper retains
 //! age and performs a strict timeout test; the actor's specialized owner must

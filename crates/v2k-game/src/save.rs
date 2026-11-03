@@ -169,6 +169,8 @@ impl SaveManager {
     /// Load writable slots plus read-only legacy/retail imports. Reading never
     /// migrates, deletes, or creates files; explicit saves use the context's
     /// destination regardless of the source from which a row was imported.
+    /// Retail clears its row-status cache once, on first use, before probing
+    /// (`FUN_00449030`, `FUN_00449060`).
     pub fn load_paths(paths: SavePathContext) -> Self {
         let mut slots: [SaveSlotEntry; NUM_SLOTS] = std::array::from_fn(|_| SaveSlotEntry::Missing);
         for (index, entry) in slots.iter_mut().enumerate().take(NUM_SAVE_SLOTS) {
@@ -386,6 +388,7 @@ impl SaveManager {
 
     /// Retail-compatible row status plus the port's explicit unsupported
     /// state for snapshots that cannot be restored without approximation.
+    /// Retail reads the cached row status (`FUN_00449120`).
     pub fn slot_status(&self, index: usize) -> SaveSlotStatus {
         self.slots
             .get(index)
@@ -397,7 +400,8 @@ impl SaveManager {
         self.slot(index).is_some()
     }
 
-    /// Get a display label for a slot.
+    /// Get a display label for a slot. The saved name is the one retail copies
+    /// for an occupied row (`FUN_00449080`).
     pub fn slot_label(&self, index: usize) -> String {
         if index == SETTINGS_SLOT {
             return "Used for game settings".into();
@@ -565,6 +569,8 @@ fn load_native_slot(path: &Path, timestamp: &str) -> SaveSlotEntry {
     }
 }
 
+/// A native slot's menu row, as retail's slot probe `FUN_00448E70` reads the
+/// version and state records for the 32-byte name and the row's status.
 fn parse_native_slot(bytes: &[u8], timestamp: &str) -> SaveSlotEntry {
     let retail = match RetailSaveSlot::parse(bytes) {
         Ok(retail) => retail,

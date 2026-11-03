@@ -340,6 +340,7 @@ fn coarse_terrain_height_raw(terrain: &TerrainGrid, x_raw: i16, z_raw: i16) -> i
     i16::from(terrain.cell(x, z).expect("complete 256x256 terrain").height as i8) << 5
 }
 
+/// Retail `FUN_0041F190`: each Q31 component shifted right by 19.
 fn basis_axis_q12(axis_q31: [i32; 3]) -> [i16; 3] {
     axis_q31.map(|component| (component >> 19) as i16)
 }

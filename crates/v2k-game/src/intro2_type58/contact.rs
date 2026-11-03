@@ -358,7 +358,8 @@ fn contact_task_hook(entity: &Entity) -> Result<Type58StaticTaskHook, Intro2Type
     let primary = entity.actor_task_state(ActorTaskSlot::Primary);
     let secondary = entity.actor_task_state(ActorTaskSlot::Secondary);
     let tertiary = entity.actor_task_state(ActorTaskSlot::Tertiary);
-    // A8B0 visits current Primary/Secondary/Tertiary in order. Acquiring
+    // A8B0 visits current Primary/Secondary/Tertiary in order; FUN_00401270 calls
+    // each slot's +20 static hook with its +24 context. Acquiring
     // secondaries and ADE0's Tertiary Aim retain05FF0's null static hook.
     // 02B10/03B70/03360 install02CA0 at template+20 (402B6B/403BDB/4033C3).
     match (style, primary, secondary, tertiary) {

@@ -686,6 +686,7 @@ fn run_callback(
                 .ok_or(Class0ActorError::Graph)?;
             let remote = bits(entity, REMOTE_OWNED_STATE_BIT)? != 0;
             // 06390 ignores the coarse argument: every callback draws twice.
+            // FUN_00448720 copies the player's position through the controller.
             let player = manager
                 .player()
                 .map(|player| player.position_raw())

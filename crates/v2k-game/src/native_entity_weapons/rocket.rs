@@ -1,6 +1,6 @@
 //! Type42's class22 construction, primary force phase and tertiary trail.
 //!
-//! Retail owners are `40B010`, `403840/403860`, `4069E0/406A70`, and
+//! Retail owners are `40B010`, `FUN_00403840/FUN_00403860`, `4069E0/406A70`, and
 //! `4061A0`. These kernels require resolved live inputs. Entity allocation,
 //! class22's `40CEF0 -> 410C10` lifecycle callback, fresh task-wrapper
 //! survival, common E100 environment/integration, and model contact remain
@@ -336,6 +336,7 @@ pub struct RocketTrailOutcome {
     pub model_effect_bits_to_set: u16,
 }
 
+/// Retail FUN_00406A70: the trail task tick, emitting only for reason zero.
 pub fn emit_rocket_trail<H: RocketTrailHost>(
     request: RocketTrailRequest,
     host: &mut H,

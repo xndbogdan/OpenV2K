@@ -128,7 +128,9 @@ pub const FUN_00455CC0_CONTINUE_SOUND_ID: usize = 3;
 /// then `MCI_STOP`. Overlay-51 `004D0AA0` does not run that poll; occupancy
 /// keeps the selected track paused without rewinding, and `FUN_004558A0`'s
 /// restore of `004D0918` returns the Ambient zero/nonzero gate. Ambient
-/// magnitude is still only zero/nonzero.
+/// magnitude is still only zero/nonzero. Retail re-runs that poll every
+/// 1.5 s (`FUN_00456A80`), which also restarts a finished track; the port's
+/// player loops the track itself.
 pub fn session_music_should_play(ambient_raw: u32, results_active: bool) -> bool {
     ambient_raw != 0 && !results_active
 }
@@ -291,7 +293,9 @@ pub const fn fun_00452270_case1_minutes_and_seconds(ticks_0x2bc: i32) -> (i32, i
 }
 
 /// Thresholds recovered with `FUN_00456ef0`. Score is the count of control
-/// slots that already carry campaign-completion bit `0x01`.
+/// slots that already carry campaign-completion bit `0x01`. Retail
+/// `FUN_00456E20` composes that score with the name lookup, `FUN_00456E50`:
+/// the highest threshold not above the score names the rank.
 pub fn rank_name_for_saved_worlds(saved_worlds: i32) -> &'static str {
     const RANKS: &[(i32, &str)] = &[
         (90, "Elite"),
@@ -349,6 +353,7 @@ impl WorldCompleteResultsRuntime {
 
     /// The admitted dead-hive exit owns the map and its destination. Keeping
     /// the route here prevents Space before contact from skipping the wreck.
+    /// Retail's map init `FUN_00454EE0` likewise restarts the map clock.
     pub fn open_progress_map(&mut self, route: CampaignTransition) {
         self.presentation = CompletionPresentation::ProgressMap(route);
         self.age_ms = 0;

@@ -1,6 +1,6 @@
 //! Native Type13 incoming hit custody, C690 reselection, impulse, and checked damage.
 //!
-//! The second half covers the `FUN_00442950` static route (`FUN_00441180`):
+//! The second half covers the `FUN_00442950` static route (`FUN_00411180`):
 //! pre-callback sound, DAC0 dispatch, eightfold reaction force, result-blind
 //! checked damage, and the fail-closed attached-class boundary.
 

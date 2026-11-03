@@ -1,4 +1,4 @@
-//! `451FB0 -> 443260 / 42ECA0 -> 448E30` save checkpoint publication.
+//! `FUN_00451FB0 -> FUN_00443260 / FUN_0042ECA0 -> FUN_00448E30` save checkpoint publication.
 //! The route's logical world and the current body pose are independent: on
 //! the campaign map the destination has changed before its player is born.
 
@@ -37,7 +37,7 @@ pub struct NativeSaveSnapshot<'a> {
 }
 
 impl NativeSaveSnapshot<'_> {
-    /// `42E270 ->448070` stages flags0xF and the route's arrival. After body
+    /// `42E270 ->FUN_00448070` stages flags0xF and the route's arrival. After body
     /// teardown, `443440` applies those overrides: XYZ, zero velocity, heading
     /// 4000/zero attitude, and health40000. Fuel, mode and shield are retained.
     pub fn encode_campaign_arrival(

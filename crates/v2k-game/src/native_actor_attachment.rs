@@ -1,5 +1,6 @@
 //! Shared CD50/CE70 -> CD70 attachment suffix for authenticated native ABDI
-//! people/workers. Profile owners prove their metadata and current graph first.
+//! people/workers (FUN_0040CD50 selects carrying variant 1 through CD70).
+//! Profile owners prove their metadata and current graph first.
 //! ADB0 publishes carrying None; Class14's variant1 instead runs C470/A860
 //! and410B70 immediately. Neither path owns removal of the parent's Sub-J row.
 

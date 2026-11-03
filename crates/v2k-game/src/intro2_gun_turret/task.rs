@@ -31,6 +31,7 @@ pub struct GunTurretTaskState {
 }
 
 impl GunTurretTaskState {
+    /// Retail FUN_00408DF0: the private block, aimed at L's current outputs.
     pub const fn from_408df0(
         capability_flags: u32,
         sub_l_output_raw: [i16; 2],
@@ -257,6 +258,7 @@ pub(crate) fn tick_gun_turret_task<H: GunTurretHost>(
     Ok(outcome)
 }
 
+/// Retail FUN_00408770: the turret task tick.
 fn callback<H: GunTurretHost>(
     manager: &mut EntityManager,
     id: u32,
@@ -358,7 +360,7 @@ fn callback<H: GunTurretHost>(
     Ok(TurretTaskOutcome::Continue)
 }
 
-///408BD0 walks the live list, not the spatial index or renderer-visible set.
+/// FUN_00408BD0 walks the live list, not the spatial index or renderer-visible set.
 fn acquire(
     manager: &mut EntityManager,
     id: u32,

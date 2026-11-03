@@ -1,6 +1,6 @@
 //! Shared construction contract for live Type-60 `Exploding Ring` actors.
 //!
-//! Retail `FUN_004104B0` and demo `FUN_00410440` route both class-49
+//! Retail `FUN_004104B0` and demo `DEMO_00410440` route both class-49
 //! explosion tails and hard whole-body water impacts through the same generic
 //! entity constructor. Component preparation precedes the singleton weighted
 //! selector, which still consumes one process RNG word. Class 48 then

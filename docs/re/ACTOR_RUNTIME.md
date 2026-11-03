@@ -611,11 +611,11 @@ Stable task snapshots bind style/tick pairs as follows: type 9 uses
 tick reaches `FUN_00401430`. The captures therefore validate installed
 topology but do not make any ordinary actor locomotion independently portable.
 
-Retail `FUN_00403780` and demo `FUN_004037C0` are structurally identical. They
+Retail `FUN_00403780` and demo `DEMO_004037C0` are structurally identical. They
 read the retained target from the shared `FUN_004012E0` private record and
 return the first tagged singleton for a missing target, state zero, or state
 bit `0x4000`, without calling either suffix. A live target reaches strict route
-predicate `FUN_00423030`/demo `FUN_00422F00` and then always reaches common
+predicate `FUN_00423030`/demo `DEMO_00422F00` and then always reaches common
 mover `FUN_00401430`. Predicate nonzero plus mover nonzero returns null;
 predicate nonzero plus mover zero returns the middle singleton; predicate zero
 returns the third singleton after the mover regardless of its result. The
@@ -1001,11 +1001,11 @@ live.
 
 For selected Run Away's weighted class-10 result, the exact retail chain is
 `FUN_0040C690 -> FUN_0040AC60 -> FUN_00425680 -> FUN_00438340 ->
-FUN_0040ABB0 -> FUN_0040C6B0`; demo maps those bodies to `FUN_0040C6A0`,
-`FUN_0040AC70`, `FUN_00425550`, `FUN_00437D80`, `FUN_0040ABC0`, and
-`FUN_0040C6C0`. Retail `FUN_0040B6C0` and demo `FUN_0040B6D0` have the same
+FUN_0040ABB0 -> FUN_0040C6B0`; demo maps those bodies to `DEMO_0040C6A0`,
+`DEMO_0040AC70`, `DEMO_00425550`, `DEMO_00437D80`, `DEMO_0040ABC0`, and
+`DEMO_0040C6C0`. Retail `FUN_0040B6C0` and demo `DEMO_0040B6D0` have the same
 two-phase structure, with the exact shared `FUN_00406030/00406070/0040A7A0`
-bodies mapped to demo `FUN_004060A0/004060E0/0040A7B0`. The TypeDefault
+bodies mapped to demo `DEMO_004060A0/004060E0/0040A7B0`. The TypeDefault
 replacement selects descriptor/style `0x004C88E0/0x004C7618` at index zero,
 preserves predecessor context `+0x08/+0x0C`, and leaves `initial_behavior` as
 birth provenance. B6C0 then copies only the type-authored common-axis `+0x04`
@@ -1070,12 +1070,12 @@ the accepted ledger close this boundary without a capture.
 
 Selected Go-To-Job's weighted class-54 result follows the same exact retail
 outer chain `FUN_0040C690 -> FUN_0040AC60 -> FUN_00425680 -> FUN_00438340 ->
-FUN_0040ABB0 -> FUN_0040C6B0`; demo maps those bodies to `FUN_0040C6A0`,
-`FUN_0040AC70`, `FUN_00425550`, `FUN_00437D80`, `FUN_0040ABC0`, and
-`FUN_0040C6C0`. Its selected initializer is retail `FUN_0040AF90` / demo
-`FUN_0040AFA0`, its nearest-job scan is retail `FUN_004235F0` / demo
-`FUN_004234C0`, and its shared constructor suffix is retail
-`FUN_00406030/FUN_00406070` / demo `FUN_004060A0/FUN_004060E0`. Production
+FUN_0040ABB0 -> FUN_0040C6B0`; demo maps those bodies to `DEMO_0040C6A0`,
+`DEMO_0040AC70`, `DEMO_00425550`, `DEMO_00437D80`, `DEMO_0040ABC0`, and
+`DEMO_0040C6C0`. Its selected initializer is retail `FUN_0040AF90` / demo
+`DEMO_0040AFA0`, its nearest-job scan is retail `FUN_004235F0` / demo
+`DEMO_004234C0`, and its shared constructor suffix is retail
+`FUN_00406030/FUN_00406070` / demo `DEMO_004060A0/DEMO_004060E0`. Production
 retains the selector's frozen manager-order snapshot and same-index capacity
 refinement, uses the authenticated actor-local common-axis range, and preserves
 the full axis while a pre-mutation retry also binds its exact Sub-A snapshot and

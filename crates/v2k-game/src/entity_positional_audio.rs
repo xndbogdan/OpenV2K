@@ -145,7 +145,8 @@ struct LogicalAudioFrame<'a, 'pool> {
 /// Rows retain `EntityManager::iter_all` order. This matters even for fixed
 /// loops because the physical voice pool is bounded and retry order is
 /// observable. The owner deliberately does not sort by entity id or use map
-/// iteration.
+/// iteration. It starts empty, as retail's world sound list does when its
+/// module opens (FUN_0044C710).
 #[derive(Debug, Default)]
 pub struct EntityPositionalAudio {
     fixed_loops: OrderedEntityLoops<VoiceHandle>,

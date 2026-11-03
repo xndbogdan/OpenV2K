@@ -316,14 +316,15 @@ $omittedRows
 - [``retail-functions.csv``](retail-functions.csv) lists every function start in
   the retail executable. It comes from a Ghidra census that combines
   auto-analysis with seeding from callback tables, already-cited addresses and
-  uncovered code gaps, plus seven Direct3D handlers seeded by hand. Functions
+  uncovered code gaps, plus a few handlers seeded by hand. Functions
   cover 96% of ``.text``, and most of the rest is padding. Everything from the
   first linker-placed library import stub (``0x004AC5A0``) onward counts as
   library code.
 - A function counts as *referenced* when a Rust source file under ``crates/``
   (for code) or a note under ``docs/re/`` cites its start address. A citation
   means the port or the notes deal with that function. It doesn't prove that
-  every behavior of the function is reproduced.
+  every behavior of the function is reproduced. Addresses in the demo
+  executable are written ``DEMO_0040C6C0``, which the count skips.
 - ``status.csv`` records judgments the citation count can't make:
   ``implemented``, ``approximated``, ``documented`` and ``not-needed``.
   ``not-needed`` removes a function from the denominator, for example code

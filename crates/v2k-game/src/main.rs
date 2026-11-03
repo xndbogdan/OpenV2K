@@ -360,6 +360,7 @@ fn queue_premature_hive_hit_hint(
     notifications.queue_hive_locked_hint(retail_tick);
 }
 
+/// FUN_0042ECE0: the number of control slots with the world-saved bit.
 fn campaign_saved_world_count(progress: &PlayerCampaignProgress) -> i32 {
     (0..RETAIL_CONTROL_SLOT_COUNT)
         .filter(|&slot| progress.control_slot_world_saved(slot) == Some(true))
@@ -959,13 +960,15 @@ fn apply_gameplay_input_edges(
     if edges.drop {
         entities.queue_beam(BeamCommand::Drop);
     }
+    // The weapon walks FUN_00444180 (forward) and FUN_00444210 (backward).
     if let Some(direction) = edges.weapon_cycle {
         inventory.cycle(direction);
         craft.select_weapon_callback(inventory.selected_descriptor().callback_selector());
     }
 }
 
-/// TAB's Hover/VTOL request, from the key or a pad. Retail briefly installs
+/// TAB's Hover/VTOL request (`FUN_004442B0`), from the key or a pad. Retail
+/// briefly installs
 /// VTOL even with an empty tank, then `FUN_00445310` immediately queues
 /// event 0x0B/sound 0x31 and requests Hover again. The port collapses that
 /// short-lived mode round trip into the explicit `RefusedNoFuel` outcome.
@@ -1016,6 +1019,8 @@ fn is_player_input(event: &GameEvent) -> bool {
     )
 }
 
+/// Retail's in-play modes switch on events (`FUN_0044FCD0`; event 5's pause or
+/// menu pick is `FUN_0044FD60`); the port resolves the same requests here.
 fn gameplay_interruption(
     return_to_frontend_pending: bool,
     events: &[GameEvent],
@@ -2122,6 +2127,8 @@ fn run_game(
     } else if skip_intro {
         GameState::Menu(make_menu!())
     } else {
+        // Retail's startup (FUN_00426F00) routes through the menu switch, which
+        // starts the intro movie first.
         // BANNERHI/BANNERLO are the complete Grolier -> Frontier -> V2000
         // presentation. Development data keeps them one directory above
         // port/, while installed builds may place them beside PRELOAD.DAT.
@@ -2251,8 +2258,8 @@ fn run_game(
     world_projection.apply_to(&mut camera, (render_w, render_h));
     let mut chase_camera = ChaseCameraState::default();
     let mut intro_camera = IntroCameraController::default();
-    // 503C0's final-card latch (world+28A) together with the 44F3E0(0x20)
-    // positional-audio mask it sets. Only 453E00's 44F400(0x20) at the next
+    // 503C0's final-card latch (world+28A) together with the FUN_0044F3E0(0x20)
+    // positional-audio mask it sets. Only 453E00's FUN_0044F400(0x20) at the next
     // world's entry clears the mask, so it outlives Intro2 into PostIntro.
     let mut intro2_final_card = false;
     let mut post_intro_world_cover: Option<MenuShell> = None;
@@ -2644,6 +2651,7 @@ fn run_game(
                     }
                 }
                 skip |= pad_actions.contains(&PadAction::SkipMovie);
+                // Retail's intro movie mode (FUN_0042AAE0) plays it, then the menu.
 
                 if let Some(ref mut player) = avi_player {
                     let elapsed = intro_start_time
@@ -2653,7 +2661,9 @@ fn run_game(
                     let frame_idx = (elapsed / frame_duration) as usize;
 
                     if frame_idx >= player.frame_count() || skip {
-                        // Intro finished or skipped
+                        // Intro finished or skipped: the movie mode's update switches
+                        // to the menu (FUN_0042ADC0) and its exit stops the movie
+                        // (FUN_0042AE50).
                         if let Some(ref ap) = audio_player {
                             ap.stop();
                         }
@@ -2661,6 +2671,7 @@ fn run_game(
                         audio_player = None;
                         state = GameState::Menu(make_menu!());
                     } else {
+                        // The movie mode's frame step (FUN_0042AE00).
                         // Decode every dependency through the desired frame;
                         // a slow presentation must not skip delta-coded data.
                         let w = player.info.width;
@@ -2687,6 +2698,7 @@ fn run_game(
                 let mut redraw_paused_world =
                     std::mem::take(&mut paused_world_redraw_pending) && menu_is_paused;
                 if !menu_is_paused {
+                    // The frontend's clock step (FUN_0042AA10).
                     retail_tick = retail_clock.advance(u64::from(elapsed_micros));
                 }
                 // The original frontend menu is SILENT — CD music exists only
@@ -2732,10 +2744,12 @@ fn run_game(
                             let alt = keys_down.contains(&Keycode::LAlt)
                                 || keys_down.contains(&Keycode::RAlt);
 
-                            // FUN_0042D240..D290: keys 1-6 force the arena
-                            // the next hosted game plays (DAT_004DB228). Keys
-                            // typed into the address prompt went to
-                            // DirectPlay's dialog instead.
+                            // FUN_0042D240, FUN_0042D250, FUN_0042D260,
+                            // FUN_0042D270, FUN_0042D280 and FUN_0042D290:
+                            // keys 1-6 force the arena the next hosted game
+                            // plays (DAT_004DB228). Keys typed into the
+                            // address prompt went to DirectPlay's dialog
+                            // instead.
                             let typing =
                                 shell.engine.current_va() == Some(menu_data::ADDRESS_PROMPT);
                             if let Some(arena) = [
@@ -2881,6 +2895,7 @@ fn run_game(
                                     Some(MenuInput::Back)
                                 }
                                 Keycode::Up => Some(MenuInput::Up),
+                                // Down, Left, Right: FUN_0042BB60, FUN_0042BB90, FUN_0042BBC0.
                                 Keycode::Down => Some(MenuInput::Down),
                                 Keycode::Left => Some(MenuInput::Left),
                                 Keycode::Right => Some(MenuInput::Right),
@@ -2977,6 +2992,7 @@ fn run_game(
                         // MenuShell consumes StartGame and runs the verified
                         // Klaus-mouth handoff before arming the transition.
                         ShellEvent::StartGame => {}
+                        // FUN_00495ED0 clears the run flag.
                         ShellEvent::QuitToDesktop => break 'main_loop,
                         ShellEvent::LoadSlot(slot) => {
                             if let Some(save) = save_manager.slot(slot) {
@@ -3238,6 +3254,8 @@ fn run_game(
                             },
                             None => GameState::Playing,
                         });
+                        // PAUSE_SIMPLE's switch-away callback ends the map's
+                        // save branch (FUN_00450E60).
                         map_save_checkpoint = None;
                     }
                 }
@@ -3346,6 +3364,8 @@ fn run_game(
                 }
 
                 if begin_intro && !menu_is_paused {
+                    // FUN_0042CFA0 consumes the ring's exit action once the fly-off
+                    // ends; FUN_0044F8B0 then starts the game in the in-game mode.
                     // Klaus is one persistent retail entity across this load.
                     // Carry the live shell instead of restarting its pose,
                     // scene clock, and twitch RNG after Intro2 is resident.
@@ -3359,7 +3379,10 @@ fn run_game(
                 // The network screens' callbacks: the session list's open
                 // (FUN_0043D0D0) and its search each 50 ticks (FUN_0043CF90),
                 // the ring's close (FUN_0042CED0), and a client's waits
-                // (FUN_0043D210 drawing "Please Wait", FUN_0043C7F0).
+                // (FUN_0043D210 drawing "Please Wait", FUN_0043C7F0). A
+                // screen's open runs whenever it comes back on top and fills
+                // or clears its rows, so emptying both lists as a network
+                // screen is left (FUN_0043D200) changes nothing shown.
                 if !menu_is_paused && next_state.is_none() {
                     let screen = shell.engine.current_va();
                     let opened = screen != network_screen;
@@ -3408,6 +3431,8 @@ fn run_game(
                         let (name, initials) =
                             v2k_game::network::arena::profile_names(net.local_slot());
                         let waiting_for_world = match screen {
+                            // FUN_0043D270 opens this wait at stage 0; the
+                            // screen itself is that stage here.
                             Some(menu_data::JOIN_WAIT) => {
                                 net.frontend_frame((&name, &initials));
                                 let reveal = shell.list_row_typewriter_elapsed_ms(1) * 100.0;
@@ -3416,6 +3441,9 @@ fn run_game(
                                 }
                                 false
                             }
+                            // FUN_0043D280: stage 2, waiting for the host's
+                            // world. Its reset (FUN_00439290) finds the state
+                            // the join made, holding only the local name.
                             Some(menu_data::START_WAIT) => true,
                             // --start's join skips the screens.
                             _ => network_join_wait,
@@ -3481,6 +3509,8 @@ fn run_game(
                 world_fx.clear();
                 pending_entity_weapon_fire.clear();
                 native_entity_weapon_error_reported = false;
+                // The world's teardown drops its pending terrain programs
+                // (FUN_00437470, FUN_004288C0).
                 static_damage = StaticDamageScheduler::new();
                 keys_down.clear();
                 mouse_buttons_down.clear();
@@ -3497,10 +3527,12 @@ fn run_game(
                 // worlds. Stop its voices above, but retain the decoded pool
                 // and SDL device rather than rebuilding both at every handoff.
                 // Original FUN_0044FEB0: returning to the frontend STOPS the
-                // CD and rewinds — the frontend itself is silent.
+                // CD and rewinds (FUN_00456BA0) — the frontend itself is silent.
                 if let Some(ref mut mp) = music_player {
                     mp.stop();
                 }
+                // The stopped session's mode routes to the frontend menu
+                // (FUN_0044FDC0 for the results and map modes, then FUN_0042A940).
                 let shell = make_menu!(false);
                 state = GameState::Menu(shell);
                 // Teardown is synchronous and must not become the first
@@ -3592,7 +3624,8 @@ fn run_game(
                 // Every retained specialized receipt authenticates the old
                 // manager allocation. Invalidate that allocation before
                 // releasing scheduler custody; campaign-warp cancellation
-                // above deliberately returns before either operation.
+                // above deliberately returns before either operation. This is
+                // the old world's teardown that FUN_00453EE0 runs on leaving it.
                 retire_world_radars(entity_manager.as_mut(), &mut session.cache, &mut world_fx);
                 entity_manager = None;
                 specialized_actor_tasks.clear_after_manager_reset();
@@ -3757,7 +3790,7 @@ fn run_game(
                     _ => campaign_warp.reset_after_audio_stop(),
                 }
 
-                // In-game CD music, matching Music_SelectTrack (0x456AF0):
+                // In-game CD music, matching Music_SelectTrack (FUN_00456AF0):
                 // track = world + 1 where world = Section13 +0x48 (1-6 →
                 // CD tracks 2-7; track02.ogg = index 0 → index = world-1).
                 // Selection occurs even at Ambient=0; that setting only
@@ -4504,7 +4537,7 @@ fn run_game(
                         )
                         .play_global_sound(POST_INTRO_SOUND_ID);
                         shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
-                        // 4515E0 restores 4D0918: normal world callbacks run
+                        // FUN_004515E0 restores 4D0918: normal world callbacks run
                         // throughout command 2's opening morph. Retain only
                         // its presentation owner over the live Playing pass.
                         post_intro_world_cover = Some(shell);
@@ -5188,7 +5221,7 @@ fn run_game(
                         sound_manager.as_mut(),
                     ),
                 );
-                // 4D08C8 -> 4D0710 runs 50C00: only Klaus, ED10 and
+                // 4D08C8 -> 4D0710 runs FUN_00450C00: only Klaus, ED10 and
                 // physical particles continue while the world remains loaded.
                 // The class-1 proxy, ordinary actors, static programs and
                 // active-pair contacts do not advance in this transition.
@@ -5323,6 +5356,7 @@ fn run_game(
                     }));
                     for input in progress_inputs {
                         match input {
+                            // FUN_00455CF0: S plays sound 3 and asks for the save menu.
                             ProgressMapInput::Save => {
                                 let checkpoint = (|| -> Result<_, String> {
                                     let route = world_complete_results
@@ -5595,7 +5629,8 @@ fn run_game(
                         || interruption == Some(GameplayInterruption::Pause)
                     {
                         // FUN_00455D60 (Escape or P) then FUN_0044F600: pause
-                        // reason 8 stops the world's voices, and event 5 puts
+                        // reason 8 stops the world's voices, and event 5
+                        // (FUN_00494540 hands it to the world's modes) puts
                         // 4D09F8's menu keys (0x4C45B0) in place of the in-play
                         // and craft keys. Network play keeps the simulation
                         // chain, so the world runs on under the menu.
@@ -5649,6 +5684,8 @@ fn run_game(
                                 }
                                 Some(MenuInput::Back)
                             }
+                            // The table's arrows (FUN_00456420, FUN_00456440,
+                            // FUN_00456460, FUN_00456480); Escape is FUN_004564B0.
                             GameEvent::KeyDown(Keycode::Up) => Some(MenuInput::Up),
                             GameEvent::KeyDown(Keycode::Down) => Some(MenuInput::Down),
                             GameEvent::KeyDown(Keycode::Left) => Some(MenuInput::Left),
@@ -6151,6 +6188,8 @@ fn run_game(
                             has_player = em.player().is_some();
                         }
                         PlayerDeathTick::ExpiredNow { .. } => {
+                            // Expiry runs the Dying bounce style's +00, FUN_00447AC0, which
+                            // advances to the next frame; its initializer removes the wreck.
                             em.remove_player_and_attached_entities();
                             has_player = false;
                             chase_mode = false;
@@ -8980,7 +9019,7 @@ fn run_game(
                             break;
                         }
                         CampaignSelectorStep::CheckRoute { record_index } => {
-                            // 42E300 checks the resolved player's capability1, not
+                            // FUN_0042E300 checks the resolved player's capability1, not
                             // the hull's dying bit or the session abort flag.
                             if em.player().is_some_and(|player| {
                                 player.active && player.capability_flags & 1 != 0
@@ -9397,6 +9436,8 @@ fn run_game(
                                 .unwrap_or_default();
                             let weapon_roster =
                                 GameplayHudWeaponRoster::from_inventory(&weapon_inventory);
+                            // FUN_004539D0 gathers the HUD's inputs (FUN_004538B0's
+                            // record) and hands them to FUN_004292B0.
                             let frame = gameplay_hud.frame(
                                 resources,
                                 layout,
@@ -9661,6 +9702,8 @@ fn gameplay_chase_terrain(
     })
 }
 
+/// Retail `FUN_0042D500` names the low or high banner by the settings and
+/// checks that the file opens.
 fn find_banner_avi(data_dir: &Path, detail: GraphicsDetail) -> PathBuf {
     let names = match detail {
         GraphicsDetail::High => ["BANNERHI.AVI", "BANNERLO.AVI"],
@@ -10138,8 +10181,8 @@ fn draw_gameplay_world(
                 .map(|desc| v2k_render::terrain_tiles::scan_dimensions(desc.terrain_draw_depth))
         })
         .unwrap_or((52, 30));
-    // Retail's presentation traversal publishes FUN_00411400's
-    // detail bits after the current FUN_00413500 simulation pass.
+    // Retail's presentation traversal (FUN_00411720, every live body)
+    // publishes FUN_00411400's detail bits after the current FUN_00413500 simulation pass.
     // Registered actor owners therefore consume this
     // camera result on their next scheduler visit. In particular a nearby
     // peasant needs the detailed callback to advance walking/help frames.
@@ -10551,6 +10594,9 @@ fn draw_gameplay_world(
 
     // 53760 -> 53A60 -> 536A0: callbacks and each FIFO precede the
     // single destructive particle draw gate, including this frame's births.
+    // FUN_00453A60 runs the particle draw traversal here (FUN_0043DCB0 walks
+    // the two particle list groups, FUN_0043DCD0 then FUN_0043DDC0); FUN_004536A0 then
+    // draws the terrain and static objects below.
     let particle_presentation = match particles {
         GameplayWorldParticles::Live => prepare_particle_presentation(
             renderer,
@@ -10618,6 +10664,7 @@ fn draw_gameplay_world(
         retail_tick,
     );
 
+    // Retail FUN_00448090 -> FUN_0044CFB0: run the Targetter program's draw method.
     draw_targetter_overlay(
         renderer,
         cache,
@@ -10722,6 +10769,8 @@ fn render_opening_cinematic(
         native_viewport,
         world_projection,
     } = effects;
+    // FUN_00453760: once the final card is up the model pass submits Klaus alone
+    // (FUN_004113E0) instead of the world's entity list.
     if matches!(intro2_backdrop(retail_tick), Intro2Backdrop::BlackCard) {
         renderer.begin_scene(RenderScene::World);
         renderer.clear(0.0, 0.0, 0.0);
@@ -11768,6 +11817,7 @@ struct WorldAudioFrame<'a> {
 /// Map454EE0 and pause4513E0 enter44F3E0's mask8. Stop retained physical
 /// loops while preserving their logical owners; disposable one-shots already
 /// playing and independent UI voices are not handles owned by44CE70.
+/// Retail FUN_0044CE70: the mask's first nonzero value stops the world's voices.
 fn suspend_world_audio(
     world_fx: &mut WorldFx,
     sound_manager: &mut Option<SoundManager>,
@@ -12172,6 +12222,8 @@ fn draw_fullscreen_map(
     });
 
     renderer.begin_scene(RenderScene::Menu);
+    // The map mode's tick (FUN_004542E0) clears its first two frames; the port
+    // clears every frame.
     renderer.clear(0.0, 0.0, 0.0);
     renderer.set_sprite_clip(None);
 
@@ -12809,7 +12861,8 @@ fn sync_player_weapon_after_ammo_commit(
     }
 }
 
-/// Retail ordinary worlds select the physical CD track world-style + 1.
+/// Retail ordinary worlds select the physical CD track world-style + 1, the
+/// style read from the level record's word `+48` (FUN_0042E8F0).
 fn normal_world_music_track(level_id: u32, world_style: u32) -> Option<u8> {
     if level_id == INTRO2_LEVEL_ID {
         return None;
@@ -13711,7 +13764,8 @@ fn world_model_shade_shift(
 /// Submit the authored Section-10 static-object layer over the same wrapped
 /// footprint as opaque terrain. `FUN_0042F650` uses an identity root basis,
 /// raw cell centre `+0x80`, and exposes only the global 50 Hz tick on dynamic
-/// animation channel zero.
+/// animation channel zero (the static draw context's channel callback,
+/// FUN_00427030).
 #[allow(clippy::too_many_arguments)]
 fn draw_static_terrain_objects(
     renderer: &mut dyn v2k_render::Renderer,
@@ -14242,9 +14296,11 @@ fn update_targetter_runtime(
     let projectile_speed_raw = projectile_class_row(selector)
         .map(|row| row.speed_raw)
         .unwrap_or(0);
+    // Retail builds this launch preview from the player's emitter (FUN_00424480).
     let direction = player_primary_fire_direction(&player_craft, player);
     let velocity_raw =
         direction.map(|component| (component * projectile_speed_raw as f32).round() as i32);
+    // Retail appends each candidate handle to the program's list (FUN_00414930).
     let candidates = entities
         .iter()
         .filter(|entity| entity.active)
@@ -14274,6 +14330,7 @@ fn update_targetter_runtime(
             let Some(entity) = entities.iter().find(|entity| entity.id == candidate.id) else {
                 return TargetterModelProbe::Unresolved;
             };
+            // FUN_0044D910: the model of the entity's active slot.
             let RetailRuntimeValue::Known(active_slot) = entity.collision.active_model_slot()
             else {
                 return TargetterModelProbe::Unresolved;
@@ -14997,7 +15054,7 @@ fn menu_depth_fade_from_raw(near_raw: f32, far_raw: f32, color: [f32; 3]) -> Mod
 
 /// The handoff has already switched from the frontend to game context
 /// 4D04E8. 4515E0 installs these planes; 453C20's closing minima (F00/1400)
-/// preserve them. 453570 gets its terminal colour through 2E8D0, whose
+/// preserve them. 453570 gets its terminal colour through FUN_0042E8D0, whose
 /// runtime level+B0 is initialized from Section 13+54 by 2E570.
 fn klaus_handoff_depth_fade(cache: &v2k_game::resource_cache::ResourceCache) -> ModelDepthFade {
     let color = cache
@@ -15117,8 +15174,9 @@ fn backdrop_twitch_delta(phase: u16, strength: i32) -> i32 {
     (envelope - wave - slope) / 4
 }
 
-/// Klaus's authored menu pose (`FUN_0042C660` followed by the steady-idle
-/// branch of `FUN_0042C710`). The callback reads these as packed u16 angles.
+/// Klaus's authored menu pose (`FUN_0042C610`: `FUN_0042C660` followed by the
+/// steady-idle branch of `FUN_0042C710`, then the click and twitch poses).
+/// The callback reads these as packed u16 angles.
 /// The staggered 2.02–5.24 s waves are what keep the nested wing/bone chain
 /// alive while the ring is idle; a reset-only pose looks unnaturally frozen.
 fn menu_backdrop_anim_vars(retail_tick: u32, state: KlausBackdropAnimState) -> AnimVars {
@@ -15170,6 +15228,8 @@ struct MenuBackdropFrame {
     depth_fade: ModelDepthFade,
 }
 
+/// Klaus is pinned to the camera: retail names him (`FUN_0040F9C0`) so the
+/// camera update turns his private view position into world space.
 fn draw_menu_backdrop(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,

@@ -27,7 +27,7 @@ pub enum EntityHitEntry {
     /// 11250 dispatches DA00/style+20 without the primary stamp or suffix.
     Infected,
     /// 11320 clears model bit 0x2000, emits type+84 even while dying, then
-    /// dispatches DA60/style+24 without the primary stamp or suffix.
+    /// dispatches DA60/style+24 (FUN_0040DA60) without the primary stamp or suffix.
     Cured,
 }
 
@@ -205,7 +205,7 @@ pub const TYPE_47_PROJECTILE_DAMAGE_PACKET: DamagePacket = DamagePacket {
 /// cross-validated against the seven documented packet rows at `0x004CBF70`,
 /// `0x004CBFA0`, `0x004CBFD0`, `0x004CC000`, `0x004CC048`, `0x004CC0A8` and
 /// `0x004CC0F0` (all reproduce exactly, including zero provenance words).
-/// `FUN_00441180` sums channels 1/2 via `FUN_00425590` (2,000 here) and
+/// `FUN_00411180` sums channels 1/2 via `FUN_00425590` (2,000 here) and
 /// strikes `FUN_00411030` with eight times that amount; the Section-12 filter
 /// consumes the full packet unchanged.
 pub const CLASS68_STATIC_ROUTE_DAMAGE_PACKET: DamagePacket = DamagePacket {
@@ -561,6 +561,8 @@ pub fn cap_pair_damage_raw(
     amount_raw.max(0)
 }
 
+/// Retail `FUN_004255C0`: `(excess << 8)` over the channel's Q8 multiplier, or
+/// the excess unchanged when that multiplier is zero.
 fn inverse_channel_damage_raw(
     filtered_excess_raw: i32,
     channel: i32,

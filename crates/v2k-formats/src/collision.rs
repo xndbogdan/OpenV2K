@@ -191,7 +191,7 @@ pub struct SubFSwimmingDescriptor {
 
 /// Section-12 Sub-J's authored attachment-list descriptor.
 ///
-/// Retail `FUN_00418330` and demo `FUN_004182F0` allocate one twelve-byte
+/// Retail `FUN_00418330` and demo `DEMO_004182F0` allocate one twelve-byte
 /// live record for each authored slot and reject counts above eight.  The
 /// live array has its own mutable length and capacity; these bytes describe
 /// only the immutable per-slot policy and owner-local offset.
@@ -486,7 +486,7 @@ impl CollisionEntry {
 
     /// Global Section-3 sprite selected for this entity on the fullscreen map.
     ///
-    /// `FUN_0049b140` reads the unsigned word at runtime type-record `+0x70`
+    /// `FUN_0044C430` reads the unsigned word at runtime type-record `+0x70`
     /// and skips the icon when that authored selector is zero. Keeping this on
     /// the type record avoids leaking a magic raw-header offset into gameplay
     /// presentation code.

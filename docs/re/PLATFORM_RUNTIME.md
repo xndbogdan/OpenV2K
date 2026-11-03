@@ -366,11 +366,16 @@ own platform:
   `FUN_004946B0`, `FUN_004946F0`, `FUN_004A8D50`, `FUN_004A9980`,
   `FUN_004947A0`, `FUN_004947E0`, `FUN_004A9C20`, `FUN_004A9C90`,
   `FUN_004A9BD0`, `FUN_004AB110`, `FUN_004A9790`, `FUN_004A9670`,
-  `FUN_00497940`, `FUN_00497990`), and the texture pages, which only
+  `FUN_00497940`, `FUN_00497990`, `FUN_00494780`, `FUN_004A9CE0`; `FUN_004AB380`
+  flips to the GDI surface when the window loses focus; `FUN_00428D00` restores
+  lost surfaces; `FUN_00428DA0`, `FUN_00428E00`, `FUN_0042AA80` and
+  `FUN_0042AAB0` lock and unlock a buffer, taking error `0x707` as success;
+  `FUN_004A8C30` leaves a display mode), and the texture pages, which only
   Direct3D sprites fill (`FUN_004AB2E0`, `FUN_004A8060`, `FUN_00497A80`,
   `FUN_004979E0`, `FUN_00497A40`, `FUN_004A9860`, `FUN_004AB170`,
-  `FUN_004A8700`, `FUN_004A87A0`, `FUN_004A7C20` and the 48 converters of
-  table `004D5F88`). What the screen shows is ported from the software
+  `FUN_004A8700`, `FUN_004A87A0`, `FUN_004A7C20`, the 48 converters of
+  table `004D5F88`, the world sprite set's page upload `FUN_004571E0` and the
+  Section-3 unload `FUN_004ABEB0`). What the screen shows is ported from the software
   raster's fill slots ([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md)); the code
   only the [Direct3D table](DIRECT3D_TABLE.md) reaches is omitted as dead.
 - **The shell**, replaced by the port's SDL platform and launcher: MCI CD
@@ -380,14 +385,115 @@ own platform:
   `FUN_00496DD0`; the port plays the same tracks, and the game's own track
   choice, restart poll and disc check stay counted,
   [MENU_SYSTEM.md](MENU_SYSTEM.md#music--the-frontend-menu-is-silent)), the
-  message box (`FUN_00496E10`), and the working directory and the
+  message box (`FUN_00496E10`), the CD's device-change callback
+  (`FUN_00495EE0`), and the working directory and the
   `systemmemory`/`emulation` options (`FUN_00495CC0`, `FUN_004979B0`,
   `FUN_004959C0`; the launcher's settings instead).
 
-The window, its title and pump, activation, the display-mode routines that
-set the full-screen flag the pointer reads (`FUN_004A8C30`, `FUN_004A8D90`),
-the pixel-format listeners and colour tables, the banner movie, sound voices,
-timers, the joystick and the mouse stay counted.
+- **The window and its loop**, replaced by the port's SDL platform: the
+  window (`FUN_00495BC0`) and its title (`FUN_00494800`), the pump, run loop
+  and frame entry (`FUN_00495DA0`, `FUN_00495E20`, `FUN_0044E460`), the
+  multimedia timers (`FUN_00495FA0`, `FUN_00495FD0`, `FUN_00496020`,
+  `FUN_00496080`, `FUN_004960A0`, `FUN_00496110`, `FUN_00496120`,
+  `FUN_00495F30`, `FUN_004960F0`), the frame pump forwarder (`FUN_0044FA20`)
+  and the file reads, opens, writes and closes (`FUN_00468E70`,
+  `FUN_00468D50`, `FUN_00468F80`, `FUN_00493780`, `FUN_00493790`, and
+  `FUN_00468D20`, whose start time only the between-chunk callback `004F7310`
+  reads; nothing sets that callback).
+- **The banner movie and sound voices**, replaced by the port's AVI decoder
+  and SDL audio: the DirectShow movie (`FUN_00494F50`, `FUN_00495280`,
+  `FUN_004950A0`, `FUN_00495100`, `FUN_00495160`, `FUN_00495220`,
+  `FUN_00495320`, `FUN_004951D0`) and the DirectSound voices
+  (`FUN_00495360`, `FUN_004953A0`, `FUN_004953B0`, `FUN_00495700`,
+  `FUN_00495740`, `FUN_004957A0`, and the sound section's buffer release
+  `FUN_004AB540`), with the movie's error text (`FUN_00494EA0`). Each sound request makes a fresh voice,
+  so the voices decide nothing; when a banner plays and which sounds play,
+  at what volume, pitch and pan, stay counted.
+- **Input devices**, replaced by the port's SDL platform: the keyboard
+  reader's registration (`FUN_004725F0`, `FUN_00472620`), the mouse
+  (`FUN_004AC4F0`, `FUN_004AC560`, `FUN_004AC430`, `FUN_004AC4C0`), the
+  joysticks (`FUN_004AC010`, `FUN_004AC3D0`), the device list
+  (`FUN_00494C10`, `FUN_00494C40`, `FUN_00494D10`, `FUN_00494D30`,
+  `FUN_00494DB0`) and the per-device value records with their global binding
+  set (`FUN_00428B40`, `FUN_00428BC0`), the DirectInput keyboard packet
+  (`FUN_00472560`) and its reader's helpers (`FUN_00472550`, `FUN_004725C0`,
+  `FUN_00472660`, `FUN_00472670`), and the device records' callback
+  (`FUN_00494D80`). They pass on raw device state; key
+  mapping, axis scaling and sensitivity stay counted
+  ([CONTROLS.md](CONTROLS.md)).
+- **The input binding layer**, replaced by the port's SDL platform: FGDK's
+  per-device input states (`FUN_00472040`, `FUN_004724E0`, `FUN_00472180`,
+  `FUN_00472520`, `FUN_004291A0`), the reference-counted binding and value
+  records each mode builds (`FUN_00428FE0`, `FUN_00429100`, `FUN_00471880`,
+  `FUN_00471A40`, `FUN_004712B0`, `FUN_00471280`,
+  `FUN_004719F0`, `FUN_00471B80`, `FUN_00471C80`, `FUN_00471CD0`,
+  `FUN_00471370`, `FUN_004713A0`, `FUN_004713B0`, `FUN_004713D0`,
+  `FUN_00471590`, `FUN_00471BD0`) and the 32-entry event ring that delivers
+  value changes (`FUN_004717C0`, `FUN_00471760`, `FUN_004715F0`). The port
+  reads SDL key, mouse and pad state directly; the record rule
+  (`FUN_00472320`), the start-active rule (`FUN_00471DE0`), the axis gain and
+  the dead zone stay counted ([CONTROLS.md](CONTROLS.md)).
+- **Pixel-format listeners**, replaced by the port's fixed RGB565 surfaces:
+  adding and dropping a listener (`FUN_004AA1D0`, `FUN_004AA270`), the
+  unpacking a mode change runs before it packs again (`FUN_004AB890`,
+  `FUN_004AA330`), and Section 3's listener pair and record walker
+  (`FUN_004ABDA0`, `FUN_004ABE80`, `FUN_004ABDD0`), which repack the loaded
+  sprites to the screen's channel layout; the port decodes RGB555 straight
+  into its own format. The packing, which sets on-screen colours, is ported.
+- **Game states**, replaced by the port's state machine: the application,
+  mode and mode-slot records (`FUN_00493FE0`, `FUN_00494010`,
+  `FUN_00494180`, `FUN_00494260`, `FUN_00494370`, `FUN_004943B0`,
+  `FUN_00494460`, `FUN_00494490`, `FUN_004944D0`, `FUN_00494500`,
+  `FUN_00494520`, `FUN_00494230`, `FUN_0044F5F0`), the mode slot's frame and
+  its chain runners (`FUN_004942E0`, `FUN_00493FA0`, `FUN_00493F50`),
+  descriptor staging and switching (`FUN_004942C0`, `FUN_0042A9B0`), the
+  application word (`FUN_00494050`), each mode's binding sets
+  (`FUN_00494530`, `FUN_004559E0`, `FUN_00428F70`, `FUN_00429160`,
+  `FUN_00471C10`, `FUN_0042AAC0`), and mode setup and teardown that only
+  allocates, frees or records handles (`FUN_00453330`, `FUN_00453B20`,
+  `FUN_004532E0`, `FUN_004554E0`, `FUN_0042C050`). The descriptors'
+  callbacks they run, and what each mode shows and does, stay counted.
+- **Errors**, replaced by Rust errors: error objects and their texts
+  (`FUN_00457430`, `FUN_00457480`, `FUN_00457490`, `FUN_004574C0`,
+  `FUN_00457520`, `FUN_00457580`, `FUN_00494E00`), the fatal reports
+  (`FUN_004573F0`, `FUN_0044E5A0`, `FUN_0044E4A0`), the cleanup scopes
+  (`FUN_00470FD0`, `FUN_00471030`, `FUN_00471050`, `FUN_004710B0`,
+  `FUN_004711B0`) and scoped allocation (`FUN_004572E0`, `FUN_00457340`).
+- **The debug log**, replaced by the port's SDL platform: the log file and
+  debugger output (`FUN_004387E0`, `FUN_00438A00`).
+- **The save device's status**, replaced by the port's file saves:
+  `FUN_00449110` always reports the device ready (2) on the PC build; the
+  slot count, the slot probe and the save module's open ask it. The port
+  reads and writes its `SlotNN` files directly.
+- **Module lifetimes**, replaced by Rust ownership: module open and close
+  (`FUN_004575C0`, `FUN_00457630`), and the modules' own pairs and
+  loaded-table frees that only clear state, start lists, add or drop hooks,
+  or free records (`FUN_00410400`, `FUN_00410430`, `FUN_00426F90`,
+  `FUN_00426FF0`, `FUN_00433AD0`, `FUN_00433B40`, `FUN_004383A0`,
+  `FUN_00438920`, `FUN_0043A060`, `FUN_0043A090`, `FUN_00442E60`,
+  `FUN_00442E90`, `FUN_0044A580`, `FUN_0044C740`, `FUN_0044E3D0`,
+  `FUN_0044FC50`, `FUN_00471200`, `FUN_004937C0`, `FUN_004939A0`,
+  `FUN_004948B0`, `FUN_004AB740`, `FUN_004AB8C0`, `FUN_004ABA40`,
+  `FUN_004ABB30`, `FUN_004ABB40`, `FUN_0042A8C0`, `FUN_0044F5B0`,
+  `FUN_00436930`, `FUN_004382B0`, `FUN_004389B0`, `FUN_00433B80`,
+  `FUN_0044E3F0`, `FUN_0044FDF0`), the callback lists those modules keep
+  (`FUN_00433960`, `FUN_00433980`, `FUN_004339E0`, `FUN_00433A00`,
+  `FUN_00433A20`, `FUN_00433A40`, `FUN_00433A90`, `FUN_00433AB0`), and
+  teardown that only frees what a constructor allocated: the heap's free
+  wrappers (`FUN_00457320`, `FUN_0040AC30`), a resource kind's release
+  (`FUN_004103E0`), the save path (`FUN_00448910`), component and record
+  frees (`FUN_0041BE30`, `FUN_0041D340`, `FUN_00421C40`, `FUN_0042A910`,
+  `FUN_00414AA0`), a player controller and its Targetter program
+  (`FUN_004431C0`, `FUN_0044CF00`), and the world record at quit
+  (`FUN_0042E8B0`). The PRELOAD read that `FUN_004937C0`
+  starts (`FUN_00493860`) stays counted.
+
+Activation (`FUN_00495940`, `FUN_0044E6A0`, `FUN_0044E6E0`), which suspends
+the game while its window is inactive, the display-mode routine that sets the
+full-screen flag the pointer reads (`FUN_004A8D90`), the
+loading workers that animate the loading screen from a timer, and the module
+opens that set defaults other than zero (`FUN_0042A890`, `FUN_0042F4F0`,
+`FUN_0044EAE0`) stay counted.
 
 ## Joysticks and the mouse
 
@@ -456,7 +562,7 @@ current mode.
 | `FUN_00494460` | destroys a mode: its exit handler (word 10), then unlinks and frees it |
 | `FUN_00494540` | dispatches an event code and argument to an application's modes in order, through each one's handler (word 12), until one handles it |
 | `FUN_00494490`, `FUN_004944D0` | create a `0x28`-byte record from a ten-word description, calling its first word; destroy one, calling its fifth. The world application's create callback makes four, from the descriptions at `004D0878`, `004D08A0`, `004D08F0` and `004D08C8` |
-| `FUN_00494780`, `FUN_004948B0` | empty callbacks returning success |
+| `FUN_00494780`, `FUN_004948B0` | callbacks returning success: unlock a device's current buffer (`FUN_004A9C90`); free their argument |
 
 ## Loading worker and overlay reload
 

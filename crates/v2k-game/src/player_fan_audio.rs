@@ -13,6 +13,7 @@ use v2k_render::{
 
 use crate::player::{PlayerFanSoundFrame, PLAYER_FAN_LOWER_SOUND_ID, PLAYER_FAN_UPPER_SOUND_ID};
 
+/// Starts empty, as retail's zeroed Sub-O fan state does (FUN_004208C0).
 #[derive(Debug, Default)]
 pub struct PlayerFanAudio {
     upper: FanLoopState,
@@ -87,7 +88,8 @@ impl PlayerFanAudio {
     /// Forget handles after an explicit world/audio teardown. The sound
     /// manager's generational handles also reject stale slots, but clearing the
     /// owner records the intended player-spawn lifetime directly. Callers must
-    /// stop the sound manager first; all current teardown paths do so.
+    /// stop the sound manager first; all current teardown paths do so. Retail
+    /// FUN_004208F0 releases the same two loop records when the craft goes.
     pub fn reset(&mut self) {
         *self = Self::default();
     }

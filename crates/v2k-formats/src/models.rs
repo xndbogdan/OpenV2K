@@ -533,10 +533,22 @@ pub struct ModelCollisionHit {
 /// but must not confuse that fallback with an authored miss.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelCollisionError {
-    Truncated { pc: usize, opcode: u8 },
-    UnsupportedOpcode { pc: usize, opcode: u8 },
-    InvalidBranch { pc: usize },
-    MissingChild { global_id: usize },
+    Truncated {
+        pc: usize,
+        opcode: u8,
+    },
+    /// Retail's default case walks the rest of the program (FUN_0046B8C0,
+    /// which changes nothing) and then hangs; the port reports the opcode.
+    UnsupportedOpcode {
+        pc: usize,
+        opcode: u8,
+    },
+    InvalidBranch {
+        pc: usize,
+    },
+    MissingChild {
+        global_id: usize,
+    },
     RecursionLimit,
 }
 
@@ -727,7 +739,12 @@ fn retail_tf9_axis(p0: f64, p1: f64, p2: f64, p3: f64, eval: i32) -> f64 {
 }
 
 /// Execute one member of the `0x_D` register-op family exactly as the three
-/// original command tables do (FUN_00466410..FUN_004669A0). Operands are
+/// original command tables do (FUN_00466410..FUN_004669A0: `0x1D`
+/// FUN_00466450, `0x2D` FUN_00466490, `0x3D` FUN_004664D0, `0x4D`
+/// FUN_00466540, `0x5D` FUN_00466590, `0x6D` FUN_004665D0, `0x7D`
+/// FUN_00466630, `0x8D` FUN_00466690, `0x9D` FUN_00466700, `0xAD`
+/// FUN_00466750, `0xBD` FUN_004667B0, `0xCD` FUN_00466810, `0xDD`
+/// FUN_00466870, `0xED` FUN_00466900). Operands are
 /// packed values decoded against the register file *before* the destination
 /// is overwritten.
 fn apply_register_op(op: u16, args: &[u16], vars: &mut AnimVars) {
@@ -1105,7 +1122,7 @@ fn interpret(
         );
 
         match op {
-            // End of stream.
+            // End of stream (FUN_00466400).
             0x00 => break,
 
             // Triangle [mat][norm][v0][v1][v2]; 0x_7 family adds the mirror
@@ -1299,7 +1316,8 @@ fn interpret(
                 stats.jumps_taken += 1;
             }
 
-            // Conditional jumps on packed operands (animation frame select).
+            // Conditional jumps on packed operands (animation frame select):
+            // 0x2B FUN_00467130, 0x2C FUN_00467180.
             0x2B | 0x2C => {
                 if pc + 4 > n {
                     break;
@@ -1331,8 +1349,9 @@ fn interpret(
 
             // FUN_004669E0/00466A70 open an unsorted child queue at the
             // maximum/minimum referenced camera Z. 0x38 is the optional
-            // 4689D0 vertex-number diagnostic: with4FEEF4 clear it skips
-            // resolution entirely. Normal materialization ignores it.
+            // FUN_004689D0 vertex-number diagnostic: with4FEEF4 clear it skips
+            // resolution entirely. Nothing writes that word, so normal
+            // materialization ignores it.
             0x06 | 0x26 | 0x38 => {
                 let mut q = pc + 1;
                 while q < n && words[q] != 0xFFFF {
@@ -1360,6 +1379,7 @@ fn interpret(
             // 0x15 calls 494AB0 (sorted children); 0x46 and 0xC6 call
             // 494B60 (unsorted children). Their outer records still carry
             // the reference depth when the enclosing queue is sorted.
+            // Handlers: 0x46 FUN_00466B00, 0x15 FUN_00466C50, 0xC6 FUN_00466BD0.
             0x46 | 0x15 | 0xC6 => {
                 let length = if op == 0xC6 { 4 } else { 2 };
                 if pc + length > n {
@@ -1388,6 +1408,7 @@ fn interpret(
                 });
                 pc += length;
             }
+            // FUN_00466BA0: unsorted group at a fixed signed key.
             0xA6 => {
                 if pc + 3 > n {
                     break;
@@ -1402,6 +1423,8 @@ fn interpret(
                 });
                 pc += 3;
             }
+            // Unsorted group at the origin's depth (0x66, FUN_00466B60) or at
+            // -1 (0x86, FUN_00466B80).
             0x66 | 0x86 => {
                 out.painter_program.push(ModelPainterOp::BeginGroup {
                     depth_key: if op == 0x66 {
@@ -1426,6 +1449,7 @@ fn interpret(
                 });
                 pc += 1;
             }
+            // Close the group (FUN_00466CB0).
             0xE6 => {
                 out.painter_program.push(ModelPainterOp::EndGroup);
                 pc += 1;
@@ -1458,7 +1482,7 @@ fn interpret(
                 }
                 pc += 3;
             }
-            // Mount frame (FUN_00466cd0): 3 parent slot refs → orthonormal
+            // Mount frame (FUN_00466F50 → FUN_00466cd0): 3 parent slot refs → orthonormal
             // basis stored as the current mount basis for code-6 instances.
             // Operands are runtime slot refs (÷2 → record, low bit → mirror),
             // so values above the vertex count are the mirror slots; the
@@ -1838,6 +1862,7 @@ fn resolve_stream(
             face_cull.push(pool_face_cull(normal_pool, face.normal, resolver, stats));
             face_materials.push(face.material);
             face_uvs.push(face.uvs);
+            // Each Gouraud corner lights its own normal (FUN_00461B00).
             face_corner_normals.push([
                 pool_normal(normal_pool, face.corner_normals[0]),
                 pool_normal(normal_pool, face.corner_normals[1]),
@@ -2683,7 +2708,8 @@ impl<P: CollisionModelPool + ?Sized> CollisionInterpreter<'_, P> {
                 }
 
                 // Collision-only child model. Payload order differs from the
-                // render stream's 0x0E instance record.
+                // render stream's 0x0E instance record. Retail recurses into
+                // the child through FUN_0046B6D0.
                 0x05 => {
                     let payload = collision_align2(pc);
                     let child_id = collision_u16(program, payload)
@@ -3041,6 +3067,9 @@ fn promote_collision_hit(
     }
 }
 
+/// A sphere primitive against a query sphere (`FUN_00469770`). A point query
+/// is its radius-zero case, which retail's point table runs as
+/// `FUN_00469740`.
 fn collision_sphere_hit(
     query_center: [f64; 3],
     query_radius: f64,
@@ -3091,6 +3120,8 @@ fn collision_sphere_hit(
 /// Sphere/plane callback `FUN_0046ABF0`, including its signed-word edge
 /// differences and `FUN_0046ABA0` Q12 normalization. These are oriented
 /// half-spaces, not finite triangle-distance tests; 0x8C/0x8D intersects them.
+/// Retail's point table runs the radius-zero case as `FUN_0046A890` →
+/// `FUN_0046A950`, the same arithmetic.
 fn collision_plane_hit(
     query_center: [f64; 3],
     query_radius: f64,
@@ -3164,6 +3195,9 @@ fn collision_integer_sqrt(mut value: u32) -> u32 {
     result
 }
 
+/// A box primitive against a query sphere (`FUN_0046A1C0`). Its radius-zero
+/// case is retail's point query `FUN_00469FA0`: inside on every axis, then
+/// separated along the axis of least penetration.
 fn collision_aabb_hit(
     query_center: [f64; 3],
     query_radius: f64,
@@ -3203,7 +3237,8 @@ fn collision_aabb_hit(
 /// `FUN_00469C20`: an upright cylinder rising `height` from its base slot.
 /// Retail tests the vertical span against the cylinder radius rather than
 /// the query radius, then separates only horizontally. All arithmetic is
-/// 32-bit integer, with `457730`'s root narrowed to a signed word.
+/// 32-bit integer, with `457730`'s root narrowed to a signed word. A point
+/// query is the radius-zero case (`FUN_00469C00`).
 fn collision_cylinder_hit(
     query_center: [f64; 3],
     query_radius: f64,
@@ -3411,8 +3446,9 @@ impl ModelEntry {
     /// Evaluate the authored Section-8 collision program against a sphere in
     /// this model's local raw-coordinate frame.
     ///
-    /// This is the `FUN_0046AF20` path used after an entity's broad collision
-    /// radius succeeds. Raw model coordinates and signed 8.8 entity/world
+    /// This is the `FUN_0046AF20` path (entered through `FUN_0046AEF0`) used
+    /// after an entity's broad collision radius succeeds. Raw model
+    /// coordinates and signed 8.8 entity/world
     /// coordinates share the same `/256` gameplay scale. The currently
     /// supported opcode set covers the Peasant/first-world player,
     /// Main Base, weight, lifter, and convex fence programs, including lifter's

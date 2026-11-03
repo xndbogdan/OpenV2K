@@ -5,11 +5,12 @@
 //! Search And Attack 7 (PlayerNearby), Capture People 9 (PeopleNearby) and
 //! Trash Buildings 15 (BuildingsNearby). Neither row has a Sub-J, so Capture
 //! takes the true absent-J branch Type40 owns: `C910` kills the touched
-//! person. Class15's `ADB0` installs only `403230`'s unlimited task, whose
-//! `403250` finds no Sub-I and never transitions; the style's `C890` static
-//! hook trashes whatever the body touches. Type12 (worlds 31/35) dies through
-//! class1; the Type127 power-up carriers (world 27) through class63, dropping
-//! the Type61 authored in their `+88`.
+//! person. Class15's `ADB0` (FUN_0040ADB0: clear slots 2 and 1) installs only
+//! `403230`'s unlimited task, whose `403250` finds no Sub-I and never
+//! transitions; the style's `C890` static hook trashes whatever the body
+//! touches. Type12 (worlds 31/35) dies through class1; the Type127 power-up
+//! carriers (world 27) through class63, dropping the Type61 authored in their
+//! `+88`.
 
 pub mod aim;
 mod construction;

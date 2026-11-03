@@ -603,6 +603,7 @@ fn advance_1aa60(
         }
     }
     for channel in 0..5 {
+        // FUN_0041ABB0: one bound oscillator channel.
         if bindings[channel] == 0 {
             continue;
         }
@@ -839,6 +840,7 @@ fn coarse_surface_raw(
     }
 }
 
+/// Retail `FUN_0041B020`: bilinear ground height, or the waved sea above it.
 fn sub_g_surface_raw(
     terrain: &TerrainGrid,
     x_raw: i16,

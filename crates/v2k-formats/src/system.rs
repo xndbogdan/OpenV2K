@@ -50,6 +50,7 @@ pub struct DisplayMode {
 
 /// Parse display mode records from Section 5 data.
 /// Each record is 20 bytes: width, height, reserved, param_1, param_2.
+/// Retail's Section-5 loader is `FUN_004AB9C0`.
 pub fn parse_display_modes(data: &[u8]) -> Result<Vec<DisplayMode>> {
     if data.len() < DISPLAY_MODE_SIZE {
         return Err(V2kError::section(5, "section 5 data too short"));
@@ -125,6 +126,7 @@ pub struct PaletteEntry {
 
 /// Parse RGB555 color palette entries from Section 7 data.
 /// Each entry is 4 bytes (u32), lower 16 bits = RGB555 color value.
+/// Retail's Section-7 loader is `FUN_004AB790`.
 pub fn parse_color_palettes(data: &[u8]) -> Result<Vec<PaletteEntry>> {
     if data.len() < 4 {
         return Err(V2kError::section(7, "section 7 data too short"));

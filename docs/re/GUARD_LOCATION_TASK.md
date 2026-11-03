@@ -75,7 +75,7 @@ run through the retained hive component owner.
 the write and retains the authored context. The selector walks the intrusive
 list in order and returns the first eligible candidate inside its strict
 wrapped-coordinate cube; it does not rank by distance. Retail `FUN_00422C10`
-and exact-match demo `FUN_00422AE0` read candidate state only as
+and exact-match demo `DEMO_00422AE0` read candidate state only as
 `state != 0 && (state & 0x5000) == 0`. Rust therefore carries a
 `RetailStateWord` through `GuardLocationEntityRef`: unrelated unknown bits do
 not block a proven predicate, while actual ambiguity remains an error before

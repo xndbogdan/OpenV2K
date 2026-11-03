@@ -2,7 +2,7 @@
 //! The packet is retained with its proven callback pair, independently of motion.
 //! The `FUN_00442950` static-route family (classes 52/68/85) shares this sweep:
 //! its entity hits carry the descriptor-selected `+0x20` packet into the
-//! `FUN_00441180` delivery, while static contact consumes 52/68 through the
+//! `FUN_00411180` delivery, while static contact consumes 52/68 through the
 //! `FUN_0042E8E0` no-op and delivers `FUN_0043F800` for 85.
 
 use super::*;

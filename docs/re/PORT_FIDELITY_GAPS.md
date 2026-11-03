@@ -1563,7 +1563,7 @@ Last observation pass: 2026-09-07 (first-world lighting/lens and peasant animati
     success consumes one selector plus two constructor words from shared
     `WorldFx`. Matched retail/demo construction plus Level-1 terrain close exact
     fresh state at `0x07468805`; direct starts remain masked. Exact retail
-    `FUN_00422C10` / demo `FUN_00422AE0` close the
+    `FUN_00422C10` / demo `DEMO_00422AE0` close the
     candidate read to `state != 0 && (state & 0x5000) == 0`; the live snapshot
     now carries partial `RetailStateWord` evidence and stops only on ambiguity
     in those predicates. Impact-selected class-9 variant-zero
@@ -1668,7 +1668,7 @@ Last observation pass: 2026-09-07 (first-world lighting/lens and peasant animati
     scheduler draws precede E370; detailed visits have no scheduler draw.
     Authenticated model slot 1/state `0x4000` suppresses the sound gate without
     consuming RNG. Exact-match retail `FUN_00411400` / demo
-    `FUN_00411390` now supplies one shared tight/full, expanded/broader, and
+    `DEMO_00411390` now supplies one shared tight/full, expanded/broader, and
     coarse classifier. It retains wrapping X/Z words, full-dword camera Y,
     wrapping rear-plane multiplication, the original no-negative-Z-cutoff
     invariant, the `0x800` gate, and a masked `0x06000000` write. The later

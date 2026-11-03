@@ -1238,7 +1238,7 @@ pub static AUDITED_NON_INITIAL_BEHAVIOR_STYLES: &[BehaviorStyle] = &[
     },
     EXPLODING_PERSON_COMPLETION_STYLE,
     // Rolling Boulder style1 (faststart04 runtime words): +18 pair and +28
-    // impact both select style0 through 40C730; +0C and +2C are null.
+    // impact both select style0 through FUN_0040C730; +0C and +2C are null.
     BehaviorStyle {
         class_id: 20,
         variant: 1,
@@ -1376,7 +1376,7 @@ pub fn audited_behavior_program(class_id: u32) -> Option<&'static BehaviorProgra
 
 /// Whether selection identity alone proves that the selected descriptor was
 /// retained after initialization. Retail `FUN_004257F0` and demo
-/// `FUN_004256C0` (Power Up) contain only fixed writes and an explicit zero
+/// `DEMO_004256C0` (Power Up) contain only fixed writes and an explicit zero
 /// return. Every other currently catalogued initializer can propagate a
 /// helper/task-allocation failure into the outer unnamed fallback.
 pub const fn initializer_success_is_identity_determined(program: &BehaviorProgram) -> bool {

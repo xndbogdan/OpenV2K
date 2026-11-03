@@ -188,6 +188,20 @@ pub fn screen_midpoint(
 
 /// Run the constructor for `opcode` on the command `words` following it.
 /// Returns the words consumed, or `None` when `opcode` is not a face.
+///
+/// Retail face constructors, near / fog table:
+/// `0x03` `FUN_00459AC0` / `FUN_00459D60`, `0x04` `FUN_0045CFB0` / `FUN_0045D260`,
+/// `0x07` `FUN_0045AEA0` / `FUN_0045B390`, `0x08` `FUN_0045E6B0` / `FUN_0045EA90`,
+/// `0x23` `FUN_00460CC0` / `FUN_00460F20`, `0x24` `FUN_00462A00` / `FUN_00462D00`,
+/// `0x27` `FUN_004616B0` / `FUN_00461B30`, `0x28` `FUN_00463670` / `FUN_00463BD0`,
+/// `0x43` `FUN_00459FF0` / `FUN_0045A240`, `0x44` `FUN_0045D560` / `FUN_0045D820`,
+/// `0x47` `FUN_0045B7D0` / `FUN_0045BB80`, `0x48` `FUN_0045EFF0` / `FUN_0045F440`,
+/// `0x83` `FUN_0045A4E0` / `FUN_0045A730`, `0x84` `FUN_0045DB30` / `FUN_0045DDE0`,
+/// `0x87` `FUN_0045BFF0` / `FUN_0045C370`, `0x88` `FUN_0045F9C0` / `FUN_0045FDA0`,
+/// `0xA3` `FUN_004611C0` / `FUN_00461420`, `0xA4` `FUN_00463040` / `FUN_00463330`,
+/// `0xA7` `FUN_00462070` / `FUN_004624C0`, `0xA8` `FUN_00464270` / `FUN_004647C0`,
+/// `0xC3` `FUN_0045A9C0` / `FUN_0045AC10`, `0xC4` `FUN_0045E0E0` / `FUN_0045E3A0`,
+/// `0xC7` `FUN_0045C7B0` / `FUN_0045CB50`, `0xC8` `FUN_004602F0` / `FUN_00460740`.
 pub fn construct_face(
     queue: &mut PrimitiveQueue,
     context: &FaceContext<'_>,

@@ -27,6 +27,8 @@ pub enum NativeSaveRestoreError {
 #[derive(Debug, Clone)]
 pub struct NativeSaveRestore {
     pub logical_level_id: u32,
+    /// The loaded state, which retail's `FUN_00448E50` copies out whole for
+    /// the world session.
     pub state_payload: [u8; STATE_PAYLOAD_SIZE],
     pub player: SavedPlayerState,
     pub mode: VehicleMode,

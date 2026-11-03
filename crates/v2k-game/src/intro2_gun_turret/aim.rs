@@ -176,7 +176,7 @@ impl super::host::GunTurretHost for ElTurret {
     }
 }
 
-/// `425160` on any turret body: E's cadence, the stochastic gate, then per
+/// `FUN_00425160` on any turret body: E's cadence, the stochastic gate, then per
 /// catch-up shot `24EE0`'s joint flag, the primary `4147A0` command, the
 /// method-15 auxiliary command when E `+17` is set, and the selector toggle.
 pub(crate) fn tick_gun_turret_aim<H: super::host::GunTurretHost>(

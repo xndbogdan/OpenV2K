@@ -84,7 +84,7 @@ impl CommonWindDrag {
     }
 }
 
-/// 44EBD0 scales each signed authored word with the retail quarter-sine
+/// 44EBD0 (`FUN_0044EBD0`) scales each signed authored word with the retail quarter-sine
 /// lookup. The caller owns the one wrapping phase advance, before this read.
 pub(crate) fn gust_vector_raw(configured: [i16; 3], phase: u32) -> [i16; 3] {
     let sine = v2k_formats::fixed_math::retail_sine_q15(phase >> 7);

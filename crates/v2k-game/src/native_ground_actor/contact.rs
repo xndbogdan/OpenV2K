@@ -1148,7 +1148,8 @@ fn apply_contact(
         address => return Err(Block::UnsupportedStyle(address)),
     };
     let crushing_damage = if effective_flags & 0x400 != 0 {
-        // D9B0 ->27950 uses source -5/owner0; static damage consumes only
+        // D9B0 (FUN_0040D9B0, the generic crush: 40,000 on channel 1 to the
+        // touched static) ->27950 uses source -5/owner0; static damage consumes only
         // the packet. Retain this provenance rather than substituting the
         // actor's ordinary collision source. The selected plane is unchanged.
         let delivery = DamageDeliveryRecord {
@@ -1174,8 +1175,9 @@ fn apply_contact(
                 amounts_raw: [40_000, 0],
             },
         )?;
-        // C890 calls C690 irrespective of filtering, duplicate registration or
-        // the preceding generic crush having already changed this static cell.
+        // FUN_0040C890 calls C690 irrespective of filtering, duplicate
+        // registration or the preceding generic crush having already changed
+        // this static cell.
         reselect_after_furniture_contact(frame, id)?;
         damage
     } else {

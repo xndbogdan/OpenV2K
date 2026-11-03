@@ -25,7 +25,7 @@ use crate::{
 };
 
 /// Size passed to native `Mem_Alloc` by retail `FUN_0040ABE0` and demo
-/// `FUN_0040ABF0` for one fresh behavior context.
+/// `DEMO_0040ABF0` for one fresh behavior context.
 pub const FRESH_LEVEL1_TYPE9_CONTEXT_ALLOCATION_SIZE_BYTES: usize = 0x1c;
 
 /// Injected result at the native fresh-context allocation boundary.

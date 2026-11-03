@@ -35,7 +35,8 @@ pub struct EmbeddedOvl {
 }
 
 impl PreloadDat {
-    /// Parse a PRELOAD.DAT file from raw bytes.
+    /// Parse a PRELOAD.DAT file from raw bytes: retail `FUN_00493860` reads
+    /// the same count matrix, then the embedded overlays.
     pub fn parse(data: &[u8]) -> Result<Self> {
         if data.len() < MATRIX_SIZE {
             return Err(V2kError::OvlFormat(format!(

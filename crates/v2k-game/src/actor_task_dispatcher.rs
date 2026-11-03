@@ -195,7 +195,7 @@ pub enum ActorTaskRuntime {
     SharkAttack(crate::shark_attack::SharkAttackTaskState),
     CleansingLandscape(crate::cleansing_vehicle::tasks::CleansingMovementTaskState),
     TerrainCleansing(DefecateVirusTerrainTaskState),
-    /// Class9 carrying search 402190/4021B0 has no task-private storage.
+    /// Class9 carrying search FUN_00402190/FUN_004021B0 has no task-private storage.
     CaptureBeaconAcquisition,
     /// Class9 variant4 shares 403B70/403CE0 data, retaining its own C790/CF90 owner.
     CapturePeopleFollowing(FollowBeaconsFollowingTaskState),
@@ -986,8 +986,9 @@ pub fn prepare_run_away_runtime_task(
     })
 }
 
-/// B3F0's 403E20 for a B/D/F swimmer: no Sub-A speed and no A/H suffix; its
-/// 06070 only resets Sub-F, which the owner applies.
+/// B3F0's 403E20 (FUN_00403E20, the 2000-ms flee task builder) for a B/D/F
+/// swimmer: no Sub-A speed and no A/H suffix; its 06070 only resets Sub-F,
+/// which the owner applies.
 pub(crate) fn prepare_swimmer_run_away_runtime_task(
     preparation: RunAwayTaskPreparation,
     owner_entity_id: u32,

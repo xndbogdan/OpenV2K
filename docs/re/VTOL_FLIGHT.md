@@ -369,7 +369,7 @@ Constructor `+0x60` is the null relation sentinel; `+0x68/+0x6C/+0x70` and byte
 `+0xB6` remain exact zero through every reachable initializer; malloc-owned
 `+0xB2` remains unresolved until the scheduler clears it. Mutable neighbour
 order is also owned by `EntityManager`. Exact retail `FUN_00422C10` / demo
-`FUN_00422AE0` prove that the bounded type-17 candidate walk reads only
+`DEMO_00422AE0` prove that the bounded type-17 candidate walk reads only
 `state != 0 && (state & 0x5000) == 0`. It now consumes the real
 `RetailStateWord`, admits independently proven predicates despite unknown
 surface bits, and fails closed only when one of those exact reads is ambiguous.
@@ -521,10 +521,10 @@ this directory. The inspector and census script now emit a corrected v2 schema,
 extend that window through `+0x48`, and read the sounds from their real owner.
 
 The retail/demo dispatcher differential is now closed. Retail
-`FUN_00411AD0` and demo `FUN_00411A60` are behaviorally identical; the demo's
+`FUN_00411AD0` and demo `DEMO_00411A60` are behaviorally identical; the demo's
 eight additional bytes are distributed register/spill codegen rather than a
 branch or policy change. Their outer drivers, retail `FUN_00411A80` and demo
-`FUN_00411A10`, are behaviorally identical as well. Both retain
+`DEMO_00411A10`, are behaviorally identical as well. Both retain
 subject-authored, candidate-capability-gated contact sounds -> subject behavior
 -> immediate `0xA300` handling -> conditional candidate behavior -> subject
 component slots 0--2 -> candidate component slots 0--2 -> physical
@@ -551,7 +551,7 @@ semantics are now statically bounded:
 - `FUN_004259F0` is the hive contact hook. It consumes `0xC00` targets, or
   records a sufficiently energetic `0x2000` impact in the hive's nested state;
   it returns zero, so it does not cancel the physical response by itself.
-- Component callback retail `FUN_00402DA0` / demo `FUN_00402DE0` performs an
+- Component callback retail `FUN_00402DA0` / demo `DEMO_00402DE0` performs an
   authored forward-half-space test and calls exact descriptor effect
   `FUN_00401A20` to mutate/randomize descriptor-driven contact state and
   effects. Its return is ignored, but omitting it would lose those side effects

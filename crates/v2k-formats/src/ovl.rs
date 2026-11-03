@@ -16,6 +16,9 @@ pub struct OvlFile {
 }
 
 /// A single section from an OVL file.
+///
+/// Its `[u32 size][data]` block is what each retail section loader reads
+/// first; Sections 12 and 13 read it through `FUN_00410380`.
 #[derive(Debug)]
 pub struct OvlSection {
     /// Section index (0..14).
@@ -33,6 +36,9 @@ pub struct OvlSection {
 
 impl OvlFile {
     /// Parse a complete OVL file from raw bytes.
+    ///
+    /// A file without its 15 "abcd" section markers is rejected, as retail's
+    /// `FUN_00493CE0` reports a section header that is not "abcd" as corrupt.
     pub fn parse(data: &[u8]) -> Result<Self> {
         let markers = find_markers(data);
 

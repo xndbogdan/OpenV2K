@@ -198,7 +198,7 @@ impl MarkerTraversal<'_> {
 }
 
 impl EntityManager {
-    /// Apply 198E0's pose suffix to each live Sub-M +88 product. The +60 recent
+    /// Apply FUN_004198E0's pose suffix to each live Sub-M +88 product. The +60 recent
     /// relation is not an attachment list and is not the selection authority.
     pub fn follow_base_factory_products_to_marker(
         &mut self,

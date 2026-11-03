@@ -1,4 +1,4 @@
-//! Retail `415160` sphere/heightfield callback. Its collision surface is one
+//! Retail `FUN_00415160` sphere/heightfield callback. Its collision surface is one
 //! averaged Q12 plane per cell, followed by the four perimeter edges. It is
 //! independent of the renderer's two triangles and the bilinear ride surface.
 
@@ -68,8 +68,9 @@ fn cell_hit(
     if h00.max(h01).max(h10).max(h11) <= center[1] - radius {
         return None;
     }
-    // 415770 normalizes each cross separately, then 415610 normalizes their
-    // sum. Averaging raw cross products would weight the two slopes differently.
+    // FUN_00415770 normalizes each cross separately, then FUN_00415610 normalizes
+    // their sum. Averaging raw cross products would weight the two slopes
+    // differently.
     let first = normalize_scaled([-256 * (h10 - h00), 65536, -256 * (h01 - h00)]);
     let second = normalize_scaled([256 * (h01 - h11), 65536, 256 * (h10 - h11)]);
     let normal = normalize(std::array::from_fn(|i| {
@@ -79,7 +80,7 @@ fn cell_hit(
     if distance >= radius {
         return None;
     }
-    // 4158C0 stores the projected displacement in signed words. 415416/430
+    // FUN_004158C0 stores the projected displacement in signed words. 415416/430
     // compare the wrapped cell bytes, not a finite triangle's barycentrics.
     let displacement = normal.map(|n| ((i32::from(n).wrapping_mul(distance)) >> 12) as i16);
     let projected_x = center[0].wrapping_sub(i32::from(displacement[0]));
@@ -88,7 +89,7 @@ fn cell_hit(
         return Some((normal, radius - distance));
     }
 
-    // 415900: four perimeter segments, clockwise from (x,z). There is no
+    // FUN_00415900: four perimeter segments, clockwise from (x,z). There is no
     // diagonal edge. Strictly closer candidates replace the retained point.
     let corners = [
         [x, h00, z],
@@ -147,6 +148,7 @@ fn closest_on_edge(center: [i32; 3], a: [i32; 3], b: [i32; 3]) -> [i32; 3] {
     }
 }
 
+/// `FUN_00415890`: a Q12 normal dotted with a vector, shifted down 12.
 fn dot(normal: [i16; 3], vector: [i32; 3]) -> i32 {
     (0..3).fold(0i32, |sum, i| {
         sum.wrapping_add(i32::from(normal[i]).wrapping_mul(vector[i]))
@@ -159,6 +161,8 @@ fn squared_length(vector: [i32; 3]) -> u32 {
         .fold(0u32, |sum, v| sum.wrapping_add(v.wrapping_mul(*v) as u32))
 }
 
+/// `FUN_00415690` (and the normalizing half of `FUN_00415770`): shift large
+/// vectors down by 0/5/10/15/20 bits, then normalize to Q12.
 fn normalize_scaled(vector: [i32; 3]) -> [i16; 3] {
     let bits = vector.iter().fold(0u32, |bits, v| bits | v.unsigned_abs());
     let shift = match 31 - bits.max(1).leading_zeros() {

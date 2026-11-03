@@ -414,7 +414,7 @@ fn deliver_entity_impact(
     let Some(damage) = impact.damage else {
         return vec![Intro2EntityImpactStep::Suppressed];
     };
-    // `FUN_00442950` (particle classes 52/68/85) owns the static `FUN_00441180`
+    // `FUN_00442950` (particle classes 52/68/85) owns the static `FUN_00411180`
     // route: it must precede every target-dispatched F590-style owner, which
     // would otherwise apply the wrong order and force.
     if particle_uses_static_route_entity_hit(impact.source_particle_class) {

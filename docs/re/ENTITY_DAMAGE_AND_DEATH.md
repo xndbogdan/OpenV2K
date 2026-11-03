@@ -284,7 +284,7 @@ boundary, a failed slot-1 allocation has cleared slot 2 while preserving the
 old slots 1/0 and consumes no constructor word. A failed slot-0 allocation has
 additionally committed phase 0's Sub-H/Sub-A effects, its one constructor word,
 and the new slot-1 search while preserving the old slot 0. Full-game
-`FUN_0040C6B0` and demo `FUN_0040C6C0` prove that this is only the nested
+`FUN_0040C6B0` and demo `DEMO_0040C6C0` prove that this is only the nested
 initializer-local checkpoint, not the outer final state. Either nonzero return
 immediately installs special fallback descriptor `0x004C8888`, style
 `0x004C74F8`, and raw context index 0, clears live state bits `0x00068000`
@@ -311,8 +311,8 @@ The exact fresh-New-Game Level-1 type-17 birth owner is now live. Retail follows
 `FUN_004104B0 -> FUN_0040D4A0 -> FUN_004381F0 -> FUN_0040AC60 ->
 FUN_00425680`, then installs and initializes the selected descriptor through
 `FUN_00438340 -> FUN_0040ABE0/FUN_0040ABB0 -> FUN_0040C6B0`. The matched demo
-constructor `FUN_00410440`, class-9/10 initializer `FUN_0040B6D0`, class-33
-initializer `FUN_0040B750`, and outer `FUN_0040C6C0` preserve the same ordering.
+constructor `FUN_00410440`, class-9/10 initializer `DEMO_0040B6D0`, class-33
+initializer `DEMO_0040B750`, and outer `DEMO_0040C6C0` preserve the same ordering.
 The allocation is not linked until the selected initializer or its terminal
 fallback has completed, so spawn 17 sees only the earlier live prefix and each
 later spider additionally sees its already-published predecessors. The null
@@ -340,7 +340,7 @@ stores `BehaviorContextRuntime` inline and therefore has no corresponding
 fallible production allocation. Both are explicit integration limits, not new
 capture requests. No new birth capture is required.
 
-Full-game class-23 `FUN_004257F0` and demo `FUN_004256C0` prove Power Up is the
+Full-game class-23 `FUN_004257F0` and demo `DEMO_004256C0` prove Power Up is the
 sole reachable
 initializer with fixed writes and an unconditional zero return. Its fresh
 context therefore knows the type-default source, null target, zero auxiliary
@@ -372,7 +372,7 @@ ordinary pre-Common-Dying pair orientation remains unresolved rather than
 inferred from model or spawn data. The later authenticated death scheduler's
 post-task matrix publication is a narrow consumer exception, not authority for
 that general pair path.
-Matched retail `FUN_004104B0` / demo `FUN_00410440` plus the exact Level-1
+Matched retail `FUN_004104B0` / demo `DEMO_00410440` plus the exact Level-1
 terrain and sea values also close their constructor surface domain. The wave
 branch is unreachable at all four cells, each authored Y is strictly above the
 static sea surface, and only the fresh post-Intro route now resolves
@@ -382,7 +382,7 @@ The ordinary null-hook impact/damage/death composition is now a bounded live
 owner for the naturally published exact fresh-Level-1 context, not a
 focused-capture blocker. The
 candidate walk no longer requires another actor's complete state dword:
-retail `FUN_00422C10` and exact-match demo `FUN_00422AE0` read only
+retail `FUN_00422C10` and exact-match demo `DEMO_00422AE0` read only
 `state != 0 && (state & 0x5000) == 0`. `GuardLocationEntityRef` now retains the
 actual `RetailStateWord`; known exclusion bits or exact zero reject, a known
 nonzero bit plus `0x5000` known clear admits, and genuine ambiguity still stops
@@ -765,7 +765,7 @@ X3 tiers and both demo X3 tiers. Section-12 bytes `+0x72/+0x73` are `1/0`,
 `+0x74..+0x77` is 2,000 ms, and model 302's header extent `+0x08` is 182
 (distinct from collision radius 140). Sub-J descriptor
 `01 00 01 00 00 00 00 00 00 00` authors one policy-1 zero-offset slot;
-retail `FUN_00418330` and demo `FUN_004182F0` construct live length zero,
+retail `FUN_00418330` and demo `DEMO_004182F0` construct live length zero,
 capacity one, outer policy zero, and one zeroed row. Initial flags `0x2039`
 with class-12 clear mask `0x2015` produce effective flags `0x28`. The accepted
 abort states keep relation bit `0x1000` clear and parent null through
@@ -905,7 +905,7 @@ Retail and German-demo `FUN_0040DCA0` are behaviorally identical. Both begin at
 `0x0040DCA0`; retail returns at `0x0040DF67` and demo at `0x0040DF66`, with the
 one-byte delta confined to equivalent tile-index code generation. Both compute
 effective flags, optionally prime the master-motion bit, dispatch
-`FUN_0040A800` / mode-0 `FUN_0040A810`, visit the low-health emitter, optionally
+`FUN_0040A800` / mode-0 `DEMO_0040A810`, visit the low-health emitter, optionally
 run E640, rebuild the basis when flag `0x4000` is clear, run E100, optionally run
 DF70, optionally dispatch flag-`0x800` class-6 tile contact, and always finish
 with E370. Type 17's effective `0x28` skips master-bit priming, E640, DF70, and
@@ -914,9 +914,9 @@ before cadence division, RNG, or sound, leaving basis rebuild -> E100 -> E370
 as the reachable post-task suffix.
 
 The matrix and its two consumers are closed by matched static code, not a new
-capture. Retail `FUN_00413F70` and demo `FUN_00413EE0` build all nine signed-Q31
+capture. Retail `FUN_00413F70` and demo `DEMO_00413EE0` build all nine signed-Q31
 dwords at entity `+0x0C..+0x2C` from angle words `+0xA2/+0xA4/+0xA6`.
-Retail/demo default draw `FUN_004138F0` / `FUN_00413860` copies all nine dwords
+Retail/demo default draw `FUN_004138F0` / `DEMO_00413860` copies all nine dwords
 into the detailed submission, while the particle sweep
 `FUN_0043F980` / `FUN_0043F230` reaches the narrow model test
 `FUN_0043FCE0` / `FUN_0043F590`, which copies the same complete matrix for

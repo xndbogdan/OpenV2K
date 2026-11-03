@@ -1,4 +1,5 @@
 //! Native Type16/17/18/26/28/58/122 `11AD0 -> D7F0/D860 -> 141D0` terrain/water contact.
+//! D860 is FUN_0040D860: the style +14 hook, then `141D0(...,0,5,0)`.
 //!
 //! Living C8=39/439 clears10000; Class12's reverse mask2015 restores it and yields
 //! effective policy28 (428 for Type122), with null solid/water style hooks.

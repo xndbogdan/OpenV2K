@@ -65,10 +65,11 @@ impl EntityManager {
                 &mut || u32::from(world_fx.next_shared_retail_random_u16()),
             )
             .map_err(|error| format!("Type111 {}:{}: {error:?}", marker.cell[0], marker.cell[1]))?;
-            //16FF0 applies these writes after104B0/D4A0/C490 returns.
+            //16FF0 (FUN_00416FF0) applies these writes after104B0/D4A0/C490 returns.
             if marker.terrain_type & 8 == 0 {
                 entity.collision.state_flags_at_0x08.overwrite(0x800, 0);
             }
+            // FUN_0042EF60: the current world's bit for this marker subtype.
             if exit_marker_bits & (0x10 << (marker.subtype - 1)) != 0 {
                 entity.capability_flags |= 0x8000;
             } else {
@@ -89,7 +90,7 @@ impl EntityManager {
         Ok(())
     }
 
-    ///42EFB0 marks helpers with10B70; no allocation/RNG word is refunded.
+    ///42EFB0 (FUN_0042EFB0) marks helpers with10B70; no allocation/RNG word is refunded.
     /// Marked rows remain in the list until the ordinary14990 sweep.
     pub(super) fn cleanup_authored_gate_helpers(&mut self) {
         let mut pending = Vec::new();

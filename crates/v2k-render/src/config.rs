@@ -380,7 +380,8 @@ impl GameConfig {
     /// 4:3 area), through retail's 1024x768 ceiling; in Borderless that
     /// resolution is the desktop. Low detail remains the explicit 320x240
     /// tier. The same authored layouts serve every scaling mode; high-tier
-    /// layout changes can be applied live.
+    /// layout changes can be applied live. Retail reads the Resolution
+    /// setting word for this choice (`FUN_0044E740`).
     pub const fn system_graphics_variant(&self) -> u32 {
         let (width, height) = self.resolution();
         if matches!(self.detail, GraphicsDetail::Low) {

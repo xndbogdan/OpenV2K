@@ -3316,7 +3316,8 @@ const RETAIL_VIEW_PIN_Y: f32 = -32767.0 / 256.0;
 
 /// `FUN_0046EBD0` type-13 transform expressed around the backend's local-model
 /// matrix. Retail preserves the source point's view X/Z and replaces view Y
-/// with signed -32767 in the 8.8 world domain. The returned point is converted
+/// with signed -32767 in the 8.8 world domain; the far (`FUN_0046EC60`) and
+/// transform-only (`FUN_0046EB60`) handlers pin the same way. The returned point is converted
 /// back to raw local coordinates because `draw_tris_gl` subsequently reapplies
 /// the model scale, orientation, and translation through OpenGL.
 fn retail_view_pin_vertex(

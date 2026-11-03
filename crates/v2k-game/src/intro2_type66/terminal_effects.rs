@@ -13,6 +13,8 @@ use crate::{
     world_fx::WorldFx,
 };
 
+/// Retail FUN_00437390 for the authored factory templates, which never set the
+/// deferred (0x01) or radial (0x04) bits; those stay blocked.
 pub(super) fn apply_intro2_type66_terminal_effects(
     manager: &mut EntityManager,
     resources: &mut ResourceCache,

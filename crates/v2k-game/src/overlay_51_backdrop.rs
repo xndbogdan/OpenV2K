@@ -311,7 +311,8 @@ pub fn overlay_51_campaign_slot(type_id: u32) -> Option<u32> {
         .map(|record| u32::from(record.next))
 }
 
-/// `FUN_00454ff0` node flags for one overlay-51 object type.
+/// `FUN_00454ff0` node flags for one overlay-51 object type. The slot-word bit tests are
+/// FUN_0042EDA0 (`0x04`), FUN_0042EDF0 (`0x02`) and FUN_0042EE10 (`0x08`).
 pub fn overlay_51_object_flags(type_id: u32, progress: &PlayerCampaignProgress) -> u32 {
     let slot = overlay_51_campaign_slot(type_id).unwrap_or(0) as usize;
     let bits = progress.control_slot_bits(slot).unwrap_or(0);
@@ -449,6 +450,8 @@ pub fn overlay_51_pair_links(
             let Some(other) = overlay_51_pair_neighbor(graph, type_id, column) else {
                 continue;
             };
+            // FUN_00455460 (over FUN_00455430's node lookup): an existing
+            // link between the two worlds, in either direction.
             if let Some(existing) = links.iter_mut().find(|link| {
                 (link.left == type_id && link.right == other)
                     || (link.left == other && link.right == type_id)
@@ -511,6 +514,8 @@ fn overlay_51_q31_perp(component: i32, span: i32, sprite_meta: i32) -> i32 {
     (high << 1 | sign).wrapping_mul(sprite_meta) >> 8
 }
 
+/// `FUN_00454C00`: rotate by a Q15 sine and cosine, then scale each axis by
+/// the screen's scale over 256.
 fn overlay_51_rotate_q15(
     x: i32,
     y: i32,

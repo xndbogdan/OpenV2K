@@ -73,9 +73,9 @@ pub struct PlayerCampaignProgress {
 }
 
 impl PlayerCampaignProgress {
-    /// Exact native 42ECC0/42E3B0 restoration. Keep every bit of all37
-    /// dwords, including pair links and fields beyond the currently decoded
-    /// trophy bits; loading does not replay acquisition events.
+    /// Exact native 42ECC0 (FUN_0042ECC0 copies all 37 words)/42E3B0 restoration.
+    /// Keep every bit of all37 dwords, including pair links and fields beyond
+    /// the currently decoded trophy bits; loading does not replay acquisition events.
     pub fn from_native_snapshot(
         current_control_slot: usize,
         control_slot_state_bits: [u32; RETAIL_CONTROL_SLOT_COUNT],
@@ -106,6 +106,7 @@ impl PlayerCampaignProgress {
         self.current_control_slot = slot.filter(|slot| *slot < RETAIL_CONTROL_SLOT_COUNT);
     }
 
+    /// Controller `+0xC4`, the current world's slot (`FUN_0042EB00`).
     pub const fn current_control_slot(&self) -> Option<usize> {
         self.current_control_slot
     }
@@ -196,6 +197,7 @@ impl PlayerCampaignProgress {
         self.set_current_control_bit(RETAIL_CONTROL_WORLD_SAVED_BIT)
     }
 
+    /// `FUN_0042ED50`: set the current world's time-trophy bit, reporting a new claim.
     pub(crate) fn claim_current_time_trophy(&mut self) -> Result<bool, CampaignControlSlotError> {
         self.set_current_control_bit(RETAIL_CONTROL_TIME_TROPHY_BIT)
     }
@@ -235,6 +237,7 @@ impl PlayerCampaignProgress {
             hull.health_raw = TROPHY_RESTORED_HULL_RAW;
             hull.pre_health_damage_buffer_raw = TROPHY_RESTORED_BUFFER_RAW;
 
+            // FUN_0042ED20: test and set the world's claimed bit 0x02.
             if self.control_slot_state_bits[slot] & RETAIL_CONTROL_HIDDEN_TROPHY_BIT != 0 {
                 return Ok(TrophyAcquisition {
                     restored_hull: true,
@@ -252,7 +255,8 @@ impl PlayerCampaignProgress {
         Ok(self.count_trophy(restore_hull, first_claim))
     }
 
-    /// `456820(1) -> 413600(player, 0x13F) -> 40DB20 -> 445A90`.
+    /// `456820(1) -> 413600(player, 0x13F) -> FUN_0040DB20 -> 445A90`; the middle
+    /// step runs the player type's operation callback.
     /// This is selector 0x3F with amount 1: it counts a trophy without the
     /// amount-zero hidden-pickup hull/shield writes or hidden campaign bit.
     pub(crate) fn acquire_time_trophy_award(&mut self) -> TrophyAcquisition {

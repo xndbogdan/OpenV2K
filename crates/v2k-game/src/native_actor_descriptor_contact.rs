@@ -424,7 +424,8 @@ impl NativeDescriptorContactSource {
         })
     }
 
-    /// Run every slot's 02DA0 against `target` in A900 order. A slot reads
+    /// Run every slot's 02DA0 against `target` in A900 order (FUN_0040A900
+    /// walks the three task slots and calls each one's contact hook). A slot reads
     /// the heading, roll and Sub-A runtime the previous slot's 01A20 wrote.
     pub(crate) fn plan(
         &self,

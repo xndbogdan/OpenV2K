@@ -4,11 +4,11 @@
 //! (`FUN_00471460`): the terrain strike (`FUN_00448280`), the dying bounce
 //! (`FUN_00447AF0`), static contact (`FUN_00447C90`), pair contact
 //! (`FUN_00447D70`) and the damage modifier (`FUN_004484A0`). On the PC every
-//! device registers without an output hook, so `FUN_00494C90` installs the
-//! no-op `FUN_00438050` and nothing vibrates. The PlayStation release stores
-//! the strength as the pad's level and runs the pad's small motor from an
-//! 8 ms poll; [`PadVibration`] is that driver, for a pad playing a console
-//! layout. See `docs/re/CONTROLS.md`, "Console vibration".
+//! device registers without an output hook (`FUN_00494DE0` calls it), so
+//! `FUN_00494C90` installs the no-op `FUN_00438050` and nothing vibrates.
+//! The PlayStation release stores the strength as the pad's level and runs
+//! the pad's small motor from an 8 ms poll; [`PadVibration`] is that driver,
+//! for a pad playing a console layout. See `docs/re/CONTROLS.md`, "Console vibration".
 
 use std::cell::Cell;
 

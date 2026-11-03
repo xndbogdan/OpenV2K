@@ -325,7 +325,7 @@ impl PlayerDeathLifecycle {
     /// `FUN_00401120` accumulates `dt_us / 1000` and expires only when the
     /// authored duration is strictly less than elapsed. The per-tick callback
     /// independently adds `floor(dt_us / 40)` to control output 7 with a
-    /// `0xFFFF` ceiling.
+    /// `0xFFFF` ceiling (`FUN_004476F0`).
     pub fn advance_micros(&mut self, elapsed_micros: u32) -> PlayerDeathTick {
         if !self.active {
             return PlayerDeathTick::Inactive;

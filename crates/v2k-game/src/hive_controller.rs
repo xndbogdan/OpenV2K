@@ -205,7 +205,7 @@ pub(crate) fn notify_health_transition(
             HiveHealthTransition::Locked => {}
         }
     }
-    // 456790 is outside the text helpers' controller-phase gates. It arms
+    // FUN_00456790 is outside the text helpers' controller-phase gates. It arms
     // the timestamp sentinel without opening results or changing game mode.
     if transition == HiveHealthTransition::Unlocked && frame.world_complete_tally.ticks_0x2bc == 0 {
         frame.world_complete_tally.ticks_0x2bc = -1;

@@ -199,6 +199,7 @@ fn select(next_random: &mut impl FnMut() -> u32) -> Result<MainBasePublication, 
     })
 }
 
+/// 25730 clears Tertiary then Secondary; FUN_00425CD0 publishes the Primary.
 fn publish_graph(entity: &mut Entity, context: BehaviorContextRuntime, allocation_identity: u64) {
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
     entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);

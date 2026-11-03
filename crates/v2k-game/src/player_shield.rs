@@ -59,7 +59,7 @@ impl PlayerShieldPresentation {
         Some(PlayerShieldFrame {
             spin_raw: (self.player_callback_elapsed_micros_raw >> 8) as u16,
             retail_tick,
-            // Callback413670: selector0 returns process tick; every nonzero
+            // Callback FUN_00413670: selector0 returns process tick; every nonzero
             // selector clamps signed param3/1000 to 0..7.
             damage_flash_level: (difference / 1_000).clamp(0, 7) as u8,
         })
@@ -74,8 +74,9 @@ impl PlayerShieldFrame {
         vars
     }
 
-    /// 457C30 mixes lateral/forward, then457DD0 mixes lateral/up. In the
-    /// renderer's column basis these are local Ry(-angle) then Rz(angle).
+    /// `FUN_00457C30` mixes lateral/forward, then `FUN_00457DD0` mixes
+    /// lateral/up. In the renderer's column basis these are local Ry(-angle)
+    /// then Rz(angle).
     pub fn orientation(self, body: [[f32; 3]; 3]) -> [[f32; 3]; 3] {
         let angle = f32::from(self.spin_raw) * std::f32::consts::TAU / 65_536.0;
         mat3_mul(body, orientation_from_ypr(-angle, 0.0, angle))

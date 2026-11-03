@@ -77,7 +77,8 @@ fn restored_cargo_identities(
 }
 
 impl EntityManager {
-    /// Restore the conventional list and its player-surface/ballast phases.
+    /// Restore the conventional list and its player-surface/ballast phases
+    /// (FUN_00451C00).
     /// The separate auxiliary owned-object list at session+184 is not cargo
     /// and still requires its own controller-operation reconstruction.
     ///
@@ -131,7 +132,7 @@ impl EntityManager {
             self.attach_campaign_cargo(entity_id, &mut context)?;
         }
 
-        // 42EB50 reads Section13+48. This is the world style, not a level id.
+        // FUN_0042EB50 reads Section13+48. This is the world style, not a level id.
         // The signed comparison follows4185C0's wrapping unsigned mass sum.
         if context.level.world_style == 6 {
             let mass = match self.attached_cargo_mass_state() {
