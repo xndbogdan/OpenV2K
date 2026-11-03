@@ -899,6 +899,10 @@ struct GameplayInputEdges {
     collect: bool,
     drop: bool,
     weapon_cycle: Option<WeaponCycleDirection>,
+    /// In-play T with Left Shift up (`FUN_004565E0`).
+    targetter_toggle: bool,
+    /// The craft set's E (`FUN_004442E0`).
+    rotate_hold: bool,
 }
 
 fn gameplay_key_transition(
@@ -910,6 +914,9 @@ fn gameplay_key_transition(
     let drop_was_down = !keys_down.contains(&Keycode::LShift) && keys_down.contains(&Keycode::D);
     let weapon_forward_was_down = weapon_cycle_forward_held(keys_down);
     let weapon_backward_was_down = weapon_cycle_backward_held(keys_down);
+    let targetter_was_down =
+        !keys_down.contains(&Keycode::LShift) && keys_down.contains(&Keycode::T);
+    let rotate_was_down = keys_down.contains(&Keycode::E);
 
     if pressed {
         keys_down.insert(key);
@@ -921,7 +928,12 @@ fn gameplay_key_transition(
     let drop_is_down = !keys_down.contains(&Keycode::LShift) && keys_down.contains(&Keycode::D);
     let weapon_forward_is_down = weapon_cycle_forward_held(keys_down);
     let weapon_backward_is_down = weapon_cycle_backward_held(keys_down);
+    let targetter_is_down =
+        !keys_down.contains(&Keycode::LShift) && keys_down.contains(&Keycode::T);
+    let rotate_is_down = keys_down.contains(&Keycode::E);
     GameplayInputEdges {
+        targetter_toggle: targetter_is_down && !targetter_was_down,
+        rotate_hold: rotate_is_down && !rotate_was_down,
         collect: collect_is_down && !collect_was_down,
         drop: drop_is_down && !drop_was_down,
         weapon_cycle: if weapon_forward_is_down && !weapon_forward_was_down {
@@ -967,6 +979,15 @@ fn apply_gameplay_input_edges(
     if let Some(direction) = edges.weapon_cycle {
         inventory.cycle(direction);
         craft.select_weapon_callback(inventory.selected_descriptor().callback_selector());
+    }
+    // FUN_004442E0 -> FUN_00418980: the hold's first row moves to the end.
+    if edges.rotate_hold {
+        if let Some(RetailRuntimeValue::Known(Some(hold))) = entities
+            .player_mut()
+            .map(|player| &mut player.sub_j_attachment_runtime)
+        {
+            hold.rotate_first_to_end();
+        }
     }
 }
 
@@ -6065,6 +6086,9 @@ fn run_game(
                                 &keys_before,
                                 &keys_down,
                             ));
+                            if input_edges.targetter_toggle {
+                                config.targetter = !config.targetter;
+                            }
                             apply_gameplay_input_edges(
                                 input_edges,
                                 has_player,
@@ -6076,6 +6100,9 @@ fn run_game(
                         }
                         GameEvent::KeyUp(kc) => {
                             let input_edges = gameplay_key_transition(&mut keys_down, *kc, false);
+                            if input_edges.targetter_toggle {
+                                config.targetter = !config.targetter;
+                            }
                             apply_gameplay_input_edges(
                                 input_edges,
                                 has_player,
@@ -11569,8 +11596,8 @@ fn rebuild_particle_terrain_lights(
 }
 
 /// Submit the acquired Targetter's ring and crosshair Section-8 models.
-/// Configuration suppresses only the selected-entity ring; crosshairs and the
-/// controller continue regardless, matching `FUN_0044DB10`'s internal branch.
+/// `FUN_00453710` runs the draw only with the Targetter setting (`+0x34`) on;
+/// the controller keeps updating either way.
 #[allow(clippy::too_many_arguments)]
 fn draw_targetter_overlay(
     renderer: &mut dyn v2k_render::Renderer,
@@ -11580,14 +11607,14 @@ fn draw_targetter_overlay(
     entities: &EntityManager,
     player_craft: &PlayerCraft,
     targetter: &mut TargetterRuntime,
-    show_entity_ring: bool,
+    enabled: bool,
     elapsed_micros: u32,
     retail_tick: u32,
 ) {
-    if !renderer.supports_models() {
+    if !enabled || !renderer.supports_models() {
         return;
     }
-    let overlay = targetter.overlay(show_entity_ring);
+    let overlay = targetter.overlay();
 
     if let Some(ring) = overlay.ring {
         let target = entities.iter().find(|entity| entity.id == ring.target_id);
@@ -11602,8 +11629,21 @@ fn draw_targetter_overlay(
                     .and_then(|model_id| cache.global_model(model_id)),
                 RetailRuntimeValue::Unresolved => None,
             };
-            if let (Some(active_model), RetailRuntimeValue::Known(base_orientation)) =
-                (active_model, entity_pair_to_world(target))
+            // FUN_004167C0: health over the type record's initial health.
+            let health_channel = match (
+                target.collision.health_raw,
+                cache.global_entity_type(target.entity_type as usize),
+            ) {
+                (RetailRuntimeValue::Known(health), Some(record)) => Some(
+                    v2k_game::targetter::targetter_health_channel(health, record.dims[0] as i32),
+                ),
+                _ => None,
+            };
+            if let (
+                Some(active_model),
+                RetailRuntimeValue::Known(base_orientation),
+                Some(health_channel),
+            ) = (active_model, entity_pair_to_world(target), health_channel)
             {
                 targetter.advance_ring_spin(elapsed_micros);
                 let spin =
@@ -11616,7 +11656,7 @@ fn draw_targetter_overlay(
                 vars.dynamic[0] = (retail_tick & 0xffff) as i32;
                 let scale_raw = targetter_model_scale_raw(active_model.collision_radius_raw);
                 vars.dynamic[1] = i32::from(scale_raw);
-                vars.dynamic[2] = i32::from(scale_raw);
+                vars.dynamic[2] = i32::from(health_channel);
                 ModelTreeRenderer::new_world(
                     renderer,
                     cache,
@@ -14714,9 +14754,18 @@ fn update_targetter_runtime(
                 return TargetterModelProbe::Unresolved;
             };
             let entity_raw = entity.position_raw();
-            let delta_raw = std::array::from_fn(|axis| {
-                f64::from(point_raw[axis].wrapping_sub(entity_raw[axis]))
+            let offset_raw: [i32; 3] = std::array::from_fn(|axis| {
+                i32::from(point_raw[axis].wrapping_sub(entity_raw[axis]))
             });
+            // FUN_0044D8B0 / FUN_0044D950: no radius, or out of reach, is a
+            // miss before the collision program runs.
+            if !v2k_game::targetter::targetter_probe_in_reach(
+                model.collision_radius_raw,
+                offset_raw,
+            ) {
+                return TargetterModelProbe::Miss;
+            }
+            let delta_raw = offset_raw.map(f64::from);
             let RetailRuntimeValue::Known(orientation) = entity_pair_to_world(entity) else {
                 return TargetterModelProbe::Unresolved;
             };
@@ -17993,12 +18042,36 @@ mod menu_visual_tests {
     }
 
     #[test]
+    fn t_toggles_the_targetter_with_left_shift_up_and_e_rotates_the_hold() {
+        let mut keys = HashSet::new();
+        let toggle = GameplayInputEdges {
+            targetter_toggle: true,
+            ..GameplayInputEdges::default()
+        };
+        assert_eq!(gameplay_key_transition(&mut keys, Keycode::T, true), toggle);
+        assert_eq!(
+            gameplay_key_transition(&mut keys, Keycode::T, true),
+            GameplayInputEdges::default()
+        );
+        gameplay_key_transition(&mut keys, Keycode::T, false);
+        // LSHIFT+T types cheat digit 5 instead; releasing the shift with T
+        // still held completes the T record.
+        gameplay_key_transition(&mut keys, Keycode::LShift, true);
+        assert!(!gameplay_key_transition(&mut keys, Keycode::T, true).targetter_toggle);
+        assert!(gameplay_key_transition(&mut keys, Keycode::LShift, false).targetter_toggle);
+
+        let mut keys = HashSet::from([Keycode::LShift]);
+        assert!(gameplay_key_transition(&mut keys, Keycode::E, true).rotate_hold);
+        assert!(!gameplay_key_transition(&mut keys, Keycode::E, true).rotate_hold);
+    }
+
+    #[test]
     fn cargo_keys_are_edge_triggered_and_only_left_shift_suppresses_them() {
         let mut keys = HashSet::new();
         let cargo = |collect, drop| GameplayInputEdges {
             collect,
             drop,
-            weapon_cycle: None,
+            ..GameplayInputEdges::default()
         };
 
         assert_eq!(

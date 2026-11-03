@@ -323,9 +323,11 @@ projection. Its draw callback composes dynamic global
 Section-8 models 235 (`target`) / 239 (`targetgreen`) with crosshair models
 236..238 according to live acquisition flags and the selected target entity's
 model/pose. Those flags come from distance, visibility/hit, and aim-convergence
-tests; drawing a static sphere would not reproduce it. Config word
-`DAT_004D0148` gates only the selected-entity ring block at `0044DB93`; the
-result-bit crosshair block at `0044DCA2` still runs. "Portable Radar" and
+tests; drawing a static sphere would not reproduce it. The word
+`DAT_004D0148` tested by the selected-entity ring block at `0044DB93` is a
+constant 1 that nothing writes. The Targetter setting (`+0x34`) instead gates
+the whole draw, ring and crosshair, in `FUN_00453710`; the program keeps
+updating with it off. "Portable Radar" and
 "Mini Radar" remain pickup item names, not evidence of a persistent minimap.
 
 The first accepted selector-`0x3C` player/type-61 contact sets the retained
@@ -340,8 +342,11 @@ the selected-entity ring consume `entity_pair_to_world` (pair-census Euler
 or published Q31 body matrix). Using pair-census orientation alone silently
 dropped Type-17/47 locks — the terrain crosshair still ran, so the red
 `target` / green `targetgreen` ring never appeared around insects. Unresolved
-both ways stays fail-closed. `DAT_004D0148` / settings Targetter still gates
-only the ring, not the crosshair. `FUN_0044CFE0` really
+both ways stays fail-closed. With the setting off the port draws neither the
+ring nor the crosshair, as `FUN_00453710` does, and in play T (Left Shift
+up, `FUN_004565E0`) flips the setting. The ring's third channel is the
+target's health (`FUN_004167C0`), and a candidate out of its model's reach
+(`FUN_0044D8B0`) misses before the hit test runs. `FUN_0044CFE0` really
 zeros the distance/step fields on pickup; the first `FUN_0044D0F0` update turns
 the zero step into `0x14` before continuing convergence. Both currently
 recovered player weapon profiles use the ballistic family; unknown projectile
@@ -437,6 +442,9 @@ The controller's `+22C` holds the Targetter's active program (installed by
 | `FUN_0044CF70` | the Targetter program's per-frame step (from `FUN_00446640`): calls method `+08` (no arguments) and then `+0C` (two arguments) of the program's description `+44` when each exists |
 | `FUN_00448090` | runs the Targetter program's method `+10` (`FUN_0044CFB0`) on the controller's program at `+22C` inside an error scope and returns the error code (from `FUN_00453710`, in the in-game presentation chain) |
 | `FUN_0044D950` | the Targetter's model probe: when a point lies within an entity's active model radius (`+A8..+AE` by its detail bits) plus a margin, runs the FGDK model hit test (`FUN_0046AEF0`) with the entity's basis and its type's collision description (`+78`), exact (`0x4D4908`) without a margin and near (`0x4D4920`) with one; otherwise reports no hit |
+| `FUN_00453710` | the in-game presentation step that draws the Targetter: only while the Targetter setting (`+0x34`) is on, through `FUN_00448090` |
+| `FUN_0044D8B0` | the reach test before a straight-trajectory probe: whether a point's offset lies within the active model's collision radius (`+0A`) plus 0x78, first per axis with unsigned compares, then by the sum of squares; a model without a radius, or a point out of reach, is a miss without running the hit test. `FUN_0044D950` inlines the same test for the ballistic probe |
+| `FUN_004167C0` | the ring's health channel: the body's health (`+30`) × 0xFFFF over its type record's initial health (`+14`), or 0xFFFF from 0x10000 up or with a zero initial health |
 | `FUN_0044DDD0` | the animation channels of the Targetter's ring (from `FUN_0044DB10`): channel 0 the frame counter (`004FED60`); 1 the ring size, (the target's active model radius + 0x20) × 0x80 capped at 0xFFFF; 2 the target's health fraction (`FUN_004167C0`); the target is `+C` when `+10` is set, else `+4`; without a record channel 1 is 0x8000 |
 | `FUN_004538B0` | fills a presentation record for the emblem and trophy steps (`FUN_004537F0`, `FUN_004539D0`): the current world index, the controller and, while the session's body (`+2A8`) is live, its position and campaign selectors 3, 4, 1 and 2 (`DAT_004FECDC`); otherwise zeroes the first two selector words |
 

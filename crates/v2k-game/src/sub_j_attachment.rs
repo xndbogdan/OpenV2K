@@ -127,6 +127,13 @@ impl SubJAttachmentRuntime {
     }
 
     /// The row pop of retail FUN_00418590; the caller runs the row's callback.
+    /// `FUN_00418980`: with two rows or more, the first row moves to the end.
+    pub fn rotate_first_to_end(&mut self) {
+        if self.ordered_entity_ids.len() > 1 {
+            self.ordered_entity_ids.rotate_left(1);
+        }
+    }
+
     pub fn pop_last(&mut self) -> Option<u32> {
         self.ordered_entity_ids.pop()
     }
@@ -180,6 +187,20 @@ mod tests {
         assert_eq!(runtime.capacity(), 3);
         assert!(runtime.ordered_entity_ids().is_empty());
         assert_eq!(runtime.policy_raw_at_0x0c(), 0);
+    }
+
+    #[test]
+    fn rotation_moves_the_first_row_to_the_end() {
+        let mut runtime = SubJAttachmentRuntime::from_descriptor(&descriptor(3)).unwrap();
+        runtime.append(7).unwrap();
+        runtime.rotate_first_to_end();
+        assert_eq!(runtime.ordered_entity_ids(), &[7]);
+        runtime.append(8).unwrap();
+        runtime.append(9).unwrap();
+        runtime.rotate_first_to_end();
+        assert_eq!(runtime.ordered_entity_ids(), &[8, 9, 7]);
+        // The drop pops the last row: the one E just moved.
+        assert_eq!(runtime.pop_last(), Some(7));
     }
 
     #[test]
