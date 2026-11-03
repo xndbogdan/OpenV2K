@@ -52,7 +52,14 @@ pub enum NetworkEvent {
     },
     /// Kind 10: velocity and attitude deltas for an owned body.
     Impact { entity_id: u32, deltas: [i16; 6] },
-    /// Kinds 3..=6 and 13..=15: records whose world owners the port holds.
+    /// Kind 3: a peer's sea level and terrain runs (`FUN_00437910`); the
+    /// host's are applied with `004DC9B4` set.
+    Terrain { record: Vec<u8>, from_host: bool },
+    /// Kind 4: one cell (`FUN_00437B60`).
+    Cell { record: [u8; 4], from_host: bool },
+    /// Kind 5 on the host: a client's cell request (`FUN_00437CB0`).
+    CellRequest([u8; 4]),
+    /// Kinds 6 and 13..=15: records whose world owners the port holds.
     Held { kind: u8 },
     /// `FUN_00438CB0` could not tell whether a body rests: its state word's
     /// bits `0x08000080` are unknown, so it resends on the moving period.
@@ -103,7 +110,13 @@ pub struct WorldFrame<'a> {
     pub profile: (&'a str, &'a str),
     /// The local player's extra sync fields.
     pub player: LocalBodyState,
+    /// The level's terrain, which the host's kind 3 describes.
+    pub terrain: Option<&'a v2k_formats::terrain::TerrainGrid>,
 }
+
+/// `004DC9E0`: where the host's next kind 3 starts. Retail never resets it,
+/// so it carries over from one session to the next.
+static TERRAIN_CURSOR: std::sync::Mutex<[u32; 2]> = std::sync::Mutex::new([0, 0]);
 
 pub struct NetworkGame {
     session: NetSession,
@@ -475,8 +488,17 @@ impl NetworkGame {
                 if let Some(line) = self.scoring.host_announcement(frame.ticks, &tables, random) {
                     self.send(GameRecord::Line(line.into_bytes()));
                 }
-                // Kind 3, the sea level and terrain runs, is not sent.
-                self.events.push(NetworkEvent::Held { kind: 3 });
+                if let Some(terrain) = frame.terrain {
+                    let mut cursor = TERRAIN_CURSOR
+                        .lock()
+                        .unwrap_or_else(|poisoned| poisoned.into_inner());
+                    let record = super::terrain::TerrainRuns {
+                        terrain,
+                        cursor: std::cell::Cell::new(*cursor),
+                    };
+                    self.push(Channel::Game, &record);
+                    *cursor = record.cursor.get();
+                }
                 let (limit_winner, table) = self.scoring.scores_record();
                 self.send(GameRecord::Scores {
                     limit_winner,
@@ -670,14 +692,24 @@ impl NetworkGame {
         });
         for record in records {
             if let Some(frame) = frame.as_deref_mut() {
-                self.apply(record, stamp.slot, frame);
+                self.apply(record, stamp.slot, stamp.host_slot != 0, frame);
             }
         }
     }
 
     /// Each kind's apply routine.
-    fn apply(&mut self, record: GameRecord, sender: u8, frame: &mut WorldFrame) {
+    fn apply(&mut self, record: GameRecord, sender: u8, from_host: bool, frame: &mut WorldFrame) {
         match record {
+            GameRecord::Terrain(record) => self
+                .events
+                .push(NetworkEvent::Terrain { record, from_host }),
+            GameRecord::Cell(record) => self.events.push(NetworkEvent::Cell { record, from_host }),
+            GameRecord::CellRequest(record) => {
+                // FUN_00437CB0 acts on the host only.
+                if self.is_host() {
+                    self.events.push(NetworkEvent::CellRequest(record));
+                }
+            }
             GameRecord::Body(sync) => self.apply_body(sync, frame),
             GameRecord::Removed(handle) => {
                 // FUN_00417D90: FUN_00410B70 on whichever body the handle

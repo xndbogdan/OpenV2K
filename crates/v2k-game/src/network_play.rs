@@ -157,9 +157,9 @@ pub fn advance_network_world(
         retail_tick,
         removals,
     } = frame;
-    // The world owners' own sends: cells (4, 5), static objects (6), impacts
-    // on a peer's body (10) and attachments (13 to 15).
-    report_held("sending record kinds 4, 5, 6, 10, 13, 14 and 15".into());
+    // The world owners' own sends: static objects (6), impacts on a peer's
+    // body (10) and attachments (13 to 15).
+    report_held("sending record kinds 6, 10, 13, 14 and 15".into());
     // This frame's sends from the effects, in call order: FUN_00440A60's
     // kind 1, FUN_00440950's kind 2 and FUN_0044F480's kinds 22 and 23.
     for send in world_fx.take_network_sends() {
@@ -206,6 +206,7 @@ pub fn advance_network_world(
             net.send(GameRecord::Removed(handle));
         }
     }
+    send_cell_changes(net, cache);
     for reason in em.take_refused_network_drops() {
         report_held(format!("a dropped power-up ({reason})"));
     }
@@ -243,6 +244,7 @@ pub fn advance_network_world(
             random: &mut random,
             profile: (&name, &initials),
             player,
+            terrain: cache.level_terrain(),
         };
         net.world_frame(&mut world_frame);
     }
@@ -383,6 +385,30 @@ pub fn advance_network_world(
                 verbose(format_args!("Network: a peer's burst {request:?}"));
                 world_fx.materialize_network_burst(request, sea_level_raw);
             }
+            NetworkEvent::Terrain { record, from_host } => CellWorld {
+                cache: &mut *cache,
+                em: &mut *em,
+                world_fx: &mut *world_fx,
+                scheduler: &mut *static_damage,
+                host_record: from_host,
+            }
+            .apply_terrain(&record),
+            NetworkEvent::Cell { record, from_host } => CellWorld {
+                cache: &mut *cache,
+                em: &mut *em,
+                world_fx: &mut *world_fx,
+                scheduler: &mut *static_damage,
+                host_record: from_host,
+            }
+            .apply_cell(record),
+            NetworkEvent::CellRequest(record) => CellWorld {
+                cache: &mut *cache,
+                em: &mut *em,
+                world_fx: &mut *world_fx,
+                scheduler: &mut *static_damage,
+                host_record: false,
+            }
+            .apply_cell_request(record),
             NetworkEvent::Held { kind } => report_held(format!("record kind {kind}")),
             NetworkEvent::UnknownRestState => {
                 report_held("the rest period of a body with unknown state bits".into())
@@ -407,7 +433,204 @@ pub fn advance_network_world(
             }
         }
     }
+    // What the records just applied changed goes out with this frame's
+    // message, as retail's drain sends it at once.
+    send_cell_changes(net, cache);
     outcome
+}
+
+/// `FUN_00438F60` for each cell change the frame made: the host's kind 4,
+/// a client's kind 5.
+fn send_cell_changes(net: &mut NetworkGame, cache: &mut v2k_game::resource_cache::ResourceCache) {
+    let host = net.is_host();
+    for change in cache.take_network_cell_changes() {
+        let record = v2k_game::network::terrain::cell_change_record(change, host);
+        verbose(format_args!(
+            "Network: cell change {change:?} sent as {record:?}"
+        ));
+        net.send(record);
+    }
+}
+
+/// The world a received terrain or cell record writes; `host_record` is
+/// retail's `004DC9B4` (no notification, no burn burst).
+struct CellWorld<'a> {
+    cache: &'a mut v2k_game::resource_cache::ResourceCache,
+    em: &'a mut EntityManager,
+    world_fx: &'a mut WorldFx,
+    scheduler: &'a mut v2k_game::static_damage::StaticDamageScheduler,
+    host_record: bool,
+}
+
+impl CellWorld<'_> {
+    fn suspended(&mut self, apply: impl FnOnce(&mut Self)) {
+        let journal = if self.host_record {
+            self.cache.take_network_cell_journal()
+        } else {
+            None
+        };
+        apply(self);
+        if self.host_record {
+            self.cache.set_network_cell_journal(journal);
+        }
+    }
+
+    fn cell(&self, cell: [u8; 2]) -> Option<v2k_formats::terrain::TerrainCell> {
+        self.cache
+            .level_terrain()?
+            .cell(usize::from(cell[0]), usize::from(cell[1]))
+            .copied()
+    }
+
+    /// `FUN_00433720`.
+    fn infect(&mut self, cell: [u8; 2], infected: bool) {
+        self.cache.apply_level_infection_writes(&[
+            v2k_game::infection_evolution::InfectionCellWrite { cell, infected },
+        ]);
+    }
+
+    /// `FUN_004337E0` and its `FUN_00427760` callback.
+    fn burn(&mut self, cell: [u8; 2], burned: bool) {
+        if let Err(failure) = v2k_game::static_terrain_burn::apply_network_terrain_burn(
+            cell,
+            burned,
+            self.host_record,
+            self.cache,
+            self.em,
+            self.world_fx,
+            self.scheduler,
+        ) {
+            report_held(format!("a peer's burn at a cell ({})", failure.phase));
+        }
+    }
+
+    /// `FUN_00437910` -> `FUN_004379C0`: the host's sea level, then each run.
+    fn apply_terrain(&mut self, record: &[u8]) {
+        if self.cache.level_terrain().is_none() {
+            return;
+        }
+        let Some((sea, mut cursor, runs)) = v2k_game::network::terrain::parse_runs(record) else {
+            return;
+        };
+        let before = self.cache.level_terrain().map(|terrain| {
+            terrain
+                .cells
+                .iter()
+                .filter(|cell| cell.terrain_type & 0x18 != 0)
+                .count()
+        });
+        verbose(format_args!(
+            "Network: terrain runs from {cursor:?}, {} runs over {} cells, sea {sea} (host {})",
+            runs.len(),
+            runs.iter().map(|run| u32::from(run.0)).sum::<u32>(),
+            self.host_record
+        ));
+        self.suspended(|world| {
+            if world.host_record {
+                if let Some(terrain) = world.cache.level_terrain_mut() {
+                    terrain.header[0] = sea.wrapping_shl(8);
+                }
+            }
+            for (count, flags) in runs {
+                let infected = flags & 1 != 0;
+                let burned = flags & 2 != 0;
+                for _ in 0..count {
+                    let cell = [cursor[0] as u8, cursor[1] as u8];
+                    if let Some(current) = world.cell(cell) {
+                        if (current.terrain_type & 0x10 != 0) != infected {
+                            world.infect(cell, infected);
+                        }
+                        // The attribute byte is read once, before the burn.
+                        if current.attribute != 0 {
+                            let now = world.cell(cell).unwrap_or(current);
+                            if (now.terrain_type & 0x08 != 0) != burned {
+                                world.burn(cell, burned);
+                            }
+                            if flags & 4 != 0 {
+                                world.cache.take_level_terrain_object_attribute(cell);
+                            }
+                        }
+                    }
+                    v2k_game::network::terrain::advance(&mut cursor);
+                }
+            }
+        });
+        let after = self.cache.level_terrain().map(|terrain| {
+            terrain
+                .cells
+                .iter()
+                .filter(|cell| cell.terrain_type & 0x18 != 0)
+                .count()
+        });
+        if before != after {
+            verbose(format_args!(
+                "Network: terrain runs changed infected/burned cells {before:?} -> {after:?}"
+            ));
+        }
+    }
+
+    /// `FUN_00437B60`: one cell's attribute byte, infection and burn.
+    fn apply_cell(&mut self, [x, z, flags, attribute]: [u8; 4]) {
+        let cell = [x, z];
+        let Some(old) = self.cell(cell) else {
+            return;
+        };
+        self.suspended(|world| {
+            if world
+                .cell(cell)
+                .is_some_and(|now| now.attribute != attribute)
+            {
+                world
+                    .cache
+                    .set_level_terrain_object_attribute(cell, attribute);
+            }
+            if world
+                .cell(cell)
+                .is_some_and(|now| (now.terrain_type ^ flags) & 0x10 != 0)
+            {
+                world.infect(cell, flags & 0x10 != 0);
+            }
+            if world
+                .cell(cell)
+                .is_some_and(|now| (now.terrain_type ^ flags) & 0x08 != 0)
+            {
+                world.burn(cell, flags & 0x08 != 0);
+            }
+        });
+        verbose(format_args!(
+            "Network: cell {cell:?} {:#x}/{} -> {:?} (host {})",
+            old.terrain_type,
+            old.attribute,
+            self.cell(cell).map(|now| (now.terrain_type, now.attribute)),
+            self.host_record
+        ));
+    }
+
+    /// `FUN_00437CB0` on the host: a client's request, applied only when it
+    /// changes the cell (an unknown operation does nothing).
+    fn apply_cell_request(&mut self, [x, z, operation, attribute]: [u8; 4]) {
+        let cell = [x, z];
+        let Some(now) = self.cell(cell) else {
+            return;
+        };
+        let infected = now.terrain_type & 0x10 != 0;
+        let burned = now.terrain_type & 0x08 != 0;
+        verbose(format_args!(
+            "Network: a client's request {operation} at {cell:?} ({:#x}/{})",
+            now.terrain_type, now.attribute
+        ));
+        match operation {
+            0 if !infected => self.infect(cell, true),
+            1 if infected => self.infect(cell, false),
+            2 if !burned => self.burn(cell, true),
+            3 if burned => self.burn(cell, false),
+            4 if now.attribute != attribute => {
+                self.cache
+                    .set_level_terrain_object_attribute(cell, attribute);
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cfg(test)]

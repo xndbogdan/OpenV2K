@@ -13,4 +13,5 @@ pub mod power_ups;
 pub mod protocol;
 pub mod scoring;
 pub mod slots;
+pub mod terrain;
 pub mod transport;

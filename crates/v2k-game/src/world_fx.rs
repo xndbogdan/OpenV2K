@@ -2254,6 +2254,12 @@ pub struct WorldFx {
     /// A network game's sends from these effects, in call order. `None`
     /// outside one.
     network_sends: Option<Vec<NetworkSend>>,
+    /// A network client (`DAT_004F741C` set, `DAT_004F73B8` clear): its
+    /// static bursts carry network byte 1.
+    network_client: bool,
+    /// `FUN_00440A60` with network byte 1 refuses a class whose descriptor
+    /// flags hold 2; set only while such a burst is born.
+    client_births: bool,
 }
 
 /// What these effects send to the other machines of a network game.
@@ -2348,12 +2354,38 @@ impl WorldFx {
             global_elapsed_micros: self.global_elapsed_micros,
             splash_path_counters: self.splash_path_counters,
             network_sends: self.network_sends.clone(),
+            network_client: self.network_client,
+            client_births: self.client_births,
         }
     }
 
     /// Start or stop collecting a network game's sends.
     pub fn set_network_sends(&mut self, enabled: bool) {
         self.network_sends = enabled.then(Vec::new);
+    }
+
+    /// Mark this machine a network client (or not).
+    pub fn set_network_client(&mut self, client: bool) {
+        self.network_client = client;
+    }
+
+    pub fn is_network_client(&self) -> bool {
+        self.network_client
+    }
+
+    /// `FUN_00440950` with network byte 1, a client's static burst
+    /// (`FUN_00427760`): no kind 2, particles that do no damage (`+1D` bit
+    /// 0), and no birth of a class whose descriptor flags hold 2.
+    pub(crate) fn emit_client_explode_with_ring_burst_raw(
+        &mut self,
+        request: ExplodeWithRingBurstRequest,
+    ) {
+        self.client_births = true;
+        self.emit_explode_with_ring_burst_raw(ExplodeWithRingBurstRequest {
+            suppresses_impact_damage: true,
+            ..request
+        });
+        self.client_births = false;
     }
 
     /// The sends since the last call, in call order.
@@ -3733,6 +3765,11 @@ impl WorldFx {
         birth_context: Option<ParticleBirthContext<'_>>,
     ) -> Option<usize> {
         if spawn.lifetime_ticks == 0 {
+            return None;
+        }
+        if self.client_births
+            && particle_descriptor(spawn.source_class).is_some_and(|d| d.flags() & 0x02 != 0)
+        {
             return None;
         }
         let mut particle = world_particle(origin, spawn);
@@ -13172,6 +13209,57 @@ mod tests {
         );
         assert!(burst < sends.len() - 1);
         assert!(fx.take_network_sends().is_empty());
+    }
+
+    #[test]
+    fn a_clients_static_burst_is_not_sent_and_refuses_flag_2_classes() {
+        let flagged = (0..=u8::MAX)
+            .find(|&class| {
+                particle_descriptor(class).is_some_and(|d| d.flags() & 2 != 0)
+                    && particle_frame(class, 0).is_some()
+            })
+            .expect("a class FUN_00440A60 sends");
+        let plain = (0..=u8::MAX)
+            .find(|&class| {
+                particle_descriptor(class).is_some_and(|d| d.flags() & 2 == 0)
+                    && particle_frame(class, 0).is_some()
+            })
+            .expect("a class FUN_00440A60 keeps local");
+        let request = |class: u8| ExplodeWithRingBurstRequest {
+            position_raw: [100, -20, 300],
+            source_extent_raw: 0x100,
+            sea_level_raw: Some(-512),
+            logical_owner_entity_id: 0,
+            logical_owner_entity_type: 0,
+            scatter_count: 10,
+            scatter_classes: [class; 2],
+            suppresses_impact_damage: false,
+        };
+        let mut fx = WorldFx::new();
+        fx.frame_pacing.count_scale_q16 = 0x1_0000;
+        fx.set_network_sends(true);
+        fx.emit_client_explode_with_ring_burst_raw(request(flagged));
+        assert!(fx
+            .test_particles_in_virgin_birth_order()
+            .iter()
+            .all(|particle| particle.source_class != flagged));
+        fx.emit_client_explode_with_ring_burst_raw(request(plain));
+        assert!(fx.take_network_sends().is_empty());
+        let particles = fx.test_particles_in_virgin_birth_order();
+        assert!(particles
+            .iter()
+            .any(|particle| particle.source_class == plain));
+        assert!(particles
+            .iter()
+            .all(|particle| particle.suppresses_impact_damage));
+        // The same burst on the host is sent.
+        let mut fx = WorldFx::new();
+        fx.set_network_sends(true);
+        fx.emit_explode_with_ring_burst_raw(request(METEOR_SCATTER_CLASS));
+        assert!(fx
+            .take_network_sends()
+            .iter()
+            .any(|send| matches!(send, NetworkSend::Burst(_))));
     }
 
     #[test]
