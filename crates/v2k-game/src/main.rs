@@ -84,9 +84,9 @@ use v2k_game::full_frame_sprite_sequence::{
 };
 use v2k_game::fullscreen_map_status::FullscreenMapStatusResources;
 use v2k_game::game_state::{
-    ambient_setting_value, apply_setting_to_config, FrontendDepthFadeMode, GameState,
-    Intro2PresentationStage, KlausBackdropAnimState, LoadingPurpose, MenuCtx, MenuLayout,
-    MenuShell, PostIntroStage, ShellEvent,
+    ambient_setting_value, apply_setting_to_config, ClosingSceneDestination, FrontendDepthFadeMode,
+    GameState, Intro2PresentationStage, KlausBackdropAnimState, LoadingPurpose, MenuCtx,
+    MenuLayout, MenuShell, PostIntroStage, ShellEvent,
 };
 use v2k_game::gameplay_hud::{
     advance_retail_bar_clock, retail_weapon_sprite_rect, GameplayHud, GameplayHudClip,
@@ -2108,6 +2108,24 @@ fn run_game(
             (save.level_id, purpose)
         }
         Some(probe::StartState {
+            closing_scene: Some(carried_camera_raw),
+            ..
+        }) => {
+            let ctx = MenuCtx {
+                cache: &session.cache,
+                config: &config,
+                saves: Some(&save_manager),
+                display_modes: &display_modes,
+            };
+            (
+                v2k_game::closing_scene::CLOSING_SCENE_LEVEL_ID,
+                LoadingPurpose::ClosingScene {
+                    shell: MenuShell::new_post_intro(&ctx),
+                    carried_camera_raw,
+                },
+            )
+        }
+        Some(probe::StartState {
             network: Some(network),
             ..
         }) => {
@@ -2358,8 +2376,17 @@ fn run_game(
     // Session +28C: the Cheats world selector's skip, consumed at the end of
     // the next gameplay frame (FUN_0044FFA0).
     let mut pending_cheat_skip: Option<u32> = None;
-    // The dying Queen's FUN_00456F20 left this world for the closing scene.
-    let mut closing_scene_held = false;
+    // The dying Queen's FUN_00456F20 ran in this world (applied once).
+    let mut queen_closing_move_applied = false;
+    // Session +290 after a phase-3 exit (FUN_00456F20 or FUN_00452770). The
+    // next FUN_0044FFA0 visit consumes it and leaves for 4D0A30.
+    let mut closing_scene_exit: Option<ClosingSceneDestination> = None;
+    // Overlay 49 running in phase 3.
+    let mut closing_scene: Option<v2k_game::closing_scene::ClosingScene> = None;
+    // Session +38's pose, which 451710's 443260 saves after a world with a
+    // player loads and 451AF0's 443560 restores; the closing scene leaves it
+    // for world 13.
+    let mut world_arrival_pose: Option<v2k_game::entity::AuthoredPlayerArrival> = None;
     // Resolved player4 hull id for the persistent type-46 player entity.
     let mut player_model_id: Option<usize> = None;
 
@@ -3703,6 +3730,8 @@ fn run_game(
 
             GameState::Loading { level_id, purpose } => {
                 post_intro_world_cover = None;
+                closing_scene = None;
+                closing_scene_exit = None;
                 let lid = *level_id;
                 let purpose = std::mem::replace(purpose, LoadingPurpose::Normal);
                 // FUN_0044F8B0 clears the typed cheat digits on every entry.
@@ -4131,6 +4160,9 @@ fn run_game(
                                     heading_raw: arrival.heading_raw,
                                 })
                             }
+                            // FUN_00450390: phase 3 builds no player; 451797
+                            // still reserves its ordinal.
+                            LoadingPurpose::ClosingScene { .. } => None,
                             _ if lid == 49 => {
                                 // Intro1 is outside the campaign graph. Keep its
                                 // existing direct-debug controller publication.
@@ -4237,7 +4269,10 @@ fn run_game(
                     state = GameState::ReturningToFrontend;
                     continue 'main_loop;
                 }
-                if purpose.uses_authored_world_publication(lid) {
+                // 451C00 runs only with a player (FUN_00450390 zero).
+                if purpose.uses_authored_world_publication(lid)
+                    && !matches!(purpose, LoadingPurpose::ClosingScene { .. })
+                {
                     let level_desc = session
                         .cache
                         .level_desc()
@@ -4317,14 +4352,22 @@ fn run_game(
                     );
                 }
                 em.set_hover_physics(hover_physics);
-                if lid == INTRO2_LEVEL_ID {
+                if lid == INTRO2_LEVEL_ID || matches!(purpose, LoadingPurpose::ClosingScene { .. })
+                {
                     // Intro2 operation 2 releases authored behavior
                     // components over the story timeline. Their models remain
                     // independently eligible for rendering before release.
+                    // 451710 does the same in the closing scene's phase 3.
                     em.disable_authored_behavior_components();
                 }
 
                 has_player = em.player().is_some();
+                if let Some(player) = em.player() {
+                    world_arrival_pose = Some(v2k_game::entity::AuthoredPlayerArrival {
+                        position_raw: player.position_raw(),
+                        heading_raw: player.heading_raw(),
+                    });
+                }
                 if has_player {
                     log!("Player entity found — chase camera active (F11 toggles free-fly)");
                 } else {
@@ -4652,7 +4695,7 @@ fn run_game(
                 // synchronous load; the next active frame starts at zero.
                 retail_clock.reset();
                 retail_tick = retail_clock.current();
-                closing_scene_held = false;
+                queen_closing_move_applied = false;
                 state = match purpose {
                     LoadingPurpose::BeginIntro { mut shell } => {
                         intro_camera = IntroCameraController::default();
@@ -4714,6 +4757,38 @@ fn run_game(
                         source_level_id, ..
                     } => {
                         log!("Campaign warp complete: {} -> {}", source_level_id, lid);
+                        GameState::Playing
+                    }
+                    LoadingPurpose::ClosingScene {
+                        mut shell,
+                        carried_camera_raw,
+                    } => {
+                        let level = session
+                            .cache
+                            .level_desc()
+                            .expect("closing scene descriptor");
+                        let camera = IntroCameraController::at_rest(
+                            v2k_game::closing_scene::camera_arrival_raw(
+                                carried_camera_raw,
+                                level.terrain_draw_depth,
+                            ),
+                            level.world_style,
+                            Default::default(),
+                        );
+                        let strings = session
+                            .cache
+                            .level()
+                            .map(|level| level.strings.clone())
+                            .unwrap_or_default();
+                        log!(
+                            "Closing scene: overlay {lid} in phase 3, camera proxy at {:?}",
+                            camera.position_raw()
+                        );
+                        closing_scene =
+                            Some(v2k_game::closing_scene::ClosingScene::new(&strings, camera));
+                        // 451710's type-0 visit queues Klaus's command 2.
+                        shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
+                        post_intro_world_cover = Some(shell);
                         GameState::Playing
                     }
                     LoadingPurpose::Normal if lid == INTRO2_LEVEL_ID => {
@@ -5479,6 +5554,155 @@ fn run_game(
                 }
             }
 
+            GameState::ClosingSceneLeg { shell, destination } => {
+                retail_tick = retail_clock.advance(u64::from(elapsed_micros));
+                for event in &events {
+                    match event {
+                        GameEvent::Quit => break 'main_loop,
+                        GameEvent::Resize(w, h) => {
+                            renderer.resize(*w, *h);
+                            world_projection.apply_to(&mut camera, renderer.viewport_size());
+                        }
+                        _ => {}
+                    }
+                }
+                shell.update(
+                    elapsed_micros,
+                    &mut GlobalSoundRuntime::new(
+                        &session.cache,
+                        &mut world_fx,
+                        sound_manager.as_mut(),
+                    ),
+                );
+                // 4D0710's 50C00: Klaus, ED10 on the class-1 proxy and the
+                // physical particles; actors, statics and contacts wait.
+                advance_opening_camera_eye(
+                    &session.cache,
+                    &mut camera,
+                    &mut intro_camera,
+                    elapsed_micros,
+                    config.active_camera,
+                );
+                let effects = v2k_game::intro2_effects::update_intro2_effects(
+                    v2k_game::intro2_effects::Intro2EffectsFrame {
+                        cache: &mut session.cache,
+                        entities: entity_manager
+                            .as_mut()
+                            .expect("closing leg world entity manager"),
+                        world_fx: &mut world_fx,
+                        static_damage: &mut static_damage,
+                        scheduler: &mut specialized_actor_tasks,
+                        notifications: &mut gameplay_notifications,
+                        elapsed_micros,
+                        retail_tick,
+                    },
+                );
+                for &entity_id in &effects.unresolved_collision_entity_ids {
+                    report_unresolved_particle_collision(
+                        entity_id,
+                        &mut particle_collision_error_reported,
+                    );
+                }
+                for delivery in &effects.entity_deliveries {
+                    log!("Closing leg impact: {delivery:?}");
+                }
+                if session.cache.take_level_terrain_presentation_dirty() {
+                    renderer.invalidate_terrain_cache();
+                }
+                world_fx.process_pending();
+                // The world stays drawn under the closing morph. Klaus is
+                // queued geometry, so the exit's flash sequence (key zero)
+                // covers him too.
+                let prepared_full_frame_sprite = prepare_full_frame_sprite_command(
+                    &*renderer,
+                    &session.cache,
+                    &mut main_base_level_abort.outer_frame_sequence,
+                );
+                let overlay = GameplayOverlayFrame::default();
+                let em = entity_manager
+                    .as_mut()
+                    .expect("closing leg world entity manager");
+                PausedGameplayScene::capture(
+                    v2k_game::frozen_world_presentation::FrozenWorldPresentationSource {
+                        entities: em,
+                        world_fx: &world_fx,
+                        specialized_actor_tasks: &specialized_actor_tasks,
+                    },
+                    targetter,
+                    retail_tick,
+                )
+                .redraw(
+                    renderer.as_mut(),
+                    PausedGameplayDraw {
+                        cache: &session.cache,
+                        colors: &face_colors,
+                        camera: &camera,
+                        camera_mode: GameplayWorldCameraMode::RetailChase,
+                        native_viewport: intro_camera.native_viewport(),
+                        projection: world_projection,
+                        sky: sky_background.as_ref(),
+                        terrain_frames: terrain_frames.as_ref(),
+                        water_frames: water_frames.as_ref(),
+                        abort_frame: main_base_level_abort.submitted_frame_request(),
+                        craft: &player_craft,
+                        hull: &player_hull,
+                        death: &player_death,
+                        player_model_id,
+                        targetter_enabled: config.targetter,
+                        overlay: &overlay,
+                        hud_resources: None,
+                        fonts: None,
+                        handoff: Some(shell),
+                    },
+                );
+                if let Some(command) = prepared_full_frame_sprite.as_ref() {
+                    draw_prepared_full_frame_sprite_command(renderer.as_mut(), command);
+                }
+                play_world_audio(
+                    WorldAudioFrame {
+                        cache: &session.cache,
+                        entities: em,
+                        camera: &camera,
+                        elapsed_micros,
+                        positional_masked: false,
+                    },
+                    &mut world_fx,
+                    &mut sound_manager,
+                    &mut entity_positional_audio,
+                );
+                renderer.present();
+                if shell.take_transition_ready() {
+                    let ctx = MenuCtx {
+                        cache: &session.cache,
+                        config: &config,
+                        saves: Some(&save_manager),
+                        display_modes: &display_modes,
+                    };
+                    let shell = std::mem::replace(shell, MenuShell::new_post_intro(&ctx));
+                    // 453E00 keeps phase 3 only for logical world 0x25.
+                    state = match *destination {
+                        ClosingSceneDestination::ClosingScene { carried_camera_raw } => {
+                            GameState::Loading {
+                                level_id: v2k_game::closing_scene::CLOSING_SCENE_LEVEL_ID,
+                                purpose: LoadingPurpose::ClosingScene {
+                                    shell,
+                                    carried_camera_raw,
+                                },
+                            }
+                        }
+                        ClosingSceneDestination::FirstWorld => {
+                            // 451AF0 restores session +38: the pose saved when
+                            // the Queen's world loaded.
+                            start_arrival = world_arrival_pose;
+                            GameState::Loading {
+                                level_id: FIRST_WORLD_LEVEL_ID,
+                                purpose: LoadingPurpose::ResumePostIntro { shell },
+                            }
+                        }
+                    };
+                }
+            }
+
             GameState::Playing => {
                 // Craft feel constants now live in v2k_game::player (the two
                 // integrators), keyed to the RE'd reader/integrator anchors.
@@ -5492,6 +5716,97 @@ fn run_game(
                         renderer.resize(*w, *h);
                         world_projection.apply_to(&mut camera, renderer.viewport_size());
                         resized_before_pause = true;
+                    }
+                }
+
+                // FUN_0044FFA0 consumes a phase-3 exit's +290 before anything
+                // else; event 2 leaves for 4D0A30, where 453BA0/453C20 close
+                // Klaus over this world.
+                if let Some(destination) = closing_scene_exit.take() {
+                    if let Some(ref mut sm) = sound_manager {
+                        sm.stop_all();
+                    }
+                    intro_camera = match (closing_scene.take(), destination) {
+                        (Some(scene), _) => scene.camera,
+                        // 453C20 stands the class-1 proxy on the player, at
+                        // rest; ED10 keeps its springs.
+                        (None, ClosingSceneDestination::ClosingScene { carried_camera_raw }) => {
+                            IntroCameraController::at_rest(
+                                carried_camera_raw,
+                                session
+                                    .cache
+                                    .level_desc()
+                                    .map_or(0, |level| level.world_style),
+                                chase_camera.clone(),
+                            )
+                        }
+                        (None, ClosingSceneDestination::FirstWorld) => {
+                            unreachable!("only the closing scene leaves for the first world")
+                        }
+                    };
+                    let ctx = MenuCtx {
+                        cache: &session.cache,
+                        config: &config,
+                        saves: Some(&save_manager),
+                        display_modes: &display_modes,
+                    };
+                    // 453BA0 selects world[4]; 44FE20 resets the 50-Hz clock.
+                    retail_clock.reset();
+                    keys_down.clear();
+                    mouse_buttons_down.clear();
+                    state = GameState::ClosingSceneLeg {
+                        shell: MenuShell::new_post_intro(&ctx),
+                        destination,
+                    };
+                    continue;
+                }
+                // Phase 3 installs no craft keys (453330). The in-play table
+                // still runs: Space and Return reach 455D30, Escape and P
+                // 455D60, both FUN_00452770 below phase 5; Shift+Escape
+                // reaches 455C90's abort. The map (456610) needs phase 5.
+                if closing_scene.is_some() {
+                    let shift = keys_down.contains(&Keycode::LShift)
+                        || keys_down.contains(&Keycode::RShift)
+                        || events.iter().any(|event| {
+                            matches!(event, GameEvent::KeyDown(Keycode::LShift | Keycode::RShift))
+                        });
+                    let escape = events
+                        .iter()
+                        .any(|event| matches!(event, GameEvent::KeyDown(Keycode::Escape)));
+                    let leave = events.iter().any(|event| {
+                        matches!(
+                            event,
+                            GameEvent::KeyDown(
+                                Keycode::Space | Keycode::Return | Keycode::Escape | Keycode::P
+                            )
+                        )
+                    }) || pad_actions
+                        .iter()
+                        .any(|action| matches!(action, PadAction::Continue | PadAction::Pause));
+                    for event in &events {
+                        match event {
+                            GameEvent::KeyDown(key) => {
+                                keys_down.insert(*key);
+                            }
+                            GameEvent::KeyUp(key) => {
+                                keys_down.remove(key);
+                            }
+                            _ => {}
+                        }
+                    }
+                    events.retain(|event| !is_player_input(event));
+                    pad_actions.clear();
+                    if escape && shift {
+                        GlobalSoundRuntime::new(
+                            &session.cache,
+                            &mut world_fx,
+                            sound_manager.as_mut(),
+                        )
+                        .play_global_sound(3);
+                        return_to_frontend_pending = true;
+                    } else if leave && closing_scene_exit.is_none() {
+                        closing_scene_exit = Some(ClosingSceneDestination::FirstWorld);
+                        main_base_level_abort.outer_frame_sequence.request();
                     }
                 }
 
@@ -6391,6 +6706,11 @@ fn run_game(
                         actor_animation_claims.push(claim);
                     }
                 }
+                if let Some(scene) = closing_scene.as_mut() {
+                    // 13500 reaches the class-1 proxy, the live list's head,
+                    // before any authored body.
+                    scene.camera.advance_proxy(elapsed_micros);
+                }
                 let specialized_pass = specialized_actor_tasks.tick(
                     em,
                     SpecializedActorTaskProductionFrame {
@@ -6413,8 +6733,11 @@ fn run_game(
                         elapsed_micros,
                         global_elapsed_micros: elapsed_micros,
                         retail_tick,
-                        notification_phase:
-                            v2k_game::gameplay_notifications::GameplayNotificationPhase::Playing,
+                        notification_phase: if closing_scene.is_some() {
+                            v2k_game::gameplay_notifications::GameplayNotificationPhase::NonGameplay
+                        } else {
+                            v2k_game::gameplay_notifications::GameplayNotificationPhase::Playing
+                        },
                         main_base_abort_active: main_base_level_abort.active,
                     },
                     &mut gameplay_notifications,
@@ -6503,6 +6826,49 @@ fn run_game(
                     .collect();
                 // 12DA0 visits every power-up this frame, whatever the camera.
                 em.clear_power_up_b2();
+                // FUN_004374B0, the static damage programs, with the eye's
+                // first spring as opcode 6's focus.
+                macro_rules! advance_static_damage_programs {
+                    ($focus:expr) => {
+                        let static_damage_camera_focus_raw = $focus;
+                        static_damage.begin_advance(elapsed_micros);
+                        while let Some(batch) = static_damage.next_node_batch(|cell| {
+                            resolve_current_static_damage_target(&session.cache, cell)
+                                .ok()
+                                .flatten()
+                                .map(|target| target.state)
+                        }) {
+                            let (token, static_damage_actions) = batch.into_parts();
+                            apply_static_damage_actions(
+                                &mut static_damage,
+                                static_damage_actions,
+                                &mut session.cache,
+                                em,
+                                StaticDamageWorldContext::Playing {
+                                    extra_lives: RetailRuntimeValue::Known(
+                                        player_campaign_progress.extra_lives(),
+                                    ),
+                                    player_hull: &mut player_hull,
+                                    actor_tasks: &mut specialized_actor_tasks,
+                                    notifications: &mut gameplay_notifications,
+                                    retail_tick,
+                                },
+                                &mut world_fx,
+                                &mut static_damage_explosion_lights,
+                                static_damage_camera_focus_raw,
+                                &mut main_base_level_abort.outer_frame_sequence,
+                            );
+                            let completed = static_damage.complete_node_batch(token);
+                            debug_assert!(
+                                completed,
+                                "applied node batch token must remain current"
+                            );
+                        }
+                        if session.cache.take_level_terrain_presentation_dirty() {
+                            renderer.invalidate_terrain_cache();
+                        }
+                    };
+                }
                 if chase_mode {
                     // FUN_00446640 snapshots entity +0x30 at callback entry;
                     // the later solid-contact pass cannot affect its warning
@@ -7111,40 +7477,7 @@ fn run_game(
                     // captured ID queue and therefore wait until the next pass.
                     // Opcode 6 samples the first chase spring at this boundary;
                     // FUN_0044FFA0 updates that focus only later in the frame.
-                    let static_damage_camera_focus_raw = chase_camera.focus_position_raw();
-                    static_damage.begin_advance(elapsed_micros);
-                    while let Some(batch) = static_damage.next_node_batch(|cell| {
-                        resolve_current_static_damage_target(&session.cache, cell)
-                            .ok()
-                            .flatten()
-                            .map(|target| target.state)
-                    }) {
-                        let (token, static_damage_actions) = batch.into_parts();
-                        apply_static_damage_actions(
-                            &mut static_damage,
-                            static_damage_actions,
-                            &mut session.cache,
-                            em,
-                            StaticDamageWorldContext::Playing {
-                                extra_lives: RetailRuntimeValue::Known(
-                                    player_campaign_progress.extra_lives(),
-                                ),
-                                player_hull: &mut player_hull,
-                                actor_tasks: &mut specialized_actor_tasks,
-                                notifications: &mut gameplay_notifications,
-                                retail_tick,
-                            },
-                            &mut world_fx,
-                            &mut static_damage_explosion_lights,
-                            static_damage_camera_focus_raw,
-                            &mut main_base_level_abort.outer_frame_sequence,
-                        );
-                        let completed = static_damage.complete_node_batch(token);
-                        debug_assert!(completed, "applied node batch token must remain current");
-                    }
-                    if session.cache.take_level_terrain_presentation_dirty() {
-                        renderer.invalidate_terrain_cache();
-                    }
+                    advance_static_damage_programs!(chase_camera.focus_position_raw());
 
                     // FUN_00445310 tests fuel at callback entry. A positive
                     // tank that reaches zero from this frame's exact burn does
@@ -7186,6 +7519,16 @@ fn run_game(
                             )
                             .apply_to(&mut camera);
                     }
+                } else if let Some(scene) = closing_scene.as_mut() {
+                    // Phase 3: no player; 374B0 then ED10 on the class-1 proxy.
+                    advance_static_damage_programs!(scene.camera.focus_position_raw());
+                    advance_opening_camera_eye(
+                        &session.cache,
+                        &mut camera,
+                        &mut scene.camera,
+                        elapsed_micros,
+                        config.active_camera,
+                    );
                 } else {
                     let speed = fly_speed * dt;
                     let fwd = camera.forward();
@@ -7389,8 +7732,8 @@ fn run_game(
                 // cheats 1 and 0 on (FUN_00450FC0, each with its sound), and
                 // session +290 leaves for logical world 0x25 in phase 3.
                 if let Some(closing) = specialized_pass.closing_scene.as_ref() {
-                    if !closing_scene_held {
-                        closing_scene_held = true;
+                    if !queen_closing_move_applied {
+                        queen_closing_move_applied = true;
                         main_base_level_abort.outer_frame_sequence.request();
                         for (cheat, sound) in v2k_game::queen::CLOSING_SCENE_CHEATS
                             .into_iter()
@@ -7406,16 +7749,19 @@ fn run_game(
                                 Err(error) => eprintln!("Cheat {cheat} sound: {error:?}"),
                             }
                         }
-                        // Held: the closing scene, overlay 49 played as a
-                        // phase-3 cinematic, has no port owner yet. This world
-                        // keeps running under the pending exit.
-                        eprintln!(
-                            "Closing scene held: FUN_00456F20 left world {:?} for logical world {:#x} (overlay {}) in phase {}, whose cinematic is not ported",
-                            current_level_id,
-                            v2k_game::queen::CLOSING_SCENE_LOGICAL_WORLD,
-                            v2k_game::queen::CLOSING_SCENE_LOGICAL_WORLD + 12,
-                            v2k_game::queen::CLOSING_SCENE_PHASE,
-                        );
+                        // 453C20 will stand the class-1 camera proxy on the
+                        // player; without one it keeps a pose the port does
+                        // not hold, and this world runs on.
+                        match em.player().map(|player| player.position_raw()) {
+                            Some(carried_camera_raw) => {
+                                closing_scene_exit =
+                                    Some(ClosingSceneDestination::ClosingScene { carried_camera_raw });
+                            }
+                            None => eprintln!(
+                                "Closing scene held: FUN_00456F20 left world {:?} with no player for 453C20's camera proxy",
+                                current_level_id,
+                            ),
+                        }
                     }
                 }
 
@@ -9088,9 +9434,10 @@ fn run_game(
                 // resolves. Stateful or remote paths remain a fail-closed
                 // boundary for that solid subsystem.
                 let active_pair_pass_succeeded =
-                    if !player_active_solid_pass_required(current_level_id) {
+                    if !player_active_solid_pass_required(current_level_id) || !has_player {
                         // Intro2 / no-world: keep the Power-Up path available
-                        // without a recovered solid census.
+                        // without a recovered solid census. Without a player
+                        // (phase 3) this subset has no subject.
                         true
                     } else if !player_hull.dying {
                         match em.resolve_player_active_contacts(
@@ -9180,7 +9527,7 @@ fn run_game(
                 // This suffix is atomic within its own subsystem; a malformed
                 // pickup cannot roll back a solid pass already committed, so
                 // it is attempted only after that earlier pass succeeds.
-                if active_pair_pass_succeeded {
+                if active_pair_pass_succeeded && has_player {
                     match em.resolve_player_power_up_contacts(
                         &session.cache,
                         retail_tick,
@@ -9602,6 +9949,14 @@ fn run_game(
                 // traversal. Materialize their deferred records now so they
                 // present at age zero this frame without entering that pass.
                 world_fx.process_pending();
+                // Phase 3's 503C0, after the contacts: the class-1 proxy
+                // follows the body the Section-2 commands selected.
+                if let Some(scene) = closing_scene.as_mut() {
+                    let subject = scene.camera_subject(em);
+                    scene
+                        .camera
+                        .follow_subject(subject, gameplay_chase_terrain(&session.cache));
+                }
                 // FUN_00450CC0, after the gameplay frame.
                 if let Some(net) = network_game.as_mut() {
                     let outcome = advance_network_world(
@@ -9652,15 +10007,15 @@ fn run_game(
                         face_colors: &face_colors,
                         em,
                         camera: &camera,
-                        camera_mode: if chase_mode {
+                        camera_mode: if chase_mode || closing_scene.is_some() {
                             GameplayWorldCameraMode::RetailChase
                         } else {
                             GameplayWorldCameraMode::Free
                         },
-                        native_viewport: if chase_mode {
-                            chase_camera.native_viewport()
-                        } else {
-                            None
+                        native_viewport: match closing_scene.as_ref() {
+                            Some(scene) => scene.camera.native_viewport(),
+                            None if chase_mode => chase_camera.native_viewport(),
+                            None => None,
                         },
                         world_projection: Some(world_projection),
                         sky: sky_background.as_ref(),
@@ -9721,7 +10076,8 @@ fn run_game(
 
                 let overlay_51_results = world_complete_results.replaces_ingame_hud();
 
-                if config.hud && player_hull.health_raw > 0 && !overlay_51_results {
+                // 4292B0 returns at 443260 when there is no player (phase 3).
+                if config.hud && has_player && player_hull.health_raw > 0 && !overlay_51_results {
                     if let (Some(radar), Some(terrain)) =
                         (gameplay_radar.as_ref(), session.cache.level_terrain_radar())
                     {
@@ -9744,15 +10100,12 @@ fn run_game(
                     census.cap_0x800,
                 ));
 
-                if config.hud {
-                    if player_hull.health_raw > 0 && !overlay_51_results {
+                if config.hud || closing_scene.is_some() {
+                    if has_player && player_hull.health_raw > 0 && !overlay_51_results {
                         if let (Some(resources), Some(layout)) =
                             (gameplay_hud_resources.as_ref(), gameplay_hud_layout)
                         {
-                            let cargo_models = entity_manager
-                                .as_ref()
-                                .map(|manager| manager.player_cargo_hud_models())
-                                .unwrap_or_default();
+                            let cargo_models = em.player_cargo_hud_models();
                             let weapon_roster =
                                 GameplayHudWeaponRoster::from_inventory(&weapon_inventory);
                             // FUN_004539D0 gathers the HUD's inputs (FUN_004538B0's
@@ -9782,28 +10135,54 @@ fn run_game(
                             gameplay_overlay_frame.hud = Some(frame);
                         }
                     }
+                    // Below phase 5, 537F0 draws the emblem (FUN_0042D030).
+                    if closing_scene.is_some() {
+                        let (billboard_sprite_id, wrapped) =
+                            billboard.prepare_cinematic_frame(elapsed_micros);
+                        draw_intro_billboard(&mut *renderer, &session.cache, billboard_sprite_id);
+                        if wrapped {
+                            GlobalSoundRuntime::new(
+                                &session.cache,
+                                &mut world_fx,
+                                sound_manager.as_mut(),
+                            )
+                            .play_global_sound(v2k_game::menu_engine::SOUND_BG_RUMBLE as usize);
+                        }
+                    }
                     // The network pause's draw list has no FUN_00452CB0.
                     if network_pause.is_none() {
                         // FUN_00452CB0 first draws the world's arrival records
                         // (its strings up to `#`) unless its control slot is
-                        // already completed.
-                        let world_records: Vec<&str> = current_level_id
-                            .and_then(world_control_slot)
-                            .filter(|&slot| {
-                                player_campaign_progress
-                                    .control_slot_bits(slot)
-                                    .is_none_or(|bits| bits & 1 == 0)
-                            })
-                            .and_then(|_| session.cache.level())
-                            .map(|level| {
-                                level
-                                    .strings
-                                    .iter()
-                                    .map(String::as_str)
-                                    .take_while(|record| !record.starts_with('#'))
-                                    .collect()
-                            })
-                            .unwrap_or_default();
+                        // already completed. Logical 0x25 skips that test and
+                        // starts one record in.
+                        let world_records: Vec<&str> = if closing_scene.is_some() {
+                            session
+                                .cache
+                                .level()
+                                .map(|level| {
+                                    v2k_game::closing_scene::visited_records(&level.strings)
+                                        .collect()
+                                })
+                                .unwrap_or_default()
+                        } else {
+                            current_level_id
+                                .and_then(world_control_slot)
+                                .filter(|&slot| {
+                                    player_campaign_progress
+                                        .control_slot_bits(slot)
+                                        .is_none_or(|bits| bits & 1 == 0)
+                                })
+                                .and_then(|_| session.cache.level())
+                                .map(|level| {
+                                    level
+                                        .strings
+                                        .iter()
+                                        .map(String::as_str)
+                                        .take_while(|record| !record.starts_with('#'))
+                                        .collect()
+                                })
+                                .unwrap_or_default()
+                        };
                         let notification_presentation = gameplay_notifications
                             .presentation_with_world_text(
                                 retail_tick as i32,
@@ -9867,6 +10246,16 @@ fn run_game(
                                 .notifications
                                 .extend(results_presentation.lines);
                         }
+                    }
+                }
+
+                // 52CB0's command records, after the captions: 52270 selects
+                // the camera's body or switches behavior bits, and 0x40 runs
+                // FUN_00452770, which leaves for world 1 with the flash.
+                if let Some(scene) = closing_scene.as_mut() {
+                    if scene.present(em, retail_tick).leave && closing_scene_exit.is_none() {
+                        closing_scene_exit = Some(ClosingSceneDestination::FirstWorld);
+                        main_base_level_abort.outer_frame_sequence.request();
                     }
                 }
 
@@ -9975,6 +10364,7 @@ fn write_probe_events(
         GameState::Loading { .. } => "loading",
         GameState::OpeningCinematic { .. } => "opening_cinematic",
         GameState::PostIntro { .. } => "post_intro",
+        GameState::ClosingSceneLeg { .. } => "closing_scene_leg",
         GameState::Paused { .. } => "paused",
         GameState::ReturningToFrontend => "returning_to_frontend",
         GameState::Playing => "playing",
@@ -10072,6 +10462,7 @@ fn build_debug_panel_lines(
         GameState::Loading { .. } => "LOADING",
         GameState::OpeningCinematic { .. } => "OPENING CINEMATIC",
         GameState::PostIntro { .. } => "POST INTRO / BEFORE LOAD",
+        GameState::ClosingSceneLeg { .. } => "CLOSING SCENE / BEFORE LOAD",
         GameState::Paused { .. } => "PAUSED",
         GameState::ReturningToFrontend => "RETURNING TO FRONTEND",
         GameState::Playing => "PLAYING",

@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,400 | |
 | Marked not needed (excluded below) | 607 | |
-| **Referenced by port code** | **1,592** | **88.8%** |
+| **Referenced by port code** | **1,595** | **89.0%** |
 | Referenced by code or RE notes | 1,793 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -19,9 +19,9 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 307 |
+| implemented | 310 |
 | approximated | 6 |
-| documented | 17 |
+| documented | 19 |
 | not-needed | 607 |
 
 10 `FUN_` citations don't match a retail function
@@ -43,14 +43,14 @@ Where the code's references are thinnest:
 |---|---:|---:|---:|
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 46 | 1 | 115 |
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 28 | 3 | 97 |
-| [Menu system](../re/MENU_SYSTEM.md) | 21 | 6 | 148 |
+| [Menu system](../re/MENU_SYSTEM.md) | 21 | 6 | 144 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 20 | 1 | 85 |
 | [Controls](../re/CONTROLS.md) | 17 | 3 | 48 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 15 | 4 | 29 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 11 | 2 | 119 |
 | [Render pipeline](../re/RENDER_PIPELINE.md) | 7 | 0 | 129 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 5 | 1 | 50 |
-| [Hud rendering](../re/HUD_RENDERING.md) | 5 | 2 | 46 |
+| [Hud rendering](../re/HUD_RENDERING.md) | 4 | 1 | 45 |
 
 ## Omitted
 

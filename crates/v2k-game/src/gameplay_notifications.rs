@@ -721,6 +721,11 @@ impl GameplayNotifications {
         let world_ms = retail_tick.wrapping_mul(1000) / 50;
         let cursor_visible = ((retail_tick / 10) & 1) != 0;
         for raw in world_records {
+            // FUN_00452790 returns after FUN_00452270 for a body command,
+            // before it draws or touches the type-on cadence.
+            if section2_record_fields(raw).command > 0x40 {
+                continue;
+            }
             let Some(parsed) = parse_authored_notification(
                 raw,
                 None,
@@ -927,6 +932,74 @@ fn parse_authored_notification(
         center_x: layout > 9,
         reveal_incomplete,
     })
+}
+
+/// The fields `FUN_00452790` reads from a record's `<...>` prefix that decide
+/// what the record does: its inclusive window, its field 6 (a command's
+/// operation) and field 7 (`local_f8`: 0 plain text, 1..=0x3F a formatter,
+/// 0x40 the leave command, above 0x40 a body stamp for `FUN_00452270`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Section2RecordFields {
+    pub start_millis: i32,
+    /// A zero end has no upper bound.
+    pub end_millis: Option<i32>,
+    pub operation: i32,
+    pub command: u32,
+}
+
+impl Section2RecordFields {
+    pub fn active_at(self, millis: i32) -> bool {
+        millis >= self.start_millis && self.end_millis.is_none_or(|end| millis <= end)
+    }
+}
+
+/// `FUN_00452790`'s field walk with `FUN_004521F0`'s numbers: tabs and spaces
+/// are skipped, `*` reads as the digits so far, and a nonzero layout preset
+/// (field 2) moves the next token to field 6. A record without `<` has no
+/// fields.
+pub fn section2_record_fields(raw: &str) -> Section2RecordFields {
+    let mut fields = Section2RecordFields {
+        start_millis: 0,
+        end_millis: None,
+        operation: 0,
+        command: 0,
+    };
+    let Some(prefix) = raw.trim_start_matches([' ', '\t']).strip_prefix('<') else {
+        return fields;
+    };
+    let prefix = prefix.split('>').next().unwrap_or_default();
+    let mut field = 0;
+    for token in prefix.split(',') {
+        let value = fun_004521f0_number(token);
+        match field {
+            0 => fields.start_millis = value,
+            1 => fields.end_millis = (value != 0).then_some(value),
+            2 if value != 0 => field = 5,
+            6 => fields.operation = value,
+            7 => fields.command = value as u32,
+            _ => {}
+        }
+        field += 1;
+    }
+    fields
+}
+
+fn fun_004521f0_number(token: &str) -> i32 {
+    let mut value = 0i32;
+    let mut sign = 1;
+    for byte in token.bytes() {
+        match byte {
+            b'*' => return value,
+            b'\t' | b' ' => {}
+            b'-' => sign = -1,
+            digit => {
+                value = i32::from(digit)
+                    .wrapping_sub(0x30)
+                    .wrapping_add(value.wrapping_mul(10))
+            }
+        }
+    }
+    sign * value
 }
 
 /// One field of the `<...>` prefix, as `FUN_004521F0` reads it: `*` or empty is 0.

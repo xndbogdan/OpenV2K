@@ -15,8 +15,9 @@ must not be globally relabelled as a cinematic state.
 
 `FUN_00456F10` returns the byte, `FUN_00456F20` performs the phase-3 setup
 transition (the dead Queen's move to the closing scene, overlay 49; see
-[TYPE110_QUEEN.md](TYPE110_QUEEN.md)), and `FUN_0044F8B0` supplies the
-load-time value.
+[CLOSING_SCENE.md](CLOSING_SCENE.md)), and `FUN_0044F8B0` supplies the
+load-time value. After a world exit `FUN_00453E00` sets phase 5 below phase 4
+unless the next world is `0x25`, so only the closing scene keeps phase 3.
 
 Ordinary `451710` loading (`+0x28E == 0`) clears both visible notification
 slots after cargo restoration while preserving the session's resource-event

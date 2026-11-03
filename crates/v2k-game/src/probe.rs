@@ -117,6 +117,10 @@ pub struct StartState {
     pub attitude: Option<[i16; 2]>,
     /// A network game instead of a save or level.
     pub network: Option<NetworkStart>,
+    /// The closing scene (overlay 49 in phase 3) instead of a save or level,
+    /// with the raw position `[x, y, z]` its camera proxy carries in: the
+    /// player's where the Queen died.
+    pub closing_scene: Option<[i16; 3]>,
 }
 
 /// `{"network": {"host": true, "arena": 1}}` hosts a session on this machine
@@ -155,6 +159,16 @@ impl StartState {
     }
 
     fn validate(&self) -> Result<(), String> {
+        if self.closing_scene.is_some() {
+            if self.network.is_some()
+                || self.save.is_some()
+                || self.level.is_some()
+                || self.position.is_some()
+            {
+                return Err("start state: the closing scene takes no save, level or pose".into());
+            }
+            return Ok(());
+        }
         if let Some(network) = &self.network {
             if self.save.is_some() || self.level.is_some() || self.position.is_some() {
                 return Err("start state: a network game takes no save, level or pose".into());
