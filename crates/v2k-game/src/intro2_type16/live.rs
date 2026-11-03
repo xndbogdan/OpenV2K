@@ -29,7 +29,10 @@ pub enum Intro2Type16Block {
     Metadata,
     Runtime(&'static str),
     Behavior(&'static str),
-    SubDFirstQuery { spawn_index: usize, seed: u8 },
+    SubDFirstQuery {
+        spawn_index: usize,
+        seed: u8,
+    },
     SubD(Type9SubDStep),
     SubH(crate::sub_h_external_frame::SubHUpdateError),
     Mover(CommonMoverFrameBlock),
@@ -37,10 +40,15 @@ pub enum Intro2Type16Block {
     MoverAdvance(CommonMoverFrameAdvanceError),
     Acquisition(crate::search_attack_live::SearchAttackLiveAcquisitionBlock),
     Aim(super::aim::Intro2Type16AimError),
-    BehaviorTransition { class: u8, variant: u32 },
+    BehaviorTransition {
+        class: u8,
+        variant: u32,
+    },
     Surface(crate::intro2_common_dying::Intro2CommonDyingBlock),
     Capture(crate::native_actor_capture::CaptureBlock),
     CaptureTask(Box<crate::native_actor_capture::carry_tasks::CaptureTaskBlock>),
+    /// A Type128's class63 drowning terminal.
+    Class63(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -169,8 +177,29 @@ pub struct Intro2Type16Frame<'a> {
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
-    pub capture_tasks: &'a mut dyn crate::native_actor_capture::CaptureTaskCustody,
+    pub capture_tasks: Type16Tasks<'a>,
     pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+}
+
+/// The task storage a visit reaches. The scheduler visits a Type128 with
+/// every owner back in place, the static queue and the scene's player, as
+/// the weapon pass does: its class63 drowning runs BAF0 from the surface step.
+pub enum Type16Tasks<'a> {
+    Capture(&'a mut dyn crate::native_actor_capture::CaptureTaskCustody),
+    Lent {
+        scheduler: &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+        static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+        world: crate::specialized_actor_task_production::SpecializedActorTaskWorld<'a>,
+    },
+}
+
+impl Type16Tasks<'_> {
+    pub(crate) fn capture(&mut self) -> &mut dyn crate::native_actor_capture::CaptureTaskCustody {
+        match self {
+            Self::Capture(tasks) => &mut **tasks,
+            Self::Lent { scheduler, .. } => &mut **scheduler,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -402,7 +431,7 @@ fn run_frame(
                 crate::native_actor_capture::CaptureRootCallback::ReleaseOrKill,
                 &mut crate::native_actor_capture::CaptureContext {
                     resources: None,
-                    tasks: &mut *frame.capture_tasks,
+                    tasks: frame.capture_tasks.capture(),
                     world_fx: frame.world_fx,
                     notifications: frame.notifications,
                     retail_tick: frame.retail_tick,

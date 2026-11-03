@@ -23,7 +23,7 @@ mod ordinary_tests;
 
 pub use live::{
     tick_intro2_type16, Intro2Type16Block, Intro2Type16Frame, Intro2Type16Outcome,
-    Intro2Type16Owner, Intro2Type16Tick,
+    Intro2Type16Owner, Intro2Type16Tick, Type16Tasks,
 };
 pub(crate) use native::authenticate_metadata;
 pub(crate) use native::publish_intro2_type16;

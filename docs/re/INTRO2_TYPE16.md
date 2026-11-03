@@ -139,7 +139,8 @@ profile on the shared BAF0/BC90 terminal
 - **radial deaths**;
 - **static-contact deaths**, through the walk's lent player;
 - **player pairs**, through a new class63 pair branch;
-- **the Main Base abort.**
+- **the Main Base abort;**
+- **drowning**, below.
 
 The class12 publisher already rejects their alternate. The shared hit frame
 holds a lethal Type128 hit.
@@ -173,8 +174,18 @@ An empty row (the child already compacted by `18640`) makes `18500` return
 `BE5B0`; `D040` skips `C690` and only the reread runs `BC90`, once. The child
 is released alive at the carrier, so the first radial meets it. A primary hit
 differs: DAC0 runs `D040` while the carrier is alive (living C690), and a
-lethal packet then installs class63 once from the released style. A Type128
-drowning stays held: its surface step needs `BAF0`'s lent world.
+lethal packet then installs class63 once from the released style.
+
+A Type128 drowns as Type16 does: once its deep-water timer passes the 20000-ms
+lifetime, `162B0` runs `16750` and then `10C10`, so DB80 installs class63 from
+inside the surface step (twice when carrying, as above). `BC90`'s burst and
+radials need the static queue and the player, which an actor visit does not
+otherwise hold. The scheduler therefore visits a Type128 the way it visits a
+native weapon: every owner of the pass goes back into the scheduler, which
+lends itself, the static queue and the scene's player to the visit, and the
+owners are repartitioned by live order afterwards. `E370`'s bubble and sound
+then read the terrain afresh, since the radial may have cratered it. Worlds
+25 and 28 can't be reached by Skip to World, so no retail run compares this.
 
 [Carrier tests](../../crates/v2k-game/src/intro2_type16/carrier_tests.rs)
 cover:
@@ -198,8 +209,8 @@ run on Type16's mover (variant3's `021B0` beacon search in Secondary,
 variant4's Following), D0B0 delivers, and `18640` follows the surface step,
 before the master motion. Every death path runs DB80's carrying `D040` first:
 a lethal or primary hit, a radial, static contact, the pair terminal, the
-Main Base abort and a Type16 drowning. Type16 then takes class12 as before;
-Type128 takes class63 twice (above), except a Type128 drowning, still held.
+Main Base abort and a drowning. Type16 then takes class12 as before;
+Type128 takes class63 twice (above).
 
 Before this, the port visited no Type16/128 pair at all, so their bodies
 passed through others. In the production Intro2 (New Game, 20-ms steps), the
@@ -217,7 +228,9 @@ The port's minute in each world carries people in worlds 24 and 37.
 cover a minute of every Type16/128 world with pair walks, a forced capture and
 ten seconds of carrying, a Type16 killed while carrying (its person released
 alive, class12 installed), a Type128 killed while carrying (two Type61 drops,
-one staged removal) and one with an empty row (one drop).
+one staged removal), one with an empty row (one drop), and a Type128 drowned
+under a raised sea, alone (one drop) and carrying (two drops, its person
+released).
 
 ## Validation and remaining acceptance
 

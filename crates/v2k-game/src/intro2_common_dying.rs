@@ -16,8 +16,9 @@ mod type26_tests;
 mod type58_tests;
 mod world;
 pub(crate) use surface::{
+    release_surface_relation, run_actor_surface_head, run_actor_surface_tail,
     run_actor_surface_with_death, run_actor_surface_with_lifecycle, run_living_actor_surface,
-    Intro2ActorSurfaceFrame,
+    ActorSurfaceHead, Intro2ActorSurfaceFrame,
 };
 pub(crate) use world::run_surface as run_dying_actor_surface;
 pub use world::{
