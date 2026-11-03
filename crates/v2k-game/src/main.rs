@@ -164,6 +164,7 @@ use v2k_game::primary_weapon::UPGRADED_PRIMARY_PROFILE;
 use v2k_game::primary_weapon::{
     fire_profile_from_descriptor, PrimaryAuthoredGunMounts, PrimaryFireGeometry, PrimaryGunChannel,
     PrimaryGunMounts, PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
+    POSSESSION_RAY_HELD, POSSESSION_RAY_SELECTOR,
 };
 use v2k_game::projectile_emitter::projectile_class_row;
 use v2k_game::radial_damage::radial_distance_raw;
@@ -2324,6 +2325,7 @@ fn run_game(
     let mut primary_weapon = PrimaryWeapon::new();
     let mut pending_entity_weapon_fire = Vec::new();
     let mut native_entity_weapon_error_reported = false;
+    let mut possession_ray_held_reported = false;
     let mut targetter = TargetterRuntime::new(0);
     let mut weapon_inventory = WeaponInventory::new();
     let mut player_capabilities = PlayerCapabilities::default();
@@ -7290,6 +7292,13 @@ fn run_game(
                         }
                         world_fx.queue_primary_fire_batch(&fire_events, sea_level);
                     } else {
+                        if descriptor.selector() == POSSESSION_RAY_SELECTOR
+                            && primary_trigger.held()
+                            && !possession_ray_held_reported
+                        {
+                            possession_ray_held_reported = true;
+                            eprintln!("{POSSESSION_RAY_HELD}");
+                        }
                         // Unrecovered selectors still visit FUN_00444FA0.
                         // Keep A/B phase instead of resetting the scheduler.
                         primary_weapon.idle(

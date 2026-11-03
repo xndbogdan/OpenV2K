@@ -1572,6 +1572,25 @@ The controller is the player's `0x5AC`-byte record (`+68` its body, `+74` the
 | `FUN_00421230` | draws the lock reticle (draw callback `FUN_00421570`) along the line from the craft to a locked target (mode 2), storing that distance in `+44` |
 | `FUN_004480E0` | the mind-control takeover (from `FUN_00420C60`): gives the target Type46's behavior source (`+D0`) and the controller (`+88`), gives the old body Type88's, points the controller at the target (`+68`, the old body at `+6C`), reinstalls both behaviors (`FUN_0040AC60`), clears the target's fan and record flags (`FUN_0041B9B0`, `FUN_00424F10`), records the body in the session (`FUN_00456770`), and holds controller `+70` at 60000 (500 when the install failed) |
 
+| `FUN_00446D70` | ends a takeover (controller `+70` reaching zero in `FUN_00446640`, or its old body dying): the old body (`+6C`) gets Type46's behavior source and the controller back, the target loses both, and the two handles swap back; when both behaviors reinstall, a released Type98 only moves the session's view to the craft, any other target leaves a Type98 MindBall at it (`FUN_00409950`) that flies to the craft and hands the view back when it ends (`FUN_00409420`); a failed reinstall swaps the handles back and retries in 500 ms |
+| `FUN_00448760` | a Hive swallowing the possessed body sets controller `+70` to 1, so control returns on the next Player Control frame |
+
+The Possession Ray is weapon selector `0x1B` (Cheats -> Weapons code
+`0x3E71B`): infinite, 400 ms cadence, no sound, no auxiliary command. Its
+`DAT_004D02C0` row `{0, 1000, 0, 0}` names neither a particle nor a body, so
+`FUN_0044E770` only starts the lock (`FUN_00421800`) on the shooter. The lock
+record is the shooter body's component `+0x38`: mode `+34`, mode time `+38`,
+target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
+
+**Port status: held.** The takeover makes the target's own body run Player
+Control (`FUN_00446640`, with the integrator its movement style selects from
+`0x4CD8D0`) over that body's type components, and the craft run Passive
+Player. The port's Player Control drives only the player craft, so the lock,
+the takeover, the release and the MindBall stay unported together: a lock
+without its takeover would show a reticle that never ends in one. Holding the trigger with selector `0x1B` selected logs one
+"Possession Ray held" stop per run and fires nothing; the A/B gun phase is
+kept as for any unresolved selector.
+
 ### Wind on trail particles
 
 | Routine | Does |
