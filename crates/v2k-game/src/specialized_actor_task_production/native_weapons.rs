@@ -24,6 +24,43 @@ pub enum SpecializedActorTaskWorld<'a> {
     },
 }
 
+impl SpecializedActorTaskWorld<'_> {
+    pub(crate) fn reborrow(&mut self) -> SpecializedActorTaskWorld<'_> {
+        match self {
+            Self::Cinematic => SpecializedActorTaskWorld::Cinematic,
+            Self::Playing {
+                player_hull,
+                extra_lives,
+            } => SpecializedActorTaskWorld::Playing {
+                player_hull,
+                extra_lives: *extra_lives,
+            },
+        }
+    }
+
+    /// BAF0's world from a scheduler holding every owner of the pass.
+    pub(crate) fn class49_world<'s>(
+        &'s mut self,
+        scheduler: &'s mut SpecializedActorTaskScheduler,
+    ) -> Class49WorldContext<'s> {
+        match self {
+            Self::Cinematic => Class49WorldContext::Cinematic {
+                actor_tasks: scheduler,
+                active_terminal_calls: Vec::new(),
+            },
+            Self::Playing {
+                player_hull,
+                extra_lives,
+            } => Class49WorldContext::Playing {
+                scheduler,
+                player_hull,
+                extra_lives: *extra_lives,
+                active_terminal_calls: Vec::new(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeWeaponRegistrationBlock {
     OwnerUnavailable,
@@ -140,6 +177,43 @@ impl SpecializedActorTaskScheduler {
             .map_err(|(conflict, _)| NativeWeaponRegistrationBlock::Conflict(conflict))
     }
 
+    /// Reunite the pass cursor in the scheduler, with the visited owner, so a
+    /// synchronous BAF0 reaches every target's owner.
+    pub(super) fn lend_owners(
+        &mut self,
+        pending: &mut Vec<SpecializedActorTaskOwner>,
+        retained: &mut Vec<SpecializedActorTaskOwner>,
+        visited: SpecializedActorTaskOwner,
+    ) {
+        debug_assert!(self.owners.is_empty());
+        self.owners.append(pending);
+        self.owners.append(retained);
+        self.owners.push(visited);
+    }
+
+    /// Repartition against the current intrusive list, newly born tails
+    /// included: owners at or before the visited allocation were visited.
+    pub(super) fn return_lent_owners(
+        &mut self,
+        manager: &EntityManager,
+        entity_id: u32,
+        pending: &mut Vec<SpecializedActorTaskOwner>,
+        retained: &mut Vec<SpecializedActorTaskOwner>,
+    ) {
+        let live_order: Vec<_> = manager.retail_live_order_ids().collect();
+        let current_index = live_order.iter().position(|&id| id == entity_id);
+        for retained_owner in std::mem::take(&mut self.owners) {
+            let index = live_order
+                .iter()
+                .position(|&id| id == retained_owner.entity_id());
+            if matches!((current_index, index), (Some(current), Some(index)) if index <= current) {
+                retained.push(retained_owner);
+            } else {
+                pending.push(retained_owner);
+            }
+        }
+    }
+
     pub(super) fn tick_native_weapon_in_pass(
         &mut self,
         owner: NativeEntityWeaponOwner,
@@ -166,11 +240,11 @@ impl SpecializedActorTaskScheduler {
             return NativeWeaponProductionOutcome::Dropped { entity_id, kind };
         }
 
-        debug_assert!(self.owners.is_empty());
-        self.owners.append(pending);
-        self.owners.append(retained);
-        self.owners
-            .push(SpecializedActorTaskOwner::NativeWeapon(owner));
+        self.lend_owners(
+            pending,
+            retained,
+            SpecializedActorTaskOwner::NativeWeapon(owner),
+        );
         let result = tick_entity_weapon(
             manager,
             owner,
@@ -181,21 +255,6 @@ impl SpecializedActorTaskScheduler {
                 retail_tick,
             },
             |manager, resources, world_fx, id| {
-                let world = match world {
-                    SpecializedActorTaskWorld::Cinematic => Class49WorldContext::Cinematic {
-                        actor_tasks: self,
-                        active_terminal_calls: Vec::new(),
-                    },
-                    SpecializedActorTaskWorld::Playing {
-                        player_hull,
-                        extra_lives,
-                    } => Class49WorldContext::Playing {
-                        scheduler: self,
-                        player_hull,
-                        extra_lives: *extra_lives,
-                        active_terminal_calls: Vec::new(),
-                    },
-                };
                 run_class49_standard_death(
                     Class49TerminalFrame {
                         entities: manager,
@@ -204,7 +263,7 @@ impl SpecializedActorTaskScheduler {
                         static_damage,
                         notifications,
                         retail_tick,
-                        world,
+                        world: world.class49_world(self),
                     },
                     id,
                 )
@@ -218,18 +277,7 @@ impl SpecializedActorTaskScheduler {
             // never reruns trail RNG or terminal dispatch on the next pass.
             self.park_native_contact_prefix(manager, entity_id);
         }
-        let live_order: Vec<_> = manager.retail_live_order_ids().collect();
-        let current_index = live_order.iter().position(|&id| id == entity_id);
-        for retained_owner in std::mem::take(&mut self.owners) {
-            let index = live_order
-                .iter()
-                .position(|&id| id == retained_owner.entity_id());
-            if matches!((current_index, index), (Some(current), Some(index)) if index <= current) {
-                retained.push(retained_owner);
-            } else {
-                pending.push(retained_owner);
-            }
-        }
+        self.return_lent_owners(manager, entity_id, pending, retained);
         match result {
             Ok(EntityWeaponTickOutcome::Waiting) => {
                 NativeWeaponProductionOutcome::Waiting { entity_id, kind }

@@ -106,7 +106,7 @@ fn both_native_type16_births_run_five_seconds_with_varied_frames_and_both_initia
                             world_fx: &mut fx,
                             elapsed_micros: elapsed,
                             retail_tick: 286 + total_us / 20_000,
-                            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+                            capture_tasks: crate::intro2_type16::Type16Tasks::Capture(&mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new()),
                             notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                         },
                     );
@@ -192,8 +192,9 @@ fn native_type16_class4_strict_expiry_retires_old_graph_after_mover_and_runs_new
             world_fx: &mut fx,
             elapsed_micros: 20_000,
             retail_tick: 286,
-            capture_tasks:
+            capture_tasks: crate::intro2_type16::Type16Tasks::Capture(
                 &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+            ),
             notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     ));
@@ -216,8 +217,9 @@ fn native_type16_class4_strict_expiry_retires_old_graph_after_mover_and_runs_new
             world_fx: &mut fx,
             elapsed_micros: 1_000,
             retail_tick: 287,
-            capture_tasks:
+            capture_tasks: crate::intro2_type16::Type16Tasks::Capture(
                 &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+            ),
             notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     ));
@@ -289,8 +291,9 @@ fn native_type16_coarse_class4_writes_real_terrain_before_outer_motion() {
             world_fx: &mut fx,
             elapsed_micros: 20_000,
             retail_tick: 767,
-            capture_tasks:
+            capture_tasks: crate::intro2_type16::Type16Tasks::Capture(
                 &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+            ),
             notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     ));
@@ -404,7 +407,7 @@ fn native_type16_search_and_capture_handoffs_keep_primary_next_pass_and_aim_same
                     world_fx: &mut fx,
                     elapsed_micros: 20_000,
                     retail_tick: 321 + frame_index,
-                    capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+                    capture_tasks: crate::intro2_type16::Type16Tasks::Capture(&mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new()),
                     notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                 },
             ));
@@ -479,8 +482,9 @@ fn native_type16_missing_own_first_query_receipt_retains_prefix_without_replayin
             world_fx: &mut fx,
             elapsed_micros: 20_000,
             retail_tick: 286,
-            capture_tasks:
+            capture_tasks: crate::intro2_type16::Type16Tasks::Capture(
                 &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+            ),
             notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
@@ -516,8 +520,9 @@ fn native_type16_missing_own_first_query_receipt_retains_prefix_without_replayin
             world_fx: &mut fx,
             elapsed_micros: 999_000,
             retail_tick: 900,
-            capture_tasks:
+            capture_tasks: crate::intro2_type16::Type16Tasks::Capture(
                 &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+            ),
             notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );

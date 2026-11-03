@@ -68,31 +68,41 @@ pub(crate) fn run_actor_surface_with_death<D>(
         death,
         authenticates,
         |manager, entity_id, world_fx| {
-            use Intro2CommonDyingBlock as Block;
-            let entity = manager
-                .entity_mut(entity_id)
-                .ok_or(Block::AllocationUnavailable)?;
-            let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
-                return Err(Block::Runtime("surface release context"));
-            };
-            let release = context.active_style().release_callback_policy();
-            if release != ReleaseCallbackPolicy::None {
-                return Err(Block::UnsupportedReleaseHook(release));
-            }
-            let default = metadata
-                .initializer
-                .as_ref()
-                .ok_or(Block::Metadata("surface release initializer"))?
-                .initializer_state_flags_raw;
-            // Existing callers own a null style release. Keep their exact
-            // timer -> 16750/D3C0 -> 10C10 decision matrix in this adapter.
-            entity.collision.state_flags_at_0x08 =
-                relation_release_state_word_after(entity.collision.state_flags_at_0x08, default);
-            entity.collision.default_state_flags_at_0xc8 = RetailRuntimeValue::Known(default);
-            entity.attached_to = None;
+            release_surface_relation(manager, entity_id, metadata)?;
             publish_death(manager, entity_id, world_fx)
         },
     )
+}
+
+/// 162B0's 16750 for a null style release, before its 10C10.
+pub(crate) fn release_surface_relation(
+    manager: &mut EntityManager,
+    entity_id: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), Intro2CommonDyingBlock> {
+    use Intro2CommonDyingBlock as Block;
+    let entity = manager
+        .entity_mut(entity_id)
+        .ok_or(Block::AllocationUnavailable)?;
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return Err(Block::Runtime("surface release context"));
+    };
+    let release = context.active_style().release_callback_policy();
+    if release != ReleaseCallbackPolicy::None {
+        return Err(Block::UnsupportedReleaseHook(release));
+    }
+    let default = metadata
+        .initializer
+        .as_ref()
+        .ok_or(Block::Metadata("surface release initializer"))?
+        .initializer_state_flags_raw;
+    // Existing callers own a null style release. Keep their exact
+    // timer -> 16750/D3C0 -> 10C10 decision matrix in this adapter.
+    entity.collision.state_flags_at_0x08 =
+        relation_release_state_word_after(entity.collision.state_flags_at_0x08, default);
+    entity.collision.default_state_flags_at_0xc8 = RetailRuntimeValue::Known(default);
+    entity.attached_to = None;
+    Ok(())
 }
 
 /// E370 with a caller-owned complete 162B0 lifecycle pair. The timer write
@@ -112,6 +122,40 @@ pub(crate) fn run_actor_surface_with_lifecycle<D>(
         &mut WorldFx,
     ) -> Result<Option<D>, Intro2CommonDyingBlock>,
 ) -> Result<(), Intro2CommonDyingBlock> {
+    let remaining = match run_actor_surface_head(manager, entity_id, &frame, authenticates)? {
+        ActorSurfaceHead::Tail(remaining) => remaining,
+        ActorSurfaceHead::Lifecycle(after) => {
+            *death = run_lifecycle(manager, entity_id, world_fx)?;
+            (after < 75).then_some(after)
+        }
+    };
+    run_actor_surface_tail(
+        manager,
+        entity_id,
+        remaining,
+        frame.active_model_extent_raw,
+        frame.particle_environment,
+        frame.retail_tick,
+        world_fx,
+    )
+}
+
+/// What E370 does after its timer write.
+pub(crate) enum ActorSurfaceHead {
+    /// The bubble and sound tail at this remaining percent; `None` skips both.
+    Tail(Option<u32>),
+    /// 162B0 calls 16750 and 10C10; the tail follows below 75 percent.
+    Lifecycle(u32),
+}
+
+/// E370 up to 162B0's lifecycle: authentication, the disabled bit and the
+/// +48 timer write. The caller runs the lifecycle, then the tail.
+pub(crate) fn run_actor_surface_head(
+    manager: &mut EntityManager,
+    entity_id: u32,
+    frame: &Intro2ActorSurfaceFrame<'_>,
+    authenticates: impl FnOnce(&Entity) -> bool,
+) -> Result<ActorSurfaceHead, Intro2CommonDyingBlock> {
     use Intro2CommonDyingBlock as Block;
     let entity = manager
         .entity_mut(entity_id)
@@ -128,7 +172,7 @@ pub(crate) fn run_actor_surface_with_lifecycle<D>(
         _ => return Err(Block::Runtime("surface disabled bit")),
     };
     if state != 0 {
-        return Ok(());
+        return Ok(ActorSurfaceHead::Tail(None));
     }
     let RetailRuntimeValue::Known(timer) = entity.surface_lifetime_timer_ms_at_0x48 else {
         return Err(Block::Runtime("surface timer"));
@@ -140,7 +184,7 @@ pub(crate) fn run_actor_surface_with_lifecycle<D>(
         // 1E370 does not call 162B0 when both +72/+73 selectors are absent.
         entity.surface_lifetime_timer_ms_at_0x48 =
             RetailRuntimeValue::Known(timer.saturating_sub(frame.elapsed_micros / 1000));
-        return Ok(());
+        return Ok(ActorSurfaceHead::Tail(None));
     }
     if effects.surface_selectors != [1, 0] {
         return Err(Block::Metadata("surface selectors"));
@@ -157,19 +201,19 @@ pub(crate) fn run_actor_surface_with_lifecycle<D>(
         },
     )
     .map_err(|_| Block::Metadata("surface lifetime"))?;
-    let remaining = match phase {
-        ActorSurfaceTimerPhase::OwnerDisabled => return Ok(()),
+    match phase {
+        ActorSurfaceTimerPhase::OwnerDisabled => Ok(ActorSurfaceHead::Tail(None)),
         ActorSurfaceTimerPhase::NonDeep { timer_after_ms }
         | ActorSurfaceTimerPhase::DeepBeforeRandomEffects { timer_after_ms, .. } => {
             entity.surface_lifetime_timer_ms_at_0x48 = RetailRuntimeValue::Known(timer_after_ms);
-            None
+            Ok(ActorSurfaceHead::Tail(None))
         }
         ActorSurfaceTimerPhase::DeepRandomEffects {
             timer_after_ms,
             remaining_percent,
         } => {
             entity.surface_lifetime_timer_ms_at_0x48 = RetailRuntimeValue::Known(timer_after_ms);
-            Some(remaining_percent)
+            Ok(ActorSurfaceHead::Tail(Some(remaining_percent)))
         }
         ActorSurfaceTimerPhase::DeepLifecycle {
             timer_after_ms,
@@ -178,10 +222,25 @@ pub(crate) fn run_actor_surface_with_lifecycle<D>(
             // 162B0 writes +48 before calling 16750. If the release policy is
             // unresolved, preserve that timer prefix rather than losing it.
             entity.surface_lifetime_timer_ms_at_0x48 = RetailRuntimeValue::Known(timer_after_ms);
-            *death = run_lifecycle(manager, entity_id, world_fx)?;
-            (remaining_percent_after_lifecycle < 75).then_some(remaining_percent_after_lifecycle)
+            Ok(ActorSurfaceHead::Lifecycle(
+                remaining_percent_after_lifecycle,
+            ))
         }
-    };
+    }
+}
+
+/// E370's bubble and sound, read afresh after any 162B0 lifecycle; `None`
+/// when the timer phase or the lifecycle's remaining percent skips them.
+pub(crate) fn run_actor_surface_tail(
+    manager: &mut EntityManager,
+    entity_id: u32,
+    remaining: Option<u32>,
+    active_model_extent_raw: u16,
+    particle_environment: ParticleEnvironment<'_>,
+    retail_tick: u32,
+    world_fx: &mut WorldFx,
+) -> Result<(), Intro2CommonDyingBlock> {
+    use Intro2CommonDyingBlock as Block;
     if let Some(remaining) = remaining {
         // E370 consumes the gate before reading any bubble-only live inputs.
         // A missed gate does not need the forward basis at all.
@@ -208,14 +267,14 @@ pub(crate) fn run_actor_surface_with_lifecycle<D>(
                     state_flags,
                     position_raw: entity.position_raw(),
                     emission_axis_q31: basis.forward,
-                    active_model_extent_raw: frame.active_model_extent_raw,
+                    active_model_extent_raw,
                 },
                 &mut || u32::from(world_fx.next_shared_retail_random_u16()),
             );
             world_fx.materialize_actor_surface_bubble_request(
                 bubble,
-                frame.particle_environment,
-                frame.retail_tick,
+                particle_environment,
+                retail_tick,
             );
         }
         // The sound branch follows synchronous allocation, reads current

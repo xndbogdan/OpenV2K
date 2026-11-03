@@ -571,3 +571,169 @@ fn a_type128_carrying_an_empty_row_drops_once() {
     );
     assert_eq!(drops.len(), 1);
 }
+
+/// The scheduler's Playing pass, which lends a Type128 its world.
+fn playing_tick(
+    tasks: &mut SpecializedActorTaskScheduler,
+    manager: &mut EntityManager,
+    session: &mut GameSession,
+    fx: &mut WorldFx,
+    static_damage: &mut StaticDamageScheduler,
+    notifications: &mut GameplayNotifications,
+    hull: &mut crate::player_hull::PlayerHull,
+    t: u32,
+) -> crate::specialized_actor_task_production::SpecializedActorTaskProductionPass {
+    tasks.tick(
+        manager,
+        crate::specialized_actor_task_production::SpecializedActorTaskProductionFrame {
+            world: crate::specialized_actor_task_production::SpecializedActorTaskWorld::Playing {
+                player_hull: hull,
+                extra_lives: RetailRuntimeValue::Known(3),
+            },
+            hive_components: None,
+            notification_phase: crate::gameplay_notifications::GameplayNotificationPhase::Playing,
+            resources: &mut session.cache,
+            world_fx: fx,
+            static_damage,
+            elapsed_micros: 20_000,
+            global_elapsed_micros: t * 20_000,
+            retail_tick: t,
+            main_base_abort_active: false,
+        },
+        notifications,
+    )
+}
+
+/// Hold a Type128 deep under the sea with its 20-second lifetime spent until
+/// 162B0's lifecycle runs, and return the Type61s it dropped.
+#[allow(clippy::too_many_arguments)]
+fn drown_carrier(
+    session: &mut GameSession,
+    manager: &mut EntityManager,
+    fx: &mut WorldFx,
+    tasks: &mut SpecializedActorTaskScheduler,
+    static_damage: &mut StaticDamageScheduler,
+    notifications: &mut GameplayNotifications,
+    captor: u32,
+    from: u32,
+) -> Vec<u32> {
+    let newest = manager.iter_all().map(|entity| entity.id).max().unwrap();
+    // Flood the carrier's spot 0x400 deep, as a rising sea would.
+    let [x, _, z] = entity(manager, captor).position_raw();
+    let terrain = session.cache.level_terrain_mut().unwrap();
+    let ground = terrain.bilinear_height_raw(x, z);
+    terrain.header[0] = i32::from(ground.wrapping_add(0x400)) << 8;
+    let depth = [x, ground.wrapping_add(0x200), z];
+    let mut hull = crate::player_hull::PlayerHull::default();
+    for t in from..from + 50 {
+        if entity(manager, captor).collision.health_raw == RetailRuntimeValue::Known(0) {
+            break;
+        }
+        let body = manager.entity_mut(captor).unwrap();
+        body.set_position_raw(depth);
+        body.surface_lifetime_timer_ms_at_0x48 = RetailRuntimeValue::Known(20_000);
+        let pass = playing_tick(
+            tasks,
+            manager,
+            session,
+            fx,
+            static_damage,
+            notifications,
+            &mut hull,
+            t,
+        );
+        assert_pass_in(Some(manager), &pass, &format!("tick{t}"));
+    }
+    let carrier = entity(manager, captor);
+    assert_eq!(carrier.collision.health_raw, RetailRuntimeValue::Known(0));
+    assert_eq!(class(manager, captor), 63);
+    assert!(crate::class49_death::finished_terminal_hit_authenticates(
+        manager, captor
+    ));
+    assert_eq!(
+        manager
+            .pending_actor_deferred_destroy_ids()
+            .iter()
+            .filter(|&&id| id == captor)
+            .count(),
+        1,
+        "10B70 is idempotent"
+    );
+    // The corpse has no owner left: the next pass does not visit it.
+    let pass = playing_tick(
+        tasks,
+        manager,
+        session,
+        fx,
+        static_damage,
+        notifications,
+        &mut hull,
+        from + 50,
+    );
+    assert!(!pass.outcomes.iter().any(|outcome| matches!(outcome,
+        SpecializedActorTaskProductionOutcome::Intro2Type16(outcome)
+            if outcome.entity_id() == captor)));
+    manager
+        .iter_all()
+        .filter(|entity| entity.id > newest && entity.entity_type == 61)
+        .map(|entity| entity.id)
+        .collect()
+}
+
+/// A drowning Type128's 162B0 runs 10C10 in its surface step: class63's BC90
+/// bursts, blasts and drops one Type61, as its other deaths do.
+#[v2k_test_support::retail_test]
+fn a_drowning_type128_runs_class63() {
+    let (mut session, mut manager, mut fx) = fixture(28);
+    let ids = captor_ids(&manager);
+    activate(&mut manager, &ids);
+    let mut tasks = adopt_world(&mut manager);
+    let mut static_damage = StaticDamageScheduler::new();
+    let mut notifications = GameplayNotifications::new();
+    let captor = ids[0];
+    assert_eq!(
+        type16_row(entity(&manager, captor)),
+        Some(Type16Row::Type128)
+    );
+    let drops = drown_carrier(
+        &mut session,
+        &mut manager,
+        &mut fx,
+        &mut tasks,
+        &mut static_damage,
+        &mut notifications,
+        captor,
+        1,
+    );
+    assert_eq!(drops.len(), 1);
+}
+
+/// Drowning while carrying enters DB80's D040 as a direct death does: the
+/// person is released alive and class63 runs twice.
+#[v2k_test_support::retail_test]
+fn a_type128_drowning_with_a_captive_drops_twice() {
+    let (
+        mut session,
+        mut manager,
+        mut fx,
+        mut tasks,
+        mut static_damage,
+        mut notifications,
+        captor,
+        person,
+        at,
+    ) = capture_a_person(28, Type16Row::Type128);
+    assert!(carrying_variant(entity(&manager, captor)).is_some());
+    let drops = drown_carrier(
+        &mut session,
+        &mut manager,
+        &mut fx,
+        &mut tasks,
+        &mut static_damage,
+        &mut notifications,
+        captor,
+        at + 1,
+    );
+    assert_eq!(drops.len(), 2);
+    assert_eq!(entity(&manager, person).attached_to, None);
+}

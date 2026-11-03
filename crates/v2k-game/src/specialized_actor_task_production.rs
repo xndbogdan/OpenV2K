@@ -5819,22 +5819,59 @@ impl SpecializedActorTaskScheduler {
                     ));
                 }
                 SpecializedActorTaskOwner::Intro2Type16(owner) => {
-                    let tick = crate::intro2_type16::tick_intro2_type16(
-                        manager,
-                        owner,
-                        crate::intro2_type16::Intro2Type16Frame {
-                            resources,
-                            world_fx,
-                            elapsed_micros,
-                            retail_tick,
-                            capture_tasks: &mut Intro2RadialCursorCustody {
-                                pending: &mut pending,
-                                retained: &mut retained,
-                                remaining_live_ids: &live_order[live_index + 1..],
+                    let lend = manager.iter_all().any(|entity| {
+                        entity.id == entity_id
+                            && crate::intro2_type16::type16_row(entity)
+                                == Some(crate::intro2_type16::Type16Row::Type128)
+                    });
+                    let tick = if lend {
+                        // A Type128's class63 drowning runs BAF0 from its
+                        // surface step: lend it every owner, as weapons are.
+                        self.lend_owners(
+                            &mut pending,
+                            &mut retained,
+                            SpecializedActorTaskOwner::Intro2Type16(owner),
+                        );
+                        let tick = crate::intro2_type16::tick_intro2_type16(
+                            manager,
+                            owner,
+                            crate::intro2_type16::Intro2Type16Frame {
+                                resources,
+                                world_fx,
+                                elapsed_micros,
+                                retail_tick,
+                                capture_tasks: crate::intro2_type16::Type16Tasks::Lent {
+                                    scheduler: self,
+                                    static_damage,
+                                    world: world.reborrow(),
+                                },
+                                notifications,
                             },
-                            notifications,
-                        },
-                    );
+                        );
+                        // The visit's own result replaces its lent copy.
+                        self.owners.retain(|owner| owner.entity_id() != entity_id);
+                        self.return_lent_owners(manager, entity_id, &mut pending, &mut retained);
+                        tick
+                    } else {
+                        crate::intro2_type16::tick_intro2_type16(
+                            manager,
+                            owner,
+                            crate::intro2_type16::Intro2Type16Frame {
+                                resources,
+                                world_fx,
+                                elapsed_micros,
+                                retail_tick,
+                                capture_tasks: crate::intro2_type16::Type16Tasks::Capture(
+                                    &mut Intro2RadialCursorCustody {
+                                        pending: &mut pending,
+                                        retained: &mut retained,
+                                        remaining_live_ids: &live_order[live_index + 1..],
+                                    },
+                                ),
+                                notifications,
+                            },
+                        )
+                    };
                     if let Some(owner) = tick.replacement_common_dying_owner {
                         retained.push(SpecializedActorTaskOwner::Intro2CommonDying(owner));
                     } else if let Some(owner) = tick.retained_owner {
