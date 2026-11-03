@@ -16,7 +16,7 @@ use crate::{
     intro2_gun_turret::Intro2GunTurretProfile,
     main_base_abort::{
         MainBaseAbortActorLease, MainBaseDeferredDestroyCustodyBlock, MainBaseDeferredDestroyEntry,
-        MainBaseExternalDeferredDestroyOwner,
+        MainBaseDeferredDestroyQueueFacts, MainBaseExternalDeferredDestroyOwner,
     },
     radial_damage::RadialDamageTemplate,
     resource_cache::ResourceCache,
@@ -534,6 +534,8 @@ pub struct Class49TerminalReceipt {
     context: BehaviorContextRuntime,
     continuation_id: u64,
     deferred_destroy_entry: MainBaseDeferredDestroyEntry,
+    /// DB80's second class63 install: the first BC90's 10B70 staged removal.
+    restaged: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -621,17 +623,68 @@ fn logical_owner(manager: &EntityManager, entity: &Entity) -> Result<(u32, u8), 
     Ok((owner.id, owner.entity_type as u8))
 }
 
-/// Authenticate the native source before committing health/dying/context.
-/// Class1/49 is the direct alternate: there is no weighted-selector RNG word.
-/// The returned receipt's caller must claim it, execute static then dynamic
-/// radial damage synchronously, and finish only after that scan completes.
-pub fn begin_class49_standard_death(
-    manager: &mut EntityManager,
+/// Which DB80 step reaches the class49/63 install.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Entry {
+    /// 10C10, then DB80 with a null style+2C: one install.
+    Direct,
+    /// 10C10's prefix alone, for a class63 carrier whose carrying style owns
+    /// D040; the caller runs D040, then each install.
+    CarryingPrefix,
+    /// AC60's dying 25660 -> C6B0 after that prefix: D040's C690, then
+    /// DB80's reread +BC. The second follows the first's finished 10B70.
+    Reinstall,
+}
+
+/// Everything the commits need, closed before the first write.
+struct Prepared {
+    profile: NativeExplosionSourceProfile,
+    deferred_destroy_entry: MainBaseDeferredDestroyEntry,
+    restaged: bool,
+    selected: BehaviorContextRuntime,
+    flags: u32,
+    extent: u16,
+    owner_id: u32,
+    owner_type: u8,
+    death_sound: Option<u16>,
+    allocation: MainBaseAbortActorLease,
+    radial_damage: RadialDamageTemplate,
+}
+
+/// The first BC90's 10B70 already staged this allocation in the actor queue,
+/// and nothing else owns its removal.
+fn own_terminal_pending(manager: &EntityManager, id: u32, entity: &Entity) -> bool {
+    matches!(
+        manager.preflight_main_base_deferred_destroy_entry(id, entity.collision.state_flags_at_0x08),
+        Err(MainBaseDeferredDestroyCustodyBlock::StateQueueMismatch(facts))
+            if facts == MainBaseDeferredDestroyQueueFacts {
+                state_pending: true,
+                power_up_queued: false,
+                main_base_conversion_queued: false,
+                factory_scientist_queued: false,
+                actor_terminal_queued: true,
+            }
+    )
+}
+
+/// A class63 carrier whose current style is a carrying Capture variant: its
+/// style+2C is D040, so DB80 releases the child around the class63 installs.
+pub(crate) fn carrying_class63_source(entity: &Entity) -> bool {
+    matches!(
+        source_profile(entity),
+        Some(NativeExplosionSourceProfile::Type16Carrier(_))
+    ) && matches!(entity.current_behavior_context,
+        RetailRuntimeValue::Known(Some(context))
+            if context.active_style().death_callback_policy()
+                == crate::entity_behavior::DeathCallbackPolicy::CapturePeopleCleanup)
+}
+
+fn prepare(
+    manager: &EntityManager,
     id: u32,
     resources: &ResourceCache,
-    fx: &mut WorldFx,
-    retail_tick: u32,
-) -> Result<Option<Class49TerminalReceipt>, Class49DeathBlock> {
+    entry: Entry,
+) -> Result<Option<Prepared>, Class49DeathBlock> {
     use Class49DeathBlock as Block;
     let entity = manager
         .iter_all()
@@ -640,15 +693,40 @@ pub fn begin_class49_standard_death(
     if !allocation_authenticates(manager, id) {
         return Err(Block::Allocation);
     }
-    if terminal_is_pending(entity)
-        || state_bits(entity, REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT)? != 0
-    {
+    let state = state_bits(entity, REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT)?;
+    let mut restaged = false;
+    if entry == Entry::Reinstall {
+        if state != DYING_STATE_BIT {
+            return Err(Block::Runtime("class63 reinstall outside 10C10"));
+        }
+        match entity.class49_death_runtime {
+            None => {}
+            Some(runtime)
+                if runtime.phase == TerminalPhase::Finished
+                    && receipt_current(manager, &runtime.receipt) =>
+            {
+                restaged = true;
+            }
+            Some(_) => return Err(Block::TerminalReceipt),
+        }
+    } else if terminal_is_pending(entity) || state != 0 {
         return Ok(None);
     }
     let profile = source_profile(entity).ok_or(Block::Metadata)?;
-    let deferred_destroy_entry = manager
-        .preflight_main_base_deferred_destroy_entry(id, entity.collision.state_flags_at_0x08)
-        .map_err(Block::DeferredDestroyCustody)?;
+    if entry != Entry::Direct && !matches!(profile, NativeExplosionSourceProfile::Type16Carrier(_))
+    {
+        return Err(Block::Runtime("carrying class63 profile"));
+    }
+    let deferred_destroy_entry = if restaged {
+        if !own_terminal_pending(manager, id, entity) {
+            return Err(Block::Runtime("restaged deferred destroy"));
+        }
+        MainBaseDeferredDestroyEntry::Unstaged
+    } else {
+        manager
+            .preflight_main_base_deferred_destroy_entry(id, entity.collision.state_flags_at_0x08)
+            .map_err(Block::DeferredDestroyCustody)?
+    };
     if let MainBaseDeferredDestroyEntry::AlreadyPending(owner) = deferred_destroy_entry {
         if profile != NativeExplosionSourceProfile::PowerUp61
             || owner != MainBaseExternalDeferredDestroyOwner::Type61DeferredQueue
@@ -662,16 +740,26 @@ pub fn begin_class49_standard_death(
     if !profile.authenticates_metadata(metadata) {
         return Err(Block::Metadata);
     }
-    if entity.collision.constructor_sound_attachment_id_at_0x8c
-        != metadata.constructor_sound_attachment_id
-    {
+    // 10C10 stopped +8C before a reinstall.
+    let sound_attachment = if entry == Entry::Reinstall {
+        RetailRuntimeValue::Known(None)
+    } else {
+        metadata.constructor_sound_attachment_id
+    };
+    if entity.collision.constructor_sound_attachment_id_at_0x8c != sound_attachment {
         return Err(Block::Runtime("constructor sound attachment"));
     }
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Graph);
     };
-    if !profile.null_death_cleanup(context.active_style().style_address()) {
-        return Err(Block::Runtime("unaudited death style"));
+    match entry {
+        Entry::Direct if !profile.null_death_cleanup(context.active_style().style_address()) => {
+            return Err(Block::Runtime("unaudited death style"));
+        }
+        Entry::CarryingPrefix if !carrying_class63_source(entity) => {
+            return Err(Block::Runtime("carrying class63 style"));
+        }
+        _ => {}
     }
     if profile == NativeExplosionSourceProfile::Intro2Type13 {
         crate::intro2_type13_live::Intro2Type13SchedulerOwner::adopt_published(entity)
@@ -761,18 +849,20 @@ pub fn begin_class49_standard_death(
     let header = &type_record.raw_header;
     let word = |at: usize| i16::from_le_bytes(header[at..at + 2].try_into().unwrap());
     let dword = |at: usize| i32::from_le_bytes(header[at..at + 4].try_into().unwrap());
-    let receipt = Class49TerminalReceipt {
-        entity_id: id,
+    Ok(Some(Prepared {
         profile,
-        retail_tick,
-        position_raw: entity.position_raw(),
+        deferred_destroy_entry,
+        restaged,
+        selected,
+        flags,
+        extent,
+        owner_id,
+        owner_type,
+        death_sound,
         allocation: manager
             .main_base_abort_actor_observation(id)
             .ok_or(Block::Allocation)?
             .lease,
-        context: selected,
-        continuation_id: NEXT_TERMINAL_ID.fetch_add(1, Ordering::Relaxed),
-        deferred_destroy_entry,
         radial_damage: RadialDamageTemplate {
             inner_radius_raw: word(0x50),
             outer_radius_raw: word(0x52),
@@ -783,7 +873,11 @@ pub fn begin_class49_standard_death(
             },
             trailing_raw: [i32::from(owner_type), owner_id as i32],
         },
-    };
+    }))
+}
+
+/// 10C10's own writes: health, dying, header+90 and the +8C stop.
+fn commit_prefix(manager: &mut EntityManager, id: u32, prepared: &Prepared, fx: &mut WorldFx) {
     let entity = manager.entity_mut(id).unwrap();
     entity.collision.health_raw = RetailRuntimeValue::Known(0);
     entity
@@ -793,33 +887,111 @@ pub fn begin_class49_standard_death(
     // 10C10 requests header+90 at fixed gain/rate after setting dying and
     // before DB80 enters BD20. This is distinct from 440950's later sound62
     // and consumes no process RNG. Submit now, before BAF0's immediate cues.
-    if let Some(sound) = death_sound {
-        fx.emit_networked_positional_sound_raw(sound, receipt.position_raw);
+    if let Some(sound) = prepared.death_sound {
+        fx.emit_networked_positional_sound_raw(sound, entity.position_raw());
     }
     // 10C10 then stops +8C before DB80 enters the selected alternate. In
     // particular the native Type61 class23 source owns looping sound44.
     entity.collision.constructor_sound_attachment_id_at_0x8c = RetailRuntimeValue::Known(None);
-    entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));
+}
+
+/// C6B0's install of the alternate and its initializer's BAF0 burst.
+fn install(
+    manager: &mut EntityManager,
+    id: u32,
+    prepared: Prepared,
+    resources: &ResourceCache,
+    fx: &mut WorldFx,
+    retail_tick: u32,
+) -> Class49TerminalReceipt {
+    let entity = manager.entity_mut(id).unwrap();
+    let receipt = Class49TerminalReceipt {
+        entity_id: id,
+        profile: prepared.profile,
+        retail_tick,
+        position_raw: entity.position_raw(),
+        allocation: prepared.allocation,
+        context: prepared.selected,
+        continuation_id: NEXT_TERMINAL_ID.fetch_add(1, Ordering::Relaxed),
+        deferred_destroy_entry: prepared.deferred_destroy_entry,
+        restaged: prepared.restaged,
+        radial_damage: prepared.radial_damage,
+    };
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(prepared.selected));
     entity.class49_death_runtime = Some(Class49DeathRuntime {
         receipt,
         phase: TerminalPhase::Issued,
     });
-    let (scatter_count, scatter_classes) = profile.scatter();
+    let (scatter_count, scatter_classes) = prepared.profile.scatter();
     // 440950's solo network step is a no-op; its independent surface/sound
     // suffix follows the profile's exact BAF0 scatter branch.
     fx.emit_explode_with_ring_burst_raw(ExplodeWithRingBurstRequest {
         position_raw: receipt.position_raw,
-        source_extent_raw: extent,
+        source_extent_raw: prepared.extent,
         sea_level_raw: resources
             .level_terrain()
             .map(|terrain| terrain.sea_level_raw()),
-        logical_owner_entity_id: owner_id,
-        logical_owner_entity_type: owner_type,
+        logical_owner_entity_id: prepared.owner_id,
+        logical_owner_entity_type: prepared.owner_type,
         scatter_count,
         scatter_classes,
-        suppresses_impact_damage: flags & 0x8000_0000 != 0,
+        suppresses_impact_damage: prepared.flags & 0x8000_0000 != 0,
     });
-    Ok(Some(receipt))
+    receipt
+}
+
+/// Authenticate the native source before committing health/dying/context.
+/// Class1/49 is the direct alternate: there is no weighted-selector RNG word.
+/// The returned receipt's caller must claim it, execute static then dynamic
+/// radial damage synchronously, and finish only after that scan completes.
+pub fn begin_class49_standard_death(
+    manager: &mut EntityManager,
+    id: u32,
+    resources: &ResourceCache,
+    fx: &mut WorldFx,
+    retail_tick: u32,
+) -> Result<Option<Class49TerminalReceipt>, Class49DeathBlock> {
+    let Some(prepared) = prepare(manager, id, resources, Entry::Direct)? else {
+        return Ok(None);
+    };
+    commit_prefix(manager, id, &prepared, fx);
+    Ok(Some(install(
+        manager,
+        id,
+        prepared,
+        resources,
+        fx,
+        retail_tick,
+    )))
+}
+
+/// 10C10's prefix for a class63 carrier holding a carrying style. Every
+/// install input is closed first; the caller then runs D040 and each install.
+pub(crate) fn begin_carrying_class63_death(
+    manager: &mut EntityManager,
+    id: u32,
+    resources: &ResourceCache,
+    fx: &mut WorldFx,
+) -> Result<bool, Class49DeathBlock> {
+    let Some(prepared) = prepare(manager, id, resources, Entry::CarryingPrefix)? else {
+        return Ok(false);
+    };
+    commit_prefix(manager, id, &prepared, fx);
+    Ok(true)
+}
+
+/// AC60's dying 25660 on that carrier: C6B0 installs class63 again and BC90
+/// bursts again, whether a previous BC90 finished or not.
+pub(crate) fn reinstall_class63_alternate(
+    manager: &mut EntityManager,
+    id: u32,
+    resources: &ResourceCache,
+    fx: &mut WorldFx,
+    retail_tick: u32,
+) -> Result<Class49TerminalReceipt, Class49DeathBlock> {
+    let prepared = prepare(manager, id, resources, Entry::Reinstall)?
+        .ok_or(Class49DeathBlock::Runtime("class63 reinstall"))?;
+    Ok(install(manager, id, prepared, resources, fx, retail_tick))
 }
 
 fn receipt_current(manager: &EntityManager, receipt: &Class49TerminalReceipt) -> bool {
@@ -956,7 +1128,15 @@ fn finish_with_allocator(
         .map(Type60ExplodingRingProductionOwner::adopt);
     let entity = manager.entity_mut(receipt.entity_id).unwrap();
     let state = entity.collision.state_flags_at_0x08;
-    if manager
+    if receipt.restaged {
+        let entity = manager
+            .iter_all()
+            .find(|e| e.id == receipt.entity_id)
+            .unwrap();
+        if !own_terminal_pending(manager, receipt.entity_id, entity) {
+            return Err(Block::Runtime("deferred destroy owner changed"));
+        }
+    } else if manager
         .preflight_main_base_deferred_destroy_entry(receipt.entity_id, state)
         .map_err(Block::DeferredDestroyCustody)?
         != receipt.deferred_destroy_entry
@@ -966,8 +1146,12 @@ fn finish_with_allocator(
     let entity = manager.entity_mut(receipt.entity_id).unwrap();
     entity.class49_death_runtime.as_mut().unwrap().phase = TerminalPhase::Finished;
     // 10B70 is idempotent across the retail shared pending bit/count. A
-    // same-frame Type61 pickup keeps its earlier deferred-splice owner.
-    manager.commit_main_base_deferred_destroy(receipt.entity_id, receipt.deferred_destroy_entry);
+    // same-frame Type61 pickup keeps its earlier deferred-splice owner, and a
+    // second class63 BC90 finds its own first staging.
+    if !receipt.restaged {
+        manager
+            .commit_main_base_deferred_destroy(receipt.entity_id, receipt.deferred_destroy_entry);
+    }
     Ok(Class49TerminalCompletion {
         ring,
         ring_owner,

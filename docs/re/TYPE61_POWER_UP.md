@@ -52,7 +52,8 @@ pickups with the native actor and static-world callbacks.
 Alternate class63 ("Auto Pilot", descriptor `0x004C8828`, style `0x004C7198`)
 is the death program of every power-up carrier: Types 71, 80, 81, 117, 124 and
 126..129. The style is zero apart from its `+40` initializer `40BC90`, which
-retail runs once:
+retail runs once (twice for a Type128 killed directly while carrying a
+captive; see [Type16](INTRO2_TYPE16.md#ordinary-type128-power-up-carriers)):
 
 1. `43A580` resolves the actor and `40BAF0` emits the shared burst and the
    static/live radial walks.
