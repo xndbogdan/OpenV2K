@@ -60,7 +60,10 @@ pub enum NetworkEvent {
     Cell { record: [u8; 4], from_host: bool },
     /// Kind 5 on the host: a client's cell request (`FUN_00437CB0`).
     CellRequest([u8; 4]),
-    /// Kinds 6 and 13..=15: records whose world owners the port holds.
+    /// Kind 6: a static object's destruction starts here too
+    /// (`FUN_00428910`): the cell's X and Z.
+    StaticDestroyed([u8; 2]),
+    /// Kinds 13..=15: records whose world owners the port holds.
     Held { kind: u8 },
     /// `FUN_00438CB0` could not tell whether a body rests: its state word's
     /// bits `0x08000080` are unknown, so it resends on the moving period.
@@ -710,6 +713,10 @@ impl NetworkGame {
                 .events
                 .push(NetworkEvent::Terrain { record, from_host }),
             GameRecord::Cell(record) => self.events.push(NetworkEvent::Cell { record, from_host }),
+            GameRecord::StaticDestroyed(word) => self.events.push(NetworkEvent::StaticDestroyed([
+                word as u8,
+                (word >> 8) as u8,
+            ])),
             GameRecord::CellRequest(record) => {
                 // FUN_00437CB0 acts on the host only.
                 if self.is_host() {
