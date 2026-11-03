@@ -123,7 +123,7 @@ phase/flag selector `00453E00`, and switch helper `00456680` correspond to demo
 same and the switch pair is instruction-exact. Both select completion/
 progression descriptor retail `004D0AA0` / demo `004CAA70`. Its content slot is
 the actual delta: retail `FUN_00454390` renders normal progression/result
-content, while demo `FUN_00453AF0` reads and draws all twelve appended X3
+content, while demo `DEMO_00453AF0` reads and draws all twelve appended X3
 strings at global ids `300..311`. The paired initializers load system overlay
 51 and exit pair `004556A0` / `00454FF0` is instruction-exact. Thus the demo
 reuses normal completion activation and substitutes page content; the exact
@@ -975,7 +975,7 @@ when DAT_004F73B8 != 0.
 
 ### Late-demo idle-attract selector (STATIC DIFFERENTIAL 2026-08-02)
 
-Version Tracking pairs retail `FUN_0044F650` with demo `FUN_0044EE50`:
+Version Tracking pairs retail `FUN_0044F650` with demo `DEMO_0044EE50`:
 the loader's control flow and its table-record contract match, but the
 `sub_mode == 4` selector has a deliberately smaller table in the demo. This
 is the 7-in-8 idle-attract auto-play path above, not manual New Game and not
@@ -984,7 +984,7 @@ evidence for the later demo-ending route.
 Both builds consume exactly one `Random_Next()` value, derive an unsigned index
 from its low 16 bits, copy the selected record's `+0x0A` dword and `+0x0E` word
 to the loader receiver at `+0x38` and `+0x3C`, and pass its byte `+0x00` to the
-common state initializer (`FUN_0042E3B0` retail / `FUN_0042DE00` demo).
+common state initializer (`FUN_0042E3B0` retail / `DEMO_0042DE00` demo).
 `FUN_0042E3B0` stores that byte as the current logical control/campaign slot;
 the corresponding gameplay-overlay id is slot + 12. The copied `+0x0A` dword,
 `+0x0E` word, and other record fields remain unnamed.
@@ -994,7 +994,7 @@ the corresponding gameplay-overlay id is slot + 12. The copied `+0x0A` dword,
 | Retail | `0x0044F650` / `0x004D0CC8`, 12 × 16-byte records | `((rng & 0xFFFF) * 12) >> 16` | `7, 27, 2, 3, 5, 6, 11, 12, 31, 11, 24, 26` |
 | German demo | `0x0044EE50` / `0x004CAC98`, 2 × 16-byte records | `((rng & 0xFFFF) << 1) >> 16` | `2, 3` |
 
-The shared caller (`FUN_0042CF40` retail / `FUN_0042C990` demo) passes the
+The shared caller (`FUN_0042CF40` retail / `DEMO_0042C990` demo) passes the
 front-end sub-mode directly to this loader. Both demo records also carry an
 unclassified word `0x005A` at `+0x08` where the corresponding retail records
 carry `0x0058`; this comparison does not name that tuning field. Do not copy
@@ -1251,7 +1251,7 @@ the requested file opens successfully.
 
 | Routine | Does |
 | --- | --- |
-| `FUN_00426F00` | from startup (`FUN_0044E2E0`): when `FUN_00426F80` allows it, routes through the menu (`FUN_0042A940`) and switches the session to the attract mode copied from `004C9840` |
+| `FUN_00426F00` | from startup (`FUN_0044E2E0`): when `FUN_00426F80` allows it (always), routes through the menu (`FUN_0042A940`) unless `FUN_00438050` is non-zero, which would stage the attract sheet mode copied from `004C9840`; `FUN_00438050` always returns 0, so that mode, its draw chain and its key table `004C9810` never run |
 | `FUN_0042ADC0` | switches the session to the frontend menu (`004CA7F8`) through `FUN_0042A9B0` |
 | `FUN_0042AE50` | the intro movie mode's exit: when the movie ran (`004CA6C0`), stops and destroys it, closes its screen and restores the saved display device and screen (`004DB1D0`); then the common exit `FUN_0042AAC0`, and `004DB200` becomes 1 |
 | `FUN_0042AAC0` | a mode's exit: frees its input set (`FUN_00471C10`) and releases its binding tables (`FUN_00429160`) |

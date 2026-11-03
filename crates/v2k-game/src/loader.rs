@@ -8,6 +8,7 @@ use crate::level::LevelState;
 /// Parse all sections from an already-loaded `OvlFile` into a `LevelState`.
 ///
 /// The `source` label is stored for display purposes (file path, embedded index, etc.).
+/// Retail's section reader `FUN_00493BF0` likewise runs every section's loader in turn.
 pub fn load_ovl(ovl: &OvlFile, source: &str) -> Result<LevelState> {
     Ok(LevelState {
         source_path: source.to_string(),
@@ -30,9 +31,12 @@ pub fn load_ovl(ovl: &OvlFile, source: &str) -> Result<LevelState> {
     })
 }
 
-/// Load all sections from an OVL file on disk into a `LevelState`.
+/// Load all sections from an OVL file on disk into a `LevelState`, as retail
+/// `FUN_00493BA0` loads one overlay. Retail requests it through
+/// `FUN_00493E40` and opens the file with `FUN_00493680`.
 ///
-/// Only hard errors: file I/O failure or invalid OVL container format.
+/// Only hard errors: file I/O failure or invalid OVL container format, which
+/// retail's `FUN_00493DB0` turns into an "Error loading overlay" failure.
 /// Individual section parse failures are silently converted to `None`.
 pub fn load_level(ovl_path: &Path) -> Result<LevelState> {
     let data = std::fs::read(ovl_path)?;

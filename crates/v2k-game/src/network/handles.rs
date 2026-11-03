@@ -42,6 +42,8 @@ pub struct HandleTable {
 impl HandleTable {
     /// `FUN_0043A6E0(blocks, entries)`: block 0 stays unused. A network
     /// session opens nine blocks of 256 (`FUN_00438880`), single play two.
+    /// The table it replaces drops whole, as `FUN_0043A800` frees every
+    /// block first.
     pub fn new(blocks: usize, entries: usize) -> Self {
         let mut table = Self {
             blocks: vec![Block::empty(); blocks],
@@ -147,7 +149,8 @@ impl HandleTable {
     }
 
     /// Every live handle in a slot's block, by entry (`FUN_00438CB0` and
-    /// `FUN_00439010` walk entries 1.. in order).
+    /// `FUN_00439010` walk entries 1.. in order). The block comes by slot
+    /// number, none past the count (`FUN_0043A870`).
     pub fn slot_handles(&self, slot: u8) -> Vec<(u32, u32)> {
         self.blocks
             .get(usize::from(slot))

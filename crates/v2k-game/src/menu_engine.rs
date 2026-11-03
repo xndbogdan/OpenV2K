@@ -142,9 +142,13 @@ pub struct MenuEngine {
     tree: MenuTree,
     stack: Vec<StackSlot>,
     pub settings: Settings,
-    /// Current visibility mask (VIS_* bits; FUN_0043CBA0).
+    /// Current visibility mask (VIS_* bits; FUN_0043CBA0). Retail picks the
+    /// frontend or in-game mask by the session's level-active byte
+    /// (`FUN_00456780(FUN_0044F3D0())`).
     pub vis_mask: u32,
-    /// Display-mode count, bounds the resolution spinner.
+    /// Display-mode count, bounds the resolution spinner. Retail counts the
+    /// system overlay's Section 5 modes (`FUN_00493EB0`); the port counts the
+    /// display's.
     pub resolution_count: u32,
 }
 
@@ -169,7 +173,7 @@ impl MenuEngine {
     }
 
     /// Show the Cheats rows the session's cheat word `+1C4` has on
-    /// (`FUN_00450FC0`).
+    /// (`FUN_00450FC0` for each of the six, as `FUN_0044F830` runs it).
     pub fn apply_cheat_enables(&mut self, cheats: u32) {
         self.tree.apply_cheat_enables(cheats);
     }
@@ -208,7 +212,7 @@ impl MenuEngine {
         item.selectable(self.vis_mask) && self.item_available(item)
     }
 
-    /// Push a screen, clamping at the original 10-slot depth.
+    /// Push a screen, clamping at the original 10-slot depth (`FUN_0043A960`).
     pub fn push(&mut self, va: u32) -> bool {
         if self.stack.len() >= MAX_DEPTH || self.tree.screen(va).is_none() {
             return false;
@@ -222,7 +226,7 @@ impl MenuEngine {
         true
     }
 
-    /// Pop the current screen (keeps the root).
+    /// Pop the current screen (keeps the root; `FUN_0043A9A0`).
     pub fn pop(&mut self) -> bool {
         if self.stack.len() > 1 {
             self.stack.pop();
@@ -256,7 +260,8 @@ impl MenuEngine {
         // The cursor stays where it was, even on a row that just hid.
     }
 
-    /// Replace the whole stack with a new root (mode change).
+    /// Replace the whole stack with a new root (mode change). Retail empties
+    /// the stack and its fly clocks first (`FUN_0043C7D0`).
     pub fn reset(&mut self, root: u32, vis_mask: u32) {
         self.vis_mask = vis_mask;
         self.stack.clear();
@@ -266,6 +271,8 @@ impl MenuEngine {
     // ── Input handling ──
 
     pub fn handle(&mut self, input: MenuInput) -> Vec<MenuCommand> {
+        // Retail key slots: Up runs FUN_0042BB30, Return and Space FUN_0042BD90
+        // (FUN_00456380 in the pause menu).
         match input {
             MenuInput::Up => self.move_cursor(-1),
             MenuInput::Down => self.move_cursor(1),
@@ -337,6 +344,8 @@ impl MenuEngine {
 
     /// Left/Right: adjust the selected spinner/toggle, else move the cursor
     /// (the main ring navigates horizontally).
+    /// Left or right (`FUN_0043C6C0`, `FUN_0043C720`): a spinner steps,
+    /// otherwise the cursor moves.
     fn adjust_or_move(&mut self, dir: i32) -> Vec<MenuCommand> {
         let action = self.selected_action();
         match action {

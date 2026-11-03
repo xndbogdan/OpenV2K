@@ -463,7 +463,7 @@ pub enum Intro2Type13StaticBlock {
     },
 }
 
-/// Committed `FUN_00441180` prefix. The shared physical traversal owns
+/// Committed `FUN_00411180` prefix. The shared physical traversal owns
 /// 442950's subsequent F610 visual and attached allocation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Intro2Type13StaticApplied {

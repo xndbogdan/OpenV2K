@@ -27,6 +27,7 @@ pub struct GameplayHudTimeTrophyFrame {
 impl GameplayHudTimeTrophyFrame {
     /// Retail 429509 tests state 1 exactly, so expiry, completion and abort
     /// all remove the HUD trophy and clock. This is not a world-entity death.
+    /// The state and whole seconds are what FUN_0042F100 hands the HUD.
     pub fn from_runtime(
         runtime: TimeTrophyRuntime,
         layout: GameplayHudTimeTrophyLayout,

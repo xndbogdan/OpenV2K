@@ -109,7 +109,8 @@ Enable the repository hooks once per clone with
 progress numbers in `README.md` and `docs/progress/`; never edit those by hand.
 When a retail function is implemented, approximated, documented or deliberately
 not needed, record it in `docs/progress/status.csv`. Cite retail functions by
-their start address (`FUN_0042D030`), so the progress count stays meaningful.
+their start address (`FUN_0042D030`), so the progress count stays meaningful;
+write demo-executable addresses as `DEMO_0040C6C0`, which the count skips.
 
 ## Coding Style & Naming Conventions
 

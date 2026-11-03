@@ -227,7 +227,10 @@ impl SoftwareRenderer {
         }
     }
 
-    /// Drain queued primitives into the surface (`FUN_004948F0`).
+    /// Drain queued primitives into the surface (`FUN_004948F0`), then reset
+    /// the queue (`FUN_004948C0`): a mode frame's drain (FUN_0042AA90 through
+    /// FUN_00428E70) and the reset that starts the next (FUN_0042AA40 through
+    /// FUN_00428E60).
     fn flush(&mut self) {
         self.settle_models();
         if !self.queued {

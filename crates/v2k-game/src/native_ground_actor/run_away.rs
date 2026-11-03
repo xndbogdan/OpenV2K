@@ -160,7 +160,7 @@ fn publish_fleeing(
         *audited_behavior_style(10, 1).unwrap(),
     )
     .ok_or(Block::Graph)?;
-    // C7D0/C6B0 publishes target/style before B3F0's task replacement.
+    // C7D0/C6B0 publishes target/style before FUN_0040B3F0 replaces the tasks.
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
     let (RetailRuntimeValue::Known(sound), RetailRuntimeValue::Known(period_raw)) = (
         metadata.run_away_optional_sound_id,

@@ -1,4 +1,4 @@
-//! 449140/4491D0 persist 15 DWORDs from 4CB3D8, using table 4C2160.
+//! `FUN_00449140`/4491D0 persist 15 DWORDs from 4CB3D8, using table 4C2160.
 //! The original registry key is import-only. The port owns its key and files.
 
 use std::collections::BTreeMap;

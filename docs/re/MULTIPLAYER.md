@@ -47,7 +47,7 @@ player's slot and `004F737C` flags a change.
 | `FUN_0046BD80` | the network timer's callback: on the slot authority (`004F73D4`), finds the local slot or takes the first free one; every twelfth visit (or on request, `004F73DC`) sends an empty message; then flushes the outgoing queue (`FUN_004691D0`) and re-arms itself |
 | `FUN_0046BC10`, `FUN_0046BB10` | pack the slot table (all nine ids on the slot authority, the local one otherwise); unpack a peer's table, where a client finds its own slot |
 | `FUN_0046C0C0` | copies the slot table out |
-| `FUN_0046BA90`, `FUN_0046BAC0` | unpack a received dword into `004F73A8` for the caller; read a dword |
+| `FUN_0046BA90`, `FUN_0046BAC0` | unpack a received dword into `004F73A8` for the caller; read a dword. Both belong to the default channel descriptor `004D4A00` (with `FUN_0046BA70` and `FUN_0046BAD0`), which `FUN_0046BED0` uses only when its caller passes none; both callers pass the game's `004CAFA8`, so they never run |
 | `FUN_0046BAD0` | packs a test message: its length, the id, then `(id * 7) & 0x7F` bytes counting down |
 
 ## Names and announcements

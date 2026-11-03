@@ -532,7 +532,8 @@ impl MainBaseAbortFrameRequest {
 /// Live owner for the retail world-controller state and its current submitted
 /// full-frame request.
 ///
-/// `FUN_0042E3B0` clears the complete `0x1FC`-byte controller and explicitly
+/// `FUN_0042E380` allocates the controller and `FUN_0042E3B0` clears the
+/// complete `0x1FC`-byte controller and explicitly
 /// initializes `+0xAC` to zero. `FUN_0042E570` submits the normal Section-13
 /// `+0x54/+0x56` frame and initializes time-trophy fields `+0x1EC/+0x1F0`,
 /// while `FUN_0042F1A0` later replaces only the callback and `+0xB0..+0xBC`

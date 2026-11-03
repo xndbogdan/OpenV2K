@@ -63,7 +63,8 @@ pub struct ParamTable {
     pub records: Vec<ParamRecord>,
 }
 
-/// Parse Section 4 parameter lookup tables.
+/// Parse Section 4 parameter lookup tables: the font records retail's
+/// `FUN_004ABA70` loads, each with its glyph metrics and sprite-id table.
 pub fn parse_params(data: &[u8]) -> Result<ParamTable> {
     if data.len() < RECORD_SIZE {
         return Err(V2kError::section(4, "section 4 data too short"));

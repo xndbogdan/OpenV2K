@@ -319,6 +319,7 @@ fn select(
     profile: Intro2GunTurretProfile,
     next_random: &mut impl FnMut() -> u32,
 ) -> Result<Intro2GunTurretPublication, Intro2GunTurretError> {
+    // Rule 5 Mutated is FUN_004163E0: bit 0x2000 of the state word.
     let RetailRuntimeValue::Known(mutated) = entity.collision.state_flags_at_0x08.masked(0x2000)
     else {
         return Err(Intro2GunTurretError::ComponentStorage);
@@ -408,7 +409,7 @@ fn publish_graph(
         );
         return;
     }
-    // D190 clears Secondary then Primary;4086D0 prepares the new private
+    // D190 clears Secondary then Primary; FUN_004086D0 prepares the new private
     // allocation before A7A0 retires the former Tertiary wrapper.
     entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Primary);
@@ -418,6 +419,7 @@ fn publish_graph(
         .expect("authenticated E/L allocation");
     //44EA60(method12/14) returns zero; flower method16 returns one.
     let state = task::GunTurretTaskState::from_408df0(
+        // Retail reads the type record's capability word (FUN_00410480).
         entity.capability_flags,
         runtime.sub_l_output_raw,
         runtime.profile.gravity_lead(),

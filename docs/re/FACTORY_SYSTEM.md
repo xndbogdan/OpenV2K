@@ -869,7 +869,7 @@ Hive through the sweep, but its component-table window ends before slot
 another capture.
 
 The first ordinary-death family is now statically closed and live as a bounded
-callback adapter. Full-game `FUN_00410C10` and demo `FUN_00410BA0` agree on the
+callback adapter. Full-game `FUN_00410C10` and demo `DEMO_00410BA0` agree on the
 generic prefix: remote ownership returns zero, an existing `0x4000` dying bit
 returns one, and a fresh local death writes health zero and `0x4000`, requests
 the optional type `+0x90` cue, releases entity `+0x8C`, invokes the current
@@ -1000,7 +1000,7 @@ earlier port-side swap of spawns 16 and 22. This observation
 authenticates the current context used by the callback without inventing the
 earlier process-RNG-owned weighted selection that the port has not yet run.
 
-Matched retail/demo `FUN_00410C10`/`FUN_00410BA0` and class-14 initializer
+Matched retail/demo `FUN_00410C10`/`DEMO_00410BA0` and class-14 initializer
 `FUN_0040C3A0` close the transaction. Fresh generic death writes health zero and
 dying bit `0x4000`, requests retail sound 35, traverses the proven null
 attachment/death-hook branches, and publishes Exploding Person style
@@ -1035,7 +1035,7 @@ the Type-9 stride-4 special selectors 38--41 without target lookup or RNG.
 Matched retail/demo code also closes the basis source and lifecycle. The
 signed-Q31 lateral/up/forward matrix lives on the entity at
 `+0x0C..+0x2C`; retail `FUN_0040D720 -> FUN_004104B0 -> FUN_00413F70` and demo
-`FUN_0040D720 -> FUN_00410440 -> FUN_00413EE0` initialize it from the three
+`FUN_0040D720 -> FUN_00410440 -> DEMO_00413EE0` initialize it from the three
 angle words. Type-9's D/A/B helpers read that retained matrix directly. A
 Sub-D heading write does not rebuild it, so all mover phases consume the same
 callback-entry basis; DCA0/E870 rebuilds the next basis only after task
@@ -1166,7 +1166,7 @@ removes its entity-backed ring, and queues deferred destruction. This closes
 Type-61/Class-49 and Type-60/Class-48/fallback/Class-2 semantics without a new
 runtime capture. The ordinary Working Factory constructor now feeds that same
 path through explicit allocation provenance. Retail/demo `FUN_00419010`/
-`FUN_00418FD0` build a zero-filled Type-61 request, and the shared constructor
+`DEMO_00418FD0` build a zero-filled Type-61 request, and the shared constructor
 still consumes one selector RNG word for the singleton Always/class-23 row.
 The live factory bridge now takes that word from `WorldFx`, retains it with the
 exact factory version and request, tail-appends the class-23/model-82 product,
@@ -1179,12 +1179,12 @@ the mutation-sensitive traversal; arbitrary unauthored Type-61 shapes remain
 rejected.
 
 The other live Type-60 caller is now closed without another capture. Retail
-`FUN_004141D0` and demo `FUN_00414140` are exact-instruction matches with
+`FUN_004141D0` and demo `DEMO_00414140` are exact-instruction matches with
 1,478-byte bodies. On the hard-water branch they zero-fill the same `0x4C`-byte
 request, write type `0x3C`, place it at `[entity.x, animated_surface_y,
 entity.z]`, leave rotation, payload, and damage buffer zero, and override all
 four model slots with 130 when pre-damping signed Y velocity is strictly below
-`-1750`, or 132 otherwise. Retail `FUN_00438080` / demo `FUN_00437AC0` submits
+`-1750`, or 132 otherwise. Retail `FUN_00438080` / demo `DEMO_00437AC0` submits
 that request through the shared constructor. The ring uses the displaced
 animated-surface Y, while positional sound 17 uses the entering body's original
 XYZ. The mandatory singleton class-48 selector word is therefore consumed
@@ -1192,8 +1192,8 @@ before that sound and the final signed arithmetic shift of Y velocity. The
 three already-proven constructor failure boundaries remain distinct;
 caller-owned sound and damping still run when no actor links.
 
-Paired retail/demo task bodies `FUN_00406D20` / `FUN_00406D90` and
-`FUN_00406DC0` / `FUN_00406E30` close the longer-lived actor path. A successful
+Paired retail/demo task bodies `FUN_00406D20` / `DEMO_00406D90` and
+`FUN_00406DC0` / `DEMO_00406E30` close the longer-lived actor path. A successful
 Primary publishes bound output `0xFFFF`. Each later callback clamps the
 effective unsigned control to `0x1000..0xD000`, subtracts
 the 32-bit wrapping product `((elapsed >> 12) * effective) >> 7`, and keeps an
@@ -1224,7 +1224,7 @@ A default-model actor without constructor custody, or an explosion tail with
 a substituted water model, remains rejected. The shared callback consumes no
 additional RNG and does not replay the source explosion or radial damage.
 
-Matched `FUN_004258A0`/`FUN_00425770` also closes the conversion-pending Type-9
+Matched `FUN_004258A0`/`DEMO_00425770` also closes the conversion-pending Type-9
 overlap. Its shared pending bit `0x00100000` is outside the Main Base abort skip
 mask `0x10001000`, so class 14 still publishes. The adapter admits only a
 coherent `MainBaseConversion` queue owner, leaves that queue and bit untouched,

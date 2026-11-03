@@ -1797,6 +1797,8 @@ fn classify_type9_terrain(terrain: &TerrainGrid, point_raw: [i16; 2]) -> u16 {
     classify_terrain(terrain, point_raw, ORDINARY_TYPE9_SUB_D.classifier_flags)
 }
 
+/// FUN_0041FEB0's Sub-D cell classifier, for the flag arms the admitted
+/// descriptors use (0x20, 0x10, 0x02, 0x01, 0x04).
 fn classify_terrain(terrain: &TerrainGrid, point_raw: [i16; 2], flags: u8) -> u16 {
     let [x_raw, z_raw] = point_raw.map(|word| word as u16);
 

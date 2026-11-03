@@ -493,7 +493,8 @@ impl WeaponInventory {
         payload[0x146] = self.selected_slot as u8;
     }
 
-    /// Immutable access to all controller slots in retail order.
+    /// Immutable access to all controller slots in retail order, the 32
+    /// records `FUN_00448420` scans for a selector.
     pub const fn slots(&self) -> &[WeaponDescriptor; WEAPON_SLOT_COUNT] {
         &self.slots
     }

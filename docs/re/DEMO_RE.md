@@ -81,11 +81,11 @@ Several first-pass pairs already land on named retail subsystems:
 ### Closed active-pair differential
 
 The changed-function lead at retail `FUN_00411AD0` / demo
-`FUN_00411A60` does not contain a late collision-policy change. The retail body
+`DEMO_00411A60` does not contain a late collision-policy change. The retail body
 is 2,651 bytes and the demo body is 2,659 bytes; aligned control flow and calls
 show that the extra eight demo bytes are distributed register/spill codegen
 around the physical-response and damage suffix. The outer drivers, retail
-`FUN_00411A80` and demo `FUN_00411A10`, are behaviorally identical too.
+`FUN_00411A80` and demo `DEMO_00411A10`, are behaviorally identical too.
 
 Both builds retain the same order: subject-authored, candidate-capability-gated
 contact sounds, subject behavior,
@@ -93,7 +93,7 @@ immediate `0xA300` dispatch/null normalization, candidate behavior when no
 subject object remains, subject component slots 0--2, candidate component slots
 0--2, then physical response and shared damage. Component returns are ignored;
 their mutations remain visible to the later callbacks and suffix. The exact
-type-9 component pair is retail `FUN_00402DA0` / demo `FUN_00402DE0`, which
+type-9 component pair is retail `FUN_00402DA0` / demo `DEMO_00402DE0`, which
 reaches the exact descriptor effect `FUN_00401A20`. The shipping implementation
 must therefore preserve retail callback and mutation order; this demo size
 difference authorizes no alternate policy.

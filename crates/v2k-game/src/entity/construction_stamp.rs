@@ -24,7 +24,7 @@ impl CommonBodyStampCounter {
         }
     }
 
-    /// `456C20` adds the full unsigned ordinal to the wrapping 32-bit world
+    /// `FUN_00456C20` adds the full unsigned ordinal to the wrapping 32-bit world
     /// term; `4104F1` truncates the result when storing the body word.
     pub(super) fn consume(&mut self) -> u16 {
         let ordinal = self.next_ordinal;

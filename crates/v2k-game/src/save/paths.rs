@@ -61,6 +61,8 @@ impl SavePathContext {
         }
     }
 
+    /// Where a native `SlotNN` file goes; retail's `FUN_00448CD0` formats the
+    /// same name as `"%s\\Slot%02d"` beside its save directory.
     pub(super) fn native_slot_destination(&self, slot: usize) -> PathBuf {
         if self.storage_policy == SaveStoragePolicy::BesideExecutable {
             return self.save_directory.join(format!("Slot{slot:02}"));

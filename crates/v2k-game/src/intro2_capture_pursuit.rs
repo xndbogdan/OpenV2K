@@ -1,4 +1,5 @@
 //! Native class9 variant1: C7D0/C6B0 -> AEE0/AF50 -> 403650/403780.
+//! The variant-1 initializer FUN_0040AEE0 warns the target, then runs AF50.
 //!
 //! This owner ends at pursuit and ordinary C690 reentry. C910 attachment,
 //! captured-row callbacks and carry styles 2..5 require their relation owner.

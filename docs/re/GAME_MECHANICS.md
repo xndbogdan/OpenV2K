@@ -28,7 +28,7 @@ vehicle flight mode:
 | 4 | Time trophy secured | Active completion or zero-deadline initialization; bit `0x8` |
 | 5 | Results/abort active | Existing results byte at load or post-terrain Main Base abort commit |
 
-Retail `FUN_0042EE70` / demo `FUN_0042E8B0` is the campaign "save world"
+Retail `FUN_0042EE70` / demo `DEMO_0042E8B0` is the campaign "save world"
 handler, not weapon fire. It sets control-slot bit `0x1`; state 1 becomes state
 4 and calls `FUN_00456820(1)` to claim independent time-trophy bit `0x8`, while
 every other state becomes 3. Selector-`0x3F` hidden pickups use separate bit
@@ -1385,7 +1385,7 @@ Every entity type has a record in `g_resource_table` indexed by `entity_type * 4
 
 | Offset | Role | Called From |
 |--------|------|-------------|
-| +0x04 | Init/update | `FUN_00418180` |
+| +0x04 | Init/update | `FUN_004180F0` |
 | +0x0C | Bare-terrain trampoline into behavior-style `+0x10`, then generic solid response | Common terrain contact |
 | +0x10 | Whole-body surface trampoline into behavior-style `+0x14`, then generic response | Surface/water contact |
 | +0x14 | Primary-hit impact callback | `FUN_00410eb0`, `FUN_00411180` |
@@ -1421,7 +1421,7 @@ Entity creation (`FUN_00438080`) copies 19 uint32s from the type's vtable into a
 
 ### View-Detail Classifier (`FUN_00411400`)
 
-Retail `FUN_00411400` and demo `FUN_00411390` are accepted exact 786-byte
+Retail `FUN_00411400` and demo `DEMO_00411390` are accepted exact 786-byte
 instruction matches. Retail remains authoritative, while the identical demo
 body independently confirms that the unusual comparisons below are shipped
 logic rather than a decompiler mistake.
@@ -1621,7 +1621,7 @@ supplies initial runtime policy.
 
 The behavior death callback `FUN_00419750` starts the progressive sequence by
 restoring health to 10,000,000, clearing dying bit `0x4000`, and changing
-runtime `+0x94` from zero to one. Matched full/demo `FUN_00419B50` first adds
+runtime `+0x94` from zero to one. Matched full/demo `DEMO_00419B50` first adds
 frame time to that field, then advances one destruction stage per 100,000
 microseconds. Stage 1 emits effect selector 25, stages 2 through 30 use
 `stage / 2`, and stage 31 synchronously invokes selector `0x10000` while the

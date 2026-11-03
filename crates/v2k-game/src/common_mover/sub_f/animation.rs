@@ -1,4 +1,5 @@
-//! Exact ordered output writes of `423890`, `423BA0`, and `423C80`.
+//! Exact ordered output writes of `423890`, `423BA0`, and `423C80` (FUN_00423890,
+//! FUN_00423BA0 and FUN_00423C80: Sub-F animation modes 0, 1 and 2).
 use super::{SubFSwimmingError, SubFSwimmingRuntime};
 use v2k_formats::fixed_math::retail_sine_q15;
 

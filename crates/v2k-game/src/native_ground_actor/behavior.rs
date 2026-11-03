@@ -91,6 +91,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
         .filter(|entity| entity.active)
         .map(candidate)
         .collect();
+    // Rule 10 is 16590 (FUN_00416590): 164D0 with the people mask 0xC00.
     let people = if needs(BehaviorWeightRule::PeopleNearby) {
         nearby_within(owner, &candidates, 0xc00, range)
             .map_err(|_| Block::Runtime("people selector"))?
@@ -103,7 +104,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     } else {
         false
     };
-    // Rule8 scans terrain objects within a quarter of the current axis.
+    // Rule8 (FUN_00416650) scans terrain objects within a quarter of the current axis.
     let furniture = if needs(BehaviorWeightRule::FurnitureNearby) {
         furniture_nearby(
             entity,
@@ -112,7 +113,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     } else {
         false
     };
-    // Rule 11 is 16570: 164D0 with the beacon mask 0x100.
+    // Rule 11 is 16570 (FUN_00416570): 164D0 with the beacon mask 0x100.
     let beacon = if needs(BehaviorWeightRule::BeaconNearby) {
         nearby_within(owner, &candidates, 0x100, range)
             .map_err(|_| Block::Runtime("beacon selector"))?
@@ -143,6 +144,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
     let selection = select_initial_behavior(
         P::CHOICES,
         |rule| match rule {
+            // Rule 1 is FUN_00425720, which always answers 1.
             BehaviorWeightRule::Always => 1,
             BehaviorWeightRule::UnderAttack => i32::from(under_attack),
             BehaviorWeightRule::PeopleNearby => i32::from(people),

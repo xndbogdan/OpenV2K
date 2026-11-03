@@ -10,7 +10,7 @@
 //!   zero-state target, or `23030`'s axis cube failing returns a `9C01`
 //!   singleton (`C690`); within 0x200 in X and Z, more than 300 above the
 //!   target and `1E930`'s forward half-space passing, `4BE108` (`9C00`,
-//!   `C770` into the dive); otherwise `1B940` sets G `+38` to the target's
+//!   `FUN_0040C770` into the dive); otherwise `1B940` sets G `+38` to the target's
 //!   Y + 500.
 //! * Style `4C7CD8` (`FUN_0040B340`) plays type `+9A` (none for Type29),
 //!   clears slots 1 and 2 and installs `04BE0`'s lifetime-0 dive: `06030`,
@@ -93,7 +93,7 @@ impl MobbingTaskState {
     }
 }
 
-/// `40CF00` against a capability-bit0 body: `{ch 1, 6000}` of `kind`.
+/// `FUN_0040CF00` against a capability-bit0 body: `{ch 1, 6000}` of `kind`.
 pub(crate) const fn pair_hit_packet() -> DamagePacket {
     DamagePacket {
         channels: [1, 0],
@@ -195,6 +195,7 @@ pub(super) fn apply_searching_setup(
 
 /// `C6B0(variant)` from a living Mobbing context: the same target and
 /// auxiliary word, then that style's initializer (`B2C0` or `B340`).
+/// Variant 1 builds `FUN_00403900`'s approach, variant 2 `FUN_00404BE0`'s dive.
 fn switch_style(
     entity: &mut Entity,
     variant: u8,
@@ -440,6 +441,7 @@ fn finish(
     Ok(())
 }
 
+/// Retail `FUN_00403A00`: the approach tick.
 fn tick_approach(
     manager: &mut EntityManager,
     id: u32,
@@ -507,6 +509,7 @@ fn tick_approach(
     Ok(Next::Continue)
 }
 
+/// Retail `FUN_00404D50`: the dive tick.
 fn tick_dive(
     manager: &mut EntityManager,
     id: u32,

@@ -81,7 +81,9 @@ pub struct TargetterCandidate {
     pub capability_flags: u32,
 }
 
-/// Result of the caller-owned Section-8 radius-0x78 model probe.
+/// Result of the caller-owned Section-8 radius-0x78 model probe. Retail's
+/// probe is `FUN_0044D950`: the candidate's active model, its broad sphere,
+/// then its collision program.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TargetterModelProbe {
     Hit,
@@ -202,8 +204,8 @@ impl TargetterRuntime {
         self.ring_spin_raw
     }
 
-    /// Install table `0x004D0128`. Its init callback clears +0x04..+0x37;
-    /// owner, callback/list storage and immutable constants survive.
+    /// Install table `0x004D0128` (`FUN_0044CF30`). Its init callback clears
+    /// +0x04..+0x37; owner, callback/list storage and immutable constants survive.
     pub fn install(&mut self) {
         self.active = true;
         self.prior_target_id = None;
@@ -228,6 +230,8 @@ impl TargetterRuntime {
         }
     }
 
+    /// Retail `FUN_0044CF70`: the program's per-frame step, candidate selection
+    /// (`+08`) then terrain convergence (`+0C`).
     pub fn update<ModelProbe, TerrainHeight>(
         &mut self,
         request: TargetterUpdateRequest<'_>,

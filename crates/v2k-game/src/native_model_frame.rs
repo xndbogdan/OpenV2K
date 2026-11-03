@@ -12,7 +12,7 @@ use v2k_formats::models::{
 };
 use v2k_formats::terrain::TerrainGrid;
 
-/// The retained viewport supplied by 40F350, with axes in consecutive native
+/// The retained viewport supplied by FUN_0040F350, with axes in consecutive native
 /// +14/+20/+2C order. Normal world VIEW uses dot products with these rows;
 /// 199B0's inverse conversion consumes their columns.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +39,7 @@ impl NativeWorldViewport {
         }
     }
 
+    /// Retail FUN_004199B0's view-to-world step (an identity view copies).
     pub fn view_point_to_world(self, point: [i32; 3]) -> [i32; 3] {
         let displacement = if self.identity {
             point
@@ -101,11 +102,13 @@ impl NativeModelFrame {
         }
     }
 
-    /// `FUN_00427090`'s static terrain-object node at its `FUN_0042F650`
+    /// `FUN_00427090`'s static terrain-object node (drawn through
+    /// `FUN_00465390`) at its `FUN_0042F650`
     /// origin. The node record at `0x004CA3C0` holds Q31 one on the basis
     /// diagonal and identity word 1; `FUN_00464F90` multiplies that basis into
     /// a world viewport's axes and clears the identity word, or copies both
-    /// from an identity viewport.
+    /// from an identity viewport. `FUN_00427070` sets up that context once
+    /// per static-object traversal.
     pub fn from_static_object(viewport: NativeWorldViewport, origin_raw: [i16; 3]) -> Self {
         const BASIS_Q31: [[i32; 3]; 3] = [[i32::MAX, 0, 0], [0, i32::MAX, 0], [0, 0, i32::MAX]];
         Self {

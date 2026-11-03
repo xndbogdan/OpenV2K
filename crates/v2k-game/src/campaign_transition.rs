@@ -53,7 +53,7 @@ pub struct CampaignWarpRoute {
     pub arrival: WarpArrival,
 }
 
-/// `456D10 ->42F140 ->42DE20`: an aborted wreck interior returns the
+/// `FUN_00456D10 ->42F140 ->42DE20`: an aborted wreck interior returns the
 /// controller's current world, before any authored marker record is examined.
 /// Its XYZ comes from retained session `+38/+3C`; `456D10` supplies heading4000.
 /// There is no marker identity, pair-link column, or exit-bit write on this path.
@@ -297,7 +297,7 @@ impl CampaignWarpRuntime {
         self.marker_stamp = None;
     }
 
-    /// `427E20` mode2 calls `4464B0` before physical separation. The two
+    /// `427E20` mode2 calls `FUN_004464B0` before physical separation. The two
     /// selector words come from `427100` contact+18/+14 (terrain bits3/4).
     pub fn observe_player_static_contact(&mut self, contact: StaticModelContact, retail_tick: u32) {
         let Some(kind) = static_kind_descriptor(contact.kind_index) else {
@@ -320,7 +320,7 @@ impl CampaignWarpRuntime {
         });
     }
 
-    /// `446440` consumes the first matching stamp once. Failed selector tests
+    /// `FUN_00446440` consumes the first matching stamp once. Failed selector tests
     /// retain it, and the unsigned wrapping age test is strictly `< 2`.
     pub fn poll_route(
         &mut self,

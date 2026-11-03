@@ -3,6 +3,10 @@
 //! Child relations belong to `capture`; this module owns only C6B0 publication
 //! and task-private execution. Shared callbacks retain their original kernels,
 //! while C7B0/C790/CF90 remain Capture-owned transitions.
+//!
+//! Retail initializers: FUN_0040AF10 (variant 2) and FUN_0040B780 (variant 3,
+//! whose Secondary is FUN_00402190's carrying search). FUN_0040C7B0 selects
+//! variant 5 and FUN_0040C790 variant 3 without a weighted draw.
 
 use super::NativeCaptorProfile;
 use crate::{
@@ -396,6 +400,8 @@ fn clear(entity: &mut Entity, slot: ActorTaskSlot) {
     entity.actor_tasks.clear_slot_with_retirement(slot, |_| {});
 }
 
+/// Retail `FUN_00405F80`: build a task through the shared constructor, then
+/// install it in its slot.
 fn publish_task(
     entity: &mut Entity,
     slot: ActorTaskSlot,
@@ -487,6 +493,7 @@ pub(crate) fn tick_primary(
     }
 }
 
+/// Retail `FUN_004021B0`: the carrying search's tick.
 pub(crate) fn acquire(
     manager: &mut EntityManager,
     id: u32,
@@ -542,7 +549,7 @@ pub(crate) fn acquire(
     result
 }
 
-/// 22F10 is a separate ranked selector from Follow's 22E30: minimum signed
+/// `FUN_00422F10` is a separate ranked selector from Follow's 22E30: minimum signed
 /// entity+88, initial 65535, and one low-bit tie draw per eligible equal score.
 pub(crate) fn select_beacon(
     manager: &EntityManager,

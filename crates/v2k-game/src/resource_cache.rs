@@ -418,6 +418,8 @@ impl ResourceCache {
     }
 
     /// Unload the current level, keeping preload and system resources.
+    /// Retail releases a loaded overlay's resources before the next one loads
+    /// (`FUN_00493B70`, which runs each section's release, `FUN_00493AF0`).
     pub fn unload_level(&mut self) {
         self.layers.retain(|l| l.kind != LayerKind::Level);
         self.level_abort_terrain_transformed = false;
@@ -450,6 +452,8 @@ impl ResourceCache {
     }
 
     /// 4A890 refreshes preserve the original coverage map and input order.
+    /// Retail's radar registers the same refresh as a terrain-change callback
+    /// (`FUN_0044A850`), so a changed cell redraws at once.
     pub(crate) fn refresh_level_terrain_radar(
         &mut self,
         positions: &[[i16; 2]],
@@ -663,7 +667,7 @@ impl ResourceCache {
         std::mem::take(&mut self.level_terrain_presentation_dirty)
     }
 
-    /// Static opcode11 -> 37100 lowers the current cell's high three light
+    /// Static opcode11 -> FUN_00437100 lowers the current cell's high three light
     /// bits, clamps at zero and preserves all five low terrain-state bits.
     ///
     /// Only a positive amount and a nonzero old light reach the write and
@@ -1024,7 +1028,7 @@ impl ResourceCache {
     }
 
     /// Resolve one entry in the executable's cumulative global Section-7
-    /// palette-pointer pool.
+    /// palette-pointer pool (retail's lookup callback FUN_004291E0).
     ///
     /// Missing mutually exclusive world-style OVLs retain their canonical
     /// holes. Cache insertion priority and residency are deliberately
@@ -1105,7 +1109,8 @@ impl ResourceCache {
     }
 
     /// Look up a sprite by its GLOBAL pool index, matching the runtime pool at
-    /// DAT_004FE62C. Each Section 3 entry stores its global slot in its
+    /// DAT_004FE62C (retail's lookup callback FUN_004291D0). Each Section 3
+    /// entry stores its global slot in its
     /// `index` field (verified: biome 6 entries are 1322 + entry_idx), so the
     /// cumulative pool can be searched directly without cumulative bases.
     /// Scans layers newest-first.
@@ -1168,7 +1173,8 @@ impl ResourceCache {
         });
     }
 
-    /// Look up a global model id in the fixed Section-8 pool at DAT_004FE640.
+    /// Look up a global model id in the fixed Section-8 pool at DAT_004FE640
+    /// (retail's lookup callback FUN_004291F0).
     /// Missing biome layers leave their canonical ranges unresolved instead
     /// of compressing every later absolute id toward 324.
     pub fn global_model(&self, id: usize) -> Option<&v2k_formats::models::ModelEntry> {

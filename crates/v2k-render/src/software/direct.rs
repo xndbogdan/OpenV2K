@@ -190,6 +190,7 @@ impl SoftwareRaster {
         if x1 < x0 || y1 < y0 {
             return;
         }
+        // FUN_004A9E90 reads the surface's width and height.
         let width = target.width as i32;
         let height = target.height as i32;
         self.state.clip = ClipRect {

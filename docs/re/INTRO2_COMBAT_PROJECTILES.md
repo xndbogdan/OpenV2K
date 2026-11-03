@@ -294,7 +294,7 @@ sweep with descriptor-selected packets: `004CC0F0` (shared with class 87),
 `004CC108` (`[2,6]/[2000,2000]`, recovered by static executable read and
 cross-validated against seven documented rows), and `004CC048` (shared with
 dragon class 38). Static contact consumes 52/68 through the `42E8E0` no-op and
-delivers `F800` for 85. `FUN_00441180` delivery (stamp, pre-callback `+0x80`
+delivers `F800` for 85. `FUN_00411180` delivery (stamp, pre-callback `+0x80`
 sound, DAC0/C690, 11030 at eightfold 25590 force, result-blind 15040) runs for
 native Type9 and Type26 in Intro2 and their owned ordinary authored worlds,
 Type13 in Intro2, and [native fish](FISH_RUNTIME.md#particle-hits-and-quiet-death)

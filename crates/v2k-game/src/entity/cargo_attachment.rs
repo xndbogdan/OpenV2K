@@ -31,7 +31,7 @@ pub enum PlayerCargoAttachmentError {
 }
 
 impl EntityManager {
-    /// Run443B30/443B50 for a selected native weight. Identity selection and
+    /// Run FUN_00443B30/443B50 for a selected native weight. Identity selection and
     /// a possible zero-record birth belong to the caller; neither is retried
     /// when the selected body's callback is unavailable.
     pub fn attach_player_cargo(

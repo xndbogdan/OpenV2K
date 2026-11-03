@@ -2111,7 +2111,7 @@ controls remain unchanged. Matched retail presentation acceptance remains open.
 | Queue flush: merge-sort → drain | `FUN_00494930` → `FUN_00494A50` |
 | Model authored-plane setup/test | `FUN_0046D5A0` / `FUN_0046D3F0` |
 | DirectDraw surface lock | `FUN_004A9CE0` (IDirectDrawSurface::Lock vtbl+0x64) |
-| Bilinear toggle (DEAD) global / handler | `0x4CB3F0` / `FUN_0043CCA0` |
+| Bilinear toggle global (no effect on the software fill) / handler | `0x4CB3F0` / `FUN_0043CCA0` |
 
 Binary source tags: `C:\Coding\FGDK\Code\Windows\Graph2D.c` (rasterizer),
 `…\DDCalls.c` (DirectDraw), `…\movie.c` (AVI). Imports: `DDRAW.dll` only.

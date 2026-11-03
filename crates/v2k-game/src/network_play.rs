@@ -771,7 +771,8 @@ fn wrap_words(font: &v2k_game::menu_text::MenuFont, text: &str, width: f32) -> V
 
 /// `FUN_00421590` in a network game: a peer's craft wears its initials
 /// above it (-100, +128 raw from its origin), once its world Z exceeds the
-/// view origin's by more than 256.
+/// view origin's by more than 256. Retail queues each tag's draw through
+/// `FUN_00421840` and `FUN_004218A0`.
 pub fn draw_name_tags(
     renderer: &mut dyn v2k_render::Renderer,
     fonts: &v2k_game::menu_text::MenuFonts,

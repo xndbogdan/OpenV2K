@@ -3,6 +3,8 @@
 # region=library starts at the first linker-placed import stub (0x004AC5A0).
 # Seeded by hand: the seven Direct3D fill handlers 0x00486BA0..0x00489A60, named only by
 # FUN_00480D10's table-1 branch; each runs to its last instruction, as Ghidra sizes them.
+# Seeded by hand: the frontend digit-key setters 0x0042D250..0x0042D290 (table 004CA720) and
+# the slot thunks 0x0047A8C0..0x0047A940, whose neighbours the census already had.
 address,size,region
 0x00401000,14,game
 0x00401010,14,game
@@ -741,6 +743,11 @@ address,size,region
 0x0042D030,480,game
 0x0042D210,48,game
 0x0042D240,11,game
+0x0042D250,11,game
+0x0042D260,11,game
+0x0042D270,11,game
+0x0042D280,11,game
+0x0042D290,11,game
 0x0042D2A0,149,game
 0x0042D340,435,game
 0x0042D500,194,game
@@ -1980,6 +1987,11 @@ address,size,region
 0x0047A860,20,game
 0x0047A880,20,game
 0x0047A8A0,20,game
+0x0047A8C0,20,game
+0x0047A8E0,20,game
+0x0047A900,20,game
+0x0047A920,20,game
+0x0047A940,20,game
 0x0047A960,20,game
 0x0047A980,20,game
 0x0047A9A0,20,game

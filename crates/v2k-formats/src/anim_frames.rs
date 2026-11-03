@@ -74,7 +74,8 @@ fn classify_quad(quad: &[u16; 4]) -> ModelSlotPattern {
 }
 
 /// Parse the Section-9 terrain-object descriptor table.
-/// Expects exactly 3072 bytes (256 × 12-byte records).
+/// Expects exactly 3072 bytes (256 × 12-byte records). Retail's Section-9
+/// loader `FUN_00428A20` keeps one such 0xC00-byte table per overlay.
 pub fn parse_terrain_objects(data: &[u8]) -> Result<TerrainObjectTable> {
     if data.len() < EXPECTED_SIZE {
         return Err(V2kError::section(

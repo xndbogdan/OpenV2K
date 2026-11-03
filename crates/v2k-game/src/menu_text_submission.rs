@@ -58,6 +58,7 @@ pub(super) fn draw_menu_text(
     );
 }
 
+/// One line of menu text (`FUN_00470A70`), glyph by glyph.
 pub(super) fn draw_menu_text_toned(
     renderer: &mut dyn v2k_render::Renderer,
     font: &v2k_game::menu_text::MenuFont,
@@ -93,7 +94,7 @@ pub(super) fn draw_menu_text_toned(
         let Some(g) = font.glyph(c) else { continue };
         let pen = (pen_raw / font.pen_scale) as f32 + fraction;
         if g.width > 0 && g.height > 0 {
-            // Baseline blit: y = baseline + yoff − sprite_h + 1 (asset px).
+            // Baseline blit (FUN_00470F30): y = baseline + yoff − sprite_h + 1 (asset px).
             let x0 = ox + ((pen + g.xoff) * s) as i32;
             let x1 = ox + ((pen + g.xoff + g.width as f32) * s) as i32;
             let y0 = oy + ((baseline + g.yoff - g.height as f32 + 1.0) * s) as i32;

@@ -31,7 +31,7 @@ pub struct SubFSwimmingRuntime {
 }
 
 impl SubFSwimmingRuntime {
-    /// Successful `424220`: zero allocation, conditional RNG sequence, then
+    /// Successful `424220` (`FUN_00424220`): zero allocation, conditional RNG sequence, then
     /// six signed selector resolutions. Zero selectors never call the resolver.
     /// The host owns allocation failure and the `40A950` binding interpretation.
     pub fn construct(
@@ -118,7 +118,8 @@ pub enum SubFSwimmingError {
     MissingBeachedAnimationBinding,
 }
 
-/// Apply exactly one `4236D0` call. Validation precedes all mutable writes.
+/// Apply exactly one `4236D0` call (FUN_004236D0, the Sub-F tick). Validation
+/// precedes all mutable writes.
 /// B/D steering, detailed/coarse admission and master motion remain with the host.
 pub fn apply_sub_f_swimming_raw(
     descriptor: SubFSwimmingDescriptor,
@@ -200,7 +201,7 @@ pub fn apply_sub_f_swimming_raw(
     Ok(())
 }
 
-/// Scalar/controller portion of `423DF0`; sea/beach writes follow on the host.
+/// Scalar/controller portion of `423DF0` (`FUN_00423DF0`); sea/beach writes follow on the host.
 fn apply_controller(
     runtime: &mut SubFSwimmingRuntime,
     body: &mut SubFSwimmingBody,

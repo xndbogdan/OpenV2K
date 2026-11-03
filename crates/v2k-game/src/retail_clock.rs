@@ -15,7 +15,8 @@ pub const RETAIL_TICK_MICROS: u64 = 20_000;
 pub const RETAIL_FRAME_DELTA_MAX_US: u32 = 125_000;
 
 /// `FUN_00494070`'s minimum frame period (task `+0x20`): a frame runs only
-/// once this much has passed, so retail tops out at 125 frames a second.
+/// once this much has passed, so retail tops out at 125 frames a second. The
+/// world session's application (`FUN_0044F960`) asks for this period.
 pub const RETAIL_MIN_FRAME_PERIOD_MICROS: u64 = 8_000;
 
 /// `FUN_00494070`'s gate on `FUN_00495FF0`'s clock (`timeGetTime() * 1000`):
@@ -88,7 +89,8 @@ pub struct RetailTickClock {
 }
 
 impl RetailTickClock {
-    /// Construct a reset clock at tick zero.
+    /// Construct a reset clock at tick zero, as the clock module's open
+    /// (`FUN_00428AA0`) leaves it.
     pub const fn new() -> Self {
         Self {
             accumulated_micros: 0,

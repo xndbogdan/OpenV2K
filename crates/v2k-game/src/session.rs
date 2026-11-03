@@ -60,7 +60,8 @@ impl GameSession {
     /// Constructs the OVL path as `Overlay/{variant}X{level_id}XX.OVL`
     /// following the V2000 naming convention (e.g. `1X3XX.OVL` for level 3,
     /// `1X13XX.OVL` for level 13, high-resolution variant 1). Variant 0 is the
-    /// explicit 320x240 low-resolution tier.
+    /// explicit 320x240 low-resolution tier. Retail `FUN_00493640` formats the
+    /// same `overlay\%dx%dxx.ovl` name.
     ///
     /// For game world levels (13-50), also loads the one system OVL selected
     /// by Section-13 `+0x48`. `FUN_0042E570` performs exactly

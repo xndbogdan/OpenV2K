@@ -393,7 +393,9 @@ impl GameplayRadar {
     }
 
     /// Advance only the map's presentation clock. Gameplay and the retail
-    /// process tick stay frozen while this modal is open.
+    /// process tick stay frozen while this modal is open. Retail
+    /// `FUN_0044C340` steps the blink phase every 100 ms and draws markers
+    /// only in a nonzero phase.
     pub fn advance_fullscreen(&mut self, elapsed_micros: u32) {
         if !self.lifecycle.open {
             return;
@@ -567,6 +569,8 @@ impl GameplayRadar {
 }
 
 impl RadarPalette565 {
+    /// The terrain part is retail `FUN_0044BC80`: 32 colours from the level's
+    /// palette base, then global entries 31, 34 and 33.
     fn from_cache(cache: &ResourceCache) -> Option<Self> {
         let base = usize::try_from(cache.level_desc()?.raw_u32(0x50)?).ok()?;
         let mut terrain = [0_u16; TERRAIN_PALETTE_LEN];
@@ -630,7 +634,7 @@ impl TerrainRadar {
         }
     }
 
-    /// `2E570` calls `F390`, then `4AFB0 -> 4AB20(0)` after the authored
+    /// `2E570` calls `F390`, then `4AFB0 -> 4AB20(0)` (`FUN_0044AFB0`) after the authored
     /// constructors. Every covered cell consumes a process RNG word, including
     /// cells subsequently overwritten by the map grid. Display resources are
     /// independent: Intro2 performs this load even without a visible HUD.
@@ -683,7 +687,7 @@ impl TerrainRadar {
         Ok(radar)
     }
 
-    /// `4A890` refreshes the raster only; coverage is retained. Preserve raw
+    /// `FUN_0044A890` refreshes the raster only; coverage is retained. Preserve raw
     /// positions and input order, including duplicates, because each covered
     /// call consumes a fresh word. The material sample rounds by `+0x80` while
     /// object, height and layer remain in the unrounded cell (`4A5C0`).
@@ -704,7 +708,7 @@ impl TerrainRadar {
         Ok(draws)
     }
 
-    /// `44A8D0` changes packed coverage and immediately runs `44A5C0` for
+    /// `44A8D0` (`FUN_0044A8D0`) changes packed coverage and immediately runs `44A5C0` for
     /// every cell in the square, including zero-contribution edge cells.
     /// Whole-byte carries/borrows and X-outer/Z-inner traversal are observable
     /// through both neighboring coverage and the shared random stream.
@@ -1108,6 +1112,8 @@ fn marker_style(capabilities: u32, state: RetailStateWord, variant: u8) -> Optio
     (capabilities & 0x8000 != 0).then_some((5, 3))
 }
 
+/// Retail `FUN_0044B950`: the centre pixel unless shape bit 2, and with bit 1
+/// a halo of edge neighbours at half and diagonals at a quarter.
 fn plot_marker(image: &mut RadarImage, marker: Marker) {
     if marker.shape & 2 == 0 {
         blend_image_pixel(image, marker.x, marker.y, marker.color, 255);
@@ -1129,6 +1135,7 @@ fn plot_marker(image: &mut RadarImage, marker: Marker) {
     }
 }
 
+/// One halo pixel: an even blend (`FUN_0044B6F0`) or a quarter (`FUN_0044B810`).
 fn blend_image_pixel(image: &mut RadarImage, x: i32, y: i32, color: [u8; 4], alpha: u8) {
     if x < 0 || y < 0 || x >= image.width as i32 || y >= image.height as i32 {
         return;
@@ -1166,8 +1173,9 @@ fn state_proves_nonzero(state: RetailStateWord) -> bool {
 }
 
 fn radar_palette_rgb565(entry: &PaletteEntry) -> u16 {
-    // Section 7 stores RGB555 on disk. Retail expands those channels into the
-    // RGB565 framebuffer table captured at DAT_004FE63C by shifting the red
+    // Section 7 stores RGB555 on disk. When the table loads, retail expands
+    // those channels (FUN_004AB830, FUN_004AB860) into the RGB565
+    // framebuffer table captured at DAT_004FE63C by shifting the red
     // and green lanes one place. It does not replicate green's high bit into
     // the new low bit: disk 0x7fff deliberately becomes 0xffdf, not 0xffff.
     ((entry.rgb555 & 0x7c00) << 1) | ((entry.rgb555 & 0x03e0) << 1) | (entry.rgb555 & 0x001f)

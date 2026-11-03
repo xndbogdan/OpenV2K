@@ -15,7 +15,7 @@ use v2k_formats::{
     anim_frames::TerrainObjectTable, collision::CommonAxisDescriptor, terrain::TerrainGrid,
 };
 
-/// 4230C0 preserves low coordinate bytes and searches its asymmetric edges
+/// `FUN_004230C0` preserves low coordinate bytes and searches its asymmetric edges
 /// in this exact order (EXE 423170/4232D8). Current and outer-radius cells
 /// are excluded. This scanner has no RNG or actor-family policy.
 pub(crate) fn find_furniture(
@@ -74,6 +74,7 @@ pub struct TrashFurnitureTaskState {
 }
 
 impl TrashFurnitureTaskState {
+    /// Retail `FUN_00401D30`: the task's 0x24-byte furniture record.
     fn new(
         kind_filter: i32,
         policy: TrashFurnitureTargetHeightPolicy,
@@ -135,6 +136,7 @@ fn apply_setup<E>(
     Ok(())
 }
 
+/// Retail `FUN_00401CA0` builds this Primary.
 /// Successful 401D03 -> 406030 -> 406070 enables H, then consumes one A
 /// constructor word before publishing Primary. E is not a 6070 consumer.
 pub(crate) fn publish_trash_furniture(
@@ -207,7 +209,7 @@ pub enum TrashFurnitureError<E> {
     Mover(E),
 }
 
-/// Exact 01120 visit around 1DA0. A failed scan still calls 01430 before
+/// Exact 01120 visit around `FUN_00401DA0`. A failed scan still calls 01430 before
 /// returning 9C01; the mover Boolean is discarded. Callback errors preserve
 /// elapsed/scan/mover prefixes and always unwind. Only a surviving wrapper
 /// can request the tag or strict >2000-ms transition.

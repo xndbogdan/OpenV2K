@@ -54,7 +54,7 @@ The outer `FUN_0040C6B0` owner later maps that nonzero result to fallback
 descriptor/style `0x004C8888/0x004C74F8` and clears slots 1, 2, then 0; the
 detached initializer deliberately does not claim that live owner.
 
-`FUN_004568B0` and demo `FUN_00456210` are exact instruction matches. They
+`FUN_004568B0` and demo `DEMO_00456210` are exact instruction matches. They
 forward event `0x10` and the callback's current millisecond timestamp
 `(50-Hz tick * 1000) / 50` to the canonical resource slot only in gameplay
 phase 5. The exact matched callee sets mask bit
@@ -90,7 +90,7 @@ replacement. The heterogeneous dispatcher remains fail-closed so it cannot
 partially visit the shared local-wander task around either dedicated boundary.
 
 This receipt bridge models only native fresh-context allocation's success path.
-Retail `FUN_0040ABE0` and demo `FUN_0040ABF0` allocate the 0x1c-byte context
+Retail `FUN_0040ABE0` and demo `DEMO_0040ABF0` allocate the 0x1c-byte context
 after selector RNG but before the style switch. Allocation failure propagates
 unchanged, enters neither the selected initializer nor unnamed fallback,
 destroys the provisional entity/component aggregate, unregisters its handle,
@@ -112,7 +112,7 @@ applies the accepted one-in-four gate's filter overwrite `0x201` at its
 in intrusive order. Its non-forgeable handoff stores that handle before
 `FUN_0040C6B0` publishes variant + 1 / style `0x004C86F8`; no selector RNG is
 repeated inside the handoff. Target-style initializer retail `FUN_0040AF50` /
-demo `FUN_0040AF60` then clears Secondary followed by Tertiary and fallibly
+demo `DEMO_0040AF60` then clears Secondary followed by Tertiary and fallibly
 prepares the 5,000-ms shared target-route task from context `+0x08` and the
 owner's current position. Successful preparation consumes exactly one generic
 constructor word, resets Sub-A, overwrites target speed with signed
@@ -195,7 +195,7 @@ Sub-I `+0x04` (global sound 72, PCM alias 15), a 1000-ms cue and local-wander
 task, and a separate 5000-ms accepted-target route. There is no blanket help
 cooldown: selecting class 45 again executes its initializer and sound again.
 Retail `FUN_00438050` is an unconditional zero-return leaf;
-the demo uses the structurally identical shifted leaf `FUN_00402B40`. The
+the demo uses the structurally identical shifted leaf `DEMO_00402B40`. The
 generic owner first adds `elapsed_us / 1000` with per-call truncation and u32
 wrapping, then enters and unwinds the leaf. Exactly 1000 ms remains active;
 only `elapsed > 1000` can call the type-default/root-first selector, and only
@@ -512,7 +512,7 @@ The outer post-task basis rebuild now completes before any selected owner can
 be ticked again. An admitted initial multi-slot Attract frame, and selected
 Wander, Go-To-Job, or Run Away after F70, continue through the shared
 non-lifecycle outer tail in the same actor-list visit. Retail
-`FUN_00412DA0`, demo `FUN_00412D10`, and the exact-matched helpers establish the
+`FUN_00412DA0`, demo `DEMO_00412D10`, and the exact-matched helpers establish the
 order: E100 applies ordinary `0x2F` drag, DF70 snaps Y from the old X/Z terrain
 sample and zeroes vertical velocity, then E370 commits its timer and chooses
 either lifecycle or random effects. The random branch plans and materializes

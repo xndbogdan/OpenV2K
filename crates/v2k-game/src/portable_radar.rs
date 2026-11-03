@@ -48,7 +48,7 @@ pub enum PortableRadarTickOutcome {
     AlreadyDeployed,
 }
 
-/// `405610`: attachment resets K1; otherwise advance once per callback with
+/// `405610` (`FUN_00405610`): attachment resets K1; otherwise advance once per callback with
 /// no fractional carry. The first saturation writes FFFF before adding coverage.
 ///
 /// A coverage error therefore retains that committed K1 write. A native caller
@@ -79,7 +79,7 @@ pub fn tick_portable_radar(
     Ok(PortableRadarTickOutcome::Deployed { random_draws })
 }
 
-/// `4055C0`: remove a saturated footprint at the entity's *current* position,
+/// `4055C0` (`FUN_004055C0`): remove a saturated footprint at the entity's *current* position,
 /// then reset the shared K1 word. Partial deployment needs no radar resources.
 ///
 /// The native task owner must run this during inner-task retirement, before

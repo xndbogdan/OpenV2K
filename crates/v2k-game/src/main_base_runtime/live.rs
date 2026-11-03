@@ -292,6 +292,8 @@ fn run_frame(
     })
 }
 
+/// Retail FUN_00425D60: the Primary tick. A running death clock advances the
+/// progressive death; otherwise a new attack queues the under-attack message.
 fn run_callback(
     manager: &mut EntityManager,
     id: u32,

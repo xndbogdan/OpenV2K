@@ -286,7 +286,9 @@ impl AnimSoundTable {
 /// Parse Section 11 sound-effect entries.
 ///
 /// Scans 20-byte entries from the start of data, stopping when an invalid
-/// type is encountered (not 0, 1, or 5).
+/// type is encountered (not 0, 1, or 5). Retail's Section-11 loader
+/// `FUN_004AB470` relocates the same records: type 1's PCM block, type 5's
+/// alias target.
 pub fn parse_anim_sound(data: &[u8]) -> Result<AnimSoundTable> {
     if data.is_empty() {
         return Err(V2kError::section(11, "section 11 is empty"));

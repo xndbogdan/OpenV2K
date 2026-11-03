@@ -48,14 +48,14 @@ Each handler's Load function reads a `uint32 block_size` from the file stream, a
 | Section | Load Function | Record Size | Description |
 |---------|---------------|-------------|-------------|
 | 0 | 0x004AB920 | pointer array | Pointer fixup table (live display block) |
-| 1 | 0x0048F130 | pointer array | Layout points (packed s16 x,y) — menu row positions |
-| 2 | 0x00484260 | string table | Null-terminated ASCII strings |
+| 1 | 0x004AB920 ✓ | pointer array | Layout points (packed s16 x,y) — menu row positions |
+| 2 | 0x004ABF40 ✓ | string table | Null-terminated ASCII strings |
 | 3 | 0x004ABB80 ✓ | variable | Sprite atlas (size dword = unpacked atlas size) |
 | 4 | 0x004ABA70 ✓ | 0x40 + tables | **Menu FONTS** (see Section 4 — old "parameter tables" reading was wrong) |
-| 5 | 0x00471900 | 0x14 (20) | Display mode configuration (4 modes) |
-| 6 | loader pending re-verification | 4 | Render shade lookup (26 packed entries) |
-| 7 | 0x0046E400 | 4 | RGB555 color palettes (1–86 entries) |
-| 8 | 0x00465C50 | variable | Model command streams (size dword = (model_count<<16)\|stream_bytes) |
+| 5 | 0x004AB9C0 ✓ | 0x14 (20) | Display mode configuration (4 modes) |
+| 6 | 0x004AB920 ✓ | 4 | Render shade lookup (26 packed entries) |
+| 7 | 0x004AB790 ✓ | 4 | RGB555 color palettes (1–86 entries) |
+| 8 | 0x004AB5B0 ✓ | variable | Model command streams (size dword = (model_count<<16)\|stream_bytes) |
 | 9 | 0x00428A20 ✓ | 0xC00 (3,072) | Animation frame lookup tables (256 × 12B) |
 | 10 | 0x00437E60 ✓ | 0x30014 | Terrain heightmaps (0x14 header + 256 × 256 × 3 bytes) |
 | 11 | 0x004AB470 ✓ | 0x14 (20) | Sound effects (PCM blobs + parametric aliases) |
@@ -104,7 +104,7 @@ Data boundaries are determined by `"abcd"` marker positions. Each section's data
 
 ### Section 1: Code Pointer Fixup Table
 
-**Handler:** `FUN_0048f130` — Same pattern as Section 0. Reads block and fixes up internal pointers. Used for code/function pointer relocation.
+**Handler:** `FUN_004AB920`, the Section 0 loader. Reads block and fixes up internal pointers. Used for code/function pointer relocation.
 
 **Entry format:** Flat array of uint16 values (packed pointer offsets). Entry count from PRELOAD.DAT; block size = count × 4 bytes.
 
@@ -116,7 +116,7 @@ Data boundaries are determined by `"abcd"` marker positions. Each section's data
 
 ### Section 2: String Table
 
-**Handler:** `FUN_00484260` — Reads block containing null-terminated ASCII strings. Used for level text, UI strings, and weapon/rank names.
+**Handler:** `FUN_004ABF40` — Reads block containing null-terminated ASCII strings. Used for level text, UI strings, and weapon/rank names.
 
 **Present in:** System and game world OVLs. Over 1 million strings extracted across all 212 files.
 
@@ -255,7 +255,7 @@ and preserves the captured OVL fields rather than embedding another parser.
 
 ### Section 5: Display Mode Configuration
 
-**Handler:** `FUN_00471900` — Reads `[uint32 block_size][data]`, stores pointer at global+0x24. Contains display resolution configurations available to the player.
+**Handler:** `FUN_004AB9C0` — Reads `[uint32 block_size][data]`, stores pointer at global+0x24. Contains display resolution configurations available to the player.
 
 **Record format (0x14 = 20 bytes):**
 ```
@@ -286,9 +286,9 @@ All records share identical param_1 (0x02000010) and param_2 (0x00010101) values
 
 > **2026-07-14 correction:** this is not the terminal fog-colour source.
 > Gameplay fog has separate render-context near/far words and terminates in
-> the authored sky colour. The old `FUN_004708E0` loader attribution was also
-> stale (`0x004708E0` lies inside an operand decoder); its loader address
-> remains to be re-verified.
+> the authored sky colour. The old loader attribution to `0x004708E0` was also
+> stale (it lies inside an operand decoder); the handler table gives the
+> Section 0 loader, `FUN_004AB920`.
 
 Contains packed render colour/shade lookup entries. Terrain construction
 (`FUN_0042FCC0` / `FUN_00430140`) produces a 0–7 vertex shade. `FUN_00430430`
@@ -319,7 +319,7 @@ the first eight Section-6 dwords into the context.
 
 ### Section 7: RGB555 Color Palettes
 
-**Handler:** `FUN_0046e400` — Reads `[uint32 block_size][data]`, stores pointer at global+0x30, then registers a display-mode-change callback. Contains the base color palettes used by the shade ramp system (Section 3 atlas references these as shade-level-0 colors).
+**Handler:** `FUN_004AB790` — Reads `[uint32 block_size][data]`, stores pointer at global+0x30, then registers a display-mode-change callback. Contains the base color palettes used by the shade ramp system (Section 3 atlas references these as shade-level-0 colors).
 
 **Entry format (4 bytes):**
 ```
@@ -663,6 +663,10 @@ opcode order, as the table at `0x004CDF08`: `FUN_00448780`, `FUN_00448790`,
 `FUN_004487D0`, `FUN_004487F0`, `FUN_00448810`, `FUN_00448840`,
 `FUN_00448850`, `FUN_00448880`, `FUN_004696B0`, `FUN_004488A0`,
 `FUN_004696D0` and `FUN_00448900`.
+Nothing references that table at `0x004CDF08`; its entries that are also in
+`0x004D4980` serve the collision interpreter's opcode `0x36`, and
+`FUN_00448780`, `FUN_004487A0` and `FUN_00448850`, which appear only there,
+never run.
 
 **Transform-only table** (`0x004D44E0`). It shares the drawing tables'
 control and variable ops. Its face, edge and billboard handlers resolve each
@@ -1050,7 +1054,7 @@ the model placed *on* a cell.
 
 ### Section 10: Terrain Heightmaps
 
-**Handler:** `FUN_004277c0` — Reads block, assigns entries at stride 0x30000 (196,608 bytes = 256 × 256 × 3).
+**Handler:** `FUN_00437E60` — Reads block, assigns entries at stride 0x30000 (196,608 bytes = 256 × 256 × 3).
 
 **Record size:** 196,628 bytes = 20-byte header + 196,608 bytes grid data (256 × 256 × 3 bytes per cell).
 
@@ -1901,7 +1905,7 @@ uint32[15][53]    Section-major order, little-endian
 | `0x004D40E0` | (data) | cmd dispatch table B — render far/LOD (256 ptrs) |
 | `0x004D44E0` | (data) | cmd dispatch table C — transform-only pass (256 ptrs) |
 | `0x004D55A0` | (data) | scanline rasterizer edge-interpolator table (NOT a cmd pass) |
-| `0x004D4A78` | (data) | per-vertex type_flag transform table (ctx[0x13]): +0 far, +0x3C near, +0x78 pass 3, +0xB4.. projection helpers |
+| `0x004D4A78` | (data) | per-vertex type_flag transform table (ctx[0x13]): +0 far, +0x3C near, +0x78 pass 3, +0xB4.. projection helpers (no instruction calls slots +0xBC `FUN_0046CC20` and +0xC8 `FUN_0046CCF0`) |
 | `0x004D14D0` | (data) | sine table (0x4000 = 90°), used by billboard rotation |
 | `0x00470840` | PackedOperandDecode | rotate-imm / register / callback operand scheme |
 | `0x00470700` | EvalAnimVar | animation variable eval (imm / imm<<10 / callback / register) |

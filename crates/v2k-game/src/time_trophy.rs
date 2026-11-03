@@ -1,5 +1,5 @@
 //! Per-world time-trophy controller recovered from `FUN_0042D9B0` and
-//! `FUN_0042E570` (demo `FUN_0042D400` / `FUN_0042DFC0`).
+//! `FUN_0042E570` (demo `DEMO_0042D400` / `DEMO_0042DFC0`).
 //!
 //! This is the authoritative owner of player-controller state `+0x1F0` and
 //! signed remaining milliseconds `+0x1EC`. Ordinary hive/world-complete now
@@ -203,7 +203,7 @@ impl TimeTrophyRuntime {
         })
     }
 
-    /// Apply retail's campaign "save world" transaction.
+    /// Apply retail's campaign "save world" transaction (`FUN_0042EE70`).
     ///
     /// This is campaign completion bit `0x01`, not save-to-disk. Only an
     /// active timer secures bit `0x08`; every other prior state becomes `3`.

@@ -23,7 +23,8 @@ use crate::entity::EntityManager;
 use crate::entity_collision_state::{RetailRuntimeValue, BODY_BASIS_REBUILT_STATE_BIT};
 
 /// `FUN_00469550(..., 0x40, ...)`: the game channel's inbound ring holds 64
-/// messages; one arriving at a full ring is dropped.
+/// messages; one arriving at a full ring is dropped. Each start frees the
+/// previous ring first (`FUN_004695A0`).
 pub const INBOUND_MESSAGES: usize = 64;
 /// `FUN_0046BED0` re-arms the network timer every second.
 pub const TIMER_US: u32 = 1_000_000;
@@ -245,6 +246,9 @@ impl NetworkGame {
                     self.became_host = true;
                     self.slots.changed = true;
                 }
+                // FUN_00469470: channel 0 applies at once and channel 1 waits
+                // in the ring: its next entry (FUN_004694F0), pushed by
+                // FUN_00469520, which drops a message at a full ring.
                 Received::Game { data, .. } => match framing::header(&data) {
                     Some((0, _)) => {
                         let slots = &mut self.slots;
@@ -300,6 +304,7 @@ impl NetworkGame {
             // FUN_00414990: the departed bodies leave at once.
         }
         self.session_tick(frame);
+        // FUN_004694B0 pops each ring entry in turn.
         while let Some(message) = self.inbound.pop_front() {
             self.read_message(&message, Some(frame));
         }
@@ -386,6 +391,7 @@ impl NetworkGame {
             .record_local_name(local, profile, &tables, self.is_host());
         let mut departed = false;
         let mut entities = entities;
+        // Retail reads a copy of the slot table (FUN_0046C0C0).
         for slot in 1..SLOTS {
             if slot as u8 == local || self.slots.ids[slot] == self.expected[slot] {
                 continue;
@@ -793,6 +799,7 @@ impl NetworkGame {
                 }
             }
             GameRecord::KillReport { victim, attacker } => {
+                // FUN_00439A40: only the host scores the hit.
                 if self.is_host() {
                     let effects = self.scoring.score_hit(victim, attacker);
                     self.run_effects(effects);

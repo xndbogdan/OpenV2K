@@ -118,6 +118,8 @@ pub struct ChaseCameraState {
 }
 
 impl ChaseCameraState {
+    /// Retail FUN_0040F390: clear both springs' initialized flags so the next
+    /// update starts them on their targets.
     pub fn reset(&mut self) {
         *self = Self::default();
     }

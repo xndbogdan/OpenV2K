@@ -477,7 +477,9 @@ impl PadBindings {
 
     /// Install `context`'s binding sets. A record already satisfied by held
     /// buttons starts active without acting, so a button held through a
-    /// screen change does not also act on the new screen.
+    /// screen change does not also act on the new screen, as retail's
+    /// install-time evaluation `FUN_00471DE0` does.
+    /// The old set stops first, dropping its records' state (`FUN_00471D20`).
     pub fn set_context(&mut self, context: PadContext) {
         if context != self.context {
             self.context = context;
@@ -489,7 +491,8 @@ impl PadBindings {
         }
     }
 
-    /// Fold one pad button change in, appending the actions it starts.
+    /// Fold one pad button change in, appending the actions it starts: the
+    /// matcher `FUN_00472320`.
     pub fn button(&mut self, button: PadButton, pressed: bool, started: &mut Vec<PadAction>) {
         let bit = 1 << input_of(button);
         if pressed {

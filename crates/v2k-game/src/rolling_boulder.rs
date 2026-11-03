@@ -242,7 +242,7 @@ pub const fn apply_style_install_state(state: u32, style: RollingBoulderStyle) -
     (state | disable.clear_bits) & !disable.set_bits
 }
 
-/// `404B40 -> 405F80`'s task: the generic wrapper's millisecond counter only.
+/// `FUN_00404B40 -> 405F80`'s task: the generic wrapper's millisecond counter only.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct BoulderRestingTaskState {
     pub elapsed_ms: u32,
@@ -253,7 +253,7 @@ impl BoulderRestingTaskState {
         Self { elapsed_ms: 0 }
     }
 
-    /// `404B60`. A restricted (coarse) visit returns zero untouched. A
+    /// `FUN_00404B60`. A restricted (coarse) visit returns zero untouched. A
     /// detailed visit returns the 9C00 singleton `4BE198` while the narrowed
     /// `457730` speed exceeds 100; otherwise it zeroes the velocity.
     pub fn step(
@@ -547,9 +547,9 @@ pub(crate) fn publish_split_rolling_boulder(
     Ok(runtime)
 }
 
-/// The class20 initializers: `40A7A0` clears Tertiary and Secondary, then
-/// `404580`/`404B40` publish the new Primary. Neither consumes RNG for a
-/// component-less body.
+/// The class20 initializers (resting: FUN_0040B9B0): `40A7A0` clears Tertiary and
+/// Secondary, then `404580`/`404B40` publish the new Primary. Neither consumes
+/// RNG for a component-less body.
 fn install_style_tasks(entity: &mut Entity, style: RollingBoulderStyle) {
     entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);

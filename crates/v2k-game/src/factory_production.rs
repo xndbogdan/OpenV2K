@@ -1,9 +1,10 @@
 //! Pure Working Factory production state recovered from retail.
 //!
 //! `FUN_00418A90` copies the complete Section-13 0x58-byte factory template
-//! into a zeroed 0xB8-byte runtime component and derives the counters below
-//! from the entity's Section-12 health. `FUN_00418C20` changes staffing, while
-//! the full-health branch of `FUN_00419010` owns the five production phases.
+//! into a zeroed 0xB8-byte runtime component (allocated by FUN_00418A60) and
+//! derives the counters below from the entity's Section-12 health.
+//! `FUN_00418C20` changes staffing, while the full-health branch of
+//! `FUN_00419010` owns the five production phases.
 //!
 //! This module deliberately does not find or move scientists, touch the live
 //! entity list, or choose the world-style-dependent converted output. Those
@@ -21,7 +22,7 @@ pub const FACTORY_PICKUP_ENTITY_TYPE: u32 = 0x3D;
 pub const FACTORY_MATERIALISER_ENTITY_TYPE: u32 = 0x5D;
 /// Fixed positional sound played after a successful output/materialiser link.
 ///
-/// Retail `FUN_0044F480` and demo `FUN_0044EC80` both receive global
+/// Retail `FUN_0044F480` and demo `DEMO_0044EC80` both receive global
 /// Section-11 sound id 8 with full gain and a fixed 1.0 playback rate.
 pub const FACTORY_OUTPUT_CONVERSION_SOUND_ID: u16 = 8;
 /// Retail waits until production exceeds its threshold by this signed amount.

@@ -140,6 +140,7 @@ fn bits(entity: &Entity, mask: u32) -> Result<u32, Intro2Type10DeathBlock> {
     }
 }
 
+/// FUN_00404360 installs the tumble.
 /// No-op death gates precede metadata/component reads. All constructor inputs
 /// are authenticated before health0/dying; the alternate uses no selector draw.
 pub fn publish_intro2_type10_standard_death(
@@ -399,6 +400,7 @@ fn run_frame(
     })
 }
 
+/// Retail FUN_00404460's detailed visit: the tumble spin.
 fn tick_detailed_components(
     entity: &mut Entity,
     multiplier: i32,

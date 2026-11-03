@@ -306,7 +306,7 @@ pub enum FactoryProductionAction {
         output: FactorySpawnedEntity,
     },
     /// Play retail/demo's fixed positional sound through
-    /// `FUN_0044F480`/`FUN_0044EC80` and dispose the returned object before
+    /// `FUN_0044F480`/`DEMO_0044EC80` and dispose the returned object before
     /// acknowledging the action.
     ///
     /// As with every compound action in this protocol, adapters must preflight

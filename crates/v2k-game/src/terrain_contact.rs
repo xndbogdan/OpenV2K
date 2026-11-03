@@ -352,6 +352,8 @@ fn apply_player_terrain_style_callback(
             return PlayerTerrainStyleCallbackOutcome::Unauthenticated;
         }
     }
+    // FUN_00443AF0 takes the session's controller (FUN_00456F70) and
+    // compares its player handle with this body.
     if request.controlled_entity_handle != Some(request.entity_handle) {
         return PlayerTerrainStyleCallbackOutcome::ControllerMismatch {
             entity_handle: request.entity_handle,

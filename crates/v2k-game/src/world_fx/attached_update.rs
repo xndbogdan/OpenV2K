@@ -289,7 +289,7 @@ impl WorldFx {
             if i32::from(self.next_shared_retail_random_u16()) * 2 < timing.elapsed_micros as i32 {
                 let context = host.context();
                 let position_raw = world_position_to_raw(particle.position);
-                // 4417E0 compares signed Y with the authored flat sea plane,
+                // FUN_004417E0 compares signed Y with the authored flat sea plane,
                 // independent of waves, water enablement and classification.
                 let at_or_below_sea = match context.environment {
                     ParticleEnvironment::Dry => {

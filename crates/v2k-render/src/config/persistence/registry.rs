@@ -66,6 +66,7 @@ fn wide(value: &str) -> Vec<u16> {
     value.encode_utf16().chain(Some(0)).collect()
 }
 
+/// Retail `FUN_004491D0` reads each DWORD setting from the V2000 key.
 pub(super) fn read(path: &str) -> Option<NativeSettings> {
     let mut handle = ptr::null_mut();
     let path = wide(path);
@@ -102,7 +103,7 @@ pub(super) fn read(path: &str) -> Option<NativeSettings> {
     found.then_some(settings)
 }
 
-/// 4493D0 accepts REG_SZ only. This imported path is never a write target.
+/// `FUN_004493D0` accepts REG_SZ only. This imported path is never a write target.
 pub(super) fn read_save_directory() -> Option<std::path::PathBuf> {
     let path = wide(RETAIL_KEY);
     let mut handle = ptr::null_mut();

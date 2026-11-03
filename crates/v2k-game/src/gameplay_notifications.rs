@@ -264,16 +264,18 @@ pub struct FreshLevel1Type9NotificationDrainError {
 }
 
 impl GameplayNotifications {
+    /// The session's two notification slot records (FUN_00437FC0).
     pub fn new() -> Self {
         Self::default()
     }
 
-    /// `456C50` writes this independent hint mask after the checkpoint copies.
+    /// `456C50` (`FUN_00456C50`) writes this independent hint mask after the
+    /// checkpoint copies.
     pub const fn save_tail_seen_mask(&self) -> u32 {
         self.seen_resource_events
     }
 
-    /// 44F7E1 ->437FF0 clears the slots and hint mask on frontend/session
+    /// 44F7E1 -> FUN_00437FF0 clears the slots and hint mask on frontend/session
     /// selection. Campaign warps preserve this mask. The independent
     /// process-global [`TextTypewriterCadence`] is owned by the runtime.
     pub fn reset_session(&mut self) {
@@ -660,6 +662,7 @@ impl GameplayNotifications {
         });
     }
 
+    /// Retail `FUN_00437F60`: the once-per-session bit test, then the slot write.
     fn queue_resource(&mut self, event_id: u8, retail_tick: i32) {
         let bit = 1u32.wrapping_shl(u32::from(event_id & 0x1f));
         if self.seen_resource_events & bit != 0 {
@@ -926,6 +929,7 @@ fn parse_authored_notification(
     })
 }
 
+/// One field of the `<...>` prefix, as `FUN_004521F0` reads it: `*` or empty is 0.
 fn parse_prefix_integer(field: &str) -> i32 {
     let field = field.trim();
     if field.is_empty() || field == "*" {

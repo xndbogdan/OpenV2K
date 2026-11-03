@@ -1,6 +1,6 @@
 //! Entity-owned ordered runtime for Section-12 Sub-J attachments.
 //!
-//! Retail `FUN_00418330` / demo `FUN_004182F0` allocate a fixed backing array
+//! Retail `FUN_00418330` / demo `DEMO_004182F0` allocate a fixed backing array
 //! from the authored descriptor, then track a separate mutable length and
 //! capacity. The array order is authoritative: child relation backlinks and
 //! manager live-list order cannot reconstruct it.
@@ -68,7 +68,8 @@ impl SubJAttachmentRuntime {
         self.capacity
     }
 
-    /// Current ordered live-record count at runtime header `+0x04`.
+    /// Current ordered live-record count at runtime header `+0x04`
+    /// (FUN_00418950).
     pub fn len(&self) -> usize {
         self.ordered_entity_ids.len()
     }
@@ -87,11 +88,13 @@ impl SubJAttachmentRuntime {
         self.policy_raw_at_0x0c = policy_raw;
     }
 
-    /// Child handles in authoritative Sub-J insertion order.
+    /// Child handles in authoritative Sub-J insertion order; retail reads row
+    /// `i`'s handle through FUN_00418960.
     pub fn ordered_entity_ids(&self) -> &[u32] {
         &self.ordered_entity_ids
     }
 
+    /// Retail FUN_00418A00: whether the child handle has a row.
     pub fn contains(&self, entity_id: u32) -> bool {
         self.ordered_entity_ids.contains(&entity_id)
     }
@@ -123,6 +126,7 @@ impl SubJAttachmentRuntime {
         self.ordered_entity_ids.last().copied()
     }
 
+    /// The row pop of retail FUN_00418590; the caller runs the row's callback.
     pub fn pop_last(&mut self) -> Option<u32> {
         self.ordered_entity_ids.pop()
     }

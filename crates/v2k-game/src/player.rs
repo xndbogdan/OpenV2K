@@ -445,7 +445,8 @@ impl MotionChannels {
 /// struct reached via `g_rng_state+0x27c`).
 #[derive(Debug, Clone)]
 pub struct PlayerCraft {
-    /// Movement style (TAB swaps hover ↔ fly).
+    /// Movement style (TAB swaps hover ↔ fly): retail's Player Control variant,
+    /// which its initializer reads back through FUN_0040D150.
     pub mode: VehicleMode,
     /// Gun barrel joint elevation (16-bit angle domain; clamp per §3 hover).
     /// Both integrators keep it a whole signed word; it is stored as f32 for
@@ -487,6 +488,7 @@ impl Default for PlayerCraft {
 }
 
 impl PlayerCraft {
+    /// A fresh controller, as `FUN_00442ED0` makes for the local player.
     pub fn new() -> Self {
         let physics = HoverPhysicsConfig::default();
         Self::with_hover_target(physics, i32::from(physics.target_speed_base_raw))
@@ -571,6 +573,10 @@ impl PlayerCraft {
     /// `RefusedNoFuel`; the runtime call site owns the exact feedback. Vtol→Hover
     /// remains unconditional.
     ///
+    /// The swap is retail's style initializers `FUN_00447970` (to VTOL) and
+    /// `FUN_004479F0` (to Hover), which reinstall Player Control
+    /// (`FUN_00446530`) with the new style.
+    ///
     /// A successful swap changes only the behavior style. The live model joints
     /// retain their current words and ease toward the new mode's targets.
     pub fn toggle_mode(&mut self) -> VehicleModeToggleOutcome {
@@ -601,6 +607,8 @@ impl PlayerCraft {
     /// Integrate using the menu's 0-15 Self Righting mode. Zero disables the
     /// flight correction, one damps toward level, and 2..=15 seek progressively
     /// steeper nose-down attitudes using the retail integer recurrence.
+    /// Retail copies the mode into the craft's Sub-G byte `+0x41` (FUN_0041B9C0);
+    /// the port passes it on each call.
     pub fn integrate_configured(
         &mut self,
         dt: f32,

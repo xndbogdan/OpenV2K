@@ -266,7 +266,7 @@ impl Scoring {
         effects
     }
 
-    /// `004DC9A4` as sent in kind 16.
+    /// `004DC9A4` as sent in kind 16 (`FUN_00439BC0`).
     pub fn score_word(&self) -> u32 {
         u32::from(self.kill_counter) | u32::from(self.last_killer) << 16
     }

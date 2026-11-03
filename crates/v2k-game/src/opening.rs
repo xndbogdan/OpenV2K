@@ -550,7 +550,8 @@ pub const INTRO2_CAPTIONS: &[StoryCaption] = &[
     },
     StoryCaption {
         // The `#` page begins at 80 seconds. This record's wildcard start and
-        // 3000-ms end are local to that final page.
+        // 3000-ms end are local to that final page, which retail types on the
+        // final card from tick 4000 (`FUN_00453D40`).
         start_millis: 80_000,
         end_millis: 83_000,
         text: "You are our last chance",

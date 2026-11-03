@@ -221,6 +221,11 @@ pub trait ModelVertexResolver {
 /// Resolve slot refs to model-space positions per the type_flag transform
 /// table. Cycles are broken with a busy set, so a self-referential generator
 /// resolves to `None` instead of recursing forever.
+///
+/// The cache is retail's per-model vertex block: carved from a frame arena
+/// (`FUN_0046D4B0`), started unprojected (`FUN_0046D580`, `FUN_0046D550`),
+/// released on return (`FUN_0046D520`); the arena empties each frame
+/// (`FUN_0046D540`). Here it lives as long as the resolver.
 pub(super) struct SlotResolver<'a> {
     pub(super) records: &'a [[i16; 4]],
     pub(super) vars: &'a AnimVars,
@@ -417,7 +422,8 @@ impl<'a> SlotResolver<'a> {
 
         let position =
             match tf {
-                // Plain vertex; mirror slot negates X.
+                // Plain vertex; mirror slot negates X (far FUN_0046D9F0, near
+                // FUN_0046D7E0, transform-only FUN_0046D610).
                 0 => Some([
                     if odd != 0 { -(a as f64) } else { a as f64 },
                     b as f64,
@@ -449,6 +455,7 @@ impl<'a> SlotResolver<'a> {
                     });
                 }
                 // 46E760 consumes completed VIEW caches and writes fresh clip flags.
+                // Handlers: far FUN_0046E910, near FUN_0046E830, FUN_0046E760.
                 5 => {
                     count(stats, "midpoint");
                     let first = self.resolve(b as u16 ^ odd, stats)?;
@@ -466,6 +473,7 @@ impl<'a> SlotResolver<'a> {
                     ));
                 }
                 // 46DDB0 reflects the source through the current node VIEW origin.
+                // Handlers: far FUN_0046DED0, near FUN_0046DE30, FUN_0046DDB0.
                 2 => {
                     count(stats, "point_reflect");
                     let source = self.resolve(c as u16 ^ odd, stats)?;
@@ -484,6 +492,7 @@ impl<'a> SlotResolver<'a> {
                     self.rref(c as i32, odd, stats)
                 }
                 // 46F1B0 visits B,C,A, then completes A+B-C in saved VIEW words.
+                // Far FUN_0046F400 and near FUN_0046F2D0 do the same, then project.
                 6 => {
                     count(stats, "parallelogram");
                     let vb = self.resolve(b as u16 ^ odd, stats)?;
@@ -504,6 +513,7 @@ impl<'a> SlotResolver<'a> {
                     ));
                 }
                 // 46F530 subtracts the current node VIEW origin after B+C.
+                // Handlers: far FUN_0046F6F0, near FUN_0046F600, FUN_0046F530.
                 7 => {
                     count(stats, "vector_sum");
                     let first = self.resolve(b as u16 ^ odd, stats)?;
@@ -544,6 +554,7 @@ impl<'a> SlotResolver<'a> {
                     ));
                 }
                 // 46FB80 visits B,C,C+2,B+2, then evaluates the current phase.
+                // Handlers: far FUN_0046FEF0, near FUN_0046FEA0, FUN_0046FB50.
                 9 => {
                     count(stats, "bezier");
                     let points = [
@@ -604,6 +615,7 @@ impl<'a> SlotResolver<'a> {
                     }
                     self.resolve(target, stats).map(|slot| slot.position_raw)
                 }
+                // Handlers: far FUN_004705F0, near FUN_004704E0, FUN_00470410.
                 // Vertex imported from the linked model at ctx+0xC0 (set at runtime
                 // by op 0x0E instancing). Without a linked context, return None so
                 // the face is DROPPED rather than spiking to the origin — matching

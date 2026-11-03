@@ -913,7 +913,8 @@ fn behavior(
             {
                 return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
             }
-            // 418410 returns full for the genuine null J. C910 invokes the
+            // 418410 (FUN_00418410, the Sub-J full test) returns full for the
+            // genuine null J. C910 invokes the
             // contact person's10C10 and discards it at40CAC5: no attachment,
             // transport task or A300 return. Opposing behavior/components and
             // the12760 physical suffix still execute after this null result.

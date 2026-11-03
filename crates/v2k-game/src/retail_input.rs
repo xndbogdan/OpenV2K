@@ -4,7 +4,8 @@
 //! relative axes, FGDK device type 1) and every attached joystick through
 //! WinMM `joyGetPosEx` (device type 2, polled every 20 ms). The FGDK binding
 //! layer picks each device's table by its type from the craft binding set
-//! `0x004C4120`, the only one the PC build selects (`FUN_004292A0` returns 0):
+//! `0x004C4120`, the only one the PC build selects (`FUN_004292A0` returns 0),
+//! whose callbacks receive the player's controller (FUN_00443B20 copies it):
 //!
 //! - slot 1, the mouse: X, Y and wheel feed analog consumers through
 //!   `0x004C2DE0`; button 1 (left) drives the Space bindings and button 2
@@ -29,7 +30,8 @@ pub fn analog_axis_gain(sensitivity: u8) -> i32 {
     (i32::from(sensitivity.min(15)) << 27) + 0x7FF_FFFF
 }
 
-/// A device axis after its adapter bias: `FUN_004721F0` multiplies it by the
+/// A device axis after its adapter bias (the axis entry `FUN_00428EE0` installs
+/// from `0x004CA448` with the gain): `FUN_004721F0` multiplies it by the
 /// axis scale 2 (a 32-bit product) and then by the Sensitivity gain in Q31.
 fn device_axis(biased: i32, sensitivity: u8) -> i32 {
     ((i64::from(biased.wrapping_mul(2)) * i64::from(analog_axis_gain(sensitivity)) * 2) >> 32)

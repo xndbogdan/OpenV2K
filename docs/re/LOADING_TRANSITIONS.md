@@ -386,7 +386,7 @@ Real examples:
 **Full-frame sprite sequence** (`+0x295`): this is a shared presentation
 cursor, not a briefing-specific state or a results-transition gate.
 `FUN_00456750` unconditionally writes one, so a new request restarts an active
-sequence. Exact-matched retail `FUN_00453410` and demo `FUN_00452B90` consume
+sequence. Exact-matched retail `FUN_00453410` and demo `DEMO_00452B90` consume
 one entry per successfully built gameplay draw command:
 
 `0x227, 0x228, 0x228, 0x228, 0x229, 0x22A, 0x22B, 0x22C`, then the null
@@ -459,14 +459,14 @@ request is consumed at the same deferred campaign-selector boundary.
 
 Section-13 header dword `+0x5C` is an authored time-trophy deadline in
 seconds, not a virus threshold. Retail `FUN_0042E570` and demo
-`FUN_0042DFC0` initialize signed controller timer `+0x1EC` and state `+0x1F0`.
+`DEMO_0042DFC0` initialize signed controller timer `+0x1EC` and state `+0x1F0`.
 Existing campaign-completion bit `0x1` wins first and selects state 4 when
 time-trophy bit `0x8` is also set or state 3 otherwise. An active results byte
 selects state 5 next. A zero deadline selects state 4, zero remaining time, and
 claims bit `0x8`; every other fresh world starts state 1 at
 `seconds * 1000 + 500`. Cistern stores 180, so its countdown begins at 3:00.
 
-Retail `FUN_0042D9B0` and instruction-identical demo `FUN_0042D400` discard
+Retail `FUN_0042D9B0` and instruction-identical demo `DEMO_0042D400` discard
 each frame's sub-millisecond remainder (`elapsed_us / 1000`) and emit direct
 global sound 51 only when the final whole-second quotient changed and matches
 the following schedule. A long frame tests only its endpoint and does not
@@ -488,7 +488,7 @@ when a later frame's elapsed milliseconds equal or exceed the remaining value,
 the remaining time, and changes the controller to state 2.
 
 The controller's per-level campaign bits separate this deadline from the
-hidden pickup. Retail `FUN_0042EE70` / demo `FUN_0042E8B0` saves the world by
+hidden pickup. Retail `FUN_0042EE70` / demo `DEMO_0042E8B0` saves the world by
 setting bit `0x1`; doing so while state 1 is still active changes to state 4
 and claims the independent time-trophy bit `0x8`. Saving in every other state
 changes it to state 3 and does not award that bit.

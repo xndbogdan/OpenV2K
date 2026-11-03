@@ -453,6 +453,8 @@ impl GameRecord {
                 (Self::Line(b.get(1..1 + length)?.to_vec()), length + 1)
             }
             22..=25 => {
+                // FUN_00439E70, FUN_00439F20, FUN_00439F40 and FUN_00439F60
+                // hand FUN_00439E90 these flags, 0 to 3.
                 let flags = kind - 22;
                 let mut at = 4;
                 let mut optional = |present: bool| -> Option<Option<u32>> {
@@ -496,9 +498,12 @@ impl Record for GameRecord {
         let mut out = Out { room, at: 0 };
         match self {
             Self::Particle(b) => out.bytes(b)?,
+            // FUN_00439FF0: the burst request's first 12 bytes.
             Self::Burst(b) => out.bytes(b)?,
             Self::Terrain(b) => out.bytes(b)?,
             Self::Cell(b) | Self::CellRequest(b) => out.bytes(b)?,
+            // One dword: the body's handle for kinds 8 and 11 (FUN_00417D70),
+            // the wanted slot for kind 19 (FUN_00439700).
             Self::StaticDestroyed(w)
             | Self::Removed(w)
             | Self::Resend(w)
@@ -529,6 +534,7 @@ impl Record for GameRecord {
                 out.u32(*child)?;
                 out.u32(*parent)?;
             }
+            // FUN_00439BA0: one word, the victim's slot then the attacker's.
             Self::KillReport { victim, attacker } => out.bytes(&[*victim, *attacker])?,
             Self::Scores {
                 limit_winner,
@@ -540,6 +546,7 @@ impl Record for GameRecord {
                 }
             }
             Self::Name { initials, name } => {
+                // FUN_004397C0: the local slot's initials and name, 32 bytes.
                 out.bytes(initials)?;
                 out.bytes(name)?;
                 out.bytes(&[0; 10])?;

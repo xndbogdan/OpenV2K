@@ -30,6 +30,7 @@ pub(crate) struct TerrainCraterRequest {
     pub replacement_material: Option<u8>,
 }
 
+/// Retail FUN_0042EC30: the crater floor material by the world's style.
 pub(crate) const fn crater_material_for_world_style(world_style: u32) -> Option<u8> {
     match world_style {
         4 => Some(1),
@@ -70,7 +71,7 @@ pub(crate) struct WorldTerrainCraterFailure {
     pub terrain_changed: bool,
 }
 
-/// Complete `436E00`: terrain/static insertion, radar RNG, then grounded actors.
+/// Complete `FUN_00436E00`: terrain/static insertion, radar RNG, then grounded actors.
 /// Both Sub-M death and static burn callbacks run this synchronously.
 pub(crate) fn apply_world_terrain_crater(
     manager: &mut EntityManager,
@@ -276,7 +277,7 @@ pub(crate) fn apply_terrain_crater(
     )
 }
 
-/// `16AC0` uses forward terrain differences, not Euler rotation or a central
+/// `16AC0` (`FUN_00416AC0`) uses forward terrain differences, not Euler rotation or a central
 /// gradient. It normalizes Q12 tangents, crosses them, expands then normalizes
 /// each Q31 column through the existing exact57960 implementation.
 pub(crate) fn terrain_aligned_actor_basis(
@@ -302,6 +303,7 @@ pub(crate) fn terrain_aligned_actor_basis(
     };
     let forward = tangent(dz, false);
     let lateral = tangent(dx, true);
+    // FUN_00416F20: the Q12 cross product of two word triples.
     let cross = |a: [i16; 3], b: [i16; 3]| {
         std::array::from_fn(|axis| {
             let p = (axis + 1) % 3;
@@ -309,6 +311,7 @@ pub(crate) fn terrain_aligned_actor_basis(
             ((i32::from(a[p]) * i32::from(b[q]) - i32::from(a[q]) * i32::from(b[p])) >> 12) as i16
         })
     };
+    // FUN_00416E90: widen each word to Q31, saturating beyond ±0xFFF.
     let expand = |vector: [i16; 3]| {
         normalize_retail_vector_q31(vector.map(|component| match component {
             4096.. => i32::MAX,
@@ -323,7 +326,8 @@ pub(crate) fn terrain_aligned_actor_basis(
     }
 }
 
-/// `EB20` runs after all crater/radar cells. Later failures keep earlier actor
+/// `EB20` (FUN_0040EB20) re-grounds resting bodies in the radius and runs after
+/// all crater/radar cells. Later failures keep earlier actor
 /// refreshes committed, and unrelated unresolved state bits are never read.
 pub(crate) fn refresh_crater_grounded_actors(
     manager: &mut EntityManager,

@@ -389,7 +389,7 @@ pub fn fly_offsets(phase: MenuPhase) -> (f32, f32) {
 }
 
 /// Dynamic model callback channels 1 and 2 during a menu fly transition
-/// (`LAB_0043B610`). The original supplies elapsed travel on fly-out and the
+/// (`FUN_0043B610`). The original supplies elapsed travel on fly-out and the
 /// remaining clock on fly-in. Wrapper props consume this as an authored child
 /// rotation: notably `screenop` turns its `screeno2` monitor one way while it
 /// leaves the ring, then unwinds on the submenu fly-in.
@@ -573,7 +573,8 @@ struct PendingSlotOverlay {
 
 /// Deferred action owned by the pause root's switch-away callback. Continue
 /// first arms the ordinary 0x7000 fly clock; gameplay resumes only when that
-/// clock reaches the callback boundary.
+/// clock reaches the callback boundary. Retail's callback is `FUN_00450E40`,
+/// which resumes when the root screen is popped.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum PauseSwitchAway {
     #[default]
@@ -725,7 +726,7 @@ impl MenuShell {
         Self::new_with_engine(ctx, MenuEngine::main_menu(), phase, false)
     }
 
-    /// Escape owns 4D1190; campaign-map S enters 4D0AD8, whose 4557D0
+    /// Escape owns 4D1190; campaign-map S enters 4D0AD8, whose `FUN_004557D0`
     /// initializer pushes 4D1090 (Save Game / Continue / Options).
     pub fn new_single_player_menu(ctx: &MenuCtx, kind: SinglePlayerMenuKind) -> Self {
         let root = match kind {
@@ -787,6 +788,7 @@ impl MenuShell {
             // FUN_0042BFD0 constructor word 3, before the first random
             // twitch replaces it with a sampled 0x20..0x3F divisor.
             klaus_twitch_divisor: 0x1E,
+            // FUN_0042BF20 seeds Sub-K variable 2 from DAT_004DB218 as it builds Klaus.
             klaus_model_state: 1,
             klaus_render_anim_state: KlausBackdropAnimState {
                 morph_progress: 0,
@@ -813,8 +815,9 @@ impl MenuShell {
         shell
     }
 
-    /// Normal Intro2 exit enters 4D0A30/453C20 (command 3), waits for the
-    /// closing morph, then loads through 4D0918/451710 (command 2). Preserve
+    /// Normal Intro2 exit enters 4D0A30 (`FUN_00453BA0`)/453C20 (command 3), waits
+    /// for the closing morph (`FUN_00453E00`), then loads through 4D0918/451710
+    /// (command 2). Preserve
     /// the persistent component across both halves, including its Y/Z pose.
     pub fn begin_post_intro_leg(&mut self, stage: PostIntroStage) {
         self.phase = MenuPhase::PostIntro { stage };
@@ -833,6 +836,7 @@ impl MenuShell {
     pub fn begin_intro_reveal(&mut self) {
         self.phase = MenuPhase::IntroReveal;
         self.frontend_background_zoom_raw = 0;
+        // FUN_0042CEB0(1), from the game start: DAT_004DB218 becomes zero.
         self.klaus_model_state = 0;
         self.transition_ready = false;
         self.prime_klaus_opening();
@@ -980,7 +984,8 @@ impl MenuShell {
         )
     }
 
-    /// True when retail's plain-Escape pop has no screen or overlay to remove.
+    /// True when retail's plain-Escape pop has no screen or overlay to remove
+    /// (the depth-below-2 test FUN_0043CB10).
     pub fn back_is_inert(&self) -> bool {
         self.overlay.is_none() && self.engine.depth() <= 1
     }
@@ -1168,6 +1173,8 @@ impl MenuShell {
         }
     }
 
+    /// One Klaus actor visit for the frame delta, as retail runs it alone
+    /// through `FUN_00412D80`.
     fn update_klaus(&mut self, frame_delta_micros: u32, effects: &mut impl KlausEffects) {
         // C090 calls C610/C710 first. Commands, phase advancement, random
         // twitch starts, and entity-position easing all occur afterwards.
@@ -1299,8 +1306,9 @@ impl MenuShell {
     }
 
     /// Resolve the synchronous portable write represented by retail's
-    /// 0x4C17B0 progress screen. Success replaces it with "Game Saved";
-    /// failure replaces it with "Access Failed". Both acknowledgements pop
+    /// 0x4C17B0 progress screen (the write is `FUN_0043BA50`). Success
+    /// replaces it with "Game Saved"; failure replaces it with "Access
+    /// Failed". Both acknowledgements pop
     /// back to the pause root when selected.
     pub fn complete_save(&mut self, succeeded: bool, ctx: &MenuCtx) {
         let Some(overlay) = self.overlay.as_mut() else {
@@ -1888,6 +1896,7 @@ fn ring_icon(position: usize) -> (Vec<u8>, u32, u32) {
 }
 
 fn item_label(item: &crate::menu_data::ItemDef, ctx: &MenuCtx) -> String {
+    // Plain string rows such as the Host row (`FUN_0043D0A0`) stay Unknown.
     let resolved = match item.draw {
         DrawKind::PortText { text } => Some(text.to_string()),
         DrawKind::Text { string_id }
@@ -2093,6 +2102,8 @@ pub fn apply_setting_to_config(
 ) {
     match id {
         SettingId::SoundVolume => {
+            // The Sound Volume row (FUN_0043CB50) sets the master gain on change.
+            // Zero turns sound off, as retail's mute reason 1 (FUN_0044F420).
             config.sound_enabled = v > 0;
             config.sfx_volume = v as f32 / 15.0;
         }
@@ -2529,7 +2540,7 @@ mod tests {
 
     #[test]
     fn list_window_keeps_retail_one_row_navigation_margin() {
-        // FUN_0043C400/FUN_0043C560 scroll as soon as the selection reaches
+        // FUN_0043C1E0/FUN_0043C4A0 scroll as soon as the selection reaches
         // the bottom/top visible row, leaving one row of look-ahead whenever
         // the list bounds permit it.
         assert_eq!(window_top(0, 0, 6, 5), 0);

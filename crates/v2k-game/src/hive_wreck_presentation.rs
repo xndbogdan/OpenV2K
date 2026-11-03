@@ -55,6 +55,7 @@ impl HiveWreckPresentationRequest {
 
     /// `41CB5D..41CE06`: the timer phases begin drawing during the six-second
     /// delay. Requiring a positive timer here would lose that authored build-up.
+    /// Retail FUN_0041CB10's ten rings.
     pub fn ring_submissions(self, terrain: &TerrainGrid) -> Vec<HiveWreckRingSubmission> {
         if self.controller_state != HIVE_CONTROLLER_DEAD || !self.marker_present {
             return Vec::new();

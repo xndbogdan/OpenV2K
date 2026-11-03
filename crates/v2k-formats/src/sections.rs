@@ -70,7 +70,8 @@ pub fn extract_palette(ovl: &OvlFile) -> Result<ShadePalette> {
 
 // ── Section 0 & 1: Pointer fixup tables ─────────────────────────────────────
 
-/// Parse Section 0 (data pointer fixup table).
+/// Parse Section 0 (data pointer fixup table). Retail loads Sections 0, 1
+/// and 6 with `FUN_004AB920`: one pointer per dword of the block.
 pub fn parse_fixup_data(ovl: &OvlFile) -> Option<FixupTable> {
     let sec = ovl.section(idx::POINTER_FIXUP_DATA)?;
     if sec.data.is_empty() {

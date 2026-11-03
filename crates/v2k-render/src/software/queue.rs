@@ -74,7 +74,19 @@ pub enum QueueCallback {
     Other(u32),
 }
 
-/// The retail thunk that calls `slot` through the device fill table.
+/// The retail thunk that calls `slot` through the device fill table, such as
+/// `FUN_0047A960` (flat quad, `+0x1080`) or `FUN_0047AAE0` (explicit UVs, `+0x10C0`).
+///
+/// The other thunks, each calling one slot with the device and record payload:
+/// `FUN_0047A740` `+0x1024`, `FUN_0047A760` `+0x1028`, `FUN_0047A780` `+0x102C`,
+/// `FUN_0047A7C0` `+0x1034`, `FUN_0047A7E0` `+0x1038`, `FUN_0047A800` `+0x103C`,
+/// `FUN_0047A820` `+0x1040`, `FUN_0047A840` `+0x1044`, `FUN_0047A860` `+0x1048`,
+/// `FUN_0047A880` `+0x104C`, `FUN_0047A8A0` `+0x1050`, `FUN_0047A8C0` `+0x1054`,
+/// `FUN_0047A8E0` `+0x1058`, `FUN_0047A900` `+0x105C`, `FUN_0047A920` `+0x1060`,
+/// `FUN_0047A940` `+0x1064`, `FUN_0047A980` `+0x1084`, `FUN_0047A9A0` `+0x1088`,
+/// `FUN_0047A9C0` `+0x108C`, `FUN_0047A9E0` `+0x1090`, `FUN_0047AA00` `+0x1094`,
+/// `FUN_0047AA40` `+0x109C`, `FUN_0047AA60` `+0x10A0`, `FUN_0047AA80` `+0x10A4`,
+/// `FUN_0047AAA0` `+0x10A8`, `FUN_0047AAC0` `+0x10AC`.
 pub fn thunk_address(slot: FillSlot) -> u32 {
     let offset = u32::from(slot.offset());
     match offset {

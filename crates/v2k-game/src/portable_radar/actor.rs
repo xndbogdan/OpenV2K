@@ -312,7 +312,7 @@ fn c560_prefix(entity: &mut Entity) {
     entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
 }
 
-/// 405540 -> 406030: no optional component, so 406070 draws nothing.
+/// 405540 (`FUN_00405540`) -> 406030: no optional component, so 406070 draws nothing.
 fn store_primary(entity: &mut Entity) {
     entity.actor_tasks.replace_prepared(
         ActorTaskSlot::Primary,
@@ -825,7 +825,8 @@ fn run_callback(
     Ok(radar)
 }
 
-/// World teardown: 42E980 queues every actor's deferred removal in live
+/// World teardown: 42E980 (`FUN_0042E980`, through `FUN_0042EA00` for every
+/// type but 0 and 1) queues every actor's deferred removal in live
 /// order, then 14990's sweep runs each A860. A deployed radar's 4055C0
 /// removes its footprint while the old world's raster and the process RNG
 /// are still resident, before resources unload. Returns the raster draws.

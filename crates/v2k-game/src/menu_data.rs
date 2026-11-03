@@ -223,7 +223,7 @@ pub enum SelectAction {
     /// FUN_0043CBF0 — resolution spinner (max = display-mode count - 1,
     /// applies the mode on change).
     ResolutionSpinner,
-    /// FUN_0043CC70 / 0x43CCA0 / 0x43CCD0 — 0/1 toggles on a setting.
+    /// FUN_0043CC70 / FUN_0043CCA0 (Bilinear) / 0x43CCD0 — 0/1 toggles on a setting.
     Toggle { setting: SettingId },
     /// FUN_00456170 — Continue: resume gameplay (pop the pause stack).
     Continue,

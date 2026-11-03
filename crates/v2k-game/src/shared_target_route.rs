@@ -181,7 +181,8 @@ pub struct SharedTargetRouteTransitionRequest {
 ///
 /// `FUN_00403650` delegates private-state initialization to
 /// `FUN_00401350 -> FUN_004012E0`: the controlled actor's current position,
-/// one target handle, initial direction one, and timer zero. The generic task
+/// one target handle, initial direction one, and timer zero, attached to the
+/// task wrapper through `FUN_00401260`. The generic task
 /// wrapper owns the elapsed 5,000-ms lifetime represented here separately.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SharedTargetRouteTaskState {

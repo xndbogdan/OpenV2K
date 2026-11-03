@@ -176,7 +176,7 @@ pub fn resolve_actor_emitter_external_frame(
     {
         return Ok(None);
     }
-    // 424F20 chooses +12 for ordinal zero, +14 otherwise. In particular an
+    // FUN_00424F20 chooses +12 for ordinal zero, +14 otherwise. In particular an
     // absent +12 with a present +14 still resolves source slot zero here.
     let source_slot = if emitter_index == 0 {
         descriptor.raw_word_at_0x12

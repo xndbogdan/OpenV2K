@@ -1,4 +1,5 @@
 //! Type123's 16700/DBF0/CD50/CE70 attachment and 409030/16750/CE90 release.
+//! DBF0 is FUN_0040DBF0, which forwards the attach to the current style's `+08`.
 //!
 //! Class45 variant0/variant1 and class6 share the CE70 variant-2 / variant-1
 //! carrying selection with Type9, but use their own receipt, Sub-I descriptor

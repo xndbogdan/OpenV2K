@@ -198,8 +198,8 @@ feel. The former port `config.json` settings-root mismatch remains the
 cause of that observation. Current [settings persistence](SAVE_AND_SETTINGS.md#port-storage-and-migration)
 imports those preferences and separates the native DWORDs from modern display
 options; always compare the effective Self Righting value. The demo provides
-an independent control: its input reader, `FUN_0041A650` recurrence,
-`FUN_00444D00` player caller, `FUN_0041AFE0` lift/ceiling path, pristine mode-1
+an independent control: its input reader, `DEMO_0041A650` recurrence,
+`DEMO_00444D00` player caller, `DEMO_0041AFE0` lift/ceiling path, pristine mode-1
 default, terrain response, and collision-damage chain are instruction-matched
 to their retail counterparts apart from relocated addresses and controller
 layout. It supplies no alternate clamp or impact protection.

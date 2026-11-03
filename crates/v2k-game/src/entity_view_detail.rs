@@ -76,7 +76,8 @@ impl RetailViewDetailContext {
         Self::from_raw(camera_position_raw, camera_true_up_z_q31, scan_dimensions)
     }
 
-    /// Build an exact raw context. X/Z are narrowed at their retail word reads;
+    /// Build an exact raw context; the extents are FUN_00433110's (half the scan
+    /// columns, all the scan rows). X/Z are narrowed at their retail word reads;
     /// Y deliberately remains a signed dword.
     pub const fn from_raw(
         camera_position_raw: [i32; 3],
