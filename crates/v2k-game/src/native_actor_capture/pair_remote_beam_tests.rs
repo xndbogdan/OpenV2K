@@ -187,7 +187,8 @@ fn a_person_touching_a_remote_beamer_is_beamed_to_the_main_base() {
     assert!(!entities.iter_all().any(|e| e.id == proxy));
     // Retail's world-21 lab beam: the Base pushed its Type93 from Z -31744
     // through -31931, -32052, -32090 and -32098 to -32100 (Y 3228 at the
-    // first push), and the person was let go there, at Y 3009.
-    assert_eq!(last, [base_position[0], 3009, -32101]);
+    // first push), and the person was let go there, at Y 3009. The Base's
+    // box stays world-aligned in the pair probe, as in retail.
+    assert_eq!(last, [base_position[0], 3009, -32100]);
     assert_eq!(actor(&entities, person).unwrap().position_raw(), last);
 }

@@ -10,19 +10,19 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,400 | |
-| Marked not needed (excluded below) | 610 | |
-| **Referenced by port code** | **1,603** | **89.6%** |
-| Referenced by code or RE notes | 1,790 | 100.0% |
+| Marked not needed (excluded below) | 625 | |
+| **Referenced by port code** | **1,613** | **90.9%** |
+| Referenced by code or RE notes | 1,775 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 317 |
+| implemented | 310 |
 | approximated | 6 |
-| documented | 42 |
-| not-needed | 610 |
+| documented | 20 |
+| not-needed | 625 |
 
 10 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,13 +41,13 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 46 | 1 | 115 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 28 | 3 | 95 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 30 | 3 | 95 |
+| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 23 | 0 | 124 |
 | [Menu system](../re/MENU_SYSTEM.md) | 21 | 6 | 144 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 19 | 1 | 94 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 20 | 1 | 94 |
 | [Controls](../re/CONTROLS.md) | 17 | 3 | 48 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 14 | 3 | 29 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 10 | 2 | 123 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 123 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 4 | 1 | 45 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 3 | 0 | 46 |
 | [Demo re](../re/DEMO_RE.md) | 3 | 0 | 5 |
@@ -74,17 +74,18 @@ denominator, each with its reason: the never-installed
 | replaced: the port's SDL platform (the window, its pump and main loop, multimedia timers and file reads; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 21 |
 | replaced: the port's SDL platform (MCI CD audio, the message box, the command line; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 18 |
 | replaced: Rust errors (FGDK error objects, fatal reports, cleanup scopes and scoped allocation; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 17 |
+| dead: collision register op 0x36 table 0x004D4980; no shipped collision program uses 0x36 (docs/re/FORMAT_DOCUMENTATION.md) | 16 |
 | replaced: the port's AVI decoder and SDL audio (the DirectShow banner movie and the DirectSound voices; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 16 |
 | dead: the attract sheet mode 004C9840 (its draw chain and key table 004C9810), which FUN_00426F00 never stages because its gate FUN_00438050 always returns 0 (docs/re/MENU_SYSTEM.md) | 12 |
 | replaced: the port's fixed RGB565 surfaces (pixel-format listeners and the unpacking a mode change runs; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 7 |
 | dead: installed at Graph2D +0x1068..+0x107C by FUN_00480D10, but no queue thunk or call site reads those slots (docs/re/SOFTWARE_RASTER.md) | 6 |
 | dead: only in the default game-channel descriptor 004D4A00, which FUN_0046BED0 uses when its caller passes none; both callers (FUN_0046CAC0, FUN_0046CB50) pass the game's 004CAFA8 (docs/re/MULTIPLAYER.md#player-slots) | 4 |
 | dead: stored in software fill slots +0x10B0..+0x10BC, which no thunk or call site calls (docs/re/SOFTWARE_RASTER.md) | 4 |
-| dead: no Section-12 type selects class 52 (Lightning Shield) as a behavior or alternate (docs/re/PLAYER_CRAFT.md#special-weapons) | 3 |
 | dead: no shipped model vertex has type 10 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: no shipped model vertex has type 4 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: only in the value-op table 0x004CDF08, which no code or data references (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | replaced: the port's UDP transport (DirectPlay 3's connection enumeration; docs/re/MULTIPLAYER.md#the-port) | 3 |
+| dead: sea table 0x004C92B8 is installed by FUN_004129B0 but never walked (docs/re/TERRAIN_COLLISION.md) | 2 |
 | replaced: the port's SDL platform (the debug log file, debugger output and fatal-error exit; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 2 |
 | dead: its body runs only when the load-progress callback DAT_004F7310 is set, which nothing writes (FUN_00433BD0 and FUN_0044AB20 call it to no effect) | 1 |
 | dead: only stored as the first word of the FUN_00433130 render request at 0x004DB250, which no code reads or calls | 1 |

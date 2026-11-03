@@ -423,7 +423,7 @@ reconstructed from the visible `MaterializedModel` triangles.
 |--------|-----------------|--------------------|
 | `0x88` | none | terminate; a final hit needs at least one raw unit of penetration |
 | `0x8E` | align4: `u32 radius, i16 slot` | integer sphere centered on a resolved model slot; distance is `floor(sqrt(dx²+dy²+dz²))`, and tangent is sufficient for a gate |
-| `0x8F` | align4: `u32 hx,hy,hz, i16 slot` | strict expanded AABB; center is transformed, extents stay query-axis aligned |
+| `0x8F` | align4: `u32 hx,hy,hz, i16 slot` | strict expanded AABB; center is transformed, extents stay world-axis aligned |
 | `0x90` | align4: `u32 radius, u32 height, i16 slot` | upright cylinder rising `height` from the slot (`FUN_00469C20`, sphere-table `+4`). Its vertical span is strict on both ends and uses the cylinder radius, not the query's: `slot.y < q.y + radius`, `q.y - radius < slot.y + height`. It separates only horizontally: the normal is the XZ Q12 unit from the `i16` integer root, the penetration `radius + r - length`, and a zero length gives `(1,0,0)` |
 | `0x8C` | align2: signed group span | begin convex plane group; span is relative to aligned payload |
 | `0x8A` | align2: three `i16` slots | sphere/plane half-space; rejection branches to group end |
@@ -432,6 +432,42 @@ reconstructed from the visible `MaterializedModel` triangles.
 | `0x8D` | none | commit accepted group's minimum penetration; compete with other primitives by maximum |
 | `0x95` | align2: `i16 relative_offset` | continue on the previous primitive hit, otherwise branch from the aligned payload |
 | `0x05` | align2: child id/orientation/span/attach/remaps | recurse into a collision-only child model hierarchy |
+
+`FUN_0046AF20`'s switch also has `0x30`/`0x31` (mount-basis transforms),
+`0x36` (register op) and the no-ops `0x87`/`0x93`/`0x94`. Opcode `0x36`
+`[op][dst][a][b]` decodes both operands with `FUN_00470840`, runs entry
+`op` of table `0x004D4980` (`FUN_00469630`, `FUN_00448790`, `FUN_00469640`,
+`FUN_00469650`, `FUN_004487B0`, `FUN_004487C0`, `FUN_004487D0`,
+`FUN_004487F0`, `FUN_00448810`, `FUN_00448840`, `FUN_00469680`,
+`FUN_00448880`, `FUN_004696B0`, `FUN_004488A0`, `FUN_004696D0`,
+`FUN_00448900`) and stores the word in register `dst`. Only that case reads
+the table.
+
+**Shipped data.** Level overlays carry no Section 8, so the system overlays
+(PRELOAD's embedded copies and `Overlay/<tier>X{2,3,5..11}XX.OVL`, all four
+tiers identical) hold every model the game loads: 728 collision programs per
+tier. Walked with the switch's operand lengths, they use exactly
+`0x05 0x30 0x88 0x89 0x8A 0x8C 0x8D 0x8E 0x8F 0x90 0x95`
+(`section8_collision_programs_use_only_the_ported_opcodes`). Opcode `0x36`
+never occurs, so table `0x004D4980` never runs; nor do `0x31`, `0x8B` or the
+no-ops. Non-sphere primitives are almost all on buildings and trees. Actors
+carry them only through these spawns and type records:
+
+| Actor | Model (non-sphere ops) | Worlds |
+|---|---|---|
+| Type 66 Working Factory, spawn override | `227` lifter (`0x8F`, child `0x05`) | 13, 25 |
+| Type 67, spawn override | `185`/`186` fbuild1/deadfbuild1 (`0x8F`), `867` ziggurat and `1010` icestore (convex faces) | 27, 28, 29, 41 |
+| Type 82, spawn override | `183` oilrig1 (`0x8F`) | 22, 25, 32 |
+| Type 82, spawn override | `180` nukesub (`0x30`) | 38 |
+| Type 110, type record | `1113` queen (`0x30`, child code 6) | 47 |
+| Type 84, type record | `859` mileston (`0x8F`) | no spawn |
+
+Every one of those type records' state policy (`+0xC0`, bit 1) clears
+`0x10000`, so none enters the terrain/sea pass; all of them enter the active
+pair pass as the moving model, which is why the cylinder/box/model tables
+below are ported. `0x30` (nukesub, the queen and her parts `1114`, `1115`,
+`1116`, `1118`, `1119`) and the queen's child orientation code 6 remain
+explicit errors.
 
 Each primitive is tested by the query's table: one table per query shape, one
 entry per primitive. The Targetter's probe uses the point and sphere tables
@@ -454,8 +490,28 @@ entry per primitive. The Targetter's probe uses the point and sphere tables
 | `FUN_00469910` | the box query against a sphere primitive: overlapping on every axis (the box's half extents `+28..+30` plus the radius), the hit separates along the axis of least penetration, a signed Q12 unit with that penetration |
 | `FUN_00469DF0` | the box query against a cylinder primitive: when the box's half extents overlap the cylinder's radius and height, the hit is the Q12 unit of the centre offset with penetration 1 |
 | `FUN_0046A560` | the box query against a box primitive: overlapping on every axis (summed half extents), the hit separates along the axis of least penetration, a signed Q12 unit with that penetration |
-| `FUN_00469F00` | the model query against a cylinder primitive: runs the moving model's collision program (`FUN_0046AEF0`) as an upright-cylinder query of that radius and height (table `0x4D4938`) at the primitive's offset, keeping the projector block `004FEEA0` across it |
-| `FUN_0046A7F0` | the model query against a box primitive: runs the moving model's collision program (`FUN_0046AEF0`) as a box query of those half extents (table `0x4D4950`) at the primitive's offset, keeping the projector block `004FEEA0` across it |
+| `FUN_00469B70` | the moving model's sphere: walks the other model's program (`FUN_0046AEF0`) as a sphere query (table `0x4D4920`) at the sphere's offset from that model |
+| `FUN_00469F00` | the moving model's upright cylinder: walks the other model's program (`FUN_0046AEF0`) as an upright-cylinder query of that radius and height (table `0x4D4938`) at the base's offset, keeping the projector block `004FEEA0` across it |
+| `FUN_0046A7F0` | the moving model's box: walks the other model's program (`FUN_0046AEF0`) as a box query of those half extents (table `0x4D4950`) at the centre's offset, keeping the projector block `004FEEA0` across it |
+| `FUN_0046A8D0` | every convex face against a cylinder or box query, and every face of the moving model: hit, penetration 1, normal the Q12 unit of the context offset (the query point relative to the walked model, or for the moving model the other model's origin relative to it); the face's slots are never read |
+
+The box-separating entries (`FUN_0046A1C0`, `FUN_00469910`, `FUN_0046A560`)
+take each axis's penetration as the smaller of its two face distances and
+pick X only when it is strictly below both Y and Z, Z only when strictly
+below Y, otherwise Y. Their normals point from the target toward the query.
+`FUN_00469850`'s points from the query toward the target sphere; the
+depth-1 entries' along query minus target.
+
+For an entity pair (`FUN_00412530`) each walker state carries its own
+entity's basis, so both models' points are rotated into world axes about
+their origins and compared relative to the candidate's origin: boxes stay
+world-aligned and cylinders upright whatever the yaw. Section-10 statics are
+unrotated, so their contact is the same computation. The port's
+`collide_model_raw_world` is this pair; the Working Factory's scientist
+intake runs it with the factory as the moving model, as retail's live walk
+does. On the Remote Beamer lab capture the world-aligned Main Base box
+reproduces retail's final Type93 push to Z -32100 exactly; the earlier
+candidate-local frame stopped one unit short.
 
 The child command is also valid on the **query** side. `FUN_0046AF20`
 case `0x05` calls `FUN_0046B6D0`, which copies the selected callback context
@@ -488,8 +544,8 @@ acceptance remain recorded by the active objective and owning actor notes.
 The supported child orientations compose the already recovered signed
 permutation basis and parent frame. Orientation code6 depends on a preceding
 `0x31` mount basis and remains an explicit unsupported error, as on the target
-side. Child traversal does not broaden support to unowned query primitives
-or render commands. The terrain entry accepting a model pool shares this
+side. Both sides share one walker, as retail shares `FUN_0046AF20`, so
+query-side cylinders, boxes and faces follow the same traversal. The terrain entry accepting a model pool shares this
 traversal; the legacy pool-free entry remains suitable for child-free player
 geometry and reports unavailable children explicitly.
 

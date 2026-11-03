@@ -93,7 +93,20 @@ relying on a zero-vector fallback changes reachable results.
 
 | Routine | Does |
 | --- | --- |
-| `FUN_00415E10` | the sea-surface counterpart of `FUN_00415160`: the same sphere sweep over the cells its box covers, against the flat sea plane, keeping the deepest contact |
+| `FUN_00415E10` | the sea-surface counterpart of `FUN_00415160`: the same sphere sweep over the cells its box covers, against the flat sea plane, keeping the deepest contact; `FUN_00416230` normalizes its contact |
+
+`FUN_00412870` installs table `0x004C92A0` (`FUN_00415160` for spheres,
+`FUN_00416290` for cylinders, boxes and faces) and walks the moving model.
+`FUN_004129B0` installs the sea table `0x004C92B8` (`FUN_00415E10`, then
+`FUN_00416290`) in the same context but never walks it: it answers from the
+surface height directly, and the pair and static passes that reuse the
+context replace the table through `FUN_0046AE40`. No other code reads the
+sea table, so `FUN_00415E10` and `FUN_00416230` never run.
+
+`FUN_00416290` is a hit of depth 1 that leaves the result buffer's previous
+normal. Every actor type whose model has a non-sphere primitive clears
+`0x10000` through its state policy, so no shipped actor reaches it; the port
+reports `NonSphereTerrainPrimitive` instead of guessing that stale normal.
 
 ## Evidence and acceptance boundary
 

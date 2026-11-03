@@ -550,6 +550,12 @@ pub enum ModelCollisionError {
         global_id: usize,
     },
     RecursionLimit,
+    /// A moving model's cylinder, box or convex face met the heightfield.
+    /// Retail answers with `FUN_00416290` (depth 1, the result buffer's stale
+    /// normal); no shipped actor type reaches it.
+    NonSphereTerrainPrimitive {
+        opcode: u8,
+    },
 }
 
 /// Root transform used while collecting the authored model-effect points
@@ -2452,488 +2458,430 @@ impl<P: CollisionModelPool + ?Sized> StagedEffectInterpreter<'_, P> {
     }
 }
 
-struct CollisionInterpreter<'a, P: CollisionModelPool + ?Sized> {
-    pool: &'a P,
+type CollisionResult = std::result::Result<Option<ModelCollisionHit>, ModelCollisionError>;
+
+/// One retail primitive-callback table: `FUN_0046AF20` walks every collision
+/// program the same way and hands each primitive to the table its caller
+/// installed. Points arrive transformed into the walk's frame; `model_origin`
+/// is the walked (child) model's origin in that frame, which is where
+/// `FUN_0046B6D0` moves the context offset before recursing.
+trait CollisionPrimitiveTable {
+    fn sphere(&mut self, center: [f64; 3], radius: u32) -> CollisionResult;
+    fn cylinder(&mut self, base: [f64; 3], radius: u32, height: u32) -> CollisionResult;
+    fn aabb(&mut self, center: [f64; 3], half: [u32; 3]) -> CollisionResult;
+    /// Convex face `0x89`/`0x8A`; `points` is `None` when a corner slot is
+    /// unresolved.
+    fn plane(
+        &mut self,
+        opcode: u8,
+        points: Option<[[f64; 3]; 3]>,
+        model_origin: [f64; 3],
+    ) -> CollisionResult;
 }
 
-impl<P: CollisionModelPool + ?Sized> CollisionInterpreter<'_, P> {
-    #[allow(clippy::too_many_arguments)]
-    fn run(
-        &self,
-        model: &ModelEntry,
-        query_center: [f64; 3],
-        query_radius: f64,
-        model_to_query_basis: [[f64; 3]; 3],
-        model_origin: [f64; 3],
-        vars: &AnimVars,
-        linked: Option<&LinkedModelSlots>,
-        depth: u8,
-    ) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError> {
-        if depth > COLLISION_RECURSION_LIMIT {
-            return Err(ModelCollisionError::RecursionLimit);
-        }
-        if model.collision_program.is_empty() {
-            return Ok(None);
-        }
+/// Table `004D4920`: the query is a sphere (a projectile probe, or one sphere
+/// of a moving model). The point table is its radius-zero case.
+struct SphereQuery {
+    center: [f64; 3],
+    radius: f64,
+}
 
-        let program = &model.collision_program;
-        let mut pc = 0usize;
-        let mut guard = 0usize;
-        let mut scratch: Option<ModelCollisionHit> = None;
-        let mut best: Option<ModelCollisionHit> = None;
-        // FUN_0046AF20 keeps the callback's acceptance bit separate from its
-        // depth/normal: 0x8C clears only the latter, and an empty 0x8D group
-        // inherits the last successful primitive, even across a later miss.
-        let mut scratch_hit = false;
-        let mut previous_hit = None;
-        let mut group_end = None;
-        let mut group_active = false;
+impl CollisionPrimitiveTable for SphereQuery {
+    fn sphere(&mut self, center: [f64; 3], radius: u32) -> CollisionResult {
+        Ok(collision_sphere_hit(
+            self.center,
+            self.radius,
+            center,
+            f64::from(radius),
+        ))
+    }
 
-        while pc < program.len() {
-            guard += 1;
-            if guard > program.len().saturating_mul(4).max(16) {
-                return Err(ModelCollisionError::InvalidBranch { pc });
-            }
-            let opcode = program[pc];
-            match opcode {
-                // End of collision program. Retail requires at least one raw
-                // unit of final penetration. A tangent primitive remains in
-                // `scratch` so it can pass a following 0x95 gate, but is not a
-                // standalone final hit.
-                0x88 => {
-                    return Ok(best.filter(|hit| hit.penetration_raw >= 1.0));
-                }
+    fn cylinder(&mut self, base: [f64; 3], radius: u32, height: u32) -> CollisionResult {
+        Ok(collision_cylinder_hit(
+            self.center,
+            self.radius,
+            base,
+            radius,
+            height,
+        ))
+    }
 
-                // Convex group: the signed span is relative to the aligned
-                // payload. Any rejected plane jumps directly to that end.
-                0x8C => {
-                    let payload = collision_align2(pc);
-                    let span = collision_i16(program, payload)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    let target = payload as isize + span as isize;
-                    if target < 0 || target as usize >= program.len() {
-                        return Err(ModelCollisionError::InvalidBranch { pc });
-                    }
-                    group_end = Some(target as usize);
-                    group_active = true;
-                    scratch = None;
-                    pc = payload + 2;
-                }
+    fn aabb(&mut self, center: [f64; 3], half: [u32; 3]) -> CollisionResult {
+        Ok(collision_aabb_hit(self.center, self.radius, center, half))
+    }
 
-                // The sphere-query table at 004D4920 selects 0046ABF0 for
-                // 0x8A. Its 0x89 wrapper (0046A8B0) uses the same first three
-                // slots and merely consumes one additional, unused word.
-                0x89 | 0x8A => {
-                    let payload = collision_align2(pc);
-                    let next = payload + if opcode == 0x89 { 8 } else { 6 };
-                    if next > program.len() {
-                        return Err(ModelCollisionError::Truncated { pc, opcode });
-                    }
-                    let end = group_end.ok_or(ModelCollisionError::InvalidBranch { pc })?;
-                    let points = std::array::from_fn::<_, 3, _>(|index| {
-                        let slot = collision_u16(program, payload + index * 2)?;
-                        resolve_collision_slot(model, slot, vars, linked).map(|point| {
-                            transform_collision_point(model_to_query_basis, model_origin, point)
-                        })
-                    });
-                    let hit = match points {
-                        [Some(a), Some(b), Some(c)] => {
-                            collision_plane_hit(query_center, query_radius, [a, b, c])
-                        }
-                        _ => None,
-                    };
-                    scratch_hit = hit.is_some();
-                    if let Some(hit) = hit {
-                        if scratch
-                            .is_none_or(|current| hit.penetration_raw < current.penetration_raw)
-                        {
-                            scratch = Some(hit);
-                        }
-                        pc = next;
-                    } else {
-                        group_active = false;
-                        pc = end;
-                    }
-                }
-
-                // This group guard consumes a word but invokes no callback.
-                0x8B => {
-                    let payload = collision_align2(pc);
-                    collision_u16(program, payload)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    if scratch_hit {
-                        pc = payload + 2;
-                    } else {
-                        group_active = false;
-                        pc = group_end.ok_or(ModelCollisionError::InvalidBranch { pc })?;
-                    }
-                }
-
-                // Plane callbacks minimize penetration within a group; the
-                // completed group competes with other primitives by maximum.
-                0x8D => {
-                    let next = pc + 1;
-                    if group_active {
-                        scratch_hit = true;
-                        scratch = scratch.or(previous_hit);
-                        previous_hit = scratch;
-                        promote_collision_hit(program, next, scratch, &mut best);
-                    }
-                    pc = next;
-                }
-
-                // Sphere: align4(pc+4), [u32 radius][i16 center slot].
-                0x8E => {
-                    let payload = collision_align4(pc);
-                    let radius = collision_u32(program, payload)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    let slot = collision_u16(program, payload + 4)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    let next = payload + 6;
-                    if next > program.len() {
-                        return Err(ModelCollisionError::Truncated { pc, opcode });
-                    }
-                    scratch =
-                        resolve_collision_slot(model, slot, vars, linked).and_then(|center| {
-                            collision_sphere_hit(
-                                query_center,
-                                query_radius,
-                                transform_collision_point(
-                                    model_to_query_basis,
-                                    model_origin,
-                                    center,
-                                ),
-                                radius as f64,
-                            )
-                        });
-                    scratch_hit = scratch.is_some();
-                    if scratch_hit {
-                        previous_hit = scratch;
-                    }
-                    promote_collision_hit(program, next, scratch, &mut best);
-                    pc = next;
-                }
-
-                // Axis-aligned box: align4(pc+4), three u32 half extents and
-                // one i16 center slot.
-                0x8F => {
-                    let payload = collision_align4(pc);
-                    let half = [
-                        collision_u32(program, payload),
-                        collision_u32(program, payload + 4),
-                        collision_u32(program, payload + 8),
-                    ];
-                    let slot = collision_u16(program, payload + 12);
-                    let (Some(hx), Some(hy), Some(hz), Some(slot)) =
-                        (half[0], half[1], half[2], slot)
-                    else {
-                        return Err(ModelCollisionError::Truncated { pc, opcode });
-                    };
-                    let next = payload + 14;
-                    if next > program.len() {
-                        return Err(ModelCollisionError::Truncated { pc, opcode });
-                    }
-                    scratch =
-                        resolve_collision_slot(model, slot, vars, linked).and_then(|center| {
-                            collision_aabb_hit(
-                                query_center,
-                                query_radius,
-                                transform_collision_point(
-                                    model_to_query_basis,
-                                    model_origin,
-                                    center,
-                                ),
-                                [hx as f64, hy as f64, hz as f64],
-                            )
-                        });
-                    scratch_hit = scratch.is_some();
-                    if scratch_hit {
-                        previous_hit = scratch;
-                    }
-                    promote_collision_hit(program, next, scratch, &mut best);
-                    pc = next;
-                }
-
-                // Vertical cylinder: align4(pc+4), [u32 radius][u32 height]
-                // [i16 base slot]. 46AF20 passes both dwords to the sphere
-                // table's +4 callback, FUN_00469C20.
-                0x90 => {
-                    let payload = collision_align4(pc);
-                    let radius = collision_u32(program, payload);
-                    let height = collision_u32(program, payload + 4);
-                    let slot = collision_u16(program, payload + 8);
-                    let (Some(radius), Some(height), Some(slot)) = (radius, height, slot) else {
-                        return Err(ModelCollisionError::Truncated { pc, opcode });
-                    };
-                    let next = payload + 10;
-                    if next > program.len() {
-                        return Err(ModelCollisionError::Truncated { pc, opcode });
-                    }
-                    scratch = resolve_collision_slot(model, slot, vars, linked).and_then(|base| {
-                        collision_cylinder_hit(
-                            query_center,
-                            query_radius,
-                            transform_collision_point(model_to_query_basis, model_origin, base),
-                            radius,
-                            height,
-                        )
-                    });
-                    scratch_hit = scratch.is_some();
-                    if scratch_hit {
-                        previous_hit = scratch;
-                    }
-                    promote_collision_hit(program, next, scratch, &mut best);
-                    pc = next;
-                }
-
-                // Conditional gate: continue after the signed offset word if
-                // the previous primitive hit; otherwise branch from the
-                // aligned payload base. Broad gate primitives are deliberately
-                // not promoted when immediately followed by 0x95.
-                0x95 => {
-                    let payload = collision_align2(pc);
-                    let offset = collision_i16(program, payload)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    if scratch_hit {
-                        pc = payload + 2;
-                    } else {
-                        let Some(target) = (payload as isize).checked_add(offset as isize) else {
-                            return Err(ModelCollisionError::InvalidBranch { pc });
-                        };
-                        if target < 0 || target as usize >= program.len() {
-                            return Err(ModelCollisionError::InvalidBranch { pc });
-                        }
-                        pc = target as usize;
-                    }
-                }
-
-                // Collision-only child model. Payload order differs from the
-                // render stream's 0x0E instance record. Retail recurses into
-                // the child through FUN_0046B6D0.
-                0x05 => {
-                    let payload = collision_align2(pc);
-                    let child_id = collision_u16(program, payload)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?
-                        as usize;
-                    let orientation_code = collision_u16(program, payload + 2)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    let span = collision_i16(program, payload + 4)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    let attach_slot = collision_u16(program, payload + 6)
-                        .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                    if span < 8 {
-                        return Err(ModelCollisionError::InvalidBranch { pc });
-                    }
-                    let next = payload.saturating_add(span as usize);
-                    if next > program.len() {
-                        return Err(ModelCollisionError::Truncated { pc, opcode });
-                    }
-                    // Code 6 depends on an earlier 0x31 mount-basis command;
-                    // that rarer transform state is intentionally explicit
-                    // rather than silently treated as identity.
-                    if orientation_code & 7 == 6 {
-                        return Err(ModelCollisionError::UnsupportedOpcode { pc, opcode });
-                    }
-                    let child = self.pool.collision_model(child_id).ok_or(
-                        ModelCollisionError::MissingChild {
-                            global_id: child_id,
-                        },
-                    )?;
-                    let Some(attach_pos) = resolve_collision_slot(model, attach_slot, vars, linked)
-                    else {
-                        scratch = None;
-                        scratch_hit = false;
-                        pc = next;
-                        continue;
-                    };
-                    let child_local_basis =
-                        transpose_basis(permute_negate(&IDENTITY3, orientation_code));
-                    let child_origin =
-                        transform_collision_point(model_to_query_basis, model_origin, attach_pos);
-                    let child_basis = mat3_mul_f64(model_to_query_basis, child_local_basis);
-                    let remap_slots = (payload + 6..next)
-                        .step_by(2)
-                        .filter_map(|offset| collision_u16(program, offset))
-                        .collect::<Vec<_>>();
-                    let child_linked = build_collision_child_links(
-                        model,
-                        linked,
-                        &remap_slots,
-                        vars,
-                        attach_pos,
-                        child_local_basis,
-                    );
-                    scratch = self.run(
-                        child,
-                        query_center,
-                        query_radius,
-                        child_basis,
-                        child_origin,
-                        vars,
-                        Some(&child_linked),
-                        depth + 1,
-                    )?;
-                    scratch_hit = scratch.is_some();
-                    if scratch_hit {
-                        previous_hit = scratch;
-                    }
-                    promote_collision_hit(program, next, scratch, &mut best);
-                    pc = next;
-                }
-
-                _ => return Err(ModelCollisionError::UnsupportedOpcode { pc, opcode }),
-            }
-        }
-
-        Err(ModelCollisionError::Truncated {
-            pc,
-            opcode: program.get(pc).copied().unwrap_or(0),
-        })
+    fn plane(&mut self, _: u8, points: Option<[[f64; 3]; 3]>, _: [f64; 3]) -> CollisionResult {
+        Ok(points.and_then(|points| collision_plane_hit(self.center, self.radius, points)))
     }
 }
 
-/// Retail's Section-10 contact path runs the moving model's collision program
-/// first. Each authored sphere then becomes a query against the static model's
-/// complete collision program (`FUN_0046AE40` -> the `0x00469B70` callback ->
-/// nested `FUN_0046AF20`). Type 46's active `player4` program uses only this
-/// sphere/gate subset, while the static side may contain spheres, boxes, and
-/// collision-only children. Query-side collision children preserve that same
-/// selected sphere callback through their attachment/orientation/link context.
-struct ModelPairCollisionInterpreter<'a, P: CollisionModelPool + ?Sized> {
+/// Table `004D4938`: a moving model's upright cylinder `0x90`
+/// (`FUN_00469F00`). Its base is the query point; `radius`/`height` sit at
+/// context `+0x20/+0x24`.
+struct CylinderQuery {
+    base: [f64; 3],
+    radius: u32,
+    height: u32,
+}
+
+impl CollisionPrimitiveTable for CylinderQuery {
+    // FUN_00469850
+    fn sphere(&mut self, center: [f64; 3], radius: u32) -> CollisionResult {
+        let base = query_word(self.base);
+        let center = primitive_word(center);
+        let (own_radius, height) = (self.radius as i32, self.height as i32);
+        // The vertical span uses the cylinder's own radius, not the sphere's.
+        if !(base[1] < center[1].wrapping_add(own_radius)
+            && center[1].wrapping_sub(own_radius) < height.wrapping_add(base[1]))
+        {
+            return Ok(None);
+        }
+        let dx = center[0].wrapping_sub(base[0]);
+        let dz = center[2].wrapping_sub(base[2]);
+        let reach = (radius as i32).wrapping_add(own_radius);
+        let distance_sq = dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz));
+        if distance_sq >= reach.wrapping_mul(reach) {
+            return Ok(None);
+        }
+        let distance = collision_root_word(distance_sq);
+        if distance == 0 {
+            return Ok(Some(ModelCollisionHit {
+                normal: [1.0, 0.0, 0.0],
+                penetration_raw: f64::from(reach),
+            }));
+        }
+        // Unlike the sphere table, this normal points from the query toward
+        // the target sphere.
+        Ok(Some(ModelCollisionHit {
+            normal: [q12_ratio(dx, distance), 0.0, q12_ratio(dz, distance)],
+            penetration_raw: f64::from(reach.wrapping_sub(distance)),
+        }))
+    }
+
+    // FUN_00469CE0
+    fn cylinder(&mut self, base: [f64; 3], radius: u32, height: u32) -> CollisionResult {
+        let (r, h) = (radius as i32, height as i32);
+        Ok(extent_overlap_hit(
+            query_word(self.base),
+            [self.radius as i32, self.height as i32, self.radius as i32],
+            primitive_word(base),
+            [r, h, r],
+        ))
+    }
+
+    // FUN_0046A440
+    fn aabb(&mut self, center: [f64; 3], half: [u32; 3]) -> CollisionResult {
+        Ok(extent_overlap_hit(
+            query_word(self.base),
+            [self.radius as i32, self.height as i32, self.radius as i32],
+            primitive_word(center),
+            half.map(|extent| extent as i32),
+        ))
+    }
+
+    // FUN_0046A8D0
+    fn plane(&mut self, _: u8, _: Option<[[f64; 3]; 3]>, origin: [f64; 3]) -> CollisionResult {
+        Ok(Some(collision_offset_plane_hit(self.base, origin)))
+    }
+}
+
+/// Table `004D4950`: a moving model's box `0x8F` (`FUN_0046A7F0`), its half
+/// extents at context `+0x28..+0x30`.
+struct BoxQuery {
+    center: [f64; 3],
+    half: [u32; 3],
+}
+
+impl CollisionPrimitiveTable for BoxQuery {
+    // FUN_00469910
+    fn sphere(&mut self, center: [f64; 3], radius: u32) -> CollisionResult {
+        Ok(box_separation_hit(
+            query_word(self.center),
+            self.half.map(|extent| extent as i32),
+            primitive_word(center),
+            [radius as i32; 3],
+        ))
+    }
+
+    // FUN_00469DF0
+    fn cylinder(&mut self, base: [f64; 3], radius: u32, height: u32) -> CollisionResult {
+        let (r, h) = (radius as i32, height as i32);
+        Ok(extent_overlap_hit(
+            query_word(self.center),
+            self.half.map(|extent| extent as i32),
+            primitive_word(base),
+            [r, h, r],
+        ))
+    }
+
+    // FUN_0046A560
+    fn aabb(&mut self, center: [f64; 3], half: [u32; 3]) -> CollisionResult {
+        Ok(box_separation_hit(
+            query_word(self.center),
+            self.half.map(|extent| extent as i32),
+            primitive_word(center),
+            half.map(|extent| extent as i32),
+        ))
+    }
+
+    // FUN_0046A8D0
+    fn plane(&mut self, _: u8, _: Option<[[f64; 3]; 3]>, origin: [f64; 3]) -> CollisionResult {
+        Ok(Some(collision_offset_plane_hit(self.center, origin)))
+    }
+}
+
+/// Table `004D4968` (`FUN_0046AE40`): each primitive of the moving model
+/// walks the whole target program through the matching query table.
+struct ModelPairQuery<'a, P: CollisionModelPool + ?Sized> {
     target: &'a ModelEntry,
+    target_basis: [[f64; 3]; 3],
     target_vars: &'a AnimVars,
     pool: &'a P,
 }
 
-impl<P: CollisionModelPool + ?Sized> ModelPairCollisionInterpreter<'_, P> {
-    fn run(
-        &self,
-        query: &ModelEntry,
-        query_origin_in_target: [f64; 3],
-        query_to_target_basis: [[f64; 3]; 3],
-        query_vars: &AnimVars,
-    ) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError> {
-        if self.target.collision_radius_raw == 0 {
-            return Ok(None);
-        }
-        if self.target.collision_program.is_empty() {
-            return Ok(None);
-        }
-
-        run_query_sphere_program(
-            query,
-            query_origin_in_target,
-            query_to_target_basis,
-            query_vars,
+impl<P: CollisionModelPool + ?Sized> ModelPairQuery<'_, P> {
+    fn walk_target<T: CollisionPrimitiveTable>(&self, table: &mut T) -> CollisionResult {
+        walk_collision_program(
             self.pool,
-            |sphere_center, sphere_radius| {
-                CollisionInterpreter { pool: self.pool }.run(
-                    self.target,
-                    sphere_center,
-                    sphere_radius,
-                    IDENTITY3,
-                    [0.0; 3],
-                    self.target_vars,
-                    None,
-                    0,
-                )
-            },
+            self.target,
+            self.target_basis,
+            [0.0; 3],
+            self.target_vars,
+            None,
+            0,
+            table,
         )
     }
 }
 
-/// Walk the authored query spheres/gates and collision-only children, retaining
-/// the selected primitive callback through each child. `46AF20 ->46B6D0` copies
-/// the callback context before recursing; model and heightfield contacts share
-/// this traversal, independently of the visible render hierarchy.
-fn run_query_sphere_program<P, F>(
-    query: &ModelEntry,
-    query_origin: [f64; 3],
-    query_to_target_basis: [[f64; 3]; 3],
-    query_vars: &AnimVars,
-    pool: &P,
-    mut collide_sphere: F,
-) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError>
-where
-    P: CollisionModelPool + ?Sized,
-    F: FnMut([f64; 3], f64) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError>,
-{
-    run_query_sphere_program_linked(
-        query,
-        query_origin,
-        query_to_target_basis,
-        query_vars,
-        None,
-        pool,
-        &mut collide_sphere,
-        0,
-    )
+impl<P: CollisionModelPool + ?Sized> CollisionPrimitiveTable for ModelPairQuery<'_, P> {
+    // FUN_00469B70
+    fn sphere(&mut self, center: [f64; 3], radius: u32) -> CollisionResult {
+        self.walk_target(&mut SphereQuery {
+            center,
+            radius: f64::from(radius),
+        })
+    }
+
+    // FUN_00469F00
+    fn cylinder(&mut self, base: [f64; 3], radius: u32, height: u32) -> CollisionResult {
+        self.walk_target(&mut CylinderQuery {
+            base,
+            radius,
+            height,
+        })
+    }
+
+    // FUN_0046A7F0
+    fn aabb(&mut self, center: [f64; 3], half: [u32; 3]) -> CollisionResult {
+        self.walk_target(&mut BoxQuery { center, half })
+    }
+
+    // FUN_0046A8D0 on the outer context: the target origin relative to the
+    // walked query (child) model, never the face itself.
+    fn plane(&mut self, _: u8, _: Option<[[f64; 3]; 3]>, origin: [f64; 3]) -> CollisionResult {
+        Ok(Some(collision_offset_plane_hit([0.0; 3], origin)))
+    }
 }
 
+/// Table `004C92A0`, installed by `FUN_00412870`: moving-model spheres meet
+/// the heightfield. Its other entries are `FUN_00416290`, a depth-1 hit that
+/// keeps whatever normal the result buffer held. No shipped actor type that
+/// carries a non-sphere model enters the terrain pass (their authored state
+/// policy clears `0x10000`), so that entry stays an explicit stop.
+struct TerrainQuery<'a> {
+    terrain: &'a TerrainGrid,
+}
+
+impl CollisionPrimitiveTable for TerrainQuery<'_> {
+    fn sphere(&mut self, center: [f64; 3], radius: u32) -> CollisionResult {
+        Ok(terrain_sphere_hit(self.terrain, center, f64::from(radius)))
+    }
+
+    fn cylinder(&mut self, _: [f64; 3], _: u32, _: u32) -> CollisionResult {
+        Err(ModelCollisionError::NonSphereTerrainPrimitive { opcode: 0x90 })
+    }
+
+    fn aabb(&mut self, _: [f64; 3], _: [u32; 3]) -> CollisionResult {
+        Err(ModelCollisionError::NonSphereTerrainPrimitive { opcode: 0x8F })
+    }
+
+    fn plane(&mut self, opcode: u8, _: Option<[[f64; 3]; 3]>, _: [f64; 3]) -> CollisionResult {
+        Err(ModelCollisionError::NonSphereTerrainPrimitive { opcode })
+    }
+}
+
+/// `FUN_0046AF20`: walk one collision program, handing each primitive to
+/// `table`. Retail returns no contact for a model whose collision radius
+/// (header `+0x0A`) is zero, at every level including collision children.
 #[allow(clippy::too_many_arguments)]
-fn run_query_sphere_program_linked<P, F>(
-    query: &ModelEntry,
-    query_origin: [f64; 3],
-    query_to_target_basis: [[f64; 3]; 3],
-    query_vars: &AnimVars,
-    linked: Option<&LinkedModelSlots>,
+fn walk_collision_program<P, T>(
     pool: &P,
-    collide_sphere: &mut F,
+    model: &ModelEntry,
+    model_to_frame_basis: [[f64; 3]; 3],
+    model_origin: [f64; 3],
+    vars: &AnimVars,
+    linked: Option<&LinkedModelSlots>,
     depth: u8,
-) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError>
+    table: &mut T,
+) -> CollisionResult
 where
     P: CollisionModelPool + ?Sized,
-    F: FnMut([f64; 3], f64) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError>,
+    T: CollisionPrimitiveTable,
 {
     if depth > COLLISION_RECURSION_LIMIT {
         return Err(ModelCollisionError::RecursionLimit);
     }
-    if query.collision_radius_raw == 0 || query.collision_program.is_empty() {
+    if model.collision_radius_raw == 0 || model.collision_program.is_empty() {
         return Ok(None);
     }
 
-    let program = &query.collision_program;
+    let program = &model.collision_program;
     let mut pc = 0usize;
     let mut guard = 0usize;
     let mut scratch: Option<ModelCollisionHit> = None;
     let mut best: Option<ModelCollisionHit> = None;
+    // FUN_0046AF20 keeps the callback's acceptance bit separate from its
+    // depth/normal: 0x8C clears only the latter, and an empty 0x8D group
+    // inherits the last successful primitive, even across a later miss.
+    let mut scratch_hit = false;
+    let mut previous_hit = None;
+    let mut group_end = None;
+    let mut group_active = false;
+    let point = |slot: u16| {
+        resolve_collision_slot(model, slot, vars, linked)
+            .map(|local| transform_collision_point(model_to_frame_basis, model_origin, local))
+    };
 
     while pc < program.len() {
         guard += 1;
         if guard > program.len().saturating_mul(4).max(16) {
             return Err(ModelCollisionError::InvalidBranch { pc });
         }
-
         let opcode = program[pc];
         match opcode {
-            0x88 => return Ok(best.filter(|hit| hit.penetration_raw >= 1.0)),
-            0x8E => {
-                let payload = collision_align4(pc);
-                let radius = collision_u32(program, payload)
+            // End of collision program. Retail requires at least one raw
+            // unit of final penetration. A tangent primitive remains in
+            // `scratch` so it can pass a following 0x95 gate, but is not a
+            // standalone final hit.
+            0x88 => {
+                return Ok(best.filter(|hit| hit.penetration_raw >= 1.0));
+            }
+
+            // Convex group: the signed span is relative to the aligned
+            // payload. Any rejected plane jumps directly to that end.
+            0x8C => {
+                let payload = collision_align2(pc);
+                let span = collision_i16(program, payload)
                     .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                let slot = collision_u16(program, payload + 4)
-                    .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                let next = payload + 6;
+                let target = payload as isize + span as isize;
+                if target < 0 || target as usize >= program.len() {
+                    return Err(ModelCollisionError::InvalidBranch { pc });
+                }
+                group_end = Some(target as usize);
+                group_active = true;
+                scratch = None;
+                pc = payload + 2;
+            }
+
+            // Convex face. The sphere table's 0x89 wrapper (0046A8B0) uses
+            // the same first three slots as 0x8A (0046ABF0) and merely
+            // consumes one additional, unused word.
+            0x89 | 0x8A => {
+                let payload = collision_align2(pc);
+                let next = payload + if opcode == 0x89 { 8 } else { 6 };
                 if next > program.len() {
                     return Err(ModelCollisionError::Truncated { pc, opcode });
                 }
-
-                scratch = match resolve_collision_slot(query, slot, query_vars, linked) {
-                    Some(center) => {
-                        let sphere_center =
-                            transform_collision_point(query_to_target_basis, query_origin, center);
-                        collide_sphere(sphere_center, f64::from(radius))?
+                let end = group_end.ok_or(ModelCollisionError::InvalidBranch { pc })?;
+                let points = std::array::from_fn::<_, 3, _>(|index| {
+                    collision_u16(program, payload + index * 2).and_then(point)
+                });
+                let points = match points {
+                    [Some(a), Some(b), Some(c)] => Some([a, b, c]),
+                    _ => None,
+                };
+                let hit = table.plane(opcode, points, model_origin)?;
+                scratch_hit = hit.is_some();
+                if let Some(hit) = hit {
+                    if scratch.is_none_or(|current| hit.penetration_raw < current.penetration_raw) {
+                        scratch = Some(hit);
                     }
+                    pc = next;
+                } else {
+                    group_active = false;
+                    pc = end;
+                }
+            }
+
+            // This group guard consumes a word but invokes no callback.
+            0x8B => {
+                let payload = collision_align2(pc);
+                collision_u16(program, payload)
+                    .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
+                if scratch_hit {
+                    pc = payload + 2;
+                } else {
+                    group_active = false;
+                    pc = group_end.ok_or(ModelCollisionError::InvalidBranch { pc })?;
+                }
+            }
+
+            // Plane callbacks minimize penetration within a group; the
+            // completed group competes with other primitives by maximum.
+            0x8D => {
+                let next = pc + 1;
+                if group_active {
+                    scratch_hit = true;
+                    scratch = scratch.or(previous_hit);
+                    previous_hit = scratch;
+                    promote_collision_hit(program, next, scratch, &mut best);
+                }
+                pc = next;
+            }
+
+            // Sphere: align4(pc+4), [u32 radius][i16 center slot].
+            // Box: align4(pc+4), three u32 half extents and one i16 center slot.
+            // Upright cylinder: align4(pc+4), [u32 radius][u32 height][i16 base slot].
+            0x8E | 0x8F | 0x90 => {
+                let payload = collision_align4(pc);
+                let dwords = match opcode {
+                    0x8E => 1,
+                    0x8F => 3,
+                    _ => 2,
+                };
+                let next = payload + dwords * 4 + 2;
+                if next > program.len() {
+                    return Err(ModelCollisionError::Truncated { pc, opcode });
+                }
+                let word = |index: usize| collision_u32(program, payload + index * 4).unwrap_or(0);
+                let slot = collision_u16(program, payload + dwords * 4)
+                    .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
+                scratch = match point(slot) {
+                    Some(at) => match opcode {
+                        0x8E => table.sphere(at, word(0))?,
+                        0x8F => table.aabb(at, [word(0), word(1), word(2)])?,
+                        _ => table.cylinder(at, word(0), word(1))?,
+                    },
                     None => None,
                 };
+                scratch_hit = scratch.is_some();
+                if scratch_hit {
+                    previous_hit = scratch;
+                }
                 promote_collision_hit(program, next, scratch, &mut best);
                 pc = next;
             }
+
+            // Conditional gate: continue after the signed offset word if
+            // the previous primitive hit; otherwise branch from the
+            // aligned payload base. Broad gate primitives are deliberately
+            // not promoted when immediately followed by 0x95.
             0x95 => {
                 let payload = collision_align2(pc);
                 let offset = collision_i16(program, payload)
                     .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
-                if scratch.is_some() {
+                if scratch_hit {
                     pc = payload + 2;
                 } else {
                     let Some(target) = (payload as isize).checked_add(offset as isize) else {
@@ -2945,6 +2893,10 @@ where
                     pc = target as usize;
                 }
             }
+
+            // Collision-only child model. Payload order differs from the
+            // render stream's 0x0E instance record. Retail recurses into
+            // the child through FUN_0046B6D0 with the same table.
             0x05 => {
                 let payload = collision_align2(pc);
                 let child_id = collision_u16(program, payload)
@@ -2959,14 +2911,13 @@ where
                 if span < 8 {
                     return Err(ModelCollisionError::InvalidBranch { pc });
                 }
-                let next = payload
-                    .checked_add(span as usize)
-                    .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
+                let next = payload.saturating_add(span as usize);
                 if next > program.len() {
                     return Err(ModelCollisionError::Truncated { pc, opcode });
                 }
-                // Native code6 copies the mount basis from prior transform31.
-                // Preserve the same explicit boundary as the target walker.
+                // Code 6 depends on an earlier 0x30 mount-basis command;
+                // that rarer transform state is intentionally explicit
+                // rather than silently treated as identity.
                 if orientation_code & 7 == 6 {
                     return Err(ModelCollisionError::UnsupportedOpcode { pc, opcode });
                 }
@@ -2975,46 +2926,49 @@ where
                         .ok_or(ModelCollisionError::MissingChild {
                             global_id: child_id,
                         })?;
-                let Some(attach_pos) =
-                    resolve_collision_slot(query, attach_slot, query_vars, linked)
+                let Some(attach_pos) = resolve_collision_slot(model, attach_slot, vars, linked)
                 else {
                     scratch = None;
+                    scratch_hit = false;
                     pc = next;
                     continue;
                 };
                 let child_local_basis =
                     transpose_basis(permute_negate(&IDENTITY3, orientation_code));
                 let child_origin =
-                    transform_collision_point(query_to_target_basis, query_origin, attach_pos);
-                let child_basis = mat3_mul_f64(query_to_target_basis, child_local_basis);
+                    transform_collision_point(model_to_frame_basis, model_origin, attach_pos);
+                let child_basis = mat3_mul_f64(model_to_frame_basis, child_local_basis);
                 let remap_slots = (payload + 6..next)
                     .step_by(2)
                     .filter_map(|offset| collision_u16(program, offset))
                     .collect::<Vec<_>>();
                 let child_linked = build_collision_child_links(
-                    query,
+                    model,
                     linked,
                     &remap_slots,
-                    query_vars,
+                    vars,
                     attach_pos,
                     child_local_basis,
                 );
                 // A child replaces the last callback result, including a miss.
-                // Existing best penetration survives; a following95 gates on
-                // this child result rather than a successful older sibling.
-                scratch = run_query_sphere_program_linked(
-                    child,
-                    child_origin,
-                    child_basis,
-                    query_vars,
-                    Some(&child_linked),
+                scratch = walk_collision_program(
                     pool,
-                    collide_sphere,
+                    child,
+                    child_basis,
+                    child_origin,
+                    vars,
+                    Some(&child_linked),
                     depth + 1,
+                    table,
                 )?;
+                scratch_hit = scratch.is_some();
+                if scratch_hit {
+                    previous_hit = scratch;
+                }
                 promote_collision_hit(program, next, scratch, &mut best);
                 pc = next;
             }
+
             _ => return Err(ModelCollisionError::UnsupportedOpcode { pc, opcode }),
         }
     }
@@ -3022,6 +2976,130 @@ where
     Err(ModelCollisionError::Truncated {
         pc,
         opcode: program.get(pc).copied().unwrap_or(0),
+    })
+}
+
+/// Query points are word-sized relative positions (truncated, as the sphere
+/// callback does); primitive points are independently shifted Q31 products.
+fn query_word(point: [f64; 3]) -> [i32; 3] {
+    point.map(|component| component.trunc() as i32)
+}
+
+fn primitive_word(point: [f64; 3]) -> [i32; 3] {
+    point.map(|component| component.floor() as i32)
+}
+
+/// `FUN_00457730` narrowed to the signed word every caller keeps: zero for a
+/// signed nonpositive input.
+fn collision_root_word(value: i32) -> i32 {
+    if value <= 0 {
+        0
+    } else {
+        i32::from(collision_integer_sqrt(value as u32) as i16)
+    }
+}
+
+/// One signed-Q12 normal component, C division truncating toward zero.
+fn q12_ratio(component: i32, length: i32) -> f64 {
+    f64::from((component.wrapping_mul(0x1000) / length) as i16) / 4096.0
+}
+
+/// `FUN_0046A8D0`: every convex face meets a cylinder or box query with
+/// depth 1, along the context offset (the query point relative to the walked
+/// model's origin); the face's own slots are never read.
+fn collision_offset_plane_hit(query: [f64; 3], model_origin: [f64; 3]) -> ModelCollisionHit {
+    let query = query_word(query);
+    let origin = primitive_word(model_origin);
+    let offset = std::array::from_fn::<_, 3, _>(|axis| query[axis].wrapping_sub(origin[axis]));
+    ModelCollisionHit {
+        normal: q12_direction(offset),
+        penetration_raw: 1.0,
+    }
+}
+
+fn q12_direction(vector: [i32; 3]) -> [f64; 3] {
+    let squared = vector.iter().fold(0i32, |sum, component| {
+        sum.wrapping_add(component.wrapping_mul(*component))
+    });
+    let length = collision_root_word(squared);
+    if length == 0 {
+        return [1.0, 0.0, 0.0];
+    }
+    vector.map(|component| q12_ratio(component, length))
+}
+
+/// `FUN_00469CE0`, `FUN_00469DF0` and `FUN_0046A440`: strict per-axis
+/// interval overlap of a query extent `query_half` around `query` and a
+/// target extent `target_half` around `target`, then a depth-1 hit along
+/// query-minus-target.
+fn extent_overlap_hit(
+    query: [i32; 3],
+    query_half: [i32; 3],
+    target: [i32; 3],
+    target_half: [i32; 3],
+) -> Option<ModelCollisionHit> {
+    let delta = std::array::from_fn::<_, 3, _>(|axis| query[axis].wrapping_sub(target[axis]));
+    let overlaps = (0..3).all(|axis| {
+        query_half[axis].wrapping_neg() < delta[axis].wrapping_add(target_half[axis])
+            && delta[axis].wrapping_sub(target_half[axis]) < query_half[axis]
+    });
+    overlaps.then(|| ModelCollisionHit {
+        normal: q12_direction(delta),
+        penetration_raw: 1.0,
+    })
+}
+
+/// `FUN_0046A1C0`, `FUN_00469910` and `FUN_0046A560`: a query extent and a
+/// target extent overlap strictly on every axis, then separate along the
+/// axis of least penetration. X wins only when strictly below both others,
+/// Z only when strictly below Y; every other tie goes to Y. The normal points
+/// from the target toward the query.
+fn box_separation_hit(
+    query: [i32; 3],
+    query_half: [i32; 3],
+    target: [i32; 3],
+    target_half: [i32; 3],
+) -> Option<ModelCollisionHit> {
+    let mut depth = [0i32; 3];
+    let mut sign = [1i32; 3];
+    for axis in 0..3 {
+        let (c, ce, q, qe) = (
+            query[axis],
+            query_half[axis],
+            target[axis],
+            target_half[axis],
+        );
+        if !(q.wrapping_sub(qe) < ce.wrapping_add(c) && c.wrapping_sub(ce) < qe.wrapping_add(q)) {
+            return None;
+        }
+        let low = c
+            .wrapping_sub(q)
+            .wrapping_sub(qe)
+            .wrapping_sub(ce)
+            .wrapping_abs();
+        let high = qe
+            .wrapping_add(ce)
+            .wrapping_add(c)
+            .wrapping_sub(q)
+            .wrapping_abs();
+        (sign[axis], depth[axis]) = if high < low { (-1, high) } else { (1, low) };
+    }
+    let axis = if depth[0] < depth[2] {
+        if depth[0] < depth[1] {
+            0
+        } else {
+            1
+        }
+    } else if depth[2] < depth[1] {
+        2
+    } else {
+        1
+    };
+    let mut normal = [0.0; 3];
+    normal[axis] = f64::from(sign[axis]);
+    Some(ModelCollisionHit {
+        normal,
+        penetration_raw: f64::from(depth[axis]),
     })
 }
 
@@ -3202,36 +3280,18 @@ fn collision_aabb_hit(
     query_center: [f64; 3],
     query_radius: f64,
     primitive_center: [f64; 3],
-    half_extents: [f64; 3],
+    half_extents: [u32; 3],
 ) -> Option<ModelCollisionHit> {
     // The static-contact callback receives materialized integer centers. As
     // with the sphere callback above, preserve the signed shift direction at
     // the floating-point orientation boundary rather than carrying fractions
     // into an otherwise-integer interval test.
-    let query_center = query_center.map(|component| component.trunc() as i32);
-    let primitive_center = primitive_center.map(|component| component.floor() as i32);
-    let delta = std::array::from_fn::<_, 3, _>(|axis| {
-        f64::from(query_center[axis].wrapping_sub(primitive_center[axis]))
-    });
-    let overlap = std::array::from_fn::<_, 3, _>(|axis| {
-        half_extents[axis] + query_radius - delta[axis].abs()
-    });
-    // FUN_0046A1C0 uses strict interval comparisons on every axis.
-    if overlap.iter().any(|amount| *amount <= 0.0) {
-        return None;
-    }
-    let axis = (0..3)
-        .min_by(|&left, &right| overlap[left].total_cmp(&overlap[right]))
-        .unwrap_or(0);
-    let mut normal = [0.0; 3];
-    // FUN_0046A1C0 selects the face on the query sphere's side of the box:
-    // the normal points from the authored primitive toward the query, exactly
-    // like FUN_00469770's sphere/sphere result.
-    normal[axis] = if delta[axis] < 0.0 { -1.0 } else { 1.0 };
-    Some(ModelCollisionHit {
-        normal,
-        penetration_raw: overlap[axis],
-    })
+    box_separation_hit(
+        query_word(query_center),
+        [query_radius as i32; 3],
+        primitive_word(primitive_center),
+        half_extents.map(|extent| extent as i32),
+    )
 }
 
 /// `FUN_00469C20`: an upright cylinder rising `height` from its base slot.
@@ -3482,15 +3542,18 @@ impl ModelEntry {
         vars: &AnimVars,
         pool: &P,
     ) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError> {
-        CollisionInterpreter { pool }.run(
+        walk_collision_program(
+            pool,
             self,
-            query_center_raw,
-            f64::from(query_radius_raw),
             model_to_query_basis,
             [0.0; 3],
             vars,
             None,
             0,
+            &mut SphereQuery {
+                center: query_center_raw,
+                radius: f64::from(query_radius_raw),
+            },
         )
     }
 
@@ -3500,16 +3563,9 @@ impl ModelEntry {
     /// contact: `self` is the active entity model, `target` is the selected
     /// static model, and `query_origin_in_target_raw` is the moving origin
     /// relative to the static object's origin in raw 8.8 units. The moving
-    /// model's authored sphere centers are transformed through
+    /// model's authored primitives are transformed through
     /// `query_to_target_basis`; the returned normal is expressed in the static
-    /// target/world axes and points from the target toward the moving model.
-    ///
-    /// Retail type 46's `player4` program is a broad gated sphere followed by
-    /// eight detailed spheres, so this implements its exact `FUN_0046AE40` /
-    /// nested `FUN_0046AF20` path. A moving-side opcode outside
-    /// `0x88/0x8E/0x95` remains an explicit error. The target side retains the
-    /// complete subset supported by [`Self::collide_sphere_raw`], including
-    /// boxes, convex plane groups, and collision-only children.
+    /// target/world axes. See [`Self::collide_model_raw_world`].
     pub fn collide_model_raw_oriented<P: CollisionModelPool + ?Sized>(
         &self,
         target: &ModelEntry,
@@ -3519,16 +3575,56 @@ impl ModelEntry {
         target_vars: &AnimVars,
         pool: &P,
     ) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError> {
-        ModelPairCollisionInterpreter {
+        self.collide_model_raw_world(
             target,
-            target_vars,
-            pool,
-        }
-        .run(
-            self,
             query_origin_in_target_raw,
             query_to_target_basis,
+            IDENTITY3,
             query_vars,
+            target_vars,
+            pool,
+        )
+    }
+
+    /// `FUN_0046AE40`: walk this moving model's collision program and, for
+    /// each primitive, the whole `target` program through the matching query
+    /// table (sphere, upright cylinder or box; convex faces of either side
+    /// meet a cylinder or box at depth 1). Retail rotates each model's points
+    /// by its own entity basis into world axes, so boxes stay world-aligned
+    /// and cylinders upright: `query_origin_raw` is the moving origin minus
+    /// the target origin in world axes, and both bases are model-to-world.
+    /// The normal is in world axes. Sphere tables point it from the target
+    /// toward the moving model; the cylinder-against-sphere entry points it
+    /// the other way, as retail does.
+    #[allow(clippy::too_many_arguments)]
+    pub fn collide_model_raw_world<P: CollisionModelPool + ?Sized>(
+        &self,
+        target: &ModelEntry,
+        query_origin_raw: [f64; 3],
+        query_to_world_basis: [[f64; 3]; 3],
+        target_to_world_basis: [[f64; 3]; 3],
+        query_vars: &AnimVars,
+        target_vars: &AnimVars,
+        pool: &P,
+    ) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError> {
+        // FUN_00412530 leaves a zero-radius target before walking the query.
+        if target.collision_radius_raw == 0 || target.collision_program.is_empty() {
+            return Ok(None);
+        }
+        walk_collision_program(
+            pool,
+            self,
+            query_to_world_basis,
+            query_origin_raw,
+            query_vars,
+            None,
+            0,
+            &mut ModelPairQuery {
+                target,
+                target_basis: target_to_world_basis,
+                target_vars,
+                pool,
+            },
         )
     }
 
@@ -3572,15 +3668,15 @@ impl ModelEntry {
         query_vars: &AnimVars,
         pool: &P,
     ) -> std::result::Result<Option<ModelCollisionHit>, ModelCollisionError> {
-        run_query_sphere_program(
-            self,
-            query_origin_world_raw.map(f64::from),
-            query_to_world_basis,
-            query_vars,
+        walk_collision_program(
             pool,
-            |sphere_center, sphere_radius| {
-                Ok(terrain_sphere_hit(terrain, sphere_center, sphere_radius))
-            },
+            self,
+            query_to_world_basis,
+            query_origin_world_raw.map(f64::from),
+            query_vars,
+            None,
+            0,
+            &mut TerrainQuery { terrain },
         )
     }
 
@@ -4447,6 +4543,143 @@ mod tests {
     }
 
     #[test]
+    fn cylinder_and_box_query_tables_follow_their_retail_callbacks() {
+        let q12 = |value: f64| value / 4096.0;
+        // 00469910: box query against a target sphere, separated along X.
+        let mut boxed = BoxQuery {
+            center: [0.0; 3],
+            half: [100, 50, 100],
+        };
+        let hit = boxed.sphere([120.0, 0.0, 0.0], 30).unwrap().unwrap();
+        assert_eq!((hit.normal, hit.penetration_raw), ([-1.0, 0.0, 0.0], 10.0));
+        // 0046A560: an X/Y tie goes to Y.
+        let mut small = BoxQuery {
+            center: [0.0; 3],
+            half: [10, 10, 10],
+        };
+        let hit = small
+            .aabb([15.0, 15.0, 0.0], [10, 10, 30])
+            .unwrap()
+            .unwrap();
+        assert_eq!((hit.normal, hit.penetration_raw), ([0.0, -1.0, 0.0], 5.0));
+        // 0046A1C0 shares that order.
+        let mut sphere = SphereQuery {
+            center: [0.0; 3],
+            radius: 10.0,
+        };
+        let hit = sphere
+            .aabb([50.0, 50.0, 0.0], [45, 45, 100])
+            .unwrap()
+            .unwrap();
+        assert_eq!((hit.normal, hit.penetration_raw), ([0.0, -1.0, 0.0], 5.0));
+        // 0046A8D0: depth 1 along the query point, the face itself unread.
+        let probe = BoxQuery {
+            center: [3.0, 0.0, 4.0],
+            half: [1, 1, 1],
+        };
+        let hit = collision_offset_plane_hit(probe.center, [0.0; 3]);
+        assert_eq!(hit.normal, [q12(2457.0), 0.0, q12(3276.0)]);
+        assert_eq!(hit.penetration_raw, 1.0);
+
+        let mut cylinder = CylinderQuery {
+            base: [0.0; 3],
+            radius: 50,
+            height: 200,
+        };
+        // 00469850: horizontal only, from the query toward the sphere.
+        let hit = cylinder.sphere([60.0, 100.0, 0.0], 20).unwrap().unwrap();
+        assert_eq!((hit.normal, hit.penetration_raw), ([1.0, 0.0, 0.0], 10.0));
+        // Its vertical span uses the cylinder's radius, not the sphere's.
+        assert!(cylinder.sphere([10.0, -60.0, 0.0], 100).unwrap().is_none());
+        // 00469CE0: strict interval overlap, depth 1 along query - target.
+        let hit = cylinder
+            .cylinder([0.0, -30.0, 40.0], 10, 40)
+            .unwrap()
+            .unwrap();
+        assert_eq!(hit.normal, [0.0, q12(2457.0), q12(-3276.0)]);
+        assert_eq!(hit.penetration_raw, 1.0);
+        assert!(cylinder
+            .aabb([0.0, 0.0, 60.0], [10, 10, 10])
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn moving_model_boxes_stay_world_aligned_and_faces_always_touch() {
+        let vars = AnimVars::default();
+        let target = collision_entry(
+            vec![[0, 0, 0, 0]],
+            vec![0x8E, 0, 0, 0, 30, 0, 0, 0, 0, 0, 0x88],
+        );
+        let boxed = collision_entry(
+            vec![[0, 0, 0, 0]],
+            vec![
+                0x8F, 0, 0, 0, 100, 0, 0, 0, 50, 0, 0, 0, 100, 0, 0, 0, 0, 0, 0x88,
+            ],
+        );
+        let half = std::f64::consts::FRAC_1_SQRT_2;
+        let yaw_45 = [[half, 0.0, half], [0.0, 1.0, 0.0], [-half, 0.0, half]];
+        let hit = boxed
+            .collide_model_raw_world(
+                &target,
+                [-120.0, 0.0, 0.0],
+                yaw_45,
+                IDENTITY3,
+                &vars,
+                &vars,
+                &(),
+            )
+            .unwrap()
+            .expect("the box keeps its world-axis extents under any yaw");
+        assert_eq!((hit.normal, hit.penetration_raw), ([-1.0, 0.0, 0.0], 10.0));
+
+        // One convex face: the outer table answers with the target origin
+        // relative to the moving model, wherever the target is.
+        let faced = collision_entry(
+            vec![[0, 0, 0, 0]],
+            vec![0x8C, 0, 10, 0, 0x8A, 0, 0, 0, 0, 0, 0, 0, 0x8D, 0x88],
+        );
+        let hit = faced
+            .collide_model_raw_world(
+                &target,
+                [-30.0, 0.0, -40.0],
+                IDENTITY3,
+                IDENTITY3,
+                &vars,
+                &vars,
+                &(),
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(hit.normal, [2457.0 / 4096.0, 0.0, 3276.0 / 4096.0]);
+        assert_eq!(hit.penetration_raw, 1.0);
+
+        assert_eq!(
+            boxed.collide_terrain_raw_oriented(&flat_terrain(0), [0; 3], IDENTITY3, &vars),
+            Err(ModelCollisionError::NonSphereTerrainPrimitive { opcode: 0x8F })
+        );
+    }
+
+    /// Records each sphere a walk hands its table, answering every one as a miss.
+    struct RecordSpheres(Vec<([f64; 3], f64)>);
+
+    impl CollisionPrimitiveTable for RecordSpheres {
+        fn sphere(&mut self, center: [f64; 3], radius: u32) -> CollisionResult {
+            self.0.push((center, f64::from(radius)));
+            Ok(None)
+        }
+        fn cylinder(&mut self, _: [f64; 3], _: u32, _: u32) -> CollisionResult {
+            unreachable!()
+        }
+        fn aabb(&mut self, _: [f64; 3], _: [u32; 3]) -> CollisionResult {
+            unreachable!()
+        }
+        fn plane(&mut self, _: u8, _: Option<[[f64; 3]; 3]>, _: [f64; 3]) -> CollisionResult {
+            unreachable!()
+        }
+    }
+
+    #[test]
     fn query_child_composes_orientation_attachment_and_linked_slot_imports() {
         let parent = collision_entry(
             vec![[0, 100, 10, 20], [0, 130, 40, 50]],
@@ -4461,22 +4694,21 @@ mod tests {
         let pool = vec![parent, child];
         let yaw_90 = [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [-1.0, 0.0, 0.0]];
         let vars = AnimVars::default();
-        let mut spheres = Vec::new();
-        assert!(run_query_sphere_program(
-            &pool[0],
-            [1_000.0, 2_000.0, 3_000.0],
-            yaw_90,
-            &vars,
+        let mut spheres = RecordSpheres(Vec::new());
+        assert!(walk_collision_program(
             &pool,
-            |center, radius| {
-                spheres.push((center, radius));
-                Ok(None)
-            },
+            &pool[0],
+            yaw_90,
+            [1_000.0, 2_000.0, 3_000.0],
+            &vars,
+            None,
+            0,
+            &mut spheres,
         )
         .unwrap()
         .is_none());
         assert_eq!(
-            spheres,
+            spheres.0,
             [
                 // Child slot 0 imports parent slot 2 through remap index 1.
                 ([1_050.0, 2_040.0, 2_870.0], 5.0),
