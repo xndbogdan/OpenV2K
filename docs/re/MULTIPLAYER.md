@@ -125,7 +125,7 @@ send kind 10 for network-owned bodies, and the session tick sends kinds 3, 7,
 | `FUN_00439FB0` | spawns a remote particle from the 20-byte record through `FUN_00440A60` |
 | `FUN_0043A020` | presents a remote burst through `FUN_00440950` from the message's three words, with no source |
 | `FUN_00437730` | packs a terrain update: the sea level, then run-length pairs from `FUN_004377E0` up to 0x60 bytes or 4,096 cells |
-| `FUN_004377E0` | measures a run of up to 255 cells from (x, z), advancing X then Z with wrap, that share the infection bit and, on cells with an attribute byte or flag `0x08`, that flag and whether the attribute byte is clear; returns the length and a flags byte (1 infected, 2 flag `0x08`, 4 attribute byte clear) |
+| `FUN_004377E0` | measures a run of up to 255 cells from (x, z), advancing X then Z with wrap, that share the infection bit and, on cells with an attribute byte or flag `0x08`, that flag and a comparison of the attribute byte (below); returns the length and a flags byte (1 infected, 2 flag `0x08`, 4 attribute byte clear, set only with 2) |
 | `FUN_00437910` | applies a terrain update: the sea level when the sender is the host, then each run through `FUN_004379C0`, with `004DC9B4` marking the remote write |
 | `FUN_004379C0` | applies a received run of cells from (x, z), advancing X then Z with wrap: sets each cell's infection bit to the run's (`FUN_00433720`) and, on a cell whose attribute byte is set, flag `0x08` to the run's (`FUN_004337E0`), clearing the attribute byte when the run's bit 4 says so (`FUN_00433860`) |
 | `FUN_00437B60` | syncs one cell: its material through `FUN_00433900` and its flags `0x10` (`FUN_00433720`) and `0x08` (`FUN_004337E0`) when they differ |
@@ -140,6 +140,47 @@ send kind 10 for network-owned bodies, and the session tick sends kinds 3, 7,
 | `FUN_00418030` | attaches a local body to its parent through `FUN_00416700`, setting `0x20000000` for flag 1 and clearing render bit `0x800` without flag 2 |
 | `FUN_004180A0` | releases a local body from the named parent through `FUN_00416750` |
 | `FUN_00438BE0` | keeps a stamp in `004DC780`; when it matches the slot's expected id (`004DC758`) and the session agrees (`FUN_00450C90`), marks the slot ready (`004DC7B8`), and a newer counter is recorded |
+
+## Terrain and cells
+
+`FUN_00438880` subscribes `FUN_00438F60` to the three cell-change lists of
+`FUN_004337A0`: list 0 (`004DC5F8`) the infection bit, notified by
+`FUN_00433720` when it changes; list 1 (`004DC628`) flag `0x08`, by
+`FUN_004337E0` when it changes; list 2 (`004DC608`) the attribute byte, by
+`FUN_00433860` (cleared, notifying the old byte whether or not it was set) and
+`FUN_00433900` (written, always notifying). Their local writers are the
+infection spread and its particles (`FUN_00402850`, `FUN_00427DE0`,
+`FUN_00427E00`, `FUN_00436750`, `FUN_00436960`, `FUN_00437630`,
+`FUN_0043E1C0`), the static burns (`FUN_00427950`, `FUN_00427B20`,
+`FUN_004281A0`, the Main Base abort's `FUN_00433E30`) and the attribute
+clears (`FUN_0041CF90`, `FUN_00427E20`); `FUN_00433900` only the receivers.
+
+| Routine | Does |
+| --- | --- |
+| `FUN_00438F60` | unless `004DC9B4` is set: the host sends kind 4 for the cell; a client sends kind 5 with an operation, 0 or 1 infect or clean, 2 or 3 burn or unburn, 4 the attribute byte |
+| `FUN_00437B00` | packs kind 4: the cell, then its flags and attribute byte as they are now |
+| `FUN_00437C50` | packs kind 5; for operation 4 its last byte is the cell's attribute byte now (the other operations carry the position word's top byte, which their apply never reads) |
+| `FUN_00437CB0` | on the host only, applies a request when it changes the cell: operations 0-3 through `FUN_00433720` and `FUN_004337E0`, 4 through `FUN_00433900`. `004DC9B4` stays clear, so the host's own notifications send kind 4 to everyone |
+| `FUN_00438CB0` | the host's periodic kind 3, while a level terrain is loaded, from the cursor `004DC9E0` (X, Z), which nothing resets, so it runs on from one session to the next |
+
+`FUN_004377E0` compares the attribute byte the wrong way round. A later cell
+with neither an attribute byte nor flag `0x08` joins the run on its infection
+bit alone; any other must match the run's flag `0x08`, then its "attribute
+byte set" (4 when set) must equal the first cell's "attribute byte clear" (4
+when clear). So a burned run that starts on a bare cell takes only burned
+objects, and one that starts on a burned object takes only bare burned cells.
+The receiver clears the attribute byte of every object cell in a run with bit
+4.
+
+`004DC9B4` is set while a record from the host (stamp byte 11 nonzero) is
+applied by `FUN_00437910` or `FUN_00437B60`, then cleared: those writes
+notify no peer, and `FUN_00427760`, the burn list's other subscriber, makes
+no burst for them, though its crater still runs. Every other burst of
+`FUN_00427760` and `FUN_00427C30` carries network byte 1 on a client
+(`DAT_004F741C` set, `DAT_004F73B8` clear), else 0. With byte 1,
+`FUN_00440950` sends no kind 2 and `FUN_00440A60` refuses every class whose
+descriptor flags hold 2; any nonzero byte sets `+1D` bit 0, so the particles
+do no damage.
 
 ## Session tick, handles and queues
 
@@ -285,6 +326,18 @@ connection row is the port's transport, and a port-owned prompt asks for the
 host's address in place of DirectPlay's dialog. The CD check before hosting
 is not run.
 
+Terrain and cells follow [Terrain and cells](#terrain-and-cells). The level
+cache journals each notification its writers make while a network game runs,
+with the cell's bytes right after it, and the frame sends the journal as kinds
+4 or 5 after its effects' records, and again after the records it applied, so
+a host's answer to a request leaves in the same frame as in retail. A host's
+record is applied with the journal set aside (`004DC9B4`). Kind 5's last byte
+is 0 for operations 0-3. Not sent: burns made while a world is built, which
+the port writes to a private copy of the terrain (retail notifies them too).
+The port does not run `FUN_00427C30` (the static effect of an
+infected object cell) or the radar's listeners `FUN_0044A850` and
+`FUN_0044AA50` for any cell change, a peer's or its own.
+
 Held, each with a logged stop ("Network: ... is held"):
 
 - the special weapon's power-up (selector 0x39): `FUN_00445A90` raises the
@@ -292,11 +345,11 @@ Held, each with a logged stop ("Network: ... is held"):
   and the deploy `FUN_00444400` builds three. The port has no Type65, so it
   refuses the pickup and the power-up stays; with no count, a dying player
   here never drops one;
-- sending kinds 3 to 6 (terrain, cells and static objects) and 13 to 15
-  (attachments), and kind 10: `FUN_00414AE0`'s, whose handle is stale (above),
-  and `FUN_00411030`'s, since the port runs no particle hit wrapper
+- sending kind 6 (static objects) and kinds 13 to 15 (attachments), and
+  kind 10: `FUN_00414AE0`'s, whose handle is stale (above), and
+  `FUN_00411030`'s, since the port runs no particle hit wrapper
   (`FUN_00411180`, `FUN_00411250`) on a peer's body, only its damage;
-- receiving kinds 3 to 6 and 13 to 15;
+- receiving kinds 6 and 13 to 15;
 - a particle's damage to a peer's body of type 73, 109 or 110, whose modifier
   `FUN_00415040` would run first;
 - a peer's damage to an owned creature whose type's hit callback or death the

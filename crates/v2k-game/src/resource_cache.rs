@@ -39,6 +39,22 @@ pub struct ResourceCache {
     /// A live material/light write requires the next terrain submission to
     /// rebuild its cached mesh, including after a later radar refresh block.
     level_terrain_presentation_dirty: bool,
+    /// `FUN_00438F60`'s subscriptions in network play; `None` outside it and
+    /// while a peer's terrain is applied (`004DC9B4`).
+    network_cell_changes: Option<Vec<NetworkCellChange>>,
+}
+
+/// One cell-change notification (`FUN_004337A0`) that network play sends on:
+/// list 0 the infection bit (`FUN_00433720`), 1 the burn bit
+/// (`FUN_004337E0`), 2 the attribute byte (`FUN_00433860`, `FUN_00433900`);
+/// the value notified, then the cell's flags and attribute right after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NetworkCellChange {
+    pub list: u8,
+    pub cell: [u8; 2],
+    pub value: u8,
+    pub flags: u8,
+    pub attribute: u8,
 }
 
 /// `44A8D0`'s persistent coverage: the cache itself, or its radar lent apart.
@@ -103,6 +119,7 @@ pub(crate) struct MainBaseAbortResourceTransaction<'a> {
     original_transform_latch: bool,
     original_terrain_radar: Option<crate::gameplay_radar::TerrainRadar>,
     original_presentation_dirty: bool,
+    original_journal_len: Option<usize>,
     committed: bool,
 }
 
@@ -140,6 +157,12 @@ impl Drop for MainBaseAbortResourceTransaction<'_> {
         self.cache.level_abort_terrain_transformed = self.original_transform_latch;
         self.cache.level_terrain_radar = self.original_terrain_radar.take();
         self.cache.level_terrain_presentation_dirty = self.original_presentation_dirty;
+        if let (Some(journal), Some(len)) = (
+            self.cache.network_cell_changes.as_mut(),
+            self.original_journal_len,
+        ) {
+            journal.truncate(len);
+        }
     }
 }
 
@@ -237,7 +260,82 @@ impl ResourceCache {
             level_abort_terrain_transformed: false,
             level_terrain_radar: None,
             level_terrain_presentation_dirty: false,
+            network_cell_changes: None,
         }
+    }
+
+    /// Start (or stop) recording cell changes for network play, or give back
+    /// a journal taken with [`Self::take_network_cell_journal`].
+    pub fn set_network_cell_journal(&mut self, journal: Option<Vec<NetworkCellChange>>) {
+        self.network_cell_changes = journal;
+    }
+
+    /// Stop recording, returning the journal: `FUN_00437910` and
+    /// `FUN_00437B60` apply the host's terrain with `004DC9B4` set.
+    pub fn take_network_cell_journal(&mut self) -> Option<Vec<NetworkCellChange>> {
+        self.network_cell_changes.take()
+    }
+
+    /// The changes recorded since the last call.
+    pub fn take_network_cell_changes(&mut self) -> Vec<NetworkCellChange> {
+        self.network_cell_changes
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+
+    fn note_cell_changes(&mut self, changes: impl IntoIterator<Item = NetworkCellChange>) {
+        if let Some(journal) = self.network_cell_changes.as_mut() {
+            journal.extend(changes);
+        }
+    }
+
+    fn level_terrain_cell_mut(
+        &mut self,
+        cell: [u8; 2],
+    ) -> Option<&mut v2k_formats::terrain::TerrainCell> {
+        let index = usize::from(cell[0]) * v2k_formats::terrain::GRID_SIZE + usize::from(cell[1]);
+        self.level_terrain_mut()?.cells.get_mut(index)
+    }
+
+    /// `FUN_00433900`: write one live attribute byte; it always notifies,
+    /// with the cell's burn bit.
+    pub fn set_level_terrain_object_attribute(&mut self, cell: [u8; 2], attribute: u8) -> bool {
+        let Some(terrain_cell) = self.level_terrain_cell_mut(cell) else {
+            return false;
+        };
+        terrain_cell.attribute = attribute;
+        let note = NetworkCellChange {
+            list: 2,
+            cell,
+            value: terrain_cell.terrain_type & 0x08,
+            flags: terrain_cell.terrain_type,
+            attribute,
+        };
+        self.level_terrain_presentation_dirty = true;
+        self.note_cell_changes([note]);
+        true
+    }
+
+    /// `FUN_004337E0(..., 0)`: clear one live burn bit, notifying a change.
+    pub fn clear_level_terrain_burn(&mut self, cell: [u8; 2]) -> bool {
+        let Some(terrain_cell) = self.level_terrain_cell_mut(cell) else {
+            return false;
+        };
+        if terrain_cell.terrain_type & 0x08 == 0 {
+            return false;
+        }
+        terrain_cell.terrain_type &= !0x08;
+        let note = NetworkCellChange {
+            list: 1,
+            cell,
+            value: 0,
+            flags: terrain_cell.terrain_type,
+            attribute: terrain_cell.attribute,
+        };
+        self.level_terrain_presentation_dirty = true;
+        self.note_cell_changes([note]);
+        true
     }
 
     /// Install an exact working copy of the only resource state mutated by a
@@ -249,6 +347,7 @@ impl ResourceCache {
         let original_transform_latch = self.level_abort_terrain_transformed;
         let original_terrain_radar = self.level_terrain_radar.clone();
         let original_presentation_dirty = self.level_terrain_presentation_dirty;
+        let original_journal_len = self.network_cell_changes.as_ref().map(Vec::len);
         let level_layer_index = self
             .layers
             .iter()
@@ -269,6 +368,7 @@ impl ResourceCache {
             original_transform_latch,
             original_terrain_radar,
             original_presentation_dirty,
+            original_journal_len,
             committed: false,
         }
     }
@@ -492,6 +592,15 @@ impl ResourceCache {
         let terrain_cell = terrain.cells.get_mut(index)?;
         let old_attribute = terrain_cell.attribute;
         terrain_cell.attribute = 0;
+        // FUN_00433860 notifies with the old byte, changed or not.
+        let note = NetworkCellChange {
+            list: 2,
+            cell,
+            value: old_attribute,
+            flags: terrain_cell.terrain_type,
+            attribute: 0,
+        };
+        self.note_cell_changes([note]);
         Some(old_attribute)
     }
 
@@ -532,6 +641,19 @@ impl ResourceCache {
         let old_terrain_type = terrain_cell.terrain_type;
         terrain_cell.terrain_type |= bits;
         let changed = terrain_cell.terrain_type != old_terrain_type;
+        // FUN_00433720 (0x10) and FUN_004337E0 (0x08) notify a change.
+        let notes: Vec<NetworkCellChange> = [(0u8, 0x10u8), (1, 0x08)]
+            .into_iter()
+            .filter(|&(_, bit)| bits & bit != 0 && old_terrain_type & bit == 0)
+            .map(|(list, _)| NetworkCellChange {
+                list,
+                cell,
+                value: 1,
+                flags: terrain_cell.terrain_type,
+                attribute: terrain_cell.attribute,
+            })
+            .collect();
+        self.note_cell_changes(notes);
         self.level_terrain_presentation_dirty |= changed;
         changed
     }
@@ -604,7 +726,7 @@ impl ResourceCache {
             .rev()
             .find(|layer| layer.kind == LayerKind::Level)
             .and_then(|layer| layer.state.terrain.as_mut())?;
-        let mut changed = 0;
+        let mut notes = Vec::new();
         for write in writes {
             let index = usize::from(write.cell[0]) * v2k_formats::terrain::GRID_SIZE
                 + usize::from(write.cell[1]);
@@ -617,8 +739,19 @@ impl ResourceCache {
             } else {
                 cell.terrain_type &= !INFECTION_TERRAIN_TYPE_BIT;
             }
-            changed += usize::from(cell.terrain_type != old);
+            // FUN_00433720 notifies only a change.
+            if cell.terrain_type != old {
+                notes.push(NetworkCellChange {
+                    list: 0,
+                    cell: write.cell,
+                    value: u8::from(write.infected),
+                    flags: cell.terrain_type,
+                    attribute: cell.attribute,
+                });
+            }
         }
+        let changed = notes.len();
+        self.note_cell_changes(notes);
         Some(changed)
     }
 
@@ -632,18 +765,37 @@ impl ResourceCache {
     ) -> Option<usize> {
         let terrain = self.level_terrain_mut()?;
         let mut changed = 0;
+        let mut notes = Vec::new();
         for &write in writes {
-            let cell = write.cell();
-            let index =
-                usize::from(cell[0]) * v2k_formats::terrain::GRID_SIZE + usize::from(cell[1]);
+            let position = write.cell();
+            let index = usize::from(position[0]) * v2k_formats::terrain::GRID_SIZE
+                + usize::from(position[1]);
             let Some(cell) = terrain.cells.get_mut(index) else {
                 continue;
             };
             let old = cell.terrain_type;
             cell.terrain_type = write.apply(old);
             changed += usize::from(cell.terrain_type != old);
+            // FUN_0043E1C0's FUN_00433720 and FUN_00427950's FUN_004337E0
+            // notify only a change.
+            let (list, bit, value) = match write {
+                crate::world_fx::ParticleTerrainMutation::Infection { infected, .. } => {
+                    (0, INFECTION_TERRAIN_TYPE_BIT, u8::from(infected))
+                }
+                crate::world_fx::ParticleTerrainMutation::ImmediateBurn { .. } => (1, 0x08, 1),
+            };
+            if (old ^ cell.terrain_type) & bit != 0 {
+                notes.push(NetworkCellChange {
+                    list,
+                    cell: position,
+                    value,
+                    flags: cell.terrain_type,
+                    attribute: cell.attribute,
+                });
+            }
         }
         self.level_terrain_presentation_dirty |= changed != 0;
+        self.note_cell_changes(notes);
         Some(changed)
     }
 
@@ -668,9 +820,19 @@ impl ResourceCache {
         let Some(terrain_cell) = terrain.cells.get_mut(index) else {
             return false;
         };
+        let burned = terrain_cell.terrain_type & 0x08 != 0;
         terrain_cell.terrain_type &= !0x08;
+        // FUN_004337E0 notifies a change before FUN_004338C0's silent increment.
+        let note = burned.then_some(NetworkCellChange {
+            list: 1,
+            cell,
+            value: 0,
+            flags: terrain_cell.terrain_type,
+            attribute: terrain_cell.attribute,
+        });
         terrain_cell.attribute = terrain_cell.attribute.wrapping_add(1);
         self.level_terrain_presentation_dirty = true;
+        self.note_cell_changes(note);
         true
     }
 
@@ -688,9 +850,9 @@ impl ResourceCache {
     /// bit 0x08. Kind 10 additionally consumes one shared `Random_Next` sample
     /// and repeats that idempotent call `sample % 6` times. The callback/count
     /// side effects inside `FUN_004337E0` happen only when the bit changes.
-    /// This method owns the authoritative terrain bit and exact RNG cadence;
-    /// retail's separate global active-count/subscriber notification remains
-    /// outside this terrain-state bridge.
+    /// This method owns the authoritative terrain bit and exact RNG cadence,
+    /// and journals each change for network play; retail's global active
+    /// count and its other subscribers remain outside this bridge.
     ///
     /// Returns an outcome only for the first application to a loaded terrain.
     /// `None` means either no level terrain is resident or the transform was
@@ -726,7 +888,8 @@ impl ResourceCache {
             object_activation_calls: 0,
             kind_10_rng_draws: 0,
         };
-        for cell in &mut terrain.cells {
+        let mut notes = Vec::new();
+        for (index, cell) in terrain.cells.iter_mut().enumerate() {
             if cell.attribute != 0 {
                 if let Some(&kind_index) = descriptor_kinds.get(usize::from(cell.attribute)) {
                     if kind_index != 8 {
@@ -735,6 +898,15 @@ impl ResourceCache {
                         cell.terrain_type |= 0x08;
                         outcome.newly_activated_object_cells +=
                             usize::from(cell.terrain_type != previous);
+                        if cell.terrain_type != previous {
+                            notes.push(NetworkCellChange {
+                                list: 1,
+                                cell: [(index >> 8) as u8, index as u8],
+                                value: 1,
+                                flags: cell.terrain_type,
+                                attribute: cell.attribute,
+                            });
+                        }
                         if kind_index == 10 {
                             outcome.kind_10_rng_draws += 1;
                             outcome.object_activation_calls += usize::from(next_random_u16() % 6);
@@ -748,6 +920,7 @@ impl ResourceCache {
             cell.terrain_type = (darkened << 5) | (old & 0x1f);
             outcome.darkened_light_cells += usize::from(cell.terrain_type != old);
         }
+        self.note_cell_changes(notes);
         self.level_abort_terrain_transformed = true;
         Some(outcome)
     }
@@ -1857,6 +2030,63 @@ mod tests {
             .cell(usize::from(cell[0]), usize::from(cell[1]));
         assert_eq!(preload.unwrap().terrain_type, 0x40);
         assert!(!cache.or_level_terrain_type_bits(cell, 0x08));
+    }
+
+    #[test]
+    fn network_play_journals_each_cell_notification() {
+        let cell = [0x10, 0x20];
+        let level = level_state_with_cell(
+            cell,
+            TerrainCell {
+                height: 0,
+                attribute: 5,
+                terrain_type: 0x40,
+            },
+        );
+        let mut cache = ResourceCache::new(Vec::new());
+        cache.load_level(level);
+        // Outside network play nothing is recorded.
+        cache.or_level_terrain_type_bits(cell, 0x10);
+        assert!(cache.take_network_cell_changes().is_empty());
+        cache.set_network_cell_journal(Some(Vec::new()));
+        let note = |list, value, flags, attribute| NetworkCellChange {
+            list,
+            cell,
+            value,
+            flags,
+            attribute,
+        };
+        // A repeated bit notifies nothing (FUN_004337E0 compares).
+        cache.or_level_terrain_type_bits(cell, 0x18);
+        cache.or_level_terrain_type_bits(cell, 0x08);
+        cache.clear_level_terrain_burn(cell);
+        cache.apply_level_infection_writes(&[InfectionCellWrite {
+            cell,
+            infected: false,
+        }]);
+        cache.set_level_terrain_object_attribute(cell, 9);
+        // FUN_00433860 notifies the old byte; a zero byte is still notified.
+        cache.take_level_terrain_object_attribute(cell);
+        cache.take_level_terrain_object_attribute(cell);
+        assert_eq!(
+            cache.take_network_cell_changes(),
+            vec![
+                note(1, 1, 0x58, 5),
+                note(1, 0, 0x50, 5),
+                note(0, 0, 0x40, 5),
+                note(2, 0, 0x40, 9),
+                note(2, 9, 0x40, 0),
+                note(2, 0, 0x40, 0),
+            ]
+        );
+        // A host's record writes with the journal taken (004DC9B4).
+        let journal = cache.take_network_cell_journal();
+        cache.or_level_terrain_type_bits(cell, 0x08);
+        cache.set_network_cell_journal(journal);
+        assert!(cache.take_network_cell_changes().is_empty());
+        // The kind-10 transition notifies the clear, not the increment.
+        assert!(cache.apply_burned_kind_10_transition(cell));
+        assert_eq!(cache.take_network_cell_changes(), vec![note(1, 0, 0x40, 0)]);
     }
 
     #[test]

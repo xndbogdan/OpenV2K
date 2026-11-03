@@ -3456,6 +3456,8 @@ fn run_game(
                 if let Some(net) = network_game.take() {
                     net.close();
                     world_fx.set_network_sends(false);
+                    world_fx.set_network_client(false);
+                    session.cache.set_network_cell_journal(None);
                 }
                 post_intro_world_cover = None;
                 log!("Returning to menu...");
@@ -4542,6 +4544,15 @@ fn run_game(
                             );
                         }
                         world_fx.set_network_sends(true);
+                        // FUN_00427760's burst byte: 1 on a client.
+                        world_fx.set_network_client(
+                            network_game.as_ref().is_some_and(|net| !net.is_host()),
+                        );
+                        // FUN_00438880 subscribes FUN_00438F60 to the cell lists.
+                        let journal = session.cache.take_network_cell_journal();
+                        session
+                            .cache
+                            .set_network_cell_journal(Some(journal.unwrap_or_default()));
                         GameState::Playing
                     }
                     LoadingPurpose::Normal => GameState::Playing,

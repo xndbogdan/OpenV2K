@@ -97,6 +97,7 @@ impl Pair {
                     model_variables: vec![1, 2, 3],
                     shield: 0,
                 },
+                terrain: None,
             };
             game.world_frame(&mut frame);
             out.push(std::mem::take(&mut game.events));

@@ -113,16 +113,25 @@ fn emit_static_burn_burst(
     sea_level_raw: Option<i16>,
     burst: crate::static_kind_catalog::StaticBurnBurst,
 ) {
-    world_fx.emit_explode_with_ring_burst_raw(ExplodeWithRingBurstRequest {
-        position_raw,
-        source_extent_raw,
-        sea_level_raw,
-        logical_owner_entity_id: 0,
-        logical_owner_entity_type: 0,
-        scatter_count: i32::from(burst.scatter_count),
-        scatter_classes: [burst.particle_class; 2],
-        suppresses_impact_damage: false,
-    });
+    // 427760 passes network byte 1 on a network client, else 0.
+    let emit = if world_fx.is_network_client() {
+        WorldFx::emit_client_explode_with_ring_burst_raw
+    } else {
+        WorldFx::emit_explode_with_ring_burst_raw
+    };
+    emit(
+        world_fx,
+        ExplodeWithRingBurstRequest {
+            position_raw,
+            source_extent_raw,
+            sea_level_raw,
+            logical_owner_entity_id: 0,
+            logical_owner_entity_type: 0,
+            scatter_count: i32::from(burst.scatter_count),
+            scatter_classes: [burst.particle_class; 2],
+            suppresses_impact_damage: false,
+        },
+    );
 }
 
 /// `27950`'s null-program branch still enters `4337E0 -> 427760`.
@@ -189,6 +198,41 @@ pub fn apply_static_terrain_burn(
     world_fx: &mut WorldFx,
     scheduler: &mut StaticDamageScheduler,
 ) -> Result<StaticTerrainBurnOutcome, StaticTerrainBurnFailure> {
+    apply_terrain_burn(cell, resources, manager, world_fx, scheduler, true)
+}
+
+/// A burn bit a network record writes (`FUN_004379C0`, `FUN_00437B60`,
+/// `FUN_00437CB0`): `4337E0` and its `427760` callback, whose burst runs
+/// only outside a host's record (`004DC9B4` clear). A clear reaches
+/// `427760` only for kind 10, which has neither crater nor burst.
+pub fn apply_network_terrain_burn(
+    cell: [u8; 2],
+    burned: bool,
+    host_record: bool,
+    resources: &mut ResourceCache,
+    manager: &mut EntityManager,
+    world_fx: &mut WorldFx,
+    scheduler: &mut StaticDamageScheduler,
+) -> Result<StaticTerrainBurnOutcome, StaticTerrainBurnFailure> {
+    if !burned {
+        let changed = resources.clear_level_terrain_burn(cell);
+        return Ok(StaticTerrainBurnOutcome {
+            burn_changed: changed,
+            terrain_changed: changed,
+            ..StaticTerrainBurnOutcome::default()
+        });
+    }
+    apply_terrain_burn(cell, resources, manager, world_fx, scheduler, !host_record)
+}
+
+fn apply_terrain_burn(
+    cell: [u8; 2],
+    resources: &mut ResourceCache,
+    manager: &mut EntityManager,
+    world_fx: &mut WorldFx,
+    scheduler: &mut StaticDamageScheduler,
+    allow_burst: bool,
+) -> Result<StaticTerrainBurnOutcome, StaticTerrainBurnFailure> {
     let mut outcome = StaticTerrainBurnOutcome::default();
     let failure = |phase, outcome| StaticTerrainBurnFailure { phase, outcome };
     let current = *resources
@@ -236,7 +280,7 @@ pub fn apply_static_terrain_burn(
         .map_err(|error| failure(error.phase, outcome))?;
         outcome.crater_applied = true;
     }
-    if let Some(burst) = descriptor.burn_burst() {
+    if let Some(burst) = descriptor.burn_burst().filter(|_| allow_burst) {
         let source_extent_raw = resources
             .global_model(usize::from(burned_model_id))
             .ok_or_else(|| failure("burn burst model", outcome))?

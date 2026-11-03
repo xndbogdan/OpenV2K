@@ -578,3 +578,11 @@ fn catalog_has_one_authored_burn_crater_and_empty_cells_only_change_burn_bit() {
         original
     );
 }
+
+#[test]
+fn only_kind_10_reaches_427760_on_a_clear_and_it_has_no_crater_or_burst() {
+    // A network burn clear relies on this to skip 427760 entirely.
+    let kind_10 = static_kind_descriptor(10).unwrap();
+    assert!(kind_10.burn_crater().is_none());
+    assert!(kind_10.burn_burst().is_none());
+}
