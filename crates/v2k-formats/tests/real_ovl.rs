@@ -821,6 +821,63 @@ fn section8_batch_all_ovls() {
     );
 }
 
+/// Every collision program in every display tier, walked linearly with the
+/// operand lengths of `FUN_0046AF20`. Level overlays carry no Section 8, so
+/// this is every model the game can load. Register op `0x36` (and `0x31`,
+/// `0x87`, `0x8B`, `0x93`, `0x94`) never occurs.
+#[v2k_test_support::retail_test]
+fn section8_collision_programs_use_only_the_ported_opcodes() {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut programs = 0usize;
+    for entry in std::fs::read_dir(overlay_dir()).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_none_or(|e| e != "OVL") {
+            continue;
+        }
+        let ovl = load_from(path.clone());
+        if !ovl.has_data(8) {
+            continue;
+        }
+        for model in v2k_formats::sections::parse_models(&ovl)
+            .unwrap()
+            .all_entries
+        {
+            let p = &model.collision_program;
+            if p.is_empty() {
+                continue;
+            }
+            programs += 1;
+            let a2 = |pc: usize| (pc + 2) & !1;
+            let mut pc = 0;
+            loop {
+                let op = *p
+                    .get(pc)
+                    .unwrap_or_else(|| panic!("{}: no 0x88", path.display()));
+                seen.insert(op);
+                pc = match op {
+                    0x88 => break,
+                    0x05 => a2(pc) + i16::from_le_bytes([p[a2(pc) + 4], p[a2(pc) + 5]]) as usize,
+                    0x30 => a2(pc) + if p[a2(pc)] == 0 { 5 } else { 9 },
+                    0x31 => a2(pc) + 6,
+                    0x36 | 0x89 => a2(pc) + 8,
+                    0x8A => a2(pc) + 6,
+                    0x8B | 0x8C | 0x95 => a2(pc) + 2,
+                    0x87 | 0x8D | 0x93 | 0x94 => pc + 1,
+                    0x8E => ((pc + 4) & !3) + 6,
+                    0x8F => ((pc + 4) & !3) + 14,
+                    0x90 => ((pc + 4) & !3) + 10,
+                    _ => panic!("{}: opcode {op:#x} outside retail's switch", path.display()),
+                };
+            }
+        }
+    }
+    assert!(programs > 0);
+    assert_eq!(
+        seen.into_iter().collect::<Vec<_>>(),
+        [0x05, 0x30, 0x88, 0x89, 0x8A, 0x8C, 0x8D, 0x8E, 0x8F, 0x90, 0x95]
+    );
+}
+
 // ── Section 9: Animation frames ─────────────────────────────────────────────
 
 #[v2k_test_support::retail_test]

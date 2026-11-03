@@ -3,7 +3,8 @@
 //! Retail `FUN_00411A80` visits the factory after the actor-task pass. The
 //! caller selects one actual type-66 allocation, then this adapter classifies
 //! workers whose Primary Go-To-Job still targets that factory.
-//! Contact uses the shared oriented Section-8 probe. Arrival is never inferred
+//! Contact uses the shared oriented Section-8 probe with the factory as the
+//! moving (query) model, as in retail. Arrival is never inferred
 //! from distance. Applying the delivery journal and the remaining `0xA300`
 //! pair visit stays with the scheduler owner.
 
@@ -95,6 +96,9 @@ pub fn resolve_factory_pair_arrivals<P: CollisionModelPool + ?Sized>(
     crate::factory_activation_live::validate_factory_delivery_owner(entities, factory_id)
         .map_err(FactoryPairUnresolved::FactoryOwner)?;
 
+    // 11AD0 samples the subject's model and state once, at pass entry.
+    let factory_entry =
+        crate::player_active_contact::active_pair_body_from_entity(factory, model_pool);
     let candidate_ids = entities
         .retail_live_order_ids()
         .filter(|id| *id != factory_id)
@@ -119,17 +123,13 @@ pub fn resolve_factory_pair_arrivals<P: CollisionModelPool + ?Sized>(
             .iter_all()
             .find(|entity| entity.id == candidate_id)
             .expect("candidate was just observed");
-        // Factory owns the LifterDelivery callback, but its Section-8 program
-        // uses target-side `0x8F` boxes. The pair query walker only emits
-        // `0x8E` spheres, so the scientist is the query model and the factory
-        // is the target. Distance is still not used.
+        // Retail's walk visits the factory as subject: its lifter program's
+        // `0x8F` box queries the scientist through the box table.
         match classify_oriented_active_pair_contact(
             crate::player_active_contact::OrientedActivePairContactRequest {
-                subject: candidate,
-                candidate: factory,
-                subject_entry: &crate::player_active_contact::active_pair_body_from_entity(
-                    candidate, model_pool,
-                ),
+                subject: factory,
+                candidate,
+                subject_entry: &factory_entry,
                 retail_tick,
             },
             model_pool,

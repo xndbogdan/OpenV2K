@@ -62,51 +62,30 @@ pub(crate) fn oriented_model_pair_narrow_phase<P: CollisionModelPool + ?Sized>(
     let RetailRuntimeValue::Known(subject_to_world) = subject_to_world else {
         return PairNarrowPhaseOutcome::RuntimeUnresolved(PairRuntimeField::Orientation);
     };
+    // FUN_00412530 rotates each model by its own entity basis into world
+    // axes, relative to the candidate origin: boxes stay world-aligned.
     let candidate_to_world = candidate_to_world.map(|row| row.map(f64::from));
-    let world_to_candidate = transpose(candidate_to_world);
     let subject_to_world = subject_to_world.map(|row| row.map(f64::from));
-    let query_to_candidate = multiply_basis(world_to_candidate, subject_to_world);
     let world_delta_raw = std::array::from_fn(|axis| {
         f64::from(subject.position_raw[axis].wrapping_sub(candidate.position_raw[axis]))
     });
-    let query_origin_in_candidate = transform_vector(world_to_candidate, world_delta_raw);
 
-    match subject_model_resource.collide_model_raw_oriented(
+    match subject_model_resource.collide_model_raw_world(
         candidate_model_resource,
-        query_origin_in_candidate,
-        query_to_candidate,
+        world_delta_raw,
+        subject_to_world,
+        candidate_to_world,
         subject_anim_vars,
         candidate_anim_vars,
         model_pool,
     ) {
         Ok(None) => PairNarrowPhaseOutcome::Miss,
-        Ok(Some(hit)) => {
-            let normal_world = transform_vector(candidate_to_world, hit.normal);
-            PairNarrowPhaseOutcome::Contact(ActivePairContact {
-                normal_q12: normal_world.map(|component| (component * 4096.0).round() as i16),
-                penetration_raw: hit.penetration_raw as i32,
-            })
-        }
+        Ok(Some(hit)) => PairNarrowPhaseOutcome::Contact(ActivePairContact {
+            normal_q12: hit
+                .normal
+                .map(|component| (component * 4096.0).round() as i16),
+            penetration_raw: hit.penetration_raw as i32,
+        }),
         Err(source) => PairNarrowPhaseOutcome::Unresolved(source),
     }
-}
-
-fn transpose(matrix: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
-    std::array::from_fn(|row| std::array::from_fn(|column| matrix[column][row]))
-}
-
-fn transform_vector(matrix: [[f64; 3]; 3], vector: [f64; 3]) -> [f64; 3] {
-    std::array::from_fn(|row| {
-        matrix[row][0] * vector[0] + matrix[row][1] * vector[1] + matrix[row][2] * vector[2]
-    })
-}
-
-fn multiply_basis(left: [[f64; 3]; 3], right: [[f64; 3]; 3]) -> [[f64; 3]; 3] {
-    std::array::from_fn(|row| {
-        std::array::from_fn(|column| {
-            (0..3)
-                .map(|axis| left[row][axis] * right[axis][column])
-                .sum()
-        })
-    })
 }
