@@ -8,8 +8,11 @@
 //! retail's task pass has already completed for the aborting frame.
 
 mod fallback;
+mod generic_death;
 mod native;
 pub use fallback::{MainBaseAbortFallbackReport, MainBaseAbortFallbackRequest};
+pub use generic_death::GenericDeathBlock;
+pub(crate) use generic_death::{run_generic_death, GenericDeathFrame};
 pub use native::NativeMainBaseAbortDeathBlock;
 
 use crate::common_dying_live::LevelOneType17CommonDyingOwner;

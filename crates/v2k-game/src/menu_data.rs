@@ -588,6 +588,31 @@ impl MenuTree {
         self.screens.get_mut(&va)
     }
 
+    /// `FUN_00450FC0`'s item writes for the session's cheat word `+1C4`:
+    /// Cheats row k (`4D0F20 + k * 0x1C`) shows in single play (bit 2, not
+    /// 8) while cheat k is on, and the pause menu's Cheats row (`4D1154`)
+    /// while any of the six is.
+    pub fn apply_cheat_enables(&mut self, cheats: u32) {
+        let show = |item: &mut ItemDef, on: bool| {
+            item.visibility = if on {
+                item.visibility & !VIS_CHEATS | VIS_INGAME_SP
+            } else {
+                item.visibility & !VIS_INGAME_SP | VIS_CHEATS
+            };
+        };
+        if let Some(screen) = self.screen_mut(CHEATS) {
+            for (cheat, item) in screen.items.iter_mut().take(6).enumerate() {
+                show(item, cheats & (1 << cheat) != 0);
+            }
+        }
+        if let Some(item) = self
+            .screen_mut(PAUSE_FULL)
+            .and_then(|screen| screen.items.get_mut(5))
+        {
+            show(item, cheats & 0x3f != 0);
+        }
+    }
+
     pub fn len(&self) -> usize {
         self.screens.len()
     }
@@ -626,6 +651,25 @@ mod tests {
         ] {
             assert!(tree.screen(va).is_some(), "missing screen 0x{va:X}");
         }
+    }
+
+    #[test]
+    fn the_cheat_word_shows_its_rows_and_the_pause_cheats_row() {
+        let mut tree = MenuTree::load();
+        let single = VIS_INGAME | VIS_INGAME_SP;
+        let pause_cheats =
+            |tree: &MenuTree| tree.screen(PAUSE_FULL).unwrap().items[5].visible(single);
+        assert!(!pause_cheats(&tree));
+        // The closing scene's cheats: Weapons Menu (1) and Skip to World (0).
+        tree.apply_cheat_enables(0b11);
+        assert!(pause_cheats(&tree));
+        let rows: Vec<bool> = tree.screen(CHEATS).unwrap().items[..6]
+            .iter()
+            .map(|item| item.visible(single))
+            .collect();
+        assert_eq!(rows, [true, true, false, false, false, false]);
+        tree.apply_cheat_enables(0);
+        assert!(!pause_cheats(&tree));
     }
 
     #[test]

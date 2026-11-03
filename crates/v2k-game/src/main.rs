@@ -2319,6 +2319,10 @@ fn run_game(
     let mut weapon_inventory = WeaponInventory::new();
     let mut player_capabilities = PlayerCapabilities::default();
     let mut player_campaign_progress = PlayerCampaignProgress::default();
+    // Session +1C4: the six cheat enables (FUN_00450FC0).
+    let mut session_cheats: u32 = 0;
+    // The dying Queen's FUN_00456F20 left this world for the closing scene.
+    let mut closing_scene_held = false;
     // Resolved player4 hull id for the persistent type-46 player entity.
     let mut player_model_id: Option<usize> = None;
 
@@ -3483,6 +3487,7 @@ fn run_game(
                 weapon_inventory = WeaponInventory::new();
                 player_capabilities = PlayerCapabilities::default();
                 player_campaign_progress = PlayerCampaignProgress::default();
+                session_cheats = 0;
                 save_baseline.fill(0);
                 map_save_checkpoint = None;
                 session.cache.unload_level();
@@ -4444,6 +4449,7 @@ fn run_game(
                 // synchronous load; the next active frame starts at zero.
                 retail_clock.reset();
                 retail_tick = retail_clock.current();
+                closing_scene_held = false;
                 state = match purpose {
                     LoadingPurpose::BeginIntro { mut shell } => {
                         intro_camera = IntroCameraController::default();
@@ -5369,9 +5375,11 @@ fn run_game(
                                             saves: Some(&save_manager),
                                             display_modes: &display_modes,
                                         };
-                                        state = GameState::Paused { shell: MenuShell::new_single_player_menu(
+                                        let mut shell = MenuShell::new_single_player_menu(
                                             &ctx, v2k_game::game_state::SinglePlayerMenuKind::CampaignSave,
-                                        ) };
+                                        );
+                                        shell.engine.apply_cheat_enables(session_cheats);
+                                        state = GameState::Paused { shell };
                                         GlobalSoundRuntime::new(
                                             &session.cache,
                                             &mut world_fx,
@@ -5749,12 +5757,12 @@ fn run_game(
                                 targetter, retail_tick,
                             )
                         });
-                        state = GameState::Paused {
-                            shell: MenuShell::new_single_player_menu(
-                                &ctx,
-                                v2k_game::game_state::SinglePlayerMenuKind::Pause,
-                            ),
-                        };
+                        let mut shell = MenuShell::new_single_player_menu(
+                            &ctx,
+                            v2k_game::game_state::SinglePlayerMenuKind::Pause,
+                        );
+                        shell.engine.apply_cheat_enables(session_cheats);
+                        state = GameState::Paused { shell };
                         continue;
                     }
                     None => {}
@@ -7024,6 +7032,39 @@ fn run_game(
                 if base_factory_progression.full_frame_sequence_requested {
                     // FUN_00419B50 stage 32, param_3 == 0: FUN_00456750.
                     main_base_level_abort.outer_frame_sequence.request();
+                }
+                // The dying Queen's FUN_00456F20: FUN_00456750's flash, then
+                // cheats 1 and 0 on (FUN_00450FC0, each with its sound), and
+                // session +290 leaves for logical world 0x25 in phase 3.
+                if let Some(closing) = specialized_pass.closing_scene.as_ref() {
+                    if !closing_scene_held {
+                        closing_scene_held = true;
+                        main_base_level_abort.outer_frame_sequence.request();
+                        for (cheat, sound) in v2k_game::queen::CLOSING_SCENE_CHEATS
+                            .into_iter()
+                            .zip(&closing.cheat_sounds)
+                        {
+                            session_cheats |= 1 << cheat;
+                            match sound {
+                                Ok(sound) => {
+                                    if let Some(sm) = sound_manager.as_mut() {
+                                        sm.play_resolved(*sound);
+                                    }
+                                }
+                                Err(error) => eprintln!("Cheat {cheat} sound: {error:?}"),
+                            }
+                        }
+                        // Held: the closing scene, overlay 49 played as a
+                        // phase-3 cinematic, has no port owner yet. This world
+                        // keeps running under the pending exit.
+                        eprintln!(
+                            "Closing scene held: FUN_00456F20 left world {:?} for logical world {:#x} (overlay {}) in phase {}, whose cinematic is not ported",
+                            current_level_id,
+                            v2k_game::queen::CLOSING_SCENE_LOGICAL_WORLD,
+                            v2k_game::queen::CLOSING_SCENE_LOGICAL_WORLD + 12,
+                            v2k_game::queen::CLOSING_SCENE_PHASE,
+                        );
+                    }
                 }
 
                 // The specialized pass already ran before the player/contact

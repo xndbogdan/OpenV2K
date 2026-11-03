@@ -205,6 +205,7 @@ fn campaign_miss_constructs_zero_record_weight_with_its_own_body_and_task_custod
                 world_fx: &mut world.fx,
                 elapsed_micros: 20_000,
                 retail_tick: 4794,
+                generic_death: None,
             },
         );
         assert!(

@@ -444,3 +444,103 @@ mod tests {
         assert_eq!(plan.entity_transition.model_after, 401);
     }
 }
+
+/// `FUN_00425F60`'s effects after its dying slot 0: the shared `FUN_00440950`
+/// burst at the Hive with its dying model's extent, then `FUN_004566E0`'s
+/// static-then-dynamic radial from the same point.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HiveDeathBlast {
+    pub target_id: u32,
+    pub position_raw: [i16; 3],
+    pub model_after: usize,
+}
+
+/// The playing world a Hive's blast reaches.
+pub struct HiveDeathBlastFrame<'a> {
+    pub entities: &'a mut crate::entity::EntityManager,
+    pub cache: &'a mut crate::resource_cache::ResourceCache,
+    pub world_fx: &'a mut crate::world_fx::WorldFx,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub player_hull: &'a mut crate::player_hull::PlayerHull,
+    pub extra_lives: crate::entity_collision_state::RetailRuntimeValue<u8>,
+    pub actor_tasks:
+        &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    pub retail_tick: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HiveDeathBlastReport {
+    pub static_outcomes: Result<
+        Vec<crate::static_damage::StaticDamageOutcome>,
+        crate::static_damage_live::CurrentStaticDamageLookupError,
+    >,
+    pub dynamic: crate::specialized_actor_task_production::PlayingRadialOutcome,
+    pub terrain_changed: bool,
+}
+
+pub(crate) fn apply_hive_death_burst_and_radial(
+    frame: HiveDeathBlastFrame<'_>,
+    blast: HiveDeathBlast,
+) -> HiveDeathBlastReport {
+    let HiveDeathBlastFrame {
+        entities,
+        cache,
+        world_fx,
+        static_damage,
+        player_hull,
+        extra_lives,
+        actor_tasks,
+        notifications,
+        retail_tick,
+    } = frame;
+    let source_extent_raw = cache
+        .global_model(blast.model_after)
+        .map_or(0, |model| model.radius);
+    let sea_level_raw = cache
+        .terrain()
+        .and_then(|terrain| terrain.water_enabled().then(|| terrain.sea_level_raw()));
+    world_fx.emit_scatter_surface_burst_raw(
+        blast.position_raw,
+        source_extent_raw,
+        sea_level_raw,
+        blast.target_id,
+    );
+    let template = hive_death_radial_template(blast.target_id);
+    let static_outcomes = crate::intro2_radial::apply_static_radial_damage(
+        cache,
+        static_damage,
+        world_fx,
+        blast.position_raw,
+        template,
+    );
+    let terrain_changed = static_outcomes.as_ref().is_ok_and(|outcomes| {
+        outcomes.iter().any(|outcome| {
+            matches!(
+                outcome,
+                crate::static_damage::StaticDamageOutcome::ImmediateBurn { .. }
+                    | crate::static_damage::StaticDamageOutcome::BurnedKind10Transition { .. }
+            )
+        })
+    });
+    let dynamic = actor_tasks.apply_playing_radial_damage(
+        crate::specialized_actor_task_production::PlayingRadialFrame {
+            resources: cache,
+            static_damage,
+            active_terminal_calls: Vec::new(),
+            entities,
+            player_hull,
+            extra_lives,
+            world_fx,
+            notifications,
+            retail_tick,
+            origin_raw: blast.position_raw,
+            template,
+        },
+    );
+    HiveDeathBlastReport {
+        static_outcomes,
+        dynamic,
+        terrain_changed,
+    }
+}
