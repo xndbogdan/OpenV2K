@@ -51,11 +51,13 @@ use v2k_game::campaign_failure::{
     CampaignCasualtyFrame, CampaignSelectorCursor, CampaignSelectorEntry, CampaignSelectorStep,
 };
 use v2k_game::campaign_transition::{
-    CampaignArrivalCatalog, CampaignTransition, CampaignWarpRuntime, FailedWorldRetry,
+    CampaignArrivalCatalog, CampaignTransition, CampaignWarpRuntime, CheatSkipWorld,
+    FailedWorldRetry,
 };
 use v2k_game::chase_camera::{
     ChaseBodyBasis, ChaseCameraParameters, ChaseCameraState, ChaseCameraTarget, ChaseTerrainContext,
 };
+use v2k_game::cheats::InPlayCheatKey;
 use v2k_game::common_mover::type9_attitude::Type9BodyBasis;
 use v2k_game::damage::EntityHitEntry;
 use v2k_game::debug_panel::DebugPanel;
@@ -151,11 +153,11 @@ use v2k_game::player_hull::{
 };
 use v2k_game::player_surface_contact::{PlayerSurfaceContactFrame, PlayerSurfaceContactRequest};
 use v2k_game::power_up_contact::{
-    AcceptedPowerUpContact, CampaignControlSlotError, NonSpawningPowerUpAcquisition,
-    PlayerCampaignProgress, PlayerPowerUpContactPass, PlayerPowerUpRecipient,
-    PowerUpContactOutcome, PowerUpContactRejection, TrophyAcquisition, RETAIL_CONTROL_SLOT_COUNT,
-    TARGETTER_DUPLICATE_RATE_Q16, TROPHY_EXTRA_LIFE_RATE_Q16, TROPHY_PICKUP_SOUND_ID,
-    TURBO_DUPLICATE_RATE_Q16, WEAPON_PICKUP_REJECTED_SOUND_ID,
+    apply_player_power_up_operation, AcceptedPowerUpContact, CampaignControlSlotError,
+    NonSpawningPowerUpAcquisition, PlayerCampaignProgress, PlayerPowerUpContactPass,
+    PlayerPowerUpRecipient, PowerUpContactOutcome, PowerUpContactRejection, TrophyAcquisition,
+    RETAIL_CONTROL_SLOT_COUNT, TARGETTER_DUPLICATE_RATE_Q16, TROPHY_EXTRA_LIFE_RATE_Q16,
+    TROPHY_PICKUP_SOUND_ID, TURBO_DUPLICATE_RATE_Q16, WEAPON_PICKUP_REJECTED_SOUND_ID,
 };
 #[cfg(test)]
 use v2k_game::primary_weapon::UPGRADED_PRIMARY_PROFILE;
@@ -2328,6 +2330,11 @@ fn run_game(
     let mut player_campaign_progress = PlayerCampaignProgress::default();
     // Session +1C4: the six cheat enables (FUN_00450FC0).
     let mut session_cheats: u32 = 0;
+    // Session +280: the cheat digits typed in this world (FUN_00455BD0).
+    let mut cheat_code_entry = v2k_game::cheats::CheatCodeEntry::default();
+    // Session +28C: the Cheats world selector's skip, consumed at the end of
+    // the next gameplay frame (FUN_0044FFA0).
+    let mut pending_cheat_skip: Option<u32> = None;
     // The dying Queen's FUN_00456F20 left this world for the closing scene.
     let mut closing_scene_held = false;
     // Resolved player4 hull id for the persistent type-46 player entity.
@@ -2566,8 +2573,12 @@ fn run_game(
                 GameEvent::KeyUp(Keycode::Backquote) => {}
                 // F12 belongs to the diagnostics layer in every game state;
                 // consuming it here prevents it from skipping the intro or
-                // reaching menu/game controls.
-                GameEvent::KeyDown(Keycode::F12) => {
+                // reaching menu/game controls. In play with the Repairs cheat
+                // on, it is retail's fuel callback instead (FUN_00455EB0).
+                GameEvent::KeyDown(Keycode::F12)
+                    if !(matches!(state, GameState::Playing)
+                        && InPlayCheatKey::Fuel.enabled(session_cheats)) =>
+                {
                     if let Err(error) = debug_panel.toggle(&game_window.video) {
                         eprintln!("Debug panel error: {error}");
                     }
@@ -3099,8 +3110,7 @@ fn run_game(
                                         level_id: route.destination_level_id(),
                                         purpose: LoadingPurpose::CampaignWarp {
                                             source_level_id: route.source_level_id(),
-                                            arrival_position_raw: route.arrival().position_raw,
-                                            arrival_heading_raw: route.arrival().heading_raw,
+                                            arrival: route.arrival(),
                                         },
                                     },
                                     None => GameState::Playing,
@@ -3114,9 +3124,135 @@ fn run_game(
                         }
                         // Pause-only flows are inert in the frontend context.
                         ShellEvent::ResumeGame | ShellEvent::QuitToFrontend => {}
-                        ShellEvent::CheatGranted(code) => {
-                            log!("Cheat granted: {:#x} (gameplay wiring pending)", code);
+                        ShellEvent::Cheat(v2k_game::cheats::CheatMenuAction::SkipToWorld(
+                            world,
+                        )) if menu_is_paused => {
+                            // FUN_00450D70: FUN_0043C7D0 empties the menu stack
+                            // at once and FUN_004512E0 resumes play; the
+                            // gameplay frame then consumes +28C.
+                            log!("Cheat: skip to logical world {world}");
+                            keys_down.clear();
+                            mouse_buttons_down.clear();
+                            pending_cheat_skip = Some(world);
+                            next_state = Some(GameState::Playing);
                         }
+                        ShellEvent::Cheat(action) if menu_is_paused => {
+                            use v2k_game::cheats::{self, CheatMenuAction};
+                            let Some(em) = entity_manager.as_mut() else {
+                                continue;
+                            };
+                            // FUN_00455FF0 and FUN_00456020 pass the world's
+                            // native or scientist to FUN_00455F50; a theme
+                            // without one does nothing.
+                            let action = match action {
+                                CheatMenuAction::AddNative | CheatMenuAction::AddScientist => {
+                                    let theme = session
+                                        .cache
+                                        .level_desc()
+                                        .map_or(0, |level| level.world_style);
+                                    let entity_type = if action == CheatMenuAction::AddNative {
+                                        cheats::native_cargo_type(theme)
+                                    } else {
+                                        cheats::scientist_cargo_type(theme)
+                                    };
+                                    if entity_type == 0 {
+                                        continue;
+                                    }
+                                    CheatMenuAction::Grant(cheats::add_to_hold_code(entity_type))
+                                }
+                                other => other,
+                            };
+                            let alive = em.player().is_some() && !player_hull.dying;
+                            let sound = match action {
+                                CheatMenuAction::Grant(_) => {
+                                    session_cheats & (1 << cheats::CARGO_MENU) != 0
+                                }
+                                CheatMenuAction::AllWeapons => {
+                                    session_cheats & (1 << cheats::WEAPONS_MENU) != 0
+                                        && em.player().is_some()
+                                }
+                                _ => false,
+                            };
+                            if sound {
+                                GlobalSoundRuntime::new(
+                                    &session.cache,
+                                    &mut world_fx,
+                                    sound_manager.as_mut(),
+                                )
+                                .play_global_sound(3);
+                            }
+                            match action {
+                                CheatMenuAction::Grant(code) if sound && alive => {
+                                    CheatOperationContext {
+                                        entities: em,
+                                        craft: &mut player_craft,
+                                        weapon_inventory: &mut weapon_inventory,
+                                        capabilities: &mut player_capabilities,
+                                        hull: &mut player_hull,
+                                        campaign_progress: &mut player_campaign_progress,
+                                        notifications: &mut gameplay_notifications,
+                                        world_fx: &mut world_fx,
+                                        targetter: &mut targetter,
+                                        main_base_level_abort: &mut main_base_level_abort,
+                                        retail_tick,
+                                    }
+                                    .apply(code);
+                                }
+                                CheatMenuAction::AllWeapons if sound => {
+                                    CheatOperationContext {
+                                        entities: em,
+                                        craft: &mut player_craft,
+                                        weapon_inventory: &mut weapon_inventory,
+                                        capabilities: &mut player_capabilities,
+                                        hull: &mut player_hull,
+                                        campaign_progress: &mut player_campaign_progress,
+                                        notifications: &mut gameplay_notifications,
+                                        world_fx: &mut world_fx,
+                                        targetter: &mut targetter,
+                                        main_base_level_abort: &mut main_base_level_abort,
+                                        retail_tick,
+                                    }
+                                    .all_weapons();
+                                }
+                                CheatMenuAction::CompleteThisWorld => {
+                                    let extra_lives = player_campaign_progress.extra_lives();
+                                    match cheats::complete_this_world(cheats::CheatWorldFrame {
+                                        entities: em,
+                                        resources: &mut session.cache,
+                                        static_damage: &mut static_damage,
+                                        player_hull: &mut player_hull,
+                                        world_fx: &mut world_fx,
+                                        scheduler: &mut specialized_actor_tasks,
+                                        notifications: &mut gameplay_notifications,
+                                        retail_tick,
+                                        extra_lives,
+                                    }) {
+                                        Ok(terrain_changed) => {
+                                            log!("Cheat: Complete this World");
+                                            if terrain_changed {
+                                                renderer.invalidate_terrain_cache();
+                                            }
+                                        }
+                                        Err(block) => {
+                                            eprintln!(
+                                                "Cheat Complete this World stopped: {block:?}"
+                                            )
+                                        }
+                                    }
+                                }
+                                CheatMenuAction::CompleteAllWorlds => {
+                                    log!("Cheat: Complete All Worlds");
+                                    player_campaign_progress.complete_all_worlds();
+                                }
+                                CheatMenuAction::DisableAll => {
+                                    for id in 0..cheats::CHEAT_COUNT {
+                                        cheats::set_cheat(&mut session_cheats, id, false, false);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                        ShellEvent::Cheat(_) => {}
                         ShellEvent::NetworkConnection => {
                             // FUN_0043CEB0; the address prompt stands in for
                             // the dialog the search then raised.
@@ -3248,8 +3384,7 @@ fn run_game(
                                 level_id: route.destination_level_id(),
                                 purpose: LoadingPurpose::CampaignWarp {
                                     source_level_id: route.source_level_id(),
-                                    arrival_position_raw: route.arrival().position_raw,
-                                    arrival_heading_raw: route.arrival().heading_raw,
+                                    arrival: route.arrival(),
                                 },
                             },
                             None => GameState::Playing,
@@ -3520,6 +3655,8 @@ fn run_game(
                 player_capabilities = PlayerCapabilities::default();
                 player_campaign_progress = PlayerCampaignProgress::default();
                 session_cheats = 0;
+                cheat_code_entry = v2k_game::cheats::CheatCodeEntry::default();
+                pending_cheat_skip = None;
                 save_baseline.fill(0);
                 map_save_checkpoint = None;
                 session.cache.unload_level();
@@ -3545,71 +3682,80 @@ fn run_game(
                 post_intro_world_cover = None;
                 let lid = *level_id;
                 let purpose = std::mem::replace(purpose, LoadingPurpose::Normal);
+                // FUN_0044F8B0 clears the typed cheat digits on every entry.
+                cheat_code_entry = v2k_game::cheats::CheatCodeEntry::default();
+                pending_cheat_skip = None;
+                // FUN_0044F650 mode 6 restores session +1C4 with the rest of
+                // the save, then FUN_0044F830 passes each bit back through
+                // FUN_00450FC0: every cheat on plays its sound again.
+                if let LoadingPurpose::NativeSave { restore } = &purpose {
+                    session_cheats = restore.session_flags_raw;
+                    for cheat in v2k_game::cheats::reapply_cheats(&mut session_cheats, false) {
+                        log!("Cheat {cheat} on from the save");
+                        GlobalSoundRuntime::new(
+                            &session.cache,
+                            &mut world_fx,
+                            sound_manager.as_mut(),
+                        )
+                        .play_global_sound(v2k_game::queen::CHEAT_ENABLE_SOUND_ID);
+                    }
+                }
                 // 42E270 stages flags0xF before the old body is released.
                 // Both a map checkpoint and a direct handoff restore this
                 // controller snapshot before any destination actor is born.
-                let campaign_restore = if let LoadingPurpose::CampaignWarp {
-                    arrival_position_raw,
-                    arrival_heading_raw,
-                    ..
-                } = &purpose
-                {
-                    let restored = (|| -> Result<_, String> {
-                        let manager = entity_manager.as_ref().ok_or("source manager absent")?;
-                        let player = manager.player().ok_or("source player absent")?;
-                        let RetailRuntimeValue::Known(cargo) =
-                            manager.campaign_cargo_controller_state()
-                        else {
-                            return Err("player Sub-J state unresolved".into());
-                        };
-                        let logical_level_id = lid
-                            .checked_sub(WORLD_OVERLAY_CONTROL_SLOT_OFFSET)
-                            .ok_or("invalid campaign destination")?;
-                        let name = session
-                            .cache
-                            .global_string(152 + logical_level_id as usize)
-                            .or_else(|| session.cache.global_string(128))
-                            .ok_or("campaign destination name unavailable")?;
-                        let checkpoint = v2k_game::save::NativeSaveSnapshot {
-                            logical_level_id,
-                            player: SavedPlayerState {
-                                position_raw: player.position_raw(),
-                                velocity_raw: player.velocity_raw(),
-                                heading_raw: player.heading_raw(),
-                                pitch_raw: 0,
-                                roll_raw: 0,
-                                health_raw: player_hull.health_raw,
-                            },
-                            craft: &player_craft,
-                            hull: &player_hull,
-                            inventory: &weapon_inventory,
-                            capabilities: &player_capabilities,
-                            cargo: &cargo,
-                            campaign: &player_campaign_progress,
+                // The Cheats world selector stages nothing: the snapshot's
+                // own pose, velocity and health come back.
+                let campaign_restore =
+                    if let LoadingPurpose::CampaignWarp { arrival, .. } = &purpose {
+                        let restored = (|| -> Result<_, String> {
+                            let manager = entity_manager.as_ref().ok_or("source manager absent")?;
+                            let player = manager.player().ok_or("source player absent")?;
+                            let RetailRuntimeValue::Known(cargo) =
+                                manager.campaign_cargo_controller_state()
+                            else {
+                                return Err("player Sub-J state unresolved".into());
+                            };
+                            let logical_level_id = lid
+                                .checked_sub(WORLD_OVERLAY_CONTROL_SLOT_OFFSET)
+                                .ok_or("invalid campaign destination")?;
+                            let name = session
+                                .cache
+                                .global_string(152 + logical_level_id as usize)
+                                .or_else(|| session.cache.global_string(128))
+                                .ok_or("campaign destination name unavailable")?;
+                            let checkpoint = v2k_game::save::NativeSaveSnapshot {
+                                logical_level_id,
+                                player: SavedPlayerState {
+                                    position_raw: player.position_raw(),
+                                    velocity_raw: player.velocity_raw(),
+                                    heading_raw: player.heading_raw(),
+                                    pitch_raw: 0,
+                                    roll_raw: 0,
+                                    health_raw: player_hull.health_raw,
+                                },
+                                craft: &player_craft,
+                                hull: &player_hull,
+                                inventory: &weapon_inventory,
+                                capabilities: &player_capabilities,
+                                cargo: &cargo,
+                                campaign: &player_campaign_progress,
+                            }
+                            .encode_campaign_checkpoint(&save_baseline, *arrival, name)
+                            .map_err(|error| format!("controller checkpoint: {error:?}"))?;
+                            v2k_game::save::NativeSaveRestore::decode(&checkpoint)
+                                .map_err(|error| format!("controller restore: {error:?}"))
+                        })();
+                        match restored {
+                            Ok(restore) => Some(restore),
+                            Err(error) => {
+                                eprintln!("Campaign warp cancelled: {error}");
+                                state = GameState::Playing;
+                                continue;
+                            }
                         }
-                        .encode_campaign_arrival(
-                            &save_baseline,
-                            v2k_game::campaign_transition::WarpArrival {
-                                position_raw: *arrival_position_raw,
-                                heading_raw: *arrival_heading_raw,
-                            },
-                            name,
-                        )
-                        .map_err(|error| format!("controller checkpoint: {error:?}"))?;
-                        v2k_game::save::NativeSaveRestore::decode(&checkpoint)
-                            .map_err(|error| format!("controller restore: {error:?}"))
-                    })();
-                    match restored {
-                        Ok(restore) => Some(restore),
-                        Err(error) => {
-                            eprintln!("Campaign warp cancelled: {error}");
-                            state = GameState::Playing;
-                            continue;
-                        }
-                    }
-                } else {
-                    None
-                };
+                    } else {
+                        None
+                    };
                 let native_restore = match &purpose {
                     LoadingPurpose::NativeSave { restore } => Some(restore.as_ref()),
                     _ => campaign_restore.as_ref(),
@@ -3956,14 +4102,12 @@ fn run_game(
                             .flatten();
                         let player_arrival = match &purpose {
                             LoadingPurpose::Network { .. } => network_entry,
-                            LoadingPurpose::CampaignWarp {
-                                arrival_position_raw,
-                                arrival_heading_raw,
-                                ..
-                            } => Some(v2k_game::entity::AuthoredPlayerArrival {
-                                position_raw: *arrival_position_raw,
-                                heading_raw: *arrival_heading_raw,
-                            }),
+                            LoadingPurpose::CampaignWarp { arrival, .. } => {
+                                arrival.map(|arrival| v2k_game::entity::AuthoredPlayerArrival {
+                                    position_raw: arrival.position_raw,
+                                    heading_raw: arrival.heading_raw,
+                                })
+                            }
                             _ if lid == 49 => {
                                 // Intro1 is outside the campaign graph. Keep its
                                 // existing direct-debug controller publication.
@@ -5398,13 +5542,18 @@ fn run_game(
                                         cargo: &cargo,
                                         campaign: &player_campaign_progress,
                                     };
-                                    snapshot
-                                        .encode_campaign_arrival(
+                                    let mut checkpoint = snapshot
+                                        .encode_campaign_checkpoint(
                                             &save_baseline,
                                             route.arrival(),
                                             name,
                                         )
-                                        .map_err(|error| format!("checkpoint snapshot: {error:?}"))
+                                        .map_err(|error| {
+                                            format!("checkpoint snapshot: {error:?}")
+                                        })?;
+                                    // The save keeps session +1C4 at state +1B0.
+                                    checkpoint.set_session_flags_raw(session_cheats);
+                                    Ok(checkpoint)
                                 })();
                                 match checkpoint {
                                     Ok(checkpoint) => {
@@ -5452,8 +5601,7 @@ fn run_game(
                                         level_id: route.destination_level_id(),
                                         purpose: LoadingPurpose::CampaignWarp {
                                             source_level_id: route.source_level_id(),
-                                            arrival_position_raw: route.arrival().position_raw,
-                                            arrival_heading_raw: route.arrival().heading_raw,
+                                            arrival: route.arrival(),
                                         },
                                     };
                                     continue 'main_loop;
@@ -5880,6 +6028,7 @@ fn run_game(
                 // call, which consumes them all at once.
                 let mut mouse_motion = (0i32, 0i32);
                 let mut wheel_away = 0i32;
+                let mut in_play_cheat_keys: Vec<InPlayCheatKey> = Vec::new();
 
                 for event in &events {
                     match event {
@@ -5898,12 +6047,22 @@ fn run_game(
                                     retail_tick as i32,
                                 );
                             }
-                            // F11 = dev free-fly camera toggle.
-                            if *kc == Keycode::F11 && has_player && !player_hull.dying {
+                            // F11 = dev free-fly camera toggle, unless the
+                            // Repairs cheat gives F11 its retail callback.
+                            if *kc == Keycode::F11
+                                && has_player
+                                && !player_hull.dying
+                                && !InPlayCheatKey::HullRepair.enabled(session_cheats)
+                            {
                                 chase_mode = !chase_mode;
                                 log!("Camera: {}", if chase_mode { "chase" } else { "free-fly" });
                             }
+                            let keys_before = keys_down.clone();
                             let input_edges = gameplay_key_transition(&mut keys_down, *kc, true);
+                            in_play_cheat_keys.extend(v2k_game::cheats::newly_active_in_play_keys(
+                                &keys_before,
+                                &keys_down,
+                            ));
                             apply_gameplay_input_edges(
                                 input_edges,
                                 has_player,
@@ -5962,6 +6121,10 @@ fn run_game(
                 // requests as TAB, C, D and the weapon keys.
                 for &action in &pad_actions {
                     let edges = match action {
+                        PadAction::CheatDigit(digit) => {
+                            in_play_cheat_keys.push(InPlayCheatKey::Digit(digit));
+                            continue;
+                        }
                         PadAction::ToggleMode => {
                             if has_player && !player_hull.dying {
                                 request_vehicle_mode_toggle(
@@ -6000,6 +6163,108 @@ fn run_game(
                         &mut weapon_inventory,
                         &mut player_craft,
                     );
+                }
+
+                // The in-play set's cheat callbacks (FUN_00455AB0..FUN_00456100).
+                for key in in_play_cheat_keys {
+                    if !key.enabled(session_cheats) {
+                        continue;
+                    }
+                    let alive = em.player().is_some() && !player_hull.dying;
+                    let code = match key {
+                        InPlayCheatKey::Digit(digit) => {
+                            for cheat in cheat_code_entry.type_digit(digit) {
+                                if v2k_game::cheats::set_cheat(
+                                    &mut session_cheats,
+                                    cheat,
+                                    true,
+                                    network_game.is_some(),
+                                ) {
+                                    log!("Cheat {cheat} on");
+                                    GlobalSoundRuntime::new(
+                                        &session.cache,
+                                        &mut world_fx,
+                                        sound_manager.as_mut(),
+                                    )
+                                    .play_global_sound(v2k_game::queen::CHEAT_ENABLE_SOUND_ID);
+                                }
+                            }
+                            continue;
+                        }
+                        InPlayCheatKey::SelfDamage => {
+                            // Session +2A8 is the player's body in play.
+                            if let Some(id) = em.player().map(|player| player.id) {
+                                let extra_lives = player_campaign_progress.extra_lives();
+                                if let Err(block) = v2k_game::cheats::self_damage(
+                                    v2k_game::attached_particle_damage::AttachedParticleDamageFrame {
+                                        resources: &mut session.cache,
+                                        entities: em,
+                                        world_fx: &mut world_fx,
+                                        static_damage: &mut static_damage,
+                                        scheduler: &mut specialized_actor_tasks,
+                                        notifications: &mut gameplay_notifications,
+                                        retail_tick,
+                                        world: v2k_game::attached_particle_damage::AttachedParticleDamageWorld::Playing {
+                                            player_hull: &mut player_hull,
+                                            extra_lives: RetailRuntimeValue::Known(extra_lives),
+                                        },
+                                    },
+                                    id,
+                                ) {
+                                    eprintln!("Cheat self-damage stopped: {block:?}");
+                                }
+                            }
+                            continue;
+                        }
+                        InPlayCheatKey::AllWeapons => {
+                            if em.player().is_some() {
+                                GlobalSoundRuntime::new(
+                                    &session.cache,
+                                    &mut world_fx,
+                                    sound_manager.as_mut(),
+                                )
+                                .play_global_sound(3);
+                                CheatOperationContext {
+                                    entities: em,
+                                    craft: &mut player_craft,
+                                    weapon_inventory: &mut weapon_inventory,
+                                    capabilities: &mut player_capabilities,
+                                    hull: &mut player_hull,
+                                    campaign_progress: &mut player_campaign_progress,
+                                    notifications: &mut gameplay_notifications,
+                                    world_fx: &mut world_fx,
+                                    targetter: &mut targetter,
+                                    main_base_level_abort: &mut main_base_level_abort,
+                                    retail_tick,
+                                }
+                                .all_weapons();
+                            }
+                            continue;
+                        }
+                        InPlayCheatKey::Shields => v2k_game::cheats::SHIELDS_CODE,
+                        InPlayCheatKey::HullRepair => {
+                            v2k_game::cheats::hull_repair_code(player_hull.health_raw)
+                        }
+                        InPlayCheatKey::Fuel => {
+                            v2k_game::cheats::fuel_top_up_code(player_craft.fuel_raw)
+                        }
+                    };
+                    if alive {
+                        CheatOperationContext {
+                            entities: em,
+                            craft: &mut player_craft,
+                            weapon_inventory: &mut weapon_inventory,
+                            capabilities: &mut player_capabilities,
+                            hull: &mut player_hull,
+                            campaign_progress: &mut player_campaign_progress,
+                            notifications: &mut gameplay_notifications,
+                            world_fx: &mut world_fx,
+                            targetter: &mut targetter,
+                            main_base_level_abort: &mut main_base_level_abort,
+                            retail_tick,
+                        }
+                        .apply(code);
+                    }
                 }
 
                 gameplay_hud_elapsed_micros =
@@ -9198,6 +9463,19 @@ fn run_game(
                     }
                 }
 
+                // FUN_0044FFA0 ends with the Cheats world selector's +28C: +34
+                // becomes the chosen world, over any route this frame chose,
+                // and event 2 leaves for the map.
+                if let Some(world) = pending_cheat_skip.take() {
+                    match current_level_id
+                        .and_then(|source| CheatSkipWorld::new(source, world))
+                    {
+                        Some(skip) => selected_campaign_route = Some(CampaignTransition::CheatSkip(skip)),
+                        None => eprintln!(
+                            "Cheat skip held: logical world {world} from level {current_level_id:?} is outside the campaign"
+                        ),
+                    }
+                }
                 // 450344 consumes the first successful authored route.
                 if let Some(route) = selected_campaign_route {
                     match route {
@@ -9210,6 +9488,11 @@ fn run_game(
                         ),
                         CampaignTransition::FailedWorldRetry(_) => log!(
                             "Failed-world Hive retry: {} -> {}",
+                            route.source_level_id(),
+                            route.destination_level_id(),
+                        ),
+                        CampaignTransition::CheatSkip(_) => log!(
+                            "Cheat skip: {} -> {}",
                             route.source_level_id(),
                             route.destination_level_id(),
                         ),
@@ -12655,6 +12938,86 @@ fn apply_live_audio_setting(
 struct PowerUpFeedbackResult {
     hull_state_changed: bool,
     targetter_acquired: bool,
+}
+
+/// The session state a cheat's player operation reaches.
+struct CheatOperationContext<'a> {
+    entities: &'a mut EntityManager,
+    craft: &'a mut PlayerCraft,
+    weapon_inventory: &'a mut WeaponInventory,
+    capabilities: &'a mut PlayerCapabilities,
+    hull: &'a mut PlayerHull,
+    campaign_progress: &'a mut PlayerCampaignProgress,
+    notifications: &'a mut GameplayNotifications,
+    world_fx: &'a mut WorldFx,
+    targetter: &'a mut TargetterRuntime,
+    main_base_level_abort: &'a mut MainBaseAbortBridgeState,
+    retail_tick: u32,
+}
+
+impl CheatOperationContext<'_> {
+    /// `FUN_00413600(player, code)` from a cheat: type 46's `FUN_00445A90`,
+    /// with a pickup's texts and sounds at the player. Returns false when
+    /// the operation stopped (a held branch or unresolved player state), so
+    /// a cheat granting several stops there too.
+    fn apply(&mut self, code: u32) -> bool {
+        if let Some(held) = v2k_game::cheats::held_operation(code) {
+            eprintln!("Cheat operation {code:#x} held: {held:?} has no port owner");
+            return false;
+        }
+        let outcome = match apply_player_power_up_operation(
+            self.entities,
+            code,
+            PlayerPowerUpRecipient {
+                craft: self.craft,
+                weapon_inventory: self.weapon_inventory,
+                capabilities: self.capabilities,
+                hull: self.hull,
+                campaign_progress: self.campaign_progress,
+            },
+        ) {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                eprintln!("Cheat operation {code:#x} stopped: {error:?}");
+                return false;
+            }
+        };
+        let pass = PlayerPowerUpContactPass {
+            contacts: vec![outcome],
+        };
+        let feedback = apply_power_up_contact_feedback(
+            &pass,
+            self.weapon_inventory,
+            self.craft,
+            self.notifications,
+            self.world_fx,
+            self.retail_tick,
+        );
+        if feedback.hull_state_changed {
+            self.entities.sync_player_hull_collision_state(self.hull);
+        }
+        if pass.accepted().any(|contact| {
+            matches!(contact, AcceptedPowerUpContact::Trophy { acquisition, .. }
+                if acquisition.restored_hull)
+        }) {
+            self.main_base_level_abort
+                .stop_time_trophy_countdown_for_hidden_pickup();
+        }
+        if feedback.targetter_acquired {
+            self.targetter.install();
+        }
+        log!("Cheat operation {code:#x}: {:?}", pass.contacts);
+        true
+    }
+
+    /// `FUN_00455E20`'s loop over the Weapons rows, after its sound.
+    fn all_weapons(&mut self) {
+        for code in v2k_game::cheats::all_weapons_codes() {
+            if !self.apply(code) {
+                break;
+            }
+        }
+    }
 }
 
 fn player_vtol_boost(capabilities: &PlayerCapabilities) -> VtolBoost {

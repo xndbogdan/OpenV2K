@@ -116,10 +116,8 @@ pub enum MenuCommand {
     /// to the engine; shell tracks its own slot list).
     SaveSlotPicked,
     LoadSlotPicked,
-    /// Grant a cheat weapon/item (0x3E7xx code).
-    GrantCheat(u32),
-    /// Cheat-menu world action (skip/complete world), by callback address.
-    CheatWorld(u32),
+    /// A Cheats screen row's action on the session.
+    Cheat(crate::cheats::CheatMenuAction),
     /// FUN_0043CEB0: initialize the connection and list its sessions.
     NetworkConnection,
     /// FUN_0043CD50: host a session and start its game.
@@ -355,6 +353,19 @@ impl MenuEngine {
                 let max = self.resolution_count.saturating_sub(1);
                 self.spin(SettingId::Resolution, max, dir)
             }
+            // The Cheats screens lack flag 0x80, so FUN_0043C6C0/0043C720
+            // call the row's callback with 0 or 1.
+            Some(SelectAction::CheatSkipWorld { max }) => {
+                match crate::cheats::step_skip_world(crate::cheats::skip_world(), dir > 0, max) {
+                    Some(world) => {
+                        crate::cheats::set_skip_world(world);
+                        vec![MenuCommand::PlaySound(1)]
+                    }
+                    None => vec![MenuCommand::PlaySound(0)],
+                }
+            }
+            Some(SelectAction::CheatAnyKey(action)) => self.cheat_action(action),
+            Some(SelectAction::Cheat { .. } | SelectAction::CheatOnSelect(_)) => Vec::new(),
             _ => self.move_cursor(dir),
         }
     }
@@ -436,12 +447,21 @@ impl MenuEngine {
             | SelectAction::Toggle { .. }
             | SelectAction::ResolutionSpinner => self.adjust_or_move(1),
 
+            // The session decides FUN_00455F50's sound and grant.
             SelectAction::Cheat { code } => {
-                vec![MenuCommand::PlaySound(3), MenuCommand::GrantCheat(code)]
+                vec![MenuCommand::Cheat(crate::cheats::CheatMenuAction::Grant(
+                    code,
+                ))]
             }
-            SelectAction::CheatWorld { addr } => {
-                vec![MenuCommand::PlaySound(3), MenuCommand::CheatWorld(addr)]
+            SelectAction::CheatAnyKey(action) | SelectAction::CheatOnSelect(action) => {
+                self.cheat_action(action)
             }
+            SelectAction::CheatSkipWorld { .. } => vec![
+                MenuCommand::PlaySound(3),
+                MenuCommand::Cheat(crate::cheats::CheatMenuAction::SkipToWorld(
+                    crate::cheats::skip_world(),
+                )),
+            ],
 
             SelectAction::OpenMemoryCard => {
                 vec![MenuCommand::PlaySound(3), MenuCommand::OpenSaveFlow]
@@ -465,6 +485,23 @@ impl MenuEngine {
             SelectAction::NetworkJoin { session } => vec![MenuCommand::NetworkJoin(session)],
             SelectAction::FormatCard => vec![MenuCommand::PlaySound(0)],
         }
+    }
+}
+
+impl MenuEngine {
+    fn cheat_action(&mut self, action: crate::cheats::CheatMenuAction) -> Vec<MenuCommand> {
+        if action != crate::cheats::CheatMenuAction::DisableAll {
+            return vec![MenuCommand::Cheat(action)];
+        }
+        // FUN_004562B0: the six cheats off (FUN_00450FC0 hides their rows
+        // and the pause menu's Cheats row), then FUN_0043A9A0 pops one
+        // screen without a sound.
+        self.apply_cheat_enables(0);
+        let mut cmds = vec![MenuCommand::Cheat(action)];
+        if self.pop() {
+            cmds.push(MenuCommand::ScreenPopped);
+        }
+        cmds
     }
 }
 
@@ -717,6 +754,72 @@ mod tests {
         }
         let cmds = engine.handle(MenuInput::Select);
         assert!(cmds.contains(&MenuCommand::QuitToFrontend));
+    }
+
+    #[test]
+    fn cheats_screen_rows_act_as_their_callbacks() {
+        use crate::cheats::{self, CheatMenuAction};
+        use crate::menu_data::{CHEATS, CHEAT_WEAPONS, VIS_INGAME_SP};
+        let mut engine = MenuEngine::new(PAUSE_FULL, VIS_INGAME | VIS_INGAME_SP);
+        engine.apply_cheat_enables(0x3f);
+        assert!(engine.push(CHEATS));
+        assert_eq!(engine.selected(), 0, "Skip to World");
+
+        // FUN_00450D70: the only test that moves DAT_004D04E0.
+        cheats::set_skip_world(1);
+        assert_eq!(engine.handle(MenuInput::Left), [MenuCommand::PlaySound(0)]);
+        assert_eq!(engine.handle(MenuInput::Right), [MenuCommand::PlaySound(1)]);
+        assert_eq!(cheats::skip_world(), 2);
+        assert_eq!(
+            engine.handle(MenuInput::Select),
+            [
+                MenuCommand::PlaySound(3),
+                MenuCommand::Cheat(CheatMenuAction::SkipToWorld(2)),
+            ]
+        );
+        cheats::set_skip_world(1);
+
+        // FUN_00455F50 rows act on select only; the session plays the sound.
+        engine.handle(MenuInput::Down);
+        engine.handle(MenuInput::Select);
+        assert_eq!(engine.current_va(), Some(CHEAT_WEAPONS));
+        assert!(engine.handle(MenuInput::Left).is_empty());
+        assert_eq!(engine.selected(), 0);
+        assert_eq!(
+            engine.handle(MenuInput::Select),
+            [MenuCommand::Cheat(CheatMenuAction::Grant(0x3E712))]
+        );
+        engine.handle(MenuInput::Back);
+
+        // FUN_00455FD0 ignores the key: Left grants Larger Cargo Capacity.
+        engine.handle(MenuInput::Down);
+        engine.handle(MenuInput::Select);
+        while engine.current().unwrap().items[engine.selected()].select
+            != SelectAction::CheatAnyKey(CheatMenuAction::Grant(cheats::LARGER_CARGO_CODE))
+        {
+            engine.handle(MenuInput::Down);
+        }
+        assert_eq!(
+            engine.handle(MenuInput::Left),
+            [MenuCommand::Cheat(CheatMenuAction::Grant(0x53A))]
+        );
+        engine.handle(MenuInput::Back);
+
+        // FUN_004562B0, also on Right: every cheat off, then one pop.
+        while engine.selected() != 6 {
+            engine.handle(MenuInput::Down);
+        }
+        assert_eq!(
+            engine.handle(MenuInput::Right),
+            [
+                MenuCommand::Cheat(CheatMenuAction::DisableAll),
+                MenuCommand::ScreenPopped,
+            ]
+        );
+        assert_eq!(engine.current_va(), Some(PAUSE_FULL));
+        let single = VIS_INGAME | VIS_INGAME_SP;
+        assert!(!engine.tree().screen(PAUSE_FULL).unwrap().items[5].visible(single));
+        assert!(!engine.tree().screen(CHEATS).unwrap().items[0].visible(single));
     }
 
     #[test]

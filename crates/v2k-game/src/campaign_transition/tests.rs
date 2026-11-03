@@ -208,10 +208,10 @@ fn retry_returns_the_same_interactive_world_and_exact_retained_xyz_with_fixed_he
         assert_eq!(transition.destination_logical_level(), level - 12);
         assert_eq!(
             transition.arrival(),
-            WarpArrival {
+            Some(WarpArrival {
                 position_raw: retained,
                 heading_raw: 0x4000,
-            }
+            })
         );
     }
     for level in [0, 1, 12, 49, 50, u32::MAX] {
@@ -228,7 +228,7 @@ fn retry_returns_the_same_interactive_world_and_exact_retained_xyz_with_fixed_he
         transition.destination_logical_level(),
         authored.destination_logical_level
     );
-    assert_eq!(transition.arrival(), authored.arrival);
+    assert_eq!(transition.arrival(), Some(authored.arrival));
 }
 
 #[test]
@@ -276,8 +276,8 @@ fn failed_interior_preempts_a_real_marker_stamp_without_pair_or_exit_progress_wr
         other => panic!("unexpected selector step: {other:?}"),
     };
     assert_eq!(transition.destination_level_id(), 13);
-    assert_eq!(transition.arrival().position_raw, [111, -222, 333]);
-    assert_ne!(transition.arrival(), authored.route.arrival);
+    assert_eq!(transition.arrival().unwrap().position_raw, [111, -222, 333]);
+    assert_ne!(transition.arrival(), Some(authored.route.arrival));
     assert_eq!(progress, before, "retain all37 words, lives and trophies");
     assert!(
         runtime.marker_stamp.is_some(),

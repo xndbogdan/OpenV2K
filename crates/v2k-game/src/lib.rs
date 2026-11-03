@@ -19,6 +19,7 @@ pub mod campaign_failure;
 pub mod campaign_transition;
 pub mod chase_camera;
 pub mod chase_target;
+pub mod cheats;
 pub mod checked_damage;
 pub mod class0_impact;
 pub mod class0_timer;

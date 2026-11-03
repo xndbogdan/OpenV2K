@@ -58,10 +58,11 @@ pub enum LoadingPurpose {
     /// warp marker. Section 13 supplies the route-specific destination pose;
     /// carrying it in the load request keeps loading independent of the
     /// source world after that world's resource layer has been replaced.
+    /// The Cheats world selector stages no pose (`None`): the player keeps
+    /// its own.
     CampaignWarp {
         source_level_id: u32,
-        arrival_position_raw: [i16; 3],
-        arrival_heading_raw: u16,
+        arrival: Option<crate::campaign_transition::WarpArrival>,
     },
     /// `FUN_0044F650` mode 7: a network game's arena. Only the host builds
     /// the authored bodies (`FUN_0042E570`); every player enters at a random
@@ -223,8 +224,8 @@ pub enum ShellEvent {
     SaveSlot(usize),
     /// A setting changed; sync GameConfig / audio / video.
     SettingChanged(SettingId, u32),
-    /// Cheat granted (0x3E7xx weapon code) — gameplay wiring pending.
-    CheatGranted(u32),
+    /// A Cheats screen row's action on the live session.
+    Cheat(crate::cheats::CheatMenuAction),
     /// `FUN_0043CEB0`: the connection row was chosen.
     NetworkConnection,
     /// `FUN_0043CD50`: "Host session on this machine".
@@ -1496,15 +1497,13 @@ impl MenuShell {
                         page: SlotOverlayPage::Slots,
                     });
                 }
-                MenuCommand::GrantCheat(code) => events.push(ShellEvent::CheatGranted(code)),
+                MenuCommand::Cheat(action) => events.push(ShellEvent::Cheat(action)),
                 MenuCommand::NetworkConnection => events.push(ShellEvent::NetworkConnection),
                 MenuCommand::NetworkHost => events.push(ShellEvent::NetworkHost),
                 MenuCommand::NetworkJoin(row) => events.push(ShellEvent::NetworkJoin(row as usize)),
                 // Engine-side memory-card slot flow is superseded by the
                 // overlay; world cheats await gameplay wiring.
-                MenuCommand::SaveSlotPicked
-                | MenuCommand::LoadSlotPicked
-                | MenuCommand::CheatWorld(_) => {}
+                MenuCommand::SaveSlotPicked | MenuCommand::LoadSlotPicked => {}
             }
         }
         events
@@ -1910,6 +1909,18 @@ fn item_label(item: &crate::menu_data::ItemDef, ctx: &MenuCtx) -> String {
         | DrawKind::Unknown { string_id, .. } => ctx.string(string_id as usize),
         DrawKind::Prop { label_id, .. } => label_id.and_then(|id| ctx.string(id as usize)),
         DrawKind::DynamicText => None,
+        // FUN_00450E80: sprintf(string 138, world name), the name string
+        // 152 + world, or 127 when that string is absent.
+        DrawKind::CheatSkipWorld { string_id } => {
+            let world = crate::cheats::skip_world() as usize;
+            ctx.string(string_id as usize).map(|format| {
+                let name = ctx
+                    .string(152 + world)
+                    .or_else(|| ctx.string(127))
+                    .unwrap_or_default();
+                format.replacen("%s", &name, 1)
+            })
+        }
     };
     resolved
         .or_else(|| {

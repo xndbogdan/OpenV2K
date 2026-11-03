@@ -359,7 +359,7 @@ fn level_one_failed_interior_returns_level_one_before_real_next_world_records() 
     assert_eq!(retry.source_level_id(), 13);
     assert_eq!(retry.destination_level_id(), 13);
     assert_eq!(retry.destination_logical_level(), 1);
-    assert_eq!(retry.arrival(), RETAIL_CONTROLLER_DEFAULT_ARRIVAL);
+    assert_eq!(retry.arrival(), Some(RETAIL_CONTROLLER_DEFAULT_ARRIVAL));
     assert_eq!(
         cursor.next_step(&mut casualty, &level.campaign_records),
         Ok(CampaignSelectorStep::Finished)

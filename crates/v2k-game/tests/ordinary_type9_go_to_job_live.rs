@@ -122,15 +122,13 @@ fn ordinary_section13_rebuilds_use_shared_publication() {
     assert!(LoadingPurpose::Normal.uses_authored_world_publication(FIRST_WORLD_LEVEL_ID));
     assert!(LoadingPurpose::CampaignWarp {
         source_level_id: 30,
-        arrival_position_raw: [0; 3],
-        arrival_heading_raw: 0,
+        arrival: None,
     }
     .uses_authored_world_publication(FIRST_WORLD_LEVEL_ID));
     assert!(LoadingPurpose::Normal.uses_authored_world_publication(30));
     assert!(LoadingPurpose::CampaignWarp {
         source_level_id: FIRST_WORLD_LEVEL_ID,
-        arrival_position_raw: [0; 3],
-        arrival_heading_raw: 0,
+        arrival: None,
     }
     .uses_authored_world_publication(14));
     let mut payload = [0; 0x248];

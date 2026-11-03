@@ -143,6 +143,15 @@ impl PlayerCampaignProgress {
         self.control_slot_state_bits.get(slot).copied()
     }
 
+    /// Complete All Worlds (`FUN_00456300`): `FUN_0042EE30` ORs `0xF` into
+    /// all 37 words, then `FUN_0042EE50` ORs `0xFFFFFFF0`.
+    pub fn complete_all_worlds(&mut self) {
+        for word in &mut self.control_slot_state_bits {
+            *word |= 0xf;
+            *word |= 0xffff_fff0;
+        }
+    }
+
     /// `FUN_0042edc0(controller, slot, column)` for overlay-51 neighbor `1..=7`.
     pub fn control_slot_pair_neighbor(&self, slot: usize, column: u32) -> bool {
         if !(1..=RETAIL_CONTROL_PAIR_LINK_COLUMNS).contains(&column) {
@@ -631,146 +640,17 @@ pub fn resolve_player_power_up_contacts<P: CollisionModelPool + ?Sized>(
         if payload.selector == CARGO_CAPACITY_SELECTOR && !cargo_runtime_resolved {
             return Err(PlayerPowerUpContactError::PlayerAttachmentRuntimeUnavailable);
         }
-        match payload.selector {
-            selector if selector < WEAPON_SELECTOR_LIMIT => {
-                let before = staged_inventory.clone();
-                match staged_inventory.acquire_weapon(payload) {
-                    acquisition @ WeaponAcquisition::Accepted { .. } => {
-                        pass.contacts.push(PowerUpContactOutcome::Accepted(
-                            AcceptedPowerUpContact::Weapon {
-                                entity_id,
-                                position_raw,
-                                payload,
-                                acquisition,
-                            },
-                        ));
-                    }
-                    WeaponAcquisition::Rejected(reason) => {
-                        staged_inventory = before;
-                        pass.contacts.push(PowerUpContactOutcome::Rejected(
-                            RejectedPowerUpContact {
-                                entity_id,
-                                position_raw,
-                                payload,
-                                reason: PowerUpContactRejection::WeaponInventory(reason),
-                            },
-                        ));
-                    }
-                }
-            }
-            TARGETTER_SELECTOR => match staged_capabilities.acquire_targetter(payload) {
-                TargetterAcquisition::Acquired => {
-                    pass.contacts.push(PowerUpContactOutcome::Accepted(
-                        AcceptedPowerUpContact::Targetter {
-                            entity_id,
-                            position_raw,
-                            payload,
-                        },
-                    ));
-                }
-                TargetterAcquisition::AlreadyAcquired => {
-                    pass.contacts
-                        .push(PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
-                            entity_id,
-                            position_raw,
-                            payload,
-                            reason: PowerUpContactRejection::TargetterAlreadyAcquired,
-                        }));
-                }
-                TargetterAcquisition::RejectedUnsupportedSelector => {
-                    unreachable!("selector was matched before dispatching the Targetter handler")
-                }
-            },
-            TURBO_SELECTOR => match staged_capabilities.acquire_turbo(payload) {
-                TurboAcquisition::Acquired => {
-                    pass.contacts.push(PowerUpContactOutcome::Accepted(
-                        AcceptedPowerUpContact::Turbo {
-                            entity_id,
-                            position_raw,
-                            payload,
-                        },
-                    ));
-                }
-                TurboAcquisition::AlreadyAcquired => {
-                    pass.contacts
-                        .push(PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
-                            entity_id,
-                            position_raw,
-                            payload,
-                            reason: PowerUpContactRejection::TurboAlreadyAcquired,
-                        }));
-                }
-                TurboAcquisition::RejectedUnsupportedSelector => {
-                    unreachable!("selector was matched before dispatching the Turbo handler")
-                }
-            },
-            FUEL_SELECTOR
-            | SHIELD_SELECTOR
-            | EXTRA_LIFE_SELECTOR
-            | HULL_REPAIR_SELECTOR
-            | CARGO_CAPACITY_SELECTOR => match acquire_non_spawning_power_up(
-                payload,
-                &mut staged_craft,
-                &mut staged_hull,
-                &mut staged_campaign_progress,
-                &mut staged_cargo,
-            ) {
-                Ok(acquisition) => {
-                    pass.contacts.push(PowerUpContactOutcome::Accepted(
-                        AcceptedPowerUpContact::NonSpawning {
-                            entity_id,
-                            position_raw,
-                            payload,
-                            acquisition,
-                        },
-                    ));
-                }
-                Err(reason) => {
-                    pass.contacts
-                        .push(PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
-                            entity_id,
-                            position_raw,
-                            payload,
-                            reason,
-                        }));
-                }
-            },
-            TROPHY_SELECTOR => {
-                let before_hull = staged_hull;
-                let before_progress = staged_campaign_progress;
-                match staged_campaign_progress.acquire_trophy(payload, &mut staged_hull) {
-                    Ok(acquisition) => pass.contacts.push(PowerUpContactOutcome::Accepted(
-                        AcceptedPowerUpContact::Trophy {
-                            entity_id,
-                            position_raw,
-                            payload,
-                            acquisition,
-                        },
-                    )),
-                    Err(reason) => {
-                        staged_hull = before_hull;
-                        staged_campaign_progress = before_progress;
-                        pass.contacts.push(PowerUpContactOutcome::Rejected(
-                            RejectedPowerUpContact {
-                                entity_id,
-                                position_raw,
-                                payload,
-                                reason: PowerUpContactRejection::Trophy(reason),
-                            },
-                        ));
-                    }
-                }
-            }
-            selector => {
-                pass.contacts
-                    .push(PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
-                        entity_id,
-                        position_raw,
-                        payload,
-                        reason: PowerUpContactRejection::UnsupportedSelector { selector },
-                    }))
-            }
-        }
+        pass.contacts.push(dispatch_power_up_payload(
+            entity_id,
+            position_raw,
+            payload,
+            &mut staged_inventory,
+            &mut staged_capabilities,
+            &mut staged_craft,
+            &mut staged_hull,
+            &mut staged_campaign_progress,
+            &mut staged_cargo,
+        ));
     }
 
     *weapon_inventory = staged_inventory;
@@ -787,6 +667,189 @@ pub fn resolve_player_power_up_contacts<P: CollisionModelPool + ?Sized>(
         .collect::<Vec<_>>();
     entities.queue_power_up_destroys(&accepted_ids);
     Ok(pass)
+}
+
+/// `FUN_00413600(player, code)` outside a contact: type 46's `FUN_00445A90`
+/// with the code's operation byte and the signed amount above it, as the
+/// cheats and their in-play keys call it. Its texts and sounds are a
+/// contact's, placed at the player.
+pub fn apply_player_power_up_operation(
+    entities: &mut EntityManager,
+    code: u32,
+    recipient: PlayerPowerUpRecipient<'_>,
+) -> Result<PowerUpContactOutcome, PlayerPowerUpContactError> {
+    let player = entities
+        .player()
+        .ok_or(PlayerPowerUpContactError::PlayerMissing)?;
+    if player.entity_type != PLAYER_ENTITY_TYPE {
+        return Err(PlayerPowerUpContactError::PlayerWrongType {
+            entity_type: player.entity_type,
+        });
+    }
+    let (entity_id, position_raw) = (player.id, player.position_raw());
+    let payload = PowerUpPayload::from_runtime_word(code);
+    let mut cargo = match entities.player_cargo_capacity_state() {
+        RetailRuntimeValue::Known((capacity, capacity_max)) => StagedCargoUnlock {
+            raw: entities.player_cargo_unlock_raw(),
+            capacity,
+            capacity_max,
+        },
+        RetailRuntimeValue::Unresolved if payload.selector == CARGO_CAPACITY_SELECTOR => {
+            return Err(PlayerPowerUpContactError::PlayerAttachmentRuntimeUnavailable);
+        }
+        RetailRuntimeValue::Unresolved => StagedCargoUnlock {
+            raw: entities.player_cargo_unlock_raw(),
+            capacity: 0,
+            capacity_max: 0,
+        },
+    };
+    let outcome = dispatch_power_up_payload(
+        entity_id,
+        position_raw,
+        payload,
+        recipient.weapon_inventory,
+        recipient.capabilities,
+        recipient.craft,
+        recipient.hull,
+        recipient.campaign_progress,
+        &mut cargo,
+    );
+    if payload.selector == CARGO_CAPACITY_SELECTOR {
+        entities.raise_player_cargo_capacity_to(cargo.capacity);
+        entities.set_player_cargo_unlock_raw(cargo.raw);
+    }
+    Ok(outcome)
+}
+
+/// One operation of type 46's `FUN_00445A90` on the staged controller state.
+#[allow(clippy::too_many_arguments)]
+fn dispatch_power_up_payload(
+    entity_id: u32,
+    position_raw: [i16; 3],
+    payload: PowerUpPayload,
+    inventory: &mut WeaponInventory,
+    capabilities: &mut PlayerCapabilities,
+    craft: &mut PlayerCraft,
+    hull: &mut PlayerHull,
+    campaign_progress: &mut PlayerCampaignProgress,
+    cargo: &mut StagedCargoUnlock,
+) -> PowerUpContactOutcome {
+    match payload.selector {
+        selector if selector < WEAPON_SELECTOR_LIMIT => {
+            let before = inventory.clone();
+            match inventory.acquire_weapon(payload) {
+                acquisition @ WeaponAcquisition::Accepted { .. } => {
+                    PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Weapon {
+                        entity_id,
+                        position_raw,
+                        payload,
+                        acquisition,
+                    })
+                }
+                WeaponAcquisition::Rejected(reason) => {
+                    *inventory = before;
+                    PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+                        entity_id,
+                        position_raw,
+                        payload,
+                        reason: PowerUpContactRejection::WeaponInventory(reason),
+                    })
+                }
+            }
+        }
+        TARGETTER_SELECTOR => match capabilities.acquire_targetter(payload) {
+            TargetterAcquisition::Acquired => {
+                PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Targetter {
+                    entity_id,
+                    position_raw,
+                    payload,
+                })
+            }
+            TargetterAcquisition::AlreadyAcquired => {
+                PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+                    entity_id,
+                    position_raw,
+                    payload,
+                    reason: PowerUpContactRejection::TargetterAlreadyAcquired,
+                })
+            }
+            TargetterAcquisition::RejectedUnsupportedSelector => {
+                unreachable!("selector was matched before dispatching the Targetter handler")
+            }
+        },
+        TURBO_SELECTOR => match capabilities.acquire_turbo(payload) {
+            TurboAcquisition::Acquired => {
+                PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Turbo {
+                    entity_id,
+                    position_raw,
+                    payload,
+                })
+            }
+            TurboAcquisition::AlreadyAcquired => {
+                PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+                    entity_id,
+                    position_raw,
+                    payload,
+                    reason: PowerUpContactRejection::TurboAlreadyAcquired,
+                })
+            }
+            TurboAcquisition::RejectedUnsupportedSelector => {
+                unreachable!("selector was matched before dispatching the Turbo handler")
+            }
+        },
+        FUEL_SELECTOR
+        | SHIELD_SELECTOR
+        | EXTRA_LIFE_SELECTOR
+        | HULL_REPAIR_SELECTOR
+        | CARGO_CAPACITY_SELECTOR => {
+            match acquire_non_spawning_power_up(payload, craft, hull, campaign_progress, cargo) {
+                Ok(acquisition) => {
+                    PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::NonSpawning {
+                        entity_id,
+                        position_raw,
+                        payload,
+                        acquisition,
+                    })
+                }
+                Err(reason) => PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+                    entity_id,
+                    position_raw,
+                    payload,
+                    reason,
+                }),
+            }
+        }
+        TROPHY_SELECTOR => {
+            let before_hull = *hull;
+            let before_progress = *campaign_progress;
+            match campaign_progress.acquire_trophy(payload, hull) {
+                Ok(acquisition) => {
+                    PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Trophy {
+                        entity_id,
+                        position_raw,
+                        payload,
+                        acquisition,
+                    })
+                }
+                Err(reason) => {
+                    *hull = before_hull;
+                    *campaign_progress = before_progress;
+                    PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+                        entity_id,
+                        position_raw,
+                        payload,
+                        reason: PowerUpContactRejection::Trophy(reason),
+                    })
+                }
+            }
+        }
+        selector => PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+            entity_id,
+            position_raw,
+            payload,
+            reason: PowerUpContactRejection::UnsupportedSelector { selector },
+        }),
+    }
 }
 
 fn acquire_non_spawning_power_up(

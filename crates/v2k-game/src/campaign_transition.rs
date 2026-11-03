@@ -75,12 +75,36 @@ impl FailedWorldRetry {
     }
 }
 
-/// Both selector-zero transitions enter the existing map/loading owner.
-/// Their campaign-state and arrival authorities remain distinct.
+/// The Cheats world selector's `+28C`: `FUN_0044FFA0` sets session `+34` to
+/// the chosen logical world and raises event 2 at the end of the gameplay
+/// frame. No route record stages an arrival (`42E270`), so the player keeps
+/// its position, velocity, heading, attitude and health.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CheatSkipWorld {
+    source_level_id: u32,
+    destination_logical_level: u32,
+}
+
+impl CheatSkipWorld {
+    /// The selector offers logical worlds 1..=36 (global overlays 13..=48).
+    pub fn new(source_level_id: u32, destination_logical_level: u32) -> Option<Self> {
+        (1..=36)
+            .contains(&destination_logical_level)
+            .then_some(Self {
+                source_level_id,
+                destination_logical_level,
+            })
+    }
+}
+
+/// The selector-zero transitions and the cheat's skip enter the existing
+/// map/loading owner. Their campaign-state and arrival authorities remain
+/// distinct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CampaignTransition {
     AuthoredMarker(CampaignWarpRoute),
     FailedWorldRetry(FailedWorldRetry),
+    CheatSkip(CheatSkipWorld),
 }
 
 impl CampaignTransition {
@@ -88,6 +112,7 @@ impl CampaignTransition {
         match self {
             Self::AuthoredMarker(route) => route.source_level_id,
             Self::FailedWorldRetry(retry) => retry.source_level_id,
+            Self::CheatSkip(skip) => skip.source_level_id,
         }
     }
 
@@ -95,6 +120,7 @@ impl CampaignTransition {
         match self {
             Self::AuthoredMarker(route) => route.destination_level_id,
             Self::FailedWorldRetry(retry) => retry.source_level_id,
+            Self::CheatSkip(skip) => skip.destination_logical_level + 12,
         }
     }
 
@@ -102,13 +128,17 @@ impl CampaignTransition {
         match self {
             Self::AuthoredMarker(route) => route.destination_logical_level,
             Self::FailedWorldRetry(retry) => retry.source_level_id - 12,
+            Self::CheatSkip(skip) => skip.destination_logical_level,
         }
     }
 
-    pub const fn arrival(self) -> WarpArrival {
+    /// The pose the destination stages for the player; `None` keeps the
+    /// player's own.
+    pub const fn arrival(self) -> Option<WarpArrival> {
         match self {
-            Self::AuthoredMarker(route) => route.arrival,
-            Self::FailedWorldRetry(retry) => retry.arrival,
+            Self::AuthoredMarker(route) => Some(route.arrival),
+            Self::FailedWorldRetry(retry) => Some(retry.arrival),
+            Self::CheatSkip(_) => None,
         }
     }
 }

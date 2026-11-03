@@ -66,13 +66,21 @@ impl NativeSaveSnapshot<'_> {
             cargo: self.cargo,
             campaign: self.campaign,
         };
-        let mut native = snapshot.encode(baseline)?;
-        // 451FB0 copies at most31 bytes and terminates the 32-byte name field.
-        native.state_payload[..32].fill(0);
-        let name = display_name.as_bytes();
-        let count = name.len().min(31);
-        native.state_payload[..count].copy_from_slice(&name[..count]);
-        Ok(native)
+        Ok(with_display_name(snapshot.encode(baseline)?, display_name))
+    }
+
+    /// A route's arrival when one is staged; without one (the Cheats world
+    /// selector) nothing overrides the live pose, velocity or health.
+    pub fn encode_campaign_checkpoint(
+        &self,
+        baseline: &[u8; STATE_PAYLOAD_SIZE],
+        arrival: Option<crate::campaign_transition::WarpArrival>,
+        display_name: &str,
+    ) -> Result<NativeCompatibilityPreview, NativeSaveSnapshotError> {
+        match arrival {
+            Some(arrival) => self.encode_campaign_arrival(baseline, arrival, display_name),
+            None => Ok(with_display_name(self.encode(baseline)?, display_name)),
+        }
     }
 
     pub fn encode(
@@ -164,6 +172,18 @@ impl NativeSaveSnapshot<'_> {
             state_payload: payload,
         })
     }
+}
+
+/// 451FB0 copies at most31 bytes and terminates the 32-byte name field.
+fn with_display_name(
+    mut native: NativeCompatibilityPreview,
+    display_name: &str,
+) -> NativeCompatibilityPreview {
+    native.state_payload[..32].fill(0);
+    let name = display_name.as_bytes();
+    let count = name.len().min(31);
+    native.state_payload[..count].copy_from_slice(&name[..count]);
+    native
 }
 
 fn write_word(payload: &mut [u8; STATE_PAYLOAD_SIZE], offset: usize, value: u32) {
@@ -267,5 +287,24 @@ mod tests {
             [-123, 456],
             "snapshot must not mutate the outgoing body"
         );
+
+        // The Cheats world selector stages no arrival: the live pose,
+        // velocity, attitude and health come back; the save keeps the
+        // cheat word at +1B0.
+        let mut skip = snapshot
+            .encode_campaign_checkpoint(&baseline, None, "World Three")
+            .unwrap();
+        skip.set_session_flags_raw(0x3f);
+        let restored = NativeSaveRestore::decode(&skip).unwrap();
+        assert_eq!(restored.player.position_raw, [0x2a00, -512, -13568]);
+        assert_eq!(restored.player.velocity_raw, [7, 8, 9]);
+        assert_eq!(restored.player.heading_raw, 0x4000);
+        assert_eq!(
+            (restored.player.pitch_raw, restored.player.roll_raw),
+            ((-123_i16) as u16, 456)
+        );
+        assert_eq!(restored.player.health_raw, 32109);
+        assert_eq!(restored.session_flags_raw, 0x3f);
+        assert_eq!(&skip.state_payload[..12], b"World Three\0");
     }
 }
