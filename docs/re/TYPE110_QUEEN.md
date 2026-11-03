@@ -181,12 +181,11 @@ Overlay 49 in phase 3 is the closing scene: its Section-2 records caption
 "WELL DONE!", "You've completed V2000 by killing the Alien Queen." and the
 rest, move the camera over its actors, and at 290 s command `0x40`
 (`FUN_00452770`), in phase 3, sets the next world to 1 and leaves; the player
-then arrives in world 13 in ordinary play (phase 5) with both cheats on.
-
-**Held in the port:** the closing scene. No port owner plays overlay 49 as a
-phase-3 cinematic, so after `FUN_00456F20` the port logs `Closing scene
-held` once and world 47 keeps running under the pending exit; the Queen's
-later visits repeat the call, which the port applies once.
+then arrives in world 13 in ordinary play (phase 5) with both cheats on. The
+port plays it: see [CLOSING_SCENE.md](CLOSING_SCENE.md). With no player in
+the world when `FUN_00456F20` runs (the port cannot know where `FUN_00453C20`
+would leave the camera proxy), the port logs `Closing scene held` and the
+world runs on.
 
 ## Evidence
 
@@ -210,4 +209,5 @@ At tick 2345, 1,500 ticks later, `FUN_00450FC0` switches cheats 1 and 0 on,
 `+34` reads `0x25` and `+296` 3, and the next pass loads overlay 49, whose
 captions and credits run until it leaves for world 13 about 291 s later.
 The port's world 47 reproduces the victims and calls `FUN_00456F20` on the
-same tick after her first dying visit.
+same tick after her first dying visit. The closing scene follows in
+[CLOSING_SCENE.md](CLOSING_SCENE.md).

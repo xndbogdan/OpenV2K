@@ -77,7 +77,9 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
   names in its address (`"127.0.0.1:47700"`); both take a raw `"position"`
   and `"heading"` for every entry. Run each player as its
   own process with its own `--settings` folder; a `Host.txt` in the
-  `--data-dir` sets the frag limit.
+  `--data-dir` sets the frag limit. `{"closing_scene": [x, y, z]}` plays
+  the closing scene (overlay 49 in phase 3) with its camera proxy carried in
+  from that raw position, as the Queen's death does from the player's.
 - `--input-replay` takes `[{"frame": 10, "key": "Space", "pressed": true}]`
   with SDL key names. Frames count from 1, as `--frames` and
   `--snapshot-at FRAME:PATH` do.

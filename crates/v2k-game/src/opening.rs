@@ -107,6 +107,9 @@ pub struct IntroCameraController {
     position_raw: [i16; 3],
     velocity_raw: [i16; 3],
     chase: ChaseCameraState,
+    /// `FUN_004503C0` skips its terrain-relative vertical bias when
+    /// `FUN_0042EB50` (Section 13 `+48`, the world style) is 6.
+    vertical_bias: bool,
 }
 
 impl Default for IntroCameraController {
@@ -115,6 +118,7 @@ impl Default for IntroCameraController {
             position_raw: INTRO_CAMERA_INITIAL_POSITION_RAW,
             velocity_raw: [0; 3],
             chase: ChaseCameraState::default(),
+            vertical_bias: true,
         }
     }
 }
@@ -133,6 +137,21 @@ pub struct IntroCameraEyeUpdate<'a> {
 }
 
 impl IntroCameraController {
+    /// The class-1 proxy at rest at `position_raw`, with the eye springs it
+    /// inherits, in a world of the given style.
+    pub fn at_rest(position_raw: [i16; 3], world_style: u32, chase: ChaseCameraState) -> Self {
+        Self {
+            position_raw,
+            velocity_raw: [0; 3],
+            chase,
+            vertical_bias: world_style != 6,
+        }
+    }
+
+    pub fn position_raw(&self) -> [i16; 3] {
+        self.position_raw
+    }
+
     pub fn focus_position_raw(&self) -> [i16; 3] {
         self.chase.focus_position_raw()
     }
@@ -205,16 +224,18 @@ impl IntroCameraController {
             self.snap_to_target(target_position_raw);
         }
 
-        // Intro2 is not mode 6, so FUN_004503C0 applies its terrain-relative
+        // Outside world style 6, FUN_004503C0 applies its terrain-relative
         // vertical correction. This writes proxy Y directly; target Y velocity
         // and the proxy's stored Y velocity are deliberately absent.
         let mut y_error = target_position_raw[1].wrapping_sub(self.position_raw[1]);
         if let Some(context) = terrain {
             let ground_raw =
                 terrain_height_raw(context.terrain, self.position_raw[0], self.position_raw[2]);
-            let terrain_bias =
-                (i32::from(self.position_raw[1]) - i32::from(ground_raw) + 0x500) / 4;
-            y_error = y_error.wrapping_sub(terrain_bias as i16);
+            if self.vertical_bias {
+                let terrain_bias =
+                    (i32::from(self.position_raw[1]) - i32::from(ground_raw) + 0x500) / 4;
+                y_error = y_error.wrapping_sub(terrain_bias as i16);
+            }
             self.position_raw[1] = self.position_raw[1].wrapping_add(y_error / 6);
             let floor_raw = i32::from(ground_raw) + 0x100;
             if i32::from(self.position_raw[1]) < floor_raw {

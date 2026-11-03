@@ -25,6 +25,7 @@ pub mod class0_impact;
 pub mod class0_timer;
 pub mod class49_terminal;
 pub mod cleansing_landscape_owner;
+pub mod closing_scene;
 pub mod common_dying;
 pub mod common_dying_live;
 pub mod common_mover;

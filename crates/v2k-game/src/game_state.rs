@@ -68,6 +68,13 @@ pub enum LoadingPurpose {
     /// the authored bodies (`FUN_0042E570`); every player enters at a random
     /// point (`FUN_00451AF0`).
     Network { host: bool },
+    /// Overlay 49 in phase 3, the closing scene: no player, and the class-1
+    /// camera proxy carried from the world the Queen died in. Klaus opens
+    /// over it as over the first world.
+    ClosingScene {
+        shell: MenuShell,
+        carried_camera_raw: [i16; 3],
+    },
 }
 
 impl LoadingPurpose {
@@ -82,6 +89,7 @@ impl LoadingPurpose {
                     | Self::ResumePostIntro { .. }
                     | Self::CampaignWarp { .. }
                     | Self::Network { .. }
+                    | Self::ClosingScene { .. }
             )
     }
 }
@@ -193,6 +201,13 @@ pub enum GameState {
     /// Klaus closes over the completed Intro2 before the first-world load.
     /// The opening leg after load is a presentation owner over live gameplay.
     PostIntro { shell: MenuShell },
+    /// `FUN_00453BA0`/`FUN_00453E00` after a phase-3 exit: Klaus closes over
+    /// the resident world (`FUN_00450C00` still runs the eye and particles),
+    /// then the next world loads.
+    ClosingSceneLeg {
+        shell: MenuShell,
+        destination: ClosingSceneDestination,
+    },
     /// Authored normal single-player in-game pause menu. Gameplay ownership
     /// remains outside the menu shell and stays resident while this is active.
     Paused { shell: MenuShell },
@@ -201,6 +216,15 @@ pub enum GameState {
     ReturningToFrontend,
     /// In-game (existing gameplay loop).
     Playing,
+}
+
+/// Where a phase-3 exit goes once Klaus has closed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClosingSceneDestination {
+    /// `FUN_00456F20`: logical world `0x25` stays in phase 3.
+    ClosingScene { carried_camera_raw: [i16; 3] },
+    /// `FUN_00452770`: logical world 1 in phase 5.
+    FirstWorld,
 }
 
 // ── Shell events (menu side effects for the main loop) ──

@@ -149,3 +149,69 @@ fn native_world_entry_resets_stamps_while_cache_load_and_effect_clear_do_not() {
         );
     }
 }
+
+#[v2k_test_support::retail_test]
+fn closing_scene_bodies_carry_the_stamps_its_commands_name() {
+    // A retail lab run of the closing scene (overlay 49 in phase 3, no
+    // player) dumps eleven Type123s at 0x9401..0x940B, the Type122 ant at
+    // 0x940C and the 34 Type52 beacons at 0x940D..0x942E.
+    let mut session = session();
+    session.load_level_by_id(49, 1).unwrap();
+    let mut fx = WorldFx::new();
+    let mut manager = construct(&session, 0x25, false, &mut fx);
+    assert!(manager.player().is_none());
+    let bodies: Vec<_> = manager
+        .iter_all()
+        .filter(|entity| entity.authored_spawn_index.is_some())
+        .map(|entity| (entity.entity_type, entity.construction_stamp_at_0xb4))
+        .collect();
+    assert_eq!(bodies.len(), 46);
+    for (index, (entity_type, stamp)) in bodies.iter().enumerate() {
+        let expected_type = match index {
+            0..=10 => 123,
+            11 => 122,
+            _ => 52,
+        };
+        assert_eq!(*entity_type, expected_type, "body {index}");
+        assert_eq!(*stamp, RetailRuntimeValue::Known(0x9401 + index as u16));
+    }
+    // 451710 clears the ant's behavior bits; its record at 23 s restores them.
+    manager.disable_authored_behavior_components();
+    let strings = session.cache.level().unwrap().strings.clone();
+    let mut scene = v2k_game::closing_scene::ClosingScene::new(
+        &strings,
+        v2k_game::opening::IntroCameraController::default(),
+    );
+    let ant = manager
+        .iter_all()
+        .find(|entity| entity.entity_type == 122)
+        .unwrap()
+        .id;
+    let ant_state = |manager: &EntityManager| {
+        manager
+            .iter_all()
+            .find(|entity| entity.id == ant)
+            .unwrap()
+            .collision
+            .state_flags_at_0x08
+            .masked(0x0006_8000)
+    };
+    assert_eq!(ant_state(&manager), RetailRuntimeValue::Known(0));
+    // The first record (camera 0x9401 to 3 s) is never visited.
+    assert!(!scene.present(&mut manager, 100).leave);
+    assert!(scene.camera_subject(&manager).is_none());
+    assert!(!scene.present(&mut manager, 1150).leave);
+    assert_eq!(ant_state(&manager), RetailRuntimeValue::Known(0x0006_8000));
+    // The camera moves to the ant at 24 s.
+    assert!(!scene.present(&mut manager, 1200).leave);
+    let ant_position = manager
+        .iter_all()
+        .find(|entity| entity.id == ant)
+        .unwrap()
+        .position_raw();
+    assert_eq!(
+        scene.camera_subject(&manager).unwrap().position_raw,
+        ant_position
+    );
+    assert!(scene.present(&mut manager, 14_500).leave);
+}

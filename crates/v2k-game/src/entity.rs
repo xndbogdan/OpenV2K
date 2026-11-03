@@ -9245,11 +9245,20 @@ impl EntityManager {
     /// the original entity allocation, so resolve the index before visiting it
     /// rather than encoding the hive's type or behavior class here.
     pub fn set_authored_behavior_components_enabled(&mut self, spawn_index: usize, enabled: bool) {
-        let Some(spawn) = self
+        if let Some(id) = self
             .entities
-            .iter_mut()
+            .iter()
             .find(|entity| entity.authored_spawn_index == Some(spawn_index))
-        else {
+            .map(|entity| entity.id)
+        {
+            self.set_behavior_components_enabled(id, enabled);
+        }
+    }
+
+    /// `FUN_00452270` operation 2 ORs `0x68000` into a body's state and
+    /// operation 3 clears it.
+    pub fn set_behavior_components_enabled(&mut self, id: u32, enabled: bool) {
+        let Some(spawn) = self.entities.iter_mut().find(|entity| entity.id == id) else {
             return;
         };
         if let Some(emitter) = spawn.authored_radial_emitter.as_mut() {
