@@ -428,26 +428,146 @@ fn a_type16_killed_while_carrying_lets_its_captive_go() {
     }
 }
 
-/// Type128 shares the transport: C910 attaches a person to a carrier. Its
-/// class63 death while carrying stays held before its first write.
-#[v2k_test_support::retail_test]
-fn a_type128_captures_its_pursued_person() {
-    let (session, mut manager, mut fx, _, _, _, captor, person, at) =
-        capture_a_person(25, Type16Row::Type128);
-    assert!(carrying_variant(entity(&manager, captor)).is_some());
-    let before = entity(&manager, captor).collision.health_raw;
-    assert_eq!(
-        crate::class49_death::begin_class49_standard_death(
-            &mut manager,
-            captor,
-            &session.cache,
-            &mut fx,
-            at + 1,
-        ),
-        Err(crate::class49_death::Class49DeathBlock::Runtime(
-            "unaudited death style"
-        ))
+/// DB80 on a Type128 killed directly while carrying (a radial, static
+/// contact, a pair, the abort or an infected hit all enter here).
+fn kill_carrier(
+    session: &mut GameSession,
+    manager: &mut EntityManager,
+    fx: &mut WorldFx,
+    tasks: &mut SpecializedActorTaskScheduler,
+    static_damage: &mut StaticDamageScheduler,
+    notifications: &mut GameplayNotifications,
+    captor: u32,
+    tick: u32,
+) -> Vec<u32> {
+    let newest = manager.iter_all().map(|entity| entity.id).max().unwrap();
+    let mut hull = crate::player_hull::PlayerHull::default();
+    let result = crate::class49_terminal::run_class49_standard_death(
+        crate::class49_terminal::Class49TerminalFrame {
+            entities: manager,
+            resources: &mut session.cache,
+            world_fx: fx,
+            static_damage,
+            notifications,
+            retail_tick: tick,
+            world: crate::class49_terminal::Class49WorldContext::Playing {
+                scheduler: tasks,
+                player_hull: &mut hull,
+                extra_lives: RetailRuntimeValue::Known(3),
+                active_terminal_calls: Vec::new(),
+            },
+        },
+        captor,
     );
-    assert_eq!(entity(&manager, person).attached_to, Some(captor));
-    assert_eq!(entity(&manager, captor).collision.health_raw, before);
+    assert!(
+        result.as_ref().is_ok_and(|result| result.returned_nonzero),
+        "{result:?}"
+    );
+    let carrier = entity(manager, captor);
+    assert_eq!(carrier.collision.health_raw, RetailRuntimeValue::Known(0));
+    // An empty row's relation stays the bookkeeping of a popped row.
+    assert!(carrier
+        .native_capture_relation
+        .is_none_or(|relation| !relation.row_present));
+    assert!(crate::class49_death::finished_terminal_hit_authenticates(
+        manager, captor
+    ));
+    assert_eq!(
+        manager
+            .pending_actor_deferred_destroy_ids()
+            .iter()
+            .filter(|&&id| id == captor)
+            .count(),
+        1,
+        "10B70 is idempotent"
+    );
+    let position = carrier.position_raw();
+    let drops: Vec<u32> = manager
+        .iter_all()
+        .filter(|entity| entity.id > newest && entity.entity_type == 61)
+        .map(|entity| {
+            assert_eq!(entity.position_raw(), position);
+            entity.id
+        })
+        .collect();
+    drops
+}
+
+/// Type128 shares the transport. Killed directly while carrying, its D040
+/// releases the person and C690 runs BC90 once; DB80's reread runs it again:
+/// two Type61 drops.
+#[v2k_test_support::retail_test]
+fn a_type128_killed_while_carrying_drops_twice() {
+    let (
+        mut session,
+        mut manager,
+        mut fx,
+        mut tasks,
+        mut static_damage,
+        mut notifications,
+        captor,
+        person,
+        at,
+    ) = capture_a_person(28, Type16Row::Type128);
+    assert!(carrying_variant(entity(&manager, captor)).is_some());
+    let drops = kill_carrier(
+        &mut session,
+        &mut manager,
+        &mut fx,
+        &mut tasks,
+        &mut static_damage,
+        &mut notifications,
+        captor,
+        at + 1,
+    );
+    assert_eq!(drops.len(), 2);
+    assert_eq!(entity(&manager, person).attached_to, None);
+    for t in at + 2..=at + 250 {
+        let pass = tick(
+            &mut tasks,
+            &mut manager,
+            &mut session,
+            &mut fx,
+            &mut static_damage,
+            &mut notifications,
+            t,
+        );
+        assert_pass_in(Some(&manager), &pass, &format!("tick{t}"));
+    }
+}
+
+/// With its row already compacted by 18640 (the person died in its grip),
+/// 18500 returns BE5B0: D040 skips C690 and only DB80's reread runs BC90.
+#[v2k_test_support::retail_test]
+fn a_type128_carrying_an_empty_row_drops_once() {
+    let (
+        mut session,
+        mut manager,
+        mut fx,
+        mut tasks,
+        mut static_damage,
+        mut notifications,
+        captor,
+        person,
+        at,
+    ) = capture_a_person(28, Type16Row::Type128);
+    let child = manager.entity_mut(person).unwrap();
+    child.collision.health_raw = RetailRuntimeValue::Known(0);
+    child.collision.state_flags_at_0x08.overwrite(
+        crate::entity_collision_state::DYING_STATE_BIT,
+        crate::entity_collision_state::DYING_STATE_BIT,
+    );
+    crate::native_actor_capture::update_carried_pose(&mut manager, captor).unwrap();
+    assert!(carrying_variant(entity(&manager, captor)).is_some());
+    let drops = kill_carrier(
+        &mut session,
+        &mut manager,
+        &mut fx,
+        &mut tasks,
+        &mut static_damage,
+        &mut notifications,
+        captor,
+        at + 1,
+    );
+    assert_eq!(drops.len(), 1);
 }

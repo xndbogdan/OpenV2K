@@ -102,6 +102,8 @@ pub enum Class49TerminalBlock {
     PlayingPlayerContextUnavailable,
     StaticLookup(CurrentStaticDamageLookupError),
     Radial(Box<Class49RadialReport>),
+    /// A carrying class63 carrier's D040 child release.
+    Capture(crate::native_actor_capture::CaptureBlock),
 }
 
 pub(crate) fn run_class49_standard_death(
@@ -126,6 +128,14 @@ fn run(
     id: u32,
 ) -> Result<LiveActorDeathResult<()>, Class49TerminalBlock> {
     use Class49TerminalBlock as Block;
+    if frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .is_some_and(carrying_class63_source)
+    {
+        return run_carrying_class63(frame, id);
+    }
     let Some(receipt) = begin_class49_standard_death(
         frame.entities,
         id,
@@ -140,6 +150,77 @@ fn run(
             publication: None,
         });
     };
+    terminal(frame, receipt)?;
+    Ok(LiveActorDeathResult {
+        returned_nonzero: true,
+        publication: None,
+    })
+}
+
+/// 10C10 -> DB80 on a class63 carrier holding a carrying style. Style+2C is
+/// D040: it pops the child (16750 releases it with the carrier already
+/// dying) and, on the child's zero return, C690 -> AC60 -> 25660 installs
+/// class63, whose BC90 bursts, blasts and drops a Type61. DB80 then rereads
+/// +BC while the allocation still resolves, so 25660 installs class63 and BC90
+/// runs again: two bursts, two radials, two Type61s and one 10B70. An empty
+/// row returns BE5B0 from 18500, D040 skips C690, and only the reread runs.
+fn run_carrying_class63(
+    frame: &mut Class49TerminalFrame<'_>,
+    id: u32,
+) -> Result<LiveActorDeathResult<()>, Class49TerminalBlock> {
+    use Class49TerminalBlock as Block;
+    if !begin_carrying_class63_death(frame.entities, id, frame.resources, frame.world_fx)
+        .map_err(Block::Death)?
+    {
+        return Ok(LiveActorDeathResult {
+            returned_nonzero: false,
+            publication: None,
+        });
+    }
+    let tasks: &mut dyn crate::native_actor_capture::CaptureTaskCustody = match &mut frame.world {
+        Class49WorldContext::Cinematic { actor_tasks, .. } => &mut **actor_tasks,
+        Class49WorldContext::Playing { scheduler, .. } => &mut **scheduler,
+    };
+    let completion = crate::native_actor_capture::execute_capture_root(
+        frame.entities,
+        id,
+        crate::native_actor_capture::CaptureRootCallback::Cleanup,
+        &mut crate::native_actor_capture::CaptureContext {
+            resources: Some(&*frame.resources),
+            tasks,
+            world_fx: frame.world_fx,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            // D040 only releases; the result screen matters to a kill.
+            result_screen: crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
+            hive_dying: Default::default(),
+        },
+    )
+    .map_err(Block::Capture)?;
+    let installs = if completion.class63_install { 2 } else { 1 };
+    for _ in 0..installs {
+        let receipt = reinstall_class63_alternate(
+            frame.entities,
+            id,
+            frame.resources,
+            frame.world_fx,
+            frame.retail_tick,
+        )
+        .map_err(Block::Death)?;
+        terminal(frame, receipt)?;
+    }
+    Ok(LiveActorDeathResult {
+        returned_nonzero: true,
+        publication: None,
+    })
+}
+
+/// Claim, BAF0's static then dynamic radial, and the policy's finish.
+fn terminal(
+    frame: &mut Class49TerminalFrame<'_>,
+    receipt: Class49TerminalReceipt,
+) -> Result<(), Class49TerminalBlock> {
+    use Class49TerminalBlock as Block;
     if !claim_class49_terminal(frame.entities, &receipt) {
         return Err(Block::Claim);
     }
@@ -214,10 +295,7 @@ fn run(
             scheduler.finish_class49_terminal(receipt, completed.ring_owner)
         }
     }
-    Ok(LiveActorDeathResult {
-        returned_nonzero: true,
-        publication: None,
-    })
+    Ok(())
 }
 
 #[cfg(test)]

@@ -243,6 +243,9 @@ pub enum CaptureRootCallback {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CaptureCallbackCompletion {
     pub common_dying_owner: Option<Intro2CommonDyingOwner>,
+    /// A dying Type128's C690 reached AC60's 25660: its class63 install and
+    /// BC90 belong to the class49 terminal that entered this D040.
+    pub class63_install: bool,
 }
 
 pub(crate) fn actor(manager: &EntityManager, id: u32) -> Result<&Entity, CaptureBlock> {
@@ -439,6 +442,15 @@ fn reselect(
             manager.entity_mut(id).unwrap().native_capture_relation = None;
             Ok(CaptureCallbackCompletion::default())
         }
+        RetailRuntimeValue::Known(DYING_STATE_BIT)
+            if NativeCaptorProfile::authenticate(manager, id)? == NativeCaptorProfile::Type128 =>
+        {
+            manager.entity_mut(id).unwrap().native_capture_relation = None;
+            Ok(CaptureCallbackCompletion {
+                common_dying_owner: None,
+                class63_install: true,
+            })
+        }
         RetailRuntimeValue::Known(DYING_STATE_BIT) => {
             let owner = crate::intro2_common_dying::publish_intro2_common_dying_alternate(
                 manager,
@@ -449,6 +461,7 @@ fn reselect(
             manager.entity_mut(id).unwrap().native_capture_relation = None;
             Ok(CaptureCallbackCompletion {
                 common_dying_owner: owner,
+                class63_install: false,
             })
         }
         _ => Err(CaptureBlock::new("capture root state").committed()),
@@ -617,6 +630,7 @@ pub fn apply_capture_pair_checked_damage(
     })?;
     Ok(CaptureCallbackCompletion {
         common_dying_owner: result.death_publication,
+        class63_install: false,
     })
 }
 
@@ -629,6 +643,11 @@ pub fn publish_native_captor_standard_death(
     id: u32,
     context: &mut CaptureContext<'_>,
 ) -> Result<Option<Intro2CommonDyingOwner>, CaptureBlock> {
+    if NativeCaptorProfile::authenticate(manager, id)? == NativeCaptorProfile::Type128 {
+        return Err(CaptureBlock::new(
+            "class63 captor death is the class49 terminal's",
+        ));
+    }
     let entity = captor(manager, id)?;
     let flags = entity
         .collision

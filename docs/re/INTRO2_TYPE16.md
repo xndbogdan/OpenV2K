@@ -151,13 +151,30 @@ Particle re-hits find class63's null `+28`. The ground solid/water kernel
 admits only the class12 corpse, and finds the class63 corpse ineligible, as it
 does the living body.
 
-A Type128 killed while carrying a captive is held. The four carrying Capture
-variants (class9 variants 2..5) own `D040`'s death hook, which releases the
-child before AC60's alternate. The class63 terminal admits only styles whose
-`+2C` is null, so a direct death (radial, static contact, pair, abort,
-infected hit) fails closed before its first write. A primary hit is not held:
-DAC0 runs `D040` while the carrier is alive (living C690), and a lethal packet
-then installs class63 once from the released style.
+A Type128 killed directly while carrying (a radial, static contact, a pair,
+the Main Base abort or an infected hit) runs class63 twice. The four carrying
+Capture variants (class9 variants 2..5) have `D040` at style `+2C`, which
+`DB80` calls after `10C10`'s prefix (health 0, dying, the header+90 sound,
+the `+8C` stop):
+
+1. `D040` resets the axis and `18500` pops the child. Its callback `CAD0`
+   runs `16750`, whose release (`DC50` to the carried style's `CE90`) sees
+   the carrier already dying and returns `AC60`'s result: 0, since `C6B0`
+   ends `XOR EAX,EAX` and only `ABE0`'s failed allocation (`0x4C5060`) is
+   nonzero. On that zero `D040` calls `C690`; the dying `AC60` takes `25660`,
+   and `C6B0` installs class63 and runs `BC90`: the burst and both radial
+   walks, a Type61 at the carrier, and `10B70`.
+2. `DB80` then rereads `+BC` while the handle still resolves (removal waits
+   for `14990`). That is the new class63 context's `AC40`, so `AC60` takes
+   `25660` again and `BC90` runs in full again: a second burst, second radial
+   walks, a second Type61. `10B70` is idempotent.
+
+An empty row (the child already compacted by `18640`) makes `18500` return
+`BE5B0`; `D040` skips `C690` and only the reread runs `BC90`, once. The child
+is released alive at the carrier, so the first radial meets it. A primary hit
+differs: DAC0 runs `D040` while the carrier is alive (living C690), and a
+lethal packet then installs class63 once from the released style. A Type128
+drowning stays held: its surface step needs `BAF0`'s lent world.
 
 [Carrier tests](../../crates/v2k-game/src/intro2_type16/carrier_tests.rs)
 cover:
@@ -182,8 +199,7 @@ variant4's Following), D0B0 delivers, and `18640` follows the surface step,
 before the master motion. Every death path runs DB80's carrying `D040` first:
 a lethal or primary hit, a radial, static contact, the pair terminal, the
 Main Base abort and a Type16 drowning. Type16 then takes class12 as before;
-Type128's class63 death with a captive stays held (above), as does a Type128
-drowning.
+Type128 takes class63 twice (above), except a Type128 drowning, still held.
 
 Before this, the port visited no Type16/128 pair at all, so their bodies
 passed through others. In the production Intro2 (New Game, 20-ms steps), the
@@ -200,7 +216,8 @@ The port's minute in each world carries people in worlds 24 and 37.
 [Capture tests](../../crates/v2k-game/src/intro2_type16/capture_tests.rs)
 cover a minute of every Type16/128 world with pair walks, a forced capture and
 ten seconds of carrying, a Type16 killed while carrying (its person released
-alive, class12 installed), and the Type128 hold.
+alive, class12 installed), a Type128 killed while carrying (two Type61 drops,
+one staged removal) and one with an empty row (one drop).
 
 ## Validation and remaining acceptance
 
