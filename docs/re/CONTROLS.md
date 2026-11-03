@@ -48,7 +48,7 @@ integrator that interprets the same motion vector, not in the keys.
 | **ENTER / right mouse / joystick button 1** | held\* | **fire primary weapon** | fire (**NOT locked**) |
 | **/** 0x35 (A up), **A** 0x1E (/ and LSHIFT up) | held | fire, as ENTER | same |
 | **A + /** together | press | special-weapon deploy (cap 4; cb 0x00444400) | same |
-| **E** 0x12 | press | next target / rotate selection list | same |
+| **E** 0x12 | press | rotate the hold: its first row moves to the end, so the next D drops it | same |
 | **B/PgDn/LShift/L** | press | next weapon | same |
 | **V/PgUp/CapsLock/K** | press | previous weapon | same |
 | **D** (LShift up) | press | beam-out / drop (`entity+0x20E=−80`) | same |
@@ -69,8 +69,9 @@ The weapon/target labels above were corrected from accepted retail evidence on
 2026-07-20. Callback `0x00444180` walks controller descriptor slots forward;
 `0x00444210` walks them backward. Their binding groups are respectively
 B/PageDown/Left Shift/L and V/PageUp/Caps Lock/K. Callback `0x004442E0`, bound
-to E, instead rotates the separate 12-byte selection list through
-`FUN_00418980`. A 1-kHz pickup/fire capture independently observed four
+to E, instead rotates the player's hold (its Sub-J rows, 12 bytes each)
+through `FUN_00418980`: the first row moves to the end, where the next drop
+takes it. The port binds it. A 1-kHz pickup/fire capture independently observed four
 Left-Shift weapon changes as active-slot transitions followed by complete
 descriptor swaps. The older action-name interpretation had these families
 reversed even though its raw key grouping was correct.
@@ -314,7 +315,7 @@ press. The cheat actions test bits of the session's cheat word `+1C4`
 | `FUN_00455AB0`, `FUN_00455AD0`, `FUN_00455AF0`, `FUN_00455B10`, `FUN_00455B30`, `FUN_00455B50`, `FUN_00455B70`, `FUN_00455B90`, `FUN_00455BB0` | type cheat digits 1 to 9 (`FUN_00455BD0`) |
 | `FUN_00455C90` | unless the game is suspended (`004FE60C`), plays menu cue 3 and sets the abort flag `+28D` |
 | `FUN_004564B0` | unless suspended, plays cue 3 and pops a screen (`FUN_0043A9A0`) |
-| `FUN_004565E0` | toggles the Targetter (settings `+34`) |
+| `FUN_004565E0` | toggles the Targetter (settings `+34`); the port binds it |
 | `FUN_00456420`, `FUN_00456440`, `FUN_00456460`, `FUN_00456480` | move the menu cursor up, down, left and right (`FUN_0043C4A0`, `FUN_0043C1E0`, `FUN_0043C6C0`, `FUN_0043C720`) |
 | `FUN_00456590` | steps the session's body selector `+2B0` through 0..3 and gives it to the craft (`FUN_00447C70`) |
 | `FUN_00455DB0` | with cheat 0 (word bit `1`), delivers `[2,3]/[3000,3000]` to the session's body `+2A8` through checked damage |

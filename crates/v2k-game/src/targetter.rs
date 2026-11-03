@@ -315,10 +315,10 @@ impl TargetterRuntime {
         self.ring_spin_raw = self.ring_spin_raw.wrapping_add(elapsed_micros >> 5);
     }
 
-    /// Build `FUN_0044DB10`'s draw requests. Retail's config word at
-    /// `DAT_004D0148` guards only the entity-ring block at `0044DB93`; the
-    /// result-bit crosshair block beginning at `0044DCA2` runs regardless.
-    pub fn overlay(&self, show_entity_ring: bool) -> TargetterOverlay {
+    /// Build `FUN_0044DB10`'s draw requests. The word at `DAT_004D0148`
+    /// guarding the entity ring is a constant 1 nothing writes; the Targetter
+    /// setting (`+0x34`) instead gates the whole draw in `FUN_00453710`.
+    pub fn overlay(&self) -> TargetterOverlay {
         if !self.active || self.result_bits == 0 {
             return TargetterOverlay::default();
         }
@@ -330,21 +330,17 @@ impl TargetterRuntime {
         } else {
             None
         };
-        let ring = if show_entity_ring {
-            display_target.map(|target_id| TargetterRing {
-                // Assembly at 0044DBB5 selects pool offset 0x3AC (235) for bit 2,
-                // otherwise 0x3BC (239). The names alone suggest the reverse and
-                // must not override the executable branch.
-                model_id: if self.result_bits & TARGETTER_RESULT_EXACT_ENTITY != 0 {
-                    TARGETTER_RING_EXACT_MODEL_ID
-                } else {
-                    TARGETTER_RING_NEAR_MODEL_ID
-                },
-                target_id,
-            })
-        } else {
-            None
-        };
+        let ring = display_target.map(|target_id| TargetterRing {
+            // Assembly at 0044DBB5 selects pool offset 0x3AC (235) for bit 2,
+            // otherwise 0x3BC (239). The names alone suggest the reverse and
+            // must not override the executable branch.
+            model_id: if self.result_bits & TARGETTER_RESULT_EXACT_ENTITY != 0 {
+                TARGETTER_RING_EXACT_MODEL_ID
+            } else {
+                TARGETTER_RING_NEAR_MODEL_ID
+            },
+            target_id,
+        });
 
         let crosshair = if self.result_bits
             & (TARGETTER_RESULT_EXACT_ENTITY | TARGETTER_RESULT_NEAR_ENTITY)
@@ -452,6 +448,44 @@ impl TargetterRuntime {
             self.result_bits |= TARGETTER_RESULT_TERRAIN;
             self.terrain_point_raw = point;
         }
+    }
+}
+
+/// `FUN_0044D8B0`: whether a probe point at `offset_raw` from a candidate
+/// lies inside the sphere of its active model's collision radius plus
+/// `margin_raw`, with retail's unsigned per-axis box test first.
+/// `FUN_0044D950` inlines the same test.
+pub fn fun_0044d8b0(collision_radius_raw: u16, margin_raw: u16, offset_raw: [i32; 3]) -> bool {
+    let reach = u32::from(collision_radius_raw) + u32::from(margin_raw);
+    offset_raw
+        .iter()
+        .all(|&axis| reach.wrapping_add(axis as u32) <= reach * 2)
+        && offset_raw
+            .iter()
+            .fold(0_u32, |sum, &axis| sum.wrapping_add((axis * axis) as u32))
+            <= reach * reach
+}
+
+/// Whether the Targetter's collision program may run on a candidate: its
+/// active model has a collision radius and the point is in reach
+/// (`0044D1F6` in the straight branch, `FUN_0044D950` in the ballistic one).
+pub fn targetter_probe_in_reach(collision_radius_raw: u16, offset_raw: [i32; 3]) -> bool {
+    collision_radius_raw != 0
+        && fun_0044d8b0(
+            collision_radius_raw,
+            TARGETTER_MODEL_PROBE_RADIUS_RAW,
+            offset_raw,
+        )
+}
+
+/// `FUN_004167C0`: the ring's health channel, the target's health over its
+/// type's initial health (`+0x14`) in 0..0xFFFF; 0xFFFF from 0x10000 up or
+/// without an initial health. Negative health keeps retail's low word.
+pub fn targetter_health_channel(health_raw: i32, type_initial_health_raw: i32) -> u16 {
+    if health_raw < 0x10000 && type_initial_health_raw != 0 {
+        (health_raw.wrapping_mul(0xffff) / type_initial_health_raw) as u16
+    } else {
+        0xffff
     }
 }
 
@@ -738,7 +772,7 @@ mod tests {
             |_, _, _| TargetterModelProbe::Hit,
             |_, _| -10_000,
         );
-        assert_eq!(runtime.overlay(true).ring.unwrap().target_id, 2);
+        assert_eq!(runtime.overlay().ring.unwrap().target_id, 2);
 
         runtime.update(
             TargetterUpdateRequest {
@@ -755,7 +789,7 @@ mod tests {
         // the independently converged terrain probe supplies bit 1 while the
         // one-second prior-target ring is retained.
         runtime.result_bits |= TARGETTER_RESULT_TERRAIN;
-        assert_eq!(runtime.overlay(true).ring.unwrap().target_id, 2);
+        assert_eq!(runtime.overlay().ring.unwrap().target_id, 2);
 
         runtime.update(
             TargetterUpdateRequest {
@@ -767,7 +801,7 @@ mod tests {
             |_, _| -10_000,
         );
         runtime.result_bits |= TARGETTER_RESULT_TERRAIN;
-        assert!(runtime.overlay(true).ring.is_none());
+        assert!(runtime.overlay().ring.is_none());
     }
 
     #[test]
@@ -829,7 +863,7 @@ mod tests {
         runtime.time_on_current_target_us = 1;
         runtime.result_bits = TARGETTER_RESULT_EXACT_ENTITY;
         runtime.entity_point_raw = [1, 2, 3];
-        let exact = runtime.overlay(true);
+        let exact = runtime.overlay();
         assert_eq!(exact.ring.unwrap().model_id, TARGETTER_RING_EXACT_MODEL_ID);
         assert_eq!(
             exact.crosshair.unwrap().model_id,
@@ -837,7 +871,7 @@ mod tests {
         );
 
         runtime.result_bits = TARGETTER_RESULT_NEAR_ENTITY;
-        let near = runtime.overlay(true);
+        let near = runtime.overlay();
         assert_eq!(near.ring.unwrap().model_id, TARGETTER_RING_NEAR_MODEL_ID);
         assert_eq!(
             near.crosshair.unwrap().model_id,
@@ -848,7 +882,7 @@ mod tests {
         runtime.prior_target_id = None;
         runtime.result_bits = TARGETTER_RESULT_TERRAIN;
         runtime.terrain_point_raw = [4, 5, 6];
-        let terrain = runtime.overlay(true);
+        let terrain = runtime.overlay();
         assert!(terrain.ring.is_none());
         assert_eq!(
             terrain.crosshair.unwrap().model_id,
@@ -857,7 +891,7 @@ mod tests {
     }
 
     #[test]
-    fn targetter_config_suppresses_only_the_entity_ring() {
+    fn ring_draws_with_the_crosshair_whenever_a_target_is_shown() {
         let mut runtime = TargetterRuntime::new(1);
         runtime.install();
         runtime.current_target_id = Some(2);
@@ -865,12 +899,36 @@ mod tests {
         runtime.result_bits = TARGETTER_RESULT_EXACT_ENTITY;
         runtime.entity_point_raw = [1, 2, 3];
 
-        let hidden_ring = runtime.overlay(false);
-        assert!(hidden_ring.ring.is_none());
+        let overlay = runtime.overlay();
+        assert_eq!(overlay.ring.unwrap().target_id, 2);
         assert_eq!(
-            hidden_ring.crosshair.unwrap().model_id,
+            overlay.crosshair.unwrap().model_id,
             TARGETTER_EXACT_CROSSHAIR_MODEL_ID
         );
+    }
+
+    #[test]
+    fn reach_test_is_the_unsigned_box_then_the_sphere() {
+        // Radius 100 plus the 0x78 margin reaches 220 on each axis.
+        assert!(fun_0044d8b0(100, 0x78, [220, 0, 0]));
+        assert!(fun_0044d8b0(100, 0x78, [-220, 0, 0]));
+        assert!(!fun_0044d8b0(100, 0x78, [221, 0, 0]));
+        assert!(!fun_0044d8b0(100, 0x78, [0, -221, 0]));
+        // Inside the box but outside the sphere.
+        assert!(!fun_0044d8b0(100, 0x78, [160, 160, 0]));
+        assert!(fun_0044d8b0(100, 0x78, [150, 150, 50]));
+        assert!(!targetter_probe_in_reach(0, [0, 0, 0]));
+        assert!(targetter_probe_in_reach(1, [0, 0, 0]));
+    }
+
+    #[test]
+    fn health_channel_scales_by_the_types_initial_health() {
+        assert_eq!(targetter_health_channel(800, 800), 0xffff);
+        assert_eq!(targetter_health_channel(400, 800), 0x7fff);
+        assert_eq!(targetter_health_channel(0, 800), 0);
+        assert_eq!(targetter_health_channel(0x10000, 800), 0xffff);
+        assert_eq!(targetter_health_channel(5, 0), 0xffff);
+        assert_eq!(targetter_health_channel(-1, 0xffff), 0xffff);
     }
 
     #[test]
