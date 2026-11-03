@@ -100,6 +100,14 @@ pub struct NativeCompatibilityPreview {
     pub state_payload: [u8; STATE_PAYLOAD_SIZE],
 }
 
+impl NativeCompatibilityPreview {
+    /// State `+0x1B0` is session `+1C4`, the cheat word, which a save keeps
+    /// and a load reapplies (`FUN_0044F830`).
+    pub fn set_session_flags_raw(&mut self, word: u32) {
+        self.state_payload[0x1b0..0x1b4].copy_from_slice(&word.to_le_bytes());
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveSource {

@@ -188,7 +188,7 @@ impl RetryFixture {
             cargo: &self.cargo,
             campaign: &self.campaign,
         }
-        .encode_campaign_arrival(&self.baseline, transition.arrival(), "Level1 retry")
+        .encode_campaign_checkpoint(&self.baseline, transition.arrival(), "Level1 retry")
         .unwrap()
     }
 }

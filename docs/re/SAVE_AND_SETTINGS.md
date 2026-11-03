@@ -84,8 +84,10 @@ that each later birth reads and that the app commits on successful load.
 Other death families, attached Hive voices, and constructor-time crater
 callbacks still require their explicit live owners and reject unsupported loads.
 
-Session `+0x1C4` (state `+0x1B0`, applied by `44F830 ->450FC0`) and controller
-`+0x195` remain retained inputs awaiting complete runtime ownership. This is
+Session `+0x1C4` (state `+0x1B0`) is the [cheat word](CHEATS.md#saves-and-settings):
+a load restores it and `44F830 ->450FC0` switches each cheat on it holds back
+on, with its sound; a save writes the live word. Controller `+0x195` remains a
+retained input awaiting complete runtime ownership. This is
 bounded native restoration, not a claim that every saved field is implemented.
 
 The four-byte tail has separate semantics: `456C70 ->438020` restores it to

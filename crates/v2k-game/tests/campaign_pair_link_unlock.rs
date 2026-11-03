@@ -365,7 +365,7 @@ fn cistern_roundtrip_waits_for_map_continue_then_restores_native_player_first() 
             cargo: &cargo,
             campaign: &progress,
         }
-        .encode_campaign_arrival(&baseline, route.arrival(), "campaign roundtrip")
+        .encode_campaign_checkpoint(&baseline, route.arrival(), "campaign roundtrip")
         .unwrap();
         let restore = NativeSaveRestore::decode(&checkpoint).unwrap();
         baseline = checkpoint.state_payload;

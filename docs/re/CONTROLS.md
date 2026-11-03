@@ -293,7 +293,7 @@ flag on the console, one with a callback on the PC.
 | Frontend menus (`0x004C0818`) | arrows move; ENTER (LALT up) or SPACE select; ESCAPE (no SHIFT) back; SHIFT+ESCAPE quit to the desktop; LALT+ENTER Full Screen toggle; 1–6 force deathmatch world 1–6 (the host, entering a network game) | D-pad moves, Cross selects, Triangle goes back |
 | Intro movie (`0x004C0B28`, player `FUN_0042AAE0`) | ENTER or SPACE skip to the next mode (`FUN_0042ADA0`); ESCAPE runs the menu back handler | every button skips: Start, Select, D-pad, the four face buttons, L1, L2, R1, R2 |
 | Attract demo (`0x004BEC70`, `FUN_00426320`) | ENTER applies, ESCAPE leaves, LEFT/RIGHT step a 16.16 value by one, LALT+ENTER | Cross, Triangle, Left/Right |
-| In play (`0x004C2AD8`, beside the craft set) | SPACE or ENTER continue, and while session state `+0x296` is 4 or less skip the level opening; ESCAPE (no SHIFT) or P pause, also skipping the opening; SHIFT+ESCAPE abort the mission (`+0x28D`); M map (state above 4); T (LSHIFT up) toggles the Targetter (settings `+0x34`); LSHIFT+C/E/R/A/T/H/S/O/Q type cheat digits 1–9 (`FUN_00455BD0` compares eight digits with the table at `0x4D1330`); F8, F9, F11, F12 and LSHIFT+D run debug actions gated by player flags `+0x1C4`; LALT+ENTER | Cross, Square, Circle or Triangle continue; Start pauses; Select opens the map; Start+Select aborts; R1 with Left, Right, Triangle, Circle, Cross, Square, R2, L1 or L2 types digits 1–9; Cross+R1 is the debug spawn; the right stick moves the camera (below) |
+| In play (`0x004C2AD8`, beside the craft set) | SPACE or ENTER continue, and while session state `+0x296` is 4 or less skip the level opening; ESCAPE (no SHIFT) or P pause, also skipping the opening; SHIFT+ESCAPE abort the mission (`+0x28D`); M map (state above 4); T (LSHIFT up) toggles the Targetter (settings `+0x34`); LSHIFT+C/E/R/A/T/H/S/O/Q type cheat digits 1–9 (`FUN_00455BD0` compares eight digits with the table at `0x4D1330`); F8, F9, F11, F12 and LSHIFT+D run the [cheats](CHEATS.md)' actions, each gated by a bit of the session's cheat word `+0x1C4`; LALT+ENTER | Cross, Square, Circle or Triangle continue; Start pauses; Select opens the map; Start+Select aborts; R1 with Left, Right, Triangle, Circle, Cross, Square, R2, L1 or L2 types digits 1–9; Cross+R1 is the debug spawn; the right stick moves the camera (below) |
 | Briefing (`0x004C2580`; "Press S to Save, Space to Continue") | S save; SPACE, ENTER, ESCAPE or N continue; SHIFT+ESCAPE abort | Triangle saves; Start or Cross continues; Start+Select aborts |
 | Results (`0x004C45B0`) | arrows; ENTER confirm; ESCAPE back; P pause; SHIFT+ESCAPE abort | D-pad; Cross; Triangle; Start; Start+Select |
 | Full-screen map (`0x004C4730`) | M, ESCAPE, SPACE, ENTER, A or `/` close | Cross or Select closes |
@@ -306,19 +306,20 @@ The screen text names only keyboard keys: the menu help line
 ### In-play callbacks
 
 The in-play set's callbacks take the session and a key state; most act on a
-press. Debug actions test bits of the session's cheat word `+1C4`.
+press. The cheat actions test bits of the session's cheat word `+1C4`
+([cheats](CHEATS.md)); the port runs all of them.
 
 | Routine | Does |
 | --- | --- |
-| `FUN_00455AB0`, `FUN_00455AD0`, `FUN_00455B10`, `FUN_00455B30`, `FUN_00455B50`, `FUN_00455B70`, `FUN_00455B90`, `FUN_00455BB0` | type cheat digits 1, 2 and 4 to 9 (`FUN_00455BD0`) |
+| `FUN_00455AB0`, `FUN_00455AD0`, `FUN_00455AF0`, `FUN_00455B10`, `FUN_00455B30`, `FUN_00455B50`, `FUN_00455B70`, `FUN_00455B90`, `FUN_00455BB0` | type cheat digits 1 to 9 (`FUN_00455BD0`) |
 | `FUN_00455C90` | unless the game is suspended (`004FE60C`), plays menu cue 3 and sets the abort flag `+28D` |
 | `FUN_004564B0` | unless suspended, plays cue 3 and pops a screen (`FUN_0043A9A0`) |
 | `FUN_004565E0` | toggles the Targetter (settings `+34`) |
 | `FUN_00456420`, `FUN_00456440`, `FUN_00456460`, `FUN_00456480` | move the menu cursor up, down, left and right (`FUN_0043C4A0`, `FUN_0043C1E0`, `FUN_0043C6C0`, `FUN_0043C720`) |
 | `FUN_00456590` | steps the session's body selector `+2B0` through 0..3 and gives it to the craft (`FUN_00447C70`) |
-| `FUN_00455DB0` | with cheat bit 1, delivers `[2,3]/[3000,3000]` to the player through checked damage |
-| `FUN_00455E20`, `FUN_00456050` | with cheat bit 2 (the second on key state 2 only), play cue 3 and give the player every Cheats -> Weapons entry, the menu rows whose callback is `FUN_00455F50` |
-| `FUN_00455EB0`, `FUN_00456070`, `FUN_00456100` | with cheat bit 4, give the player power-up operations (`FUN_00413600`, amount above the operation byte): `0x33` with 200000 less a controller word, `0x37` with 40000 less its health, and `0x35` with 100000 |
+| `FUN_00455DB0` | with cheat 0 (word bit `1`), delivers `[2,3]/[3000,3000]` to the session's body `+2A8` through checked damage |
+| `FUN_00455E20`, `FUN_00456050` | with cheat 1 (word bit `2`; the second on key state 2 only), play cue 3 and give the player every Cheats -> Weapons entry, the menu rows whose callback is `FUN_00455F50` |
+| `FUN_00455EB0`, `FUN_00456070`, `FUN_00456100` | with cheat 2 (word bit `4`), give the living player power-up operations (`FUN_00413600`, amount above the operation byte): `0x33` with 200000 less the controller's fuel, `0x37` with 40000 less its health, and `0x35` with 100000 |
 | `FUN_004562B0` | clears all six cheat enables (`FUN_00450FC0`) and pops a screen |
 | `FUN_004564E0` | an in-play debug action: on a press, steps the controller's craft type (`+190`, `FUN_00447C60`) to the next of the 18 entries at `0x4D13B8` whose world mask has the current world, rebuilds the player as that type (`FUN_00447C20`, keeping it in phase 4), and stores its body handle at `+2A8` |
 
@@ -526,8 +527,8 @@ active. When the screen changes, a record already satisfied by held buttons
 starts active without acting, so a button held through a screen change does
 not act on the new screen, while held flight controls carry over. Actions
 the port has no owner for yet act on nothing: the console's continue after
-the opening, abort, the special weapon, next target, the debug spawn and the
-cheat digits. During the Intro2 opening the camera keeps zero parameters;
+the opening, abort, the special weapon, next target and the debug spawn.
+The cheat digits type as the keyboard's do. During the Intro2 opening the camera keeps zero parameters;
 whether the console pad moves it there is not traced.
 
 ## Mode toggle + fuel
@@ -629,9 +630,10 @@ runtime turbo/session policy, S/X pitch render, and solid-ground
 impact/destruction remain follow-ups.
 
 Against [every binding set](#every-binding-set), the port does not yet bind
-`/` or A to fire, the A+`/` special weapon, E (next target), T (Targetter),
-the cheat digits, N on the briefing, or the debug keys (the port uses F11 and
-F12 for its own camera and debug window). With the PC original layout a pad
+`/` or A to fire, the A+`/` special weapon, E (next target), T (Targetter) or
+N on the briefing. The cheat digits and the cheat keys are bound
+([cheats](CHEATS.md)); the port's own F11 free-fly camera and F12 debug window
+give way to retail's F11 and F12 while the Repairs cheat is on in play. With the PC original layout a pad
 works only in flight, through the PC joystick path. The Console original and
 [Remastered](#port-controller-layouts) layouts bind every screen the port
 has, the right-stick camera included, and their pads vibrate as the console's

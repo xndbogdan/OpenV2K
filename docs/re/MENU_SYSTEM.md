@@ -1018,7 +1018,8 @@ an attract-table policy.
 - 0x4D1090 / 0x4D1190 = pause menus (Continue, Options, Mission Briefing,
   Player Status → 0x4C4FB0, Replay, Cheats → 0x4D0FE8, Quit → 0x4C4DD0).
 - 0x4D0FE8 Cheats: Skip to %s World, Weapons → 0x4C4B48 (26 weapons,
-  codes 0x3E7xx), Repairs, Cargo, Complete this/All Worlds, Disable All.
+  codes 0x3E7xx), Repairs, Cargo, Complete this/All Worlds, Disable All;
+  every row's action, the codes and the selector are in [CHEATS.md](CHEATS.md).
 - Settings bindings: +0x14 Rendering (FUN_0043CC70), +0x18 Bilinear,
   +0x1C Display window/fullscreen, +0x10 Resolution (max = display-mode
   count FUN_00493EB0). Packed ids: lo16 = label string id, value strings
