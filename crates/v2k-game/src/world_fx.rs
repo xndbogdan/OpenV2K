@@ -1077,6 +1077,13 @@ const FUN_00441850_CLASS_54_RADIAL: crate::radial_damage::RadialDamageTemplate =
         trailing_raw: [0, 0],
     };
 
+/// A bomb particle's static hit whose tail the port holds.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct HeldBombTail {
+    pub source_class: u8,
+    pub position: [f32; 3],
+}
+
 /// Observable traversal trace and deferred terrain writes in physical-slot order.
 #[derive(Debug, Default, PartialEq)]
 pub struct ParticleUpdateOutcome {
@@ -1084,6 +1091,10 @@ pub struct ParticleUpdateOutcome {
     pub flare_damage_blocks: Vec<FlareDamageBlocked>,
     /// `FUN_00441850` radials no host ran; the shells' other effects did.
     pub unrun_world_radials: Vec<ParticleWorldRadial>,
+    /// Virus/Antidote Bomb (classes 77/78) static hits whose `FUN_0043F890`
+    /// tail is held: `FUN_00441850`'s infect/cure radial and debris, and the
+    /// closing sound 62. The F610 burst ran and the particle is gone.
+    pub held_bomb_tails: Vec<HeldBombTail>,
     /// Completed 425D0 callbacks whose checked-damage admission bit was clear.
     /// These are retrospective observations, never requests to replay.
     pub attached_updates: Vec<AttachedParticleUpdateObservation>,

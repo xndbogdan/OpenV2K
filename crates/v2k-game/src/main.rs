@@ -2364,7 +2364,7 @@ fn run_game(
     let mut primary_weapon = PrimaryWeapon::new();
     let mut pending_entity_weapon_fire = Vec::new();
     let mut native_entity_weapon_error_reported = false;
-    let mut possession_ray_held_reported = false;
+    let mut held_weapon_selectors_reported = HashSet::new();
     let mut targetter = TargetterRuntime::new(0);
     let mut weapon_inventory = WeaponInventory::new();
     let mut player_capabilities = PlayerCapabilities::default();
@@ -7663,12 +7663,16 @@ fn run_game(
                         }
                         world_fx.queue_primary_fire_batch(&fire_events, sea_level);
                     } else {
-                        if descriptor.selector() == POSSESSION_RAY_SELECTOR
-                            && primary_trigger.held()
-                            && !possession_ray_held_reported
+                        let selector = descriptor.selector();
+                        if primary_trigger.held() && held_weapon_selectors_reported.insert(selector)
                         {
-                            possession_ray_held_reported = true;
-                            eprintln!("{POSSESSION_RAY_HELD}");
+                            if selector == POSSESSION_RAY_SELECTOR {
+                                eprintln!("{POSSESSION_RAY_HELD}");
+                            } else {
+                                eprintln!(
+                                    "Weapon selector {selector:#04x} held: it has no firing profile in the port (docs/re/PLAYER_CRAFT.md#special-weapons)"
+                                );
+                            }
                         }
                         // Unrecovered selectors still visit FUN_00444FA0.
                         // Keep A/B phase instead of resetting the scheduler.
@@ -8810,6 +8814,12 @@ fn run_game(
                 }
                 for radial in outcome.unrun_world_radials {
                     eprintln!("Shell radial not run: {radial:?}");
+                }
+                for tail in outcome.held_bomb_tails {
+                    eprintln!(
+                        "Bomb tail held: particle class {} hit a static at {:?}; FUN_00441850's FUN_00456710 infect/cure radial, debris and F890's sound 62 are not ported",
+                        tail.source_class, tail.position
+                    );
                 }
                 // `ballistic_static_impacts` and primary StaticTile entries
                 // are retrospective F800 telemetry only. Their exact packets

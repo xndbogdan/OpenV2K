@@ -868,6 +868,12 @@ impl WorldFx {
                                     suppressed,
                                 });
                             }
+                            if matches!(source_class, 77 | 78) {
+                                outcome.held_bomb_tails.push(HeldBombTail {
+                                    source_class,
+                                    position,
+                                });
+                            }
                             self.particles.free(slot);
                             return ParticleSlotExit::Done;
                         }

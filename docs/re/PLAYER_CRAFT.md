@@ -1591,6 +1591,86 @@ without its takeover would show a reticle that never ends in one. Holding the tr
 "Possession Ray held" stop per run and fires nothing; the A/B gun phase is
 kept as for any unresolved selector.
 
+### Special weapons
+
+What each of the remaining Cheats -> Weapons rows is, from the master
+descriptors, `DAT_004D02C0`, the Section-12 types and their behavior
+programs ([class table](ACTOR_TASK_PROGRAMS.md#task-programs-of-the-other-classes-static)).
+A row's code is the power-up word: operation in the low byte, amount above.
+
+| Weapon | Row | Firing | Body and program | Port |
+| --- | --- | --- | --- | --- |
+| Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | held |
+| Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | held |
+| Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | held |
+| Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
+| Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | held |
+| Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | held |
+| Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | held |
+
+**Proximity Mines.** Class 34's first style (`0x4C8548`) runs the falling
+Primary (`FUN_00406BA0`): the heading turns by the elapsed microseconds over
+16, the pitch becomes (3 × pitch + q31(elapsed << 11, `0x1000` − pitch)) / 4,
+Sub-K variable 1 grows by the elapsed time over 4 and variable 2 is cleared;
+once the mine is
+within 300 of the higher of its cell's ground and the sea it returns tag
+`0x9C00`, whose style slot `+04` (`FUN_0040C750`) switches to the second
+style (`0x4C8590`). Its initializer `FUN_0040B0B0` arms the mine: Secondary
+becomes the shared target search (`FUN_00401F80`, one visit in four, the
+type's 0x300 range and capability mask 8, never the mine's shooter) and
+Primary the landed program (`FUN_00406F20`: the same pitch step toward 0,
+variable 1 by the elapsed time over 16, variable 2 plus
+q31(elapsed << 11, `0x4000` − variable 2), then the type's Sub-C lift and
+Sub-B drag). A
+found target runs the style's slot `+04`, `FUN_0040CEF0`, the mine's death,
+as any pair contact (`+18`) does.
+
+**Virus Bomb and Antidote Bomb.** A particle-77/78 solid static hit
+(`FUN_0043FF10`) runs `FUN_0043F890`, whose tail is `FUN_00441850`: sound 90, then `FUN_00456710` with
+radius 500, infecting (77) or curing (78). Its `FUN_00437630` writes every
+terrain cell whose centre lies inside the sphere (`FUN_00433720`), and
+`FUN_00414C50` gives every live body within 500 whose state masked by
+`0xB800` is `0x8800` (clean, Virus) or `0xA800` (infected, Antidote) the
+infect (`FUN_00411250`) or cure (`FUN_00411320`) hit wrapper with no packet.
+Debris follows (`FUN_00441A50`, class 5 or 6, 40000). `FUN_0043F890` then plays
+sound 62. Entity hits (`FUN_0043F6E0`) do not reach `FUN_00441850`. The port
+flies the particles and draws the hit burst, and logs a "Bomb tail held" stop
+for each such hit instead of running the tail and sound 62.
+
+**Megablast.** Operation `0x39` adds its amount to controller `+195` (at most
+4) and births one Type65 in mode 0 at the player, owned by it (`+60`).
+`FUN_004443B0`, the held-fire descriptor's callback, runs `FUN_00444400`
+while A and `/` are held together: with a count, it takes one, plays sound 79
+at a random rate up to an eighth higher, and births three Type65 in mode 1
+(the birth record's word `+20`; the pickup's is 0) at the player's position,
+velocity and attitude, the
+second and third with pitch `+0x4000`, the third also roll `+0x4000`, then
+queues text `0xC9`. Class 55's initializer `FUN_0040B140` clears Secondary
+and Tertiary and builds `FUN_00407800`'s Primary with the body's owner and `+88` word:
+Sub-K variable 2 holds that mode, variable 1 starts at `0xFFFF` in mode 1 and 0 in mode 0. Each visit of
+`FUN_004078C0` puts the ball on its owner with zero velocity, turns pitch by
+the elapsed microseconds over 64 and roll over 32, and sets state `0xA0`.
+Any mode but 1 charges variable 1 by the elapsed time over 8 and dies (tag
+`0x9C00`, `FUN_0040CEF0`) once it would pass `0xFFFF`. Mode 1 drains it by
+(elapsed >> 12) × clamp(variable 1, `0x5000`, `0xD000`) >> 7, and while
+draining requests the one-frame terrain flash (`FUN_00456740`, session
+`+293`) when a random word falls below a quarter of (`0xFFFF` less variable
+1). When it would go below zero the ball takes its owner and the owner's
+attached bodies out of checked damage (`FUN_00444330` for the player,
+`FUN_0040EAB0` otherwise), runs the radial `FUN_004566E0` at itself with
+radii `0x800`/`0x1000`, impulse 2000 and packet `[4,3]/[25000,25000]` over
+the owner's type and handle, flashes the screen (`FUN_00456750`), restores
+the admission and dies. Retail lab (Level 1, every cheat, F9 then A and `/`
+at tick 1010): three Type65 births that tick and three radials from
+`00407AE6` at tick 1080.
+
+**Lightning Shield.** No Section-12 type selects class 52, as a behavior or as
+its alternate, so `FUN_0040B1B0`, `FUN_004076E0` and `FUN_00407770` never run.
+
+The port fires nothing for a selector without a firing profile and logs one
+stop per selector and run while its trigger is held: "Possession Ray held"
+for `0x1B`, "Weapon selector ... held" for the others.
+
 ### Wind on trail particles
 
 | Routine | Does |

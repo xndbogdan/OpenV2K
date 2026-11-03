@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,400 | |
-| Marked not needed (excluded below) | 607 | |
-| **Referenced by port code** | **1,596** | **89.0%** |
-| Referenced by code or RE notes | 1,793 | 100.0% |
+| Marked not needed (excluded below) | 610 | |
+| **Referenced by port code** | **1,597** | **89.2%** |
+| Referenced by code or RE notes | 1,790 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -21,8 +21,8 @@ Manual statuses from [`status.csv`](status.csv):
 |---|---:|
 | implemented | 310 |
 | approximated | 6 |
-| documented | 19 |
-| not-needed | 607 |
+| documented | 42 |
+| not-needed | 610 |
 
 10 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -42,15 +42,15 @@ Where the code's references are thinnest:
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 46 | 1 | 115 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 28 | 3 | 97 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 28 | 3 | 95 |
 | [Menu system](../re/MENU_SYSTEM.md) | 21 | 6 | 144 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 20 | 1 | 85 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 19 | 1 | 94 |
 | [Controls](../re/CONTROLS.md) | 17 | 3 | 48 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 15 | 4 | 29 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 10 | 2 | 123 |
 | [Render pipeline](../re/RENDER_PIPELINE.md) | 7 | 0 | 129 |
-| [Actor](../re/ACTOR_RUNTIME.md) | 5 | 1 | 50 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 4 | 1 | 45 |
+| [Actor](../re/ACTOR_RUNTIME.md) | 3 | 0 | 46 |
 
 ## Omitted
 
@@ -80,6 +80,7 @@ denominator, each with its reason: the never-installed
 | dead: installed at Graph2D +0x1068..+0x107C by FUN_00480D10, but no queue thunk or call site reads those slots (docs/re/SOFTWARE_RASTER.md) | 6 |
 | dead: only in the default game-channel descriptor 004D4A00, which FUN_0046BED0 uses when its caller passes none; both callers (FUN_0046CAC0, FUN_0046CB50) pass the game's 004CAFA8 (docs/re/MULTIPLAYER.md#player-slots) | 4 |
 | dead: stored in software fill slots +0x10B0..+0x10BC, which no thunk or call site calls (docs/re/SOFTWARE_RASTER.md) | 4 |
+| dead: no Section-12 type selects class 52 (Lightning Shield) as a behavior or alternate (docs/re/PLAYER_CRAFT.md#special-weapons) | 3 |
 | dead: no shipped model vertex has type 10 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: no shipped model vertex has type 4 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: only in the value-op table 0x004CDF08, which no code or data references (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
