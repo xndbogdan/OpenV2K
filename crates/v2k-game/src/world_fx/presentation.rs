@@ -74,6 +74,11 @@ impl WorldFx {
             .collect();
         let mut particles = Vec::with_capacity(candidates.len());
         for (slot, particle) in candidates {
+            // DCD0 clears +1D bit 0x10 on every record before its callback;
+            // the sprite pass sets it again (`mark_particles_on_screen`).
+            if let Some(live) = self.particles.slots[slot].as_mut() {
+                live.on_screen = false;
+            }
             let Some(descriptor) = particle_descriptor(particle.source_class) else {
                 self.particles.free(slot);
                 continue;

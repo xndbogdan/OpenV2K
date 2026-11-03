@@ -2090,11 +2090,52 @@ controls remain unchanged. Matched retail presentation acceptance remains open.
 | `FUN_0042DB70` | runs a level's weather from its effects record (`004FE654`, indexed by the session's `+C4`): `+70` the first shadow pattern (`FUN_0040FA20`), `+78` the second (`FUN_0040FD90`), `+6C` falling class-35 particles around the camera in proportion to the elapsed time plus the first pattern, and `+74` lightning: a random flash (`FUN_0040FCB0`) whose chance grows each frame, then a 9-step cooldown; error `4C0DA0` without a record |
 | `FUN_0040FA20` | darkens the terrain-light window `4FE820` with a moving pattern: four sines of the cell coordinates and the frame counter `004DAFC4`, adding only negative sums (over 64), saturating at `0x7F` |
 | `FUN_0040FD90` | adds a second moving four-sine pattern of the cell coordinates and the frame counter `004DAFC4` to the terrain-light window `4FE820` (sums over `0x80000`), saturating at `0x7F` |
+| `FUN_0040FCB0` | lightning: adds `0x10` to every cell of the light window, saturating at `0x7F` |
+| `FUN_00438790` | the light window's 8.8 bounds from its origin cells `0x004FEC20/0x004FE818`, for the three writers above |
+| `FUN_0042D9B0` | (weather part) advances the weather clock through `FUN_0040F9F0` (milliseconds, `elapsed / 1000`) only in a world with `+70` or `+78` |
+| `FUN_00442E10` | class 35's update: a flake not fully submerged, still at or above the ground first cached under it (`FUN_0043DB60`, bilinear) and on screen at the last draw (particle `+1D` bit `0x10`) falls by the frame's gravity word and is counted in `0x004DE844`; any other is marked dead |
 | `FUN_00435E70` | projects a camera-relative point to the screen (scales `004FEED0/004FEED4`, centre `004FEEE0/004FEEE4`) with a sine wobble of the frame counter, and returns its clip outcode against `004FEED8/004FEEDC` |
 | `FUN_00436010` | the second wobbling projector, as `FUN_00435E70` with a different wobble phase |
 | `FUN_00421840` | bump-allocates a queued text node with a depth word in a draw arena (cursor `+14`, limit `+10`, list tail `+8`), failing with `4BE7F8` when full |
 | `FUN_004218A0` | the same without the depth word, failing with `4BE808` when full |
 | `FUN_004571E0` | hands the current world's sprite set to the Direct3D texture pages (from the in-game init `FUN_004515E0`): pairs each sprite the world's resource record lists (`004FE658`) with its record (`004FE62C`) and passes them to `FUN_004AB170` |
+
+### Level weather in the port
+
+`level_weather::LevelWeather` reads the four Section-13 words and runs
+`FUN_0042DB70` where `FUN_004536A0` does: after the particles' light, before
+the terrain and static objects, on the same `TerrainLightWindow` both
+backends draw from. The writers are `TerrainLightWindow`'s
+`add_weather_shadow_pattern`, `add_weather_light_pattern` and `add_flash`;
+the clock, the lightning cooldown and the flakes live in `WorldFx`, which no
+world load resets, as retail's process globals are not. The clock advances
+with the time trophy (both are `FUN_0042D9B0`'s), so it shares that owner's
+alignment with retail's world-arrival frames, which also run `FUN_0042D9B0`
+(16 frames in a cheat Skip to World) before the first gameplay tick.
+
+Worlds: `+6C` (flakes, plus the shadow pattern at a clock that never moves)
+WindyIce and Reactor; `+70` Alien2, Alien3 and Arena6; `+74` Volcano, Alien2
+and Alien3; `+78` Water, world 23, world 30, Pchannel, DarkReef and Arena6.
+A frozen (paused) redraw repeats the patterns at the unchanged clock but
+births no flakes and rolls no lightning.
+
+The births are `(DAT_004F72CC >> 10) - survivors` when over four, a quarter
+of it, each from six shared random words: X `camera ± 0x1000`, Y
+`camera - 1000 .. + 3095`, Z `camera + 2000 .. + 6095`, velocity
+`-0x100 .. -0x81` in X and Z and `-0x100 .. -0xC1` in Y, until the pool
+refuses one. A flake that was not on screen at the draw dies at its next
+update, so the population is set by `FUN_0043D410`'s visibility: its far word
+is the view's fog far plane (`0x004D0560`), the world's Section-13 `+0x88`
+cells (`0x1500` in Level 1, `0x1200` in WindyIce), not a fixed `0x1800` (that
+is Intro2's own `+0x88`, 24 cells).
+
+Evidence: native receipts run the three writers on seeded windows, origins
+and clocks (`crates/v2k-render/tests/fixtures/software_raster/weather_light.json`);
+retail's own light window, dumped at the end of lab frames in Water,
+WindyIce, Volcano and Alien2, equals the writers' output at the dumped origin
+and clock, plus particle light and, in the frame the cooldown restarted at 9,
+the flash. In WindyIce retail keeps 18 to 47 flakes alive a frame over the
+first eight seconds and the port 18 to 50, with the same early peak.
 
 ## Key addresses
 

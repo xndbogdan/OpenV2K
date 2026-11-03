@@ -6,6 +6,8 @@
 //! camera along retail's terrain scan. Samples are X-major:
 //! `values[x * 32 + z]`, matching the terrain grid.
 
+use v2k_formats::fixed_math::retail_sine_q15;
+
 pub const LIGHT_WINDOW_SIZE: usize = 32;
 const LIGHT_WINDOW_LEN: usize = LIGHT_WINDOW_SIZE * LIGHT_WINDOW_SIZE;
 
@@ -29,6 +31,17 @@ impl Default for TerrainLightWindow {
 }
 
 impl TerrainLightWindow {
+    /// A window holding `values` (X-major) at origin cells `(x, z)`, as
+    /// `window` returns them.
+    pub fn from_window(values: [i8; LIGHT_WINDOW_LEN], origin: [u8; 2]) -> Self {
+        Self {
+            origin_x: origin[0],
+            origin_z: origin[1],
+            values,
+            revision: 0,
+        }
+    }
+
     pub fn revision(&self) -> u64 {
         self.revision
     }
@@ -212,6 +225,85 @@ impl TerrainLightWindow {
             x_offset += 1;
             left_x -= 0x100;
             right_x += 0x100;
+        }
+    }
+
+    /// The weather's moving shadow pattern (`FUN_0040FA20`): four sines of
+    /// each window cell's 8.8 coordinates plus the weather clock `0x004DAFC4`
+    /// (milliseconds); a negative sum darkens the cell by `sum >> 6`.
+    pub fn add_weather_shadow_pattern(&mut self, clock_ms: u32) {
+        self.for_each_window_cell(|x, z| {
+            let x = x.wrapping_add(clock_ms) & 0xffff;
+            let z = z.wrapping_add(clock_ms) & 0xffff;
+            let term =
+                |angle: u32, amplitude: i32| ((retail_sine_q15(angle) * amplitude) >> 15) as i16;
+            let sum = i32::from(term(
+                x.wrapping_mul(2)
+                    .wrapping_add(500)
+                    .wrapping_add(z)
+                    .wrapping_mul(8),
+                0x30,
+            )) + i32::from(term(x << 4, 0x24))
+                + i32::from(term(
+                    z.wrapping_add(x.wrapping_mul(6)).wrapping_mul(8),
+                    0x12,
+                ))
+                + i32::from(term(
+                    x.wrapping_mul(2).wrapping_sub(z).wrapping_mul(0x10),
+                    0x18,
+                ));
+            (sum < 0).then_some(sum >> 6)
+        });
+    }
+
+    /// The weather's second moving pattern (`FUN_0040FD90`): four sines with
+    /// their own cell and clock rates; a positive sum lightens the cell by
+    /// `sum >> 19`.
+    pub fn add_weather_light_pattern(&mut self, clock_ms: u32) {
+        self.for_each_window_cell(|x, z| {
+            let angle = |clock: u32, x_rate: u32, z_rate: u32| {
+                clock_ms
+                    .wrapping_mul(clock)
+                    .wrapping_add(x.wrapping_mul(x_rate))
+                    .wrapping_add(z.wrapping_mul(z_rate))
+            };
+            let sum = retail_sine_q15(angle(0x5d, 0x4b, 10)) * 0x16
+                + (retail_sine_q15(angle(0x72, 0x2f_u32.wrapping_neg(), 0x32))
+                    + retail_sine_q15(angle(
+                        0x81,
+                        0x43_u32.wrapping_neg(),
+                        0x2b_u32.wrapping_neg(),
+                    )))
+                    * 0x18
+                + retail_sine_q15(angle(0x78, 0x52_u32.wrapping_neg(), 0x42)) * 0x12;
+            (sum > 0).then_some(sum >> 19)
+        });
+    }
+
+    /// One frame's lightning (`FUN_0040FCB0`): every window cell `+0x10`.
+    pub fn add_flash(&mut self) {
+        self.for_each_window_cell(|_, _| Some(0x10));
+    }
+
+    /// Walk the 32x32 window as `FUN_00438790`'s bounds give it, passing each
+    /// cell's 8.8 world X and Z (`x` the outer loop); a returned delta is
+    /// added with the writers' shared upper saturation at `0x7F`.
+    fn for_each_window_cell(&mut self, mut delta: impl FnMut(u32, u32) -> Option<i32>) {
+        for local_x in 0..LIGHT_WINDOW_SIZE {
+            let x = (u32::from(self.origin_x) + local_x as u32) << 8;
+            for local_z in 0..LIGHT_WINDOW_SIZE {
+                let z = (u32::from(self.origin_z) + local_z as u32) << 8;
+                let Some(delta) = delta(x, z) else {
+                    continue;
+                };
+                let slot = &mut self.values[local_x * LIGHT_WINDOW_SIZE + local_z];
+                let sum = i32::from(*slot) + delta;
+                let next = if sum < 0x80 { sum as i8 } else { i8::MAX };
+                if next != *slot {
+                    *slot = next;
+                    self.revision = self.revision.wrapping_add(1);
+                }
+            }
         }
     }
 }
