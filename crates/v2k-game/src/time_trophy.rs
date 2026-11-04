@@ -81,6 +81,8 @@ impl TimeTrophyRuntime {
         results_active: bool,
         progress: &mut PlayerCampaignProgress,
     ) -> Result<(Self, TimeTrophyLoadOutcome), CampaignControlSlotError> {
+        // 42E570 marks the world visited before it reads the slot.
+        progress.mark_current_world_visited()?;
         let control_state = progress.current_control_state_bits()?;
         let world_saved = control_state & RETAIL_CONTROL_WORLD_SAVED_BIT != 0;
         let time_trophy_claimed = control_state & RETAIL_CONTROL_TIME_TROPHY_BIT != 0;
@@ -266,6 +268,8 @@ mod tests {
         assert_eq!(progress.control_slot_world_saved(1), Some(false));
         assert_eq!(progress.control_slot_claimed(1), Some(false));
         assert_eq!(progress.control_slot_time_trophy_claimed(1), Some(false));
+        // 42E570's visited bit, which shows the world's node on the map.
+        assert_eq!(progress.control_slot_bits(1), Some(4));
     }
 
     #[test]

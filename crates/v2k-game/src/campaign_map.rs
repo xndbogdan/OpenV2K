@@ -205,3 +205,14 @@ impl CampaignMapKlaus {
         self.klaus
     }
 }
+
+/// The map's one pass after Replay this World (`+292`): `FUN_00454EE0`
+/// skips Klaus's command 2 and `FUN_004555A0` stages the load at once, then
+/// still visits him with the clamped delta. The pass draws nothing.
+pub fn replay_world_map_pass(
+    klaus: &mut MenuShell,
+    frame_micros: u32,
+    effects: &mut impl KlausEffects,
+) {
+    klaus.visit_klaus(frame_micros.min(MAP_VISIT_MAX_MICROS), effects);
+}

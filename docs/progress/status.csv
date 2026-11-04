@@ -1078,7 +1078,7 @@ address,status,note
 0x00414AE0,documented,dynamic radial walk visits every live actor with no type filter; Type57 and the quiet flyers take their own deaths (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00454EE0,implemented,progress map entry: pause mask 8, the map clock, Klaus's 454FA0; overlay 51 is resident from startup (docs/re/MENU_SYSTEM.md#progress-map)
 0x00454FA0,implemented,map entry: Klaus command 2 with a 1-us visit (campaign_map.rs)
-0x004555A0,implemented,map tick: Space/S close Klaus then switch to the load or the save menu; Klaus visit clamped to 125 ms; its ED10 on the proxy has no effect the load keeps (campaign_map.rs)
+0x004555A0,implemented,map tick: +292 or +28E stage the load at once and still visit Klaus; Space/S close Klaus then switch to the load or the save menu; Klaus visit clamped to 125 ms; its ED10 on the proxy has no effect the load keeps (campaign_map.rs)
 0x004557D0,implemented,save menu entry: Klaus command 4 and model argument 0, 4D1090 pushed (campaign_map.rs)
 0x004558A0,implemented,save menu tick: Continue loads; P or Escape gives Klaus command 1 and returns to the map after 1001 ms (campaign_map.rs)
 0x00455CC0,implemented,map Space: sound 3 and +294
@@ -1104,3 +1104,4 @@ address,status,note
 0x0040C910,approximated,Capture People pair contact: attach and carry for Types 17/122/18/28/16/128, the absent-J kill for Types 40/12/127/94; Type53's attach is held (docs/re/ACTOR_RUNTIME.md#type94s-capture-kills)
 0x00442B40,implemented,the particle free runs the class's +2C callback: FUN_00441850 for the class-4/54 shells and the Virus and Antidote Bombs at every free (a static hit runs it twice), FUN_00442140 for the submerged bolts (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x0043E300,implemented,mode-3 surface response of the class-4/54 shells and the Virus/Antidote Bombs: the FUN_00440DC0 burst by selector (DAT_004CD788) and sound 90; at rest (both horizontal words under 0x4B1) the record is freed, else it bounces on the surface with its vertical word halved and reversed (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x0042EDA0,implemented,campaign word bit 4 test: the progress map shows a world once its install (FUN_0042E570) set the bit (docs/re/MENU_SYSTEM.md#progress-map)

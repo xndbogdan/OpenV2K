@@ -230,7 +230,7 @@ impl MenuEngine {
         let sel = self
             .tree
             .screen(va)
-            .map(|s| first_selectable(s, self.vis_mask))
+            .map(|s| push_row(s, self.vis_mask))
             .unwrap_or(0);
         self.stack.push(StackSlot { screen: va, sel });
         true
@@ -531,6 +531,13 @@ fn first_selectable(screen: &ScreenDef, mask: u32) -> usize {
         .iter()
         .position(|item| item_is_enabled(item, mask))
         .unwrap_or(0)
+}
+
+/// The row a push starts on: the record's default, past hidden rows.
+fn push_row(screen: &ScreenDef, mask: u32) -> usize {
+    (screen.default_row..screen.items.len())
+        .find(|&row| item_is_enabled(&screen.items[row], mask))
+        .unwrap_or_else(|| first_selectable(screen, mask))
 }
 
 // ── Unit tests ──────────────────────────────────────────────────────────────

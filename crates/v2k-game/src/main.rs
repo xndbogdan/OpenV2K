@@ -2465,6 +2465,8 @@ fn run_game(
     // then opens over the reloaded world.
     let mut replay_world_entry: Option<Option<Box<v2k_game::save::NativeSaveRestore>>> = None;
     let mut replay_world_cover: Option<MenuShell> = None;
+    // Replay this World's pass on the map (+292) before the load.
+    let mut replay_map_pass = false;
     // The fire descriptor's shared counter, for FUN_004443B0's press edge.
     let mut fire_descriptor_was_held = false;
     // Overlay 49 running in phase 3.
@@ -4071,6 +4073,7 @@ fn run_game(
                 v2k_game::game_state::set_session_save_row(None);
                 replay_world_entry = None;
                 replay_world_cover = None;
+                replay_map_pass = false;
                 session.cache.unload_level();
                 // The cumulative system Section-11 pool is immutable across
                 // worlds. Stop its voices above, but retain the decoded pool
@@ -4093,6 +4096,23 @@ fn run_game(
             }
 
             GameState::Loading { level_id, purpose } => {
+                if std::mem::take(&mut replay_map_pass) {
+                    if events.iter().any(|event| matches!(event, GameEvent::Quit)) {
+                        break 'main_loop;
+                    }
+                    if let Some(shell) = replay_world_cover.as_mut() {
+                        v2k_game::campaign_map::replay_world_map_pass(
+                            shell,
+                            elapsed_micros,
+                            &mut GlobalSoundRuntime::new(
+                                &session.cache,
+                                &mut world_fx,
+                                sound_manager.as_mut(),
+                            ),
+                        );
+                    }
+                    continue 'main_loop;
+                }
                 post_intro_world_cover = None;
                 closing_scene = None;
                 closing_scene_exit = None;
@@ -6294,10 +6314,12 @@ fn run_game(
                             GameState::Playing
                         }
                         ClosingSceneDestination::ReplayWorld => {
-                            // 453E00 -> the map, which +292 leaves at once
-                            // (4555A0) -> 4D0918 loads the restored world;
-                            // its 451710 visit opens Klaus over it.
+                            // 453E00 -> the map, whose next pass with +292
+                            // (4555A0) visits Klaus and stages 4D0918, which
+                            // loads the restored world a pass later; its
+                            // 451710 visit opens Klaus over it.
                             replay_world_cover = Some(shell);
+                            replay_map_pass = true;
                             match replay_world_entry.take().flatten() {
                                 Some(restore) => GameState::Loading {
                                     level_id: restore.logical_level_id

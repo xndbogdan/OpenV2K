@@ -28,6 +28,9 @@ pub const TROPHY_SELECTOR: u8 = 0x3f;
 pub const RETAIL_CONTROL_SLOT_COUNT: usize = 37;
 pub const RETAIL_CONTROL_WORLD_SAVED_BIT: u32 = 0x01;
 pub const RETAIL_CONTROL_HIDDEN_TROPHY_BIT: u32 = 0x02;
+/// Set on the current slot by every world install (`FUN_0042E570`); the
+/// progress map shows a world's node once it is set (`FUN_0042EDA0`).
+pub const RETAIL_CONTROL_WORLD_VISITED_BIT: u32 = 0x04;
 pub const RETAIL_CONTROL_TIME_TROPHY_BIT: u32 = 0x08;
 /// `FUN_0042edc0` tests `(dword >> 9) & (1 << (column - 1))` for overlay-51
 /// pair-link columns `1..=7`. `FUN_0042DD10` is the recovered per-exit writer.
@@ -209,6 +212,11 @@ impl PlayerCampaignProgress {
 
     pub(crate) fn mark_current_world_saved(&mut self) -> Result<bool, CampaignControlSlotError> {
         self.set_current_control_bit(RETAIL_CONTROL_WORLD_SAVED_BIT)
+    }
+
+    /// `FUN_0042E570`'s visited bit `0x04` on the current slot.
+    pub(crate) fn mark_current_world_visited(&mut self) -> Result<bool, CampaignControlSlotError> {
+        self.set_current_control_bit(RETAIL_CONTROL_WORLD_VISITED_BIT)
     }
 
     /// `FUN_0042ED50`: set the current world's time-trophy bit, reporting a new claim.

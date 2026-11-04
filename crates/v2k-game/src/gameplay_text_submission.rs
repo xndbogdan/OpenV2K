@@ -82,12 +82,15 @@ fn draw_authored_notifications(
     for notification in notifications {
         let baseline = fonts.virtual_h * notification.baseline_percent as f32 / 100.0;
         if notification.center_x {
+            // FUN_00454390 and FUN_00452790: (width - text width) / 2, one
+            // division, so an odd width lands a pixel left of width/2 - w/2.
+            let x = (fonts.virtual_w as i32 - font.measure(&notification.text) as i32) / 2;
             draw_menu_text(
                 renderer,
                 font,
                 &notification.text,
-                [fonts.virtual_w * 0.5, baseline],
-                true,
+                [x as f32, baseline],
+                false,
                 usize::MAX,
                 mapping,
             );
@@ -362,18 +365,18 @@ mod tests {
         ];
         for (variant, authored) in [
             (
-                // FUN_00452790 centres at (640 - 10) / 2 with the truncated
-                // whole-pixel width.
+                // FUN_00452790 centres at (640 - 11) / 2: one division of
+                // the width less FUN_00470F80's whole-pixel text width.
                 1,
-                [(315, 20, 11, 14), (160, 404, 11, 14), (315, 443, 11, 14)],
+                [(314, 20, 11, 14), (160, 404, 11, 14), (314, 443, 11, 14)],
             ),
             (
                 2,
-                [(395, 29, 11, 14), (200, 509, 11, 14), (395, 557, 11, 14)],
+                [(394, 29, 11, 14), (200, 509, 11, 14), (394, 557, 11, 14)],
             ),
             (
                 3,
-                [(507, 40, 11, 14), (256, 655, 11, 14), (507, 716, 11, 14)],
+                [(506, 40, 11, 14), (256, 655, 11, 14), (506, 716, 11, 14)],
             ),
         ] {
             let fonts = fonts(variant);
