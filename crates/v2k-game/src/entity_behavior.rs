@@ -194,6 +194,10 @@ pub enum BehaviorDescriptorIdentity {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BehaviorChoiceListSource {
     TypeDefault,
+    /// Another type record's `+0x118` list, passed by the construction
+    /// request at `+0x48`: `FUN_004438A0`'s phase-4 craft takes type 51's.
+    /// The context keeps the pointer, so `FUN_0040C690` reselects from it.
+    TypeRecord(u32),
 }
 
 /// Exact active style identity without assigning the unnamed fallback a fake
@@ -380,6 +384,34 @@ impl BehaviorContextRuntime {
             style_table_index_raw_at_0x10: 0,
             active_style: ActiveBehaviorStyle::InitializerFailureFallback,
         }
+    }
+
+    /// `FUN_0040ABE0` with a request's list: as
+    /// [`Self::from_fresh_weighted_selection`], with that list as the source.
+    pub(crate) fn from_fresh_weighted_selection_from(
+        selection: BehaviorSelection,
+        source: BehaviorChoiceListSource,
+    ) -> Option<Self> {
+        let fresh = Self::from_fresh_weighted_selection(selection)?;
+        Some(Self {
+            choice_list_source: RetailRuntimeValue::Known(source),
+            ..fresh
+        })
+    }
+
+    /// `FUN_0040C690`: reselect from the list the context holds.
+    pub(crate) fn reselect_named_own_list(
+        self,
+        program: &'static BehaviorProgram,
+        style_table_index_raw: u32,
+        style: BehaviorStyle,
+    ) -> Option<Self> {
+        let source = self.choice_list_source;
+        let next = self.reselect_named_type_default(program, style_table_index_raw, style)?;
+        Some(Self {
+            choice_list_source: source,
+            ..next
+        })
     }
 
     /// Reuse one allocated context for a named program selected from the

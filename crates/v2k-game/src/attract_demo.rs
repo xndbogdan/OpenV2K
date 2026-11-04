@@ -197,6 +197,18 @@ impl AttractRow {
         u32::from(self.logical_world) + LOGICAL_WORLD_OVERLAY_OFFSET
     }
 
+    /// `FUN_004503C0`'s writes: runtime `+10` and `+20`, type 46's Sub-E
+    /// `+04` (times 1000) and `+17`; `+16` becomes 1.
+    pub fn craft_arming(&self) -> crate::intro2_flyer_aim::CraftEmitterArming {
+        crate::intro2_flyer_aim::CraftEmitterArming {
+            projectile_method: u32::from(self.projectile_method),
+            sound_id: u32::from(self.sound_id),
+            cadence_us: self.cadence_ms * 1000,
+            auxiliary_command: self.auxiliary_command,
+            weapon_var_raw: i16::from(self.weapon_selector as i8),
+        }
+    }
+
     /// `FUN_00450390` in phase 4.
     pub fn has_player(&self) -> bool {
         self.logical_world != PLAYERLESS_WORLD
@@ -218,6 +230,8 @@ impl AttractRow {
 pub struct AttractCamera {
     countdown_ms: i32,
     subject: Option<u32>,
+    /// `004F72C4`'s row, which `FUN_004503C0` writes into the craft.
+    row: Option<AttractRow>,
 }
 
 /// A body whose eligibility the port cannot read.
@@ -228,6 +242,17 @@ pub struct AttractCameraStop {
 }
 
 impl AttractCamera {
+    pub fn for_row(row: AttractRow) -> Self {
+        Self {
+            row: Some(row),
+            ..Self::default()
+        }
+    }
+
+    pub fn row(&self) -> Option<AttractRow> {
+        self.row
+    }
+
     pub fn subject(&self) -> Option<u32> {
         self.subject
     }
@@ -408,6 +433,92 @@ mod tests {
             .collect();
         assert_eq!(records, ["	<    *, *,16,30,   15>Demo"]);
         assert_eq!(session.cache.level_desc().unwrap().world_style, 6);
+    }
+
+    /// The lab's row-0 run: `FUN_00451AF0` builds the craft first, from RNG
+    /// state `0x8BBF572E`, drawing Sub-G, Sub-A, the selector and B6C0's two
+    /// 06070 suffixes (Sub-G then Sub-A each), leaving `0xBA7A18AF` for the
+    /// world's next body. Its pose, health and Sub-G words are the lab dump's.
+    #[v2k_test_support::retail_test]
+    fn row_0_craft_is_the_first_body_and_takes_the_labs_seven_words() {
+        use crate::entity::{
+            AttractCraftArrival, AttractWorld, AuthoredWorldConstruction,
+            EntityConstructionResources, EntityManager,
+        };
+        let row = ATTRACT_ROWS[0];
+        let session = retail_session(row.overlay_id());
+        let metadata: Vec<_> = (0..session.cache.global_entity_model_table().len())
+            .map(|id| {
+                crate::entity_collision_state::EntityTypeRuntimeMetadata::from_section12(
+                    session.cache.global_entity_type(id).unwrap(),
+                )
+            })
+            .collect();
+        let terrain = session.cache.terrain().unwrap();
+        let mut fx = crate::world_fx::WorldFx::new();
+        fx.set_shared_retail_random_state(0x8BBF_572E);
+        let position_raw = row.player_position_raw(terrain);
+        let manager = EntityManager::from_authored_world(
+            AuthoredWorldConstruction {
+                level: session.cache.level_desc().unwrap(),
+                logical_world_index: i32::from(row.logical_world),
+                type_metadata: &metadata,
+                player_arrival: None,
+                retail_tick: 0,
+                resources: EntityConstructionResources {
+                    terrain: Some(terrain),
+                    terrain_objects: session.cache.terrain_objects(),
+                    model_extent_raw: Some(&|id| session.cache.global_model(id).map(|m| m.radius)),
+                },
+            }
+            .with_attract(
+                0,
+                AttractWorld {
+                    craft: Some(AttractCraftArrival {
+                        position_raw,
+                        self_righting: 9,
+                        sub_e_record: None,
+                    }),
+                },
+            ),
+            &mut fx,
+        )
+        .unwrap();
+        let craft = manager.iter_all().next().unwrap();
+        assert_eq!(manager.attract_craft_id(), Some(craft.id));
+        assert_eq!(craft.entity_type, 46);
+        assert_eq!(craft.position_raw(), [24320, 256, 19712]);
+        assert_eq!(craft.velocity_raw(), [0; 3]);
+        assert_eq!(craft.rotation_heading_pitch_roll_raw(), [0x4000, 0, 0]);
+        assert_eq!(
+            craft.collision.health_raw,
+            crate::entity_collision_state::RetailRuntimeValue::Known(40_000)
+        );
+        let owner = craft.intro2_flyer_frame_owner.unwrap();
+        // +0x90: the controller's boot pose (DAT_004D0B30) at construction.
+        assert_eq!(owner.anchor_raw, [19712, -500, 14848]);
+        let crate::entity_collision_state::RetailRuntimeValue::Known(Some(sub_g)) =
+            craft.sub_g_06070_runtime
+        else {
+            panic!("craft Sub-G");
+        };
+        // The second B6C0 06070 word 0xA411: clearance 0 + 0xA4.
+        assert_eq!(
+            sub_g.randomized_target_raw_at_0x38(),
+            crate::entity_collision_state::RetailRuntimeValue::Known(164)
+        );
+        assert_eq!(
+            sub_g.byte_at_0x41(),
+            crate::entity_collision_state::RetailRuntimeValue::Known(9)
+        );
+        let aim = craft.intro2_flyer_aim_runtime.as_ref().unwrap();
+        // FUN_00443560: the boot record's selector 1, Sub-E's sound 88.
+        assert_eq!(aim.emitter_runtime().projectile_method, 1);
+        assert_eq!(aim.emitter_runtime().sound_id, 88);
+        // The world's next draw (a Type111's selector, 0x8953) follows.
+        let mut after = crate::world_fx::WorldFx::new();
+        after.set_shared_retail_random_state(0xBA7A_18AF);
+        assert_eq!(after.next_shared_retail_random_u16(), 0x8953);
     }
 
     #[test]

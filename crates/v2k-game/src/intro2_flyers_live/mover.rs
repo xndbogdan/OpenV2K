@@ -41,6 +41,12 @@ pub struct Intro2FlyerCommonMoverOutcome {
     pub target_private: WanderNearPrivateState,
     pub sound: Option<Type13SubGSound>,
     pub result: ChaseTargetCommonMoverReturn,
+    pub sub_a_runtime: RetailRuntimeValue<Option<crate::common_mover::SubAPropulsionRuntime>>,
+    /// Sub-O's `FUN_00440E80` after the first target correction: the class-19
+    /// downwash from the pose before Sub-G, which the caller births next.
+    pub downwash: Option<crate::entity::PlayerSurfaceEffectEmission>,
+    /// Sub-E's method word after the second correction.
+    pub sub_e_method: Option<u32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +83,10 @@ pub struct Intro2FlyerCommonMoverRequest<'a> {
     pub self_mass_raw: u16,
     pub attached_cargo_mass: u32,
     pub capability_flags: u32,
+    pub height_policy: crate::vtol::VtolHeightPolicy,
+    pub sub_a_runtime: RetailRuntimeValue<Option<crate::common_mover::SubAPropulsionRuntime>>,
+    /// Sub-E runtime `+0x10` for a Sub-O body (the craft).
+    pub sub_e_method: Option<u32>,
     pub retail_tick: u32,
     pub elapsed_micros: u32,
     pub global_elapsed_micros: u32,
@@ -90,6 +100,7 @@ pub(super) fn flyer_sub_g_descriptor(entity_type: u32) -> Option<&'static [u8; 1
         TYPE14_ENTITY_TYPE => Some(&TYPE14_SUB_G_DESCRIPTOR),
         TYPE39_ENTITY_TYPE => Some(&TYPE39_SUB_G_DESCRIPTOR),
         TYPE41_ENTITY_TYPE => Some(&TYPE41_SUB_G_DESCRIPTOR),
+        super::TYPE46_ENTITY_TYPE => Some(&super::TYPE46_SUB_G_DESCRIPTOR),
         _ => None,
     }
 }
@@ -133,8 +144,26 @@ pub fn evaluate_intro2_flyer_common_mover(
     let RetailRuntimeValue::Known(basis) = request.body_basis else {
         return Err(Intro2FlyerCommonMoverBlock::BodyBasisUnavailable);
     };
+    // FUN_00401BB0 writes 0x8000 into the type's shared Sub-G `+0x1C`; the
+    // frame owner keeps that write for the descriptor Sub-G reads.
+    let mut descriptor_copy = *descriptor;
+    if let Some(limit) = request.frame_owner.sub_g_target_limit_raw {
+        descriptor_copy[0x1c..0x20].copy_from_slice(&limit.to_le_bytes());
+    }
+    let (RetailRuntimeValue::Known(sub_g_angle_raw), RetailRuntimeValue::Known(sub_g_invert)) = (
+        request.sub_g_runtime.angle_raw_at_0x1e(),
+        request.sub_g_runtime.invert_target_at_0x3c(),
+    ) else {
+        return Err(Intro2FlyerCommonMoverBlock::SubGRuntimeUnavailable);
+    };
     let mut live = CommonMoverFrameSnapshot {
-        controlled_entity_lookup: None,
+        // FUN_00401BB0 resolves the body itself and reads its matrix's
+        // forward Y (`+0x28`).
+        controlled_entity_lookup: Some(
+            crate::common_mover::frame_machine::CommonMoverControlledEntityLookup {
+                attitude_raw_28: basis.forward[1],
+            },
+        ),
         position_raw: request.position_raw,
         velocity_raw: request.velocity_raw,
         heading_raw: request.heading_raw,
@@ -143,15 +172,15 @@ pub fn evaluate_intro2_flyer_common_mover(
         body_right_q31: basis.lateral,
         body_forward_q31: basis.forward,
         attached_cargo_mass: request.attached_cargo_mass,
-        sub_a_runtime: RetailRuntimeValue::Known(None),
+        sub_a_runtime: request.sub_a_runtime,
         sub_f_smoothed_raw: None,
-        sub_g_runtime_angle_raw: 0,
-        sub_g_state_byte_3c: 0,
+        sub_g_runtime_angle_raw: sub_g_angle_raw,
+        sub_g_state_byte_3c: sub_g_invert,
         sub_k_smoothed_raw: topology
             .sub_k
             .then_some(request.frame_owner.sub_k_smoothed_raw),
-        sub_n_accumulator_raw: None,
-        sub_o_link_raw: 0,
+        sub_n_accumulator_raw: topology.sub_o.then_some(request.frame_owner.fan_var_raw),
+        sub_o_link_raw: request.sub_e_method.unwrap_or(0),
     };
     let mut machine = CommonMoverFrameMachine::start(
         CommonMoverFrameRequest {
@@ -160,14 +189,17 @@ pub fn evaluate_intro2_flyer_common_mover(
                 topology,
                 dispatch_mode: request.dispatch_mode,
                 elapsed_micros: request.elapsed_micros,
-                sub_a_descriptor: None,
+                sub_a_descriptor: topology.sub_a.then_some(super::TYPE46_SUB_A),
                 sub_b_descriptor: flyer_sub_b(entity_type),
                 sub_c_descriptor: None,
                 sub_d_descriptor: Some(CommonMoverPreludeSubD {
                     steering_divisor_raw: sub_d.steering_divisor_raw,
                     couple_yaw_into_roll: sub_d.couple_yaw_into_roll_raw != 0,
                 }),
-                target_resource_context_present: true,
+                // 01430's first lookup: the private record's tracked body.
+                // Wander tracks none, so neither correction writes.
+                target_resource_context_present: !topology.sub_o
+                    || matches!(request.tracked_target, RetailRuntimeValue::Known(Some(_))),
             },
             initial_snapshot: live,
             target_private: Some(request.target_private),
@@ -182,6 +214,8 @@ pub fn evaluate_intro2_flyer_common_mover(
     let mut reverse_write = None;
     let mut pitch_raw = request.pitch_raw;
     let mut sound = None;
+    let mut downwash = None;
+    let mut sub_e_method = request.sub_e_method;
     loop {
         let resume = match machine.poll() {
             CommonMoverFramePoll::ReturnZero(_) | CommonMoverFramePoll::ReturnOne => {
@@ -195,6 +229,9 @@ pub fn evaluate_intro2_flyer_common_mover(
                     sub_g_runtime,
                     target_private,
                     sound,
+                    sub_a_runtime: live.sub_a_runtime,
+                    downwash,
+                    sub_e_method,
                     result: if matches!(machine.poll(), CommonMoverFramePoll::ReturnOne) {
                         ChaseTargetCommonMoverReturn::NonZero
                     } else {
@@ -211,6 +248,9 @@ pub fn evaluate_intro2_flyer_common_mover(
                 live.roll_raw = plan.roll_raw;
                 if let Some(write) = plan.sub_d_reversal_write {
                     frame_owner.sub_d_runtime.last_yaw_step_raw = write.step_raw as i16;
+                }
+                if topology.sub_a {
+                    live.sub_a_runtime = RetailRuntimeValue::Known(plan.sub_a_runtime);
                 }
                 reverse_write = plan.sub_g_reverse_write;
                 CommonMoverFrameResume::Committed {
@@ -274,7 +314,7 @@ pub fn evaluate_intro2_flyer_common_mover(
                 // no type-13 constants: these flyers retain their own force,
                 // clearance, rate, speed cap, and sole selector-one binding.
                 let outcome = plan_type13_sub_g_frame(Type13SubGFrameRequest {
-                    descriptor,
+                    descriptor: &descriptor_copy,
                     runtime: sub_g_runtime,
                     reverse_write,
                     position_raw: live.position_raw,
@@ -286,6 +326,7 @@ pub fn evaluate_intro2_flyer_common_mover(
                     self_mass_raw: request.self_mass_raw,
                     attached_cargo_mass: request.attached_cargo_mass,
                     capability_flags: request.capability_flags,
+                    height_policy: request.height_policy,
                     terrain: request.terrain,
                     retail_tick: request.retail_tick,
                     elapsed_micros,
@@ -320,6 +361,63 @@ pub fn evaluate_intro2_flyer_common_mover(
                     );
                 CommonMoverFrameResume::ComponentReturned {
                     phase: CommonMoverDispatchPhase::SubK,
+                    snapshot: live,
+                }
+            }
+            CommonMoverFramePoll::Action(
+                CommonMoverFrameAction::CommitPrimaryTargetCorrection(plan),
+            ) => {
+                if let Some(limit) = plan.correction.sub_g_descriptor_dword_1c_write {
+                    frame_owner.sub_g_target_limit_raw = Some(limit as i32);
+                    descriptor_copy[0x1c..0x20].copy_from_slice(&limit.to_le_bytes());
+                }
+                sub_g_runtime.set_angle_raw_at_0x1e(plan.sub_g_runtime_angle_raw);
+                live.sub_g_runtime_angle_raw = plan.sub_g_runtime_angle_raw;
+                CommonMoverFrameResume::Committed {
+                    phase: CommonMoverFrameCommitPhase::PrimaryTargetCorrection,
+                    snapshot: live,
+                }
+            }
+            CommonMoverFramePoll::Action(
+                CommonMoverFrameAction::InvokePrimaryCorrectionEffect { .. },
+            ) => {
+                downwash = Some(crate::entity::PlayerSurfaceEffectEmission {
+                    position_raw: live.position_raw,
+                    velocity_raw: live.velocity_raw,
+                    lateral_q31: basis.lateral,
+                    up_q31: basis.up,
+                    forward_q31: basis.forward,
+                    strength_raw: 1000,
+                    owner_entity_id: request.entity_id,
+                });
+                CommonMoverFrameResume::PrimaryCorrectionEffectReturned(live)
+            }
+            CommonMoverFramePoll::Action(CommonMoverFrameAction::CommitSubNAccumulator {
+                after_raw,
+                ..
+            }) if topology.sub_o => {
+                frame_owner.fan_var_raw = after_raw;
+                live.sub_n_accumulator_raw = Some(after_raw);
+                CommonMoverFrameResume::Committed {
+                    phase: CommonMoverFrameCommitPhase::SubNAccumulator,
+                    snapshot: live,
+                }
+            }
+            CommonMoverFramePoll::Action(
+                CommonMoverFrameAction::CommitSecondaryTargetCorrection(plan),
+            ) => {
+                if sub_e_method.is_none() {
+                    return Err(Intro2FlyerCommonMoverBlock::UnexpectedFrameAction);
+                }
+                sub_e_method = Some(plan.sub_o_link_raw);
+                live.sub_o_link_raw = plan.sub_o_link_raw;
+                if let Some(limit) = plan.correction.sub_g_descriptor_dword_1c_write {
+                    frame_owner.sub_g_target_limit_raw = Some(limit as i32);
+                }
+                sub_g_runtime.set_angle_raw_at_0x1e(plan.correction.sub_g_runtime_angle_raw);
+                live.sub_g_runtime_angle_raw = plan.correction.sub_g_runtime_angle_raw;
+                CommonMoverFrameResume::Committed {
+                    phase: CommonMoverFrameCommitPhase::SecondaryTargetCorrection,
                     snapshot: live,
                 }
             }
@@ -413,6 +511,8 @@ mod tests {
                 sub_k_smoothed_raw: 0,
                 sub_k_output_raw: [0; 2],
                 anchor_raw: [0; 3],
+                fan_var_raw: 0,
+                sub_g_target_limit_raw: None,
             },
             sub_g_runtime: sub_g,
             target_private,
@@ -422,6 +522,9 @@ mod tests {
             self_mass_raw: 100,
             attached_cargo_mass: 0,
             capability_flags: 8,
+            height_policy: crate::vtol::VtolHeightPolicy::RetailAttenuation,
+            sub_a_runtime: RetailRuntimeValue::Known(None),
+            sub_e_method: None,
             retail_tick: 12,
             elapsed_micros: 20_000,
             global_elapsed_micros: 20_000,
@@ -459,6 +562,7 @@ mod tests {
                 self_mass_raw: request.self_mass_raw,
                 attached_cargo_mass: 0,
                 capability_flags: 8,
+                height_policy: crate::vtol::VtolHeightPolicy::RetailAttenuation,
                 terrain: &terrain,
                 retail_tick: request.retail_tick,
                 elapsed_micros: request.elapsed_micros,

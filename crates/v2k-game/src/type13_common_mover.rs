@@ -290,7 +290,8 @@ mod tests {
             assert_eq!(staged.position_raw, [0, 0, 0]);
             assert_eq!(staged.velocity_raw, [10, 20, 30]);
             assert_eq!(staged.heading_raw, 153);
-            assert_eq!(staged.pitch_raw, 986);
+            // A690's terrain target is 8 * clearance - 8000 (41A7DC).
+            assert_eq!(staged.pitch_raw, 520);
             assert_eq!(staged.roll_raw, 142);
             assert_eq!(staged.sound, None);
             assert_eq!(staged.target_private.target_position_raw, [0, 0, 1_000]);

@@ -185,7 +185,8 @@ fn authenticate_predecessor_context(
         return Err(Type13C690ReselectionBlock::CurrentBehaviorNotExpectedPredecessor { expected });
     }
     match context.choice_list_source() {
-        RetailRuntimeValue::Unresolved => {
+        RetailRuntimeValue::Unresolved
+        | RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeRecord(_)) => {
             Err(Type13C690ReselectionBlock::ChoiceListSourceUnresolved)
         }
         RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeDefault) => Ok(()),

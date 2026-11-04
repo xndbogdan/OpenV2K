@@ -85,13 +85,13 @@ impl ClosingScene {
 
     /// A phase-4 attract world: its records (`FUN_00452CB0` from global string
     /// `0x77`) hold only the "Demo" caption, no commands.
-    pub fn attract(camera: IntroCameraController) -> Self {
+    pub fn attract(camera: IntroCameraController, row: crate::attract_demo::AttractRow) -> Self {
         Self {
             camera,
             commands: Vec::new(),
             selected_stamp: 0,
             camera_target: None,
-            attract: Some(crate::attract_demo::AttractCamera::default()),
+            attract: Some(crate::attract_demo::AttractCamera::for_row(row)),
         }
     }
 

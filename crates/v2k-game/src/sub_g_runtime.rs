@@ -193,6 +193,11 @@ impl SubG06070RuntimeState {
         self.word_at_0x1c
     }
 
+    /// `FUN_00401BB0`'s and `FUN_00401430`'s target-correction writes.
+    pub(crate) fn set_angle_raw_at_0x1e(&mut self, angle_raw: i16) {
+        self.angle_raw_at_0x1e = RetailRuntimeValue::Known(angle_raw);
+    }
+
     pub const fn angle_raw_at_0x1e(self) -> RetailRuntimeValue<i16> {
         self.angle_raw_at_0x1e
     }
@@ -231,6 +236,11 @@ impl SubG06070RuntimeState {
 
     pub const fn mode_at_0x40(self) -> RetailRuntimeValue<u8> {
         self.mode_at_0x40
+    }
+
+    /// `FUN_0041B9C0`: byte `+0x41`, the craft's self-righting setting.
+    pub(crate) fn set_self_righting_mode(&mut self, mode: u8) {
+        self.byte_at_0x41 = RetailRuntimeValue::Known(mode);
     }
 
     pub const fn byte_at_0x41(self) -> RetailRuntimeValue<u8> {
@@ -276,6 +286,9 @@ pub struct Type13SubGFrameRequest<'a> {
     pub self_mass_raw: u16,
     pub attached_cargo_mass: u32,
     pub capability_flags: u32,
+    /// `FUN_00456F10() == 4` (phase 4) bypasses the capability-1 height
+    /// attenuation; only a body with capability bit 1 reads it.
+    pub height_policy: crate::vtol::VtolHeightPolicy,
     pub terrain: &'a TerrainGrid,
     pub retail_tick: u32,
     pub elapsed_micros: u32,
@@ -353,6 +366,7 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
             self_mass_raw,
             attached_cargo_mass,
             capability_flags,
+            height_policy,
             terrain,
             retail_tick,
             elapsed_micros,
@@ -427,14 +441,8 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
             || mode_at_0x40 != 0
             || terrain_attitude_mode != 0
             || alternate_basis_mode != 0
-            || self_righting_mode != 1
         {
             return Err(Type13SubGFrameBlock::UnsupportedMode);
-        }
-        // Type-13 is an ordinary non-player entity. The capability-bit-one branch
-        // uses the separate five-probe VTOL policy and is already owned by vtol.rs.
-        if capability_flags & 1 != 0 {
-            return Err(Type13SubGFrameBlock::PlayerProjectionUnsupported);
         }
         if let Some(reverse) = reverse_write {
             invert_target_raw = u8::from(reverse);
@@ -526,10 +534,8 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
             read_i32(descriptor, 0x00)
         };
 
-        let mut damped_pitch_raw = attitude.pitch_raw;
-        let pitch_correction =
-            ((elapsed_micros >> 10) as i32).wrapping_mul(i32::from(damped_pitch_raw)) >> 9;
-        damped_pitch_raw = damped_pitch_raw.wrapping_sub(pitch_correction as i16);
+        let damped_pitch_raw =
+            self_righted_pitch_raw(attitude.pitch_raw, self_righting_mode as i8, elapsed_micros);
         let mut damped_roll_raw = roll_raw as i16;
         let roll_correction =
             ((elapsed_micros >> 10) as i32).wrapping_mul(i32::from(damped_roll_raw)) >> 8;
@@ -551,6 +557,8 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
             rate_raw: attitude.rate_raw,
             clearance_flag: attitude.clearance_flag,
             surface_mode,
+            capability_flags,
+            height_policy,
             terrain,
             retail_tick,
             elapsed_micros,
@@ -575,6 +583,36 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
         })
     })();
     result.map_err(|reason| SubGFrameFailure { reason, prefix })
+}
+
+/// `FUN_0041A690`'s pitch by Sub-G `+0x41` (`41A8B4..41A9E9`): mode 1
+/// damps toward level, 0 leaves it, and a craft's Self Righting word N
+/// eases toward `(N - 1) * 0x2800 / 15`.
+fn self_righted_pitch_raw(pitch_raw: i16, mode: i8, elapsed_micros: u32) -> i16 {
+    let step = (elapsed_micros >> 10) as i32;
+    match mode {
+        0 => pitch_raw,
+        1 => pitch_raw.wrapping_sub((step.wrapping_mul(i32::from(pitch_raw)) >> 9) as i16),
+        _ => {
+            let mode = i32::from(mode);
+            let gap = (mode * 0x2800 - 0x2800) / 0xf - i32::from(pitch_raw);
+            if gap < 1 {
+                let divisor = (mode * -0x100 + 0x100) / 0xf + 0x200;
+                pitch_raw.wrapping_add((step.wrapping_mul(gap) / divisor) as i16)
+            } else {
+                // Unsigned: the gap and the divisor are both positive here.
+                let divisor = ((mode * 0x200 - 0x200) / 0xf + 0x200) as u32;
+                let mut pitch = pitch_raw
+                    .wrapping_add(((gap as u32).wrapping_mul(step as u32) / divisor) as i16);
+                if gap > 0x4000 {
+                    pitch = pitch.wrapping_add(
+                        (((gap - 0x4000) as u32).wrapping_mul(step as u32) / divisor) as i16,
+                    );
+                }
+                pitch
+            }
+        }
+    }
 }
 
 /// `FUN_0041AA60`: publish the seven bound words, advance the five phase
@@ -659,6 +697,7 @@ fn plan_1a690_override_mode(
         self_mass_raw,
         attached_cargo_mass,
         capability_flags,
+        height_policy,
         terrain,
         retail_tick,
         elapsed_micros,
@@ -735,6 +774,8 @@ fn plan_1a690_override_mode(
         rate_raw,
         clearance_flag: clearance_flag_raw != 0,
         surface_mode: descriptor[0x2b],
+        capability_flags,
+        height_policy,
         terrain,
         retail_tick,
         elapsed_micros,
@@ -760,6 +801,8 @@ struct Type13B210ProjectionRequest<'a> {
     rate_raw: i32,
     clearance_flag: bool,
     surface_mode: u8,
+    capability_flags: u32,
+    height_policy: crate::vtol::VtolHeightPolicy,
     terrain: &'a TerrainGrid,
     retail_tick: u32,
     elapsed_micros: u32,
@@ -768,8 +811,15 @@ struct Type13B210ProjectionRequest<'a> {
 fn apply_type13_b210_projection(
     request: Type13B210ProjectionRequest<'_>,
 ) -> Result<(), Type13SubGFrameBlock> {
+    // 41B271..41B291: the manual force projects only while +3D is clear or
+    // the rate is below 200 (the +42 clause is zero here); otherwise only
+    // the +24 assist remains.
+    let manual_gate =
+        request.manual_force_raw != 0 && (!request.clearance_flag || request.rate_raw < 200);
     let mut vertical_force_raw = 0;
-    if request.manual_force_raw != 0 && (!request.clearance_flag || request.rate_raw < 200) {
+    let underside_raw = i32::from(request.position_raw[1])
+        .wrapping_sub(i32::from(request.active_model_extent_raw >> 1));
+    if manual_gate && request.capability_flags & 1 == 0 {
         let surface_raw = sub_g_surface_raw(
             request.terrain,
             request.position_raw[0],
@@ -777,14 +827,45 @@ fn apply_type13_b210_projection(
             request.surface_mode,
             request.retail_tick,
         );
-        let underside_raw = i32::from(request.position_raw[1])
-            .wrapping_sub(i32::from(request.active_model_extent_raw >> 1));
         if underside_raw.wrapping_sub(i32::from(surface_raw)) < 0x800 {
             vertical_force_raw = request.manual_force_raw;
         }
+    } else if manual_gate {
+        // Capability bit 1: the lowest of five waved-surface probes (the
+        // centre and 0x100 either side on each axis), the height
+        // attenuation outside phase 4, then the upward-velocity divisor.
+        vertical_force_raw = request.manual_force_raw;
+        if request.height_policy == crate::vtol::VtolHeightPolicy::RetailAttenuation {
+            let [x, _, z] = request.position_raw;
+            let probe = |x: i16, z: i16| {
+                i32::from(sub_g_surface_raw(
+                    request.terrain,
+                    x,
+                    z,
+                    0,
+                    request.retail_tick,
+                ))
+            };
+            let lowest = [
+                probe(x, z),
+                probe(x.wrapping_sub(0x100), z),
+                probe(x, z.wrapping_sub(0x100)),
+                probe(x.wrapping_add(0x100), z),
+                probe(x, z.wrapping_add(0x100)),
+            ]
+            .into_iter()
+            .min()
+            .unwrap();
+            let threshold = if request.clearance_flag { 0xc00 } else { 0x800 };
+            let clearance = underside_raw.wrapping_sub(lowest);
+            if clearance > threshold {
+                vertical_force_raw /= ((clearance - threshold) / 0x80).max(1);
+            }
+        }
+        vertical_force_raw /= (i32::from(request.velocity_raw[1]) / 0x200).max(1);
     }
 
-    if request.manual_force_raw == 0 && request.assist_force_raw == 0 {
+    if !manual_gate && request.assist_force_raw == 0 {
         return Ok(());
     }
     let total_mass_raw =
@@ -794,15 +875,17 @@ fn apply_type13_b210_projection(
     }
     let elapsed_step_raw = (request.elapsed_micros >> 5) as i32;
     let mass_twice_raw = total_mass_raw.wrapping_mul(2);
-    let horizontal_rate_raw =
-        elapsed_step_raw.wrapping_mul(request.manual_force_raw) / mass_twice_raw;
-    let vertical_rate_raw = elapsed_step_raw.wrapping_mul(vertical_force_raw) / mass_twice_raw;
-    request.velocity_raw[0] = request.velocity_raw[0]
-        .wrapping_add(q31_mul(request.body_up_q31[0], horizontal_rate_raw) as i16);
-    request.velocity_raw[1] = request.velocity_raw[1]
-        .wrapping_add(q31_mul(request.body_up_q31[1], vertical_rate_raw) as i16);
-    request.velocity_raw[2] = request.velocity_raw[2]
-        .wrapping_add(q31_mul(request.body_up_q31[2], horizontal_rate_raw) as i16);
+    if manual_gate {
+        let horizontal_rate_raw =
+            elapsed_step_raw.wrapping_mul(request.manual_force_raw) / mass_twice_raw;
+        let vertical_rate_raw = elapsed_step_raw.wrapping_mul(vertical_force_raw) / mass_twice_raw;
+        request.velocity_raw[0] = request.velocity_raw[0]
+            .wrapping_add(q31_mul(request.body_up_q31[0], horizontal_rate_raw) as i16);
+        request.velocity_raw[1] = request.velocity_raw[1]
+            .wrapping_add(q31_mul(request.body_up_q31[1], vertical_rate_raw) as i16);
+        request.velocity_raw[2] = request.velocity_raw[2]
+            .wrapping_add(q31_mul(request.body_up_q31[2], horizontal_rate_raw) as i16);
+    }
 
     if request.assist_force_raw != 0 {
         let assist_vertical_rate_raw =
@@ -971,6 +1054,95 @@ mod tests {
     }
 
     #[test]
+    fn self_righting_word_eases_pitch_toward_its_angle() {
+        // Mode 1 damps toward level; 0 leaves the pitch.
+        assert_eq!(
+            self_righted_pitch_raw(1000, 1, 20_000),
+            1000 - (19 * 1000 >> 9)
+        );
+        assert_eq!(self_righted_pitch_raw(1000, 0, 20_000), 1000);
+        // Mode 9 (the lab's Self Righting): target (9 - 1) * 0x2800 / 15 =
+        // 5461, divisor 785 below it; lab ticks 1 and 2 of the row-0 craft.
+        assert_eq!(self_righted_pitch_raw(1024, 9, 20_000), 1131);
+        assert_eq!(self_righted_pitch_raw(2101, 9, 20_000), 2182);
+        // Above the target: signed, divisor (0x100 - 9 * 0x100) / 15 + 0x200.
+        assert_eq!(
+            self_righted_pitch_raw(6000, 9, 20_000),
+            6000 + (19 * -539) / 376
+        );
+    }
+
+    fn b210(
+        capability_flags: u32,
+        height_policy: crate::vtol::VtolHeightPolicy,
+        clearance_flag: bool,
+        rate_raw: i32,
+        velocity_raw: &mut [i16; 3],
+    ) {
+        let terrain = TerrainGrid {
+            header: [0; 5],
+            cells: vec![
+                v2k_formats::terrain::TerrainCell {
+                    height: 0,
+                    attribute: 0,
+                    terrain_type: 0,
+                };
+                256 * 256
+            ],
+        };
+        apply_type13_b210_projection(Type13B210ProjectionRequest {
+            position_raw: [0, 0x4000, 0],
+            velocity_raw,
+            body_up_q31: [0x2000_0000, 0x7000_0000, 0],
+            active_model_extent_raw: 0,
+            self_mass_raw: 100,
+            attached_cargo_mass: 0,
+            manual_force_raw: 1000,
+            assist_force_raw: 0,
+            rate_raw,
+            clearance_flag,
+            surface_mode: 0,
+            capability_flags,
+            height_policy,
+            terrain: &terrain,
+            retail_tick: 0,
+            elapsed_micros: 20_000,
+        })
+        .unwrap();
+    }
+
+    #[test]
+    fn b210_gate_projects_manual_force_on_no_axis_when_closed() {
+        use crate::vtol::VtolHeightPolicy::*;
+        // 41B271..41B291: +3D set and rate 200 or more skips +20 entirely.
+        let mut velocity = [0; 3];
+        b210(8, RetailAttenuation, true, 200, &mut velocity);
+        assert_eq!(velocity, [0; 3]);
+        // Open but 0x4000 above the ground: X/Z only for a capability-0 body.
+        b210(8, RetailAttenuation, true, 199, &mut velocity);
+        assert_eq!(velocity[1], 0);
+        assert_ne!(velocity[0], 0);
+    }
+
+    #[test]
+    fn b210_capability_one_lifts_by_upward_speed_and_phase_4_skips_height() {
+        use crate::vtol::VtolHeightPolicy::*;
+        // Phase 4: the full +20 over the upward-speed divisor (1000 / 512 = 1).
+        let mut bypassed = [0, 1024, 0];
+        b210(5, BypassHeightAttenuation, false, 0, &mut bypassed);
+        // Elsewhere 0x4000 of clearance divides it by (0x4000 - 0x800) / 128.
+        let mut attenuated = [0, 1024, 0];
+        b210(5, RetailAttenuation, false, 0, &mut attenuated);
+        assert!(bypassed[1] > attenuated[1]);
+        assert_eq!(bypassed[0], attenuated[0]);
+        let step = (20_000 >> 5) * 1000 / 200;
+        assert_eq!(
+            i32::from(bypassed[1] - 1024),
+            q31_mul(0x7000_0000, step / 2)
+        );
+    }
+
+    #[test]
     fn tumble_branch_skips_terrain_descriptor_mass_and_attitude_reads() {
         let terrain = TerrainGrid {
             header: [0; 5],
@@ -998,6 +1170,7 @@ mod tests {
             self_mass_raw: 0,
             attached_cargo_mass: 0,
             capability_flags: 1,
+            height_policy: crate::vtol::VtolHeightPolicy::RetailAttenuation,
             terrain: &terrain,
             retail_tick: u32::MAX,
             elapsed_micros: u32::MAX,

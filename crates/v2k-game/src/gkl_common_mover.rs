@@ -448,6 +448,14 @@ pub(crate) fn evaluate_gkl_common_mover(
                     let Some(retained_body_basis) = retained_body_basis else {
                         return Err(GklCommonMoverBlock::UnexpectedFrameAction);
                     };
+                    // B210's capability-1 branch is proven for the attract
+                    // craft's phase-4 flight only; these owners keep the gate
+                    // before any Sub-G write.
+                    if request.capability_flags & 1 != 0 {
+                        return Err(GklCommonMoverBlock::SubG(
+                            Type13SubGFrameBlock::PlayerProjectionUnsupported,
+                        ));
+                    }
                     let outcome = plan_sub_g_frame_with_prefix(Type13SubGFrameRequest {
                         descriptor: profile
                             .gkl
@@ -465,6 +473,7 @@ pub(crate) fn evaluate_gkl_common_mover(
                         self_mass_raw: request.self_mass_raw,
                         attached_cargo_mass: request.attached_cargo_mass,
                         capability_flags: request.capability_flags,
+                        height_policy: crate::vtol::VtolHeightPolicy::RetailAttenuation,
                         terrain: request.terrain,
                         retail_tick: request.retail_tick,
                         elapsed_micros,

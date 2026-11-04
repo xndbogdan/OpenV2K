@@ -903,14 +903,18 @@ derives its pitch target as:
 ```text
 candidate =
     signed_low_word(runtime+0x1C)
-    + 2 * (center_y - active_model_radius - coarse_center_surface)
-    - 2000
+    + 8 * (center_y - active_model_radius - coarse_center_surface)
+    - 8000
 target = min(candidate, static_Sub_G+0x1C)
 if runtime+0x3C != 0: target = -target
 pitch -= (pitch - target) >> 4
 pitch += signed_word(runtime+0x1E)
 ```
 
+The scale and offset are the instruction's (`41A7DC`: `LEA EDX,
+[ECX + EDX*8 - 8000]`); the decompiler shows `* 2 - 2000`, which the port had
+copied. The attract demo's craft pins it: with `* 8 - 8000` its second-tick
+pitch is the lab's 2182 (it was 2357). Every Sub-G flyer takes this branch.
 The coarse center surface is the signed current-cell terrain height and, when
 static Sub-G byte `+0x2B` is zero, at least the static sea plane. The subsequent
 `FUN_0041AC40` projects a second X/Z sample 0x300 raw units through the

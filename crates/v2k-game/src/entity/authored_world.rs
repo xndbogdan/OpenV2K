@@ -30,6 +30,8 @@ pub enum AuthoredWorldLoadRequest<'a> {
     Ordinary {
         world: AuthoredWorldConstruction<'a>,
         exit_marker_bits: u32,
+        /// A phase-4 world (the attract demo) and its craft.
+        attract: Option<super::AttractWorld>,
     },
     NativeSave {
         world: AuthoredWorldConstruction<'a>,
@@ -51,6 +53,7 @@ impl<'a> From<AuthoredWorldConstruction<'a>> for AuthoredWorldLoadRequest<'a> {
         Self::Ordinary {
             world,
             exit_marker_bits: 0,
+            attract: None,
         }
     }
 }
@@ -61,6 +64,21 @@ impl<'a> AuthoredWorldConstruction<'a> {
         AuthoredWorldLoadRequest::Ordinary {
             world: self,
             exit_marker_bits,
+            attract: None,
+        }
+    }
+
+    /// `FUN_00451AF0` in phase 4: the row's craft, built before any other
+    /// body, or none (world 11).
+    pub fn with_attract(
+        self,
+        exit_marker_bits: u32,
+        attract: super::AttractWorld,
+    ) -> AuthoredWorldLoadRequest<'a> {
+        AuthoredWorldLoadRequest::Ordinary {
+            world: self,
+            exit_marker_bits,
+            attract: Some(attract),
         }
     }
 
@@ -74,35 +92,39 @@ impl EntityManager {
         request: impl Into<AuthoredWorldLoadRequest<'a>>,
         world_fx: &mut WorldFx,
     ) -> Result<Self, FreshNewGameEntityConstructionError> {
-        let (mut request, restored_player, completed_world, exit_marker_bits) = match request.into()
-        {
-            AuthoredWorldLoadRequest::Ordinary {
-                world,
-                exit_marker_bits,
-            } => (world, None, None, exit_marker_bits),
-            AuthoredWorldLoadRequest::NativeSave { world, saved } => {
-                let exit_marker_bits = saved
-                    .restore
-                    .campaign
-                    .control_slot_bits(saved.restore.logical_level_id as usize)
-                    .unwrap_or(0);
-                (
+        let (mut request, restored_player, completed_world, exit_marker_bits, attract) =
+            match request.into() {
+                AuthoredWorldLoadRequest::Ordinary {
                     world,
-                    Some(NativeSavedPlayerConstruction {
-                        player: saved.restore.player,
-                        cargo_unlock_raw: saved.restore.cargo.unlock_raw,
-                        pre_health_damage_buffer_raw: saved.restore.pre_health_damage_buffer_raw,
-                        current_world_flags: saved
-                            .restore
-                            .campaign
-                            .control_slot_bits(saved.restore.logical_level_id as usize)
-                            .unwrap_or(0),
-                    }),
-                    Some(saved),
                     exit_marker_bits,
-                )
-            }
-        };
+                    attract,
+                } => (world, None, None, exit_marker_bits, attract),
+                AuthoredWorldLoadRequest::NativeSave { world, saved } => {
+                    let exit_marker_bits = saved
+                        .restore
+                        .campaign
+                        .control_slot_bits(saved.restore.logical_level_id as usize)
+                        .unwrap_or(0);
+                    (
+                        world,
+                        Some(NativeSavedPlayerConstruction {
+                            player: saved.restore.player,
+                            cargo_unlock_raw: saved.restore.cargo.unlock_raw,
+                            pre_health_damage_buffer_raw: saved
+                                .restore
+                                .pre_health_damage_buffer_raw,
+                            current_world_flags: saved
+                                .restore
+                                .campaign
+                                .control_slot_bits(saved.restore.logical_level_id as usize)
+                                .unwrap_or(0),
+                        }),
+                        Some(saved),
+                        exit_marker_bits,
+                        None,
+                    )
+                }
+            };
         if let Some(saved) = restored_player {
             request.player_arrival = Some(AuthoredPlayerArrival {
                 position_raw: saved.player.position_raw,
@@ -118,6 +140,7 @@ impl EntityManager {
                 logical_world_index: request.logical_world_index,
                 restored_player,
                 exit_marker_bits,
+                attract,
             },
             Some((request.retail_tick, world_fx)),
             completed_world,
