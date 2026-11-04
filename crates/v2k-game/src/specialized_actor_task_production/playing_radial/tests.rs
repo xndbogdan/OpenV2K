@@ -457,3 +457,38 @@ fn fixed_and_zero_impulse_targets_do_not_require_selected_owner_custody() {
         assert_eq!(f.entity(f.peasant_id).velocity_raw(), before);
     }
 }
+
+/// A lethal blast on a peasant whose style has a null death hook (DB80, then
+/// the class14 alternate): the retained planner stops at the death, so the
+/// target takes the native path, which publishes class14 (world 25's Type128
+/// class49 blast on a Wander Near Location peasant).
+#[v2k_test_support::retail_test]
+fn a_lethal_blast_on_a_null_death_hook_peasant_publishes_class14() {
+    let mut f = Fixture::new();
+    let style = f
+        .entity(f.peasant_id)
+        .current_behavior_context
+        .map(|context| context.map(|context| context.active_style().death_callback_policy()));
+    assert_eq!(
+        style,
+        crate::entity_collision_state::RetailRuntimeValue::Known(Some(
+            crate::entity_behavior::DeathCallbackPolicy::None
+        ))
+    );
+    let template = RadialDamageTemplate {
+        packet: DamagePacket {
+            channels: [1, 0],
+            amounts_raw: [1_000_000, 0],
+        },
+        ..impulse_template()
+    };
+    let origin = f.origin();
+    let outcome = f.deliver(origin, template);
+    assert!(outcome.blocked.is_none(), "{outcome:?}");
+    assert_eq!(outcome.completed_target_ids, [f.peasant_id]);
+    assert!(
+        crate::ordinary_type9_standard_death::type9_entity_has_class14_publication(
+            f.entity(f.peasant_id)
+        )
+    );
+}

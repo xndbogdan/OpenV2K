@@ -369,10 +369,16 @@ Still held, each behind its logged stop:
 The every-25-ticks probe, run in the game for two idle minutes (6,000
 frames) from each arrival or until the world is lost, now completes the
 abort at every probe in every campaign world but 27 and 35, the two held
-Trash Furniture scans. Driven by the scheduler alone for 6,000 ticks, world
-25 also fails five late probes: a Type128's class49 radial reaches a Type9
-in Wander Near Location whose style has a null death hook, which the
-retained radial does not run (in the game, world 25 is lost at tick 400).
+Trash Furniture scans. Driven by the scheduler alone for 6,000 ticks (in the
+game, world 25 is lost at tick 400), world 25 failed five late probes: a
+Type128's class49 radial reached a Type9 in Wander Near Location, whose style
+has a null death hook, and the retained radial planner, which owns a
+peasant's impulse and surviving hits, stopped at its death. A lethal radial
+hit on a Type9 with a null death hook now takes the native target instead,
+which runs `10C10` -> `DB80` (the null hook) -> the class14 alternate, as a
+particle's lethal hit does; the planner's preflight writes nothing before
+the switch. All 240 probes of that run, and every probe of every world but
+27 over 2,200 scheduler ticks, now complete.
 
 Worlds 26, 31 and 40 complete with their
 [Type107 and Type121 mobile turrets](TYPE107_MOBILE_TURRETS.md), which take

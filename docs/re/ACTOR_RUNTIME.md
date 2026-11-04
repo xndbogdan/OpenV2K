@@ -690,6 +690,14 @@ world runs more than 8,200 general visits over 67 pair kinds in 32 worlds
 | Type40 x Type30, Type5 x Type5 | the native owner was not complete at that tick | 19, 47 |
 | Type76 x Type3 | the response would move a Type3, which has no native owner | 31 |
 
+Since then the Hive's consumption, Type94's capture kill, Mobbing's null
+branch, the Queen and the waiting flower turrets take the visit (below), and
+the later abort fixes changed the other rows' worlds. A 6,000-tick sweep of
+every world from its arrival now logs two held kinds: Type9 x Type53 (worlds
+14 and 15, Type53's carrying) and Type71 x Type71 (world 28, a Type71 with
+tasks and no native owner). The twelve player pair kinds above still stay
+outside the player adapter, whose pass runs apart from the walk.
+
 ### The Hive consuming people
 
 `4259F0` takes a body with capability `0xC00` (a person or worker) before it

@@ -160,6 +160,27 @@ impl SpecializedActorTaskScheduler {
                 35 => entity.native_type43_runtime.is_some(),
                 _ => crate::class49_death::source_profile(entity).is_some(),
             };
+            // The retained planner owns a peasant's other hits but stops at
+            // its death. A lethal hit on a Type9 whose style has a null death
+            // hook (DB80, then the class14 alternate) takes the native target,
+            // which authenticates the peasant and publishes that class14; the
+            // preflight writes nothing.
+            let native = native
+                || (entity.entity_type == 9
+                    && matches!(
+                        entities.preflight_dynamic_radial_target(
+                            player_hull,
+                            origin_raw,
+                            template,
+                            id
+                        ),
+                        Err(DynamicRadialUnresolved {
+                            reason: DynamicRadialUnresolvedReason::DeathCallbackPolicy(
+                                crate::entity_behavior::DeathCallbackPolicy::None
+                            ),
+                            ..
+                        })
+                    ));
             if native {
                 let mut native_outcome = DynamicRadialLiveOutcome::default();
                 let mut callbacks = PlayingNativeCallbacks {
