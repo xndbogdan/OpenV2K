@@ -2406,6 +2406,11 @@ fn run_game(
     // Session +290 after a phase-3 exit (FUN_00456F20 or FUN_00452770). The
     // next FUN_0044FFA0 visit consumes it and leaves for 4D0A30.
     let mut closing_scene_exit: Option<ClosingSceneDestination> = None;
+    // FUN_004561A0's entry snapshot (`None`: a new game's, before any
+    // checkpoint), carried through the closing leg, and the Klaus that
+    // then opens over the reloaded world.
+    let mut replay_world_entry: Option<Option<Box<v2k_game::save::NativeSaveRestore>>> = None;
+    let mut replay_world_cover: Option<MenuShell> = None;
     // Overlay 49 running in phase 3.
     let mut closing_scene: Option<v2k_game::closing_scene::ClosingScene> = None;
     // Session +38's pose, which 451710's 443260 saves after a world with a
@@ -3299,6 +3304,45 @@ fn run_game(
                         }
                         // Pause-only flows are inert in the frontend context.
                         ShellEvent::ResumeGame | ShellEvent::QuitToFrontend => {}
+                        ShellEvent::ReplayWorld if menu_is_paused => {
+                            // FUN_004561A0: FUN_0043C7D0 empties the menu at
+                            // once, FUN_004512E0 resumes, FUN_00448E50 restores
+                            // the entry snapshot and +290 leaves the world.
+                            let has_player = entity_manager
+                                .as_ref()
+                                .is_some_and(|manager| manager.player().is_some());
+                            let entry = if !has_player {
+                                Err("no player for 453C20's camera proxy".to_string())
+                            } else if save_baseline.iter().all(|&byte| byte == 0) {
+                                Ok(None)
+                            } else {
+                                v2k_game::save::NativeSaveRestore::decode(
+                                    &v2k_game::save::NativeCompatibilityPreview {
+                                        logical_level_id: u32::from_le_bytes(
+                                            save_baseline[0x20..0x24].try_into().expect("word"),
+                                        ),
+                                        state_payload: save_baseline,
+                                    },
+                                )
+                                .map(|restore| Some(Box::new(restore)))
+                                .map_err(|error| format!("{error:?}"))
+                            };
+                            match entry {
+                                Ok(entry) => {
+                                    log!("Replay this World: back to the entry snapshot");
+                                    replay_world_entry = Some(entry);
+                                    closing_scene_exit = Some(ClosingSceneDestination::ReplayWorld);
+                                }
+                                Err(error) => {
+                                    eprintln!("Replay this World blocked: {error}")
+                                }
+                            }
+                            keys_down.clear();
+                            mouse_buttons_down.clear();
+                            resume_play_after_pause!();
+                            next_state = Some(GameState::Playing);
+                        }
+                        ShellEvent::ReplayWorld => {}
                         ShellEvent::Cheat(v2k_game::cheats::CheatMenuAction::SkipToWorld(
                             world,
                         )) if menu_is_paused => {
@@ -3841,6 +3885,9 @@ fn run_game(
                 pending_cheat_skip = None;
                 save_baseline.fill(0);
                 map_save_checkpoint = None;
+                v2k_game::game_state::set_session_save_row(None);
+                replay_world_entry = None;
+                replay_world_cover = None;
                 session.cache.unload_level();
                 // The cumulative system Section-11 pool is immutable across
                 // worlds. Stop its voices above, but retain the decoded pool
@@ -3868,6 +3915,10 @@ fn run_game(
                 closing_scene_exit = None;
                 let lid = *level_id;
                 let purpose = std::mem::replace(purpose, LoadingPurpose::Normal);
+                // FUN_004515E0 (FUN_0042A850) turns the HUD setting on at every
+                // world start, and off past logical world 36 or below phase 5:
+                // Intro2 and the closing scene, both overlays past 48.
+                config.hud = lid < v2k_game::closing_scene::CLOSING_SCENE_LEVEL_ID;
                 // FUN_0044F8B0 clears the typed cheat digits on every entry.
                 cheat_code_entry = v2k_game::cheats::CheatCodeEntry::default();
                 pending_cheat_skip = None;
@@ -3973,7 +4024,10 @@ fn run_game(
                 native_entity_weapon_error_reported = false;
                 // 44F7E1 resets hint history for frontend/session selection.
                 // A456D10 campaign warp retains that history across worlds.
-                if !matches!(&purpose, LoadingPurpose::CampaignWarp { .. }) {
+                // A replayed world keeps it too: 4561A0 never reaches 44F7E1.
+                if !matches!(&purpose, LoadingPurpose::CampaignWarp { .. })
+                    && replay_world_cover.is_none()
+                {
                     gameplay_notifications.reset_session();
                 }
                 world_complete_results.reset();
@@ -4967,6 +5021,10 @@ fn run_game(
                     }
                     LoadingPurpose::Normal => GameState::Playing,
                 };
+                if let Some(mut shell) = replay_world_cover.take() {
+                    shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
+                    post_intro_world_cover = Some(shell);
+                }
                 // Loading is synchronous. Its wall time is neither a retail
                 // simulation tick nor part of Klaus's opening callback, so
                 // the next frame must begin from this boundary.
@@ -5004,8 +5062,14 @@ fn run_game(
                 skip |= pad_actions
                     .iter()
                     .any(|action| matches!(action, PadAction::Continue | PadAction::Pause));
+                // 455D30/455D60 skip through FUN_00452770: its +290 is
+                // consumed by this same pass's 44FFA0 before any actor, and
+                // its FUN_00456750 starts the full-frame flash over the leg.
+                if skip && !*exit_pending {
+                    main_base_level_abort.outer_frame_sequence.request();
+                }
 
-                if *exit_pending {
+                if *exit_pending || skip {
                     if let Some(ref mut sm) = sound_manager {
                         sm.stop_all();
                     }
@@ -5030,7 +5094,10 @@ fn run_game(
                     // world+274 and resets the 50 Hz clock through 428AD0
                     // before the first closing actor callback.
                     retail_clock.reset();
-                    state = GameState::PostIntro { shell };
+                    state = GameState::PostIntro {
+                        shell,
+                        elapsed: *elapsed,
+                    };
                     continue;
                 }
 
@@ -5575,10 +5642,10 @@ fn run_game(
 
                 // 503C0 writes world+290 after this frame's simulation.
                 // 44FFA0 consumes that latch on the next visit, before actors.
-                *exit_pending = skip || intro2_finished(retail_tick);
+                *exit_pending = intro2_finished(retail_tick);
             }
 
-            GameState::PostIntro { shell } => {
+            GameState::PostIntro { shell, elapsed } => {
                 retail_tick = retail_clock.advance(u64::from(elapsed_micros));
                 for event in &events {
                     match event {
@@ -5636,18 +5703,57 @@ fn run_game(
                     renderer.invalidate_terrain_cache();
                 }
                 world_fx.process_pending();
-                // Before load, the completed Intro2 black card stays resident.
-                renderer.begin_scene(RenderScene::World);
-                renderer.clear(0.0, 0.0, 0.0);
-                draw_klaus_handoff_overlay(
-                    &mut *renderer,
-                    KlausHandoffFrame {
-                        shell,
-                        cache: &session.cache,
-                        colors: &face_colors,
-                        retail_tick,
-                    },
+                let prepared_full_frame_sprite = prepare_full_frame_sprite_command(
+                    &*renderer,
+                    &session.cache,
+                    &mut main_base_level_abort.outer_frame_sequence,
                 );
+                let klaus = KlausHandoffFrame {
+                    shell,
+                    cache: &session.cache,
+                    colors: &face_colors,
+                    retail_tick,
+                };
+                if intro2_final_card {
+                    // The final card's flag (+28A) keeps 53760 on Klaus alone
+                    // until 453EE0 clears it: the black card stays resident.
+                    renderer.begin_scene(RenderScene::World);
+                    renderer.clear(0.0, 0.0, 0.0);
+                    draw_klaus_handoff_overlay(&mut *renderer, klaus);
+                    if let Some(command) = prepared_full_frame_sprite.as_ref() {
+                        draw_prepared_full_frame_sprite_command(&mut *renderer, command);
+                    }
+                    renderer.present();
+                } else {
+                    // A skipped Intro2: the world, as it stood, under Klaus
+                    // and the skip's flash.
+                    render_opening_cinematic(
+                        &mut *renderer,
+                        &session.cache,
+                        &face_colors,
+                        entity_manager
+                            .as_mut()
+                            .expect("retained Intro2 entity manager"),
+                        &camera,
+                        *elapsed,
+                        menu_fonts.as_ref(),
+                        sky_background.as_ref(),
+                        terrain_frames.as_ref(),
+                        water_frames.as_ref(),
+                        OpeningWorldEffects {
+                            terrain_lights: &mut terrain_lights,
+                            world_fx: &mut world_fx,
+                            explosion_lights: &[],
+                            full_frame_sprite: prepared_full_frame_sprite.as_ref(),
+                            native_viewport: intro_camera.native_viewport(),
+                            world_projection: Some(world_projection),
+                        },
+                        0,
+                        retail_tick,
+                        elapsed_micros,
+                        OpeningCinematicPresentation::ClosingLeg(klaus),
+                    );
+                }
                 play_world_audio(
                     WorldAudioFrame {
                         cache: &session.cache,
@@ -5662,7 +5768,6 @@ fn run_game(
                     &mut sound_manager,
                     &mut entity_positional_audio,
                 );
-                renderer.present();
                 if shell.take_transition_ready() {
                     // Keep --level useful as a direct world override
                     // for development; its default is retail level 13.
@@ -5791,6 +5896,8 @@ fn run_game(
                     },
                 );
                 if let Some(command) = prepared_full_frame_sprite.as_ref() {
+                    // Klaus's queued geometry drains before the flash's key zero.
+                    renderer.begin_scene(RenderScene::Menu);
                     draw_prepared_full_frame_sprite_command(renderer.as_mut(), command);
                 }
                 play_world_audio(
@@ -5823,6 +5930,33 @@ fn run_game(
                                     shell,
                                     carried_camera_raw,
                                 },
+                            }
+                        }
+                        ClosingSceneDestination::ReplayWorld => {
+                            // 453E00 -> the map, which +292 leaves at once
+                            // (4555A0) -> 4D0918 loads the restored world;
+                            // its 451710 visit opens Klaus over it.
+                            replay_world_cover = Some(shell);
+                            match replay_world_entry.take().flatten() {
+                                Some(restore) => GameState::Loading {
+                                    level_id: restore.logical_level_id
+                                        + WORLD_OVERLAY_CONTROL_SLOT_OFFSET,
+                                    purpose: LoadingPurpose::NativeSave { restore },
+                                },
+                                None => {
+                                    // A new game's snapshot (44F650): the
+                                    // first world, no cheats, a fresh craft.
+                                    primary_weapon = PrimaryWeapon::new();
+                                    targetter = TargetterRuntime::new(0);
+                                    weapon_inventory = WeaponInventory::new();
+                                    player_capabilities = PlayerCapabilities::default();
+                                    player_campaign_progress = PlayerCampaignProgress::default();
+                                    session_cheats = 0;
+                                    GameState::Loading {
+                                        level_id: FIRST_WORLD_LEVEL_ID,
+                                        purpose: LoadingPurpose::Normal,
+                                    }
+                                }
                             }
                         }
                         ClosingSceneDestination::FirstWorld => {
@@ -5868,6 +6002,20 @@ fn run_game(
                         (None, ClosingSceneDestination::ClosingScene { carried_camera_raw }) => {
                             IntroCameraController::at_rest(
                                 carried_camera_raw,
+                                session
+                                    .cache
+                                    .level_desc()
+                                    .map_or(0, |level| level.world_style),
+                                chase_camera.clone(),
+                            )
+                        }
+                        (None, ClosingSceneDestination::ReplayWorld) => {
+                            IntroCameraController::at_rest(
+                                entity_manager
+                                    .as_ref()
+                                    .and_then(|manager| manager.player())
+                                    .expect("Replay this World admits only a world with a player")
+                                    .position_raw(),
                                 session
                                     .cache
                                     .level_desc()
@@ -6031,6 +6179,17 @@ fn run_game(
                                 match checkpoint {
                                     Ok(checkpoint) => {
                                         save_baseline = checkpoint.state_payload;
+                                        // FUN_00450EF0 reads session +0x14 and
+                                        // the live rank; both are the snapshot's.
+                                        let name_end = save_baseline[..0x20]
+                                            .iter()
+                                            .position(|&byte| byte == 0)
+                                            .unwrap_or(0x1f);
+                                        v2k_game::game_state::set_session_save_row(Some((
+                                            String::from_utf8_lossy(&save_baseline[..name_end])
+                                                .into_owned(),
+                                            v2k_game::save::native_rank_score(&save_baseline),
+                                        )));
                                         map_save_checkpoint = Some(checkpoint);
                                         keys_down.clear();
                                         mouse_buttons_down.clear();
@@ -11833,6 +11992,9 @@ fn draw_gameplay_world(
 enum OpeningCinematicPresentation<'a> {
     Story,
     KlausCover(KlausHandoffFrame<'a>),
+    /// Descriptor `4D0A30`'s leg: Klaus and the flash over the world, with
+    /// no captions or emblem.
+    ClosingLeg(KlausHandoffFrame<'a>),
 }
 
 struct OpeningWorldEffects<'a> {
@@ -12276,11 +12438,22 @@ fn finish_opening_cinematic_frame(
 ) {
     // Klaus remains geometry in the first sorted queue: his positive outer
     // key drains before 53410's key zero. Captions/emblem are later overlays.
-    if let OpeningCinematicPresentation::KlausCover(frame) = presentation {
+    let closing_leg = matches!(presentation, OpeningCinematicPresentation::ClosingLeg(_));
+    if let OpeningCinematicPresentation::KlausCover(frame)
+    | OpeningCinematicPresentation::ClosingLeg(frame) = presentation
+    {
         draw_klaus_handoff_overlay(renderer, frame);
+        if full_frame_sprite.is_some() {
+            // Klaus's queued geometry drains before the flash's key zero.
+            renderer.begin_scene(RenderScene::Menu);
+        }
     }
     if let Some(command) = full_frame_sprite {
         draw_prepared_full_frame_sprite_command(renderer, command);
+    }
+    if closing_leg {
+        renderer.present();
+        return;
     }
     if let Some(fonts) = fonts {
         for caption in active_captions(retail_tick) {
@@ -17434,6 +17607,28 @@ fn render_list(
             mapping,
             tone,
         );
+
+        for (point, text) in &item.columns {
+            let column_chars = typewriter_chars_from_elapsed(reveal_ms, text.chars().count());
+            let Some((column_dx, _)) = f
+                .layout_point(*point)
+                .or_else(|| menu_text::layout_point(cache, *point))
+            else {
+                continue;
+            };
+            if column_chars > 0 {
+                draw_menu_text_toned(
+                    renderer,
+                    font,
+                    text,
+                    [start_x + column_dx, baseline],
+                    false,
+                    column_chars,
+                    mapping,
+                    tone,
+                );
+            }
+        }
 
         // Value column: original segmented glyph bar where requested, text
         // otherwise. Retail right-aligns the visible typewriter prefix at

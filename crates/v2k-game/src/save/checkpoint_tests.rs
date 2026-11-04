@@ -80,7 +80,7 @@ fn checkpoint_roundtrip_replaces_direct_native_and_preserves_parent_copy() {
         manager.slot(0).unwrap().source,
         SaveSource::NativeCompatibilityPreview
     );
-    assert_eq!(manager.slot_label(0), "Slot 1: Checkpoint");
+    assert_eq!(manager.slot_label(0), "Checkpoint");
     let encoded = fs::read(data.join("Slot00")).unwrap();
     let parsed = RetailSaveSlot::parse(&encoded).unwrap();
     assert!(parsed.full_load_is_valid());
@@ -254,7 +254,7 @@ fn portable_confirmed_overwrite_keeps_native_file_and_load_precedence() {
     assert_eq!(fs::read(root.join("Slot00")).unwrap(), native_before);
     let reloaded = SaveManager::load_all(&root, None);
     assert_eq!(reloaded.slot(0).unwrap().source, SaveSource::Portable);
-    assert_eq!(reloaded.slot_label(0), "Slot 1: Portable");
+    assert_eq!(reloaded.slot_label(0), "Portable");
     let _ = fs::remove_dir_all(root);
 }
 

@@ -408,14 +408,14 @@ impl SaveManager {
         self.slot(index).is_some()
     }
 
-    /// Get a display label for a slot. The saved name is the one retail copies
-    /// for an occupied row (`FUN_00449080`).
+    /// A slot row's name column (`FUN_0043BB20` at layout point 9): the saved
+    /// name retail copies for an occupied row (`FUN_00449080`).
     pub fn slot_label(&self, index: usize) -> String {
         if index == SETTINGS_SLOT {
             return "Used for game settings".into();
         }
         match self.slots.get(index).and_then(SaveSlotEntry::display_save) {
-            Some(save) => format!("Slot {}: {}", index + 1, save.level_name),
+            Some(save) => save.level_name.clone(),
             None => match self.slots.get(index) {
                 Some(SaveSlotEntry::Corrupt) => "Corrupt".into(),
                 Some(SaveSlotEntry::Unsupported(save)) => {
@@ -423,6 +423,20 @@ impl SaveManager {
                 }
                 _ => String::new(),
             },
+        }
+    }
+
+    /// `FUN_004490D0`'s rank score for an occupied (state 4) native row, as
+    /// the probe `FUN_00448E70` computes it from the saved state.
+    pub fn slot_rank_score(&self, index: usize) -> Option<i32> {
+        match self.slots.get(index)? {
+            SaveSlotEntry::Unsupported(save)
+            | SaveSlotEntry::ProbeValidLoadInvalid(save)
+            | SaveSlotEntry::Valid(save) => save
+                .native
+                .as_ref()
+                .map(|native| native_rank_score(&native.state_payload)),
+            _ => None,
         }
     }
 
@@ -555,6 +569,16 @@ fn load_retail_slot(
     SaveSlotEntry::Missing
 }
 
+/// `FUN_00456EF0` over a saved state: the worlds saved in its 37 control
+/// words (state `+0x1B4`, bit 0, `FUN_0042ECE0`) plus its controller byte
+/// `+0x126` (state `+0x14A`).
+pub fn native_rank_score(payload: &[u8; STATE_PAYLOAD_SIZE]) -> i32 {
+    let saved = (0..37)
+        .filter(|slot| payload[0x1b4 + slot * 4] & 1 != 0)
+        .count() as i32;
+    saved + i32::from(payload[0x14a])
+}
+
 /// One native save file (a retail `SlotNN` or a copy of one), read as the
 /// Load menu reads its rows; an error names why the menu would refuse it.
 pub fn read_native_save_file(path: &Path) -> Result<SaveSlot, String> {
@@ -613,6 +637,23 @@ fn parse_native_slot(bytes: &[u8], timestamp: &str) -> SaveSlotEntry {
 }
 
 #[cfg(test)]
+mod rank_score_tests {
+    use super::*;
+
+    #[test]
+    fn rank_score_counts_saved_worlds_and_controller_0x126() {
+        let mut payload = [0u8; STATE_PAYLOAD_SIZE];
+        assert_eq!(native_rank_score(&payload), 0);
+        // Bit 0 of a control word saves its world; other bits do not.
+        payload[0x1b4] = 1;
+        payload[0x1b4 + 4 * 36] = 0x41;
+        payload[0x1b4 + 4 * 5] = 0x02;
+        payload[0x14a] = 3;
+        assert_eq!(native_rank_score(&payload), 5);
+    }
+}
+
+#[cfg(test)]
 mod checkpoint_tests;
 
 #[cfg(test)]
@@ -662,7 +703,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(mgr.slot_label(0), "");
-        assert_eq!(mgr.slot_label(1), "Slot 2: Mediaeval");
+        assert_eq!(mgr.slot_label(1), "Mediaeval");
         assert!(mgr.is_occupied(1));
         assert!(!mgr.is_occupied(0));
 
@@ -670,7 +711,7 @@ mod tests {
         let mgr2 = SaveManager::load_all(&dir, None);
         assert_eq!(mgr2.slot(1).unwrap().level_id, 14);
         assert_eq!(mgr2.slot(1).unwrap().player, Some(portable_player));
-        assert_eq!(mgr2.slot_label(1), "Slot 2: Mediaeval");
+        assert_eq!(mgr2.slot_label(1), "Mediaeval");
 
         let overwrite_error = mgr
             .save_to_slot(
@@ -702,7 +743,7 @@ mod tests {
             },
         )
         .unwrap();
-        assert_eq!(mgr.slot_label(1), "Slot 2: Castle");
+        assert_eq!(mgr.slot_label(1), "Castle");
         let overwritten = SaveManager::load_all(&dir, None);
         assert_eq!(overwritten.slot(1).unwrap().level_id, 15);
         assert_eq!(overwritten.slot(1).unwrap().level_name, "Castle");
@@ -953,7 +994,7 @@ mod tests {
 
         let mut mgr = SaveManager::load_all(&root, None);
         assert_eq!(mgr.slot_status(0), SaveSlotStatus::Valid);
-        assert_eq!(mgr.slot_label(0), "Slot 1: Cistern");
+        assert_eq!(mgr.slot_label(0), "Cistern");
         assert!(mgr.is_occupied(0));
         assert!(!mgr.is_loadable(0));
         assert!(mgr.slot(0).is_none());
@@ -1119,7 +1160,7 @@ mod tests {
         assert!(loaded_mgr.is_occupied(0));
         assert!(loaded_mgr.is_loadable(0));
         assert_eq!(loaded_mgr.slot(0).unwrap().level_id, 13);
-        assert_eq!(loaded_mgr.slot_label(0), "Slot 1: Peasant Level");
+        assert_eq!(loaded_mgr.slot_label(0), "Peasant Level");
 
         let _ = fs::remove_dir_all(&root);
     }

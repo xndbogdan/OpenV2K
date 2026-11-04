@@ -101,6 +101,19 @@ its clock, consumes the flag, and dispatches event 2 before ticking actors.
 The port retains this exit latch instead of using a floating-point duration
 comparison to leave during the same visit.
 
+Skipping Intro2 (Space or Return through `455D30`, Escape or P through
+`455D60`) runs `FUN_00452770`: it sets `+290` and requests the full-frame
+flash (`FUN_00456750`). The key reaches the session before that pass's
+44FFA0, which consumes `+290` at once: no Intro2 actor ticks in the skip
+pass, whose frame is already the closing leg's under the flash's first,
+opaque grey sprite. The leg draws the world as the skip left it, under
+Klaus's closing morph (unless the final card's flag `+28A` was up, which
+keeps the black card), with no captions or emblem; the flash covers both,
+as its key zero drains after Klaus. In the lab the skip at pass 800 shows
+grey, the washed world at 801 to 805, the world at 808 and Klaus from 812;
+Level 1 loads at 854. The port leaves on the skip frame and draws the leg
+from the next, the flash first among them.
+
 The exact commands, retained task fields, and descriptor transitions are in
 [the Klaus handoff contract](MENU_SYSTEM.md#persistent-klaus-animation-intro-sequence-behavior).
 
