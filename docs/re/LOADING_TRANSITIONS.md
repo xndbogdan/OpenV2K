@@ -364,6 +364,13 @@ Renders during OVL load:
    - String index 35 (0x23): **"Retrying"** when `param_4 > 2`
 3. Text centered via `FUN_00470f80` (measure width) → `screen_center_x - width/2`
 
+While a world loads, `FUN_004515E0` starts a one-shot WinMM timer worker
+(`FUN_00457170`, stopped by `FUN_004571B0`; the frontend's are
+`FUN_0042D7F0` and `FUN_0042D830`) that re-arms itself and redraws the
+loading card as its clock advances (in play also session `+270`). The port
+loads in one blocking step, so its card holds still for the load's
+duration. Not ported.
+
 ### Briefing Sequence
 
 **Timed tag format** in Section 2 strings:

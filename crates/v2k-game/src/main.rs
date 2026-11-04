@@ -951,6 +951,15 @@ fn gameplay_key_transition(
     }
 }
 
+/// The craft set's fire rows (`0x4C2B38` rows 3 to 5): `/` with A up, A
+/// with `/` and Left Shift up, Return with Left Alt up.
+fn keyboard_fire_held(keys: &HashSet<Keycode>) -> bool {
+    let held = |key| keys.contains(&key);
+    (held(Keycode::Slash) && !held(Keycode::A))
+        || (held(Keycode::A) && !held(Keycode::Slash) && !held(Keycode::LShift))
+        || (held(Keycode::Return) && !held(Keycode::LAlt))
+}
+
 fn weapon_cycle_forward_held(keys_down: &HashSet<Keycode>) -> bool {
     [Keycode::B, Keycode::PageDown, Keycode::LShift, Keycode::L]
         .iter()
@@ -2411,6 +2420,8 @@ fn run_game(
     // then opens over the reloaded world.
     let mut replay_world_entry: Option<Option<Box<v2k_game::save::NativeSaveRestore>>> = None;
     let mut replay_world_cover: Option<MenuShell> = None;
+    // The fire descriptor's shared counter, for FUN_004443B0's press edge.
+    let mut fire_descriptor_was_held = false;
     // Overlay 49 running in phase 3.
     let mut closing_scene: Option<v2k_game::closing_scene::ClosingScene> = None;
     // Session +38's pose, which 451710's 443260 saves after a world with a
@@ -6927,6 +6938,25 @@ fn run_game(
                     );
                 }
 
+                // FUN_004443B0, the fire descriptor's callback: a press of any
+                // fire source while Ctrl holds descriptor 0x4FE6A0
+                // (controller +0x44) runs the deploy too.
+                let fire_keys: HashSet<Keycode> = keys_down
+                    .iter()
+                    .copied()
+                    .chain(pad_bindings.held_keys())
+                    .collect();
+                let fire_descriptor_held = keyboard_fire_held(&fire_keys)
+                    || joystick.is_some_and(JoystickSample::fire)
+                    || mouse_buttons_down.contains(&MouseButton::Right);
+                if fire_descriptor_held
+                    && !fire_descriptor_was_held
+                    && (keys_down.contains(&Keycode::LCtrl) || keys_down.contains(&Keycode::RCtrl))
+                {
+                    megablast_deploys += 1;
+                }
+                fire_descriptor_was_held = fire_descriptor_held;
+
                 // FUN_00444400 for each press of the deploy.
                 for _ in 0..std::mem::take(&mut megablast_deploys) {
                     if em.player().is_none() || player_hull.dying {
@@ -8037,7 +8067,7 @@ fn run_game(
                 let fire_allowed = !player_hull.dying && pause_fire_lockout_micros == 0;
                 let primary_trigger = PrimaryTriggerInput {
                     source_a: fire_allowed
-                        && (craft_keys.contains(&Keycode::Return)
+                        && (keyboard_fire_held(&craft_keys)
                             || joystick.is_some_and(JoystickSample::fire)),
                     source_b: fire_allowed && mouse_buttons_down.contains(&MouseButton::Right),
                 };
@@ -20352,5 +20382,26 @@ mod menu_visual_tests {
 
         assert!((screen_y - (120.0 + billboard_offset)).abs() < 0.01);
         assert!(world_y > 0.0, "negative screen offset must lift Klaus");
+    }
+}
+
+#[cfg(test)]
+mod craft_fire_key_tests {
+    use super::*;
+
+    #[test]
+    fn fire_rows_follow_the_craft_table_exclusions() {
+        let keys = |list: &[Keycode]| list.iter().copied().collect::<HashSet<_>>();
+        assert!(keyboard_fire_held(&keys(&[Keycode::Return])));
+        assert!(!keyboard_fire_held(&keys(&[
+            Keycode::Return,
+            Keycode::LAlt
+        ])));
+        assert!(keyboard_fire_held(&keys(&[Keycode::Slash])));
+        assert!(keyboard_fire_held(&keys(&[Keycode::A])));
+        assert!(!keyboard_fire_held(&keys(&[Keycode::A, Keycode::LShift])));
+        // The chord row takes A and `/` together; neither fire row matches.
+        assert!(!keyboard_fire_held(&keys(&[Keycode::A, Keycode::Slash])));
+        assert!(!keyboard_fire_held(&keys(&[Keycode::LCtrl])));
     }
 }
