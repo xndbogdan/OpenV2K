@@ -427,6 +427,7 @@ records its user-directed status and the static retail distinction.
 | Routine | Does |
 | --- | --- |
 | `FUN_0044AA50` | the radar's terrain listener, registered by `FUN_0044A500` for a cell's flag `0x08` change (`FUN_004337E0`) and attribute clear (`FUN_00433860`): when the cell's attribute is of kind 8, removes radar coverage around it (`FUN_0044A8D0(x, z, -1)`) |
+| `FUN_00437550` | the radar redraw after a sea-level change, run each frame by `FUN_004374B0` after the static programs (and reset with `1` at a world load): when the terrain's sea word differs from the one it saw, it notes the current block as the start; while the next block differs from the start it refreshes block `b`'s 256 cells `(b % 16 + 16i, b / 16 + 16j)` through `FUN_0044A890` (X outer) and steps `b` (mod 256), so flooded land turns to water across the map over 256 frames. Port: `ResourceCache::advance_radar_sea_refresh`, with the shared random stream |
 | `FUN_0044BC80` | copies the radar palette: 32 colours from the colour table (`004FE63C`) starting at `004DF114`, then its entries 31, 34 and 33 |
 | `FUN_0044B950` | plots a radar blip: the centre pixel solid unless flag 2; with flag 1 a halo, the four edge neighbours at an even blend (`FUN_0044B6F0`) and the four diagonal ones at a quarter (`FUN_0044B810`), within the radar's width `004EF128` and height `004DF110` |
 | `FUN_0044B6F0` | plots a radar pixel at an even blend of its colour with the pixel already there, within the radar's bounds, in the surface's channel layout |

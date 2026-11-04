@@ -6868,6 +6868,12 @@ fn run_game(
                                 "applied node batch token must remain current"
                             );
                         }
+                        // 374B0 then redraws one radar block after a sea change.
+                        if let Err(error) = session.cache.advance_radar_sea_refresh(&mut || {
+                            world_fx.next_shared_retail_random_u16()
+                        }) {
+                            eprintln!("Radar redraw after the sea change stopped: {error}");
+                        }
                         if session.cache.take_level_terrain_presentation_dirty() {
                             renderer.invalidate_terrain_cache();
                         }
@@ -8832,6 +8838,24 @@ fn run_game(
                     // intentionally empty. WorldFx already consumed the
                     // parent without a visual or damage delivery.
                     log!("Class-87 static impact: {static_impact:?}");
+                }
+
+                // FUN_00411A80 opens with FUN_00417130: a style-5 world's sea
+                // burns every body under it before the pair walker.
+                let (sea_damaged, sea_blocked) = v2k_game::harmful_sea::apply_harmful_sea(
+                    v2k_game::attached_particle_damage::AttachedParticleDamageFrame {
+                        resources: &mut session.cache, entities: em, world_fx: &mut world_fx,
+                        static_damage: &mut static_damage,
+                        scheduler: &mut specialized_actor_tasks,
+                        notifications: &mut gameplay_notifications, retail_tick,
+                        world: v2k_game::attached_particle_damage::AttachedParticleDamageWorld::Playing { player_hull: &mut player_hull, extra_lives: RetailRuntimeValue::Known(player_campaign_progress.extra_lives()) },
+                    },
+                );
+                for (id, amount) in sea_damaged {
+                    log!("Harmful sea: body {id} takes {amount}");
+                }
+                for (id, block) in sea_blocked {
+                    eprintln!("Harmful sea stopped at unresolved data for body {id} (each later body of its type is skipped too): {block:?}");
                 }
 
                 // Native surface and static phases precede

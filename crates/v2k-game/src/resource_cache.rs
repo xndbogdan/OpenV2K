@@ -42,6 +42,57 @@ pub struct ResourceCache {
     /// `FUN_00438F60`'s subscriptions in network play; `None` outside it and
     /// while a peer's terrain is applied (`004DC9B4`).
     network_cell_changes: Option<Vec<NetworkCellChange>>,
+    /// `FUN_00437550`'s words: the sea it last saw (`0x004CAD70`), the block
+    /// a redraw started at (`0x004DC68C`) and the next block (`0x004DC688`).
+    radar_sea_refresh: RadarSeaRefresh,
+}
+
+/// After the sea word changes, `FUN_00437550` redraws the radar one block a
+/// frame: block `b` refreshes the 256 cells `(b % 16 + 16i, b / 16 + 16j)`,
+/// X outer, until the next block is the one the change started at.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct RadarSeaRefresh {
+    sea_word: i32,
+    start_block: i32,
+    block: i32,
+}
+
+impl RadarSeaRefresh {
+    /// `FUN_00437550(1)` at a world load.
+    pub(crate) fn new(sea_word: i32) -> Self {
+        Self {
+            sea_word,
+            start_block: 0,
+            block: 0,
+        }
+    }
+
+    /// `FUN_00437550(0)`: this frame's cells, if a redraw is under way.
+    pub(crate) fn next_block(&mut self, sea_word: i32) -> Option<Vec<[i16; 2]>> {
+        if self.sea_word == sea_word {
+            if self.start_block == self.block {
+                return None;
+            }
+        } else {
+            self.start_block = self.block;
+            self.sea_word = sea_word;
+        }
+        let mut positions = Vec::with_capacity(256);
+        let mut x = ((self.block & 0x0f) << 8) as u32;
+        for _ in 0..16 {
+            let mut z = (((self.block >> 4) & 0xff) << 8) as u32;
+            for _ in 0..16 {
+                z = z.wrapping_add(0x1000);
+                positions.push([x as u16 as i16, z as u16 as i16]);
+            }
+            x = x.wrapping_add(0x1000);
+        }
+        self.block += 1;
+        if self.block > 0xff {
+            self.block = 0;
+        }
+        Some(positions)
+    }
 }
 
 /// One cell-change notification (`FUN_004337A0`) that network play sends on:
@@ -261,6 +312,7 @@ impl ResourceCache {
             level_terrain_radar: None,
             level_terrain_presentation_dirty: false,
             network_cell_changes: None,
+            radar_sea_refresh: RadarSeaRefresh::default(),
         }
     }
 
@@ -415,6 +467,25 @@ impl ResourceCache {
             system_layout_receipt: None,
         });
         self.level_abort_terrain_transformed = false;
+        self.radar_sea_refresh =
+            RadarSeaRefresh::new(self.level_terrain().map_or(0, |terrain| terrain.header[0]));
+    }
+
+    /// `FUN_004374B0`'s `FUN_00437550(0)`: one block of the radar redraw that
+    /// follows a sea-level change, with the shared random stream. Returns the
+    /// cells redrawn, or the radar's error when it is not resident.
+    pub fn advance_radar_sea_refresh(
+        &mut self,
+        next_random: &mut impl FnMut() -> u16,
+    ) -> Result<usize, crate::gameplay_radar::TerrainRadarError> {
+        let Some(sea_word) = self.level_terrain().map(|terrain| terrain.header[0]) else {
+            return Ok(0);
+        };
+        let Some(positions) = self.radar_sea_refresh.next_block(sea_word) else {
+            return Ok(0);
+        };
+        self.refresh_level_terrain_radar(&positions, next_random)
+            .map(|_| positions.len())
     }
 
     /// Unload the current level, keeping preload and system resources.
@@ -2579,5 +2650,38 @@ mod tests {
                 .map(|(level, local, entry)| (level, local, entry.rgb555)),
             Some((7, 0, 0x0700))
         );
+    }
+}
+
+#[cfg(test)]
+mod radar_sea_refresh_tests {
+    use super::RadarSeaRefresh;
+
+    #[test]
+    fn a_sea_change_redraws_every_cell_once_one_block_a_frame() {
+        let mut refresh = RadarSeaRefresh::new(-0x1000);
+        assert_eq!(refresh.next_block(-0x1000), None);
+        let first = refresh
+            .next_block(-0x0F00)
+            .expect("the change starts a redraw");
+        assert_eq!(first.len(), 256);
+        assert_eq!(first[0], [0, 0x1000]);
+        assert_eq!(first[15], [0, 0]);
+        assert_eq!(first[16], [0x1000, 0x1000]);
+        let mut cells = std::collections::BTreeSet::new();
+        for position in first {
+            cells.insert((position[0] as u16 >> 8, position[1] as u16 >> 8));
+        }
+        let mut blocks = 1;
+        while let Some(positions) = refresh.next_block(-0x0F00) {
+            blocks += 1;
+            for position in positions {
+                cells.insert((position[0] as u16 >> 8, position[1] as u16 >> 8));
+            }
+        }
+        assert_eq!(blocks, 256);
+        assert_eq!(cells.len(), 256 * 256);
+        // A later change starts again from the block the last one ended on.
+        assert!(refresh.next_block(-0x0E00).is_some());
     }
 }

@@ -73,6 +73,7 @@ pub mod gkl_common_mover;
 pub mod go_to_job;
 pub mod go_to_job_owner;
 pub mod guard_location_owner;
+pub mod harmful_sea;
 pub mod hive_birth;
 pub mod hive_controller;
 pub mod hive_death;

@@ -417,11 +417,6 @@ pub const METEOR_WAKE_DRAW_SCALE_RAW: u16 =
 pub const METEOR_WAKE_SIZE_JITTER_DIVISOR_RAW: u8 =
     PARTICLE_DESCRIPTORS[METEOR_WAKE_CLASS as usize].size_jitter_divisor_raw();
 pub const METEOR_WAKE_INITIAL_VELOCITY_RAW: [i32; 3] = [0; 3];
-/// Smooth equivalent of strength-3, mass-5 drag applied after integration.
-///
-/// Retail computes `scale=(dt_us*3)/(5*8)` and then
-/// `v -= (scale*v)>>15` independently for each raw velocity component.
-pub const METEOR_TRAIL_DRAG_PER_SECOND: f32 = 2.288_818_4;
 
 /// Shared layered explosion emitted by `FUN_00441200` for staged model
 /// destruction. The first scatter uses class 30; the four independent debris
@@ -2280,6 +2275,10 @@ pub struct WorldFx {
     client_births: bool,
     /// The level weather's process-global words.
     weather: weather::WeatherState,
+    /// The wind and drag globals `FUN_0044F0C0` reads (`0x004F7194..AD`),
+    /// as the environment frame last published them.
+    particle_wind: Option<crate::common_mover::environment::CommonWindDrag>,
+    wind_trail_stop_reported: bool,
 }
 
 /// What these effects send to the other machines of a network game.
@@ -2349,6 +2348,14 @@ impl WorldFx {
         Self::default()
     }
 
+    /// Publish the wind and drag `FUN_0044F0C0` reads this frame.
+    pub(crate) fn publish_particle_wind(
+        &mut self,
+        wind: crate::common_mover::environment::CommonWindDrag,
+    ) {
+        self.particle_wind = Some(wind);
+    }
+
     pub(crate) fn advance_wind_phase(&mut self, elapsed_micros: u32) -> u32 {
         self.wind_phase.advance(elapsed_micros)
     }
@@ -2377,6 +2384,8 @@ impl WorldFx {
             network_client: self.network_client,
             client_births: self.client_births,
             weather: self.weather,
+            particle_wind: self.particle_wind,
+            wind_trail_stop_reported: self.wind_trail_stop_reported,
         }
     }
 
@@ -5551,6 +5560,15 @@ fn uses_class_87_sweep_callbacks(source_class: u8) -> bool {
             && descriptor.raw_u32(0x20) == CLASS_87_DAMAGE_PACKET_VA
             && descriptor.raw_u32(0x24) == CLASS_87_STATIC_HIT_CALLBACK_VA
     })
+}
+
+/// Class 31's update `FUN_0043F290`: `FUN_0044F0C0` with mass 5.
+const WIND_TRAIL_UPDATE_CALLBACK_VA: u32 = 0x0043_F290;
+const WIND_TRAIL_MASS_RAW: u16 = 5;
+
+fn uses_wind_trail_update_callback(source_class: u8) -> bool {
+    particle_descriptor(source_class)
+        .is_some_and(|descriptor| descriptor.raw_u32(0x14) == WIND_TRAIL_UPDATE_CALLBACK_VA)
 }
 
 fn uses_random_drift_update_callback(source_class: u8) -> bool {
@@ -14369,15 +14387,51 @@ mod tests {
         assert_eq!(particle.current_sprite_id(), 895);
 
         particle.age_ticks = 0.0;
+        particle.velocity = raw_velocity_to_world([0x400, -0x300, 0x100]);
         let before = particle;
-        let dt = 0.02;
         let mut fx = WorldFx::new();
         fx.particles.test_allocate(particle);
+        // Without a published wind the drag is held with a logged stop.
         fx.update(ParticleUpdateRequest::dry(20_000, 1));
+        let held = fx.test_particles_in_virgin_birth_order()[0];
+        assert_eq!(held.velocity, before.velocity);
+
+        // Every world authors drag 3 (Section 13 +0x94); with no wind 44F0C0
+        // subtracts (factor * v) >> 15, factor = 20000 * 3 / (5 * 8) = 1500,
+        // after the word integration.
+        let mut fx = WorldFx::new();
+        fx.publish_particle_wind(
+            crate::common_mover::environment::CommonWindDrag::from_environment(
+                crate::entity::CommonEnvironmentPhysics {
+                    drag_strength: 3,
+                    ..Default::default()
+                },
+            ),
+        );
+        fx.particles.test_allocate(before);
+        let terrain = flat_terrain(-100, 0);
+        fx.update(ParticleUpdateRequest::new(
+            20_000,
+            1,
+            ParticleEnvironment::Terrain(TerrainCollisionContext {
+                terrain: &terrain,
+                terrain_objects: None,
+                ground_response_selectors: [0; 8],
+                water_response_selectors: [0; 8],
+            }),
+        ));
         let after = fx.test_particles_in_virgin_birth_order()[0];
-        assert!((after.position[1] - (before.position[1] + before.velocity[1] * dt)).abs() < 1e-5);
-        let drag_factor = (1.0 - METEOR_TRAIL_DRAG_PER_SECOND * dt).max(0.0);
-        assert!((after.velocity[1] - before.velocity[1] * drag_factor).abs() < 1e-5);
+        let start = world_position_to_raw(before.position);
+        let step = [0x400, -0x300, 0x100].map(|v: i32| (v * (20_000 >> 5) >> 15) as i16);
+        assert_eq!(
+            world_position_to_raw(after.position),
+            std::array::from_fn(|axis| start[axis].wrapping_add(step[axis]))
+        );
+        let raw = after.velocity.map(world_velocity_component_to_raw);
+        assert_eq!(
+            raw,
+            [0x400, -0x300, 0x100].map(|v: i32| v - ((1500 * v) >> 15))
+        );
     }
 
     #[test]
@@ -14455,8 +14509,12 @@ mod tests {
 
         let after = fx.test_particles_in_virgin_birth_order()[0];
         assert_eq!(after.age_ticks, before.age_ticks);
-        assert!(
-            (after.position[1] - (before.position[1] + before.velocity[1] * 0.02)).abs() < 1.0e-6
+        // Class 31 integrates its signed words (40120).
+        let vertical = world_velocity_component_to_raw(before.velocity[1]);
+        assert_eq!(
+            world_position_to_raw(after.position)[1],
+            world_position_to_raw(before.position)[1]
+                .wrapping_add((vertical * (20_000 >> 5) >> 15) as i16)
         );
     }
 
@@ -14494,8 +14552,12 @@ mod tests {
 
         let after = fx.test_particles_in_virgin_birth_order()[0];
         assert_eq!(after.age_ticks, before.age_ticks);
-        assert!(
-            (after.position[1] - (before.position[1] + before.velocity[1] * 0.125)).abs() < 1.0e-6
+        // Class 31 integrates its signed words (40120).
+        let vertical = world_velocity_component_to_raw(before.velocity[1]);
+        assert_eq!(
+            world_position_to_raw(after.position)[1],
+            world_position_to_raw(before.position)[1]
+                .wrapping_add((vertical * (125_000 >> 5) >> 15) as i16)
         );
     }
 

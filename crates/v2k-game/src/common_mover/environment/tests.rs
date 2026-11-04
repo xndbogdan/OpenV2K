@@ -154,3 +154,39 @@ fn gust_sine_preserves_quadrants_signed_rounding_and_process_phase_wrap() {
     fx.clear();
     assert_eq!(fx.advance_wind_phase(201), 100);
 }
+
+#[test]
+fn particle_wind_pulls_toward_the_height_scaled_wind_and_shelters_below_ground() {
+    let wind = CommonWindDrag {
+        wind: Wind::Current {
+            vector_raw: [-300, 0, -300],
+            max_height_raw: 2000,
+            above_sea: true,
+        },
+        strength: 3,
+    };
+    let ground = terrain(0, -0x1000);
+    // 0x100 above flat ground: scale 0x2000, target -300 * 0x2000 >> 15 = -75;
+    // factor 20000 * 3 / 40 = 1500.
+    let mut velocity = [100, 0, -100];
+    apply_particle_wind_drag_raw(&mut velocity, [0, 0x100, 0], wind, &ground, 5, 20_000);
+    let pull = |v: i16, target: i16| v.wrapping_add(((1500 * i32::from(target - v)) >> 15) as i16);
+    assert_eq!(velocity, [pull(100, -75), pull(0, 0), pull(-100, -75)]);
+
+    // Below the terrain upstream: no drag at all.
+    let mut sheltered = [100, 0, -100];
+    apply_particle_wind_drag_raw(&mut sheltered, [0, -0x10, 0], wind, &ground, 5, 20_000);
+    assert_eq!(sheltered, [100, 0, -100]);
+
+    // On the other side of the sea the plain drag applies.
+    let mut under = [100, 0, -100];
+    apply_particle_wind_drag_raw(&mut under, [0, -0x2000, 0], wind, &ground, 5, 20_000);
+    assert_eq!(
+        under,
+        [
+            100 - ((1500 * 100_i32) >> 15) as i16,
+            0,
+            -100 - ((1500 * -100_i32) >> 15) as i16
+        ]
+    );
+}

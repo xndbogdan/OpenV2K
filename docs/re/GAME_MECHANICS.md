@@ -1691,3 +1691,19 @@ wires ordinary particle lights into gameplay and Intro2; only the separately
 proven point/explosion callers and the generic projection/lifecycle gate remain.
 
 ---
+
+## Harmful sea (world style 5)
+
+`FUN_00411A80` opens with `FUN_00417130`, before its pair walker. When
+`FUN_0042F230` finds the world's style (Section 13 `+0x48`) is 5 (Arena5,
+Alien1, Volcano, Alien2, Alien3), every live body whose state holds `0x8800`
+and not `0x4000` takes packet `{3, 0, 40000, 0, -3}` through `FUN_00415040`
+at ratio `(world clock >> 2) / 0xFFFF`, if its state holds `0x200000` or the
+sea word is above its Y less half its active model's header `+0x0A` word. The
+damage therefore grows with the time spent in the world. In the retail lab's
+Alien2 run (Skip to World) the wandering Type119 dips under the sea at world
+clock 1308 and takes 74 a tick; the port's `harmful_sea` applies the same
+packet and ratio (its Type119 wanders elsewhere and sinks earlier). Bodies
+whose state word the port does not yet hold (Alien2's Type67 and Type6) stop
+with one logged line per type and take no sea damage.
+
