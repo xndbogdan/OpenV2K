@@ -1390,6 +1390,20 @@ over it by 1710. The port opens the map at the exit and loads at Space,
 without these Klaus legs; P on the save menu stays a logged stop until they
 are ported.
 
+What each leg runs (descriptors `4D0A30`, `4D0AA0`, `4D0AD8`): the exit leg
+draws through the world's list (`4D07A8`) while `FUN_00453E00` waits. The
+map's tick `FUN_004555A0` ticks Klaus (session `+2AC`) every frame and resets
+the eye's springs before its ED10 on the proxy (`FUN_0040F390`), and its
+draw list (`4D07E8`) draws the world's view and its actors, Klaus among them,
+before the map itself (`FUN_00454390`). The map's entry gives Klaus his
+command 2 with a 1-us actor visit, not the load's 125,000-us one. The save
+menu's tick `FUN_004558A0` runs the clock, the menu transition, Klaus and
+ED10; its list (`4D0810`) draws the world's view and actors before the menu.
+In the lab the map shows at 1609 and 1612 with Klaus out of sight; at 1620,
+twelve passes after Space, only the tip of Klaus's closing shows at the
+bottom; and after the load the map's prompt ("Press S to Save, Space to
+Continue") still shows over the glide (1670) and play's first frames (1680).
+
 | Routine | Does |
 | --- | --- |
 | `FUN_00454C00` | the progress map's point transform (from `FUN_00454520`): rotates (x, y) by a Q15 sine and cosine and scales each axis by the screen's scale (`004FE620`) over 256 |
