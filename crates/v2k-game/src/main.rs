@@ -4298,6 +4298,49 @@ fn run_game(
                         );
                     }};
                 }
+                // Retail's timer interrupts the construction anywhere. The
+                // port runs a callback that fell due between construction
+                // steps, and builds the terrain atlases (most of the time)
+                // on a worker while the timer runs here.
+                macro_rules! card_yield {
+                    ($step:literal) => {
+                        if let Some(timer) = card_timer.as_mut().filter(|timer| timer.is_due()) {
+                            let late = timer.due.elapsed();
+                            if late >= Duration::from_millis(1) {
+                                eprintln!(
+                                    "Loading card: a callback ran {} us late, after world {lid}'s {}",
+                                    late.as_micros(),
+                                    $step
+                                );
+                            }
+                            closed_card_callback!(timer)
+                        }
+                    };
+                }
+                macro_rules! beside_card {
+                    ($work:expr) => {
+                        match card_timer.as_mut() {
+                            None => $work,
+                            Some(timer) => std::thread::scope(|scope| {
+                                let (sender, receiver) = std::sync::mpsc::channel();
+                                scope.spawn(move || {
+                                    let _ = sender.send($work);
+                                });
+                                loop {
+                                    match receiver.recv_timeout(timer.until_due()) {
+                                        Ok(done) => break done,
+                                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                            closed_card_callback!(timer)
+                                        }
+                                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                                            panic!("world {lid}'s construction worker stopped")
+                                        }
+                                    }
+                                }
+                            }),
+                        }
+                    };
+                }
                 let loaded = match card_timer.as_mut() {
                     None => session.load_level_by_id(lid, startup_world_variant),
                     Some(timer) => {
@@ -4487,10 +4530,18 @@ fn run_game(
                         renderer.destroy_texture(texture);
                     }
                 }
-                terrain_frames = v2k_game::terrain_render::build_terrain_frames(
-                    &session.cache,
-                    renderer.as_mut(),
-                );
+                card_yield!("level checks and music");
+                let cache = &session.cache;
+                let prepared_terrain =
+                    beside_card!(v2k_game::terrain_render::prepare_terrain_frames(cache));
+                terrain_frames = prepared_terrain.and_then(|prepared| {
+                    v2k_game::terrain_render::upload_terrain_frames(
+                        prepared,
+                        &session.cache,
+                        renderer.as_mut(),
+                    )
+                });
+                card_yield!("terrain upload");
                 match &terrain_frames {
                     Some(_) => log!("Terrain: 120 canonical + 5 infection shapes loaded"),
                     None => log!("Terrain: transition sprites unavailable — diagnostic fallback"),
@@ -4529,6 +4580,7 @@ fn run_game(
                         }
                     }
                 }
+                card_yield!("sky and water frames");
                 let load_time = start.elapsed();
                 log!(
                     "Level {} loaded in {:.1}ms",
@@ -4703,6 +4755,7 @@ fn run_game(
                     }
                     manager
                 };
+                card_yield!("actor construction");
                 if let Some((reward, player)) = time_trophy_load_reward.zip(em.player()) {
                     queue_trophy_acquisition_feedback(
                         reward,
@@ -4731,6 +4784,7 @@ fn run_game(
                     state = GameState::ReturningToFrontend;
                     continue 'main_loop;
                 }
+                card_yield!("radar");
                 // 451C00 runs only with a player (FUN_00450390 zero).
                 if purpose.uses_authored_world_publication(lid)
                     && !matches!(purpose, LoadingPurpose::ClosingScene { .. })
@@ -4813,6 +4867,7 @@ fn run_game(
                         },
                     );
                 }
+                card_yield!("cargo and HUD resources");
                 em.set_hover_physics(hover_physics);
                 if lid == INTRO2_LEVEL_ID || matches!(purpose, LoadingPurpose::ClosingScene { .. })
                 {
@@ -4999,6 +5054,7 @@ fn run_game(
                 // The old manager was cleared before construction.451C00 may
                 // already own authored class0 cargo or a native ballast birth;
                 // preserve those leases while adopting the remaining families.
+                card_yield!("player and camera setup");
                 match specialized_actor_tasks.adopt_fresh_level1_type9_selected(&mut em) {
                     Ok(0) => {}
                     Ok(adopted) => log!(
@@ -5159,17 +5215,7 @@ fn run_game(
                 retail_clock.reset();
                 retail_tick = retail_clock.current();
                 queen_closing_move_applied = false;
-                // The world's construction runs on this thread, so retail's
-                // callbacks during it (one per period) are not ported: a
-                // callback that fell due runs once now, before Klaus's
-                // command 2, as a late timer would.
-                if let Some(timer) = card_timer.as_mut().filter(|timer| timer.is_due()) {
-                    eprintln!(
-                        "Loading card: world {lid}'s construction ran {} ms past the card's timer;                          its callbacks during construction are not ported, one runs late",
-                        timer.due.elapsed().as_millis()
-                    );
-                    closed_card_callback!(timer)
-                }
+                card_yield!("task adoption");
                 state = match purpose {
                     LoadingPurpose::BeginIntro { mut shell } => {
                         intro_camera = IntroCameraController::default();
