@@ -491,9 +491,16 @@ impl PadBindings {
         }
     }
 
-    /// Fold one pad button change in, appending the actions it starts: the
-    /// matcher `FUN_00472320`.
-    pub fn button(&mut self, button: PadButton, pressed: bool, started: &mut Vec<PadAction>) {
+    /// Fold one pad button change in, appending the actions it starts and
+    /// those it ends: the matcher `FUN_00472320`, which calls a descriptor's
+    /// handler on both edges of its count of satisfied records.
+    pub fn button(
+        &mut self,
+        button: PadButton,
+        pressed: bool,
+        started: &mut Vec<PadAction>,
+        ended: &mut Vec<PadAction>,
+    ) {
         let bit = 1 << input_of(button);
         if pressed {
             self.held |= bit;
@@ -502,12 +509,23 @@ impl PadBindings {
         }
         let held = self.held;
         let records: Vec<&PadRecord> = self.records().collect();
-        for (record, active) in records.into_iter().zip(self.active.iter_mut()) {
+        let was_active: Vec<PadAction> = records
+            .iter()
+            .zip(&self.active)
+            .filter(|(_, &active)| active)
+            .map(|(record, _)| record.action)
+            .collect();
+        for (record, active) in records.iter().zip(self.active.iter_mut()) {
             let now = record.satisfied(held);
             if now && !*active && !record.action.is_held() {
                 started.push(record.action);
             }
             *active = now;
+        }
+        for action in was_active {
+            if !action.is_held() && !ended.contains(&action) && !self.is_held(action) {
+                ended.push(action);
+            }
         }
     }
 
