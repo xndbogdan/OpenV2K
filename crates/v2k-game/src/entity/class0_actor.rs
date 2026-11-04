@@ -17,11 +17,13 @@ use crate::{
 };
 use v2k_formats::levels::EntitySpawn;
 
+mod autobot;
 pub(super) mod cargo;
 #[cfg(test)]
 mod cargo_tests;
 mod defender_ball;
 mod live;
+pub(crate) use autobot::ENTITY_TYPE as AUTOBOT_ENTITY_TYPE;
 pub(crate) use defender_ball::ENTITY_TYPE as DEFENDER_BALL_ENTITY_TYPE;
 mod megablast;
 mod zero_record;
@@ -62,6 +64,8 @@ pub(super) struct NativeClass0Runtime {
     pending_prefix: bool,
     /// 416FF0's +80=self word is distinct from a SubJ/cargo attachment.
     pub(super) gate_self_relation: Option<u32>,
+    /// The Autobot's Sub-D allocation (`FUN_004203D0`), which 409A80 builds.
+    pub(super) autobot: Option<autobot::AutobotComponents>,
 }
 
 pub(super) fn authenticate_metadata(
@@ -124,6 +128,7 @@ pub(super) fn authenticate_metadata(
                 Err(Class0ActorError::Metadata)
             }
         }
+        autobot::ENTITY_TYPE => autobot::authenticate_metadata(metadata),
         65 => {
             if crate::main_base_type54_abort::megablast_metadata(entity_type, metadata) {
                 Ok(())
@@ -213,6 +218,9 @@ fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
 /// Type110, class55 for Type65, class50 for Type63, class0 for every other
 /// row.
 pub(crate) fn living_class(entity_type: u32) -> u32 {
+    if entity_type == autobot::ENTITY_TYPE {
+        return autobot::BEHAVIOR_CLASS;
+    }
     crate::main_base_type54_abort::class0_host_living_class(entity_type).unwrap_or(0)
 }
 
@@ -277,6 +285,16 @@ fn publish_living_graph(
                 );
                 let [heading, _, roll] = entity.rotation_heading_pitch_roll_raw();
                 entity.set_rotation_heading_pitch_roll_raw([heading, next_random() as i16, roll]);
+            }
+            if living_class == autobot::BEHAVIOR_CLASS {
+                // FUN_0040B200 clears T then S; FUN_004071F0's Primary has no
+                // timeout and draws no random word.
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::DefenderDrone),
+                );
             }
             if living_class == 59 {
                 // FUN_0040C530 clears T then S and FUN_00405420 stores a Primary with no
@@ -838,6 +856,7 @@ pub(super) fn construct_class0_actor(
         anchor_raw: grounded,
         pending_prefix: false,
         gate_self_relation: None,
+        autobot: None,
     })
 }
 

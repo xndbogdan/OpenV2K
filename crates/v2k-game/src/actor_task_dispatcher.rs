@@ -165,6 +165,7 @@ pub enum ActorTaskRuntimeFamily {
     RemoteBeamer,
     Megablast,
     DefenderBall,
+    DefenderDrone,
     Queen,
     Intro2GunTurret,
     ExplodingRing,
@@ -241,6 +242,9 @@ pub enum ActorTaskRuntime {
     Megablast(crate::megablast::MegablastTaskState),
     /// Class50 FUN_00407070/FUN_00407150: no timeout and no private data.
     DefenderBall,
+    /// Class53 FUN_004071F0/FUN_00407280: no timeout and no private data;
+    /// the body's Sub-D and Sub-E carry its state.
+    DefenderDrone,
     /// Class67's FUN_0040D210 Primary: no timeout and no private data. The
     /// Queen's record lives in her Sub-K, which outlives the task.
     Queen,
@@ -321,6 +325,7 @@ impl ActorTaskRuntime {
             Self::RemoteBeamer(_) => ActorTaskRuntimeFamily::RemoteBeamer,
             Self::Megablast(_) => ActorTaskRuntimeFamily::Megablast,
             Self::DefenderBall => ActorTaskRuntimeFamily::DefenderBall,
+            Self::DefenderDrone => ActorTaskRuntimeFamily::DefenderDrone,
             Self::Queen => ActorTaskRuntimeFamily::Queen,
             Self::Intro2GunTurret(_) => ActorTaskRuntimeFamily::Intro2GunTurret,
             Self::ExplodingRing(_) => ActorTaskRuntimeFamily::ExplodingRing,
@@ -1921,6 +1926,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::RemoteBeamer(_)) => Some(ActorTaskRuntimeFamily::RemoteBeamer),
             Some(ActorTaskRuntime::Megablast(_)) => Some(ActorTaskRuntimeFamily::Megablast),
             Some(ActorTaskRuntime::DefenderBall) => Some(ActorTaskRuntimeFamily::DefenderBall),
+            Some(ActorTaskRuntime::DefenderDrone) => Some(ActorTaskRuntimeFamily::DefenderDrone),
             Some(ActorTaskRuntime::Queen) => Some(ActorTaskRuntimeFamily::Queen),
             Some(ActorTaskRuntime::ExplodingRing(_)) => Some(ActorTaskRuntimeFamily::ExplodingRing),
             Some(ActorTaskRuntime::HiveRadial(_)) => Some(ActorTaskRuntimeFamily::HiveRadial),
@@ -2050,6 +2056,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntime::RemoteBeamer(_) => unreachable!("Remote Beamer requires its native visit"),
             ActorTaskRuntime::Megablast(_) => unreachable!("Megablast requires its native visit"),
             ActorTaskRuntime::DefenderBall => unreachable!("Defender Ball requires its native visit"),
+            ActorTaskRuntime::DefenderDrone => unreachable!("Defender Drone requires its native visit"),
             ActorTaskRuntime::Queen => unreachable!("Queen requires its native visit"),
             ActorTaskRuntime::PortableRadar => unreachable!("Portable Radar requires its native visit"),
             ActorTaskRuntime::TractorBeam(_) => unreachable!("Tractor Beam requires its native visit"),
@@ -2331,6 +2338,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntimeFamily::RemoteBeamer => unreachable!("Remote Beamer requires its native visit"),
             ActorTaskRuntimeFamily::Megablast => unreachable!("Megablast requires its native visit"),
             ActorTaskRuntimeFamily::DefenderBall => unreachable!("Defender Ball requires its native visit"),
+            ActorTaskRuntimeFamily::DefenderDrone => unreachable!("Defender Drone requires its native visit"),
             ActorTaskRuntimeFamily::Queen => unreachable!("Queen requires its native visit"),
             ActorTaskRuntimeFamily::PortableRadar => unreachable!("Portable Radar requires its native visit"),
             ActorTaskRuntimeFamily::TractorBeam => unreachable!("Tractor Beam requires its native visit"),

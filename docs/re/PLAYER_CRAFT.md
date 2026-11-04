@@ -1606,7 +1606,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
 | Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | ported; its pair hook held |
-| Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | held |
+| Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | ported without a target; its target branch, damage and death held |
 
 **Proximity Mines.** Class 34's first style (`0x4C8548`, initializer
 `FUN_0040B080`: Secondary, then Tertiary cleared, then `FUN_00406B00`'s
@@ -1762,8 +1762,7 @@ block.
 **Defender Ball and Autobot.** Operation `0x38` is ported (see
 [CHEATS](CHEATS.md#port-status)). Neither type has capability `0x1000`, so
 both join the controller's `+220` list. The Defender Ball is ported; the
-Autobot has no port constructor yet, so its row stops there. What their
-owners do:
+Autobot is ported up to its target branch (below). What their owners do:
 
 - Type63 (model 244, health 1, no components, alternate class 2): class 50's
   initializer `FUN_0040B0F0` clears Tertiary then Secondary and builds the
@@ -1808,6 +1807,46 @@ The walk runs in every player hit that goes through the checked-damage owner
 (shots, particles, radials). A live hold body other than a ball (the Autobot)
 stops the craft's hit with a logged block naming its type.
 
+The port builds the Autobot on the class0 constructor too (model 248, mass
+10, capability `0x40`, health 3000, initializer state `0x84`, axis
+`{3072, 0x18}`, alternate class11, death cue 62), with the two components
+`FUN_00409A80` gives it: Sub-D (`FUN_004203D0`, which spends one process
+stagger seed; divisor 16, yaw coupled into roll, pitch steering on, no
+terrain classes) and Sub-E (method 1, 200 ms, spread 1, aim threshold 3000,
+axis tolerance 1536, sound 88, the method-15 auxiliary command). Neither
+component, the selector nor class53's initializer reads another random
+word. The search is the class-7 selector (`FUN_00422CD0`) over the live list
+with the component table's `+28` pair, a copy of the type's range 3072 and
+capability mask `0x18`; it reads no random word and writes nothing, so the
+port runs it ahead of the visit. The no-target visit is whole: the velocity
+cleared, each Euler word `(3 × own + owner's) / 4` (truncating), the goal
+(each product truncated to a word before the sum), the per-axis close and the
+roll damping, which also runs when the owner does not resolve. Retail lab
+(Level 1, master code, F9 at tick 810, `wpn4-hold`): the Autobot is born at
+the player and holds formation until tick 1787 with nothing in range; the
+port's formation step reproduces its position at ticks 812 to 817, 1700,
+1701, 1786 and 1787 exactly from the player's logged position and Euler
+words (the player's matrix is `FUN_00413F70` of them).
+
+Held, each a logged stop:
+
+- the target branch: a visit whose search finds a body stops before it
+  begins ("Autobot target branch held"), and the Autobot stays where it
+  was. In world 20 (retail lab: Skip to World, F9) retail's Autobot leaves
+  formation within seconds to sit 300 from the player toward its target;
+  the port's stops there. It needs Sub-D's pitch steering (`FUN_004202E0`, the pitch half of
+  `FUN_00420360`, which no other port actor uses), `FUN_0041E700`'s angles
+  on the Autobot's own matrix, and a direct `FUN_00424650` firing (the port
+  runs every other emitter inside Aim and Fire) whose shots carry the owner
+  (the player) in their transient command;
+- its checked damage, radial, pair and Main Base abort entries, and its
+  class11 tumble death;
+- the hold walk's second branch: a live Autobot in the list stops the craft's
+  hit with a block (at tick 1787 of `wpn4-hold` retail's walk gives the
+  Autobot a `{[2,3], [14000,12000]}` radial packet through its filter, 7211
+  after its profile, and it dies into class11 before the craft takes its
+  own).
+
 The ball's pair hook `FUN_0040C800` runs in the late pair walk (see
 [ACTOR_RUNTIME](ACTOR_RUNTIME.md#the-ports-walk)): another Type63 returns
 `0x004BE320`'s A300, which cancels the response; any other touching body
@@ -1836,8 +1875,9 @@ Type64, or 15 live bodies): then it still builds the body, removes it
 (`FUN_00410B70`) and leaves the power-up. The port decides that at the
 contact, staging the pass's own births, and builds the bodies after the pass
 in contact order, the refused ones too. A type with no port constructor at
-the player (the Autobot), or one with capability `0x1000` (the cargo branch,
-which no power-up carries), leaves the power-up with a logged stop.
+the player, or one with capability `0x1000` (the cargo branch, which no
+power-up carries), leaves the power-up with a logged stop; both of these
+worlds' payloads now have one.
 
 **Seedpods.** Selector `0x10` (world 20's power-up `0x6410`, or the master
 descriptor's callback 11, as the bombs) fires `DAT_004D02C0` row

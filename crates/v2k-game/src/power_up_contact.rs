@@ -1673,9 +1673,8 @@ mod tests {
     }
 
     /// Worlds 20 and 24 author a Defender Ball (`0x3F38`) and an Autobot
-    /// (`0x4038`) power-up. The ball joins the list; the Autobot, with no
-    /// port constructor, stays on the ground with a logged stop; a second
-    /// staged Type64 or a full list refuses.
+    /// (`0x4038`) power-up. Both join the list; a second staged Type64 or a
+    /// full list refuses.
     #[v2k_test_support::retail_test]
     fn operation_0x38_power_ups_stage_the_hold() {
         for world in [20, 24] {
@@ -1706,8 +1705,19 @@ mod tests {
             assert_eq!(hold.live, 1);
             assert!(matches!(
                 stage(0x4038, &mut hold),
+                PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::AddToHold { .. })
+            ));
+            assert_eq!(
+                hold,
+                StagedHold {
+                    live: 2,
+                    autobot: true
+                }
+            );
+            assert!(matches!(
+                stage(0x4038, &mut hold),
                 PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
-                    reason: PowerUpContactRejection::AddToHoldHeld { entity_type: 64 },
+                    reason: PowerUpContactRejection::HoldRefused { entity_type: 64 },
                     ..
                 })
             ));

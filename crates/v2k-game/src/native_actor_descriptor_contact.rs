@@ -869,6 +869,8 @@ pub(crate) fn task_has_null_contact(task: &ActorTaskRuntime) -> bool {
             | ActorTaskRuntime::Megablast(_)
             // 07070's 01020 template leaves +18 zero too.
             | ActorTaskRuntime::DefenderBall
+            // So does 071F0's.
+            | ActorTaskRuntime::DefenderDrone
     )
 }
 
