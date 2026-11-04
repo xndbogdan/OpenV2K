@@ -72,7 +72,7 @@ impl ParticleTraversalHost for MutableWorldHost {
             // F610 has consumed the last virgin free slot. Free inserts at
             // the head, so the parent is now both head and tail; otherwise
             // allocation correctly prefers an older free slot instead.
-            assert!(fx.particles.free(self.parent_slot));
+            fx.particles.release(self.parent_slot);
             assert_eq!(
                 fx.particles.allocate(descriptor_test_particle(
                     PRIMARY_ABOVE_WATER_IMPACT_CLASS,

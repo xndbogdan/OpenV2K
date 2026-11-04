@@ -28,6 +28,27 @@ pub(super) fn apply_virus_projectile_gravity(particle: &mut WorldParticle, elaps
     particle.velocity[1] = raw_velocity_to_world([0, i32::from(vertical), 0])[1];
 }
 
+/// 40120's mode-3 terrain test: the coarse rejection, then the signed
+/// bilinear test.
+pub(super) fn mode_three_touches_ground(terrain: &TerrainGrid, particle: &WorldParticle) -> bool {
+    let position = world_position_to_raw(particle.position);
+    let floor = i32::from(coarse_terrain_height_raw(terrain, position[0], position[2]));
+    let radius = i32::from(particle.collision_radius_raw as i16);
+    let bottom = i32::from(position[1]) - radius;
+    if i32::from(position[1]) + radius + 0x180 < floor {
+        true
+    } else if floor < bottom - 0x180 {
+        false
+    } else {
+        bottom
+            <= i32::from(bilinear_terrain_height_raw(
+                terrain,
+                position[0],
+                position[2],
+            ))
+    }
+}
+
 #[derive(Clone, Copy)]
 enum CarrierContact {
     Surface,
@@ -117,28 +138,7 @@ impl WorldFx {
                 return true;
             }
 
-            // 40120's coarse rejection precedes the signed bilinear test.
-            let position = world_position_to_raw(particle.position);
-            let floor = i32::from(coarse_terrain_height_raw(
-                context.terrain,
-                position[0],
-                position[2],
-            ));
-            let radius = i32::from(particle.collision_radius_raw as i16);
-            let bottom = i32::from(position[1]) - radius;
-            let touches = if i32::from(position[1]) + radius + 0x180 < floor {
-                true
-            } else if floor < bottom - 0x180 {
-                false
-            } else {
-                bottom
-                    <= i32::from(bilinear_terrain_height_raw(
-                        context.terrain,
-                        position[0],
-                        position[2],
-                    ))
-            };
-            if touches
+            if mode_three_touches_ground(context.terrain, particle)
                 && self.apply_virus_projectile_surface(
                     particle,
                     context.ground_response_selectors[usize::from(material)],
