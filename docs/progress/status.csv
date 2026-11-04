@@ -1062,3 +1062,5 @@ address,status,note
 0x00437630,documented,bomb terrain cells; held (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00414C50,documented,bomb bodies; held (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00471400,implemented,a value record's on-time within the frame (crates/v2k-game/src/key_hold.rs; docs/re/CONTROLS.md)
+0x00411A80,approximated,late pair walk in live order; the player's pairs run apart after it (docs/re/ACTOR_RUNTIME.md#late-active-pair-walk)
+0x00411AD0,approximated,pair visit for every touching pair; unproven ones held with a logged stop (docs/re/ACTOR_RUNTIME.md#late-active-pair-walk)

@@ -195,6 +195,17 @@ fn admit_slot(
         }
         return Ok(SlotAdmission::Null);
     }
+    if matches!(task, ActorTaskRuntime::MainBase(_)) {
+        //25CD0 builds the Primary through01020 with template+18 zero, as
+        //25BD0 does for the factory. The native Main Base receipt and its
+        //completed owner authenticate that task layout.
+        if !crate::main_base_runtime::main_base_manager_allocation_authenticates(entities, id)
+            || !tasks.prepare_native_actor_mutation(entities, id)
+        {
+            return Err(Error::Runtime("completed native Main Base contact owner"));
+        }
+        return Ok(SlotAdmission::Null);
+    }
     if task_has_null_contact(task) {
         return Ok(SlotAdmission::Null);
     }
@@ -802,6 +813,24 @@ fn allocation_authenticates(manager: &EntityManager, id: u32, kind: u32) -> bool
             .is_some_and(crate::intro2_type94::intro2_type94_allocation_authenticates),
         _ => false,
     }
+}
+
+/// An A900 slot [`admit_slot`] skips without consulting any owner: empty, or
+/// a live task whose constructor kept the null contact hook.
+pub(crate) fn slot_contact_needs_no_owner(entity: &Entity, slot: ActorTaskSlot) -> bool {
+    let Some(task_id) = entity.actor_tasks.task_in_slot(slot) else {
+        return true;
+    };
+    entity.native_entity_weapon_runtime.is_none()
+        && entity.actor_tasks.wrapper_flags(task_id)
+            == Some(ActorTaskWrapperFlags {
+                alive: true,
+                in_callback: false,
+            })
+        && entity
+            .actor_tasks
+            .task_state(task_id)
+            .is_some_and(task_has_null_contact)
 }
 
 pub(crate) fn task_has_null_contact(task: &ActorTaskRuntime) -> bool {

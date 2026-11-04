@@ -115,35 +115,35 @@
 <rect x="1132.8" y="458.2" width="66.2" height="19.7" fill="#8c959f"/>
 <text x="1134.8" y="406.7" fill="#1f2328">Terrain c…</text>
 </g>
-<g><title>Actor (ACTOR_RUNTIME.md): 44 code, 2 notes, 1 omitted</title>
-<rect x="891.8" y="479.9" width="61.7" height="83.8" fill="#2da44e"/>
-<rect x="891.8" y="563.6" width="59.5" height="3.2" fill="#d4a72c"/>
-<rect x="951.3" y="563.6" width="2.2" height="3.2" fill="#8c959f"/>
+<g><title>Actor (ACTOR_RUNTIME.md): 45 code, 2 notes, 1 omitted</title>
+<rect x="891.8" y="479.9" width="62" height="84.6" fill="#2da44e"/>
+<rect x="891.8" y="564.5" width="59.8" height="3.1" fill="#d4a72c"/>
+<rect x="951.6" y="564.5" width="2.2" height="3.1" fill="#8c959f"/>
 <text x="893.8" y="491.9" fill="#1f2328">Actor 95…</text>
 </g>
 <g><title>Virus spread (VIRUS_SPREAD.md): 18 code</title>
-<rect x="891.8" y="568.8" width="61.7" height="77.1" fill="#2da44e"/>
-<text x="893.8" y="580.8" fill="#1f2328">Virus sp…</text>
+<rect x="891.8" y="569.6" width="62" height="76.7" fill="#2da44e"/>
+<text x="893.8" y="581.6" fill="#1f2328">Virus sp…</text>
 </g>
 <g><title>Intro2 type94 (INTRO2_TYPE94.md): 3 code</title>
-<rect x="891.8" y="647.9" width="61.7" height="71.1" fill="#2da44e"/>
-<text x="893.8" y="659.9" fill="#1f2328">Intro2 t…</text>
+<rect x="891.8" y="648.3" width="62" height="70.7" fill="#2da44e"/>
+<text x="893.8" y="660.3" fill="#1f2328">Intro2 t…</text>
 </g>
 <g><title>Portable radar (PORTABLE_RADAR.md): 14 code</title>
-<rect x="955.5" y="479.9" width="60" height="63.4" fill="#2da44e"/>
-<text x="957.5" y="491.9" fill="#1f2328">Portable…</text>
+<rect x="955.8" y="479.9" width="59.6" height="63.8" fill="#2da44e"/>
+<text x="957.8" y="491.9" fill="#1f2328">Portabl…</text>
 </g>
-<g><title>Spider behavior (SPIDER_BEHAVIOR.md): 21 code</title>
-<rect x="955.5" y="545.3" width="60" height="59" fill="#2da44e"/>
-<text x="957.5" y="557.3" fill="#1f2328">Spider b…</text>
+<g><title>Spider behavior (SPIDER_BEHAVIOR.md): 20 code</title>
+<rect x="955.8" y="545.7" width="59.6" height="58" fill="#2da44e"/>
+<text x="957.8" y="557.7" fill="#1f2328">Spider …</text>
 </g>
 <g><title>Intro2 bee water (INTRO2_BEE_WATER.md): 6 code</title>
-<rect x="955.5" y="606.3" width="60" height="55.7" fill="#2da44e"/>
-<text x="957.5" y="618.3" fill="#1f2328">Intro2 b…</text>
+<rect x="955.8" y="605.7" width="59.6" height="56" fill="#2da44e"/>
+<text x="957.8" y="617.7" fill="#1f2328">Intro2 …</text>
 </g>
 <g><title>Guard location task (GUARD_LOCATION_TASK.md): 11 code</title>
-<rect x="955.5" y="664" width="60" height="55" fill="#2da44e"/>
-<text x="957.5" y="676" fill="#1f2328">Guard lo…</text>
+<rect x="955.8" y="663.7" width="59.6" height="55.3" fill="#2da44e"/>
+<text x="957.8" y="675.7" fill="#1f2328">Guard l…</text>
 </g>
 <g><title>Intro2 type10 (INTRO2_TYPE10.md): 13 code</title>
 <rect x="1017.4" y="479.9" width="62.9" height="47.5" fill="#2da44e"/>
