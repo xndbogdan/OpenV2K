@@ -935,13 +935,26 @@ fn dispatch(
             MainBaseAbortActorDisposition::Type47Death
         }
         NativeActor::Type53 => {
-            // Same 10C10 -> DB80 -> AC60/class12 -> C620 chain as the shared
-            // Type47 owner: Type53 lethal hits already publish this exact
-            // class12 owner, so the abort reuses it with Type53 custody.
-            let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
-                entities, id, world_fx,
+            // 10C10 -> DB80 -> class12, as a lethal hit's publisher; a
+            // carrying style's D040 releases its captive first.
+            let owner = crate::native_actor_capture::publish_native_captor_standard_death(
+                entities,
+                id,
+                &mut crate::native_actor_capture::CaptureContext {
+                    resources: None,
+                    tasks: specialized_tasks,
+                    world_fx,
+                    notifications: gameplay.notifications,
+                    retail_tick: gameplay.retail_tick,
+                    result_screen: MainBaseType9ResultScreenState::AlreadyShownByMainBaseAbort,
+                    hive_dying: Default::default(),
+                },
             )
-            .map_err(|error| block(Block::Type53(error)))?;
+            .map_err(|error| {
+                block(Block::Type53(
+                    crate::intro2_common_dying::Intro2CommonDyingBlock::Runtime(error.reason),
+                ))
+            })?;
             if let Some(owner) = owner {
                 specialized_tasks.register_intro2_common_dying(owner);
                 publications.type53_common_dying += 1;

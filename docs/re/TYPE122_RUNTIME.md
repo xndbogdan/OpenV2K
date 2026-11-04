@@ -226,7 +226,7 @@ Common class12 death admits Type122 through its own receipt and preserves C8=439
 Capture is divided at its actual owners: `intro2_capture_pursuit` handles
 variants0/1, and `native_actor_capture` owns C910, captured rows, variants2..5,
 release/delivery and nested D040 cleanup. The shared callback bodies authenticate
-Type17 or Type122 separately. Type53 remains pursuit-only. Ordinary children now own their native
+Type17, Type122 or Type53 separately. Ordinary children now own their native
 constructors and callbacks (90/116/123/86); a matching J attachment
 descriptor never substituted for those child owners.
 
@@ -235,7 +235,7 @@ descriptor never substituted for those child owners.
 | Owner | Implemented responsibility |
 | --- | --- |
 | [Native Type122](../../crates/v2k-game/src/native_type122.rs) | Exact authored metadata, loader-issued generation and process Sub-D receipt, grounded anchor, weighted constructor graph, real method24 E/Aim and model274/H ownership |
-| [Shared ground actor](../../crates/v2k-game/src/native_ground_actor.rs) | Separately authenticated53/122 Follow/Search/Capture task phases, current-slot dispatch and movement, body rebuild, steady-wind/drag and master motion; Type53 has no E and remains pursuit-only |
+| [Shared ground actor](../../crates/v2k-game/src/native_ground_actor.rs) | Separately authenticated53/122 Follow/Search/Capture task phases, current-slot dispatch and movement, body rebuild, steady-wind/drag and master motion; Type53 has no E |
 | [Shared captor relation](../../crates/v2k-game/src/native_actor_capture.rs) | Own captor/child allocation leases, actual Sub-J row/backlink, synchronous native8/9 attach/release/death, D040/CF90/delivery, Class9 carrying tasks and both directional pair callbacks/A900 walks |
 | [Static contact](../../crates/v2k-game/src/native_ground_actor/contact.rs) | Authentic current task/static callback, D9B0 before11760, retained contact plane, Type122 living/carry439 and Class12-428 policy, and relation authentication for carrying |
 | Shared native surface, impact, Class12, radial and abort adapters | Type122's actual model, radius/mass, cues, default/effective flags, child cleanup and scheduler ownership; late failures retain committed prefixes and prevent replay |
@@ -300,7 +300,7 @@ The prior uncertainty about child model275's intrinsic decoding is now bounded: 
 
 The Class9 table was independently reread from the retail PE at4C7FF0..4C81A0. C910 appears only in variant1's pair slot; D0B0 appears only in variant2's pair slot. Carry3/4/5 pair slots are null. All carry2..5 have+20 null, +24/+28/+2C D040, and+34/+38 zero. Root/completion pairs are2 CF90/null;3 C7B0/C7D0;4 CF90/C790;5 CF90/CF90. Consequently Type122 preserves its default400 generic-crush policy throughout carrying too.
 
-The sealed `NativeCaptorProfile` enum (Type17, Type122) selects each profile's own manager allocation/metadata authentication and living C690 reselector; it never substitutes a Type17 identity. A common relation stores captor and child allocation leases plus row-presence state. Shared C910/CAD0/443D10/D040/CF90 operations consume actual type metadata and SubJ, while the shared carry task kernel dispatches the actor's real mover. The ground frame explicitly distinguishes Type53's pursuit-only policy from Type122 transport with child scheduler/notification custody. All four ordinary child families (86/90/116/123) now own native constructors and callbacks; see [TYPE86_RUNTIME](TYPE86_RUNTIME.md) for the last one.
+The sealed `NativeCaptorProfile` enum (Type17, Type122) selects each profile's own manager allocation/metadata authentication and living C690 reselector; it never substitutes a Type17 identity. A common relation stores captor and child allocation leases plus row-presence state. Shared C910/CAD0/443D10/D040/CF90 operations consume actual type metadata and SubJ, while the shared carry task kernel dispatches the actor's real mover. The ground frame gives both transport profiles (Type53, Type122) child scheduler/notification custody. All four ordinary child families (86/90/116/123) now own native constructors and callbacks; see [TYPE86_RUNTIME](TYPE86_RUNTIME.md) for the last one.
 
 
 ## Exact ordinary-child prerequisite matrix

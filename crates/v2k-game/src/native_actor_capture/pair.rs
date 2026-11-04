@@ -410,6 +410,7 @@ fn owns_captor_contact(entity: &Entity) -> bool {
         || (entity.entity_type == 18 && entity.native_type18_runtime.is_some())
         || (entity.entity_type == 28 && entity.native_type28_runtime.is_some())
         || (matches!(entity.entity_type, 16 | 128) && entity.intro2_type16_runtime.is_some())
+        || (entity.entity_type == 53 && entity.intro2_type53_runtime.is_some())
 }
 
 /// Independent Type58 side of an 11AD0 pair.
@@ -1258,7 +1259,7 @@ fn behavior(
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         PairContactCallbackPolicy::CapturePeople
-            if matches!(entity.entity_type, 17 | 122 | 18 | 28 | 16 | 128) =>
+            if matches!(entity.entity_type, 17 | 122 | 18 | 28 | 16 | 128 | 53) =>
         {
             let RetailRuntimeValue::Known(Some(rows)) = &entity.sub_j_attachment_runtime else {
                 return Err(NativeCaptorPairBlock::Runtime("capture capacity"));
@@ -1342,7 +1343,7 @@ fn behavior(
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         PairContactCallbackPolicy::UnknownAddress(0x0040_d0b0)
-            if matches!(entity.entity_type, 17 | 122 | 18 | 28 | 16 | 128) =>
+            if matches!(entity.entity_type, 17 | 122 | 18 | 28 | 16 | 128 | 53) =>
         {
             let result = capture::execute_capture_delivery(
                 frame.entities,
@@ -1530,6 +1531,11 @@ fn adopt_captor(frame: &mut Intro2ContactFrame<'_>, id: u32) -> Result<(), Nativ
             let owner = Intro2Type17Owner::adopt(frame.entities, id)
                 .map_err(NativeCaptorPairBlock::Task)?;
             frame.actor_tasks.register_intro2_type17(owner);
+        }
+        NativeCaptorProfile::Type53 => {
+            let owner = crate::intro2_type53::Intro2Type53Owner::adopt(frame.entities, id)
+                .map_err(NativeCaptorPairBlock::GroundTask)?;
+            frame.actor_tasks.register_intro2_type53(owner);
         }
         NativeCaptorProfile::Type122 => {
             let owner = crate::native_type122::Type122Owner::adopt(frame.entities, id)
@@ -2098,7 +2104,7 @@ fn apply_pair_checked_damage(
         })?;
         return Ok(());
     }
-    if matches!(kind, 9 | 17 | 122 | 18 | 28 | 16 | 123)
+    if matches!(kind, 9 | 17 | 122 | 18 | 28 | 16 | 123 | 53)
         || NativeWorkerProfile::from_entity_type(kind).is_some()
         || NativeFourChoiceProfile::from_entity_type(kind).is_some()
     {
@@ -2134,7 +2140,10 @@ fn apply_pair_checked_damage(
                 || (entity.entity_type == crate::native_type43::ENTITY_TYPE
                     && crate::native_type43::allocation_authenticates(entity))
                 || crate::native_type38::type38_row(entity).is_some()
-                || crate::native_type12::type12_row(entity).is_some())
+                || crate::native_type12::type12_row(entity).is_some()
+                // Type71's alternate is class63 too (BC90, then its Type61).
+                || crate::class49_death::source_profile(entity)
+                    == Some(crate::class49_death::NativeExplosionSourceProfile::Type71Gunner))
     }) {
         return apply_terminal_pair_checked_damage(
             frame,
@@ -2155,7 +2164,7 @@ fn apply_pair_checked_damage(
             committed,
         );
     }
-    if kind == 47
+    if matches!(kind, 47 | 71)
         && !frame
             .actor_tasks
             .prepare_native_actor_mutation(frame.entities, target)
@@ -2199,7 +2208,7 @@ fn apply_pair_checked_damage(
         if let Some(owner) = error.death_publication {
             frame.actor_tasks.register_intro2_common_dying(owner);
         }
-        if kind == 47 && error.committed_prefix {
+        if matches!(kind, 47 | 71) && error.committed_prefix {
             frame.actor_tasks.park_native_type47_external_prefix(target);
         }
         NativeCaptorPairBlock::Damage(error)

@@ -108,7 +108,7 @@ counterparts; families without a native owner stay fail-closed by design.
 The [Type122 ice ant](TYPE122_RUNTIME.md) has its own native constructor and
 allocation receipt for all ten authored births in24/42/46/49/50. Its shared
 ground executor retains Type122's E emitter, J transport and C8=439 policy;
-Type53 remains a distinct no-E, pursuit-only profile. Hits, Class12/abort,
+Type53 is a distinct no-E profile with its own J transport. Hits, Class12/abort,
 static crushing and world46's steady wind use source-owned state. Capture
 shares Type17's actual child relation and carrying phases, admitting only
 children whose native callbacks exist. All 27 children in the original

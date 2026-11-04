@@ -185,7 +185,7 @@ The admitted styles at4C7A50/4C7A98/4C7AE0,4C7FF0/4C8038,
 4C7B28/4C7B70 and4C7ED0 have individually verified matching20/28 callbacks.
 Non-null C690 reselects immediately, including without the task wrapper's16410
 suppression gate. The scheduler adopts that replacement graph before the next
-hit or world visit. Capture variants2..5 retain their separate D040 boundary.
+hit or world visit. Capture variants2..5 have D040 at primary +28 and a null infected +20.
 
 [`live_actor_checked_damage.rs`](../../crates/v2k-game/src/live_actor_checked_damage.rs)
 shares the local offline415040/414E10 to14E90 phase with live radial delivery.
@@ -225,17 +225,45 @@ The Chase installer `0x403360` stores02CA0 at task `+0x20` (site `0x4033C3`)
 for the `0x403490` Chase behavior and its 423030/01430/`0x380`/`0x400`
 controller, so a coexisting Tertiary Aim keeps its own records while only the
 Primary's shared private state is committed. Class12's null hook runs the
-same response without task, Sub-A or RNG writes. This counterpart integration
-does not implement C910 attachment, carry variants2--5, the bare-terrain/water
-surface response, or the occupied Sub-J callbacks.
+same response without task, Sub-A or RNG writes. The bare-terrain/water
+surface response stays outside this integration.
+
+## Capture transport
+
+Type53 is a captor on the shared [capture lane](TYPE17_CAPTURE.md), as
+Types 16, 17, 18, 28, 122 and 128 are. Its row has one policy1 Sub-J slot
+at `[0,0,120]`, so `C910`'s capacity test `418410` finds room: the person is
+attached to that slot and C910 selects carrying variant 2 (a destination
+found by `22C10`) or 3 (none), then returns its `A300`. Every pair naming a
+Type53 belongs to the captor lane, which fails closed. The carrying variants
+2..5 run on Type53's own `01430` mover through the shared ground executor
+(variant3's `021B0` beacon search in Secondary, variant4's Following), D0B0
+delivers, and `18640` places the person at the slot after the surface step,
+before the master motion. Every death path runs DB80's carrying `D040`
+first, then class12: a lethal or primary hit (`DAC0`/style `+28` is `D040`),
+a radial, static contact, the pair's collision damage, the Main Base abort
+and E370's drowning.
+
+Retail lab (Skip to World, 20-ms ticks, `actor_state` every tick): in world
+15 a Type53 carries a Type9 from about 1,130 ticks after arrival for 30
+ticks, and in world 14 another for about 950 ticks from tick 3,445; each
+person dies in its grip. The carried person sits 94 units from its captor
+(`[94, 1, 9]`). The port's idle world 15 now carries a Type9 from frame
+1,588 for 1,103 frames, until the person dies in its grip, and its world 14
+from frame 9,686 for 3,460 frames; the offset is again 94 units
+(`[39, 0, 86]`). The two games' random streams part early, so the times
+differ; before, the port held every Type9 x Type53 pair unvisited.
+[Capture tests](../../crates/v2k-game/src/intro2_type53/capture_tests.rs)
+attach a person in world 15, carry it for ten seconds and kill a carrying
+Type53 (the person released alive, class12 installed).
 
 ## First-query evidence
 
 The task, mover, hit and static phases now live in the shared
 [native ground executor](../../crates/v2k-game/src/native_ground_actor.rs),
 with separate sealed Type53 and [Type122](TYPE122_RUNTIME.md) profiles.
-Type53 retains its no-emitter Aim and pursuit-only capture boundary; Type122's
-E/J transport and crushing policy are not Type53 admission rules.
+Type53 retains its no-emitter Aim; Type122's E emitter and crushing policy
+are not Type53 admission rules, and each authenticates its own J transport.
 
 The accepted `V200001.run` joins cover the four captured Intro2 births. The initial walk
 closes spawn20/seed13 and spawn38/seed18. A separate bounded address-read query
@@ -284,17 +312,9 @@ actor controls, but records a separate [Type13 incoming-hit boundary](INTRO2_COM
 
 ## Remaining work
 
-Class9 pursuit, class7 Chase/absent-emitter Aim and ordinary C690 reentry are
-live, and the owned11AD0 static scan now covers retarget/pursuit/Following/
-Chase Primaries plus the Class12 null-hook path. Actual C910 attachment,
-carry/destination/release variants2..5, the bare-terrain/water surface
-response, and matched retail scene acceptance remain open. C910 needs
-distinct Sub-J releaseCAD0 and destructive-consume443D10 row policies and
-native task/relation custody. Living0x39 clears the surface `0x10000` prefix
+Class9 pursuit and transport, class7 Chase/absent-emitter Aim and ordinary
+C690 reentry are live, and the owned11AD0 static scan covers retarget/
+pursuit/Following/Chase Primaries plus the Class12 null-hook path. The
+bare-terrain/water surface response of Class12 corpses and matched retail
+scene acceptance remain open. Living0x39 clears the surface `0x10000` prefix
 like living Type1739, so the surface remainder concerns Class12 corpses.
-Its A300 response must suppress
-physical response while preserving the opposite style and402DA0 component
-callbacks; existing player-cargo behavior does not supply this transaction.
-The [spider authority](SPIDER_BEHAVIOR.md#next-bounded-implementation-order)
-retains the carry and nested-cleanup boundaries. These paths stay explicit;
-pursuit alone does not claim that Type53 can capture or carry a person.

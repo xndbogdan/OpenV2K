@@ -548,3 +548,49 @@ fn a_waiting_flower_turret_takes_pair_collision_damage() {
         NativeCaptorPairStage::Physical { capped_damage_raw } if *capped_damage_raw != 0
     )));
 }
+
+/// Type71 shares the Type47 owner: after a contact hook writes a Type71's
+/// task state, its owner takes the new graph and lends it to the next pair.
+#[v2k_test_support::retail_test]
+fn a_type71_lends_its_owner_again_after_a_contact_write() {
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(28);
+    let mut tasks = adopt_authored(&mut entities);
+    let ids = entities
+        .iter_all()
+        .filter(|e| e.entity_type == 71)
+        .map(|e| e.id)
+        .collect::<Vec<_>>();
+    let mut applied = false;
+    // Each pair repeats a Type71 the previous visit's 02DA0 may have written.
+    for [a, b] in [[0, 1], [1, 2], [2, 0]] {
+        let pair = in_live_order(&entities, ids[a], ids[b]);
+        overlap(&mut entities, &session, pair);
+        let outcome = walk(&mut session, &mut entities, &mut fx, &mut tasks, pair[0]);
+        let NativeCaptorPairOutcome::Resolved { visits } = &outcome else {
+            panic!("{outcome:?}");
+        };
+        let visit = visits
+            .iter()
+            .find(|visit| visit.candidate_id == pair[1])
+            .expect("the touching Type71 is visited");
+        assert_eq!(visit.general_types, Some([71, 71]), "{visit:?}");
+        assert!(
+            matches!(
+                visit.stages.last(),
+                Some(NativeCaptorPairStage::Physical { .. })
+            ),
+            "{visit:?}"
+        );
+        applied |= visit.stages.iter().any(|stage| {
+            matches!(
+                stage,
+                NativeCaptorPairStage::Component {
+                    result: NativeCaptorPairComponentResult::Applied { .. },
+                    ..
+                }
+            )
+        });
+    }
+    assert!(applied, "a contact hook wrote a Type71's task state");
+}

@@ -41,6 +41,7 @@ pub(crate) enum NativeCaptorProfile {
     Type28,
     Type16,
     Type128,
+    Type53,
 }
 
 impl NativeCaptorProfile {
@@ -68,6 +69,9 @@ impl NativeCaptorProfile {
                     None => return Err(CaptureBlock::new("capture native allocation")),
                 }
             }
+            53 if crate::intro2_type53::type53_manager_allocation_authenticates(manager, id) => {
+                Self::Type53
+            }
             _ => return Err(CaptureBlock::new("capture native allocation")),
         };
         let metadata = manager
@@ -88,6 +92,7 @@ impl NativeCaptorProfile {
                 metadata,
             )
             .is_ok(),
+            Self::Type53 => crate::intro2_type53::authenticate_metadata(metadata).is_ok(),
         };
         if !authentic {
             return Err(CaptureBlock::new("capture native metadata"));
@@ -103,6 +108,7 @@ impl NativeCaptorProfile {
             Self::Type28 => 28,
             Self::Type16 => 16,
             Self::Type128 => 128,
+            Self::Type53 => 53,
         }
     }
 
@@ -161,6 +167,17 @@ impl NativeCaptorProfile {
                 context.retail_tick,
                 context.world_fx,
                 crate::intro2_type16::behavior::ReselectionEntry::Impact,
+            )
+            .map_err(|_| ()),
+            Self::Type53 => crate::native_ground_actor::behavior::reselect::<
+                crate::intro2_type53::profile::Type53Profile,
+            >(
+                manager,
+                id,
+                context.retail_tick,
+                context.world_fx,
+                context.resources,
+                crate::native_ground_actor::behavior::ReselectionEntry::Impact,
             )
             .map_err(|_| ()),
         };
@@ -552,7 +569,7 @@ pub fn apply_capture_pair_checked_damage(
         LiveActorDamageRequest, LiveActorDeathResult,
     };
     let target_type = actor(manager, target)?.entity_type;
-    let is_captor = matches!(target_type, 17 | 122 | 18 | 28 | 16);
+    let is_captor = matches!(target_type, 17 | 122 | 18 | 28 | 16 | 53);
     let is_hive_destination = target_type == 67;
     if is_captor {
         captor(manager, target)?;

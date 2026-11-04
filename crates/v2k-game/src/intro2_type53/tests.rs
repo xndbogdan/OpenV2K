@@ -320,6 +320,8 @@ fn callback_disabled_uses_entity_flags_without_clock_activation_or_sub_d_query()
             world_fx: &mut world_fx,
             elapsed_micros: 20_000,
             retail_tick: 10_000,
+            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
     assert!(matches!(
@@ -390,6 +392,8 @@ fn first_query_block_retains_retarget_prefix_without_replaying_time_or_rng() {
             world_fx: &mut world_fx,
             elapsed_micros: 20_000,
             retail_tick: 0,
+            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
     assert_eq!(
@@ -421,6 +425,8 @@ fn first_query_block_retains_retarget_prefix_without_replaying_time_or_rng() {
             world_fx: &mut world_fx,
             elapsed_micros: 20_000,
             retail_tick: 1,
+            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
     assert_eq!(tick.outcome, Intro2Type53Outcome::Pending { entity_id: 21 });
@@ -502,6 +508,8 @@ fn witnessed_native_acquiring_callbacks_finish_before_the_later_contact_phase() 
                     world_fx: &mut fx,
                     elapsed_micros: 20_000,
                     retail_tick: 286 + frame_index,
+                    capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+                    notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                 },
             );
             assert!(
@@ -579,6 +587,8 @@ fn native_beacon_handoff_retires_its_secondary_without_aborting_the_world_tail()
             world_fx: &mut fx,
             elapsed_micros: 20_000,
             retail_tick: 286,
+            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
     assert!(
@@ -645,6 +655,8 @@ fn native_following_continues_after_handoff_and_timeout_reselects_in_the_same_pa
                 world_fx: &mut fx,
                 elapsed_micros: 20_000,
                 retail_tick: 10_000 + frame_index,
+                capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+                notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
             },
         );
         assert!(
@@ -707,6 +719,8 @@ fn native_following_continues_after_handoff_and_timeout_reselects_in_the_same_pa
             world_fx: &mut fx,
             elapsed_micros: 20_000,
             retail_tick: 10_004,
+            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
     assert!(

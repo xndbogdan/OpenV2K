@@ -316,9 +316,6 @@ fn run_frame<P: NativeGroundActorProfile>(
             NativeCaptureDispatch::AbsentJ { .. },
             NativeCapturePolicy::AbsentJ
         ) | (
-            NativeCaptureDispatch::PursuitOnly,
-            NativeCapturePolicy::PursuitOnly
-        ) | (
             NativeCaptureDispatch::Transport { .. },
             NativeCapturePolicy::Transport
         ) | (

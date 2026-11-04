@@ -125,6 +125,23 @@ fn run_mover(
             next_random,
         )
         .map_err(|error| CaptureTaskBlock::Type16(Box::new(error))),
+        53 => {
+            crate::native_ground_actor::mover::run::<crate::intro2_type53::profile::Type53Profile>(
+                entity,
+                crate::native_ground_actor::mover::MoverFrame {
+                    metadata: frame.metadata,
+                    terrain: frame.terrain,
+                    dispatch_mode: frame.dispatch_mode,
+                    elapsed_micros: frame.elapsed_micros,
+                    global_elapsed_micros: frame.global_elapsed_micros,
+                    wave_tick_50hz: None,
+                },
+                target,
+                tracked,
+                next_random,
+            )
+            .map_err(|error| CaptureTaskBlock::Ground(Box::new(error)))
+        }
         _ => Err(CaptureTaskBlock::Allocation),
     }
 }
@@ -203,6 +220,22 @@ fn tick_retarget(
             world_fx,
         )
         .map_err(|error| CaptureTaskBlock::Type16(Box::new(error))),
+        53 => crate::native_ground_actor::live::tick_primary::<
+            crate::intro2_type53::profile::Type53Profile,
+        >(
+            entity,
+            crate::native_ground_actor::mover::MoverFrame {
+                metadata: frame.metadata,
+                terrain: frame.terrain,
+                dispatch_mode: frame.dispatch_mode,
+                elapsed_micros: frame.elapsed_micros,
+                global_elapsed_micros: frame.global_elapsed_micros,
+                // The carrying rows' Sub-C is terrain-only.
+                wave_tick_50hz: None,
+            },
+            world_fx,
+        )
+        .map_err(|error| CaptureTaskBlock::Ground(Box::new(error))),
         _ => Err(CaptureTaskBlock::Allocation),
     }
 }

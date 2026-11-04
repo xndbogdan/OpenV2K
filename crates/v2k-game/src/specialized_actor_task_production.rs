@@ -5477,6 +5477,12 @@ impl SpecializedActorTaskScheduler {
                         crate::intro2_type53::Intro2Type53Frame {
                             resources,
                             world_fx,
+                            notifications,
+                            capture_tasks: &mut Intro2RadialCursorCustody {
+                                pending: &mut pending,
+                                retained: &mut retained,
+                                remaining_live_ids: &live_order[live_index + 1..],
+                            },
                             elapsed_micros,
                             retail_tick,
                         },
