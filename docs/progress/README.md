@@ -43,7 +43,7 @@ Where the code's references are thinnest:
 |---|---:|---:|---:|
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 25 | 3 | 101 |
 | [Controls](../re/CONTROLS.md) | 17 | 1 | 53 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 104 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 105 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 28 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 139 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
