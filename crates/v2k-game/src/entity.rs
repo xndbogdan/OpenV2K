@@ -6662,6 +6662,11 @@ impl EntityManager {
                     phase,
                 );
         }
+        world_fx.publish_particle_wind(
+            crate::common_mover::environment::CommonWindDrag::from_environment(
+                self.environment_physics,
+            ),
+        );
     }
 
     /// Borrow one captured Intro2 flyer allocation (spawn 44 or 46).

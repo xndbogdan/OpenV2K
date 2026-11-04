@@ -169,5 +169,53 @@ pub(crate) fn apply_common_wind_drag_raw(
     }
 }
 
+/// `FUN_0044F0C0`, 44EC60's drag for a particle (no angles): class 31's
+/// update `FUN_0043F290` passes mass 5. Above (or below, by `+0x80`) the sea,
+/// a current wind pulls the velocity toward the wind scaled by the height
+/// over the higher of the terrain half and one wind vector upstream, and a
+/// sheltered particle keeps its velocity; otherwise the plain drag applies.
+pub(crate) fn apply_particle_wind_drag_raw(
+    velocity: &mut [i16; 3],
+    position_raw: [i16; 3],
+    wind: CommonWindDrag,
+    terrain: &TerrainGrid,
+    mass_raw: u16,
+    elapsed_micros: u32,
+) {
+    let factor = elapsed_micros.wrapping_mul(wind.strength) / (u32::from(mass_raw) << 3);
+    if let Wind::Current {
+        vector_raw,
+        max_height_raw,
+        above_sea,
+    } = wind.wind
+    {
+        if (terrain.sea_level_raw() < position_raw[1]) == above_sea {
+            let [x, y, z] = position_raw;
+            let half = terrain.bilinear_height_raw(
+                x.wrapping_sub(vector_raw[0] >> 1),
+                z.wrapping_sub(vector_raw[2] >> 1),
+            );
+            let full = terrain
+                .bilinear_height_raw(x.wrapping_sub(vector_raw[0]), z.wrapping_sub(vector_raw[2]));
+            let height = (i32::from(y) - i32::from(half.max(full))).min(max_height_raw);
+            if height < 0 {
+                return;
+            }
+            let scale = height.wrapping_mul(32);
+            for axis in 0..3 {
+                let relative = ((i32::from(vector_raw[axis]).wrapping_mul(scale) >> 15) as i16)
+                    .wrapping_sub(velocity[axis]);
+                velocity[axis] = velocity[axis]
+                    .wrapping_add(((factor as i32).wrapping_mul(i32::from(relative)) >> 15) as i16);
+            }
+            return;
+        }
+    }
+    for component in velocity.iter_mut() {
+        *component = component
+            .wrapping_sub(((factor as i32).wrapping_mul(i32::from(*component)) >> 15) as i16);
+    }
+}
+
 #[cfg(test)]
 mod tests;

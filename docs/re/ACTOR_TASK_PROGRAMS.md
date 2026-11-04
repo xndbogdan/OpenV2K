@@ -1257,6 +1257,15 @@ branch:
 World 46 authors Section-13 `+0x80 = 0`, which limits its wind to actors below
 the sea, so its flyers above the sea take the fallback.
 
+Class-31 trail particles take the same wind through `FUN_0044F0C0`, called by
+their update `FUN_0043F290` with mass 5 after the word integration: no angle
+words, otherwise EC60's sea-side gate, upstream terrain samples, shelter and
+relative drag, or the plain drag (every world authors drag 3 at `+0x94`).
+Wind blows in Water, WindyIce, WChannel and Alien2 (mode 1) and Pchannel and
+Alien3 (mode 2). The port publishes the environment frame's wind to `WorldFx`
+for this; before any frame has published one, the trail's drag is held with
+a logged stop.
+
 In Playing:
 
 - the late contact walk sends Type13 through the same flying surface kernel and

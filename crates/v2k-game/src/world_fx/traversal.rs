@@ -500,7 +500,11 @@ impl WorldFx {
                     .raw_u16(0x04),
                 0
             );
-        } else if combat_program.is_some() || virus_projectile || weather_fall {
+        } else if combat_program.is_some()
+            || virus_projectile
+            || weather_fall
+            || uses_wind_trail_update_callback(particle.source_class)
+        {
             integrate_particle_words(&mut particle, elapsed_micros);
         } else {
             particle.position[0] =
@@ -660,15 +664,30 @@ impl WorldFx {
                 };
             inline_trail = Some((particle.position, trail_class));
             particle.velocity[1] -= METEOR_SCATTER_GRAVITY_WORLD_PER_SEC2 * dt_secs;
-        } else if particle.source_class == METEOR_TRAIL_CLASS {
-            // `FUN_0044EC60` strength-3/mass-5 drag runs after generic
-            // integration: scale=(dt_us*3)/(5*8), then each raw component
-            // becomes `v - ((scale*v)>>15)`. This smooth equivalent keeps
-            // that callback order. The >805696-us retrace/cascade special
-            // remains intentionally outside this ordinary-frame path.
-            let drag_factor = (1.0 - METEOR_TRAIL_DRAG_PER_SECOND * dt_secs).max(0.0);
-            for component in &mut particle.velocity {
-                *component *= drag_factor;
+        } else if uses_wind_trail_update_callback(particle.source_class) {
+            // FUN_0043F290 -> FUN_0044F0C0 (mass 5) after the word
+            // integration: the world's wind, or its plain drag.
+            match (self.particle_wind, terrain_context) {
+                (Some(wind), Some(context)) => {
+                    let mut velocity = particle
+                        .velocity
+                        .map(|component| world_velocity_component_to_raw(component) as i16);
+                    crate::common_mover::environment::apply_particle_wind_drag_raw(
+                        &mut velocity,
+                        world_position_to_raw(particle.position),
+                        wind,
+                        context.terrain,
+                        WIND_TRAIL_MASS_RAW,
+                        elapsed_micros,
+                    );
+                    particle.velocity = raw_velocity_to_world(velocity.map(i32::from));
+                }
+                _ => {
+                    if !self.wind_trail_stop_reported {
+                        self.wind_trail_stop_reported = true;
+                        eprintln!("Particle class {} wind 0x0044F0C0 stopped at unresolved data: no published wind or terrain; its velocity is held", particle.source_class);
+                    }
+                }
             }
         }
 
