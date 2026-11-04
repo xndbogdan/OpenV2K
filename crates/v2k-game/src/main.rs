@@ -5045,7 +5045,7 @@ fn run_game(
                             .cache
                             .level_desc()
                             .expect("closing scene descriptor");
-                        let camera = IntroCameraController::at_rest(
+                        let mut proxy_camera = IntroCameraController::at_rest(
                             v2k_game::closing_scene::camera_arrival_raw(
                                 carried_camera_raw,
                                 level.terrain_draw_depth,
@@ -5053,6 +5053,7 @@ fn run_game(
                             level.world_style,
                             Default::default(),
                         );
+                        start_eye_after_load(&mut camera, &mut proxy_camera, config.active_camera);
                         let strings = session
                             .cache
                             .level()
@@ -5060,10 +5061,12 @@ fn run_game(
                             .unwrap_or_default();
                         log!(
                             "Closing scene: overlay {lid} in phase 3, camera proxy at {:?}",
-                            camera.position_raw()
+                            proxy_camera.position_raw()
                         );
-                        closing_scene =
-                            Some(v2k_game::closing_scene::ClosingScene::new(&strings, camera));
+                        closing_scene = Some(v2k_game::closing_scene::ClosingScene::new(
+                            &strings,
+                            proxy_camera,
+                        ));
                         // 451710's type-0 visit queues Klaus's command 2.
                         shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
                         post_intro_world_cover = Some(shell);
@@ -5137,13 +5140,7 @@ fn run_game(
                             level.terrain_draw_depth,
                             level.world_style,
                         );
-                        advance_opening_camera_eye(
-                            &session.cache,
-                            &mut camera,
-                            &mut glide.camera,
-                            0,
-                            config.active_camera,
-                        );
+                        start_eye_after_load(&mut camera, &mut glide.camera, config.active_camera);
                         if glide.visit(player_raw, elapsed_micros)
                             == v2k_game::world_start_glide::GlideVisit::Stepped
                         {
@@ -12847,6 +12844,19 @@ fn advance_opening_camera_eye(
             active_camera: active_camera_setting,
             terrain: gameplay_chase_terrain(cache),
         })
+        .apply_to(camera);
+}
+
+/// The loading card's last redraw starts the eye on the class-1 proxy
+/// ([`IntroCameraController::start_eye_after_load`]).
+fn start_eye_after_load(
+    camera: &mut Camera,
+    proxy_camera: &mut IntroCameraController,
+    active_camera_setting: u8,
+) {
+    configure_opening_world_camera(camera);
+    proxy_camera
+        .start_eye_after_load(active_camera_setting)
         .apply_to(camera);
 }
 

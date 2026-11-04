@@ -1308,8 +1308,13 @@ Last observation pass: 2026-09-07 (first-world lighting/lens and peasant animati
     uses `FUN_0044FFA0`'s full terrain-aware eye target: exact sea/terrain
     anchor branches, half-cell ray steps, three-cell-wide height probes, and
     Section-9 static-model collision-radius clearance (with object kinds 11/28
-    excluded as in `FUN_00436C30`). Null-context menu/cinematic callers keep
-    their separate craft-Y target.
+    excluded as in `FUN_00436C30`). Null-context callers (the frontend and
+    the loading card) run the same anchor with terrain and sea at -16000 and
+    no probe, so the eye sits level with the entity, one raw unit inside the
+    distance (the ray's saturated cosine). Lab check (Level 1, Active Camera
+    6): ED10's inputs and springs dumped every pass over 1,688 frames of
+    flight over water, beaches and a ridge; the port's step from each pass's
+    springs matches the next pass exactly.
   - The accepted 2026-07-30 Active Camera 0/6/10 traces close the remaining
     retail-policy question. Dynamic `FUN_0040ED10` parameters 3/4 remain zero
     in all three runs, so the setting changes horizontal chase distance through

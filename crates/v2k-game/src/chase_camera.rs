@@ -9,7 +9,8 @@
 //! Active gameplay/Intro2's `FUN_0044FFA0` caller supplies terrain context. That path
 //! adjusts the eye anchor around terrain/sea level, then walks a three-cell-wide
 //! clearance probe behind the craft before handing the target to the same
-//! spring. Null-context callers retain the simpler craft-Y eye policy.
+//! spring. Null-context callers run the same anchor with terrain and sea at
+//! -16000 and no probe.
 
 use v2k_formats::anim_frames::TerrainObjectTable;
 use v2k_formats::models::CollisionModelPool;
@@ -30,6 +31,8 @@ const TERRAIN_RAY_REFERENCE_DISTANCE_RAW: i32 = 0xC00;
 const TERRAIN_RAY_STEP_RAW: i32 = 0x80;
 const TERRAIN_RAY_CLEARANCE_Q31: i32 = 0x2580_0000;
 const TERRAIN_OBJECT_KIND_NO_CLEARANCE: [u32; 2] = [0x0B, 0x1C];
+/// `FUN_0040ED10`'s terrain and sea height when it has no terrain context.
+const NO_TERRAIN_HEIGHT_RAW: i32 = -16000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ChaseBodyBasis {
@@ -132,6 +135,17 @@ impl ChaseCameraState {
         self.focus.position
     }
 
+    /// Focus position and velocity, then the eye's, as the lab dumps them.
+    #[cfg(test)]
+    pub(crate) fn springs_raw(&self) -> [[i16; 3]; 4] {
+        [
+            self.focus.position,
+            self.focus.velocity,
+            self.eye.position,
+            self.eye.velocity,
+        ]
+    }
+
     /// F3A0 -> F350 preserves the spring eye and the three separately
     /// normalized/crossed Q31 vectors. Model callbacks consume these words;
     /// reconstructing them from the floating-point presentation pose loses
@@ -195,10 +209,7 @@ fn camera_targets(
     swing: i32,
     terrain: Option<ChaseTerrainContext<'_>>,
 ) -> CameraTargets {
-    let mut eye = terrain.map_or_else(
-        || no_ray_eye_target(position, distance_raw),
-        |context| terrain_eye_target(position, distance_raw, context),
-    );
+    let mut eye = eye_target(position, distance_raw, terrain);
     // The clearance probe stays on the entity's X; only the finished eye
     // moves sideways, by a 32-bit product shifted right 11.
     eye[0] = eye[0].wrapping_sub((distance_raw.wrapping_mul(swing) >> 11) as i16);
@@ -210,18 +221,8 @@ fn no_ray_targets(position: [i16; 3], body_forward: [i32; 3], distance_raw: i32)
     targets_with_eye(
         position,
         body_forward,
-        no_ray_eye_target(position, distance_raw),
+        eye_target(position, distance_raw, None),
     )
-}
-
-fn no_ray_eye_target(position: [i16; 3], distance_raw: i32) -> [i16; 3] {
-    // Frontend callers pass null terrain context: the eye shares the
-    // entity's Y and stays on FUN_0040ED10's fixed -Z compass bearing.
-    [
-        position[0],
-        position[1],
-        position[2].wrapping_sub(distance_raw as i16),
-    ]
 }
 
 fn targets_with_eye(position: [i16; 3], body_forward: [i32; 3], eye: [i16; 3]) -> CameraTargets {
@@ -238,20 +239,28 @@ fn targets_with_eye(position: [i16; 3], body_forward: [i32; 3], eye: [i16; 3]) -
     CameraTargets { eye, focus }
 }
 
-/// Active `FUN_0040ED10` eye target. All intermediate values stay in retail's
+/// `FUN_0040ED10`'s eye target. All intermediate values stay in retail's
 /// signed 8.8 raw domain; only the completed sprung pose is converted to port
-/// world units.
-fn terrain_eye_target(
+/// world units. Without terrain context (frontend callers and the loading
+/// card) terrain and sea both stand at -16000 and no clearance probe runs, so
+/// the eye sits level with an entity above -10880, its distance less one
+/// behind it (the ray's saturated Q31 cosine).
+fn eye_target(
     position: [i16; 3],
     distance_raw: i32,
-    context: ChaseTerrainContext<'_>,
+    terrain: Option<ChaseTerrainContext<'_>>,
 ) -> [i16; 3] {
-    let terrain_y = i32::from(terrain_height_raw(
-        context.terrain,
-        position[0],
-        position[2],
-    ));
-    let sea_y = i32::from((context.terrain.header[0] >> 8) as i16);
+    let (terrain_y, sea_y) =
+        terrain.map_or((NO_TERRAIN_HEIGHT_RAW, NO_TERRAIN_HEIGHT_RAW), |context| {
+            (
+                i32::from(terrain_height_raw(
+                    context.terrain,
+                    position[0],
+                    position[2],
+                )),
+                i32::from((context.terrain.header[0] >> 8) as i16),
+            )
+        });
     let entity_y = i32::from(position[1]);
     let (anchor_y, floor_y) = terrain_eye_anchor_raw(entity_y, terrain_y, sea_y);
 
@@ -261,7 +270,7 @@ fn terrain_eye_target(
     let mut ray_horizontal = TERRAIN_RAY_REFERENCE_DISTANCE_RAW;
     let mut ray_vertical = anchor_y - floor_y;
     let mut sample_distance = TERRAIN_RAY_STEP_RAW;
-    while sample_distance < distance_raw {
+    while let Some(context) = terrain.filter(|_| sample_distance < distance_raw) {
         let sample_z = position[2].wrapping_sub(sample_distance as i16);
         let clearance_y = terrain_clearance_height_raw(context, position[0], sample_z);
         let candidate_vertical = q31_mul(TERRAIN_RAY_CLEARANCE_Q31, sample_distance)
@@ -757,12 +766,12 @@ mod tests {
         let swing = (distance * -1016) >> 11;
         assert_eq!(swing, -508);
         assert_eq!(pose.eye[0], 77.0 + 508.0 / 256.0);
-        assert_eq!(pose.eye[2], 58.0 - distance as f32 / 256.0);
+        assert_eq!(pose.eye[2], 58.0 - (distance - 1) as f32 / 256.0);
 
         // Released, the targets return to the plain chase position.
         let mut plain = ChaseCameraState::default();
         let rest = plain.update(identity_target([77.0, 0.0, 58.0], 0), None, 20_000);
-        assert_eq!(rest.eye, [77.0, 0.0, 58.0 - 8.0]);
+        assert_eq!(rest.eye, [77.0, 0.0, 58.0 - 2047.0 / 256.0]);
     }
 
     #[test]
@@ -1045,7 +1054,9 @@ mod tests {
         assert_eq!(camera.focus_position_raw(), [0; 3]);
         let pose = camera.update(identity_target([77.0, -2.109_375, 58.0], 6), None, 20_000);
 
-        assert_eq!(pose.eye, [77.0, -2.109_375, 58.0 - 2049.0 / 256.0]);
+        // Without terrain the ray's saturated cosine leaves the eye one raw
+        // unit inside the 2049 distance.
+        assert_eq!(pose.eye, [77.0, -2.109_375, 58.0 - 2048.0 / 256.0]);
         assert_eq!(pose.focus[0], 77.0);
         assert_eq!(pose.focus[1], -2.109_375);
         // Positive Q31 cannot represent +1 exactly, matching the executable's
@@ -1068,10 +1079,10 @@ mod tests {
         let terrain = flat_terrain(0, 0);
         let objects = terrain_objects(0, 0, 0);
         let models = TestModelPool(Vec::new());
-        let eye = terrain_eye_target(
+        let eye = eye_target(
             [10 * 256, 4 * 256, 20 * 256],
             0x800,
-            context(&terrain, &objects, &models),
+            Some(context(&terrain, &objects, &models)),
         );
 
         assert_eq!(eye, [10 * 256, 1080, 20 * 256 - 2036]);
@@ -1116,14 +1127,184 @@ mod tests {
         }
         let objects = terrain_objects(0, 0, 0);
         let models = TestModelPool(Vec::new());
-        let eye = terrain_eye_target(
+        let eye = eye_target(
             [10 * 256, 4 * 256, 20 * 256],
             0x800,
-            context(&terrain, &objects, &models),
+            Some(context(&terrain, &objects, &models)),
         );
 
         assert!(eye[1] > 4 * 256);
         assert!(eye[2] > 20 * 256 - 0x800);
+    }
+
+    /// The lab's Level 1 under thrust over a ridge (Active Camera 6), passes
+    /// 1876 to 1887, where the clearance probe bends the eye's ray: ED10's
+    /// inputs (the player's position words and body vectors) and the springs
+    /// after it. Each frame's step from the previous springs matches retail's.
+    #[v2k_test_support::retail_test]
+    fn play_over_land_steps_as_the_lab_measured() {
+        let mut session =
+            crate::session::GameSession::init(&v2k_test_support::retail_dir()).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        session.load_level_by_id(13, 1).unwrap();
+        let context = ChaseTerrainContext {
+            terrain: session.cache.terrain().unwrap(),
+            terrain_objects: session.cache.terrain_objects().unwrap(),
+            model_pool: &session.cache,
+        };
+        let lab: [([i16; 3], [i32; 9], [i16; 12]); 12] = [
+            (
+                [19599, 239, 17826],
+                [
+                    2118385664, 350814208, 4915200, -350814208, 2118189056, 29949952, 0, -30408704,
+                    2147155968,
+                ],
+                [
+                    19568, 336, 17925, 0, -622, 2166, 19567, 546, 15435, -65, 333, 2495,
+                ],
+            ),
+            (
+                [19601, 223, 17867],
+                [
+                    2121007104, 334561280, 3932160, -334561280, 2120876032, 25165824, 0, -25493504,
+                    2147221504,
+                ],
+                [
+                    19568, 323, 17966, 0, -659, 2194, 19565, 552, 15483, -63, 316, 2538,
+                ],
+            ),
+            (
+                [19603, 207, 17909],
+                [
+                    2123300864, 319881216, 3145728, -319881216, 2123235328, 21102592, 0, -21364736,
+                    2147287040,
+                ],
+                [
+                    19568, 309, 18008, 0, -696, 2222, 19563, 557, 15532, -61, 295, 2578,
+                ],
+            ),
+            (
+                [19605, 190, 17951],
+                [
+                    2125463552, 305201152, 2555904, -305201152, 2125398016, 17891328, 0, -18087936,
+                    2147287040,
+                ],
+                [
+                    19568, 294, 18050, 0, -735, 2248, 19561, 562, 15581, -58, 264, 2616,
+                ],
+            ),
+            (
+                [19607, 173, 17994],
+                [
+                    2127167488, 293011456, 1966080, -293011456, 2127167488, 14614528, 0, -14811136,
+                    2147352576,
+                ],
+                [
+                    19568, 279, 18093, 0, -773, 2274, 19559, 566, 15631, -54, 234, 2651,
+                ],
+            ),
+            (
+                [19609, 155, 18037],
+                [
+                    2128805888, 280756224, 1703936, -280756224, 2128805888, 13041664, 0, -13172736,
+                    2147352576,
+                ],
+                [
+                    19568, 263, 18136, 0, -811, 2298, 19558, 569, 15682, -51, 208, 2684,
+                ],
+            ),
+            (
+                [19611, 137, 18080],
+                [
+                    2130116608, 270925824, 1507328, -270925824, 2130116608, 12189696, 0, -12320768,
+                    2147352576,
+                ],
+                [
+                    19568, 246, 18180, 0, -850, 2321, 19557, 572, 15733, -47, 185, 2715,
+                ],
+            ),
+            (
+                [19613, 118, 18124],
+                [
+                    2131230720, 261947392, 1441792, -261947392, 2131230720, 12189696, 0, -12320768,
+                    2147352576,
+                ],
+                [
+                    19568, 229, 18224, 0, -889, 2342, 19556, 575, 15785, -43, 164, 2744,
+                ],
+            ),
+            (
+                [19615, 99, 18168],
+                [
+                    2132213760, 253755392, 1638400, -253755392, 2132213760, 13828096, 0, -13959168,
+                    2147352576,
+                ],
+                [
+                    19568, 211, 18269, 0, -927, 2362, 19555, 577, 15837, -38, 146, 2771,
+                ],
+            ),
+            (
+                [19617, 79, 18213],
+                [
+                    2133000192, 247267328, 1769472, -247267328, 2133000192, 15466496, 0, -15597568,
+                    2147352576,
+                ],
+                [
+                    19568, 192, 18314, 1, -965, 2381, 19554, 579, 15890, -33, 130, 2795,
+                ],
+            ),
+            (
+                [19619, 59, 18258],
+                [
+                    2133655552, 241500160, 2097152, -241500160, 2133590016, 18808832, 0, -18939904,
+                    2147287040,
+                ],
+                [
+                    19568, 172, 18359, 5, -1004, 2399, 19553, 581, 15943, -27, 116, 2817,
+                ],
+            ),
+            (
+                [19621, 38, 18303],
+                [
+                    2134310912, 235798528, 2424832, -235798528, 2134245376, 22020096, 0, -22216704,
+                    2147287040,
+                ],
+                [
+                    19568, 152, 18405, 12, -1041, 2416, 19552, 582, 15997, -21, 103, 2837,
+                ],
+            ),
+        ];
+        let words = |w: &[i16; 12], i: usize| [w[i], w[i + 1], w[i + 2]];
+        for pair in lab.windows(2) {
+            let (_, _, before) = pair[0];
+            let (position_raw, basis, after) = pair[1];
+            let mut camera = ChaseCameraState {
+                focus: SpringPoint {
+                    position: words(&before, 0),
+                    velocity: words(&before, 3),
+                },
+                eye: SpringPoint {
+                    position: words(&before, 6),
+                    velocity: words(&before, 9),
+                },
+                initialized: true,
+            };
+            camera.update(
+                ChaseCameraTarget {
+                    position_raw,
+                    body_basis: ChaseBodyBasis::from_vectors([
+                        [basis[0], basis[1], basis[2]],
+                        [basis[3], basis[4], basis[5]],
+                        [basis[6], basis[7], basis[8]],
+                    ]),
+                    active_camera: 6,
+                    parameters: ChaseCameraParameters::default(),
+                },
+                Some(context),
+                20_000,
+            );
+            assert_eq!(camera.springs_raw().concat(), after);
+        }
     }
 
     #[test]
@@ -1172,7 +1353,7 @@ mod tests {
             parameters: ChaseCameraParameters::default(),
         };
         let pose = state.update(target, None, 20_000);
-        assert_eq!(pose.eye, [10.0, 4.0, 12.0]);
+        assert_eq!(pose.eye, [10.0, 4.0, 20.0 - 2047.0 / 256.0]);
         assert!(pose.forward[0] > 0.0);
 
         let mut camera = Camera::new(4.0 / 3.0);
