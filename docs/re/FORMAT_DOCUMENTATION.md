@@ -465,9 +465,25 @@ carry them only through these spawns and type records:
 Every one of those type records' state policy (`+0xC0`, bit 1) clears
 `0x10000`, so none enters the terrain/sea pass; all of them enter the active
 pair pass as the moving model, which is why the cylinder/box/model tables
-below are ported. `0x30` (nukesub, the queen and her parts `1114`, `1115`,
-`1116`, `1118`, `1119`) and the queen's child orientation code 6 remain
-explicit errors.
+below are ported, as are `0x30` (nukesub, the queen and her parts `1114`,
+`1115`, `1116`, `1118`, `1119`) and the queen's child orientation code 6.
+
+**Mount basis `0x30`** (align2 payload, 5 or 9 bytes): byte 0 says whether a
+second step follows; each step is `[mode][angle word][code]` at bytes 1..4
+and 5..8. A permuting step copies the context's model basis permuted and
+negated by `code >> 2` (signed byte; `FUN_00467730`) into the context's mount
+basis (`ctx+0xC4`), then, when its angle word is nonzero, turns it by the
+`FUN_00470840`-decoded angle about axis `code & 3` (`FUN_004671F0`); the other
+mode only turns the mount. The first step permutes when its mode byte is
+nonzero, the second when it is zero. A child whose orientation code has
+`& 7 == 6` copies that mount as its basis (`FUN_0046B6D0`). Nothing seeds a
+collision context's mount, so a turn before the first permutation leaves it
+unknown, and a code-6 child reading an unknown mount stays an explicit stop;
+no shipped program does that. The staged-effect walk (`FUN_00419D90`) has
+the same case, and since it skips a `0x8A` face's slots as single bytes it
+also runs slot bytes equal to `0x30` as mount steps (model 15, `testcros`).
+`every_shipped_collision_program_walks_including_mount_ops` walks every
+program of every world biome both ways.
 
 Each primitive is tested by the query's table: one table per query shape, one
 entry per primitive. The Targetter's probe uses the point and sphere tables
@@ -542,9 +558,8 @@ normalize actor-family responses. Full crate/repository checks and actor-pair
 acceptance remain recorded by the active objective and owning actor notes.
 
 The supported child orientations compose the already recovered signed
-permutation basis and parent frame. Orientation code6 depends on a preceding
-`0x31` mount basis and remains an explicit unsupported error, as on the target
-side. Both sides share one walker, as retail shares `FUN_0046AF20`, so
+permutation basis and parent frame; orientation code 6 takes the mount basis
+of a preceding `0x30`, on both sides. Both sides share one walker, as retail shares `FUN_0046AF20`, so
 query-side cylinders, boxes and faces follow the same traversal. The terrain entry accepting a model pool shares this
 traversal; the legacy pool-free entry remains suitable for child-free player
 geometry and reports unavailable children explicitly.

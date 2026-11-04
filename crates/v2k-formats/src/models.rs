@@ -2302,6 +2302,8 @@ impl<P: CollisionModelPool + ?Sized> StagedEffectInterpreter<'_, P> {
 
         let program = &model.collision_program;
         let mut pc = 0usize;
+        // This context's mount basis (ctx+0xC4), written by 0x30.
+        let mut mount: Option<[[f64; 3]; 3]> = None;
         while pc < program.len() {
             let opcode = program[pc];
             match opcode {
@@ -2396,12 +2398,14 @@ impl<P: CollisionModelPool + ?Sized> StagedEffectInterpreter<'_, P> {
                     if next > program.len() {
                         return Err(StagedEffectError::Truncated { pc, opcode });
                     }
-                    // Code 6 copies mount-basis state established by an
-                    // earlier transform command. That state is outside this
-                    // focused collision-program subset.
-                    if orientation_code & 7 == 6 {
-                        return Err(StagedEffectError::UnsupportedOpcode { pc, opcode });
-                    }
+                    // Code 6 copies the mount basis an earlier 0x30 wrote.
+                    let child_local_basis = if orientation_code & 7 == 6 {
+                        transpose_basis(
+                            mount.ok_or(StagedEffectError::UnsupportedOpcode { pc, opcode })?,
+                        )
+                    } else {
+                        transpose_basis(permute_negate(&IDENTITY3, orientation_code))
+                    };
                     let child = self.pool.collision_model(child_id).ok_or(
                         StagedEffectError::MissingChild {
                             global_id: child_id,
@@ -2412,8 +2416,6 @@ impl<P: CollisionModelPool + ?Sized> StagedEffectInterpreter<'_, P> {
                             pc,
                             slot: attach_slot,
                         })?;
-                    let child_local_basis =
-                        transpose_basis(permute_negate(&IDENTITY3, orientation_code));
                     let child_origin =
                         transform_collision_point(model_to_output_basis, model_origin, attach_pos);
                     let child_basis = mat3_mul_f64(model_to_output_basis, child_local_basis);
@@ -2441,9 +2443,13 @@ impl<P: CollisionModelPool + ?Sized> StagedEffectInterpreter<'_, P> {
                     pc = next;
                 }
 
-                // These source cases mutate the current mount frame. Keep
-                // them explicit until the staged interpreter owns that frame.
-                0x30 | 0x31 => return Err(StagedEffectError::UnsupportedOpcode { pc, opcode }),
+                // FUN_00419D90's case 0x30 is FUN_0046AF20's.
+                0x30 => {
+                    pc = collision_mount_op(program, pc, vars, &mut mount)
+                        .ok_or(StagedEffectError::Truncated { pc, opcode })?;
+                }
+                // 0x31 (a mount from three slots) occurs in no shipped program.
+                0x31 => return Err(StagedEffectError::UnsupportedOpcode { pc, opcode }),
                 // Source initializes next=opcode+1 before its switch. This
                 // includes the one-byte8D convex terminator and inert bytes;
                 // importing collision-query branch semantics here is wrong.
@@ -2748,6 +2754,10 @@ where
     let mut previous_hit = None;
     let mut group_end = None;
     let mut group_active = false;
+    // The context's mount basis (ctx+0xC4) in model axes, written by 0x30.
+    // Retail never seeds it for a collision context, so a rotation or a
+    // code-6 child before this program's first 0x30 permutation stays a stop.
+    let mut mount: Option<[[f64; 3]; 3]> = None;
     let point = |slot: u16| {
         resolve_collision_slot(model, slot, vars, linked)
             .map(|local| transform_collision_point(model_to_frame_basis, model_origin, local))
@@ -2894,6 +2904,12 @@ where
                 }
             }
 
+            // Mount basis (`collision_mount_op`).
+            0x30 => {
+                pc = collision_mount_op(program, pc, vars, &mut mount)
+                    .ok_or(ModelCollisionError::Truncated { pc, opcode })?;
+            }
+
             // Collision-only child model. Payload order differs from the
             // render stream's 0x0E instance record. Retail recurses into
             // the child through FUN_0046B6D0 with the same table.
@@ -2915,12 +2931,15 @@ where
                 if next > program.len() {
                     return Err(ModelCollisionError::Truncated { pc, opcode });
                 }
-                // Code 6 depends on an earlier 0x30 mount-basis command;
-                // that rarer transform state is intentionally explicit
-                // rather than silently treated as identity.
-                if orientation_code & 7 == 6 {
-                    return Err(ModelCollisionError::UnsupportedOpcode { pc, opcode });
-                }
+                // Code 6 copies the mount basis (FUN_0046B6D0); without an
+                // earlier 0x30 in this context retail would read an unseeded one.
+                let child_local_basis = if orientation_code & 7 == 6 {
+                    transpose_basis(
+                        mount.ok_or(ModelCollisionError::UnsupportedOpcode { pc, opcode })?,
+                    )
+                } else {
+                    transpose_basis(permute_negate(&IDENTITY3, orientation_code))
+                };
                 let child =
                     pool.collision_model(child_id)
                         .ok_or(ModelCollisionError::MissingChild {
@@ -2933,8 +2952,6 @@ where
                     pc = next;
                     continue;
                 };
-                let child_local_basis =
-                    transpose_basis(permute_negate(&IDENTITY3, orientation_code));
                 let child_origin =
                     transform_collision_point(model_to_frame_basis, model_origin, attach_pos);
                 let child_basis = mat3_mul_f64(model_to_frame_basis, child_local_basis);
@@ -3101,6 +3118,45 @@ fn box_separation_hit(
         normal,
         penetration_raw: f64::from(depth[axis]),
     })
+}
+
+/// Collision opcode 0x30 (`FUN_0046AF20` and `FUN_00419D90`): one or two
+/// `[mode][angle word][code]` steps on the context's mount basis, kept here in
+/// model axes. A permuting step copies the model basis permuted by
+/// `code >> 2` (`FUN_00467730`), then turns it about axis `code & 3` when its
+/// angle word is nonzero; the other mode only turns (`FUN_004671F0`). The
+/// first step permutes when its mode byte is nonzero, the second when it is
+/// zero. Returns the next program counter, or `None` when truncated. Retail
+/// never seeds a collision context's mount (ctx+0xC4), so a turn before the
+/// first permuting step leaves it unknown; only a code-6 child reads it.
+fn collision_mount_op(
+    program: &[u8],
+    pc: usize,
+    vars: &AnimVars,
+    mount: &mut Option<[[f64; 3]; 3]>,
+) -> Option<usize> {
+    let payload = collision_align2(pc);
+    let byte = |offset: usize| program.get(payload + offset).copied();
+    let mut step = |at: usize, permutes: bool| {
+        let angle = collision_u16(program, payload + at + 1)?;
+        let code = byte(at + 3)?;
+        if permutes {
+            *mount = Some(permute_negate(&IDENTITY3, ((code as i8) >> 2) as u16));
+            if angle == 0 {
+                return Some(());
+            }
+        }
+        if let Some(basis) = mount.as_mut() {
+            rotate_mount_basis(basis, u16::from(code & 3), decode_value(angle, vars));
+        }
+        Some(())
+    };
+    step(1, byte(1)? != 0)?;
+    if byte(0)? == 0 {
+        return Some(payload + 5);
+    }
+    step(5, byte(5)? == 0)?;
+    Some(payload + 9)
 }
 
 /// The retail interpreter aligns by adding the largest possible record-header
@@ -4814,6 +4870,61 @@ mod tests {
         assert_eq!(equal.normal, [1.0, 0.0, 0.0]);
     }
 
+    /// 0x30 permutes the model basis (code 0) and turns it a quarter about
+    /// axis 2; the code-6 child then copies that mount, so its sphere at local
+    /// X 100 lands at parent Y 100. A lone turn leaves the mount unknown, which
+    /// stops only the code-6 child that reads it.
+    #[test]
+    fn mount_op_orients_code6_children_in_both_walkers() {
+        let parent = collision_entry(
+            vec![[0, 0, 0, 0]],
+            vec![
+                0x30, 0, 0, 1, 0x00, 0x40, 2, 0x05, 1, 0, 6, 0, 8, 0, 0, 0, 0x88,
+            ],
+        );
+        let child = collision_entry(
+            vec![[0, 100, 0, 0]],
+            vec![0x8E, 0, 0, 0, 7, 0, 0, 0, 0, 0, 0x88],
+        );
+        let mut pool = vec![parent, child];
+        let vars = AnimVars::default();
+        let points = pool[0]
+            .staged_effect_points_raw(StagedEffectRequest::default(), &vars, &pool)
+            .unwrap();
+        assert_eq!(points.len(), 1);
+        let center = points[0].center_raw.map(|v| v.round());
+        assert_eq!(center, [0.0, 100.0, 0.0]);
+
+        let sphere = |pool: &Vec<ModelEntry>, at: [f64; 3]| {
+            pool[0]
+                .collide_sphere_raw(at, 5, &vars, pool)
+                .unwrap()
+                .is_some()
+        };
+        assert!(sphere(&pool, [0.0, 100.0, 0.0]));
+        assert!(!sphere(&pool, [100.0, 0.0, 0.0]));
+
+        // Second-step mode bytes are inverted: zero permutes. Code byte 0x80
+        // permutes with source row 0 negated (0x80 >> 2 = 0x20).
+        pool[0].collision_program = vec![
+            0x30, 0, 1, 1, 0x00, 0x00, 0, 0, 0, 0, 0x80, 0x05, 1, 0, 6, 0, 8, 0, 0, 0, 0x88,
+        ];
+        assert!(sphere(&pool, [-100.0, 0.0, 0.0]));
+
+        pool[0].collision_program = vec![
+            0x30, 0, 0, 0, 0x00, 0x40, 2, 0x05, 1, 0, 6, 0, 8, 0, 0, 0, 0x88,
+        ];
+        assert_eq!(
+            pool[0]
+                .collide_sphere_raw([0.0; 3], 5, &vars, &pool)
+                .unwrap_err(),
+            ModelCollisionError::UnsupportedOpcode {
+                pc: 7,
+                opcode: 0x05
+            }
+        );
+    }
+
     #[test]
     fn query_child_keeps_missing_mount_and_recursion_boundaries_explicit() {
         let query = collision_entry(
@@ -5204,7 +5315,7 @@ mod tests {
 
     #[test]
     fn staged_effect_walk_reports_unsupported_truncated_and_recursive_streams() {
-        let unsupported = collision_entry(Vec::new(), vec![0x30]);
+        let unsupported = collision_entry(Vec::new(), vec![0x31]);
         assert_eq!(
             unsupported
                 .staged_effect_points_raw(
@@ -5215,7 +5326,7 @@ mod tests {
                 .unwrap_err(),
             StagedEffectError::UnsupportedOpcode {
                 pc: 0,
-                opcode: 0x30,
+                opcode: 0x31,
             }
         );
 
