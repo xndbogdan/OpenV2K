@@ -217,3 +217,67 @@ fn a_blast_on_the_player_kills_the_ball_first_and_spares_the_craft() {
         RetailRuntimeValue::Known(DYING_STATE_BIT)
     );
 }
+
+/// The Main Base abort's FUN_00410C10 on the hold's ball and a Megablast
+/// pickup pod: each takes class2 (cue 62, tasks cleared, removal staged).
+#[v2k_test_support::retail_test]
+fn the_main_base_abort_kills_the_ball_and_a_pod_through_class2() {
+    use crate::main_base_abort::{classify_main_base_abort_actor, MainBaseAbortActorRoute};
+    let (session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(13);
+    let mut tasks = super::super::queen_tests::adopt_world(&mut manager);
+    let terrain = session.cache.terrain().unwrap().clone();
+    let ball = birth_ball(&session, &mut manager, &mut fx, &mut tasks);
+    let pod = crate::megablast::MegablastWorld {
+        entities: &mut manager,
+        scheduler: &mut tasks,
+        terrain: &terrain,
+        waves_enabled: false,
+        world_fx: &mut fx,
+        notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
+        retail_tick: 791,
+        player_rotation_raw: [0, 0, 0],
+    }
+    .pickup()
+    .unwrap();
+    for id in [ball, pod] {
+        let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
+        let entity_type = entity.entity_type;
+        let observation = manager.main_base_abort_actor_observation(id).unwrap();
+        let route =
+            classify_main_base_abort_actor(crate::main_base_abort::MainBaseAbortActorFacts {
+                entity_id: id,
+                entity_type,
+                capability_flags: entity.capability_flags,
+                state_flags: entity
+                    .collision
+                    .state_flags_at_0x08
+                    .masked(crate::main_base_abort::ORDINARY_DEATH_STATE_SKIP_MASK),
+            });
+        assert_eq!(
+            route,
+            MainBaseAbortActorRoute::OrdinaryDeath { entity_id: id }
+        );
+        let advance = manager
+            .apply_main_base_abort_quiet_death(observation.lease, &mut fx)
+            .unwrap();
+        assert!(
+            matches!(
+                advance,
+                crate::entity::MainBaseAbortQuietDeathAdvance::Advanced {
+                    outcome: crate::entity::MainBaseAbortQuietDeathOutcome::DeferredDestroyStaged {
+                        death_sound_id: Some(62),
+                        ..
+                    },
+                    ..
+                }
+            ),
+            "Type{entity_type}: {advance:?}"
+        );
+        let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
+        assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(0));
+        assert!(ActorTaskSlot::IN_RETAIL_TICK_ORDER
+            .into_iter()
+            .all(|slot| entity.actor_task_state(slot).is_none()));
+    }
+}
