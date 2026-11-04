@@ -75,6 +75,12 @@ pub enum LoadingPurpose {
         shell: MenuShell,
         carried_camera_raw: [i16; 3],
     },
+    /// `FUN_0044F650` mode 4: a world of the attract table in phase 4. Klaus
+    /// opens over it as over any world.
+    AttractDemo {
+        shell: MenuShell,
+        row: crate::attract_demo::AttractRow,
+    },
 }
 
 impl LoadingPurpose {
@@ -90,6 +96,7 @@ impl LoadingPurpose {
                     | Self::CampaignWarp { .. }
                     | Self::Network { .. }
                     | Self::ClosingScene { .. }
+                    | Self::AttractDemo { .. }
             )
     }
 }
@@ -985,6 +992,20 @@ impl MenuShell {
         self.klaus_model_state = 0;
         self.transition_ready = false;
         self.prime_klaus_opening();
+    }
+
+    /// `FUN_0042B5D0` at the ring: the ring's pop and Klaus's command 5, as
+    /// New Game's, without its cue.
+    pub fn start_attract(&mut self) {
+        self.apply_commands(&[MenuCommand::StartGame]);
+    }
+
+    /// `FUN_0042B5D0` deeper: one screen pops as Escape's does, silently, and
+    /// Klaus gets command 1 only when the pop starts from depth 2.
+    pub fn idle_pop(&mut self, klaus_command: bool, ctx: &MenuCtx) {
+        let pending = self.pending_intro_sequence_command;
+        self.input(MenuInput::Back, ctx);
+        self.pending_intro_sequence_command = if klaus_command { Some(1) } else { pending };
     }
 
     /// `FUN_0042CEA0`: the command Klaus's next callback consumes.

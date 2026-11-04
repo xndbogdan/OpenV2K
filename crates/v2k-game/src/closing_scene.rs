@@ -64,6 +64,9 @@ pub struct ClosingScene {
     selected_stamp: u32,
     /// Session `+308`. The handle retail carries in never resolves here.
     camera_target: Option<u32>,
+    /// Phase 4, the attract demo: `FUN_004503C0` picks the subject itself and
+    /// the world has no command records.
+    pub attract: Option<crate::attract_demo::AttractCamera>,
 }
 
 impl ClosingScene {
@@ -76,6 +79,19 @@ impl ClosingScene {
                 .collect(),
             selected_stamp: 0,
             camera_target: None,
+            attract: None,
+        }
+    }
+
+    /// A phase-4 attract world: its records (`FUN_00452CB0` from global string
+    /// `0x77`) hold only the "Demo" caption, no commands.
+    pub fn attract(camera: IntroCameraController) -> Self {
+        Self {
+            camera,
+            commands: Vec::new(),
+            selected_stamp: 0,
+            camera_target: None,
+            attract: Some(crate::attract_demo::AttractCamera::default()),
         }
     }
 
@@ -130,7 +146,10 @@ impl ClosingScene {
 
     /// `FUN_004503C0` follows the selected body while it lives.
     pub fn camera_subject(&self, entities: &EntityManager) -> Option<IntroCameraSubject> {
-        let id = self.camera_target?;
+        let id = match &self.attract {
+            Some(attract) => attract.subject()?,
+            None => self.camera_target?,
+        };
         entities
             .iter_all()
             .find(|entity| entity.id == id)

@@ -1018,62 +1018,130 @@ an attract-table policy.
 
 ### The attract demo in the port
 
-Not ported. The idle frontend's countdown (`FUN_0042B5D0`: 60 s, then 10 s
-reloads) starts game mode 4 seven times in eight and mode 1 otherwise.
-Mode 4 (`FUN_0044F650`) draws one RNG word and picks a logical world from
-the 12-row table at `004D0CC8` (worlds 7, 27, 2, 3, 5, 6, 11, 12, 31, 11,
-24 and 26), with the player's pose from the row's `+0A` and `+0E`; the
-session runs it in phase 4, where `FUN_00453330` installs no craft keys,
-the HUD is off, the cinematic follow and Section-2 records of phases below
-5 run, logical world 11 builds no player (`FUN_00450390`), and the exit
-(`FUN_00453E00`) returns to the frontend (`FUN_0044FEB0`). Mode 1 plays
-Intro2 the same way.
+Ported in `attract_demo.rs`; the phase-4 world rides the closing scene's
+cinematic path (`closing_scene.rs`).
 
-The demo world ends on its clock: in phase 4 the cinematic follow
-(`FUN_004503C0`) sets `+290` once the 50 Hz clock passes `0xB22` (2850
-ticks, 57.0 s; Intro2's phases 1 and 2 use `0x10CC`), the next visit sends
-event 2 (`FUN_0044FCD0` selects `4D0A30`), and its exit (`FUN_00453E00`)
-returns to the frontend. In the lab's idle frontend (no keys) the demo
-world loads at pass 3033, ticks 2852 times and the frontend is back at
-pass 5886, clock 2853. Phase 4 also has its own camera-subject choices in
-`FUN_004503C0`. A countdown in milliseconds (`004F72D8`, zero after every
-load) drops by each visit's microseconds over 1000; when it goes negative,
-in world style 6 or on an odd random word the camera roams: the countdown
-restarts at 2000 plus a random word's low 16 bits shifted right by five
-(2.0 to about 4.0 s), the subject (session `+308`) is reset, and the live
-list is walked: for each actor with a nonzero state word without bit
-`0x4000` that either has capability bit 8 or, in world style 6, a type
-record with a nonzero `+E4`, one random word is drawn; a word whose low
-three bits are zero takes that actor and ends the walk, and otherwise the
-actor is taken only if the current subject no longer resolves. On an even
-word outside style 6 the player (session `+27C`) becomes the subject and the
-countdown restarts at 4000 plus the shifted word (4.0 to about 6.0 s).
-Not ported yet: the idle countdown, the table's world, phase 4 and these
-choices.
+**The countdown.** `FUN_0042A890` sets the reload `004DB204` to 60,000 ms at
+startup, and every frontend entry (`FUN_0042B230`) copies it into the
+countdown `004DB21C`. Each `FUN_0042B5D0` visit, after the actor walk and the
+screen tick, takes the frame's microseconds (clamped to 125 ms) over 1000,
+truncated, from the countdown while it is nonzero, the window is active
+(`004FE60C`) and no network game is open (`004F741C`); Klaus's state only
+steers the craft's drift in the same routine. The frontend's handlers for
+Return and Space (not with Alt), Escape (with or without Shift) and the
+arrows (`FUN_0042BD90`, `FUN_0042BAD0`, `FUN_0042BAA0`, `FUN_0042BB30` to
+`FUN_0042BBC0`) set both words to 60,000 on every press and release; their
+joystick rows reach the same handlers, and the port resets on a pad's menu
+actions. Below 1 both become 10,000 and `FUN_0043A9A0` starts one screen's
+pop, returning the depth it pops from: at the ring (depth 1) the game starts
+in mode 4, or in mode 1 when one random word's low three bits are zero, and
+Klaus gets command 5 (the ring flies off as for New Game, without its cue);
+from depth 2 Klaus gets command 1; deeper the pop is all. The init's own pass
+counts, so after a return the next demo starts 500 passes after the init.
 
-More from the code, for the port to come:
+**Mode 1** takes `FUN_0044F650`'s default branch, as New Game does: Intro2
+(campaign slot `0x26`, `+34` 1), played in phase 1. Its end (`0x10CC`) or a
+skip sets `+290`; `FUN_00453E00` sees phase 1 and calls `FUN_0044FEB0` at
+once, so the frontend comes back with no Klaus closing leg.
 
-- The countdown (`004DB21C`) runs whenever it is nonzero and `004FE60C`
-  and `004F741C` are clear; Klaus's state (`FUN_0042D210`) only steers the
-  frontend craft's drift in the same routine. The pop's new depth decides:
-  below 2 the attract start, 2 Klaus's command 1, deeper nothing.
-- Mode 1 takes `FUN_0044F650`'s default branch, as New Game does: campaign
-  slot `0x26` (Intro2) and `+34` 1. `FUN_0044F8B0` stores the mode as the
-  phase, so Intro2 plays in phase 1, ends at `0x10CC` like New Game's
-  phase 2, and `FUN_00453E00` then returns to the frontend at once
-  (`FUN_0044FEB0`, no Klaus leg) where phase 2 closes Klaus and loads the
-  first world.
-- While a player exists below phase 5, every `FUN_004503C0` visit writes
-  the attract row (`004F72C4`) into the player: the body's component
-  (`+4C`, then `+0C`, then `+2C`) takes the row's `+1` byte at `+10`, its
-  `+8` word at `+20` and its `+3` byte into the word at `[+0C]`; the
-  block at the type record's `+C8`, then `+18`, takes the row's `+2` byte
-  at `+17`, 1 at `+16`
-  and the row's `+4` dword times 1000 at `+4`. These drive the demo
-  player; their meaning is not decoded.
-- The lab's idle frontend (deterministic RNG) picks logical world 11,
-  which builds no player. Its card and its frames show the V2000 branding
-  at the bottom left, and the world shows a "Demo" caption at the top.
+**Mode 4** draws one random word and takes row `(word & 0xFFFF) * 3 >> 14`
+of the 12-row table at `004D0CC8` (its index in `004F72C4`). Each 16-byte
+row is:
+
+| Offset | Size | Meaning |
+|---|---|---|
+| `+00` | byte | logical world (`FUN_0042E3B0`; overlay = world + 12) |
+| `+01` | byte | the demo player's projectile method, its Sub-E runtime `+10`: a weapon selector of the table at `004CDC08` |
+| `+02` | byte | the player type's Sub-E `+17`, the auxiliary command after each shot |
+| `+03` | byte | the word the Sub-E runtime's binding `+0C` points at: the weapon record's `+08` selector for that method |
+| `+04` | dword | times 1000, the player type's Sub-E cadence `+04` (µs) |
+| `+08` | word | the Sub-E runtime's sound `+20`, the method's firing sound |
+| `+0A` | 3 words | copied to session `+38`/`+3C`: the player's arrival |
+
+| Rows | World | Method | Selector | Cadence | Sound | Aux |
+|---|---|---|---|---|---|---|
+| 0, 4, 10 | 7, 5, 24 | 14 | 6 | 100 ms | 78 | 0 |
+| 1, 5 | 27, 6 | 13 | 7 | 100 ms | 77 | 0 |
+| 6, 9 | 11 | (no player) | | | | |
+| 2, 3 | 2, 3 | 18 | 0 | 50 ms | 88 | 1 |
+| 7, 11 | 12, 26 | 12 | 8 | 100 ms | 76 | 0 |
+| 8 | 31 | 12 | 8 | 30 ms | 76 | 0 |
+
+Methods 12, 13 and 14 are the finite-ammunition weapons of `004CDC08` with
+those selectors and sounds; method 18 with sound 88 and auxiliary 1 is type
+46's own Sub-E (authored at 75 ms). `FUN_004503C0` makes these writes on
+every visit while the player exists, the Sub-E ones into type 46's shared
+record. They arm the demo player, which is no ordinary player:
+`FUN_00451AF0` builds it through `FUN_004438A0` with phase 4's flag, which
+takes the behavior choices from type 51's record (class 7, the network peer
+craft's) instead of type 46's (class 24, Player Control), and phase 4
+installs no craft keys (`FUN_00453330` adds the craft table only in phase
+5). The lab's row-0 run shows that craft flying over world 7 and firing at
+the creatures.
+
+The world plays in phase 4: the HUD off (`FUN_004515E0`), Klaus's command 2
+opening over it (`FUN_00451710`), authored behaviors left on (only phases
+below 4 clear them), the emblem drawn below phase 5 (`FUN_004537F0`), and
+`FUN_00452CB0`'s records from global string `0x77` instead of the world's:
+`\t<    *, *,16,30,   15>Demo`, the caption. Its CD track
+(`FUN_00456AF0`) is 8 when the world's style is not 6 and a random word is
+even, and the world's own (style + 1) otherwise; phases below 3 select
+track 9, which the port's Intro2 does not play. `FUN_00451710` moves the
+persistent class-1 proxy up 0x200 and along Z by `0x700 - far`, from the
+player when the world has one (its arrival lifted by `FUN_00451C00` to 0x200
+above the ground) and otherwise from wherever it stood, keeping its velocity.
+The frontend builds that proxy at the origin once, and the frontend's actor
+walk keeps moving it by its velocity between worlds. From the origin this
+gives Intro2's traced start `[0, 0x200, -0x1100]`.
+
+`FUN_004503C0`'s phase-4 visit, after the contacts: past clock `0xB22` it
+sets `+290` and does nothing else. Otherwise its subject countdown
+(`004F72D8`, zero after every load) drops by the visit's microseconds over
+1000 and, once negative, in world style 6 or on an odd random word, restarts
+at `2000 + (word >> 5)` ms with the subject (`+308`, null at every game
+start) reset and the live list walked: each body with a nonzero state word
+without `0x4000` that has capability bit 8, or in style 6 a type record with
+Sub-F, draws a word; a word whose low three bits are zero takes it and ends
+the walk, and otherwise it is taken only while the subject does not resolve.
+On an even word outside style 6 the subject becomes the player for
+`4000 + (word >> 5)` ms. The proxy then follows the subject as in the
+closing scene.
+
+The world ends through `+290`, from that clock or from any in-play continue
+or pause key (Space, Return, Escape, P: `FUN_00455D30` and `FUN_00455D60`
+call `FUN_00452770` below phase 5). A key's handler runs before that pass's
+`FUN_0044FFA0`, which consumes `+290` at once and switches to `4D0A30`
+without a draw; the clock's `+290` waits for the next pass. `4D0A30`'s
+`FUN_00453E00` sees phase 4 and calls `FUN_0044FEB0` on its first visit, so
+the frontend's init follows one pass later, again with no Klaus leg.
+
+**Retail lab at 640x480, 20-ms passes, `--skip-intro` probes:**
+
+- Idle frontend: the countdown expires at pass 3000 (word `0x91AD`: mode 4),
+  the row word `0x8BBF` picks row 6 (world 11) and the world loads at 3033;
+  `+290` is consumed at 5885 after 2852 ticks, the frontend's init is at
+  5886, and the second demo loads at 6418 (row 3, world 3). The port, with
+  row 6 forced (its frontend's random words are not in lockstep with
+  retail's, whose model draws there call `FUN_0046E020` and `FUN_0046E0E0`,
+  the type-3 vertex handlers, three words a call),
+  loads at 3033, returns at 5885 and 5886, and loads the second demo at 6418.
+  Klaus's cover and the emblem at 3040 and 3060 match up to his twitch, as
+  does the "Demo" caption; the camera's subjects are random draws and differ.
+- Mode 1 (`004DB224` written to 1 before the ring's pop): Intro2 loads at
+  3033, the frontend's init is at 7336 and the next demo loads at 7868, in
+  the lab and in the port; the last Intro2 frames (7330, 7334) are identical.
+- Space at pass 3300 in world 11: no frame at 3300 or 3301 in either, and
+  the frontend from 3303 in both.
+- On the first pass after the frontend's init retail draws its load card
+  (Klaus, "Loading", the branding and the emblem over the last world frame);
+  the port draws the frontend there, as on every return to the frontend.
+
+**Held:** the demo player of the ten rows that have one. Its type-46 body
+under type 51's class 7, armed by these writes, is not owned by the port, so
+those worlds play without it and stderr says "Attract demo player held". The
+proxy still enters from where that player would stand, and the camera's
+fallback subject is then none. The lab's row-0 run (row 6 overwritten with
+row 0) is the reference for that work.
 
 ## Screen tree highlights (full tree in ../port/crates/v2k-game/data/menu_tree.json)
 
@@ -1560,8 +1628,8 @@ and the load restarts it.
 
 ## Remaining open questions (none port-blocking)
 
-1. Game-start mode code semantics 4 vs 1 vs 2 (attract-timeout start vs 1/8
-   variant vs ring-select) — which runs an AI demo. Runtime test needed.
+1. (Answered: mode 2 is New Game, 1 the idle Intro2, 4 the attract world,
+   whose player runs type 51's class 7; see the attract demo above.)
 2. Process-global RNG ownership for remaining world sound wrappers. Klaus's
    callback cadence and immediate whoosh alias ordering are implemented; other
    sounds must also resolve at their native call boundary.
