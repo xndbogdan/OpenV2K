@@ -62,12 +62,18 @@ impl EntityManager {
     /// lethal hit takes the class2 death. Checked before the player's hit
     /// commits anything.
     pub(crate) fn defender_ball_hit_ready(&self, id: u32) -> bool {
+        self.hold_body_hit_ready(id, ENTITY_TYPE, 50)
+    }
+
+    /// The same for a living hold body of `entity_type` in its living class
+    /// (the Autobot's class53, whose lethal hit takes class11).
+    pub(super) fn hold_body_hit_ready(&self, id: u32, entity_type: u32, class: u32) -> bool {
         let Some(entity) = self.iter_all().find(|entity| entity.id == id) else {
             return false;
         };
-        let class50 = crate::entity_behavior::behavior_program(50)
+        let class50 = crate::entity_behavior::behavior_program(class)
             .map(|program| program.initial_style.frame_address);
-        entity.entity_type == ENTITY_TYPE
+        entity.entity_type == entity_type
             && Class0ActorOwner::adopt(self, id).is_ok()
             && !self.native_class0_has_pending_prefix(id)
             && entity

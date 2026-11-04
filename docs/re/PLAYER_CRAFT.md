@@ -1606,7 +1606,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
 | Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | ported; its pair hook held |
-| Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | ported; its damage and death held |
+| Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone, death class 11 | ported |
 
 **Proximity Mines.** Class 34's first style (`0x4C8548`, initializer
 `FUN_0040B080`: Secondary, then Tertiary cleared, then `FUN_00406B00`'s
@@ -1761,8 +1761,7 @@ block.
 
 **Defender Ball and Autobot.** Operation `0x38` is ported (see
 [CHEATS](CHEATS.md#port-status)). Neither type has capability `0x1000`, so
-both join the controller's `+220` list. The Defender Ball is ported; the
-Autobot's visit is ported, its damage and death held (below). What their owners do:
+both join the controller's `+220` list. Both are ported. What their owners do:
 
 - Type63 (model 244, health 1, no components, alternate class 2): class 50's
   initializer `FUN_0040B0F0` clears Tertiary then Secondary and builds the
@@ -1804,8 +1803,11 @@ mass 10, capability `0x40`, health 1, initializer state `0x404`, axis
 the visit, and the class2 death (`FUN_00410C10`: health 0, dying, cue 62,
 tasks cleared, removal staged) from the hold walk, a particle hit or a radial.
 The walk runs in every player hit that goes through the checked-damage owner
-(shots, particles, radials). A live hold body other than a ball (the Autobot)
-stops the craft's hit with a logged block naming its type.
+(shots, particles, radials) and in a collision on the craft. Without a live
+ball, each live Autobot in the list takes the packet under a temporary
+`0x8000`, and the craft then takes its own hit in full; a live hold body
+without a port owner stops the craft's hit with a logged block naming its
+type.
 
 The port builds the Autobot on the class0 constructor too (model 248, mass
 10, capability `0x40`, health 3000, initializer state `0x84`, axis
@@ -1872,15 +1874,61 @@ arrival pose, F9 at frame 162) leaves formation 68 frames after F9 (retail
 being in lockstep) and then keeps about 300 from the player toward its
 target with no stop.
 
-Held, each a logged stop:
+**The Autobot's death.** A living Autobot's state lacks `0x8000`, so only
+the player's walk (above) reaches it, unless a Megablast's restore has set
+the bit (its class53 policy lacks `0x80`); then particles, radials and pairs
+do too, as does the Main Base abort's `FUN_00410C10`. Every lethal entry
+takes `FUN_00410C10`: health 0, dying, sound 62, then its alternate class11
+(`FUN_0040C660`): Secondary then Tertiary cleared and `FUN_00404360`'s
+Primary (tick `FUN_00404460`, no timeout). Type10's class11 also resets its
+Sub-G with a random word; the Autobot has no Sub-A, G or H for
+`FUN_00406070` to reset, so its death reads no random word. Class11's
+policy sets `0x8000` and `0x10000` and clears the rest of the type's `0x84`,
+so its effective flags are 0.
 
-- its checked damage, radial, pair and Main Base abort entries, and its
-  class11 tumble death;
-- the hold walk's second branch: a live Autobot in the list stops the craft's
-  hit with a block (at tick 1787 of `wpn4-hold` retail's walk gives the
-  Autobot a `{[2,3], [14000,12000]}` radial packet through its filter, 7211
-  after its profile, and it dies into class11 before the craft takes its
-  own).
+The class0 host keeps visiting it. A detailed visit spins it
+(`FUN_00404460`: the multiplier is 3 less the task's elapsed seconds, at
+least 1; roll by it times `dt >> 7`, heading by it times `dt >> 8`, pitch
+by it times their sum); `FUN_004018A0` finds none of its components. With
+effective flags 0, `FUN_0040E100` applies gravity, `q31(dt, 0x300000)` off
+the vertical velocity (29 a tick at 20 ms), and nothing damps it. Its
+contacts are Type10's class11 ones, shared: `FUN_00411AD0`'s terrain,
+water and static phases, each through class11's `FUN_0040C750` into the
+completion style (`FUN_0040BAC0`): the `FUN_0040BAF0` burst (no F, H, N or G
+block and capability `0x40`: sixteen particles of classes 94 and 95), the
+type's radial (inner `0x200`, outer `0x400`, impulse 2000, `{[1,3],
+[4000,4000]}`, attributed to itself), the tasks cleared and the removal
+staged, then the contact's own response. Its static gates read capability
+bit 1 (`FUN_00427E20`) and effective `0x400` (`FUN_0040D920`); the Autobot
+has neither.
+
+Retail lab (Level 1, master code, F9, `wpn4-hold`): at tick 1787 (world
+clock 1435) a radial reaches the craft with `{[2,3], [3025,2593]}`; the walk
+hands the Autobot that packet, which its profile filters to 7211, and it
+dies into class11 before the craft takes its own 8011. It starts its fall
+moving at `(1561, 631, 402)`. From its pose at its first tumble
+visit (tick 1788), the port's class0 host reproduces its position, velocity
+and Euler words at every visit to tick 1846; that tick's contact pass enters
+the sea (world clock 1494), runs the terminal, and the hard entry leaves
+its vertical velocity at -540, as retail's tick 1847 shows, with a Type60
+ring.
+
+A second lab run (the same keys to F9, then `FUN_00410C10` called on the
+Autobot at tick 897) shows the falling body in the pair walk: at tick 914
+it passes the Defender Ball, whose hook gives it a checked `{1, 40000}`
+(34000 after its filter, harmless to a dying body) and whose contact
+response stops its fall; it ends in the sea at tick 942, a soft entry that
+leaves its velocity. The port's pair walk admits it (the ball's hook needs
+its class0 owner, which holds the tumble); that pass was not compared tick
+by tick. A port probe of `wpn4-hold`'s keys (Level 1 from retail's player
+state, the keys 400 frames after the arrival) loses the ball at frame
+1380, then the Autobot at 1442, which tumbles to the sea and is removed 37
+frames later with no stop (the two worlds' blasts differ: their random
+words are not in lockstep).
+
+A body that has finished its terminal keeps its allocation until the
+removal sweep; a particle hit on it in that window stops with a logged
+block ("completed actor custody").
 
 The ball's pair hook `FUN_0040C800` runs in the late pair walk (see
 [ACTOR_RUNTIME](ACTOR_RUNTIME.md#the-ports-walk)): another Type63 returns

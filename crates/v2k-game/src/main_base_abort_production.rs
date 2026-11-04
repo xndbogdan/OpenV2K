@@ -145,6 +145,8 @@ pub enum MainBaseAbortActorDisposition {
     Type66Death,
     /// Type118's direct alternate class65 Geyser keeps the class0 owner.
     GeyserDeath,
+    /// Type64's class11 tumble on its class0 owner.
+    AutobotDeath,
     /// Type36's direct alternate class16 reinstalls Generate Flares.
     FlareDeath,
     /// Type110's direct alternate class67 reinstalls the Queen, dying.
@@ -1514,6 +1516,32 @@ fn dispatch_ordinary_actor(
                 };
             Ok(DispatchSuccess {
                 disposition: MainBaseAbortActorDisposition::GeyserDeath,
+                successor,
+                successor_available,
+            })
+        }
+        crate::entity::AUTOBOT_ENTITY_TYPE => {
+            let id = actor.lease.entity_id;
+            if !specialized_tasks.prepare_class0_actor_external_mutation(entities, id) {
+                return Err(callback_error(
+                    MainBaseAbortActorCallbackBlock::Class0Alternate(
+                        crate::entity::Class0ActorError::Allocation,
+                    ),
+                ));
+            }
+            // The scheduler's owner holds the class11 owner it becomes.
+            entities
+                .apply_autobot_death(id, world_fx)
+                .map_err(|error| {
+                    callback_error(MainBaseAbortActorCallbackBlock::Class0Alternate(error))
+                })?;
+            let (successor, successor_available) =
+                match entities.main_base_abort_successor_after_callback(id) {
+                    Ok(next_actor) => (next_actor, true),
+                    Err(()) => (None, false),
+                };
+            Ok(DispatchSuccess {
+                disposition: MainBaseAbortActorDisposition::AutobotDeath,
                 successor,
                 successor_available,
             })

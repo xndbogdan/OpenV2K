@@ -68,6 +68,8 @@ impl PlayingPlayerContact<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeCaptorPairBlock {
     Runtime(&'static str),
+    /// The Autobot's checked hit or its class11 death stopped.
+    AutobotPairDamage,
     /// `FUN_0040CAF0` past its receiver: the Type93 or its attach stopped.
     RemoteBeam {
         beamer: u32,
@@ -1744,8 +1746,18 @@ fn is_native_defender_ball(entity: &Entity) -> bool {
         )
 }
 
+/// A Type64 on its class53 Primary or class11 tumble, both on the class0 host.
+fn is_native_autobot(entity: &Entity) -> bool {
+    entity.entity_type == crate::entity::AUTOBOT_ENTITY_TYPE
+        && matches!(
+            entity.actor_task_state(ActorTaskSlot::Primary),
+            Some(ActorTaskRuntime::DefenderDrone | ActorTaskRuntime::TumbleOutOfSky(_))
+        )
+}
+
 fn requires_body_custody(entity: &Entity) -> bool {
     is_native_defender_ball(entity)
+        || is_native_autobot(entity)
         || entity.native_entity_weapon_runtime.is_some()
         || entity.intro2_type66_runtime.is_some()
         || entity.intro2_type26_sub_d_runtime.is_some()
@@ -1808,6 +1820,39 @@ fn apply_pair_checked_damage(
             playing_player,
             committed,
         );
+    }
+    // The Autobot's 15040, its 10C10 death class11; its class0 owner holds
+    // the tumbling one.
+    if kind == crate::entity::AUTOBOT_ENTITY_TYPE
+        && frame
+            .entities
+            .native_class0_allocation_authenticates(target)
+    {
+        return crate::live_actor_checked_damage::apply_live_actor_checked_damage(
+            frame.entities,
+            frame.world_fx,
+            crate::live_actor_checked_damage::LiveActorDamageRequest {
+                ratio_numerator: 0,
+                ratio_denominator: 0,
+                entity_id: target,
+                delivery,
+                entry: crate::live_actor_checked_damage::LiveActorDamageEntry::Checked,
+                feedback: None,
+            },
+            |manager, world_fx, _| {
+                manager.apply_autobot_death(target, world_fx).map(|()| {
+                    crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: true,
+                        publication: Some(()),
+                    }
+                })
+            },
+        )
+        .map(|_| ())
+        .map_err(|error| {
+            *committed |= error.committed_prefix;
+            NativeCaptorPairBlock::AutobotPairDamage
+        });
     }
     // The Main Base's 15040, its 10C10 death the revival 19750.
     if kind == 6

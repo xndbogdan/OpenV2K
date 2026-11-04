@@ -3,8 +3,11 @@
 //! C750/BAC0 destroys tasks and schedules the actor's later splice. It does
 //! not invalidate its handle: D7F0/D860 still run141D0, and D920 runs11760.
 //! The entry model and outer scan gates survive those synchronous callbacks.
+//!
+//! Every class11 host shares it: Type10's family under its native owner and
+//! the Autobot under the class0 host ([`Class11TumbleHost`]).
 
-use super::{death::*, intro2_type10_allocation_authenticates};
+use super::death::*;
 use crate::{
     class49_terminal::Class49RadialReport,
     damage::{velocity_delta_impact_raw, DamageDeliveryRecord, DamagePacket},
@@ -105,9 +108,7 @@ pub fn resolve_intro2_type10_tumble_contact_with_playing(
                     .as_ref()
                     .is_some_and(|terminal| terminal.finalized)
             {
-                frame
-                    .actor_tasks
-                    .park_intro2_type10_tumble_contact_prefix(id);
+                park_contact_prefix(frame, id);
             }
             Intro2Type10ContactOutcome::Blocked {
                 reason,
@@ -115,6 +116,35 @@ pub fn resolve_intro2_type10_tumble_contact_with_playing(
                 report,
             }
         }
+    }
+}
+
+fn host(frame: &Intro2ContactFrame<'_>, id: u32) -> Option<Class11TumbleHost> {
+    frame
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(|entity| class11_tumble_host(frame.entities, entity))
+}
+
+/// The host's owner holds the tumble and is not inside a visit.
+fn completed_owner(frame: &Intro2ContactFrame<'_>, id: u32, host: Class11TumbleHost) -> bool {
+    match host {
+        Class11TumbleHost::Type10 => frame
+            .actor_tasks
+            .intro2_type10_tumble_completed_owner(frame.entities, id),
+        Class11TumbleHost::Autobot => frame.entities.class0_tumble_owner_completed(id),
+    }
+}
+
+/// A committed prefix keeps the host's owner from visiting again.
+fn park_contact_prefix(frame: &mut Intro2ContactFrame<'_>, id: u32) {
+    match host(frame, id) {
+        Some(Class11TumbleHost::Type10) => frame
+            .actor_tasks
+            .park_intro2_type10_tumble_contact_prefix(id),
+        Some(Class11TumbleHost::Autobot) => frame.entities.park_class0_tumble_prefix(id),
+        None => {}
     }
 }
 
@@ -138,9 +168,9 @@ fn resolve(
         .iter_all()
         .find(|e| e.id == id)
         .ok_or(Block::Runtime("allocation"))?;
-    if !intro2_type10_allocation_authenticates(entity) {
+    let Some(host) = class11_tumble_host(frame.entities, entity) else {
         return Ok(false);
-    }
+    };
     if bits(entity, 0x8000)? == 0 || bits(entity, 0x1000)? != 0 {
         return Ok(false);
     }
@@ -170,10 +200,7 @@ fn resolve(
     }
     // Search's pair hook and Tumble's null +18 do not authorize a pair explosion.
     let owner = Intro2Type10TumbleOwner::adopt(frame.entities, id).map_err(Block::Death)?;
-    if !frame
-        .actor_tasks
-        .intro2_type10_tumble_completed_owner(frame.entities, id)
-    {
+    if !completed_owner(frame, id, host) {
         return Err(Block::Runtime("current completed Tumble owner"));
     }
     if style(entity)? != 0x004c7f60 {
@@ -249,17 +276,13 @@ pub(crate) fn resolve_intro2_type10_tumble_static_continuation_with_playing(
             .iter_all()
             .find(|entity| entity.id == id)
             .ok_or(Block::Runtime("static continuation allocation"))?;
-        if !intro2_type10_allocation_authenticates(entity) {
-            return Err(Block::Runtime("static continuation native allocation"));
-        }
+        let host = class11_tumble_host(frame.entities, entity)
+            .ok_or(Block::Runtime("static continuation native allocation"))?;
         let owner = match style(entity)? {
             0x004c7f60 => {
                 let owner =
                     Intro2Type10TumbleOwner::adopt(frame.entities, id).map_err(Block::Death)?;
-                if !frame
-                    .actor_tasks
-                    .intro2_type10_tumble_completed_owner(frame.entities, id)
-                {
+                if !completed_owner(frame, id, host) {
                     return Err(Block::Runtime("static continuation completed Tumble owner"));
                 }
                 Some(owner)
@@ -288,9 +311,7 @@ pub(crate) fn resolve_intro2_type10_tumble_static_continuation_with_playing(
                     .as_ref()
                     .is_some_and(|terminal| terminal.finalized)
             {
-                frame
-                    .actor_tasks
-                    .park_intro2_type10_tumble_contact_prefix(id);
+                park_contact_prefix(frame, id);
             }
             Intro2Type10ContactOutcome::Blocked {
                 reason,
@@ -350,12 +371,25 @@ fn resolve_static_phase(
         queue_type_cue(frame, id, 0x8a)?;
         let entity = frame
             .entities
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .ok_or(Block::Runtime("static survivor"))?;
+        // 27E20 reads capability bit 1 and D920 the effective 0x400: Type10's
+        // 8 and 8, and the Autobot's 0x40 and 0x84 (0 under class11), have
+        // neither.
+        let (capability, default_flags) = match class11_tumble_host(frame.entities, entity) {
+            Some(Class11TumbleHost::Autobot) => (0x40, 0x84),
+            _ => (8, 8),
+        };
+        let entity = frame
+            .entities
             .entity_mut(id)
             .ok_or(Block::Runtime("static survivor"))?;
-        if entity.capability_flags != 8 {
+        if entity.capability_flags != capability {
             return Err(Block::Runtime("static pickup policy"));
         }
-        if entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(8) {
+        if entity.collision.default_state_flags_at_0xc8 != RetailRuntimeValue::Known(default_flags)
+        {
             return Err(Block::Runtime("static crush policy"));
         }
         if owner.is_some() {
@@ -470,6 +504,7 @@ pub(crate) fn terminal_callback(
     if !finalized {
         return Err(Block::RadialIncomplete);
     }
+    // The Autobot's class0 owner drops at its next visit: no Primary is left.
     frame.actor_tasks.retire_intro2_type10_tumble(owner);
     Ok(())
 }

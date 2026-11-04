@@ -138,6 +138,8 @@ struct PlannedEntityMutation {
     hive_dying: bool,
     /// A Defender Ball's 10C10 into class2 after the dying write.
     class2_death: bool,
+    /// An Autobot's 10C10 into class11 after the dying write.
+    class11_death: bool,
 }
 
 /// Complete read-only result of one dynamic radial walk.
@@ -351,6 +353,7 @@ impl EntityManager {
         // identities must still match when the atomic commit begins.
         let mut hive_dying_bursts = Vec::new();
         let mut class2_deaths = Vec::new();
+        let mut class11_deaths = Vec::new();
         for mutation in mutations {
             let entity = self
                 .entities
@@ -362,6 +365,9 @@ impl EntityManager {
             entity.base_factory_runtime = mutation.base_factory_runtime;
             if mutation.class2_death {
                 class2_deaths.push(mutation.target_id);
+            }
+            if mutation.class11_death {
+                class11_deaths.push(mutation.target_id);
             }
             if mutation.hive_dying {
                 if let Some(dying_model) = entity.apply_hive_dying_initializer() {
@@ -375,6 +381,12 @@ impl EntityManager {
         }
         for id in class2_deaths {
             self.finish_class2_death(id);
+        }
+        for id in class11_deaths {
+            // The plan admitted only a ported Autobot on its class53 style.
+            if let Err(error) = self.finish_autobot_death(id) {
+                eprintln!("Autobot {id} radial death stopped after its dying write: {error:?}");
+            }
         }
         match (player_hull, player_hull_after) {
             (Some(hull), Some(after)) => *hull = after,
@@ -476,6 +488,7 @@ fn plan_dynamic_radial_damage<'a>(
         let mut mutated = false;
         let mut hive_dying = false;
         let mut class2_death = false;
+        let mut class11_death = false;
 
         let remote = || {
             required(
@@ -526,6 +539,7 @@ fn plan_dynamic_radial_damage<'a>(
                     base_factory_runtime,
                     hive_dying: false,
                     class2_death: false,
+                    class11_death: false,
                 });
             }
             continue;
@@ -556,6 +570,7 @@ fn plan_dynamic_radial_damage<'a>(
                     base_factory_runtime,
                     hive_dying: false,
                     class2_death: false,
+                    class11_death: false,
                 });
             }
             continue;
@@ -669,7 +684,24 @@ fn plan_dynamic_radial_damage<'a>(
                                 == crate::entity_behavior::behavior_program(50)
                                     .map(|program| program.initial_style.frame_address)
                         });
-                    if class2 {
+                    // Type64's class53 style likewise; its alternate class11
+                    // starts the tumble.
+                    let class11 = target.entity_type == crate::entity::AUTOBOT_ENTITY_TYPE
+                        && death_policy == DeathCallbackPolicy::None
+                        && style.is_some_and(|context| {
+                            Some(context.active_style().style_address())
+                                == crate::entity_behavior::behavior_program(53)
+                                    .map(|program| program.initial_style.frame_address)
+                        });
+                    if class11 {
+                        collision.health_raw = RetailRuntimeValue::Known(0);
+                        collision.pre_health_damage_buffer_raw =
+                            RetailRuntimeValue::Known(transition.pre_health_buffer_after_raw);
+                        collision
+                            .state_flags_at_0x08
+                            .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
+                        class11_death = true;
+                    } else if class2 {
                         collision.health_raw = RetailRuntimeValue::Known(0);
                         collision.pre_health_damage_buffer_raw =
                             RetailRuntimeValue::Known(transition.pre_health_buffer_after_raw);
@@ -734,6 +766,7 @@ fn plan_dynamic_radial_damage<'a>(
                 base_factory_runtime,
                 hive_dying,
                 class2_death,
+                class11_death,
             });
         }
     }

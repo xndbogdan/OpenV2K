@@ -2506,7 +2506,7 @@ impl SpecializedActorTaskScheduler {
             return false;
         };
         self.owners.iter().any(|present|
-            matches!(present, SpecializedActorTaskOwner::Class0Actor(owner) if *owner == current))
+            matches!(present, SpecializedActorTaskOwner::Class0Actor(owner) if owner.holds(current)))
     }
     pub(crate) fn take_class0_actor_external_mutation(
         &mut self,

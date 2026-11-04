@@ -773,7 +773,8 @@ fn unresolved_style_or_controller_links_block_before_prefix_sound_and_rng() {
         let hold_type = 64;
         if links {
             // 4484A0 walks the controller's +220 owned list; a live body
-            // other than a Defender Ball (here an Autobot) has no port owner.
+            // without its port owner (a Type64 the class0 host never built)
+            // stops the hit.
             let mut body =
                 Entity::unresolved_port_entity(8, EntityKind::from_type(hold_type), hold_type);
             body.collision.state_flags_at_0x08 = RetailStateWord::exact(0x84);

@@ -5,7 +5,7 @@
 //! damage runs 10C10's class38 Change Sea Level for Type54, Type72, Type85
 //! and Type50, exactly as the Main Base abort does, Type89's class1
 //! explosion, Type118's class65 Geyser, Type36's class16 again and Type63's
-//! class2. Flags,
+//! class2 and Type64's class11 tumble. Flags,
 //! weights, Type106 and gates have zero multipliers, so no shot is lethal to
 //! them. Type110's class67 style is the one with a `+28` hook, `FUN_00421990`,
 //! and its body the one with capability 8; its lethal hit takes class67 again.
@@ -64,6 +64,8 @@ pub enum Class0Death {
     /// Type36's alternate class16 Generate Flares or Type110's class67 Queen,
     /// reinstalled.
     Flares,
+    /// Type64's class11 tumble; the class0 owner keeps the body.
+    Class11,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,9 +185,16 @@ fn run(
         && Some(context.active_style().style_address())
             == crate::entity_behavior::behavior_program(65)
                 .map(|program| program.initial_style.frame_address);
+    // A falling Autobot's class11 style has null hit slots too.
+    let tumble_style = entity_type == crate::entity::AUTOBOT_ENTITY_TYPE
+        && context.active_style().style_address()
+            == crate::entity_behavior::TUMBLE_OUT_OF_SKY_BEHAVIOR_PROGRAM
+                .initial_style
+                .frame_address;
     if Some(context.active_style().style_address()) != living_style
         && !class1_style
         && !geyser_style
+        && !tumble_style
     {
         return Err(Block::Runtime("unaudited style hit slot"));
     }
@@ -285,6 +294,16 @@ fn run(
                     | crate::main_base_type54_abort::TYPE110_ENTITY_TYPE
             ) {
                 return flare_death(manager, scheduler, id);
+            }
+            if entity_type == crate::entity::AUTOBOT_ENTITY_TYPE {
+                // The scheduler's owner holds the class11 owner it becomes.
+                manager
+                    .apply_autobot_death(id, world_fx)
+                    .map_err(Class0DeathBlock::Class0Alternate)?;
+                return Ok(LiveActorDeathResult {
+                    returned_nonzero: true,
+                    publication: Some(Class0Death::Class11),
+                });
             }
             if entity_type == crate::main_base_type54_abort::TYPE63_ENTITY_TYPE {
                 // The Defender Ball's alternate class2: tasks cleared, removal
