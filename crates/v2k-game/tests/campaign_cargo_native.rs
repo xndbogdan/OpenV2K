@@ -30,6 +30,10 @@ struct World {
 
 impl World {
     fn new(level_id: u32) -> Self {
+        Self::at(level_id, [19_712, -500, 14_848])
+    }
+
+    fn at(level_id: u32, arrival_raw: [i16; 3]) -> Self {
         let data = v2k_test_support::retail_dir();
         assert!(data.join("PRELOAD.DAT").exists(), "retail corpus required");
         let mut session = GameSession::init(&data).unwrap();
@@ -64,7 +68,7 @@ impl World {
                     model_extent_raw: Some(&extent),
                 },
                 player_arrival: Some(AuthoredPlayerArrival {
-                    position_raw: [19_712, -500, 14_848],
+                    position_raw: arrival_raw,
                     heading_raw: 0x4000,
                 }),
                 retail_tick: 4793,
@@ -1199,8 +1203,7 @@ fn cheat_cargo_rows_birth_at_the_player_and_fill_the_free_slot() {
 
 /// The Cargo cheat's native and scientist rows for each theme with one
 /// (`FUN_0042EBE0`, `FUN_0042EB70`): operation `0x38` builds the body from a
-/// zero record at the player's pose, owned by the player (`+60`). Type9, the
-/// first theme's native, is still a typed stop.
+/// zero record at the player's pose, owned by the player (`+60`).
 #[v2k_test_support::retail_test]
 fn cheat_native_and_scientist_rows_birth_each_themes_people_at_the_player() {
     let mut covered = std::collections::BTreeSet::new();
@@ -1247,13 +1250,6 @@ fn cheat_native_and_scientist_rows_birth_each_themes_people_at_the_player() {
                     notifications: &mut world.notifications,
                 },
             );
-            if entity_type == 9 {
-                assert!(matches!(
-                    result,
-                    Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type: 9 })
-                ));
-                continue;
-            }
             result.unwrap_or_else(|error| panic!("level {level} Type{entity_type}: {error:?}"));
             let body = world
                 .entities
@@ -1274,4 +1270,50 @@ fn cheat_native_and_scientist_rows_birth_each_themes_people_at_the_player() {
         }
     }
     assert_eq!(covered.len(), 6, "{covered:?}");
+}
+
+/// Type9's zero record weighs its four choices over the whole live list. In
+/// the retail lab (Level 1, the Cargo native row at tick 791, the player at
+/// `(19708, -604, 13935)`), Base Nearby holds and the body takes Go to job
+/// (style `004C8788`) after the Sub-A, selector and initializer draws.
+#[v2k_test_support::retail_test]
+fn cheat_native_row_type9_weighs_its_choices_over_the_live_list() {
+    let mut world = World::at(13, [19_708, -604, 13_935]);
+    let extent = |id| {
+        world
+            .session
+            .cache
+            .global_model(id)
+            .map(|model| model.radius)
+    };
+    world
+        .entities
+        .dispatch_controller_operation_0x38(
+            9,
+            &mut CampaignCargoRestoreContext {
+                level: world.session.cache.level_desc().unwrap(),
+                resources: EntityConstructionResources {
+                    terrain: world.session.cache.terrain(),
+                    terrain_objects: world.session.cache.terrain_objects(),
+                    model_extent_raw: Some(&extent),
+                },
+                retail_tick: 791,
+                scheduler: &mut world.scheduler,
+                world_fx: &mut world.fx,
+                notifications: &mut world.notifications,
+            },
+        )
+        .unwrap();
+    let body = world.entities.iter_all().last().unwrap();
+    assert_eq!(body.entity_type, 9);
+    assert_eq!(body.authored_spawn_index, None);
+    assert_eq!(
+        [body.position_raw()[0], body.position_raw()[2]],
+        [19_708, 13_935]
+    );
+    let RetailRuntimeValue::Known(Some(selection)) = body.initial_behavior else {
+        panic!("Type9 selection: {:?}", body.initial_behavior)
+    };
+    assert_eq!(selection.program.class_id, 54, "Go to job");
+    assert!(body.actor_task_state(ActorTaskSlot::Primary).is_some());
 }

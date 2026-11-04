@@ -949,7 +949,7 @@ impl EntityManager {
                     crate::ordinary_type9_construction::OrdinaryType9ConstructionRequest {
                         entity,
                         metadata,
-                        spawn,
+                        record: NativeCreationRecord::authored(spawn),
                         preceding: &self.entities,
                         terrain,
                         allocation,

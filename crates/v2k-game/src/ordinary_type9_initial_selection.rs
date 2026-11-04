@@ -53,7 +53,8 @@ pub struct FreshLevel1Type9WeightedSelectionRequest<'a> {
     /// Private constructor receipt issued by
     /// [`crate::ordinary_type9_live::admit_fresh_level1_ordinary_type9`].
     pub admission: FreshLevel1OrdinaryType9Admission,
-    pub authored_spawn_index: usize,
+    /// None for a zero record (operation `0x38`).
+    pub authored_spawn_index: Option<usize>,
     pub active_model_id: usize,
     pub metadata: &'a EntityTypeRuntimeMetadata,
     pub owner: FreshLevel1Type9EntityRef,
@@ -117,7 +118,7 @@ pub struct FreshLevel1Type9WeightedSelection {
     random_word: u32,
     initializer_identity: FreshLevel1Type9InitializerIdentity,
     owner_snapshot: FreshLevel1Type9EntityRef,
-    authored_spawn_index: usize,
+    authored_spawn_index: Option<usize>,
     expected_pending_initial_selection:
         crate::ordinary_type9_live::OrdinaryType9PendingInitialSelection,
     native_receipt: Option<crate::ordinary_type9_construction::OrdinaryType9NativeReceipt>,
@@ -150,7 +151,7 @@ impl FreshLevel1Type9WeightedSelection {
         self.owner_snapshot.id
     }
 
-    pub const fn authored_spawn_index(&self) -> usize {
+    pub const fn authored_spawn_index(&self) -> Option<usize> {
         self.authored_spawn_index
     }
 
@@ -179,10 +180,10 @@ pub enum FreshLevel1Type9NearbyRule {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FreshLevel1Type9WeightedSelectionError {
     UnsupportedAuthoredSpawnIndex {
-        actual: usize,
+        actual: Option<usize>,
     },
     AdmissionDoesNotMatchSpawn {
-        authored_spawn_index: usize,
+        authored_spawn_index: Option<usize>,
         expected_sub_d_stagger_seed: u8,
         actual_sub_d_stagger_seed: u8,
     },
@@ -338,7 +339,7 @@ fn authenticate_request(
             .iter()
             .zip(FRESH_LEVEL1_ORDINARY_TYPE9_SUB_D_SEEDS)
             .find_map(|(&spawn_index, seed)| {
-                (spawn_index == request.authored_spawn_index).then_some(seed)
+                (Some(spawn_index) == request.authored_spawn_index).then_some(seed)
             })
         else {
             return Err(
@@ -577,7 +578,7 @@ mod tests {
         let authored_spawn_index = FRESH_LEVEL1_ORDINARY_TYPE9_SPAWN_INDICES[0];
         FreshLevel1Type9WeightedSelectionRequest {
             admission: admission_for_spawn(authored_spawn_index),
-            authored_spawn_index,
+            authored_spawn_index: Some(authored_spawn_index),
             active_model_id: LEVEL_ONE_TYPE9_MODEL_ID,
             metadata,
             owner,
@@ -997,12 +998,13 @@ mod tests {
         };
 
         let mut mismatched_admission = request(&metadata, owner(), &[]);
-        mismatched_admission.authored_spawn_index = FRESH_LEVEL1_ORDINARY_TYPE9_SPAWN_INDICES[1];
+        mismatched_admission.authored_spawn_index =
+            Some(FRESH_LEVEL1_ORDINARY_TYPE9_SPAWN_INDICES[1]);
         assert_eq!(
             plan_fresh_level1_type9_weighted_selection(mismatched_admission, next),
             Err(
                 FreshLevel1Type9WeightedSelectionError::AdmissionDoesNotMatchSpawn {
-                    authored_spawn_index: FRESH_LEVEL1_ORDINARY_TYPE9_SPAWN_INDICES[1],
+                    authored_spawn_index: Some(FRESH_LEVEL1_ORDINARY_TYPE9_SPAWN_INDICES[1]),
                     expected_sub_d_stagger_seed: FRESH_LEVEL1_ORDINARY_TYPE9_SUB_D_SEEDS[1],
                     actual_sub_d_stagger_seed: FRESH_LEVEL1_ORDINARY_TYPE9_SUB_D_SEEDS[0],
                 },
@@ -1010,12 +1012,12 @@ mod tests {
         );
 
         let mut bad_spawn = request(&metadata, owner(), &[]);
-        bad_spawn.authored_spawn_index = 11;
+        bad_spawn.authored_spawn_index = Some(11);
         assert_eq!(
             plan_fresh_level1_type9_weighted_selection(bad_spawn, next),
             Err(
                 FreshLevel1Type9WeightedSelectionError::UnsupportedAuthoredSpawnIndex {
-                    actual: 11,
+                    actual: Some(11),
                 },
             )
         );

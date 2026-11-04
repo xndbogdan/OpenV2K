@@ -472,7 +472,7 @@ mod tests {
         let result = plan_fresh_level1_type9_weighted_selection(
             FreshLevel1Type9WeightedSelectionRequest {
                 admission: admission(),
-                authored_spawn_index: SPAWN_INDEX,
+                authored_spawn_index: Some(SPAWN_INDEX),
                 active_model_id: usize::from(LEVEL_ONE_TYPE9_MODEL_ID),
                 metadata,
                 owner: owner_snapshot(entity),
@@ -495,7 +495,7 @@ mod tests {
         plan_fresh_level1_type9_weighted_selection(
             FreshLevel1Type9WeightedSelectionRequest {
                 admission: admission(),
-                authored_spawn_index: SPAWN_INDEX,
+                authored_spawn_index: Some(SPAWN_INDEX),
                 active_model_id: usize::from(LEVEL_ONE_TYPE9_MODEL_ID),
                 metadata,
                 owner: owner_snapshot(entity),
@@ -595,7 +595,7 @@ mod tests {
             panic!("expected selected publication: {outcome:?}")
         };
         assert_eq!(selected.owner_id, OWNER_ID);
-        assert_eq!(selected.authored_spawn_index, SPAWN_INDEX);
+        assert_eq!(selected.authored_spawn_index, Some(SPAWN_INDEX));
         assert_eq!(selected.selection.choice_index, 0);
         assert_eq!(selected.selection.program.class_id, 10);
         assert_eq!(selected.selector_random_word, 0);

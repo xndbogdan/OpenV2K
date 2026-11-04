@@ -43,7 +43,7 @@ impl EntityManager {
             .iter_all()
             .find(|entity| entity.id == cargo)
             .ok_or(PlayerCargoAttachmentError::ChildUnavailable)?;
-        if (matches!(entity.entity_type, 49 | 83 | 92 | 96 | 97 | 100 | 123)
+        if (matches!(entity.entity_type, 9 | 49 | 83 | 92 | 96 | 97 | 100 | 123)
             || crate::intro2_type8::NativeWorkerProfile::from_entity_type(entity.entity_type)
                 .is_some()
             || crate::native_type86::NativeFourChoiceProfile::from_entity_type(entity.entity_type)

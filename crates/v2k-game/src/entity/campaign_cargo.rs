@@ -59,6 +59,10 @@ pub enum CampaignCargoRestoreError {
         entity_type: u32,
         reason: crate::native_type86::Type86Block,
     },
+    /// The first theme's native's zero record stopped.
+    NativeType9 {
+        reason: String,
+    },
     CleansingVehicle(crate::cleansing_vehicle::CleansingVehicleError),
     PortableRadar(crate::portable_radar::PortableRadarError),
     Attachment {
@@ -624,6 +628,7 @@ impl EntityManager {
         matches!(
             entity_type,
             7 | 8
+                | 9
                 | 52
                 | 63
                 | 64
@@ -718,6 +723,22 @@ impl EntityManager {
                 context
                     .scheduler
                     .register_native_newborn(NativeHiveNewborn::Worker(owner));
+                Ok(id)
+            }
+            9 => {
+                let id = self
+                    .append_native_type9_at_pose(
+                        zero_record_at_pose(entity_type, position_raw, rotation_raw),
+                        velocity_raw,
+                        context,
+                    )
+                    .map_err(|reason| CampaignCargoRestoreError::NativeType9 { reason })?;
+                context
+                    .scheduler
+                    .adopt_fresh_level1_type9_selected(self)
+                    .map_err(|error| CampaignCargoRestoreError::NativeType9 {
+                        reason: format!("scheduler adoption: {error:?}"),
+                    })?;
                 Ok(id)
             }
             7 | 78 | 86 | 95 => {
@@ -826,6 +847,85 @@ impl EntityManager {
         self.entity_mut(id)
             .and_then(crate::native_type86::Type86Owner::take_birth)
             .ok_or(Type86Block::Runtime("person birth receipt"))
+    }
+
+    /// Type9's zero record through its own constructor (`09A80`, `D4A0`):
+    /// `FUN_00425680` weighs Baddie, Player and Base Nearby over the whole
+    /// live list, as for an authored birth over the spawns before it, then
+    /// the chosen initializer runs and `D720` appends the body.
+    fn append_native_type9_at_pose(
+        &mut self,
+        record: NativeCreationRecord,
+        velocity_raw: [i16; 3],
+        context: &mut CampaignCargoRestoreContext<'_>,
+    ) -> Result<u32, String> {
+        let metadata = self.type_metadata.get(9).ok_or("Type9 metadata")?.clone();
+        let RetailRuntimeValue::Known(Some(descriptor)) = metadata.sub_d_steering_descriptor else {
+            return Err("Type9 Sub-D".into());
+        };
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err("native body stamp lineage".into());
+        }
+        let terrain = context
+            .resources
+            .terrain
+            .filter(|terrain| {
+                terrain.cells.len()
+                    == v2k_formats::terrain::GRID_SIZE * v2k_formats::terrain::GRID_SIZE
+            })
+            .ok_or("Type9 complete terrain")?;
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            record.position_raw,
+            terrain,
+            context.retail_tick,
+            context.level.raw_u32(0x84).expect("descriptor+84") != 0,
+        )
+        .ok_or("Type9 constructor surface")?;
+        let id = self.next_entity_id;
+        if id == 0 || self.entities.iter().any(|entity| entity.id == id) {
+            return Err("Type9 allocation handle".into());
+        }
+        let stamp = self.begin_common_body_attempt();
+        let sub_d = context.world_fx.construct_entity_sub_d(descriptor);
+        let mut entity = native_instance_body(
+            id,
+            stamp,
+            &metadata,
+            terrain,
+            NativeInstanceBodyRequest {
+                entity_type: 9,
+                position_raw: record.position_raw,
+                objective: record.param != 0,
+            },
+        );
+        entity.set_rotation_heading_pitch_roll_raw(record.rotation.map(|word| word as i16));
+        entity.set_velocity_raw(velocity_raw);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        let ready = crate::ordinary_type9_construction::construct_ordinary_type9(
+            crate::ordinary_type9_construction::OrdinaryType9ConstructionRequest {
+                entity,
+                metadata: &metadata,
+                record,
+                preceding: &self.entities,
+                terrain,
+                allocation,
+                sub_d_frame_owner: sub_d.frame_owner,
+                sub_d_runtime: sub_d.runtime,
+                constructor_surface_bits,
+            },
+            context.world_fx,
+        )
+        .map_err(|error| format!("{error:?}"))?;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_and_finalize_fresh_level1_type9(ready);
+        context
+            .notifications
+            .drain_attract_attention_receipts(self, context.retail_tick as i32)
+            .map_err(|error| format!("attention text: {error:?}"))?;
+        Ok(id)
     }
 
     fn append_native_class0_at_pose(

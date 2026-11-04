@@ -776,7 +776,7 @@ mod tests {
         let receipt = plan_fresh_level1_type9_weighted_selection(
             FreshLevel1Type9WeightedSelectionRequest {
                 admission: admission(),
-                authored_spawn_index: SPAWN_INDEX,
+                authored_spawn_index: Some(SPAWN_INDEX),
                 active_model_id: usize::from(LEVEL_ONE_TYPE9_MODEL_ID),
                 metadata,
                 owner: owner_snapshot(entity),
@@ -808,7 +808,7 @@ mod tests {
         plan_fresh_level1_type9_weighted_selection(
             FreshLevel1Type9WeightedSelectionRequest {
                 admission: admission(),
-                authored_spawn_index: SPAWN_INDEX,
+                authored_spawn_index: Some(SPAWN_INDEX),
                 active_model_id: usize::from(LEVEL_ONE_TYPE9_MODEL_ID),
                 metadata,
                 owner: owner_snapshot(entity),

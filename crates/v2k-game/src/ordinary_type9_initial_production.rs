@@ -223,7 +223,7 @@ impl FreshLevel1Type9AttractAttentionProvenance {
         if entity_id != entity.id
             || !entity.active
             || selection.owner_id != entity.id
-            || entity.authored_spawn_index != Some(selection.authored_spawn_index)
+            || entity.authored_spawn_index != selection.authored_spawn_index
             || entity.initial_behavior != RetailRuntimeValue::Known(Some(selection.selection))
             || entity.ordinary_type9_pending_initial_selection.is_some()
             || entity.main_base_type9_death_component_runtime.is_some()
@@ -942,7 +942,7 @@ impl FreshLevel1Type9InitialProductionOwner {
         if self.entity_id != entity.id
             || !entity.active
             || selected.owner_id != entity.id
-            || entity.authored_spawn_index != Some(selected.authored_spawn_index)
+            || entity.authored_spawn_index != selected.authored_spawn_index
             || entity.initial_behavior != RetailRuntimeValue::Known(Some(selected.selection))
             || entity.ordinary_type9_pending_initial_selection.is_some()
             || entity.main_base_type9_death_component_runtime.is_some()
@@ -1023,7 +1023,7 @@ impl FreshLevel1Type9InitialProductionOwner {
         if self.entity_id != entity.id
             || !entity.active
             || selected.owner_id != entity.id
-            || entity.authored_spawn_index != Some(selected.authored_spawn_index)
+            || entity.authored_spawn_index != selected.authored_spawn_index
             || entity.initial_behavior != RetailRuntimeValue::Known(Some(selected.selection))
             || entity.ordinary_type9_pending_initial_selection.is_some()
             || entity.main_base_type9_death_component_runtime.is_some()
@@ -1056,7 +1056,7 @@ fn authenticates_finalized_attract_attention_publication(
     if entity_id != entity.id
         || !entity.active
         || selected.owner_id != entity.id
-        || entity.authored_spawn_index != Some(selected.authored_spawn_index)
+        || entity.authored_spawn_index != selected.authored_spawn_index
         || entity.initial_behavior != RetailRuntimeValue::Known(Some(selected.selection))
         || entity.ordinary_type9_pending_initial_selection.is_some()
         || entity.main_base_type9_death_component_runtime.is_some()
@@ -2248,7 +2248,6 @@ impl FreshLevel1Type9InitialProductionRuntime for InfallibleFreshLevel1Type9Prod
 #[derive(Debug, PartialEq, Eq)]
 pub enum FreshLevel1Type9InitialProductionFailure {
     MissingMetadata,
-    MissingAuthoredSpawnIndex,
     MissingActiveModel,
     WeightedSelection(FreshLevel1Type9WeightedSelectionError),
     Context(FreshLevel1Type9InitialConstructionFailure),
@@ -2278,9 +2277,7 @@ pub(crate) fn compose_fresh_level1_type9_initial_production(
         capability_flags: RetailRuntimeValue::Known(entity.capability_flags),
         attached_entity_handle: entity.collision.recent_relation_id_at_0x60,
     };
-    let authored_spawn_index = entity
-        .authored_spawn_index
-        .ok_or(FreshLevel1Type9InitialProductionFailure::MissingAuthoredSpawnIndex)?;
+    let authored_spawn_index = entity.authored_spawn_index;
     let active_model_id = entity
         .model_index
         .ok_or(FreshLevel1Type9InitialProductionFailure::MissingActiveModel)?;

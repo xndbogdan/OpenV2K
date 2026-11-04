@@ -5,7 +5,7 @@
 //! The process constructor supplies Sub-D's real allocation and surface result;
 //! this owner never borrows a captured seed or first-query cache reset.
 
-use v2k_formats::{levels::EntitySpawn, terrain::TerrainGrid};
+use v2k_formats::terrain::TerrainGrid;
 
 use crate::{
     actor_animation::ActorAnimationController,
@@ -48,7 +48,7 @@ mod cross_world_tests;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct OrdinaryType9NativeReceipt {
     allocation: MainBaseAbortActorLease,
-    spawn_index: usize,
+    spawn_index: Option<usize>,
     rotation_raw: [i16; 3],
     pre_publication_state: RetailStateWord,
     active_slot: usize,
@@ -60,7 +60,7 @@ impl OrdinaryType9NativeReceipt {
     pub(crate) const fn initial_components(self) -> OrdinaryType9PendingInitialSelection {
         self.components
     }
-    pub(crate) const fn authored_spawn_index(self) -> usize {
+    pub(crate) const fn authored_spawn_index(self) -> Option<usize> {
         self.spawn_index
     }
     pub(crate) const fn owner_id(self) -> u32 {
@@ -82,7 +82,7 @@ impl OrdinaryType9NativeReceipt {
     pub(crate) fn authenticates_entity(self, entity: &Entity) -> bool {
         entity.id == self.allocation.entity_id
             && entity.entity_type == 9
-            && entity.authored_spawn_index == Some(self.spawn_index)
+            && entity.authored_spawn_index == self.spawn_index
             && entity.model_slots == [Some(558); 4]
             && entity.capability_flags == 0x1804
             && entity.ordinary_type9_native_receipt == Some(self)
@@ -120,7 +120,9 @@ pub(crate) fn ordinary_type9_native_allocation_authenticates(
 pub(crate) struct OrdinaryType9ConstructionRequest<'a> {
     pub entity: Entity,
     pub metadata: &'a EntityTypeRuntimeMetadata,
-    pub spawn: &'a EntitySpawn,
+    /// An authored Section-13 spawn's words, or a zero record's (operation
+    /// `0x38` at the player).
+    pub record: crate::entity::NativeCreationRecord,
     pub preceding: &'a [Entity],
     pub terrain: &'a TerrainGrid,
     pub allocation: MainBaseAbortActorLease,
@@ -149,7 +151,7 @@ pub(crate) fn construct_ordinary_type9(
     let OrdinaryType9ConstructionRequest {
         mut entity,
         metadata,
-        spawn,
+        record,
         preceding,
         terrain,
         allocation,
@@ -160,10 +162,10 @@ pub(crate) fn construct_ordinary_type9(
     if entity.id != allocation.entity_id
         || !entity.active
         || entity.entity_type != 9
-        || spawn.entity_type != 9
-        || entity.authored_spawn_index != Some(spawn.index)
+        || record.entity_type != 9
+        || entity.authored_spawn_index != record.authored_spawn_index
         || entity.model_slots != [Some(558); 4]
-        || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
+        || entity.rotation_heading_pitch_roll_raw() != record.rotation.map(|word| word as i16)
     {
         return Err(OrdinaryType9ConstructionError::Identity);
     }
@@ -184,15 +186,19 @@ pub(crate) fn construct_ordinary_type9(
         return Err(OrdinaryType9ConstructionError::AlreadyPublished);
     }
     // The persistent player can precede authored records without a spawn index.
-    // Every authored predecessor must still retain its actual list order.
-    if preceding.iter().any(|actor| actor.id == entity.id || actor.authored_spawn_index.is_some_and(|index| index >= spawn.index))
-        || preceding.windows(2).any(|pair| matches!((pair[0].authored_spawn_index, pair[1].authored_spawn_index), (Some(a), Some(b)) if a >= b)) {
+    // Every authored predecessor must still retain its actual list order; a
+    // zero record sees the whole live list.
+    if preceding.iter().any(|actor| actor.id == entity.id)
+        || record.authored_spawn_index.is_some_and(|spawn_index| {
+            preceding.iter().any(|actor| actor.authored_spawn_index.is_some_and(|index| index >= spawn_index))
+                || preceding.windows(2).any(|pair| matches!((pair[0].authored_spawn_index, pair[1].authored_spawn_index), (Some(a), Some(b)) if a >= b))
+        }) {
         return Err(OrdinaryType9ConstructionError::Prefix);
     }
     if constructor_surface_bits & !SURFACE_STATE_MASK != 0 {
         return Err(OrdinaryType9ConstructionError::Surface);
     }
-    let authored = spawn.position_raw();
+    let authored = record.position_raw;
     let cell = terrain
         .cell(
             usize::from((authored[0] as u16) >> 8),
@@ -221,7 +227,7 @@ pub(crate) fn construct_ordinary_type9(
         return Err(OrdinaryType9ConstructionError::Components);
     }
     let mut state =
-        RetailStateWord::exact(0x0607_8801 | if spawn.param != 0 { 0x0100_0000 } else { 0 });
+        RetailStateWord::exact(0x0607_8801 | if record.param != 0 { 0x0100_0000 } else { 0 });
     state.overwrite(SURFACE_STATE_MASK, constructor_surface_bits);
     state.overwrite(
         ACTIVE_MODEL_SLOT_HIGH_STATE_BIT,
@@ -248,8 +254,8 @@ pub(crate) fn construct_ordinary_type9(
     entity.collision.pair_callbacks = EntityPairCallbackRuntimeState::audited_local(
         Some(DESCRIPTOR_CONTACT_CALLBACK_ADDRESS),
         RetailRuntimeValue::Known(PairOrientationPolicy::LiveHeadingWithAuthoredPitchRoll {
-            pitch_raw: spawn.rotation[1],
-            roll_raw: spawn.rotation[2],
+            pitch_raw: record.rotation[1],
+            roll_raw: record.rotation[2],
         }),
     );
     // Explicit native allocation policy for the uninitialized transient +B2.
@@ -269,8 +275,8 @@ pub(crate) fn construct_ordinary_type9(
     entity.ordinary_type9_pending_initial_selection = Some(components);
     let receipt = OrdinaryType9NativeReceipt {
         allocation,
-        spawn_index: spawn.index,
-        rotation_raw: spawn.rotation.map(|word| word as i16),
+        spawn_index: record.authored_spawn_index,
+        rotation_raw: record.rotation.map(|word| word as i16),
         pre_publication_state: state,
         active_slot,
         initial_sub_a,
@@ -325,6 +331,7 @@ mod tests {
         ordinary_type9_wander_initializer::OrdinaryType9WanderInitializerOutcome,
         session::GameSession,
     };
+    use v2k_formats::levels::EntitySpawn;
 
     fn corpus() -> Option<(GameSession, EntityTypeRuntimeMetadata, EntitySpawn)> {
         let data = v2k_test_support::retail_dir();
@@ -398,7 +405,7 @@ mod tests {
             OrdinaryType9ConstructionRequest {
                 entity: provisional(&metadata, &spawn, 42),
                 metadata: &metadata,
-                spawn: &spawn,
+                record: crate::entity::NativeCreationRecord::authored(&spawn),
                 preceding: &[],
                 terrain,
                 allocation: MainBaseAbortActorLease {
@@ -501,7 +508,7 @@ mod tests {
                 OrdinaryType9ConstructionRequest {
                     entity: provisional(&metadata, &spawn, 42),
                     metadata: &metadata,
-                    spawn: &spawn,
+                    record: crate::entity::NativeCreationRecord::authored(&spawn),
                     preceding: &preceding,
                     terrain,
                     allocation: MainBaseAbortActorLease {

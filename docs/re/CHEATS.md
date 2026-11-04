@@ -166,9 +166,21 @@ constructor, which sees the whole live list, as for a Hive birth. The weight
 (Type63) and Autobot (Type64) rows work (the Autobot's own limits are in
 [special weapons](PLAYER_CRAFT.md#special-weapons)), and so do the
 scientists (Type8, 91, 90, 79, 116 through the workers' constructor, Type7
-through the four-choice one) and the natives of themes 2 to 4 (Type95, 86,
-78, four-choice); a person's attention text is queued at its birth. A
-cargo refusal other than a full hold is a logged stop.
+through the four-choice one) and the natives (Type9 through its own
+constructor, Type95, 86 and 78 through the four-choice one); a person's
+attention text is queued at its birth. A cargo refusal other than a full
+hold is a logged stop.
+
+Type9's zero record takes the same constructor as a placed native:
+`FUN_00425680` weighs Baddie Nearby (x10, Run Away), Player Nearby (x3,
+Attract Attention), Base Nearby (x200, Go to job) and the constant rule (x1,
+Wander) over the live list, draws once, and runs the chosen initializer. The
+record carries no choice of its own: a placed native sees the spawns before
+it, the zero record the whole live list. In the retail lab (Level 1, tick
+791) the native is born with Sub-A's draw (`00420475`), the selector's
+(`004256CF`) and the initializer's (`00406146`), and takes Go to job (style
+`004C8788`), as the scientist does; the port's test births it at the same
+pose and takes Go to job.
 
 A retail lab run (Level 1, every row once at tick 791) births the five
 bodies at the player `(19708, -604, 13935)`: the weight takes the one free
@@ -180,11 +192,15 @@ less 0x100 (`(19708, -897, 13676)`), part to X ± 82 and carry the two
 people there. The port's test repeats the weight, radar and beamer, and
 births every theme's people at the player; a port run of the same keys
 beams its scientist through one Type93 at the player's X, Z less 0x100 on
-the first tick after the menus close. Still a logged stop, which also ends
-All weapons at that row:
+the first tick after the menus close; with the native's row the port beams
+both people through two Type93 at the player's X and Z less 0x100. Still
+held, each with its logged stop:
 
-- the first theme's native, Type9: its port constructor ties the initial
-  task selection to Level 1's authored spawns, so its zero record is held.
+- the two Type93 overlap, and their pair (no body owner for Type93) is a
+  stop, so the port's carried people stay at the shared X where retail's
+  part to X ± 82;
+- a native in Go to job meeting the player stops the player's pair at its
+  descriptor-contact callback, which the port has only for Wander.
 
 Operation `0x39` (Megablast) runs as a pickup does
 ([special weapons](PLAYER_CRAFT.md#special-weapons)).
