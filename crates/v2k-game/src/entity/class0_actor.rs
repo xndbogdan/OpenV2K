@@ -54,7 +54,7 @@ pub enum Class0ActorError {
     Runtime(&'static str),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) struct NativeClass0Runtime {
     allocation: MainBaseAbortActorLease,
     entity_type: u32,

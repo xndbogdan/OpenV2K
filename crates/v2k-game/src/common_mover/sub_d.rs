@@ -2053,6 +2053,33 @@ pub(crate) fn target_steering_rate(
     }
 }
 
+/// `FUN_004202E0`: the pitch rate (`+08`) toward the target's vertical
+/// projection. A step against the damped rate counts twice.
+pub(crate) fn target_pitch_rate(
+    current: i32,
+    target_vertical_raw: i16,
+    elapsed_micros: u32,
+    steering_divisor_raw: i32,
+) -> i32 {
+    let damping_product = (elapsed_micros >> 5).wrapping_mul(current as u32) as i32;
+    let rate = current.wrapping_sub(i32::from((damping_product >> 15) as i16));
+    if target_vertical_raw == 0 {
+        return rate;
+    }
+    let step = i32::from(target_vertical_raw) / steering_divisor_raw;
+    let rate = if step.wrapping_mul(rate) < 0 {
+        rate.wrapping_add(step.wrapping_mul(2))
+    } else {
+        rate.wrapping_add(step)
+    };
+    let limit = 0x2_0000 / steering_divisor_raw;
+    if step < 1 {
+        rate.max(-limit)
+    } else {
+        rate.min(limit)
+    }
+}
+
 fn forced_yaw_rate(numerator: i32, divisor: i32) -> i32 {
     (numerator / divisor).clamp(-0x4000, 0x4000)
 }
