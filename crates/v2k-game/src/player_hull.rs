@@ -101,6 +101,38 @@ pub struct PlayerHull {
     pub dying: bool,
 }
 
+/// `DAT_004DE85C`: the player damage modifier `FUN_004484A0`'s own low-hull
+/// cue latch, process-global, starting at zero and apart from `DAT_004DE858`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DamageModifierHullCue {
+    last_tick: i32,
+}
+
+impl DamageModifierHullCue {
+    /// With no shield buffer (`+50`), health (`+30`) less the modifier's
+    /// returned damage in 5,001..=30,000 and the clock more than 120 ticks
+    /// from the last cue, latch the clock and cue.
+    pub fn poll(
+        &mut self,
+        health_raw: i32,
+        pre_health_buffer_raw: i32,
+        damage_raw: i32,
+        tick: i32,
+    ) -> bool {
+        let left = health_raw.wrapping_sub(damage_raw);
+        if pre_health_buffer_raw != 0 || left >= 0x7531 || left <= 5000 {
+            return false;
+        }
+        let delta = self.last_tick.wrapping_sub(tick);
+        let sign = delta >> 31;
+        if (delta ^ sign).wrapping_sub(sign) <= 0x78 {
+            return false;
+        }
+        self.last_tick = tick;
+        true
+    }
+}
+
 /// Process-global cadence state behind `DAT_004DE858`'s low-hull warning.
 ///
 /// Retail retains this word across player spawns and level changes. The caller
@@ -370,6 +402,22 @@ pub fn smooth_visible_hull_health_raw(visible_raw: i32, health_raw: i32) -> i32 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn damage_modifier_hull_cue_needs_no_buffer_the_band_and_a_120_tick_gap() {
+        let mut cue = DamageModifierHullCue::default();
+        // From the zero latch the clock must pass 120.
+        assert!(!cue.poll(20_000, 0, 1_000, 120));
+        assert!(cue.poll(20_000, 0, 1_000, 121));
+        assert!(!cue.poll(20_000, 0, 1_000, 241));
+        assert!(cue.poll(20_000, 0, 1_000, 242));
+        // 30,001 and 5,000 left are outside; a buffer silences it.
+        assert!(!cue.poll(31_001, 0, 1_000, 1_000));
+        assert!(!cue.poll(6_000, 0, 1_000, 1_000));
+        assert!(!cue.poll(20_000, 1, 1_000, 1_000));
+        assert!(cue.poll(30_000, 0, 0, 1_000));
+        assert!(cue.poll(5_001, 0, 0, 1_121));
+    }
 
     #[test]
     fn type_46_profile_uses_strict_threshold_and_q8_identity_multiplier() {

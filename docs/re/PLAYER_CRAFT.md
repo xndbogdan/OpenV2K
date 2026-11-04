@@ -1809,9 +1809,13 @@ The walk runs in every player hit that goes through the checked-damage owner
 stops the craft's hit with a logged block naming its type. Two pieces stay
 held: the ball's pair hook `FUN_0040C800` (a body touching the ball stops that
 pair pass), and a pair contact on the craft while a live ball is in the hold
-(its modifier stays unresolved there). `FUN_004484A0`'s closing cue (sample
-`0x2D` when the craft has no shield and its health less the damage lies in
-5,001..30,000, at most once per 120 ticks) is not ported for any hit.
+(its modifier stays unresolved there). `FUN_004484A0`'s closing cue is ported for
+every hit it modifies: with no shield buffer (`+50`) and the craft's health
+(`+30`) less the modifier's returned damage (zero when a ball took it) in
+5,001..30,000, and the clock more than 120 ticks from the last cue (its own
+process-global latch `DAT_004DE85C`, from zero), it plays sample `0x2D`
+through `FUN_004958C0` at half gain, apart from `FUN_00446640`'s warning and
+its latch.
 
 **Power-ups carrying operation `0x38`.** Worlds 20 and 24 each author a
 Defender Ball (`0x3F38`) and an Autobot (`0x4038`) power-up, the only `0x38`

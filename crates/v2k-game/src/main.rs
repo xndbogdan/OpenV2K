@@ -13545,6 +13545,12 @@ fn play_world_audio(
     sound_manager: &mut Option<SoundManager>,
     entity_audio: &mut EntityPositionalAudio,
 ) {
+    // FUN_004958C0 plays at once, outside the positional mask.
+    for (sound_id, gain) in world_fx.take_centered_sounds() {
+        if let Some(manager) = sound_manager.as_mut() {
+            manager.play_centered_sound_with_gain(sound_id, gain);
+        }
+    }
     let pool = SoundPool::from_tables(&frame.cache.global_sound_tables());
     let listener = world_sound_listener(frame.camera);
     frame

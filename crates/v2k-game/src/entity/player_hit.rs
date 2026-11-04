@@ -157,12 +157,15 @@ pub(super) enum PlayerDamagePlan {
         /// The live Defender Ball 4484A0 hands the packet to; the craft then
         /// takes none.
         hold_ball: Option<(u32, DamageDeliveryRecord)>,
+        /// What 4484A0 returns, when it runs (its closing cue reads it).
+        modifier_damage: Option<i32>,
     },
     Alive {
         index: usize,
         /// The filtered amount 4484A0 receives (its feedback reads it).
         filtered_damage_raw: i32,
         hold_ball: Option<(u32, DamageDeliveryRecord)>,
+        modifier_damage: Option<i32>,
         transition: GenericEntityDamageTransition,
         generic_hit_sound_id: Option<u16>,
         death_sound_id: Option<u16>,
@@ -491,7 +494,8 @@ impl EntityManager {
         } else {
             collision.pair_callbacks.damage_modifier_address
         };
-        let hold_ball = match known(modifier, "damage modifier")? {
+        let modifier = known(modifier, "damage modifier")?;
+        let hold_ball = match modifier {
             None => None,
             Some(0x0044_84A0) => self
                 .plan_player_hold_walk()?
@@ -500,6 +504,7 @@ impl EntityManager {
         };
         // A live ball takes the packet and 4484A0 returns zero.
         let applied = if hold_ball.is_some() { 0 } else { filtered };
+        let modifier_damage = modifier.map(|_| applied);
         if known(
             collision.state_flags_at_0x08.masked(REMOTE_OWNED_STATE_BIT),
             "remote ownership",
@@ -523,6 +528,7 @@ impl EntityManager {
                 buffer_after: absorb_pre_health_damage_buffer(buffer, applied).0,
                 position_raw,
                 hold_ball,
+                modifier_damage,
             });
         }
         let generic_hit_sound_id = known(collision.generic_hit_sound_id, "generic-hit sound")?;
@@ -583,6 +589,7 @@ impl EntityManager {
             index,
             filtered_damage_raw: filtered,
             hold_ball,
+            modifier_damage,
             transition,
             generic_hit_sound_id,
             death_sound_id,
@@ -617,10 +624,12 @@ impl EntityManager {
                 buffer_after,
                 position_raw,
                 hold_ball,
+                modifier_damage,
             } => {
                 // 4484A0's feedback precedes 14E90's dying test.
                 crate::pad_vibration::submit_player_damage(filtered_damage_raw);
                 self.hit_hold_ball(hold_ball, fx, notifications, retail_tick);
+                self.damage_modifier_hull_cue(index, modifier_damage, fx, retail_tick);
                 self.entities[index].collision.pre_health_damage_buffer_raw =
                     RetailRuntimeValue::Known(buffer_after);
                 hull.pre_health_damage_buffer_raw = buffer_after;
@@ -636,6 +645,7 @@ impl EntityManager {
                 index,
                 filtered_damage_raw,
                 hold_ball,
+                modifier_damage,
                 transition,
                 generic_hit_sound_id,
                 death_sound_id,
@@ -647,6 +657,7 @@ impl EntityManager {
             } => {
                 crate::pad_vibration::submit_player_damage(filtered_damage_raw);
                 self.hit_hold_ball(hold_ball, fx, notifications, retail_tick);
+                self.damage_modifier_hull_cue(index, modifier_damage, fx, retail_tick);
                 let dying = transition.stage == GenericEntityDamageStage::DeathDispatchRequired;
                 let entity = &mut self.entities[index];
                 let health = if dying {
@@ -731,6 +742,27 @@ impl EntityManager {
         match live.first() {
             None => Ok(None),
             Some(&entity_type) => Err(PlayerCheckedDamageBlock::HoldBody(entity_type)),
+        }
+    }
+
+    /// 4484A0's close: the low-hull cue reads the craft's health and shield
+    /// buffer before 14E90 spends its returned damage.
+    fn damage_modifier_hull_cue(
+        &self,
+        index: usize,
+        modifier_damage: Option<i32>,
+        fx: &mut WorldFx,
+        retail_tick: u32,
+    ) {
+        let Some(damage) = modifier_damage else {
+            return;
+        };
+        let collision = &self.entities[index].collision;
+        // The plan read both words as known.
+        if let (RetailRuntimeValue::Known(health), RetailRuntimeValue::Known(buffer)) =
+            (collision.health_raw, collision.pre_health_damage_buffer_raw)
+        {
+            fx.poll_damage_modifier_hull_cue(health, buffer, damage, retail_tick as i32);
         }
     }
 
