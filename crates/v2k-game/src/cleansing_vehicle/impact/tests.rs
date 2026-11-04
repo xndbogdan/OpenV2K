@@ -168,8 +168,8 @@ fn recorded_player_class55_hit_finishes_class49_before_a_second_physical_hit() {
         .map(|p| p.particle)
         .collect::<Vec<_>>();
     assert_eq!(
-        particles.iter().filter(|p| p.source_class == 37).count(),
-        10
+        particles.iter().filter(|p| p.source_class == 6).count(),
+        30
     );
     let before_fx = fx.particle_count();
     let result = apply_cleansing_vehicle_particle_hit(

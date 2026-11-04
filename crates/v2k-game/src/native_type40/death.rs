@@ -229,7 +229,7 @@ impl SplitAndExplodeHost for Type40SplitHost<'_, '_> {
             .and_then(|m| self.frame.resources.global_model(m))
             .ok_or(Self::Block::Metadata)?
             .radius;
-        // C080 A/B/N/G test chooses37 because this real type owns A and B;
+        // C080 Sub-F/H/N/G test chooses37 because this real type owns H;
         // source WORDburstcount2 and both class bytes37 are distinct from49.
         self.frame
             .world_fx

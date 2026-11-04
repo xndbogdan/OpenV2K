@@ -98,10 +98,11 @@ owns this complete synchronous sequence through the shared
 [terminal](../../crates/v2k-game/src/class49_terminal.rs) modules. A retained
 source profile preserves the distinct rover and E/L turret burst branches.
 
-BAF0 tests runtime A/B/N/G before its capability and type-specific branches.
-The rover's nonnull A/B selects ten class37 particles at40BBB3. Its later
-type49 branch (thirty class6 particles) requires all four tested components to
-be absent and is not reachable for this authenticated native construction.
+BAF0 tests runtime Sub-F/H/N/G before its capability and type-specific
+branches. The rover has none of them (only Sub-A to Sub-D) and no capability
+`0x40`, so its type49 branch scatters thirty class6 particles, the cleansing
+particle class (the NoCD02 recording's class6 particle owned by the dying
+rover, below, is one of them).
 After440950, BAF0 dispatches the Section12 radial packet through4566E0.
 BD20 then clears tasks with A860, conditionally constructs the Type60 ring
 unless80000000h is set, and requests deferred removal through10B70.

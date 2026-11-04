@@ -153,7 +153,7 @@ silent.
     `4C7150`).
   - Type129: `BC90` keeps the living tasks and drops the Type61 authored in
     the carrier's `+88` at its position (corpse `4C7198`).
-- **Death burst.** `BAF0`'s scatter takes the nonnull-A branch at `40BBB3`:
+- **Death burst.** `BAF0`'s scatter takes the nonnull Sub-H branch at `40BBB3`:
   ten class37 particles.
 
 Playing's particle visit, radial callbacks, static walk and pair lanes reach

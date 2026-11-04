@@ -49,7 +49,7 @@ have null contact hooks (`+0x30..+0x3C`) and a null death cleanup (`+0x2C`).
 ## Death
 
 Alternate class 1 (`BAC0`, then `BAF0`): a lethal hit or the session abort
-explodes the Type14. `BAF0`'s non-null Sub-B takes the `40BBB3` scatter (ten
+explodes the Type14. `BAF0`'s non-null Sub-G takes the `40BBB3` scatter (ten
 class-37 particles) before the radial blast, and class 1 leaves no Type60
 ring. The corpse keeps only its Finished receipt until the deferred sweep.
 

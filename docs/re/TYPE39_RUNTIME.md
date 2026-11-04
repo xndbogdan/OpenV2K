@@ -42,7 +42,7 @@ it draws one RNG word and plays sound 71 with chance `(elapsed × 64 / 488 + 1)
 ## Death
 
 Alternate class 1 (`BAC0`, then `BAF0`), as Type14's: a lethal hit or the
-session abort explodes the Type39. `BAF0`'s non-null Sub-B takes the `40BBB3`
+session abort explodes the Type39. `BAF0`'s non-null Sub-G takes the `40BBB3`
 scatter (ten class-37 particles) before the radial blast. The corpse keeps
 only its Finished receipt until the deferred sweep.
 

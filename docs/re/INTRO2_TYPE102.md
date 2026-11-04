@@ -193,7 +193,7 @@ or the class0 wait, method16 with gravity lead, health1000, initializer
 damage multiplier slot5 (256), muzzle slot (36/30), Sub-L
 (`208,7`/`232,3`) and alternate49 instead of1, so they die through class49
 rather than Type115's class1. BAF0 (`40BB3E..40BBB5`) chooses the death
-scatter in this order: any A/B/N/G component gives class37; otherwise live
+scatter in this order: any Sub-F/H/N/G component gives class37; otherwise live
 capability `0x40` gives sixteen class94/95; otherwise Type49 gives class6
 and types112..115 class37. Type115 (capability zero) therefore reaches the
 type range, while Type112/113 take the capability branch like the other E/L
@@ -387,7 +387,7 @@ this does not change the upstream class7 target-selection policy.
 
 10C10 sets health0/dying, then directly selects alternate49 without a weighted
 RNG draw. BD20 invokes BAF0 before clearing tasks. Native E/L has none of the
-earlier A/B/N/G scatter branches, so capability0x40 selects sixteen class94/95
+earlier Sub-F/H/N/G scatter branches, so capability0x40 selects sixteen class94/95
 particles and the shared surface/sound tail. The radial template is
 inner512/outer1024, impulse2000, channels `[1,3]`, amounts `[4000,4000]`;
 logical owner/type come from416F90's relation resolution, falling back to self.

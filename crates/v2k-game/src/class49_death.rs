@@ -301,56 +301,6 @@ impl NativeExplosionSourceProfile {
         }
     }
 
-    fn scatter(self) -> (i32, [u8; 2]) {
-        match self {
-            // BAF0's signed type112..115 branch (40BB92..40BBB3).
-            Self::GunTurret(Intro2GunTurretProfile::Type115) => (10, [37, 37]),
-            // Empty A/B/N/G with capability40: 40BB77.
-            Self::GunTurret(_) | Self::PowerUp61 => (16, [94, 95]),
-            // Nonnull A/B takes 40BBB3 before the later type49 branch.
-            Self::CleansingVehicle => (10, [37, 37]),
-            // Type13 has G: 40BB52 branches to40BBB3 before capability40.
-            Self::Intro2Type13 => (10, [37, 37]),
-            Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket) => {
-                (10, [37, 37])
-            }
-            // No A/B/N/G, capability0, neither type49 nor 112..115: the
-            // 40BB9C default keeps ten class16 particles.
-            Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
-                (10, [16, 16])
-            }
-            // Type45 (A/B/D) and Type48 (B/C/K) have none of the F, H, O and
-            // G blocks BAF0 tests, and capability 0x40: 40BB77.
-            Self::EntityWeapon(_) => (16, [94, 95]),
-            // Type20 has no A/B/N/G, capability8, and is neither type49 nor
-            // 112..115: the 40BB9C default keeps ten class16 particles.
-            Self::ExplodingFish(20) => (10, [16, 16]),
-            // Nonnull B takes 40BBB3.
-            Self::ExplodingFish(_) => (10, [37, 37]),
-            // Nonnull G takes 40BBB3.
-            Self::Type10Carrier(_) => (10, [37, 37]),
-            // Nonnull A takes 40BBB3.
-            Self::Type16Carrier(_) => (10, [37, 37]),
-            // Empty A/B/N/G, no capability40, not type 49 or 112..115:
-            // 40BB9C keeps ten particles of class16.
-            Self::Type43 => (10, [16, 16]),
-            // Nonnull A takes 40BBB3.
-            Self::Type38Family(_) => (10, [37, 37]),
-            // Nonnull A takes 40BBB3.
-            Self::Type12Family(_) => (10, [37, 37]),
-            // No A/B/N/G, no capability40, neither type49 nor 112..115:
-            // the 40BB9C default keeps count10 with class16.
-            Self::RollingBoulder => (10, [16, 16]),
-            // Nonnull B takes 40BBB3.
-            Self::ExplodingFlyer(_) => (10, [37, 37]),
-            // Nonnull A takes 40BBB3.
-            Self::Type71Gunner => (10, [37, 37]),
-            // No A/B/N/G, no capability40, neither type49 nor 112..115:
-            // 40BB9C keeps ten particles of class16.
-            Self::PortableRadar | Self::Class0Host(_) => (10, [16, 16]),
-        }
-    }
-
     pub const fn policy(self) -> NativeExplosionPolicy {
         match self {
             Self::GunTurret(Intro2GunTurretProfile::Type115)
@@ -640,6 +590,34 @@ enum Entry {
 }
 
 /// Everything the commits need, closed before the first write.
+/// `FUN_0040BAF0`'s scatter branch. Its block words 0, 1, `+34` and `+18`
+/// are built from type `+E4`, `+EC`, `+108` and `+E8`: Sub-F, Sub-H, Sub-N
+/// and Sub-G (type `+D0` is Sub-A). Any of them gives ten class37
+/// particles; else capability `0x40` gives sixteen of classes 94 and 95;
+/// else type 49 thirty of class6, types 112..115 ten class37, and every
+/// other type ten class16.
+fn baf0_scatter(
+    entity_type: u32,
+    record: &v2k_formats::collision::CollisionEntry,
+    capability_flags: u32,
+) -> (i32, [u8; 2]) {
+    if record
+        .active_subs
+        .iter()
+        .any(|sub| matches!(sub.as_str(), "F" | "H" | "N" | "G"))
+    {
+        (10, [37, 37])
+    } else if capability_flags & 0x40 != 0 {
+        (16, [94, 95])
+    } else if entity_type == 49 {
+        (30, [6, 6])
+    } else if (112..=115).contains(&entity_type) {
+        (10, [37, 37])
+    } else {
+        (10, [16, 16])
+    }
+}
+
 struct Prepared {
     profile: NativeExplosionSourceProfile,
     deferred_destroy_entry: MainBaseDeferredDestroyEntry,
@@ -652,6 +630,7 @@ struct Prepared {
     death_sound: Option<u16>,
     allocation: MainBaseAbortActorLease,
     radial_damage: RadialDamageTemplate,
+    scatter: (i32, [u8; 2]),
 }
 
 /// The first BC90's 10B70 already staged this allocation in the actor queue,
@@ -743,6 +722,13 @@ fn prepare(
     if !profile.authenticates_metadata(metadata) {
         return Err(Block::Metadata);
     }
+    let scatter = baf0_scatter(
+        profile.entity_type(),
+        resources
+            .global_entity_type(profile.entity_type() as usize)
+            .ok_or(Block::Metadata)?,
+        metadata.capability_flags,
+    );
     // 10C10 stopped +8C before a reinstall.
     let sound_attachment = if entry == Entry::Reinstall {
         RetailRuntimeValue::Known(None)
@@ -862,6 +848,7 @@ fn prepare(
         owner_id,
         owner_type,
         death_sound,
+        scatter,
         allocation: manager
             .main_base_abort_actor_observation(id)
             .ok_or(Block::Allocation)?
@@ -925,9 +912,9 @@ fn install(
         receipt,
         phase: TerminalPhase::Issued,
     });
-    let (scatter_count, scatter_classes) = prepared.profile.scatter();
+    let (scatter_count, scatter_classes) = prepared.scatter;
     // 440950's solo network step is a no-op; its independent surface/sound
-    // suffix follows the profile's exact BAF0 scatter branch.
+    // suffix follows the type's BAF0 scatter branch.
     fx.emit_explode_with_ring_burst_raw(ExplodeWithRingBurstRequest {
         position_raw: receipt.position_raw,
         source_extent_raw: prepared.extent,

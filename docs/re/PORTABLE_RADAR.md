@@ -232,9 +232,9 @@ not rebuild that basis. Preserve this release-versus-birth asymmetry and the
 actual current position supplied by the cargo/drop owner.
 
 The Type83 BAF0 scatter branch is **10 class16 particles**. At `0040BB3E`
-it has no A/B/N/G; capability `0x40` is clear at `0040BB73`; type83 is neither
+it has no Sub-F/H/N/G; capability `0x40` is clear at `0040BB73`; type83 is neither
 49 nor112..115, so `0040BB9C` chooses class16. It therefore differs from both
-the rover's class37 branch and the turret's 94/95 branch. The shared `440950`
+the rover's class6 branch and the turret's 94/95 branch. The shared `440950`
 scatter is followed by the type-header radial template copied at `0040BC65`:
 inner radius`0x200`, outer radius`0x400`, impulse2000, channels`[1, 3]`,
 amounts`[4000, 4000]`, and initial trailing words`[0, 0]`; BAF0 then fills

@@ -353,11 +353,8 @@ fn native_terminal_keeps_scatter_logical_owner_and_ordered_death_cues() {
                 assert_eq!(particle.source_entity_type_at_birth, Some(source_type));
             }
         }
-        if kind == EntityWeaponKind::Rocket {
-            assert_eq!(scatter, BTreeMap::from([(37, 10)]));
-        } else {
-            assert_eq!(scatter, BTreeMap::from([(94, 8), (95, 8)]));
-        }
+        // No weapon type has Sub-F, H, N or G, and each has capability 0x40.
+        assert_eq!(scatter, BTreeMap::from([(94, 8), (95, 8)]));
         assert_eq!(
             manager
                 .iter_all()
