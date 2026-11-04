@@ -9,9 +9,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 
 | Measure | Functions | Share |
 |---|---:|---:|
-| Game functions in retail `V2000.EXE` | 2,400 | |
-| Marked not needed (excluded below) | 629 | |
-| **Referenced by port code** | **1,673** | **94.5%** |
+| Game functions in retail `V2000.EXE` | 2,399 | |
+| Marked not needed (excluded below) | 628 | |
+| **Referenced by port code** | **1,674** | **94.5%** |
 | Referenced by code or RE notes | 1,771 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -21,8 +21,8 @@ Manual statuses from [`status.csv`](status.csv):
 |---|---:|
 | implemented | 415 |
 | approximated | 7 |
-| documented | 33 |
-| not-needed | 629 |
+| documented | 34 |
+| not-needed | 628 |
 
 10 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -44,10 +44,10 @@ Where the code's references are thinnest:
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 23 | 3 | 101 |
 | [Controls](../re/CONTROLS.md) | 17 | 1 | 53 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 112 |
-| [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 27 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 9 | 0 | 27 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 138 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 55 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 57 |
 | [Menu system](../re/MENU_SYSTEM.md) | 3 | 1 | 155 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 2 | 1 | 54 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 45 |
@@ -69,7 +69,7 @@ denominator, each with its reason: the never-installed
 | replaced: Rust ownership (module open and close, and module or table setup that only clears state, starts lists, adds or drops hooks or frees records; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 56 |
 | replaced: the port's game states (FGDK applications, modes and mode slots, their chains and binding sets, and the records a mode allocates and frees; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 30 |
 | replaced: the port's SDL platform (FGDK's input binding layer: device input states, binding records, value records and the event ring; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 24 |
-| not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts) | 23 |
+| not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts) | 22 |
 | replaced: the port's SDL platform (the keyboard, mouse and joystick readers and their device lists; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 21 |
 | replaced: the port's SDL platform (the window, its pump and main loop, multimedia timers and file reads; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 21 |
 | replaced: the port's SDL platform (MCI CD audio, the message box, the command line; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 18 |

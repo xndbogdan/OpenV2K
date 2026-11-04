@@ -1025,8 +1025,20 @@ event 2 (`FUN_0044FCD0` selects `4D0A30`), and its exit (`FUN_00453E00`)
 returns to the frontend. In the lab's idle frontend (no keys) the demo
 world loads at pass 3033, ticks 2852 times and the frontend is back at
 pass 5886, clock 2853. Phase 4 also has its own camera-subject choices in
-`FUN_004503C0` (random picks among the world's actors), not traced in
-detail.
+`FUN_004503C0`. A countdown in milliseconds (`004F72D8`, zero after every
+load) drops by each visit's microseconds over 1000; when it goes negative,
+in world style 6 or on an odd random word the camera roams: the countdown
+restarts at 2000 plus a random word's low 16 bits shifted right by five
+(2.0 to about 4.0 s), the subject (session `+308`) is reset, and the live
+list is walked: for each actor with a nonzero state word without bit
+`0x4000` that either has capability bit 8 or, in world style 6, a type
+record with a nonzero `+E4`, one random word is drawn; a word whose low
+three bits are zero takes that actor and ends the walk, and otherwise the
+actor is taken only if the current subject no longer resolves. On an even
+word outside style 6 the player (session `+27C`) becomes the subject and the
+countdown restarts at 4000 plus the shifted word (4.0 to about 6.0 s).
+Not ported yet: the idle countdown, the table's world, phase 4 and these
+choices.
 
 ## Screen tree highlights (full tree in ../port/crates/v2k-game/data/menu_tree.json)
 

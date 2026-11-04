@@ -15,8 +15,8 @@ These census entries are not functions; the progress report omits them.
 - `0x004167BA` and `0x0043B3D5` are runs of `nop` between functions.
 - These are parts of the function before them, which runs into them:
   `0x00410440` (`FUN_00410430`), `0x0042776E` and `0x004277C0`
-  (`FUN_00427760`), `0x0043F230` (`FUN_0043F180`), `0x00456FE0`
-  (`FUN_00456FB0`), `0x00493654` (`FUN_00493640`, which loads an overlay),
+  (`FUN_00427760`), `0x0043F230` (`FUN_0043F180`), `0x00493654`
+  (`FUN_00493640`, which loads an overlay),
   `0x004956D7` (`FUN_004956B0`), `0x0046C5F1` (the exit of `FUN_0046C570`),
   `0x0048D159` and `0x0048FADE`, the ends of the Direct3D handlers
   `FUN_0048CB90` and `FUN_0048F160`.

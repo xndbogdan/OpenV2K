@@ -1511,8 +1511,7 @@ address,size,region
 0x00456F20,68,game
 0x00456F70,19,game
 0x00456F90,26,game
-0x00456FB0,48,game
-0x00456FE0,389,game
+0x00456FB0,437,game
 0x00457170,56,game
 0x004571B0,43,game
 0x004571E0,176,game

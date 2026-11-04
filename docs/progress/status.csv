@@ -541,7 +541,6 @@ address,status,note
 0x0044256E,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
 0x0044EA82,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
 0x004512AE,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
-0x00456FE0,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
 0x0046C5F1,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
 0x00471132,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
 0x0048D159,not-needed,not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts)
@@ -1089,3 +1088,4 @@ address,status,note
 0x0042CEA0,implemented,Klaus command word DAT_004DB210
 0x0042CEB0,implemented,Klaus model argument DAT_004DB218
 0x00457730,implemented,32-bit integer square root: zero below one, 0xFFFF from 0x40000000 (v2k_formats::fixed_math::retail_integer_sqrt)
+0x00456FB0,documented,the loading card's timer callback: real-time deltas, Klaus, the eye and +270 (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
