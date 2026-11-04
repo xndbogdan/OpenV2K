@@ -94,13 +94,13 @@ words, and `415040` filters the packet through the type's thresholds.
 styles, so AC60 selects the alternate class directly, with no RNG word.
 
 - **Type3, class1 Explode** (`4C7150`, initializer `BAC0`). BAF0 finds no
-  A/B/N/G and no capability `0x40`, and the type is neither 49 nor 112..115.
+  Sub-F/H/N/G and no capability `0x40`, and the type is neither 49 nor 112..115.
   So the `40BB9C` default scatters 10 class-16 particles. Its radial uses the
   type's `+50..+67` template: inner 512, outer 1024, impulse 2000, and 4000 on
   channels 1 and 3. All three task slots then clear and removal is deferred.
   That radial needs the player hull, so a hit runs it in the Playing scene.
 - **Type27, class18 Split And Explode** (`4C73D8`, initializer `40C080`). The
-  `440950` burst tests A/B/N/G and picks class `0x10` with count 2
+  `440950` burst tests Sub-F/H/N/G and picks class `0x10` with count 2
   (`40C0B3..40C0F5`), drawing one RNG word. After the task clear, the
   Type27->Type3/count2 row builds two children from the zeroed birth record.
   Each child takes nine launch words (position offsets, velocity, Euler), then

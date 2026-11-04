@@ -447,7 +447,8 @@ fn class49_nonzero_header_death_cue_precedes_scatter_sound_without_rng() {
             .unwrap()
             .is_some()
     );
-    assert_eq!(fx.particle_count(), 11);
+    // Type49's BAF0 branch: thirty class6 particles plus the burst.
+    assert_eq!(fx.particle_count(), 31);
     fx.process_pending();
     assert_eq!(
         fx.take_positional_sounds(),
@@ -470,7 +471,7 @@ fn class49_nonzero_header_death_cue_precedes_scatter_sound_without_rng() {
     );
     fx.process_pending();
     assert!(fx.take_positional_sounds().is_empty());
-    assert_eq!(fx.particle_count(), 11);
+    assert_eq!(fx.particle_count(), 31);
     assert_eq!(
         fx.next_shared_retail_random_u16(),
         oracle.next_shared_retail_random_u16()
@@ -799,4 +800,36 @@ fn type13_search_and_aimless_class1_prefix_retains_slots_until_radial_completion
             expected_rng.next_shared_retail_random_u16()
         );
     }
+}
+
+/// BAF0's branch reads Sub-F/H/N/G, not Sub-A/B. Retail lab (Level 1,
+/// every weapon fired): Type34 scatters ten class16, Type42 (the rocket),
+/// Type45, Type59 and Type64 sixteen of classes 94/95.
+#[v2k_test_support::retail_test]
+fn baf0_scatter_branch_reads_sub_f_h_n_g_and_capability_0x40() {
+    let Some((session, metadata)) = fixture() else {
+        return;
+    };
+    let scatter = |entity_type: u32| {
+        baf0_scatter(
+            entity_type,
+            session
+                .cache
+                .global_entity_type(entity_type as usize)
+                .unwrap(),
+            metadata[entity_type as usize].capability_flags,
+        )
+    };
+    for entity_type in [42, 45, 48, 59, 61, 64, 112, 113, 114] {
+        assert_eq!(scatter(entity_type), (16, [94, 95]), "type {entity_type}");
+    }
+    for entity_type in [3, 34, 43, 89] {
+        assert_eq!(scatter(entity_type), (10, [16, 16]), "type {entity_type}");
+    }
+    // Type20 has only D and F; Type115 none of the four and no 0x40.
+    for entity_type in [10, 12, 13, 14, 16, 20, 38, 39, 71, 115] {
+        assert_eq!(scatter(entity_type), (10, [37, 37]), "type {entity_type}");
+    }
+    // The cleansing vehicle (A, B, C, D; capability 0x1204).
+    assert_eq!(scatter(49), (30, [6, 6]));
 }

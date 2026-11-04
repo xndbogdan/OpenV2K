@@ -577,6 +577,7 @@ address,status,note
 0x0043F660,implemented,flare entity hit: the burst then FUN_00410D30 (docs/re/CLASS0_RUNTIME.md)
 0x00410D30,implemented,flare frame-scaled checked damage and its hit presentation (docs/re/CLASS0_RUNTIME.md)
 0x0040BAC0,implemented,class1 explosion terminal; the Type20 swimmer joins the shared class1/49/63 owner (docs/re/FISH_RUNTIME.md#type20)
+0x0040BAF0,implemented,death scatter: Sub-F/H/N/G then capability 0x40 then type 49 and 112..115, read from each type record (docs/re/ENTITY_DAMAGE_AND_DEATH.md)
 0x0040B460,implemented,Mobbing Target searching initializer for Type29 (docs/re/INTRO2_TYPE10.md)
 0x0040B2C0,implemented,Mobbing Target approach initializer (docs/re/INTRO2_TYPE10.md)
 0x0040B340,implemented,Mobbing Target dive initializer (docs/re/INTRO2_TYPE10.md)

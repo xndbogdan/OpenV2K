@@ -105,7 +105,7 @@ After the walk, in order:
 - **Lethal hit.** Lethal damage publishes alternate class1. `BAC0` runs on the
   shared class49 terminal.
 - **Death burst.** `BAF0`'s scatter takes the default branch at `40BB9C`: no
-  A/B/N/G component, no capability `0x40`, and not type 49 or 112–115. That is
+  Sub-F/H/N/G component, no capability `0x40`, and not type 49 or 112–115. That is
   ten class16 particles.
 - **Corpse.** The terminal clears every task and stages removal. Until `14990`
   the corpse stays a radial, static and pair participant, through its Finished

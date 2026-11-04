@@ -1113,9 +1113,9 @@ Type42's radial template is inner512/outer1024; Type59 is512/2048. Both retain
 impulse2000 and packet channels[2,3], amounts[14000,12000]. The source relation
 fills trailing source-type/owner words; damage goes through the existing static
 and playing dynamic radial owners. `410C10` first emits authored+90 cue62 at
-fixed rate, then `40BAF0` emits its randomized62 after scatter. Present A/B make
-Type42 use ten class37 attempts; componentless Type59 with capability40 uses
-sixteen alternating94/95 attempts. Both use the current model extent and shared
+fixed rate, then `40BAF0` emits its randomized62 after scatter. Neither has Sub-F,
+H, N or G (Type42 has A, B and C) and both have capability40, so each uses
+sixteen alternating94/95 attempts, as the retail lab counts. Both use the current model extent and shared
 density/allocation policy. Rocket alternate class1 has no ring; Type59 alternate
 class49 normally constructs Type60 after the radial blast.
 
@@ -1633,7 +1633,7 @@ found target runs the style's slot `+04`, `FUN_0040CEF0`, the mine's death,
 as any pair contact (`+18`) or static contact (`+1C`) does in either style;
 `+10`, `+14`, `+28` and `+2C` are null in both, so ground and water take
 the shared response a grenade's do. The class-49 death scatters sixteen
-particles of classes 94 and 95: `FUN_0040BAF0` tests the F, H, O and G
+particles of classes 94 and 95: `FUN_0040BAF0` tests the F, H, N and G
 blocks (component block words 0, 1, `+34` and `+18`, from type `+E4`,
 `+EC`, `+108` and `+E8`), Type48 has only B, C and K, and its capability
 word has bit `0x40`. Model variables 1 and 2 are the two Sub-K words.

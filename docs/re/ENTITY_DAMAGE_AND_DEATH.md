@@ -485,11 +485,16 @@ Type115 flowers and native Intro2 Type13 use Class1; defensive turrets, the clea
 ordinary Type61 pickups use Class49. This is shared source-backed structure,
 not a substitution of class49 for a flower's authored alternate.
 
-BAF0's ten-scatter default becomes sixteen classes94/95 only when A/B/N/G
-are all absent and capability40 is set. Type115's signed type112..115 branch
-uses ten class37 particles; the cleansing vehicle reaches that same particle
-class through its present A/B branch. Native Type13 reaches40BBB3 through
-its present G branch at40BB52, also retaining ten class37 attempts. Its actual
+BAF0 tests the runtime component block's words 0, 1, `+34` and `+18`, built
+from type `+E4`, `+EC`, `+108` and `+E8`: Sub-F, Sub-H, Sub-N and Sub-G (type
+`+D0` is Sub-A). Any of them gives ten class37 particles; otherwise
+capability `0x40` gives sixteen of classes 94/95, type 49 thirty class6 and
+types 112..115 ten class37; every other type keeps ten class16. Type115
+(capability zero) takes the type112..115 branch; the cleansing vehicle (Sub-A
+to Sub-D, capability `0x1204`) the type49 branch. Native Type13 reaches40BBB3 through
+its present G branch at40BB52, also retaining ten class37 attempts. The port
+reads the branch from each type's record; a retail lab run counts Type34's
+ten class16 and Type42's, Type45's, Type59's and Type64's sixteen 94/95. Its actual
 Search/Aimless predecessor+28 cleanup hooks are null; the Class1 style4C7150
 has null solid, water and static hooks. Each retains its own damage template,
 current-style death cleanup and source allocation. Radial delivery completes

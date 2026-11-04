@@ -175,16 +175,22 @@ fn real_rocket_terrain_terminal_visits_inline_type40_children_in_the_same_radial
             weapon.entity_id()
         ));
         assert!(finished_terminal_authenticates(&manager, parent_id));
-        let scatter = fx
-            .test_particles_in_virgin_birth_order()
-            .into_iter()
-            .filter(|particle| particle.source_class == 37)
+        let particles = fx.test_particles_in_virgin_birth_order();
+        // The rocket (capability 0x40, no Sub-F/H/N/G): sixteen of 94/95.
+        let rocket = particles
+            .iter()
+            .filter(|particle| matches!(particle.source_class, 94 | 95))
             .collect::<Vec<_>>();
-        assert_eq!(scatter.len(), 12);
-        assert!(scatter[..10].iter().all(|particle| {
+        assert_eq!(rocket.len(), 16);
+        assert!(rocket.iter().all(|particle| {
             particle.owner_id == Some(player_id) && particle.source_entity_type_at_birth == Some(46)
         }));
-        assert!(scatter[10..].iter().all(|particle| {
+        let scatter = particles
+            .iter()
+            .filter(|particle| particle.source_class == 37)
+            .collect::<Vec<_>>();
+        assert_eq!(scatter.len(), 2);
+        assert!(scatter.iter().all(|particle| {
             particle.owner_id == Some(parent_id) && particle.source_entity_type_at_birth == Some(40)
         }));
         let split = manager

@@ -4,7 +4,7 @@
 //!
 //! `10C10` zeroes health and sets the dying bit; both class20 styles have a
 //! null `+2C`, so DB80 reaches AC60, which selects alternate class18 without a
-//! `425680` draw. C080's `440950` burst tests A/B/N/G before choosing its
+//! `425680` draw. C080's `440950` burst tests Sub-F/H/N/G before choosing its
 //! class byte: a boulder has no components, so both bytes are `0x10` (16), with
 //! the fixed count 2 (`40C0B3..40C0F5`). The Type27->Type3/count2 row of its
 //! type switch then builds each child through [`crate::split_and_explode`].
@@ -31,7 +31,7 @@ use std::convert::Infallible;
 
 /// Class18 style `0x004C73D8`; its `+04..+38` words are all zero.
 pub const SPLIT_STYLE_ADDRESS: u32 = 0x004C_73D8;
-/// `440950` scatter class for a body without A/B/N/G components.
+/// `440950` scatter class for a body without Sub-F/H/N/G components.
 pub const SPLIT_BURST_CLASS: u8 = 0x10;
 pub const SPLIT_BURST_COUNT: i32 = 2;
 

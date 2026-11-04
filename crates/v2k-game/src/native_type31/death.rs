@@ -330,7 +330,7 @@ impl SplitAndExplodeHost for Type31SplitHost<'_, '_> {
             .and_then(|m| self.frame.resources.global_model(m))
             .ok_or(Self::Block::Metadata)?
             .radius;
-        // C080's A/B/N/G test picks class 37: Type31 owns A and B.
+        // C080's Sub-F/H/N/G test picks class 37: Type31 owns H.
         self.frame
             .world_fx
             .emit_explode_with_ring_burst_raw(ExplodeWithRingBurstRequest {

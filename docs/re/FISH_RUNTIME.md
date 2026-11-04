@@ -245,9 +245,8 @@ divisor 30, roll coupling, probes 512/256 and a zero classifier. Defecate
 Virus runs as for [Type37](#type37).
 
 - Death takes class1 (`FUN_0040BAC0`): `FUN_0040BAF0`'s burst and radial,
-  then `FUN_0040A860` and staged removal. With no A/B/N/G component,
-  capability 8 and a type outside 49 and 112..115, BAF0 scatters ten class16
-  particles. The style `4C7150` is null apart from its `+40`, so a later hit
+  then `FUN_0040A860` and staged removal. Its Sub-F is one of the four
+  components BAF0 tests, so it scatters ten class37 particles. The style `4C7150` is null apart from its `+40`, so a later hit
   on the finished body changes nothing. Hits, radials, attached particles
   and the Main Base abort reach it through the shared terminal, as Type124's
   class63 does.
