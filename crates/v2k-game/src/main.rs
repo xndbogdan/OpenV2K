@@ -2465,6 +2465,7 @@ fn run_game(
     let mut player_death = PlayerDeathLifecycle::default();
     let mut static_damage = StaticDamageScheduler::new();
     let mut return_to_frontend_pending = false;
+    let mut frontend_entry_card: Option<FrontendEntryCard> = None;
     let mut static_contact_error_reported = false;
     let mut active_pair_contact_error_reported = false;
     // Each general active-pair stop line is reported once a world.
@@ -3032,6 +3033,49 @@ fn run_game(
             GameState::Menu(shell) | GameState::Paused { shell } => {
                 let mut redraw_paused_world =
                     std::mem::take(&mut paused_world_redraw_pending) && menu_is_paused;
+                // FUN_0042B230's last card callback (FUN_0042D620, awaited by
+                // FUN_0042D830) precedes the first frontend frame: the 50-Hz
+                // clock, a Klaus visit, then his card over the last frame.
+                let frontend_card_drawn = match frontend_entry_card.take() {
+                    Some(card) if !menu_is_paused => {
+                        let delta = card
+                            .timer
+                            .map_or(LOADING_CARD_CALLBACK_MIN_MICROS, |mut timer| {
+                                timer.wait_for_callback()
+                            });
+                        let tick = retail_clock.advance(u64::from(delta));
+                        shell.visit_klaus(
+                            delta,
+                            &mut GlobalSoundRuntime::new(
+                                &session.cache,
+                                &mut world_fx,
+                                sound_manager.as_mut(),
+                            ),
+                        );
+                        if card.last_frame.is_none() {
+                            eprintln!("Frontend card: the renderer kept no last frame; the card is drawn over black");
+                        }
+                        render_loading_card(
+                            renderer.as_mut(),
+                            &system_strings,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            tick,
+                            Some(KlausHandoffFrame {
+                                shell: &*shell,
+                                cache: &session.cache,
+                                colors: &face_colors,
+                                retail_tick: tick,
+                            }),
+                            Some(FrontendCardLayers {
+                                resources: &menu_resources,
+                                last_frame: card.last_frame.as_ref(),
+                            }),
+                        );
+                        true
+                    }
+                    _ => false,
+                };
                 if !menu_is_paused {
                     // The frontend's clock step (FUN_0042AA10).
                     retail_tick = retail_clock.advance(u64::from(elapsed_micros));
@@ -3987,17 +4031,20 @@ fn run_game(
                         frontend_fade_before_actor,
                         shell.frontend_depth_fade_mode(),
                     );
-                    render_menu(
-                        &mut *renderer,
-                        shell,
-                        &system_strings,
-                        &menu_resources,
-                        menu_fonts.as_ref(),
-                        &session.cache,
-                        &face_colors,
-                        &billboard_frame,
-                        retail_tick,
-                    );
+                    // The card stands for this frame's present.
+                    if !frontend_card_drawn {
+                        render_menu(
+                            &mut *renderer,
+                            shell,
+                            &system_strings,
+                            &menu_resources,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            &face_colors,
+                            &billboard_frame,
+                            retail_tick,
+                        );
+                    }
                     if wrapped {
                         GlobalSoundRuntime::new(
                             &session.cache,
@@ -4225,6 +4272,15 @@ fn run_game(
                 // second attract expires 499 passes after the init's).
                 idle_countdown.enter_frontend();
                 idle_countdown.tick(elapsed_micros, window_suspended, network_game.is_some());
+                // The init's loading timer (FUN_0042D7F0) draws its card over
+                // whatever was presented last; nothing clears it first.
+                frontend_entry_card = Some(FrontendEntryCard {
+                    last_frame: renderer.capture_frame(FrameCaptureSource::Presented),
+                    timer: probe
+                        .fixed_step_micros
+                        .is_none()
+                        .then(LoadingCardTimer::arm),
+                });
                 class1_proxy.advance_proxy(elapsed_micros.min(125_000));
                 state = GameState::Menu(shell);
                 // Teardown is synchronous and must not become the first
@@ -4429,6 +4485,7 @@ fn run_game(
                                 colors: &face_colors,
                                 retail_tick: tick,
                             }),
+                            None,
                         );
                         $timer.rearm();
                         log!(
@@ -5593,6 +5650,7 @@ fn run_game(
                         colors: &face_colors,
                         retail_tick: card_tick,
                     }),
+                    None,
                 );
                 // FUN_00451710 stands the class-1 proxy above and behind
                 // the player and starts the eye on it; the load's own frame
@@ -18392,12 +18450,27 @@ fn retire_world_radars(
     }
 }
 
-/// A world load's card, as `FUN_0042AF00` draws it from a card callback:
-/// Klaus over black, then `FUN_0042B040`'s text in the normal (green) system
-/// font at level-2 layout point 12, on the even half of
-/// `(DAT_004FED60 / 20) & 1`. Its branding sprites need the record's `+0C`,
-/// which only the frontend's card (`004DB1D8`) sets. The port has no proven
-/// retry loop, so it requests system string 34 (`Loading`) only.
+/// The frontend entry's pending card: the last presented frame it covers and,
+/// in real time, the init's timer (a fixed step takes the lab's 7,800 us).
+struct FrontendEntryCard {
+    last_frame: Option<CapturedFrame>,
+    timer: Option<LoadingCardTimer>,
+}
+
+/// What the frontend's card record (`004DB1D8`, `+0C` set) adds to a world
+/// load's: no clear, and the three branding sprites.
+struct FrontendCardLayers<'a> {
+    resources: &'a v2k_game::menu::MenuResources,
+    last_frame: Option<&'a CapturedFrame>,
+}
+
+/// A card, as `FUN_0042AF00` draws it from a card callback: Klaus, then
+/// `FUN_0042B040`'s text in the normal (green) system font at level-2 layout
+/// point 12, on the even half of `(DAT_004FED60 / 20) & 1`. A world load's
+/// card (`004F71B0`) is over black. The frontend's (`004DB1D8`) is over the
+/// last presented frame and draws the branding sprites first, as its `+0C`
+/// asks. The port has no proven retry loop, so it requests system string 34
+/// (`Loading`) only.
 fn render_loading_card(
     renderer: &mut dyn v2k_render::Renderer,
     system_strings: &[String],
@@ -18405,16 +18478,24 @@ fn render_loading_card(
     cache: &v2k_game::resource_cache::ResourceCache,
     retail_tick: u32,
     klaus: Option<KlausHandoffFrame<'_>>,
+    frontend: Option<FrontendCardLayers<'_>>,
 ) {
     use v2k_game::game_state::menu_strings;
 
     renderer.begin_scene(RenderScene::Menu);
     renderer.clear(0.0, 0.0, 0.0);
+    if let Some(frame) = frontend.as_ref().and_then(|layers| layers.last_frame) {
+        renderer.draw_fullscreen(&frame.rgba, frame.width, frame.height);
+        renderer.clear_depth();
+    }
     if let Some(klaus) = klaus {
         draw_klaus_handoff_overlay(renderer, klaus);
     }
 
     let (vw, vh) = renderer.viewport_size();
+    if let Some(layers) = &frontend {
+        draw_menu_branding(renderer, system_strings, layers.resources, vw, vh);
+    }
     if loading_text_visible(retail_tick) {
         let text = system_strings
             .get(menu_strings::LOADING)
