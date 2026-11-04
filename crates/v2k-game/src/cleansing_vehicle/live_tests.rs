@@ -168,10 +168,7 @@ fn coarse_cleanse_clears_exact_wrapped_cell_without_model_or_basis() {
     let cell = [(x as u16 >> 8) as u8, (z as u16 >> 8) as u8];
     session
         .cache
-        .apply_level_infection_writes(&[InfectionCellWrite {
-            cell,
-            infected: true,
-        }])
+        .apply_level_infection_writes(&[InfectionCellWrite::at([x, z], true)])
         .unwrap();
     super::terrain_task::tick(
         &mut manager,

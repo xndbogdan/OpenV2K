@@ -11,6 +11,8 @@ struct MutableWorldHost {
     callback_sound: bool,
     publish_terrain_writes: bool,
     clear_infection_on_impact: Option<[u8; 2]>,
+    /// Live class-5 carriers each time writes publish.
+    carriers_at_publish: Vec<usize>,
 }
 
 impl ParticleTraversalHost for MutableWorldHost {
@@ -93,11 +95,20 @@ impl ParticleTraversalHost for MutableWorldHost {
 
     fn publish_terrain_mutations(
         &mut self,
+        fx: &mut WorldFx,
         mutations: &[ParticleTerrainMutation],
     ) -> ParticleTerrainPublication {
         if !self.publish_terrain_writes {
             return ParticleTerrainPublication::Deferred;
         }
+        self.carriers_at_publish.push(
+            fx.particles
+                .slots
+                .iter()
+                .flatten()
+                .filter(|particle| particle.source_class == ALIEN_HIVE_PARTICLE_CLASS)
+                .count(),
+        );
         for &write in mutations {
             let [x, z] = write.cell();
             let cell = &mut self.terrain.cells[usize::from(x) * 256 + usize::from(z)];
@@ -124,6 +135,7 @@ fn host(parent_slot: usize) -> MutableWorldHost {
         callback_sound: false,
         publish_terrain_writes: false,
         clear_infection_on_impact: None,
+        carriers_at_publish: Vec::new(),
     }
 }
 
@@ -166,6 +178,7 @@ fn committed_particle_infection_precedes_callback_clear_and_later_reinfection() 
         let write = ParticleTerrainMutation::Infection {
             cell,
             infected: true,
+            position_raw: [1024, 1280],
         };
         assert_eq!(
             outcome.terrain_type_mutations,
@@ -180,6 +193,15 @@ fn committed_particle_infection_precedes_callback_clear_and_later_reinfection() 
             host.terrain.cells[4 * 256 + 5].terrain_type & INFECTION_TERRAIN_TYPE_BIT != 0,
             reinfect_after_callback,
             "the final state follows physical-slot order rather than replaying old writes"
+        );
+        // FUN_00440120 frees each carrier only after its write's listeners.
+        assert_eq!(
+            host.carriers_at_publish,
+            if reinfect_after_callback {
+                vec![2, 1]
+            } else {
+                vec![1]
+            }
         );
         assert!(fx.particles.slots[first_slot].is_none());
         if let Some(later_slot) = later_slot {

@@ -316,20 +316,36 @@ before `FUN_00427760`'s crater and burst, and journals for the network last.
 `FUN_00427C30` emits, for a cell whose static kind has an entry, that kind's
 effect through `FUN_00440DC0` from the per-kind table at `004C9E48` (stride
 0x2C): scale `+00`, class `+08` when infected and `+0C` when cured. Kinds 0,
-1, 3 and 8-11 have one (classes 5 and 6, the infection and cleansing
+1, 3, 8-11, 28 and 29 have one (classes 5 and 6, the infection and cleansing
 carriers). A cured cell's effect starts at the cell centre at ground height;
-an infected cell's 0x80 below the cell's low Z edge (a whole cell lower in Z),
-raised by half its selected model's extent. The request carries the null owner and, on a network client,
+an infected cell's at the cell's X centre and 0x80 short of its low Z edge
+(`(z & 0xFF00) - 0x80`), raised by half the extent of the model the cell now
+selects. The request carries the null owner and, on a network client,
 the harmless flag.
 
-Both infection listeners are held in the port, which logs "Infection
-listeners held" once a world. `FUN_0044A850` draws a shared word for a
-covered cell at the moment of each infection write, and `FUN_00427C30`'s
-carriers take pool slots then; the port's infection writers (the Hive's
-evolution, the viruses, the cleansing vehicle, class 5 and 6 contacts) apply
-their writes after the RNG draws and particle births that retail interleaves
-with them, and record cells where `FUN_0044A5C0` reads the write's raw
-position. Running the listeners there would reorder the shared stream.
+`FUN_0044A850` hands the write's raw X/Z words to `FUN_0044A5C0`, so the
+radar redraw (one shared word when the cell has coverage) rounds the
+material sample from the position the writer passed, not the cell's corner.
+
+The port runs both at the write itself: `infection_listeners::write_infection`
+writes the bit and, on a change, runs `FUN_0044A850` then `FUN_00427C30`, and
+journals the change for the network last. Every writer calls it at the point
+retail calls `FUN_00433720`, with the raw words retail passes:
+
+| Retail writer | Raw X/Z | Port |
+|---|---|---|
+| `FUN_00436960` (the Hive's natural spread and clear) | the cell's corner | `infection_evolution`, through the live Hive's effects between its draws |
+| `FUN_00436750` (the Hive's queued tails, after the step's sound) | the cell's corner | the same |
+| `FUN_00402850` (a virus's or Type49's coarse terrain callback) | the two random offsets from the actor, Z drawn first | `defecate_virus`'s coarse plan, written as the callback's last action by every owner (Type16, Type26, the native ground actors, the shared fish, the Intro2 flyers, Type49) |
+| `FUN_0043E1C0` (classes 5 and 6 on the ground, from `FUN_0043E180` and `FUN_0043E1A0`) | the particle's | the particle traversal, published before `FUN_00440120` frees the carrier |
+| `FUN_00427DE0`, `FUN_00427E00` (classes 5 and 6 on a static, from `FUN_0043F920` and `FUN_0043F950`) | the static hit's tile centre, `cell << 8 \| 0x7F` | the same |
+| `FUN_004379C0`, `FUN_00437B60`, `FUN_00437CB0` (a peer's terrain and cell records) | the cell's corner | `network_play`'s cell writes |
+| `FUN_00437630` (the Virus and Antidote bombs' radial, from `FUN_00456710`) | the centre plus whole-cell offsets | held with the bomb tail |
+
+A class-5 or class-6 contact returns one, and `FUN_00440120` frees the
+carrier only after `FUN_00433720` returns: the listeners' births find the
+carrier still holding its address, so a full pool recycles from the lists
+as retail does, and a recycled carrier address is the one freed.
 
 #### Burn callback and secondary crater
 
@@ -739,4 +755,4 @@ unsynchronized tick 430 images do not establish a debris-rendering defect.
 | --- | --- |
 | `FUN_004371B0` | a terrain ripple program (from `FUN_004374B0`): its ring grows over the period `+1C` with a height that ramps up through the first quarter and down after three quarters (`+18`); each cell inside the ring changes by the difference between this frame's and last frame's profile (each falling off away from the ring), and a cell that drops calls `FUN_00427B20` |
 | `FUN_00437550` | refreshes one 16-by-16 block of cells per call through `FUN_0044A890`, sweeping the whole map in 256 calls (`004DC688`); a new sea level or a reset restarts the sweep |
-| `FUN_00427C30` | emits a cell's static-object effect through `FUN_00440DC0`: the kind's ground template (`004C9E54`, 0x2C bytes per kind) at the cell centre, or its top template (`004C9E50`) at the top of the object's model less 0x80, with the particle from `004C9E48`; a network client marks it remote |
+| `FUN_00427C30` | the infection list's object listener: emits through `FUN_00440DC0` the kind's cured class (`004C9E54`, 0x2C bytes per kind) at the cell centre on the ground, or its infected class (`004C9E50`) 0x80 short of the cell's low Z edge and half the selected model's extent up, at scale `004C9E48`; a network client's are harmless. Port: `infection_listeners` |

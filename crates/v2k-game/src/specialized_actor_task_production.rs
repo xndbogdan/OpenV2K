@@ -5399,8 +5399,13 @@ impl SpecializedActorTaskScheduler {
                         ..
                     } = tick.outcome
                     {
-                        // The flyer frame already required the level terrain.
-                        resources.apply_level_infection_writes(&[write]);
+                        // The callback's last action, so its listeners run
+                        // here; the flyer frame already required the terrain.
+                        if let Err(listener) =
+                            crate::infection_listeners::write_infection(resources, world_fx, write)
+                        {
+                            eprintln!("Intro2 flyer infection write blocked: {listener}");
+                        }
                     }
                     if let Some(owner) = tick.retained_owner {
                         retained.push(SpecializedActorTaskOwner::Intro2FlyerScheduler(owner));

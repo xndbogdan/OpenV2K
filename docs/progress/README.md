@@ -19,9 +19,9 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 389 |
+| implemented | 391 |
 | approximated | 7 |
-| documented | 34 |
+| documented | 32 |
 | not-needed | 629 |
 
 10 `FUN_` citations don't match a retail function
@@ -43,11 +43,11 @@ Where the code's references are thinnest:
 |---|---:|---:|---:|
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 25 | 3 | 101 |
 | [Controls](../re/CONTROLS.md) | 17 | 1 | 53 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 105 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 103 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 28 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 139 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 5 | 1 | 56 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 5 | 1 | 55 |
 | [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 152 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 2 | 0 | 45 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 2 | 1 | 54 |

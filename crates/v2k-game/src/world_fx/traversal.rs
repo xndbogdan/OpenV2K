@@ -55,8 +55,10 @@ pub trait ParticleTraversalHost {
     /// Called after releasing the slot's terrain borrow, before an external
     /// callback or the next slot. Committed writes remain in the outcome as
     /// history, but leave the overlay so a later callback can supersede them.
+    /// A committing host runs each infection write's listeners here.
     fn publish_terrain_mutations(
         &mut self,
+        _world_fx: &mut WorldFx,
         _mutations: &[ParticleTerrainMutation],
     ) -> ParticleTerrainPublication {
         ParticleTerrainPublication::Deferred
@@ -139,6 +141,10 @@ pub trait ParticleTraversalHost {
 
 enum ParticleSlotExit {
     Done,
+    /// A class-5/6 callback returned one after `FUN_00433720`: its listeners
+    /// run (as the slot's writes publish) before `FUN_00440120` frees the
+    /// carrier, so their births never find this address free.
+    FreeAfterTerrainWrite,
     AttachedUpdate,
     Entity {
         impact: ParticleEntityImpact,
@@ -281,9 +287,12 @@ impl WorldFx {
                 host.context(),
                 &mut outcome,
             );
-            publish_terrain_mutations(host, &mut outcome, &mut committed_terrain_mutations);
+            publish_terrain_mutations(self, host, &mut outcome, &mut committed_terrain_mutations);
             match exit {
                 ParticleSlotExit::Done => (),
+                ParticleSlotExit::FreeAfterTerrainWrite => {
+                    self.particles.free(slot);
+                }
                 ParticleSlotExit::AttachedUpdate => {
                     self.update_attached_particle_slot(
                         slot,
@@ -424,7 +433,7 @@ impl WorldFx {
                     self.particles.free(slot);
                 }
             }
-            publish_terrain_mutations(host, &mut outcome, &mut committed_terrain_mutations);
+            publish_terrain_mutations(self, host, &mut outcome, &mut committed_terrain_mutations);
         }
         self.process_pending_with_birth_context(Some(ParticleBirthContext {
             environment: host.context().environment,
@@ -964,8 +973,7 @@ impl WorldFx {
                                     &mut outcome.terrain_type_mutations,
                                 );
                             }
-                            self.particles.free(slot);
-                            return ParticleSlotExit::Done;
+                            return ParticleSlotExit::FreeAfterTerrainWrite;
                         }
                     }
                 }
@@ -1134,8 +1142,8 @@ impl WorldFx {
                     retail_tick,
                     &mut outcome.terrain_type_mutations,
                 ) {
-                    self.particles.free(slot);
-                    return ParticleSlotExit::Done;
+                    self.particles.slots[slot] = Some(particle);
+                    return ParticleSlotExit::FreeAfterTerrainWrite;
                 }
                 self.particles.slots[slot] = Some(particle);
             }
@@ -1174,12 +1182,13 @@ impl WorldFx {
 }
 
 fn publish_terrain_mutations(
+    world_fx: &mut WorldFx,
     host: &mut impl ParticleTraversalHost,
     outcome: &mut ParticleUpdateOutcome,
     committed: &mut Vec<ParticleTerrainMutation>,
 ) {
     if !outcome.terrain_type_mutations.is_empty()
-        && host.publish_terrain_mutations(&outcome.terrain_type_mutations)
+        && host.publish_terrain_mutations(world_fx, &outcome.terrain_type_mutations)
             == ParticleTerrainPublication::Committed
     {
         committed.append(&mut outcome.terrain_type_mutations);

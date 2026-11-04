@@ -3,9 +3,12 @@
 use super::*;
 use crate::{
     entity::{EntityConstructionResources, HiveBirthManagerContext, HiveBirthManagerHost},
-    entity_emitters::ComponentUpdateMode,
+    entity_emitters::{AuthoredHiveComponentEffects, AuthoredRadialEmission, ComponentUpdateMode},
     hive_birth::HiveBirthVisit,
     hive_controller::AuthoredHiveComponentFrame,
+    infection_evolution::{
+        InfectionCellWrite, InfectionEvolutionEffects, InfectionTailSound, InfectionTerrainSnapshot,
+    },
     world_complete_results::WorldCompleteTally,
 };
 
@@ -23,6 +26,43 @@ pub(super) struct HiveComponentProductionPass {
     pub newborn_owners: Vec<crate::entity::NativeHiveNewborn>,
     pub terrain_changed: bool,
     pub diagnostics: Vec<String>,
+}
+
+/// The production Hive's effects: `FUN_00436960` and `FUN_00436750` write
+/// the terrain through `FUN_00433720` and its listeners between their draws.
+struct LiveHiveEffects<'a> {
+    resources: &'a mut ResourceCache,
+    world_fx: &'a mut WorldFx,
+    blocked: Option<&'static str>,
+}
+
+impl InfectionEvolutionEffects for LiveHiveEffects<'_> {
+    fn next_shared_random_u16(&mut self) -> u16 {
+        self.world_fx.next_shared_retail_random_u16()
+    }
+
+    fn queue_infection_tail_sound(&mut self, sound: InfectionTailSound) {
+        self.world_fx.queue_infection_tail_sound(sound);
+    }
+
+    fn write_infection(&mut self, write: InfectionCellWrite) {
+        if let Err(listener) =
+            crate::infection_listeners::write_infection(self.resources, self.world_fx, write)
+        {
+            self.blocked.get_or_insert(listener);
+        }
+    }
+}
+
+impl AuthoredHiveComponentEffects for LiveHiveEffects<'_> {
+    fn emit_authored_radial(&mut self, emission: AuthoredRadialEmission) {
+        self.world_fx.emit_authored_radial(emission);
+    }
+
+    fn queue_hive_detailed_sound(&mut self, sound_id: u16, position_raw: [i16; 3]) {
+        self.world_fx
+            .queue_hive_detailed_sound(sound_id, position_raw);
+    }
 }
 
 pub(super) fn tick_hive_component(
@@ -57,24 +97,37 @@ pub(super) fn tick_hive_component(
     } else {
         ComponentUpdateMode::Coarse
     };
+    let terrain = resources
+        .level_terrain()
+        .map(InfectionTerrainSnapshot::from_terrain);
+    let mut effects = LiveHiveEffects {
+        resources: &mut *resources,
+        world_fx: &mut *world_fx,
+        blocked: None,
+    };
     let writes = manager.advance_authored_hive_component_prefix(
         entity_id,
         AuthoredHiveComponentFrame {
             elapsed_us,
-            terrain: resources.level_terrain(),
+            terrain: None,
             retail_tick: retail_tick as i32,
             notification_phase,
             notifications,
             world_complete_tally: context.world_complete_tally,
         },
+        terrain,
         mode,
-        world_fx,
+        &mut effects,
     );
+    if let Some(listener) = effects.blocked {
+        pass.diagnostics.push(format!(
+            "Hive{entity_id}: infection write blocked: {listener}"
+        ));
+    }
     let birth_prefix_admitted = match writes {
         Ok(writes) => {
-            pass.terrain_changed = resources
-                .apply_level_infection_writes(&writes)
-                .is_some_and(|changed| changed != 0);
+            // Each write reached the terrain, with its listeners, as it ran.
+            pass.terrain_changed = !writes.is_empty();
             true
         }
         Err(block) => {

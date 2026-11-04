@@ -218,10 +218,10 @@ pub fn plan_terrain_contact_callback(
         ComponentUpdateMode::Coarse => {
             let z_raw = randomized_coarse_axis(request.position_raw[2], next_random_u16());
             let x_raw = randomized_coarse_axis(request.position_raw[0], next_random_u16());
-            DefecateVirusCallbackPlan::CoarseTerrainMutation(InfectionCellWrite {
-                cell: [raw_cell_coordinate(x_raw), raw_cell_coordinate(z_raw)],
-                infected: terrain_contact_mode.infected(),
-            })
+            DefecateVirusCallbackPlan::CoarseTerrainMutation(InfectionCellWrite::at(
+                [x_raw, z_raw],
+                terrain_contact_mode.infected(),
+            ))
         }
     }
 }
@@ -242,10 +242,6 @@ const fn selected_model_slot_index(entity_state_flags: u32) -> u8 {
 fn randomized_coarse_axis(actor_axis_raw: i16, random_word: u16) -> i16 {
     let offset_raw = (random_word >> 7).wrapping_sub(0x0100) as i16;
     actor_axis_raw.wrapping_add(offset_raw)
-}
-
-const fn raw_cell_coordinate(position_raw: i16) -> u8 {
-    ((position_raw as u16) >> 8) as u8
 }
 
 /// Generic-owner state for the concurrent slot-2 terrain-infection task.
@@ -721,12 +717,12 @@ mod tests {
         assert_eq!(index.get(), 2);
         assert_eq!(
             plan,
-            DefecateVirusCallbackPlan::CoarseTerrainMutation(InfectionCellWrite {
-                // X consumed 0xFFFF and wraps to -32521 (high byte 0x80);
-                // Z consumed 0x0000 and wraps to 32520 (high byte 0x7F).
-                cell: [0x80, 0x7F],
-                infected: true,
-            })
+            // X consumed 0xFFFF and wraps to -32521 (high byte 0x80);
+            // Z consumed 0x0000 and wraps to 32520 (high byte 0x7F).
+            DefecateVirusCallbackPlan::CoarseTerrainMutation(InfectionCellWrite::at(
+                [-32_521, 32_520],
+                true
+            ))
         );
     }
 

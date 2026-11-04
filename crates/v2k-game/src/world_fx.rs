@@ -998,11 +998,26 @@ impl<'a> ParticleUpdateRequest<'a> {
 /// infection writers own bit 0x10; 27950's null static program owns bit 0x08.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ParticleTerrainMutation {
-    Infection { cell: [u8; 2], infected: bool },
-    ImmediateBurn { cell: [u8; 2] },
+    /// `FUN_00433720` with the raw X/Z words its listeners read.
+    Infection {
+        cell: [u8; 2],
+        infected: bool,
+        position_raw: [i16; 2],
+    },
+    ImmediateBurn {
+        cell: [u8; 2],
+    },
 }
 
 impl ParticleTerrainMutation {
+    pub(crate) fn infection(write: crate::infection_evolution::InfectionCellWrite) -> Self {
+        Self::Infection {
+            cell: write.cell,
+            infected: write.infected,
+            position_raw: write.position_raw,
+        }
+    }
+
     pub(crate) fn cell(self) -> [u8; 2] {
         match self {
             Self::Infection { cell, .. } | Self::ImmediateBurn { cell } => cell,
@@ -2830,6 +2845,18 @@ impl WorldFx {
         self.emit_terrain_contact_particle_raw(emission);
     }
 
+    /// `FUN_00427C30`'s `FUN_00440DC0` request for an infected or cured
+    /// static object: the null owner, harmless on a network client.
+    pub fn emit_static_object_infection_effect_raw(
+        &mut self,
+        position_raw: [i16; 3],
+        particle_class: u8,
+        scale_raw: u32,
+    ) {
+        let harmless = self.is_network_client();
+        self.emit_fun_00440dc0_raw(position_raw, particle_class, scale_raw, 0, harmless);
+    }
+
     /// Emit one native Alien-Hive class-5 particle synchronously.
     ///
     /// `FUN_0041BEB0` consumes three consecutive words from the shared
@@ -4239,6 +4266,7 @@ impl WorldFx {
             terrain_type_mutations.push(ParticleTerrainMutation::Infection {
                 cell,
                 infected: requested_infected,
+                position_raw: [position_raw[0], position_raw[2]],
             });
         }
         false
@@ -6440,7 +6468,12 @@ fn queue_static_model_switch_infection(
         != 0)
         != infected
     {
-        terrain_type_mutations.push(ParticleTerrainMutation::Infection { cell, infected });
+        terrain_type_mutations.push(ParticleTerrainMutation::infection(
+            crate::infection_evolution::InfectionCellWrite::at(
+                cell.map(|byte| ((u16::from(byte) << 8) | 0x7F) as i16),
+                infected,
+            ),
+        ));
     }
 }
 
@@ -9402,6 +9435,7 @@ mod tests {
             vec![ParticleTerrainMutation::Infection {
                 cell: [255, 128],
                 infected: true,
+                position_raw: [-128, -32768],
             }]
         );
 
@@ -9445,6 +9479,7 @@ mod tests {
             vec![ParticleTerrainMutation::Infection {
                 cell: [0, 0],
                 infected: false,
+                position_raw: [0, 0],
             }]
         );
     }
@@ -9495,10 +9530,12 @@ mod tests {
                 ParticleTerrainMutation::Infection {
                     cell: [0, 0],
                     infected: true,
+                    position_raw: [0, 0],
                 },
                 ParticleTerrainMutation::Infection {
                     cell: [0, 0],
                     infected: false,
+                    position_raw: [0, 0],
                 },
             ]
         );
@@ -9533,10 +9570,12 @@ mod tests {
                 ParticleTerrainMutation::Infection {
                     cell: [0, 0],
                     infected: false,
+                    position_raw: [0, 0],
                 },
                 ParticleTerrainMutation::Infection {
                     cell: [0, 0],
                     infected: true,
+                    position_raw: [0, 0],
                 },
             ]
         );
@@ -9617,6 +9656,7 @@ mod tests {
             vec![ParticleTerrainMutation::Infection {
                 cell: [4, 5],
                 infected: true,
+                position_raw: [1216, 1472],
             }]
         );
     }
@@ -10852,6 +10892,7 @@ mod tests {
             vec![ParticleTerrainMutation::Infection {
                 cell: [3, 4],
                 infected: true,
+                position_raw: [895, 1151],
             }]
         );
         assert!(fx.particles.slots[parent_slot].is_none());
@@ -12653,6 +12694,7 @@ mod tests {
             [ParticleTerrainMutation::Infection {
                 cell: [3, 4],
                 infected: false,
+                position_raw: [895, 1151],
             }]
         );
         assert!(
@@ -12731,6 +12773,7 @@ mod tests {
             [ParticleTerrainMutation::Infection {
                 cell: [3, 4],
                 infected: false,
+                position_raw: [895, 1151],
             }]
         );
         assert_eq!(handled.len(), 1);

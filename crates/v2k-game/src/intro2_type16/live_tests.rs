@@ -263,12 +263,14 @@ fn native_type16_coarse_class4_writes_real_terrain_before_outer_motion() {
     // without requiring the stochastic point to equal the actor's own cell.
     let clear: Vec<_> = (-1i8..=1)
         .flat_map(|dx| {
-            (-1i8..=1).map(move |dz| InfectionCellWrite {
-                cell: [
-                    cell[0].wrapping_add(dx as u8),
-                    cell[1].wrapping_add(dz as u8),
-                ],
-                infected: false,
+            (-1i8..=1).map(move |dz| {
+                InfectionCellWrite::at_cell(
+                    [
+                        cell[0].wrapping_add(dx as u8),
+                        cell[1].wrapping_add(dz as u8),
+                    ],
+                    false,
+                )
             })
         })
         .collect();

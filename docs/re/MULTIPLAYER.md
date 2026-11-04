@@ -362,9 +362,9 @@ as kind 6. A host's
 record is applied with the journal set aside (`004DC9B4`). Kind 5's last byte
 is 0 for operations 0-3. Not sent: burns made while a world is built, which
 the port writes to a private copy of the terrain (retail notifies them too).
-The port does not run `FUN_00427C30` (the static effect of an
-infected object cell) or the radar's listeners `FUN_0044A850` and
-`FUN_0044AA50` for any cell change, a peer's or its own.
+A peer's cell change runs the same listeners as a local one: the radar's
+`FUN_0044A850` and `FUN_00427C30`'s carriers for an infection (harmless on
+a client), `FUN_0044AA50` for a burn bit or an attribute.
 
 The special weapon's power-up (selector `0x39`) is taken as in single
 player: the count `+195` rises (at most 4) and a Type65 is born at the

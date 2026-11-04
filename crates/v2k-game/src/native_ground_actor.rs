@@ -288,15 +288,15 @@ impl NativeGroundResources<'_> {
     pub(crate) fn apply_infection_write(
         &mut self,
         write: crate::infection_evolution::InfectionCellWrite,
+        world_fx: &mut crate::world_fx::WorldFx,
     ) -> Result<(), NativeGroundActorBlock> {
         let Self::Mutable(resources) = self else {
             return Err(NativeGroundActorBlock::Runtime(
                 "live class4 terrain writer",
             ));
         };
-        resources
-            .apply_level_infection_writes(&[write])
-            .ok_or(NativeGroundActorBlock::Runtime("class4 infection terrain"))?;
+        crate::infection_listeners::write_infection(resources, world_fx, write)
+            .map_err(NativeGroundActorBlock::Runtime)?;
         Ok(())
     }
 }

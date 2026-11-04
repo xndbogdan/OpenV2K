@@ -765,7 +765,8 @@ fn native_type17_living_lethal_and_corpse_blood_infects_the_live_world_terrain()
                 update.terrain_type_mutations,
                 [ParticleTerrainMutation::Infection {
                     cell,
-                    infected: true
+                    infected: true,
+                    position_raw: [emission[0], emission[2]]
                 }],
                 "{stage}: both carriers contact the same clean cell"
             );

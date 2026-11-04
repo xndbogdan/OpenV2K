@@ -554,11 +554,15 @@ impl CellWorld<'_> {
             .copied()
     }
 
-    /// `FUN_00433720`.
+    /// `FUN_00433720` and its listeners, at the cell's corner.
     fn infect(&mut self, cell: [u8; 2], infected: bool) {
-        self.cache.apply_level_infection_writes(&[
-            v2k_game::infection_evolution::InfectionCellWrite { cell, infected },
-        ]);
+        if let Err(listener) = v2k_game::infection_listeners::write_infection(
+            self.cache,
+            self.world_fx,
+            v2k_game::infection_evolution::InfectionCellWrite::at_cell(cell, infected),
+        ) {
+            report_held(format!("a peer's infection at a cell ({listener})"));
+        }
     }
 
     /// `FUN_00433900`'s first listener, the radar's `FUN_0044AA50`.
