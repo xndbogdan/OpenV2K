@@ -260,6 +260,41 @@ fn the_defender_ball_hits_a_touching_body_and_meets_another_ball_with_an_a300() 
     );
 }
 
+/// 40C800 on a Main Base: its checked {1, 40000} goes through the Main
+/// Base's own 15040 entry, and nothing holds the pair.
+#[v2k_test_support::retail_test]
+fn the_defender_ball_hits_a_touching_main_base() {
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(13);
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    let base = entities.iter_all().find(|e| e.entity_type == 6).unwrap().id;
+    assert!(crate::main_base_runtime::main_base_manager_allocation_authenticates(&entities, base));
+    tasks.adopt_main_base(&entities);
+    let ball = birth_ball(&session, &mut entities, &mut fx, &mut tasks);
+    let pair = in_live_order(&entities, ball, base);
+    overlap(&mut entities, &session, pair);
+    let health = actor(&entities, base).unwrap().collision.health_raw;
+    let outcome = walk(&mut session, &mut entities, &mut fx, &mut tasks, pair[0]);
+    assert!(
+        outcome.general_stop_lines().is_empty(),
+        "{:?}",
+        outcome.general_stop_lines()
+    );
+    let NativeCaptorPairOutcome::Resolved { visits } = &outcome else {
+        panic!("the ball's visit resolves: {outcome:?}");
+    };
+    let visit = visits
+        .iter()
+        .find(|visit| visit.candidate_id == pair[1])
+        .expect("the touching pair is visited");
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Behavior { owner, result: NativeCaptorPairBehaviorResult::Null, .. }
+            if *owner == ball
+    )));
+    assert_ne!(actor(&entities, base).unwrap().collision.health_raw, health);
+}
+
 /// 4484A0 inside the craft's collision hit: a live ball in the hold takes the
 /// packet and dies; the craft takes none.
 #[v2k_test_support::retail_test]

@@ -106,6 +106,12 @@ pub enum NativeCaptorPairBlock {
             crate::intro2_type66::Intro2Type66Owner,
         >,
     ),
+    MainBaseDamage(
+        crate::live_actor_checked_damage::LiveActorDamageError<
+            crate::main_base_runtime::MainBaseDeathBlock,
+            crate::main_base_runtime::MainBaseOwner,
+        >,
+    ),
     /// Lethal ordinary Type97 active-pair Class49 delivery
     /// (`FUN_00410C10` -> BAF0 -> radial -> ring). Nonlethal checked damage
     /// completes through the same 15040 path without consulting the Playing
@@ -1773,6 +1779,7 @@ fn requires_body_custody(entity: &Entity) -> bool {
         || crate::native_type56::allocation_authenticates(entity)
         || crate::native_type31::allocation_authenticates(entity)
         || crate::intro2_type94::intro2_type94_allocation_authenticates(entity)
+        || crate::main_base_runtime::main_base_allocation_authenticates(entity)
         || matches!(
             entity.actor_task_state(ActorTaskSlot::Primary),
             Some(ActorTaskRuntime::CommonDying(_))
@@ -1801,6 +1808,48 @@ fn apply_pair_checked_damage(
             playing_player,
             committed,
         );
+    }
+    // The Main Base's 15040, its 10C10 death the revival 19750.
+    if kind == 6
+        && crate::main_base_runtime::main_base_manager_allocation_authenticates(
+            frame.entities,
+            target,
+        )
+    {
+        let result = crate::live_actor_checked_damage::apply_live_actor_checked_damage(
+            frame.entities,
+            frame.world_fx,
+            crate::live_actor_checked_damage::LiveActorDamageRequest {
+                ratio_numerator: 0,
+                ratio_denominator: 0,
+                entity_id: target,
+                delivery,
+                entry: crate::live_actor_checked_damage::LiveActorDamageEntry::Checked,
+                feedback: None,
+            },
+            |manager, world_fx, _| {
+                crate::main_base_runtime::publish_main_base_standard_death(
+                    manager, target, world_fx,
+                )
+                .map(|death| {
+                    crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: death.returned_nonzero,
+                        publication: death.owner,
+                    }
+                })
+            },
+        );
+        let publication = match &result {
+            Ok(result) => result.death_publication,
+            Err(error) => error.death_publication,
+        };
+        if let Some(owner) = publication {
+            frame.actor_tasks.register_main_base(owner);
+        }
+        return result.map(|_| ()).map_err(|error| {
+            *committed |= error.committed_prefix;
+            NativeCaptorPairBlock::MainBaseDamage(error)
+        });
     }
     if crate::intro2_type66::is_working_factory_type(kind)
         && crate::intro2_type66::intro2_type66_allocation_authenticates(actor(
