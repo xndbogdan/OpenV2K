@@ -113,7 +113,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 visible: true,
             },
             view_depth_raw: MENU_BACKDROP_VIEW_DEPTH_RAW,
-            projection_y_offset: 0.0,
+            view_y_raw: 0.0,
             depth_fade: ModelDepthFade::Disabled,
         },
         MenuSceneLight::NEUTRAL,

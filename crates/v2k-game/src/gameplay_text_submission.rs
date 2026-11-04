@@ -35,7 +35,19 @@ pub(super) fn draw_notifications(
     // single-line messages and their authored wrap widths. Low/Fit always
     // retain this same retail submission grammar.
     if !native_world || request.viewport == request.authored_canvas {
-        draw_authored_notifications(renderer, fonts, notifications, UiMapping::new(request));
+        // FUN_00454390's prompt draws with font [0] of 004FE630 (green);
+        // FUN_00452790's messages with font [1] (yellow).
+        let font = match context {
+            GameplayTextContext::AuthoredCanvas => &fonts.normal,
+            GameplayTextContext::WorldOverlay => &fonts.selected,
+        };
+        draw_authored_notifications(
+            renderer,
+            fonts,
+            font,
+            notifications,
+            UiMapping::new(request),
+        );
         return;
     }
     if width == 0 || height == 0 {
@@ -59,14 +71,14 @@ pub(super) fn draw_notifications(
     renderer.set_sprite_clip(None);
 }
 
-/// FUN_00452790/FUN_00470D00's selected-font percentage and baseline path.
+/// FUN_00452790/FUN_00470D00's percentage and baseline path.
 fn draw_authored_notifications(
     renderer: &mut dyn Renderer,
     fonts: &MenuFonts,
+    font: &MenuFont,
     notifications: &[GameplayNotificationLine],
     mapping: UiMapping,
 ) {
-    let font = &fonts.selected;
     for notification in notifications {
         let baseline = fonts.virtual_h * notification.baseline_percent as f32 / 100.0;
         if notification.center_x {

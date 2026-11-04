@@ -1089,3 +1089,6 @@ address,status,note
 0x0042CEB0,implemented,Klaus model argument DAT_004DB218
 0x00457730,implemented,32-bit integer square root: zero below one, 0xFFFF from 0x40000000 (v2k_formats::fixed_math::retail_integer_sqrt)
 0x00456FB0,documented,the loading card's timer callback: real-time deltas, Klaus, the eye and +270 (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
+0x0043A8E0,implemented,fly clock armed from the top screen's flags before a switch: 0x40 in the frontend; 0x08 in play; with 0x20 only on a pop from the base depth (fly_transition_armed; docs/re/MENU_SYSTEM.md#runtime-state-bss)
+0x00454390,implemented,progress map prompt: global string 25 centred in the green font 0 of 004FE630 (docs/re/MENU_SYSTEM.md#progress-map)
+0x00456680,implemented,in-game descriptor switch; its pass draws nothing (docs/re/MENU_SYSTEM.md#progress-map)

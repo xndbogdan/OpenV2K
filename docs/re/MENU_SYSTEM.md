@@ -248,8 +248,13 @@ screen of the stack is rendered (no parents behind).
   19,073 units/s → **one revolution per 3.436 s** (single axis; b4/b8 = 0).
 - `DAT_004DCEC4/C8` = ms since screen open / since last scroll (typewriter).
 - `_DAT_004CB4E0` = **fly transition clock**: armed to 0x7000 by
-  `FUN_0043A8E0` when the old/new screen qualifies (flags 0x40/0x08 + 0x20
-  rule); decays ≈ 45,776/s → **0.6264 s per leg**. While nonzero the stack
+  `FUN_0043A8E0` on a push or pop, from the flags of the screen on top
+  before the switch. The frontend tests 0x40 and play (session `+289`)
+  0x08; with 0x20 also set the screen flies only when popped from its base
+  depth (2 in the frontend, 1 in play). So in play only the pause roots
+  (`0x4D1090`, `0x4D1190`, `0x4C5008`) fly, and only as they close: Cheats,
+  Options and every other pause submenu switch at once (the lab's Cheats
+  screen types in two passes after Return). Decays ≈ 45,776/s → **0.6264 s per leg**. While nonzero the stack
   does NOT switch (tick early-outs) and prop labels/typewriter are held.
   Fly-out: selected prop depth y = 0xDAC − (0x7000−clk)/16 (pulls toward
   camera), others y = 0xDAC + (0x7000−clk)/2 (recede). Then the stack
@@ -1432,7 +1437,25 @@ The port runs the same legs (`campaign_map.rs`, `ClosingSceneDestination::Progre
 the exit leg as for phase 3, Klaus over the map and its save menu, and
 Klaus carried into the next world's opening. With the lab's keys at 20-ms
 steps its Klaus morph and phase match every pass above, and its frames
-match the lab's at 1720, 1740, 1770 and 1810 to 1850. Klaus's twitch
+match the lab's at 1720, 1740, 1770 and 1810 to 1850.
+
+Three presentation details, from lab snapshots at 640x480:
+
+- A pass whose tick switches descriptors draws nothing: `FUN_00456680`
+  stages the next descriptor (`FUN_004942C0` sets the mode's pending
+  word) and `FUN_004942E0` skips the draw chain while it is pending. The
+  leg's switch to the map (1602), the map's switch to the load or the save
+  menu (1673) and the save menu's return to the map (1801) present nothing;
+  the next pass, with the new descriptor's entry and first tick, presents.
+  The save menu's first pass shows Klaus over black (the menu is still far
+  out on its fly-in).
+- The prompt (`FUN_00454390`) draws in font 0 of `004FE630`, the green one;
+  the world's messages (`FUN_00452790`) use font 1, the yellow one.
+- Klaus is pinned to the camera at his private view position: `0042BFB9`
+  gives the entity transform his Y offset plus 0x40, at his Z. His Y offset
+  moves him in view space, so the shift on screen follows his depth.
+
+Klaus's twitch
 divisor starts from a fresh shell's, as the existing exit legs do, and the
 map's ED10 on the proxy is not run: nothing is drawn from the eye there,
 and the load restarts it.
