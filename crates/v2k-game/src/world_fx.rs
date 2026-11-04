@@ -2313,6 +2313,14 @@ pub enum NetworkSend {
     /// handle is read from a stack slot written only after the send (the
     /// previous target's, or older), so it is not sent.
     BlastImpulse { entity_id: u32 },
+    /// `FUN_00443D30`'s kind 15 for a peer's body the player dropped: the
+    /// player, the body, and the drop point's X and Z.
+    CargoDropped {
+        parent_id: u32,
+        cargo_id: u32,
+        x_raw: i16,
+        z_raw: i16,
+    },
 }
 
 /// A particle request as `FUN_00440A60` receives it: position and velocity
@@ -2489,6 +2497,18 @@ impl WorldFx {
     pub fn hold_network_blast_impulse(&mut self, entity_id: u32) {
         if let Some(sends) = self.network_sends.as_mut() {
             sends.push(NetworkSend::BlastImpulse { entity_id });
+        }
+    }
+
+    /// `FUN_00443D30` on a peer's body: kind 15 to its owner.
+    pub fn send_network_cargo_drop(&mut self, parent_id: u32, cargo_id: u32, target_raw: [i16; 3]) {
+        if let Some(sends) = self.network_sends.as_mut() {
+            sends.push(NetworkSend::CargoDropped {
+                parent_id,
+                cargo_id,
+                x_raw: target_raw[0],
+                z_raw: target_raw[2],
+            });
         }
     }
 

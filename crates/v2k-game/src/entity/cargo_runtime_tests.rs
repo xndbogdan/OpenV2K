@@ -287,3 +287,52 @@ fn live_cargo_attach_transfers_living_graphs_and_retires_terminal_people_and_wor
         }
     }
 }
+
+/// `FUN_00416700` on a peer's body runs its style `+08`: only a type born
+/// with null-callback classes is attached; a person (classes 10, 6) stops.
+#[test]
+fn a_peer_body_is_carried_only_when_its_attach_callback_is_null() {
+    use v2k_formats::collision::BehaviorChoice;
+    let choices = |classes: &[u32]| crate::entity_collision_state::EntityInitializerSpec {
+        initializer_state_flags_raw: 0,
+        common_axis_descriptor: Default::default(),
+        behavior_rule_ref: 0,
+        alternate_behavior_class_ref: 0,
+        behavior_choices: classes
+            .iter()
+            .map(|&behavior_class_id| BehaviorChoice {
+                weight_rule_id: 1,
+                weight_multiplier: 1,
+                behavior_class_id,
+            })
+            .collect(),
+    };
+    let mut metadata = vec![EntityTypeRuntimeMetadata::default(); 70];
+    metadata[68].initializer = Some(choices(&[0]));
+    metadata[9].initializer = Some(choices(&[10, 6]));
+    let mut manager =
+        EntityManager::from_entities_with_type_metadata_for_test(Vec::new(), metadata, false);
+    let crate_id = manager.append_network_body(68).unwrap();
+    let person = manager.append_network_body(9).unwrap();
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    let mut fx = WorldFx::new();
+    let mut notifications = GameplayNotifications::new();
+    let mut callbacks = LiveCargoCallbacks {
+        scheduler: &mut tasks,
+        world_fx: &mut fx,
+        notifications: &mut notifications,
+        retail_tick: 0,
+        terrain: None,
+        radar: None,
+        blocked: Vec::new(),
+    };
+    assert!(matches!(
+        callbacks.prepare_attach(&manager, crate_id, 1),
+        Some(CargoAttachPlan::Other(id, 1)) if id == crate_id
+    ));
+    assert!(callbacks.prepare_attach(&manager, person, 1).is_none());
+    assert_eq!(
+        callbacks.blocked,
+        vec![(person, "\"a peer's cargo attach callback\"".to_string())]
+    );
+}

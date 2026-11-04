@@ -21,8 +21,9 @@ pub fn host_world(forced: Option<u8>, random: u32) -> u16 {
     }
 }
 
-/// `FUN_00439290` -> `FUN_004393C0`: the five line files from the game
-/// folder, each falling back to its built-in text (strings 301, 300 and 302
+/// `FUN_00439290` -> `FUN_004393C0`: the five line files from the folder
+/// `FUN_004493D0` chose (the registry's Save Path, else the data path),
+/// each falling back to its built-in text (strings 301, 300 and 302
 /// for kill, death and self-kill lines; empty for names and host lines).
 pub fn load_line_tables(game_folder: &Path, built_in: impl Fn(usize) -> String) -> LineTables {
     let read = |name: &str| std::fs::read(game_folder.join(name)).ok();

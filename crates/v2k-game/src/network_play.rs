@@ -157,9 +157,9 @@ pub fn advance_network_world(
         retail_tick,
         removals,
     } = frame;
-    // The world owners' own sends: impacts on a peer's body (10) and
-    // attachments (13 to 15).
-    report_held("sending record kinds 10, 13, 14 and 15".into());
+    // FUN_00411030's impact on a peer's body (kind 10) runs inside the
+    // particle hit wrappers, which the port does not run on peers' bodies.
+    report_held("FUN_00411030's kind 10".into());
     // This frame's sends from the effects, in call order: FUN_00440A60's
     // kind 1, FUN_00440950's kind 2 and FUN_0044F480's kinds 22 and 23.
     for send in world_fx.take_network_sends() {
@@ -197,6 +197,36 @@ pub fn advance_network_world(
                 ));
                 net.forward_damage(entity_id, amount, attacker_type);
             }
+            NetworkSend::CargoDropped {
+                parent_id,
+                cargo_id,
+                x_raw,
+                z_raw,
+            } => {
+                if let (Some(parent), Some(cargo)) =
+                    (net.handle_of(parent_id), net.handle_of(cargo_id))
+                {
+                    verbose(format_args!(
+                        "Network: peer body {cargo_id} dropped at ({x_raw}, {z_raw}) (kind 15)"
+                    ));
+                    net.send(GameRecord::Dropped([
+                        parent,
+                        cargo,
+                        u32::from(x_raw as u16) | u32::from(z_raw as u16) << 16,
+                    ]));
+                }
+            }
+        }
+    }
+    // FUN_00418640 on the player: kind 13 asks the owner of each peer's body
+    // in its cargo to attach it.
+    let player_handle = em.player().and_then(|player| net.handle_of(player.id));
+    for (cargo_id, flags) in em.network_player_cargo_rows() {
+        if let (Some(parent), Some(cargo)) = (player_handle, net.handle_of(cargo_id)) {
+            verbose(format_args!(
+                "Network: peer body {cargo_id} in the cargo, flags {flags} (kind 13)"
+            ));
+            net.send(GameRecord::Attach([parent, cargo, flags]));
         }
     }
     // FUN_00425AF0 sends kind 8 for each power-up the player picked up,
@@ -438,6 +468,9 @@ pub fn advance_network_world(
                 }
             }
             NetworkEvent::Held { kind } => report_held(format!("record kind {kind}")),
+            NetworkEvent::UnknownAttachmentList => {
+                report_held("a peer's body named by an unresolved attachment list".into())
+            }
             NetworkEvent::UnknownRestState => {
                 report_held("the rest period of a body with unknown state bits".into())
             }

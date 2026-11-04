@@ -539,6 +539,25 @@ enum CargoReleasePlan {
     Other(u32, Type9CargoReleasePosition),
 }
 
+/// Behavior classes whose initial style has a null `+08` attach callback:
+/// None (style `4C7468`), Gun Turret (`4C8230`) and Remote Beamer (`4C72B8`).
+const NULL_ATTACH_CLASSES: [u32; 3] = [0, 29, 59];
+
+/// Whether `FUN_00416700` on a peer's body of this type runs no callback:
+/// every class its type can be born with has none.
+fn peer_attach_has_no_callback(manager: &EntityManager, entity_type: u32) -> bool {
+    manager
+        .type_runtime_metadata(entity_type)
+        .and_then(|metadata| metadata.initializer.as_ref())
+        .is_some_and(|initializer| {
+            !initializer.behavior_choices.is_empty()
+                && initializer
+                    .behavior_choices
+                    .iter()
+                    .all(|choice| NULL_ATTACH_CLASSES.contains(&choice.behavior_class_id))
+        })
+}
+
 impl LiveCargoCallbacks<'_> {
     fn blocked<T>(&mut self, cargo: u32, reason: impl std::fmt::Debug) -> Option<T> {
         self.blocked.push((cargo, format!("{reason:?}")));
@@ -711,6 +730,16 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
         parent: u32,
     ) -> Option<Self::AttachPlan> {
         let entity = manager.iter_all().find(|entity| entity.id == cargo)?;
+        if entity.is_network_remote() {
+            // FUN_00416700 runs the peer copy's style +08 through FUN_0040DBF0.
+            // A peer keeps its type's initial class style, which is known to
+            // have none only for the classes below.
+            return if peer_attach_has_no_callback(manager, entity.entity_type) {
+                Some(CargoAttachPlan::Other(cargo, parent))
+            } else {
+                self.blocked(cargo, "a peer's cargo attach callback")
+            };
+        }
         if entity.entity_type == 49 {
             if !self
                 .scheduler
