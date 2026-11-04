@@ -653,6 +653,19 @@ without capability `0xC00` the two bodies' relative-speed feedback and a
 the collision damage reaches its hull through `15040`. A stop in such a
 pair is reported like a general visit's.
 
+`447D70`'s other branch, a subject without capability bit 0, takes a
+living, non-dying `0xC00` body into the subject's own hold: when
+`418410` finds room in the subject type's Sub-J it runs `443B50` on the
+subject and returns non-null, ending the pair. Only the Possession Ray's
+takeover (`4480E0`) reaches it: it gives the target body type 46's
+behavior source (Player Control, whose pair callback is `447D70`) and the
+controller, and leaves the target's capability word alone, so a possessed
+creature collects the people it touches. Every type whose behavior
+choices or alternate name Player Control (24), Dying bounce (25) or
+Passive Player (66), namely types 46, 51 and 88, carries capability
+`0x5`. The port holds the Possession Ray, so no port body reaches this
+branch; it waits for the takeover.
+
 Pairs still resolved apart from the walk, after it: the player's other pairs
 (the [player adapter](../../crates/v2k-game/src/player_active_contact.rs),
 with the player as subject whatever its live position), the Main Base's

@@ -1129,6 +1129,18 @@ the frontend's init follows one pass later, again with no Klaus leg.
   loads at 3033, returns at 5885 and 5886, and loads the second demo at 6418.
   Klaus's cover and the emblem at 3040 and 3060 match up to his twitch, as
   does the "Demo" caption; the camera's subjects are random draws and differ.
+- **Held: the frontend's random stream.** Every idle frontend pass in the
+  lab draws one word for Klaus's visit and then three from the near-pass
+  type-3 vertex handler (`FUN_0046E020`, its three `FUN_00457930` calls in
+  turn): one jittered vertex is evaluated each frame. Each word, shifted
+  left 16 and right by the record's `+2` byte, offsets one axis of slot
+  `c`'s view point, so the vertex flickers. The port draws Klaus's word but
+  evaluates type-3 vertices as their source slot, without the jitter or the
+  draws (its native vertex path stops on them as unsupported), so after the
+  first frontend frame its stream parts from retail's and the attract
+  demo's mode and row are not retail's. Porting it needs the frontend's
+  model draw to take its words from the process generator, in the order
+  and number retail's lazy vertex evaluation asks for them.
 - Mode 1 (`004DB224` written to 1 before the ring's pop): Intro2 loads at
   3033, the frontend's init is at 7336 and the next demo loads at 7868, in
   the lab and in the port; the last Intro2 frames (7330, 7334) are identical.
