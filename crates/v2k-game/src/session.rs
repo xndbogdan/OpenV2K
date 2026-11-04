@@ -55,44 +55,22 @@ impl GameSession {
         })
     }
 
-    /// Load a level by ID and variant into the cache.
-    ///
-    /// Constructs the OVL path as `Overlay/{variant}X{level_id}XX.OVL`
-    /// following the V2000 naming convention (e.g. `1X3XX.OVL` for level 3,
-    /// `1X13XX.OVL` for level 13, high-resolution variant 1). Variant 0 is the
-    /// explicit 320x240 low-resolution tier. Retail `FUN_00493640` formats the
-    /// same `overlay\%dx%dxx.ovl` name.
-    ///
-    /// For game world levels (13-50), also loads the one system OVL selected
-    /// by Section-13 `+0x48`. `FUN_0042E570` performs exactly
-    /// `load_overlay(5 + world_style)` after loading the world itself.
+    /// Load a level by ID and variant into the cache ([`prepare_level`]).
     pub fn load_level_by_id(&mut self, level_id: u32, variant: u32) -> Result<()> {
+        let prepared = prepare_level(&self.data_dir, level_id, variant)?;
+        self.install_level(prepared);
+        Ok(())
+    }
+
+    /// Install a level [`prepare_level`] read, replacing the resident one.
+    pub fn install_level(&mut self, prepared: PreparedLevel) {
         // Drop world-resource auxiliaries from any previous level so they don't
         // shadow this level's palettes and sprites.
         self.cache.unload_world_auxiliaries();
-        // Parse the level OVL first (without inserting) so its Section-13
-        // world-style field can select the matching system resource pack.
-        let filename = format!("{}X{}XX.OVL", variant, level_id);
-        let path = self.data_dir.join("Overlay").join(&filename);
-        let state = load_level(&path)?;
-
-        // This one pack supplies the matching terrain palettes, transition and
-        // shoreline sprites, Section-9 terrain-object descriptors, and model
-        // range. Loading a second guessed "biome" pack lets its newest-first
-        // sections shadow the authored set (the old Intro2 palms/pyramid bug).
-        let world_resource_ovl = state
-            .level
-            .as_ref()
-            .map(|l| l.world_style)
-            .and_then(world_resource_level);
-        if let Some(resource_level) = world_resource_ovl {
-            // Keep the existing graceful fallback for incomplete data sets;
-            // full retail data always contains all six resource packs.
-            let _ = self.load_auxiliary_ovl(resource_level, variant);
+        if let Some(auxiliary) = prepared.auxiliary {
+            self.add_auxiliary(auxiliary);
         }
-
-        self.cache.load_level(state);
-        Ok(())
+        self.cache.load_level(prepared.level);
     }
 
     /// Load any OVL by level ID and add it as an auxiliary layer.
@@ -100,23 +78,18 @@ impl GameSession {
     /// Auxiliary layers sit above preload but below the gameplay level
     /// in priority. Use this for OVLs that provide shared resources.
     pub fn load_auxiliary_ovl(&mut self, level_id: u32, variant: u32) -> Result<()> {
-        let filename = format!("{}X{}XX.OVL", variant, level_id);
-        let path = self.data_dir.join("Overlay").join(&filename);
-        let bytes = std::fs::read(&path)?;
-        let ovl = v2k_formats::ovl::OvlFile::parse(&bytes)?;
-        let mut state = load_ovl(&ovl, &path.display().to_string())?;
-        // Auxiliary OVLs are system/biome levels by construction.
-        state.system_level = Some(level_id);
-        if let Some(tier) = crate::system_layout::HighSystemLayoutTier::from_variant(variant)
-            .filter(|_| matches!(level_id, 2 | 3))
-        {
-            let receipt =
-                crate::system_layout::HighSystemLayerReceipt::from_loaded_ovl(&ovl, tier, path);
-            self.cache.add_auxiliary_with_layout_receipt(state, receipt);
-        } else {
-            self.cache.add_auxiliary(state);
-        }
+        let auxiliary = prepare_auxiliary_ovl(&self.data_dir, level_id, variant)?;
+        self.add_auxiliary(auxiliary);
         Ok(())
+    }
+
+    fn add_auxiliary(&mut self, auxiliary: PreparedAuxiliary) {
+        match auxiliary.receipt {
+            Some(receipt) => self
+                .cache
+                .add_auxiliary_with_layout_receipt(auxiliary.state, receipt),
+            None => self.cache.add_auxiliary(auxiliary.state),
+        }
     }
 
     /// Read/validate both high layout candidates without touching resident
@@ -284,4 +257,69 @@ mod tests {
         assert_eq!(world_resource_level(0), None);
         assert_eq!(world_resource_level(7), None);
     }
+}
+
+/// A level's overlays, read and parsed without touching the cache, so the
+/// read can run beside the loading card's redraws.
+pub struct PreparedLevel {
+    level: crate::level::LevelState,
+    auxiliary: Option<PreparedAuxiliary>,
+}
+
+/// An auxiliary overlay, read and parsed.
+pub struct PreparedAuxiliary {
+    state: crate::level::LevelState,
+    receipt: Option<crate::system_layout::HighSystemLayerReceipt>,
+}
+
+/// Read a level by ID and variant: `Overlay/{variant}X{level_id}XX.OVL`
+/// following the V2000 naming convention (e.g. `1X3XX.OVL` for level 3,
+/// `1X13XX.OVL` for level 13, high-resolution variant 1). Variant 0 is the
+/// explicit 320x240 low-resolution tier. Retail `FUN_00493640` formats the
+/// same `overlay\%dx%dxx.ovl` name.
+///
+/// For game world levels (13-50), also reads the one system OVL selected
+/// by Section-13 `+0x48`. `FUN_0042E570` performs exactly
+/// `load_overlay(5 + world_style)` after loading the world itself.
+pub fn prepare_level(data_dir: &Path, level_id: u32, variant: u32) -> Result<PreparedLevel> {
+    // Parse the level OVL first so its Section-13 world-style field can
+    // select the matching system resource pack.
+    let filename = format!("{}X{}XX.OVL", variant, level_id);
+    let path = data_dir.join("Overlay").join(&filename);
+    let level = load_level(&path)?;
+
+    // This one pack supplies the matching terrain palettes, transition and
+    // shoreline sprites, Section-9 terrain-object descriptors, and model
+    // range. Loading a second guessed "biome" pack lets its newest-first
+    // sections shadow the authored set (the old Intro2 palms/pyramid bug).
+    // Keep the existing graceful fallback for incomplete data sets; full
+    // retail data always contains all six resource packs.
+    let auxiliary = level
+        .level
+        .as_ref()
+        .map(|l| l.world_style)
+        .and_then(world_resource_level)
+        .and_then(|resource_level| prepare_auxiliary_ovl(data_dir, resource_level, variant).ok());
+    Ok(PreparedLevel { level, auxiliary })
+}
+
+/// Read and parse an auxiliary OVL by level ID (a system or biome level).
+pub fn prepare_auxiliary_ovl(
+    data_dir: &Path,
+    level_id: u32,
+    variant: u32,
+) -> Result<PreparedAuxiliary> {
+    let filename = format!("{}X{}XX.OVL", variant, level_id);
+    let path = data_dir.join("Overlay").join(&filename);
+    let bytes = std::fs::read(&path)?;
+    let ovl = v2k_formats::ovl::OvlFile::parse(&bytes)?;
+    let mut state = load_ovl(&ovl, &path.display().to_string())?;
+    // Auxiliary OVLs are system/biome levels by construction.
+    state.system_level = Some(level_id);
+    let receipt = crate::system_layout::HighSystemLayoutTier::from_variant(variant)
+        .filter(|_| matches!(level_id, 2 | 3))
+        .map(|tier| {
+            crate::system_layout::HighSystemLayerReceipt::from_loaded_ovl(&ovl, tier, path)
+        });
+    Ok(PreparedAuxiliary { state, receipt })
 }

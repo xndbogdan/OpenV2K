@@ -66,10 +66,10 @@
 <rect x="725.8" y="436.4" width="145.9" height="159.4" fill="#2da44e"/>
 <text x="727.8" y="448.4" fill="#1f2328">Game mechanics 100.0%</text>
 </g>
-<g><title>Loading transitions (LOADING_TRANSITIONS.md): 57 code, 5 notes, 7 omitted</title>
-<rect x="725.8" y="597.8" width="136.1" height="121.2" fill="#2da44e"/>
-<rect x="861.9" y="597.8" width="9.8" height="68.1" fill="#d4a72c"/>
-<rect x="861.9" y="665.8" width="9.8" height="53.2" fill="#8c959f"/>
+<g><title>Loading transitions (LOADING_TRANSITIONS.md): 58 code, 4 notes, 7 omitted</title>
+<rect x="725.8" y="597.8" width="136.6" height="121.2" fill="#2da44e"/>
+<rect x="862.5" y="597.8" width="9.2" height="64.9" fill="#d4a72c"/>
+<rect x="862.5" y="662.7" width="9.2" height="56.3" fill="#8c959f"/>
 <text x="727.8" y="609.8" fill="#1f2328">Loading transitions 9…</text>
 </g>
 <g><title>Controls (CONTROLS.md): 53 code, 17 notes, 20 omitted</title>

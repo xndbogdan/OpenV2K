@@ -419,9 +419,13 @@ card record (`004F71B0`): the world clock (`FUN_00428B00`), one Klaus visit,
 a spring reset (`FUN_0040F390`) and ED10 without terrain on the class-1
 handle, Klaus, the card (`FUN_0042B040`, its text blinking on the clock's
 20-tick parity), and the present (`FUN_0042B1E0`). Unless it is stopping, it
-re-arms itself: when that redraw took under 43,750 us and the period is over
-50 ms the period becomes 7/8 of itself; when it took 43,750 us or more,
-9/8; otherwise it stays.
+re-arms itself as a one-shot: when the redraw took 43,750 us or more the
+period becomes 9/8 of itself, else 7/8 when it is over 50,001. The timer
+object keeps the period in whole milliseconds (`FUN_00496020` divides the
+50,000 by 1000), so the 7/8 branch never runs: the period starts at 50 ms
+and only stretches after slow redraws. `FUN_004571B0` raises the stop flag
+and spins until the next callback has run, so a world load always lasts
+until the timer's next callback, at least 50 ms.
 
 What a load leaves behind therefore depends on real time:
 
@@ -454,24 +458,32 @@ The lab's stub fires each load's timer once, with the scripted clock
 standing still: only the final callback runs, with the minimum 7,800 us
 (Klaus's morph 8,299 after the load, `+270` 7). After Intro2 the lab shows
 nothing at pass 853 (the leg's switch) and this card at 854, the load's
-pass. The port loads in one blocking step and draws that card once, after
-it. Of the final callback it runs the 50-Hz clock's advance (the text's
-blink), the spring reset and ED10 (`start_eye_after_load`), the Klaus visit
-(`MenuShell::visit_after_load`) and the card: with
-`--fixed-step-micros` the lab's 7,800 us, so the morph after the load is
-8,299 as in the lab; otherwise the real time since the load began, clamped
-as the callback clamps it, which is retail's delta when no earlier callback
-ran (a load under one 50-ms period). The `+270` addition has no port
-state to change: the first visit after the load (`FUN_0044FE20`, through
-`+274`) zeroes it before anything reads it. With the lab's keys at 20-ms
-steps the port's frames of Klaus's opening over Mediaeval after the Cheats
-skip moved closer to the lab's on every pass compared.
+pass.
 
-Held: the callbacks during a load longer than one period. Each draws the
-card and visits Klaus closed (one or two random words), so a long load
-changes the random stream and the final callback's delta. Porting them needs
-the load off the frame thread, with the redraws drawing Klaus and the card
-while the world's resources change; it is not ported.
+The port runs the same timer (`LoadingCardTimer`). The overlay read
+(`session::prepare_level`) runs on a worker thread while the frame thread
+waits for the timer: each callback that falls due draws the card with
+Klaus visited closed (`MenuShell::visit_klaus` with its delta, drawing the
+process random words) and re-arms by its redraw's cost. After the world is
+built and Klaus has his command 2, the port waits for the next callback,
+as `FUN_004571B0` does, and runs it: the 50-Hz clock's advance (the text's
+blink), the spring reset and ED10 (`start_eye_after_load`), the Klaus visit
+with its delta (`MenuShell::visit_after_load`) and the card. The `+270`
+addition has no port state to change: the first visit after the load
+(`FUN_0044FE20`, through `+274`) zeroes it before anything reads it. With
+`--fixed-step-micros` the port runs only the lab's final callback, at
+7,800 us and without waiting, so the morph after the load is 8,299 as in
+the lab and fixed-step runs stay byte-identical. With the lab's keys at
+20-ms steps the port's frames of Klaus's opening over Mediaeval after the
+Cheats skip moved closer to the lab's on every pass compared.
+
+Held: the callbacks while the world is built. The port builds it on the
+frame thread, so retail's callbacks during the construction (one a period)
+cannot run: a callback that fell due runs once, late, before Klaus's
+command 2, and the port says so on stderr ("Loading card: world N's
+construction ran ... past the card's timer"). A release build constructs a
+world in 20 to 30 ms on a current PC, under one period; a debug build takes
+about 600 ms.
 
 ### Briefing Sequence
 

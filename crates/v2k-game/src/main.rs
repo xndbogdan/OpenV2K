@@ -4097,7 +4097,7 @@ fn run_game(
                 closing_scene = None;
                 closing_scene_exit = None;
                 let lid = *level_id;
-                let purpose = std::mem::replace(purpose, LoadingPurpose::Normal);
+                let mut purpose = std::mem::replace(purpose, LoadingPurpose::Normal);
                 // FUN_004515E0 (FUN_0042A850) turns the HUD setting on at every
                 // world start, and off past logical world 36 or below phase 5:
                 // Intro2 and the closing scene, both overlays past 48.
@@ -4176,10 +4176,12 @@ fn run_game(
                     } else {
                         None
                     };
-                let native_restore = match &purpose {
-                    LoadingPurpose::NativeSave { restore } => Some(restore.as_ref()),
-                    _ => campaign_restore.as_ref(),
+                // A copy, so the card's callbacks can reach Klaus in `purpose`.
+                let native_save_restore = match &purpose {
+                    LoadingPurpose::NativeSave { restore } => Some(restore.clone()),
+                    _ => None,
                 };
+                let native_restore = native_save_restore.as_deref().or(campaign_restore.as_ref());
                 let saved_player = match &purpose {
                     LoadingPurpose::NativeSave { restore } => Some(restore.player),
                     LoadingPurpose::PortableCompatibilityPreview { player } => Some(*player),
@@ -4233,7 +4235,80 @@ fn run_game(
                 let mut card_clock = retail_clock;
 
                 let start = Instant::now();
-                if let Err(error) = session.load_level_by_id(lid, startup_world_variant) {
+                // FUN_004515E0 arms the card's timer; its callbacks redraw
+                // the card while FUN_00451710 loads, Klaus closed and idle
+                // until its command 2, and FUN_004571B0 waits for one more.
+                // A fixed-step run takes only the lab's final callback.
+                let mut card_timer = probe
+                    .fixed_step_micros
+                    .is_none()
+                    .then(LoadingCardTimer::arm);
+                macro_rules! closed_card_callback {
+                    ($timer:expr) => {{
+                        let delta = $timer.wait_for_callback();
+                        let tick = card_clock.advance(u64::from(delta));
+                        let mut klaus = loading_klaus(&mut purpose, &mut replay_world_cover);
+                        if let Some(shell) = klaus.as_deref_mut() {
+                            shell.visit_klaus(
+                                delta,
+                                &mut GlobalSoundRuntime::new(
+                                    &session.cache,
+                                    &mut world_fx,
+                                    sound_manager.as_mut(),
+                                ),
+                            );
+                        }
+                        render_loading_card(
+                            renderer.as_mut(),
+                            &system_strings,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            tick,
+                            klaus.map(|shell| KlausHandoffFrame {
+                                shell,
+                                cache: &session.cache,
+                                colors: &face_colors,
+                                retail_tick: tick,
+                            }),
+                        );
+                        $timer.rearm();
+                        log!(
+                            "Loading card: callback {delta} us, Klaus closed, next in {} ms",
+                            $timer.period_ms
+                        );
+                    }};
+                }
+                let loaded = match card_timer.as_mut() {
+                    None => session.load_level_by_id(lid, startup_world_variant),
+                    Some(timer) => {
+                        let data_dir = session.data_dir.clone();
+                        let (sender, receiver) = std::sync::mpsc::channel();
+                        std::thread::scope(|scope| {
+                            scope.spawn(move || {
+                                let _ = sender.send(v2k_game::session::prepare_level(
+                                    &data_dir,
+                                    lid,
+                                    startup_world_variant,
+                                ));
+                            });
+                            loop {
+                                match receiver.recv_timeout(timer.until_due()) {
+                                    Ok(prepared) => break prepared,
+                                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                                        closed_card_callback!(timer)
+                                    }
+                                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                                        panic!(
+                                            "level {lid}'s overlay reader stopped without a result"
+                                        )
+                                    }
+                                }
+                            }
+                        })
+                        .map(|prepared| session.install_level(prepared))
+                    }
+                };
+                if let Err(error) = loaded {
                     eprintln!("Level {} load blocked: {}", lid, error);
                     current_level_id = None;
                     session.cache.unload_level();
@@ -5064,6 +5139,17 @@ fn run_game(
                 retail_clock.reset();
                 retail_tick = retail_clock.current();
                 queen_closing_move_applied = false;
+                // The world's construction runs on this thread, so retail's
+                // callbacks during it (one per period) are not ported: a
+                // callback that fell due runs once now, before Klaus's
+                // command 2, as a late timer would.
+                if let Some(timer) = card_timer.as_mut().filter(|timer| timer.is_due()) {
+                    eprintln!(
+                        "Loading card: world {lid}'s construction ran {} ms past the card's timer;                          its callbacks during construction are not ported, one runs late",
+                        timer.due.elapsed().as_millis()
+                    );
+                    closed_card_callback!(timer)
+                }
                 state = match purpose {
                     LoadingPurpose::BeginIntro { mut shell } => {
                         intro_camera = IntroCameraController::default();
@@ -5208,17 +5294,15 @@ fn run_game(
                     shell.begin_world_opening();
                     post_intro_world_cover = Some(shell);
                 }
-                // FUN_004571B0's final card callback opens Klaus by its delta:
-                // the time since the load began (004F72E0), clamped to
-                // 7,800..125,000 us. A fixed-step run takes the lab's: the
+                // FUN_004571B0 waits for the timer's next callback, which
+                // opens Klaus by its delta since the last (004F72E0), clamped
+                // to 7,800..125,000 us. A fixed-step run takes the lab's: the
                 // scripted clock stands still, so the minimum.
-                let card_callback_micros = match probe.fixed_step_micros {
-                    Some(_) => LOADING_CARD_CALLBACK_MIN_MICROS,
-                    None => (start.elapsed().as_micros().min(u128::from(u32::MAX)) as u32).clamp(
-                        LOADING_CARD_CALLBACK_MIN_MICROS,
-                        LOADING_CARD_CALLBACK_MAX_MICROS,
-                    ),
+                let card_callback_micros = match card_timer.as_mut() {
+                    Some(timer) => timer.wait_for_callback(),
+                    None => LOADING_CARD_CALLBACK_MIN_MICROS,
                 };
+                log!("Loading card: final callback {card_callback_micros} us");
                 let mut card_klaus = match &mut state {
                     GameState::OpeningCinematic {
                         stage: Intro2PresentationStage::Covered { shell },
@@ -17247,6 +17331,88 @@ const MENU_CAMERA_FAR: f32 = 200.0;
 /// `FUN_00456FB0` clamps each card callback's real-time delta.
 const LOADING_CARD_CALLBACK_MIN_MICROS: u32 = 7_800;
 const LOADING_CARD_CALLBACK_MAX_MICROS: u32 = 125_000;
+/// `FUN_00457170` arms the card's one-shot timer at 50,000 us, which
+/// `FUN_00496020` keeps in whole milliseconds.
+const LOADING_CARD_FIRST_PERIOD_MS: u32 = 50;
+
+/// `FUN_00456FB0`'s re-arm: a redraw of 43,750 us or more stretches the
+/// period by 9/8; a quicker one takes 7/8 only when the period exceeds
+/// 50,001. The period is in milliseconds there, so in practice it never
+/// shrinks.
+fn next_loading_card_period_ms(period_ms: u32, redraw_micros: u64) -> u32 {
+    if redraw_micros < 43_750 {
+        if period_ms < 50_001 {
+            period_ms
+        } else {
+            period_ms * 7 / 8
+        }
+    } else {
+        period_ms * 9 / 8
+    }
+}
+
+/// The loading card's WinMM one-shot timer (`FUN_00457170`, re-armed by
+/// each callback, `FUN_00456FB0`): when its callbacks run and their deltas.
+struct LoadingCardTimer {
+    /// `004F72E0`: when the last callback (or the load) began.
+    last: Instant,
+    due: Instant,
+    period_ms: u32,
+}
+
+impl LoadingCardTimer {
+    fn arm() -> Self {
+        let now = Instant::now();
+        Self {
+            last: now,
+            due: now + Duration::from_millis(u64::from(LOADING_CARD_FIRST_PERIOD_MS)),
+            period_ms: LOADING_CARD_FIRST_PERIOD_MS,
+        }
+    }
+
+    fn until_due(&self) -> Duration {
+        self.due.saturating_duration_since(Instant::now())
+    }
+
+    fn is_due(&self) -> bool {
+        Instant::now() >= self.due
+    }
+
+    /// Sleep to the next callback; its delta since the last, clamped as the
+    /// callback clamps it.
+    fn wait_for_callback(&mut self) -> u32 {
+        std::thread::sleep(self.until_due());
+        let now = Instant::now();
+        let delta = now.duration_since(self.last).as_micros();
+        self.last = now;
+        (delta.min(u128::from(u32::MAX)) as u32).clamp(
+            LOADING_CARD_CALLBACK_MIN_MICROS,
+            LOADING_CARD_CALLBACK_MAX_MICROS,
+        )
+    }
+
+    /// Re-arm after a callback's redraw, which began at `self.last`.
+    fn rearm(&mut self) {
+        let now = Instant::now();
+        let redraw = now.duration_since(self.last).as_micros() as u64;
+        self.period_ms = next_loading_card_period_ms(self.period_ms, redraw);
+        self.due = now + Duration::from_millis(u64::from(self.period_ms));
+    }
+}
+
+/// Klaus while a world loads: the shell the load's purpose carries, or the
+/// one a replay or a map route hands to the next world's opening.
+fn loading_klaus<'a>(
+    purpose: &'a mut LoadingPurpose,
+    cover: &'a mut Option<MenuShell>,
+) -> Option<&'a mut MenuShell> {
+    match purpose {
+        LoadingPurpose::BeginIntro { shell }
+        | LoadingPurpose::ResumePostIntro { shell }
+        | LoadingPurpose::ClosingScene { shell, .. } => Some(shell),
+        _ => cover.as_mut(),
+    }
+}
 const MENU_BACKDROP_VIEW_DEPTH_RAW: f32 = 0x800 as f32;
 const MENU_BILLBOARD_VIEW_DEPTH_RAW: f32 = 0xC00 as f32;
 const MENU_BACKDROP_MODEL_ID: usize = 1;
@@ -19744,6 +19910,15 @@ mod menu_visual_tests {
                 assert!(modal_map.1 as u32 + modal_map.3 <= viewport[1]);
             }
         }
+    }
+
+    #[test]
+    fn loading_card_period_only_stretches_after_a_slow_redraw() {
+        // FUN_00456FB0 compares the millisecond period with 50,001.
+        assert_eq!(next_loading_card_period_ms(50, 43_749), 50);
+        assert_eq!(next_loading_card_period_ms(50, 43_750), 56);
+        assert_eq!(next_loading_card_period_ms(56, 60_000), 63);
+        assert_eq!(next_loading_card_period_ms(63, 1_000), 63);
     }
 
     #[test]
