@@ -162,6 +162,8 @@ pub enum NativeCaptorPairBehaviorResult {
     RemoteBeamA300 {
         materialiser: u32,
     },
+    /// `FUN_0040C800` met another Type63: `0x004BE320`'s A300.
+    DefenderBallPairA300,
 }
 
 pub use crate::native_actor_descriptor_contact::NativeDescriptorContactOutcome as NativeCaptorPairComponentResult;
@@ -180,6 +182,8 @@ pub enum NativeCaptorPairStage {
     DispatchPowerUpUnsupportedRecipient,
     /// `0x004BE330`, the beam's A300, shares capture's single-RET entry.
     DispatchRemoteBeam,
+    /// `0x004BE320`, the Defender Ball's A300, shares the same RET.
+    DispatchDefenderBall,
     Component {
         owner: u32,
         slot: ActorTaskSlot,
@@ -780,6 +784,12 @@ fn resolve(
                         .push(NativeCaptorPairStage::DispatchPowerUpUnsupportedRecipient);
                     visit.physical_suppressed = true;
                 }
+                NativeCaptorPairBehaviorResult::DefenderBallPairA300 => {
+                    visit
+                        .stages
+                        .push(NativeCaptorPairStage::DispatchDefenderBall);
+                    visit.physical_suppressed = true;
+                }
                 NativeCaptorPairBehaviorResult::Null => {}
             }
         }
@@ -992,6 +1002,12 @@ fn general_behavior_hold(
         }
         // 425AF0 returns its A300 for any non-player: a RET, then no 12760.
         PairContactCallbackPolicy::PowerUp => opposite.capability_flags & 1 == 0,
+        // 40C800: another ball takes the A300; any other body its checked
+        // hit, which needs that body's native owner.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_c800) => {
+            is_native_defender_ball(entity)
+                && (opposite.entity_type == DEFENDER_BALL || requires_body_custody(opposite))
+        }
         _ => false,
     };
     Ok((!null).then_some(ActivePairHoldReason::UnportedBehavior {
@@ -1375,6 +1391,31 @@ fn behavior(
         {
             Ok(NativeCaptorPairBehaviorResult::PowerUpUnsupportedRecipientA300)
         }
+        // 40C800: another Type63 returns 4BE320's A300; any other body takes
+        // a checked {1, 40000} attributed to the ball, then it returns zero.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_c800)
+            if is_native_defender_ball(entity) =>
+        {
+            if actor(frame.entities, opposite)?.entity_type == DEFENDER_BALL {
+                return Ok(NativeCaptorPairBehaviorResult::DefenderBallPairA300);
+            }
+            *committed = true;
+            apply_pair_checked_damage(
+                frame,
+                opposite,
+                crate::damage::DamageDeliveryRecord {
+                    packet: crate::damage::DamagePacket {
+                        channels: [1, 0],
+                        amounts_raw: [40_000, 0],
+                    },
+                    source_entity_type_raw: DEFENDER_BALL,
+                    owner_handle: owner,
+                },
+                playing_player,
+                committed,
+            )?;
+            Ok(NativeCaptorPairBehaviorResult::Null)
+        }
         _ => Err(NativeCaptorPairBlock::UnsupportedBehavior {
             entity_id: owner,
             style,
@@ -1686,8 +1727,20 @@ fn apply_native_pair_checked_damage(
     })
 }
 
+const DEFENDER_BALL: u32 = crate::main_base_type54_abort::TYPE63_ENTITY_TYPE;
+
+/// A Type63 on its class50 Primary, which reads its body from the entity.
+fn is_native_defender_ball(entity: &Entity) -> bool {
+    entity.entity_type == DEFENDER_BALL
+        && matches!(
+            entity.actor_task_state(ActorTaskSlot::Primary),
+            Some(ActorTaskRuntime::DefenderBall)
+        )
+}
+
 fn requires_body_custody(entity: &Entity) -> bool {
-    entity.native_entity_weapon_runtime.is_some()
+    is_native_defender_ball(entity)
+        || entity.native_entity_weapon_runtime.is_some()
         || entity.intro2_type66_runtime.is_some()
         || entity.intro2_type26_sub_d_runtime.is_some()
         || entity.intro2_type13_common_mover_runtime.is_some()

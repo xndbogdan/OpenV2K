@@ -718,7 +718,7 @@ impl EntityManager {
     /// live (nonzero state, not dying) Type63 takes the packet and the craft
     /// none; without one, every live body in the list takes it under a
     /// temporary `0x8000`, which needs that body's own owner.
-    pub(super) fn plan_player_hold_walk(&self) -> Result<Option<u32>, PlayerCheckedDamageBlock> {
+    pub(crate) fn plan_player_hold_walk(&self) -> Result<Option<u32>, PlayerCheckedDamageBlock> {
         let mut live = Vec::new();
         for &id in &self.auxiliary_owned_ids {
             let Some(entity) = self.entities.iter().find(|entity| entity.id == id) else {

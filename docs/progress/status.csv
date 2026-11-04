@@ -1043,6 +1043,7 @@ address,status,note
 0x0040B0F0,implemented,class50 initializer: T and S cleared, 07070's Primary (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00407070,implemented,Defender Ball Primary and its pitch draw (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00407150,implemented,Defender Ball visit: on the owner with zero velocity, pitch and roll spin (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x0040C800,implemented,Defender Ball pair hook: another ball's A300, else a checked {1, 40000} from the ball, in the late pair walk (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x004393C0,implemented,network line files from the Save Path folder (docs/re/MULTIPLAYER.md#names-and-announcements)
 0x004394F0,implemented,a line file's lines: leading blanks skipped, empty and # lines dropped (docs/re/MULTIPLAYER.md#names-and-announcements)
 0x00443D30,implemented,cargo drop; a peer's body goes to its owner as kind 15 (docs/re/MULTIPLAYER.md#bodies-between-machines)

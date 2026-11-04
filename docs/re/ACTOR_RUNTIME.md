@@ -611,7 +611,10 @@ runs first and writes nothing. It admits the pair when:
   without `0x400`, `4258A0` against one without `0x800`, the Hive's `259F0`
   against one with neither `0xC00` nor `0x2000`, and a Power-Up's `425AF0`
   against any body without capability 1 (its `0xA300` return is a bare `RET`
-  and cancels the response);
+  and cancels the response); the one writing hook it admits is the Defender
+  Ball's `40C800`, against another Type63 (`0x004BE320`'s A300, which
+  cancels the response) or against a body with a native owner, which takes
+  its checked `{1, 40000}` attributed to the ball before the visit goes on;
 - every body the response would move has a native owner;
 - every body with a native owner lends its completed owner (the same custody
   the family lanes check), and every other body's tasks keep a null contact
