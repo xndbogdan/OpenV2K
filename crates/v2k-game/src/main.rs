@@ -11245,6 +11245,19 @@ fn draw_gameplay_world(
         camera.view_matrix()[9],
         terrain_scan_dimensions,
     );
+    // 147A0 marked this frame's queued shots with the bit the actor tasks saw.
+    let ids: Vec<u32> = em.iter_all().map(|entity| entity.id).collect();
+    for id in ids {
+        if let Some(entity) = em.entity_mut(id) {
+            entity.broader_detail_when_queued = entity
+                .collision
+                .state_flags_at_0x08
+                .masked(v2k_game::entity_view_detail::BROADER_DETAIL_STATE_BIT)
+                == RetailRuntimeValue::Known(
+                    v2k_game::entity_view_detail::BROADER_DETAIL_STATE_BIT,
+                );
+        }
+    }
     specialized_actor_tasks.publish_presented_view_detail(em, entity_view);
     // FUN_0041D360 writes PRIMARY_CACHE_VALID / WAIT_FOR_DEPS on the live
     // Sub-H record. The first-world body loop used to resolve a copy through
@@ -11378,6 +11391,9 @@ fn draw_gameplay_world(
                 })),
                 RetailRuntimeValue::Unresolved => RetailRuntimeValue::Unresolved,
             });
+        if let Some(entity) = em.entity_mut(entity_id) {
+            entity.emitter_muzzles = [None; 2];
+        }
         'draw_actor: {
             let Some(entity) = em.entity_mut(entity_id) else {
                 break 'draw_actor;
@@ -11472,13 +11488,18 @@ fn draw_gameplay_world(
                 };
             let mut queen_boundary = None;
             let mut stamp_error = None;
-            let mut stamp_origin = |point| {
-                if let Some(runtime) = entity.ordinary_type47_aim_and_fire_runtime.as_mut() {
-                    if let Err(reason) = runtime.stamp_draw_emitter_origin(entity_id, point) {
-                        stamp_error = Some(reason);
+            let mut drawn_muzzles = [None; 2];
+            let mut stamp_origin =
+                |point: v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePoint| {
+                    if let Some(muzzle) = drawn_muzzles.get_mut(usize::from(point.emitter_index)) {
+                        *muzzle = Some(point.position_words);
                     }
-                }
-            };
+                    if let Some(runtime) = entity.ordinary_type47_aim_and_fire_runtime.as_mut() {
+                        if let Err(reason) = runtime.stamp_draw_emitter_origin(entity_id, point) {
+                            stamp_error = Some(reason);
+                        }
+                    }
+                };
             let emitter = native_context.as_ref().zip(emitter_descriptor).and_then(|((frame, viewport), descriptor)| {
                 Some(v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePresentation {
                     descriptor, root_model: cache.global_model(model_id)?, root_vars: &entity_anim_vars,
@@ -11585,6 +11606,11 @@ fn draw_gameplay_world(
             }
             drop(tree);
             drop(stamp_origin);
+            for (slot, muzzle) in entity.emitter_muzzles.iter_mut().zip(drawn_muzzles) {
+                if muzzle.is_some() {
+                    *slot = muzzle;
+                }
+            }
             drop(random_u16);
             drop(queen_stamp);
             for (selector, position_raw) in queen_stamps {
@@ -11911,6 +11937,9 @@ fn render_opening_cinematic(
                 })),
                 RetailRuntimeValue::Unresolved => RetailRuntimeValue::Unresolved,
             });
+        if let Some(entity) = entities.entity_mut(entity_id) {
+            entity.emitter_muzzles = [None; 2];
+        }
         'draw_actor: {
             let Some(entity) = entities.entity_mut(entity_id) else {
                 break 'draw_actor;
@@ -11996,13 +12025,18 @@ fn render_opening_cinematic(
             });
             let mut emitter_boundary = None;
             let mut stamp_error = None;
-            let mut stamp_origin = |point| {
-                if let Some(runtime) = entity.ordinary_type47_aim_and_fire_runtime.as_mut() {
-                    if let Err(reason) = runtime.stamp_draw_emitter_origin(entity_id, point) {
-                        stamp_error = Some(reason);
+            let mut drawn_muzzles = [None; 2];
+            let mut stamp_origin =
+                |point: v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePoint| {
+                    if let Some(muzzle) = drawn_muzzles.get_mut(usize::from(point.emitter_index)) {
+                        *muzzle = Some(point.position_words);
                     }
-                }
-            };
+                    if let Some(runtime) = entity.ordinary_type47_aim_and_fire_runtime.as_mut() {
+                        if let Err(reason) = runtime.stamp_draw_emitter_origin(entity_id, point) {
+                            stamp_error = Some(reason);
+                        }
+                    }
+                };
             let emitter = native_context.as_ref().zip(emitter_descriptor).and_then(|((frame, viewport), descriptor)| {
                 Some(v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePresentation {
                     descriptor, root_model: cache.global_model(model_id)?, root_vars: &intro_anim_vars,
@@ -12098,6 +12132,11 @@ fn render_opening_cinematic(
             }
             drop(tree);
             drop(stamp_origin);
+            for (slot, muzzle) in entity.emitter_muzzles.iter_mut().zip(drawn_muzzles) {
+                if muzzle.is_some() {
+                    *slot = muzzle;
+                }
+            }
             drop(random_u16);
             if let Some(boundary) = emitter_boundary {
                 report_actor_emitter_boundary(entity_id, model_id, boundary);

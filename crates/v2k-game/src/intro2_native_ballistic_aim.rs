@@ -853,13 +853,16 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
             if !is_exact_transient_request::<P>(source_entity_id, request) {
                 return Err(NativeBallisticShotDrainError::MalformedTransientRequest { index });
             }
+            // 11400 launches from the selector's stamp, else the centre.
+            let origin = entity.emitter_muzzles[usize::from(request.emitter_selector)]
+                .unwrap_or(entity.position_raw());
             if request.auxiliary {
                 // Method 15's row {0, 1, 32, 0} adds the source's velocity
                 // to a zero direction: its unwritten speed never reaches it.
                 auxiliary.push(true);
                 solutions.push(
                     crate::ordinary_type47_shot_math::Type47TransientDrainSolution {
-                        position_raw: entity.position_raw(),
+                        position_raw: origin,
                         velocity_raw: entity.velocity_raw(),
                     },
                 );
@@ -880,11 +883,9 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                     | NativeBallisticProfileId::Type38
                     | NativeBallisticProfileId::Type129
                     | NativeBallisticProfileId::Type119
-                    | NativeBallisticProfileId::Type32 => drain_type13_transient_request(
-                        request,
-                        entity.position_raw(),
-                        entity.velocity_raw(),
-                    ),
+                    | NativeBallisticProfileId::Type32 => {
+                        drain_type13_transient_request(request, origin, entity.velocity_raw())
+                    }
                     NativeBallisticProfileId::Type16
                     | NativeBallisticProfileId::Type128
                     | NativeBallisticProfileId::Type58
@@ -901,16 +902,14 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                     | NativeBallisticProfileId::Type127
                     | NativeBallisticProfileId::Type33
                     | NativeBallisticProfileId::Type29
-                    | NativeBallisticProfileId::Type21 => drain_intro2_flyer_transient_request(
-                        request,
-                        entity.position_raw(),
-                        entity.velocity_raw(),
-                    ),
+                    | NativeBallisticProfileId::Type21 => {
+                        drain_intro2_flyer_transient_request(request, origin, entity.velocity_raw())
+                    }
                     // Method 11's leading dword is 0: drain adds source velocity.
                     NativeBallisticProfileId::Type35 => {
                         crate::ordinary_type47_shot_math::drain_transient_with_method_row(
                             request,
-                            entity.position_raw(),
+                            origin,
                             entity.velocity_raw(),
                             projectile_class_row(11).expect("method 11 is an authored row"),
                         )
@@ -919,7 +918,7 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                     NativeBallisticProfileId::Type2 => {
                         crate::ordinary_type47_shot_math::drain_transient_with_method_row(
                             request,
-                            entity.position_raw(),
+                            origin,
                             entity.velocity_raw(),
                             projectile_class_row(25).expect("method 25 is an authored row"),
                         )
@@ -929,7 +928,7 @@ pub(crate) fn take_native_shot_solutions<P: NativeBallisticProfile>(
                     NativeBallisticProfileId::Type107 | NativeBallisticProfileId::Type121 => {
                         crate::ordinary_type47_shot_math::drain_transient_with_method_row(
                             request,
-                            entity.position_raw(),
+                            origin,
                             entity.velocity_raw(),
                             projectile_class_row(P::ID.method()).expect("an authored row"),
                         )

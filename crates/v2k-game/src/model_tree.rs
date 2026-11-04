@@ -51,6 +51,9 @@ struct WorldModelVertexResolver<'a> {
     >,
     external_points: RefCell<HashMap<u16, Option<external_frame::ActorExternalSlotPoint>>>,
     native_vertex_failures: RefCell<Vec<ModelNativeVertexFailure>>,
+    /// The transform-only pass resolves every face's vertices; the draw
+    /// resolves a tf14 vertex only for a face it keeps.
+    admit_every_face: bool,
 }
 
 impl ModelVertexResolver for WorldModelVertexResolver<'_> {
@@ -190,7 +193,7 @@ impl ModelVertexResolver for WorldModelVertexResolver<'_> {
     }
 
     fn admit_face_raw(&self, anchor: [i32; 3], normal: [i32; 3]) -> bool {
-        if self.external_owner.is_none() {
+        if self.admit_every_face || self.external_owner.is_none() {
             return true;
         }
         if let Some(ModelViewSelection::Retail {
@@ -262,7 +265,9 @@ impl ModelVertexResolver for WorldModelVertexResolver<'_> {
 
 mod external_frame;
 mod submission_buffer;
+mod transform_pass;
 pub use submission_buffer::ModelTreeSubmissionBuffer;
+pub use transform_pass::{ActorTransformPass, ActorTransformPassBoundary};
 mod painter;
 mod view;
 use external_frame::ModelTreeExternalFrame;
@@ -1626,6 +1631,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 external_owner: live_external.then_some(&resolve_external),
                 external_points: RefCell::new(HashMap::new()),
                 native_vertex_failures: RefCell::new(Vec::new()),
+                admit_every_face: false,
             });
         let context = ModelMaterializationContext {
             vars,

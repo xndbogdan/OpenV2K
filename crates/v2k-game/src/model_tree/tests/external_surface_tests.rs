@@ -275,6 +275,7 @@ fn native_live_normal_gate_uses_wrapping_raw_plane_and_strict_sign() {
         external_owner: Some(&callback),
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
+        admit_every_face: false,
     };
     assert!(
         !resolver.admit_face_raw([0; 3], [1, 0, 0]),
@@ -446,6 +447,7 @@ fn native_shadow_consumes_the_cached_view_quantization_without_changing_direct_w
         external_owner: Some(&callback),
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
+        admit_every_face: false,
     };
     let vars = AnimVars::default();
     let context = ModelMaterializationContext {
@@ -508,6 +510,7 @@ fn native_callback_rebases_all_words_to_viewport_image_before_q31_projection() {
         external_owner: Some(&callback),
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
+        admit_every_face: false,
     };
     let point = resolver
         .resolve_external_frame_raw(0, [0; 3], &mut |_| None)
@@ -656,6 +659,7 @@ fn actual_newant_antenna_tail_retains_zero_cosine_before_final_sine_registers() 
         external_owner: None,
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
+        admit_every_face: false,
     };
     let geometry = model.materialize_with_context(ModelMaterializationContext {
         vertex_resolver: Some(&resolver),

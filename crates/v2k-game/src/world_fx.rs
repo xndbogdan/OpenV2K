@@ -2421,6 +2421,11 @@ impl WorldFx {
         self.network_client
     }
 
+    /// A network game is running (`DAT_004F741C`): its sends are collected.
+    pub fn is_network_game(&self) -> bool {
+        self.network_sends.is_some()
+    }
+
     /// `FUN_00440950` with network byte 1, a client's static burst
     /// (`FUN_00427760`): no kind 2, particles that do no damage (`+1D` bit
     /// 0), and no birth of a class whose descriptor flags hold 2.

@@ -1,9 +1,12 @@
 use super::*;
+use crate::common_mover::type9_attitude::Type9BodyBasis;
+use crate::entity_view_detail::BROADER_DETAIL_STATE_BIT as PRESENTATION_DETAIL_STATE_BIT;
 use crate::{
     actor_task_owner::ActorTaskSlot,
     intro2_gun_turret::native::tests::{fixture, generic, publish},
     particle_descriptors::particle_descriptor,
 };
+use v2k_formats::models::AnimVars;
 
 fn identity_body() -> Type9BodyBasis {
     Type9BodyBasis {
@@ -31,28 +34,41 @@ fn turret_muzzle_walk_keeps_selected_face_group_stamp_and_last_callback_order() 
     let Some((session, _)) = fixture() else {
         return;
     };
-    let mut walk = MuzzleWalk {
-        descriptor: crate::intro2_gun_turret::EMITTER,
-        resources: &session.cache,
-        body: identity_body(),
-        position: [0; 3],
-        muzzles: [None; 2],
-        ancestors: Vec::new(),
+    let pass = |origin_raw: [i16; 3], vars: &AnimVars| {
+        crate::model_tree::ActorTransformPass {
+            cache: &session.cache,
+            model_id: 164,
+            vars,
+            origin_raw,
+            body_axes_q31: [
+                identity_body().lateral,
+                identity_body().up,
+                identity_body().forward,
+            ],
+            surface: None,
+            retail_tick: 0,
+            sub_h: None,
+            emitter: Some(crate::intro2_gun_turret::EMITTER),
+            fallback: None,
+        }
+        .run()
+        .unwrap()
     };
     let mut vars = AnimVars::default();
     vars.registers[3] = 1;
-    walk.visit(164, [10., 20., 30.], IDENTITY, None, &vars)
-        .unwrap();
-    assert_eq!(walk.muzzles, [Some([9, 33, 300]), Some([9, 33, 300])]);
+    assert_eq!(
+        pass([10, 20, 30], &vars),
+        [Some([10, 33, 300]), Some([10, 33, 300])]
+    );
+    // The pass's integer frame: each Q31 product shifts on its own.
     // C6 explicitly resolves44 after the selector0 face. The trailing38
     // diagnostic has no normal callback effect; the second instance wins.
-    walk.visit(164, [100., 200., 300.], IDENTITY, None, &vars)
-        .unwrap();
-    assert_eq!(walk.muzzles, [Some([99, 213, 570]), Some([99, 213, 570])]);
+    assert_eq!(
+        pass([100, 200, 300], &vars),
+        [Some([100, 213, 570]), Some([100, 213, 570])]
+    );
     vars.registers[3] = 0;
-    walk.visit(164, [-100., 0., 0.], IDENTITY, None, &vars)
-        .unwrap();
-    assert_eq!(walk.muzzles, [Some([99, 213, 570]), Some([-100, 13, 270])]);
+    assert_eq!(pass([-100, 0, 0], &vars), [None, Some([-100, 13, 270])]);
 }
 
 #[v2k_test_support::retail_test]
@@ -117,7 +133,7 @@ fn turret_canonical_both_barrels_follow_live_mounts_and_retained_body() {
         );
         assert_eq!(
             rotated[0].unwrap()[2].wrapping_sub(entity.position_raw()[2]),
-            -74
+            -75
         );
     }
 }
@@ -290,9 +306,13 @@ fn turret_failed_model_and_malformed_fifo_preserve_requests_rng_and_task() {
                 ParticleEnvironment::Dry,
                 0
             ),
-            Err(Intro2GunTurretShotDrainError::ModelUnavailable {
-                model_id: usize::MAX
-            })
+            Err(Intro2GunTurretShotDrainError::Muzzle(
+                crate::intro2_projectiles::MuzzlePassError::Pass(
+                    crate::model_tree::ActorTransformPassBoundary::ModelMissing {
+                        model_id: usize::MAX
+                    }
+                )
+            ))
         );
     }
     let entity = manager.entity_mut(id).unwrap();

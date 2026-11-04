@@ -40,6 +40,21 @@ pub enum Intro2ShotDrainError {
     Type12Family(crate::native_type12::aim::Type12ShotDrainError),
     Type94(crate::intro2_type94::aim::Intro2Type94ShotDrainError),
     Fish(crate::shared_fish::aim::FishShotDrainError),
+    /// `FUN_00413BE0` could not run for this source.
+    TransformPass(MuzzlePassError),
+}
+
+/// Why the transform-only pass for queued shots stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MuzzlePassError {
+    DetailStateUnresolved,
+    ModelUnavailable,
+    BodyBasisUnresolved,
+    SubHRuntimeUnavailable,
+    /// A Sub-M or live joint owner would take selectors after Sub-E; no
+    /// firing type has one, and the port does not run it here.
+    UnportedSelectorOwner,
+    Pass(crate::model_tree::ActorTransformPassBoundary),
 }
 
 #[derive(Clone, Copy)]
@@ -109,6 +124,9 @@ pub fn drain_intro2_projectile_source(
         .iter_all()
         .find(|entity| entity.id == id)
         .and_then(emitter_family)?;
+    if let Err(error) = stamp_unstamped_muzzles(entities, world_fx, resources, retail_tick, id) {
+        return Some(Err(Intro2ShotDrainError::TransformPass(error)));
+    }
     Some(drain_emitter_family(
         entities,
         world_fx,
@@ -118,6 +136,178 @@ pub fn drain_intro2_projectile_source(
         id,
         family,
     ))
+}
+
+/// Every queued shot's append payload, whichever family queued it.
+fn queued_requests(
+    entity: &crate::entity::Entity,
+) -> Vec<crate::generic_projectile_emitter::GenericEmitterAppendRequest> {
+    let mut requests = Vec::new();
+    if let Some(queue) = &entity.intro2_gun_turret_aim_runtime {
+        requests.extend(queue.transient_shots().iter().copied());
+    }
+    if let Some(queue) = &entity.intro2_type13_aim_runtime {
+        requests.extend_from_slice(queue.transient_shots());
+    }
+    if let Some(queue) = &entity.ordinary_type47_aim_and_fire_runtime {
+        requests.extend(queue.queued_requests());
+    }
+    if let Some(queue) = &entity.intro2_flyer_aim_runtime {
+        requests.extend_from_slice(queue.transient_shots());
+    }
+    for queue in [
+        &entity.intro2_type10_aim_runtime,
+        &entity.intro2_type57_aim_runtime,
+        &entity.intro2_type16_aim_runtime,
+        &entity.intro2_type58_aim_runtime,
+        &entity.native_type122_aim_runtime,
+        &entity.native_type18_aim_runtime,
+        &entity.native_type76_aim_runtime,
+        &entity.native_type56_aim_runtime,
+        &entity.native_type30_aim_runtime,
+        &entity.native_type40_aim_runtime,
+        &entity.native_type43_aim_runtime,
+        &entity.native_type38_aim_runtime,
+        &entity.native_type12_aim_runtime,
+        &entity.intro2_type94_aim_runtime,
+        &entity.shared_fish_aim_runtime,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        requests.extend_from_slice(queue.transient_shots());
+    }
+    requests
+}
+
+/// `FUN_00411400`'s tail before its launches. `FUN_004147A0` marks each
+/// queued shot 1, or in a network game 2 when its method word is zero or the
+/// actor held the broader-detail bit as it queued; a muzzle stamp clears the
+/// mark. When a mark reaches 2, or 1 with the bit now set (the actor is in
+/// the broader or the full-detail window), `FUN_00413BE0` runs the actor's
+/// model through the transform-only pass, stamping every shot whose selector
+/// it reaches. A shot still marked leaves from the actor's centre.
+pub fn stamp_unstamped_muzzles(
+    entities: &mut EntityManager,
+    world_fx: &mut WorldFx,
+    resources: &crate::resource_cache::ResourceCache,
+    retail_tick: u32,
+    id: u32,
+) -> Result<(), MuzzlePassError> {
+    use crate::entity_collision_state::RetailRuntimeValue;
+    use crate::entity_view_detail::BROADER_DETAIL_STATE_BIT;
+    let Some(entity) = entities.iter_all().find(|entity| entity.id == id) else {
+        return Ok(());
+    };
+    let network = world_fx.is_network_game();
+    let threshold = match entity
+        .collision
+        .state_flags_at_0x08
+        .masked(BROADER_DETAIL_STATE_BIT)
+    {
+        RetailRuntimeValue::Known(0) => 2,
+        RetailRuntimeValue::Known(_) => 1,
+        RetailRuntimeValue::Unresolved => return Err(MuzzlePassError::DetailStateUnresolved),
+    };
+    let runs = queued_requests(entity).iter().any(|request| {
+        let marker =
+            if network && (entity.broader_detail_when_queued || request.projectile_method == 0) {
+                2
+            } else {
+                1
+            };
+        let unstamped = entity
+            .emitter_muzzles
+            .get(usize::from(request.emitter_selector))
+            .is_none_or(|stamp| stamp.is_none());
+        unstamped && marker >= threshold
+    });
+    if !runs {
+        return Ok(());
+    }
+    // FUN_00413BE0 does nothing for a zero model word.
+    let Some(model_id) = entity.model_index else {
+        return Ok(());
+    };
+    let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
+        return Err(MuzzlePassError::BodyBasisUnresolved);
+    };
+    let record = resources
+        .global_entity_type(entity.entity_type as usize)
+        .ok_or(MuzzlePassError::ModelUnavailable)?;
+    // FUN_0040A9F0: Sub-H, Sub-E, then +104 (Sub-M) and a live joint record
+    // before the terminal suffix.
+    if record.subsection("M").is_some() || record.subsection("G").is_some() {
+        return Err(MuzzlePassError::UnportedSelectorOwner);
+    }
+    let emitter = record.projectile_emitter_descriptor();
+    let sub_h_descriptor = record.sub_h_external_frame_descriptor();
+    let relation_origin_raw = match entity.collision.recent_relation_id_at_0x60 {
+        RetailRuntimeValue::Known(relation) => {
+            RetailRuntimeValue::Known(relation.and_then(|other| {
+                entities
+                    .iter_all()
+                    .find(|entity| entity.id == other)
+                    .map(|entity| entity.position_raw())
+            }))
+        }
+        RetailRuntimeValue::Unresolved => RetailRuntimeValue::Unresolved,
+    };
+    let vars = entity.presentation_anim_vars(retail_tick);
+    let origin_raw = entity.position_raw();
+    let entity = entities
+        .entity_mut(id)
+        .ok_or(MuzzlePassError::ModelUnavailable)?;
+    let sub_h = match (
+        sub_h_descriptor.as_ref(),
+        &mut entity.sub_h_external_frame_runtime,
+    ) {
+        (None, _) => None,
+        (Some(descriptor), RetailRuntimeValue::Known(Some(runtime))) => Some((runtime, descriptor)),
+        (Some(_), _) => return Err(MuzzlePassError::SubHRuntimeUnavailable),
+    };
+    let mut random_u16 = || world_fx.next_shared_retail_random_u16();
+    let reservations = crate::actor_external_frame_fallback::ActorExternalFrameReservations {
+        sub_h_records: sub_h_descriptor
+            .as_ref()
+            .map_or(0, |descriptor| descriptor.records.len() as u16),
+        sub_e_joint_slots: emitter.map_or(
+            0,
+            crate::actor_emitter_external_frame::emitter_external_selector_count,
+        ),
+        sub_m_present: false,
+        live_sub_g_present: false,
+    };
+    let stamps = crate::model_tree::ActorTransformPass {
+        cache: resources,
+        model_id,
+        vars: &vars,
+        origin_raw,
+        body_axes_q31: [basis.lateral, basis.up, basis.forward],
+        surface: resources
+            .terrain()
+            .map(|terrain| v2k_render::WorldSurfaceProjection::new(terrain, retail_tick as i32)),
+        retail_tick,
+        sub_h,
+        emitter,
+        fallback: Some(
+            crate::actor_external_frame_fallback::ActorExternalFrameFallback {
+                reservations,
+                own_origin_raw: origin_raw,
+                relation_origin_raw,
+                random_u16: &mut random_u16,
+                last_boundary: None,
+            },
+        ),
+    }
+    .run()
+    .map_err(MuzzlePassError::Pass)?;
+    for (slot, stamp) in entity.emitter_muzzles.iter_mut().zip(stamps) {
+        if stamp.is_some() {
+            *slot = stamp;
+        }
+    }
+    Ok(())
 }
 
 fn emitter_family(entity: &crate::entity::Entity) -> Option<EmitterFamily> {

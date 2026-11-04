@@ -523,6 +523,7 @@ fn retail_spatial_generators_receive_native_view_for_both_parities_and_current_p
                 external_owner: None,
                 external_points: RefCell::new(HashMap::new()),
                 native_vertex_failures: RefCell::new(Vec::new()),
+                admit_every_face: false,
             };
             for phase in [0, 0x8000, 0xffff] {
                 let mut vars = AnimVars::default();

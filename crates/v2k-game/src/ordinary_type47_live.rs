@@ -331,6 +331,11 @@ impl OrdinaryType47AimAndFireRuntime {
         self.transient_shots.len()
     }
 
+    /// The queued shots' append payloads, oldest first.
+    pub fn queued_requests(&self) -> impl Iterator<Item = GenericEmitterAppendRequest> + '_ {
+        self.transient_shots.iter().map(|shot| shot.request)
+    }
+
     /// 424F20 refreshes every matching emitter node after resolving its source
     /// slot, then clears +2A. The retained runtime authenticates the descriptor
     /// and every append before any mutation; this does not borrow an AI target.
@@ -842,6 +847,7 @@ pub fn drain_fresh_level1_ordinary_type47_shots(
                 drain_type47_transient_request(
                     shot.request,
                     shot.draw_origin_raw
+                        .or(entity.emitter_muzzles[usize::from(shot.request.emitter_selector)])
                         .unwrap_or_else(|| entity.position_raw()),
                     entity.velocity_raw(),
                 )

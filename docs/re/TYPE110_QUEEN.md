@@ -100,7 +100,10 @@ emitter's own `FUN_00424FA0` and stores the point as the muzzle, with a draw
 count of 2. So a gun aims and fires only while it is drawn, and its muzzle
 is where it was last drawn: until then `(0, 0, 0)`, where her Type68 then
 waits. The port stamps the same points from the same draw (the actor
-emitter presentation, with slots 0x1C and 0x1B).
+emitter presentation, with slots 0x1C and 0x1B). The transform-only pass
+that gives undrawn actors their muzzles (`FUN_00413BE0`) runs only for an
+actor with queued shots in its `+38` list; her guns fire directly, so it
+never runs for her and her undrawn guns stay idle.
 
 ## Hits and the weak spot
 

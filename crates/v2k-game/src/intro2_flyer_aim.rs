@@ -514,7 +514,8 @@ pub fn drain_intro2_flyer_shots(
             solutions.push(
                 drain_intro2_flyer_transient_request(
                     request,
-                    entity.position_raw(),
+                    entity.emitter_muzzles[usize::from(request.emitter_selector)]
+                        .unwrap_or(entity.position_raw()),
                     entity.velocity_raw(),
                 )
                 .map_err(Intro2FlyerShotDrainError::ShotMath)?,
