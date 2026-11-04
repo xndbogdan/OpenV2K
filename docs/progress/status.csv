@@ -1096,3 +1096,6 @@ address,status,note
 0x00419750,implemented,factory death: revives into the staged death or at -1 runs the terminal template then the bit-0x10 live-list broadcast (docs/re/FACTORY_SYSTEM.md)
 0x00419010,implemented,native Working Factory update; the understaffed limit queues text 0xCF and 10C10s its own factory (docs/re/FACTORY_SYSTEM.md)
 0x0040E370,implemented,surface lifecycle; a Type38-family death runs the class49 terminal inside the tick in the lent world (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
+0x0042AF00,implemented,a card callback's frame: the 50-Hz clock, Klaus's visit, the spring reset and eye, Klaus over black and the card (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
+0x0042B040,implemented,the card's green Loading at layout point 12 on the clock's even 20-tick half; the branding sprites only with the record's +0C (the frontend's card and its frames; never a world load's) (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
+0x00454460,implemented,progress map nodes: the current slot blinks on odd +270 / 100; the map clock reads 0 on the map's first frame (docs/re/MENU_SYSTEM.md#progress-map)

@@ -1448,7 +1448,21 @@ Three presentation details, from lab snapshots at 640x480:
   menu (1673) and the save menu's return to the map (1801) present nothing;
   the next pass, with the new descriptor's entry and first tick, presents.
   The save menu's first pass shows Klaus over black (the menu is still far
-  out on its fly-in).
+  out on its fly-in). Every exit leg (`4D0A30`) switches this way: its
+  update `FUN_00453E00` runs after the world callbacks' Klaus visit
+  (`FUN_00450C00`) in the same pass, so it switches on the pass whose visit
+  closes him. After Intro2 the lab's leg switches at 853 (no snapshot), the
+  first world loads at 854 and its card shows Klaus and "Loading"
+  ([loading card](LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)).
+- The map's blink clock (session `+270`, `FUN_00454460` blinks the current
+  slot on odd `+270 / 100`) is advanced by `FUN_0044FE20`, the one callback
+  of the map's world callback set (`004D0720`, installed by `FUN_00494050`
+  from session word 3). The world callbacks run before the mode pump stages
+  a switch, so on the map's first pass `44FE20` adds to the leg's value and
+  the entry `FUN_00454EE0` then zeroes it: the first frame draws 0, each
+  later one 20 more at 20-ms passes (a lab watch on `+270`: written at
+  `0044FE59` every pass, and by `00454F00` once at 1603). The port advances
+  the map clock before the entry, so its blink frames match the lab's.
 - The prompt (`FUN_00454390`) draws in font 0 of `004FE630`, the green one;
   the world's messages (`FUN_00452790`) use font 1, the yellow one.
 - Klaus is pinned to the camera at his private view position: `0042BFB9`

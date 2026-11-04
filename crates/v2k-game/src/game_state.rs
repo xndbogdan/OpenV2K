@@ -1310,15 +1310,12 @@ impl MenuShell {
             }
             MenuPhase::IntroReveal => MenuPhase::IntroReveal,
             MenuPhase::PostIntro { stage } => {
-                // Retail selects the next descriptor before this frame's
-                // actor update. D210 closes at zero; opening clears 0x800.
-                self.transition_ready |= self.pending_intro_sequence_command.is_none()
-                    && match stage {
-                        PostIntroStage::BeforeWorldLoad => self.klaus_morph_progress_raw == 0,
-                        PostIntroStage::AfterWorldLoad => {
-                            self.klaus_sequence_state == KlausSequenceState::Hidden
-                        }
-                    };
+                // The world cover retires before this frame's actor update:
+                // opening clears 0x800. (The closing leg's 453E00 runs after
+                // the visit, below.)
+                self.transition_ready |= stage == PostIntroStage::AfterWorldLoad
+                    && self.pending_intro_sequence_command.is_none()
+                    && self.klaus_sequence_state == KlausSequenceState::Hidden;
                 MenuPhase::PostIntro { stage }
             }
             MenuPhase::Idle => {
@@ -1351,6 +1348,18 @@ impl MenuShell {
         }
 
         self.update_klaus(frame_delta_micros, effects);
+
+        // 4D0710's 50C00 visits Klaus before the mode pump runs the leg's
+        // 453E00, which switches once D210 sees him closed.
+        if self.phase
+            == (MenuPhase::PostIntro {
+                stage: PostIntroStage::BeforeWorldLoad,
+            })
+            && self.pending_intro_sequence_command.is_none()
+            && self.klaus_morph_progress_raw == 0
+        {
+            self.transition_ready = true;
+        }
 
         // The world already renders underneath Klaus. Retire the cover on
         // the callback that clears render admission, independent of ticks.
@@ -3568,24 +3577,25 @@ mod tests {
         first.begin_post_intro_leg(PostIntroStage::BeforeWorldLoad);
         assert!(!first.frontend_branding_visible());
         // Command 3 publishes FFFF immediately, then subtracts this frame's
-        // delta. The selector runs before C090 and cannot finish this frame.
+        // delta. The selector (453E00) runs after C090's visit and switches
+        // in the visit's frame once the morph is zero.
         first.update(20_000, &mut next_random);
         assert_eq!(first.menu_backdrop_anim_state().morph_progress, 0xFFFF);
         assert!(first.menu_backdrop_anim_state().visible);
         assert_eq!(first.klaus_morph_progress_raw, 0xFFFF - 1_250);
         assert!(!first.take_transition_ready());
-        for _ in 2..=53 {
+        for _ in 2..=52 {
             first.update(20_000, &mut next_random);
             assert!(!first.take_transition_ready());
         }
-        assert_eq!(first.klaus_morph_progress_raw, 0);
         first.update(20_000, &mut next_random);
+        assert_eq!(first.klaus_morph_progress_raw, 0);
         assert!(first.take_transition_ready());
         assert!(!first.take_transition_ready());
 
         let primary_before_second_leg = first.klaus_primary_phase_raw;
         let twitch_before_second_leg = first.klaus_twitch_phase_raw;
-        assert_eq!(draws.get(), 54);
+        assert_eq!(draws.get(), 53);
         first.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
         assert_eq!(
             first.menu_backdrop_anim_state().primary_phase,
@@ -3598,15 +3608,15 @@ mod tests {
         assert_eq!(first.menu_backdrop_anim_state().morph_progress, 0);
         assert_eq!(first.klaus_morph_progress_raw, 7_812);
         assert!(!first.take_transition_ready());
-        assert_eq!(draws.get(), 54);
-        for _ in 55..=101 {
+        assert_eq!(draws.get(), 53);
+        for _ in 54..=100 {
             first.update(20_000, &mut next_random);
             assert!(!first.take_transition_ready());
         }
         assert!(!first.menu_backdrop_anim_state().visible);
         first.update(20_000, &mut next_random);
         assert!(first.take_transition_ready());
-        assert_eq!(draws.get(), 54, "Opening and Hidden consume no RNG");
+        assert_eq!(draws.get(), 53, "Opening and Hidden consume no RNG");
 
         first.phase = MenuPhase::GameStart {
             remaining: FLY_LEG_SECS,
