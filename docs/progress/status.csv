@@ -1046,3 +1046,5 @@ address,status,note
 0x004394F0,implemented,a line file's lines: leading blanks skipped, empty and # lines dropped (docs/re/MULTIPLAYER.md#names-and-announcements)
 0x00443D30,implemented,cargo drop; a peer's body goes to its owner as kind 15 (docs/re/MULTIPLAYER.md#bodies-between-machines)
 0x004180A0,documented,kind 14's apply; nothing sends kind 14 (docs/re/MULTIPLAYER.md#messages)
+0x00453410,implemented,the full-frame flash: the two-by-two record stretched over the viewport; the software port draws the native record (docs/re/LOADING_TRANSITIONS.md)
+0x004530D0,documented,world start: the camera proxy's glide to the player before play; not ported (docs/re/LOADING_TRANSITIONS.md#live-worlds-beneath-the-klaus-cover)

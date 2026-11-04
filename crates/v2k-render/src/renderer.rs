@@ -1222,6 +1222,11 @@ pub trait Renderer {
         None
     }
 
+    /// Draw a record registered by [`Self::create_native_sprite`] as one
+    /// screen-space textured quad (`FUN_0047aa20`'s record), its texture
+    /// stretched over the four corners.
+    fn draw_native_sprite_quad(&mut self, _id: u32, _corners: [(i32, i32); 4]) {}
+
     /// Publish the retained world viewport words for producers that
     /// transform natively. Scene boundaries do not clear it; callers pass
     /// `None` when the scene has no native viewport.

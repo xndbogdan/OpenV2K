@@ -81,7 +81,24 @@ just as Intro2 begins updating beneath the New Game reveal.
 
 The port retains the `MenuShell` only as the persistent Klaus task and
 presentation state over `GameState::Playing`. Its callback precedes the
-world actors, and its overlay is submitted after the world/HUD. Closing
+world actors, and its model is submitted after the world and before the
+flash, the HUD and the captions, which retail draws over his opening.
+
+After the load, `004D0918`'s tick `FUN_004530D0` glides the camera proxy
+(`+2A8`) toward the player's body: each frame it adds
+`q31(distance, dt << 14)` on X and on Z, and only once both distances are
+under `0x12D` does it start play (`FUN_00494050`, `FUN_0044FD60`). Until
+then the frame runs the clock (`FUN_0044FE20`, which restarted it) and
+`FUN_00450C00` (Klaus, the eye and physical particles), with no gameplay
+visit, HUD or captions. In the lab's Replay this World the load is at pass
+1696, the clock counts from 0 at 1697, the HUD and caption first show and
+the actors first tick at 1713 (clock 16); the first world after Intro2
+also starts play 17 passes after its load. Klaus's opening, the clock and
+the caption's typing match the port's frame for frame from 1713 (a
+twin-checked run; single runs snapshotted during the load can show frames
+from later passes). The port starts play at the load, so its HUD and
+caption show, and its actors move, 16 frames early. Not ported: the
+proxy's position before the glide is not traced. Closing
 before the load remains a separate `GameState::PostIntro` over the completed
 black card. The first-world load resets the retail clock, starts sound 50
 after setup, and restores live gameplay immediately; visible morph completion
@@ -425,6 +442,17 @@ prepares before simulation, delaying its producers by one frame; that host
 timing remains open. Both backends implement the masked/additive operations;
 the software renderer's additive rows keep the top four bits of each RGB565
 field, so an entry over black shows `texel & 0xF79E`.
+
+The command is one textured record over the viewport with the two-by-two
+record as its texture, not a viewport-sized image. At 800x600 and 1024x768
+the span reciprocal overruns (spans past 640 pixels, see
+[SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#fixed-point)) and the texel steps
+leave the record; the reads outside it give index 0, which row 28 of each
+of these palettes maps to the flash's colour (its other fifteen entries are
+zero). Retail's frames at both tiers are flashed edge to edge, and the
+software port draws the native record (indices and palette) so the same
+reads give the same colour. Drawing a viewport-sized image instead left
+bands unflashed at those tiers.
 
 Intro2's final card is this sequence's first producer: `503C0` requests it on
 its first visit past tick 4000 (below). In the `V2000-nocd-faststart04.run`
