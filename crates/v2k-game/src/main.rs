@@ -3742,6 +3742,7 @@ fn run_game(
                         sound_manager.as_mut(),
                     ),
                 );
+                let mut save_menu_switched = false;
                 let save_menu_klaus = menu_is_paused
                     && campaign_map
                         .as_ref()
@@ -3766,6 +3767,9 @@ fn run_game(
                             sound_manager.as_mut(),
                         ),
                     );
+                    // FUN_004942E0 skips the draw chain of a pass whose tick
+                    // switched descriptors.
+                    save_menu_switched = switch.is_some();
                     if switch == Some(CampaignMapSwitch::Load) {
                         replay_world_cover = campaign_map.take().map(CampaignMapKlaus::into_klaus);
                         next_state = world_complete_results.continue_progress_map().map(|route| {
@@ -3785,7 +3789,7 @@ fn run_game(
                     // 4D0810: Klaus alone, then the menu's own queue over him.
                     renderer.begin_scene(RenderScene::Menu);
                     renderer.clear(0.0, 0.0, 0.0);
-                    if let Some(map) = campaign_map.as_ref() {
+                    if let Some(map) = campaign_map.as_ref().filter(|_| !save_menu_switched) {
                         draw_klaus_handoff_overlay(
                             renderer.as_mut(),
                             KlausHandoffFrame {
@@ -3824,7 +3828,8 @@ fn run_game(
                     }
                 }
                 let begin_intro = shell.take_transition_ready();
-                if menu_is_paused {
+                if save_menu_switched {
+                } else if menu_is_paused {
                     if redraw_paused_world && !save_menu_klaus {
                         if let Some(paused) = &paused_gameplay_scene {
                             paused.redraw(
@@ -6069,55 +6074,61 @@ fn run_game(
                     renderer.invalidate_terrain_cache();
                 }
                 world_fx.process_pending();
-                // The world stays drawn under the closing morph. Klaus is
-                // queued geometry, so the exit's flash sequence (key zero)
-                // covers him too.
-                let prepared_full_frame_sprite = prepare_full_frame_sprite_command(
-                    &*renderer,
-                    &session.cache,
-                    &mut main_base_level_abort.outer_frame_sequence,
-                );
-                let overlay = GameplayOverlayFrame::default();
+                // 453E00 switches to the map once Klaus is closed; FUN_004942E0
+                // skips the draw chain of a pass whose tick switched.
+                let map_switch = matches!(destination, ClosingSceneDestination::ProgressMap(_))
+                    && shell.klaus_finished();
                 let em = entity_manager
                     .as_mut()
                     .expect("closing leg world entity manager");
-                PausedGameplayScene::capture(
-                    v2k_game::frozen_world_presentation::FrozenWorldPresentationSource {
-                        entities: em,
-                        world_fx: &world_fx,
-                        specialized_actor_tasks: &specialized_actor_tasks,
-                    },
-                    targetter,
-                    retail_tick,
-                )
-                .redraw(
-                    renderer.as_mut(),
-                    PausedGameplayDraw {
-                        cache: &session.cache,
-                        colors: &face_colors,
-                        camera: &camera,
-                        camera_mode: GameplayWorldCameraMode::RetailChase,
-                        native_viewport: intro_camera.native_viewport(),
-                        projection: world_projection,
-                        sky: sky_background.as_ref(),
-                        terrain_frames: terrain_frames.as_ref(),
-                        water_frames: water_frames.as_ref(),
-                        abort_frame: main_base_level_abort.submitted_frame_request(),
-                        craft: &player_craft,
-                        hull: &player_hull,
-                        death: &player_death,
-                        player_model_id,
-                        targetter_enabled: config.targetter,
-                        overlay: &overlay,
-                        hud_resources: None,
-                        fonts: None,
-                        handoff: Some(shell),
-                    },
-                );
-                if let Some(command) = prepared_full_frame_sprite.as_ref() {
-                    // Klaus's queued geometry drains before the flash's key zero.
-                    renderer.begin_scene(RenderScene::Menu);
-                    draw_prepared_full_frame_sprite_command(renderer.as_mut(), command);
+                if !map_switch {
+                    // The world stays drawn under the closing morph. Klaus is
+                    // queued geometry, so the exit's flash sequence (key zero)
+                    // covers him too.
+                    let prepared_full_frame_sprite = prepare_full_frame_sprite_command(
+                        &*renderer,
+                        &session.cache,
+                        &mut main_base_level_abort.outer_frame_sequence,
+                    );
+                    let overlay = GameplayOverlayFrame::default();
+                    PausedGameplayScene::capture(
+                        v2k_game::frozen_world_presentation::FrozenWorldPresentationSource {
+                            entities: em,
+                            world_fx: &world_fx,
+                            specialized_actor_tasks: &specialized_actor_tasks,
+                        },
+                        targetter,
+                        retail_tick,
+                    )
+                    .redraw(
+                        renderer.as_mut(),
+                        PausedGameplayDraw {
+                            cache: &session.cache,
+                            colors: &face_colors,
+                            camera: &camera,
+                            camera_mode: GameplayWorldCameraMode::RetailChase,
+                            native_viewport: intro_camera.native_viewport(),
+                            projection: world_projection,
+                            sky: sky_background.as_ref(),
+                            terrain_frames: terrain_frames.as_ref(),
+                            water_frames: water_frames.as_ref(),
+                            abort_frame: main_base_level_abort.submitted_frame_request(),
+                            craft: &player_craft,
+                            hull: &player_hull,
+                            death: &player_death,
+                            player_model_id,
+                            targetter_enabled: config.targetter,
+                            overlay: &overlay,
+                            hud_resources: None,
+                            fonts: None,
+                            handoff: Some(shell),
+                        },
+                    );
+                    if let Some(command) = prepared_full_frame_sprite.as_ref() {
+                        // Klaus's queued geometry drains before the flash's key zero.
+                        renderer.begin_scene(RenderScene::Menu);
+                        draw_prepared_full_frame_sprite_command(renderer.as_mut(), command);
+                    }
                 }
                 play_world_audio(
                     WorldAudioFrame {
@@ -6131,7 +6142,9 @@ fn run_game(
                     &mut sound_manager,
                     &mut entity_positional_audio,
                 );
-                renderer.present();
+                if !map_switch {
+                    renderer.present();
+                }
                 let leg_done = match destination {
                     // 453E00 follows 50C00's visit in the same frame.
                     ClosingSceneDestination::ProgressMap(_) => shell.klaus_finished(),
@@ -6542,17 +6555,45 @@ fn run_game(
                                     );
                                     shell.engine.apply_cheat_enables(session_cheats);
                                     // 4557D0's Klaus command 4, then 4558A0's
-                                    // first visit with the menu up.
+                                    // first tick: the clock and the menu
+                                    // transition, then Klaus's visit.
+                                    retail_tick = retail_clock.advance(u64::from(elapsed_micros));
+                                    let mut effects = GlobalSoundRuntime::new(
+                                        &session.cache,
+                                        &mut world_fx,
+                                        sound_manager.as_mut(),
+                                    );
+                                    shell.update(elapsed_micros, &mut effects);
                                     if let Some(map) = campaign_map.as_mut() {
-                                        map.enter_save_menu(
-                                            elapsed_micros,
-                                            &mut GlobalSoundRuntime::new(
-                                                &session.cache,
-                                                &mut world_fx,
-                                                sound_manager.as_mut(),
-                                            ),
+                                        map.enter_save_menu(elapsed_micros, &mut effects);
+                                    }
+                                    // 4D0810: Klaus over black, then the menu.
+                                    renderer.begin_scene(RenderScene::Menu);
+                                    renderer.clear(0.0, 0.0, 0.0);
+                                    if let Some(map) = campaign_map.as_ref() {
+                                        draw_klaus_handoff_overlay(
+                                            renderer.as_mut(),
+                                            KlausHandoffFrame {
+                                                shell: &map.klaus,
+                                                cache: &session.cache,
+                                                colors: &face_colors,
+                                                retail_tick,
+                                            },
                                         );
                                     }
+                                    paused_world_frame =
+                                        renderer.capture_frame(FrameCaptureSource::CurrentScene);
+                                    render_pause_menu(
+                                        &mut *renderer,
+                                        &shell,
+                                        &system_strings,
+                                        &menu_resources,
+                                        menu_fonts.as_ref(),
+                                        &session.cache,
+                                        &face_colors,
+                                        retail_tick,
+                                        paused_world_frame.as_ref(),
+                                    );
                                     state = GameState::Paused { shell };
                                     continue 'main_loop;
                                 }
@@ -6622,47 +6663,51 @@ fn run_game(
                         None => None,
                     };
                     world_complete_results.advance(elapsed_micros);
-                    // 4D07E8: the map's links, nodes, labels and prompt go
-                    // straight to the screen, then the queue drains Klaus
-                    // over them. 4D0810 has no map: the live list holds only
-                    // Klaus and the camera proxy here.
-                    renderer.begin_scene(RenderScene::Menu);
-                    renderer.clear(0.0, 0.0, 0.0);
-                    if !in_save_menu {
-                        if let (Some(backdrop), Some(fonts)) =
-                            (overlay_51_backdrop.as_ref(), menu_fonts.as_ref())
-                        {
-                            draw_overlay_51_backdrop(
-                                &mut *renderer,
-                                fonts,
-                                backdrop,
-                                &player_campaign_progress,
-                                world_complete_results.age_ms(),
-                            );
-                            if let Some(prompt) = world_complete_results
-                                .continue_prompt_line(|id| session.cache.global_string(id))
+                    // FUN_004942E0 skips the draw chain of a pass whose tick
+                    // switched descriptors.
+                    if switch.is_none() {
+                        // 4D07E8: the map's links, nodes, labels and prompt go
+                        // straight to the screen, then the queue drains Klaus
+                        // over them. 4D0810 has no map: the live list holds only
+                        // Klaus and the camera proxy here.
+                        renderer.begin_scene(RenderScene::Menu);
+                        renderer.clear(0.0, 0.0, 0.0);
+                        if !in_save_menu {
+                            if let (Some(backdrop), Some(fonts)) =
+                                (overlay_51_backdrop.as_ref(), menu_fonts.as_ref())
                             {
-                                draw_gameplay_notifications(
+                                draw_overlay_51_backdrop(
                                     &mut *renderer,
                                     fonts,
-                                    &[prompt],
-                                    GameplayTextContext::AuthoredCanvas,
+                                    backdrop,
+                                    &player_campaign_progress,
+                                    world_complete_results.age_ms(),
                                 );
+                                if let Some(prompt) = world_complete_results
+                                    .continue_prompt_line(|id| session.cache.global_string(id))
+                                {
+                                    draw_gameplay_notifications(
+                                        &mut *renderer,
+                                        fonts,
+                                        &[prompt],
+                                        GameplayTextContext::AuthoredCanvas,
+                                    );
+                                }
                             }
                         }
+                        if let Some(map) = campaign_map.as_ref() {
+                            draw_klaus_handoff_overlay(
+                                &mut *renderer,
+                                KlausHandoffFrame {
+                                    shell: &map.klaus,
+                                    cache: &session.cache,
+                                    colors: &face_colors,
+                                    retail_tick,
+                                },
+                            );
+                        }
+                        renderer.present();
                     }
-                    if let Some(map) = campaign_map.as_ref() {
-                        draw_klaus_handoff_overlay(
-                            &mut *renderer,
-                            KlausHandoffFrame {
-                                shell: &map.klaus,
-                                cache: &session.cache,
-                                colors: &face_colors,
-                                retail_tick,
-                            },
-                        );
-                    }
-                    renderer.present();
                     match switch {
                         Some(CampaignMapSwitch::Load) => {
                             // 4D0918 loads on the next frame, and its 451710
@@ -15229,7 +15274,7 @@ fn draw_klaus_handoff_overlay(
                 .shell
                 .menu_backdrop_depth_raw()
                 .max(MENU_BACKDROP_VIEW_DEPTH_RAW),
-            projection_y_offset: frame.shell.menu_billboard_y_offset(),
+            view_y_raw: frame.shell.klaus_view_y_raw(),
             depth_fade: klaus_handoff_depth_fade(frame.cache),
         },
         MenuSceneLight::NEUTRAL,
@@ -15358,7 +15403,7 @@ fn render_menu_scene(
                     retail_tick,
                     anim_state: shell.menu_backdrop_anim_state(),
                     view_depth_raw: backdrop_depth,
-                    projection_y_offset: shell.menu_billboard_y_offset(),
+                    view_y_raw: shell.klaus_view_y_raw(),
                     depth_fade: menu_depth_fade_from_raw(
                         billboard.scene_depth_fade_near_raw,
                         billboard.scene_depth_fade_far_raw,
@@ -17347,7 +17392,8 @@ struct MenuBackdropFrame {
     retail_tick: u32,
     anim_state: KlausBackdropAnimState,
     view_depth_raw: f32,
-    projection_y_offset: f32,
+    /// Klaus's private view Y (`0042BFB9`: his Y offset plus 0x40).
+    view_y_raw: f32,
     depth_fade: ModelDepthFade,
 }
 
@@ -17364,17 +17410,10 @@ fn draw_menu_backdrop(
         return;
     }
     let vars = menu_backdrop_anim_vars(frame.retail_tick, frame.anim_state);
-    // The Intro Sequence moves persistent Klaus vertically as it recedes. The
-    // original chase-camera composition therefore shifts the model
-    // by the same projected Y delta as the flame billboard. The port already
-    // applied that delta to the billboard; omitting it here left Klaus centered
-    // behind the submenu panel with only its wing tips visible.
-    let world_y = menu_world_y_for_projection_center(
-        0.0,
-        frame.view_depth_raw,
-        120.0 + frame.projection_y_offset,
-        240.0,
-    );
+    // The camera turns Klaus's private view position (0, Y + 0x40, Z) into
+    // the world: his Y offset moves him in view space, not on the screen.
+    let world_y =
+        menu_world_y_for_projection_center(frame.view_y_raw, frame.view_depth_raw, 120.0, 240.0);
     let viewport = renderer.viewport_size();
     let mut tree = ModelTreeRenderer::new(
         renderer,
@@ -17458,7 +17497,7 @@ fn render_ring_3d(
             retail_tick,
             anim_state: shell.menu_backdrop_anim_state(),
             view_depth_raw: backdrop_depth,
-            projection_y_offset: shell.menu_billboard_y_offset(),
+            view_y_raw: shell.klaus_view_y_raw(),
             depth_fade: menu_depth_fade_from_raw(
                 billboard.scene_depth_fade_near_raw,
                 billboard.scene_depth_fade_far_raw,
@@ -17986,7 +18025,7 @@ fn render_list(
                     retail_tick,
                     anim_state: shell.menu_backdrop_anim_state(),
                     view_depth_raw: backdrop_depth,
-                    projection_y_offset: shell.menu_billboard_y_offset(),
+                    view_y_raw: shell.klaus_view_y_raw(),
                     depth_fade: menu_depth_fade_from_raw(
                         frame.scene_depth_fade_near_raw,
                         frame.scene_depth_fade_far_raw,

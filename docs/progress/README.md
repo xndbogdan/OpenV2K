@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 416 |
+| implemented | 419 |
 | approximated | 7 |
 | documented | 33 |
 | not-needed | 628 |
@@ -47,10 +47,10 @@ Where the code's references are thinnest:
 | [Platform](../re/PLATFORM_RUNTIME.md) | 9 | 0 | 27 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 144 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 57 |
-| [Menu system](../re/MENU_SYSTEM.md) | 3 | 1 | 155 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 56 |
+| [Menu system](../re/MENU_SYSTEM.md) | 3 | 1 | 157 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 2 | 1 | 54 |
-| [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 45 |
+| [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 44 |
 
 ## Omitted
 

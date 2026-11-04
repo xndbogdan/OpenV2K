@@ -714,6 +714,15 @@ pub struct MenuShell {
     pub from_gameplay: bool,
 }
 
+/// `FUN_0043A8E0`: whether a push or pop from the screen on top (`flags`,
+/// at `depth`) arms the 0x7000 fly clock. The frontend tests flag 0x40, play
+/// (session `+289`) flag 0x08; with 0x20 the screen flies only when popped
+/// from its base depth (2 in the frontend, 1 in play).
+pub fn fly_transition_armed(flags: u32, depth: usize, popping: bool, in_play: bool) -> bool {
+    let (fly_bit, base_depth) = if in_play { (0x08, 1) } else { (0x40, 2) };
+    depth != 0 && flags & fly_bit != 0 && (flags & 0x20 == 0 || (depth == base_depth && popping))
+}
+
 /// Fallback/synthetic-overlay row count. Decoded retail screens use their
 /// authored row-group `window_rows` value directly.
 pub const LIST_WINDOW_ROWS: usize = 5;
@@ -1115,10 +1124,10 @@ impl MenuShell {
         }
     }
 
-    /// Low-resolution billboard Y adjustment from FUN_0042C090 (about -Y/24
-    /// in the 320x240 composition space).
-    pub fn menu_billboard_y_offset(&self) -> f32 {
-        -f32::from(self.klaus_position_y_offset_raw) / 24.0
+    /// Klaus's private view Y: `0042BFB9` gives the entity transform his Y
+    /// offset plus 0x40.
+    pub fn klaus_view_y_raw(&self) -> f32 {
+        f32::from(self.klaus_position_y_offset_raw) + 64.0
     }
 
     /// Primary click-driven pose phase and secondary random-twitch inputs for
@@ -1539,6 +1548,7 @@ impl MenuShell {
             return Vec::new();
         }
         let old_depth = self.engine.depth();
+        let old_top_flags = self.engine.current().map_or(0, |screen| screen.flags);
         let old_sel = self.view.selected;
         let old_view = self.view.clone();
         let events = if self.overlay.is_some() {
@@ -1591,10 +1601,14 @@ impl MenuShell {
 
         let new_depth = self.engine.depth();
         if new_depth != old_depth && self.overlay.is_none() {
-            // Screen switched. Ring↔submenu (depth 1↔2, both screens carry
-            // fly flag 0x40 in the frontend) runs the fly transition; deeper
-            // pushes/pops switch instantly (flag 0x20 base-depth rule).
-            if old_depth.min(new_depth) == 1 && old_depth.max(new_depth) == 2 {
+            // Screen switched: FUN_0043A8E0 decides the fly from the screen
+            // on top before the switch.
+            if fly_transition_armed(
+                old_top_flags,
+                old_depth,
+                new_depth < old_depth,
+                self.from_gameplay,
+            ) {
                 self.prev_view = Some(old_view);
                 self.phase = MenuPhase::FlyOut {
                     remaining: FLY_LEG_SECS,
@@ -2691,6 +2705,23 @@ mod tests {
         assert_eq!(shell.view().selected, 1, "the pause menu keeps its row");
         update_shell_for(&mut shell, FLY_LEG_SECS);
         assert_eq!(shell.take_switch_away_event(), None);
+    }
+
+    #[test]
+    fn fly_transition_follows_the_top_screens_flags() {
+        use super::fly_transition_armed;
+        // Pause root 0x39 at depth 1: Cheats switches at once; closing flies.
+        assert!(!fly_transition_armed(0x39, 1, false, true));
+        assert!(fly_transition_armed(0x39, 1, true, true));
+        // Pause submenus never fly in play.
+        assert!(!fly_transition_armed(0x71, 2, true, true));
+        assert!(!fly_transition_armed(0x11, 2, true, true));
+        // Frontend: the ring flies; a 0x71 submenu only on its pop from 2.
+        assert!(fly_transition_armed(0xC4, 1, false, false));
+        assert!(fly_transition_armed(0x71, 2, true, false));
+        assert!(!fly_transition_armed(0x71, 2, false, false));
+        assert!(!fly_transition_armed(0x71, 3, true, false));
+        assert!(!fly_transition_armed(0x11, 2, true, false));
     }
 
     #[test]
