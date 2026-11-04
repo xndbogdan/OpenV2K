@@ -1551,11 +1551,11 @@ the intervening CRT, render traversal and callback frames modulo512.
 wrapped 32x32 window from `FUN_00438790` and adds `0x10` to every signed byte,
 saturating only at `0x7f`. `FUN_00453410` consumes session byte `+0x293` after
 the camera-relative window has been established, applies the writer once, and
-clears the byte before later particle and world consumers. The sole recovered
-setter at `0x00456740` belongs to an unidentified resource-state callback
-reached from `0x004078C0`; its exact resource/actor meaning is not yet known.
-Do not attach this flash to generic player damage, explosions, or meteors until
-that owner is captured.
+clears the byte before later particle and world consumers. Its only
+setter, `FUN_00456740`, is the Megablast's drain
+(`FUN_004078C0`, [special weapons](PLAYER_CRAFT.md#special-weapons)); the
+port's light window keeps the request and applies it once, after the next
+presented frame's clear and anchor.
 
 Session byte `+0x295` is a separate viewport-sized sprite flash owned by
 `FUN_00453410`, not another terrain-light writer. `FUN_00456750` starts or

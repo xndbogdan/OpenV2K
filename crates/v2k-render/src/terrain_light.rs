@@ -17,6 +17,8 @@ pub struct TerrainLightWindow {
     origin_z: u8,
     values: [i8; LIGHT_WINDOW_LEN],
     revision: u64,
+    /// Session `+293` (`FUN_00456740`), consumed by the next presented frame.
+    uniform_flash_pending: bool,
 }
 
 impl Default for TerrainLightWindow {
@@ -26,6 +28,7 @@ impl Default for TerrainLightWindow {
             origin_z: 0,
             values: [0; LIGHT_WINDOW_LEN],
             revision: 0,
+            uniform_flash_pending: false,
         }
     }
 }
@@ -39,6 +42,7 @@ impl TerrainLightWindow {
             origin_z: origin[1],
             values,
             revision: 0,
+            uniform_flash_pending: false,
         }
     }
 
@@ -68,6 +72,15 @@ impl TerrainLightWindow {
             retail_fixed_cell(camera_x_raw),
             retail_fixed_cell(camera_z_raw.wrapping_add(0x0a00)),
         );
+        // FUN_00453410 then consumes session +293 through FUN_0040FCB0.
+        if std::mem::take(&mut self.uniform_flash_pending) {
+            self.add_flash();
+        }
+    }
+
+    /// `FUN_00456740`: set session `+293` for the next presented frame.
+    pub fn request_uniform_flash(&mut self) {
+        self.uniform_flash_pending = true;
     }
 
     /// Scroll around a camera cell, preserving the overlapping world samples
@@ -314,6 +327,27 @@ impl TerrainLightWindow {
 /// truncate toward zero, matching the original x86 integer sequence.
 fn retail_fixed_cell(raw_8_8: i32) -> i32 {
     raw_8_8.wrapping_add((raw_8_8 >> 31) & 0xff) >> 8
+}
+
+#[cfg(test)]
+mod uniform_flash_tests {
+    use super::*;
+
+    #[test]
+    fn a_requested_flash_lights_the_next_frame_once() {
+        let mut window = TerrainLightWindow::default();
+        window.request_uniform_flash();
+        window.begin_world_frame(0, 0);
+        window.add_point(0, 10, 0x7F);
+        let (values, origin) = window.window();
+        assert_eq!(origin, [240, 250]);
+        assert!(values
+            .iter()
+            .enumerate()
+            .all(|(index, &value)| value == if index == 32 * 16 + 16 { 0x7F } else { 0x10 }));
+        window.begin_world_frame(0, 0);
+        assert!(window.window().0.iter().all(|&value| value == 0));
+    }
 }
 
 #[cfg(test)]

@@ -83,6 +83,8 @@ impl World {
                 elapsed_micros,
                 retail_tick: 77,
                 generic_death: None,
+                terrain_flash: false,
+                full_frame_flash: false,
             },
         )
     }
@@ -110,6 +112,8 @@ impl World {
                 elapsed_micros: dt,
                 retail_tick: 77,
                 generic_death: None,
+                terrain_flash: false,
+                full_frame_flash: false,
             },
             dt,
             detailed,

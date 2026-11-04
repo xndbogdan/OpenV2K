@@ -168,8 +168,10 @@ The port's test repeats the weight, radar and beamer. A type with no port
 constructor is a logged stop that also ends All weapons at that row:
 
 - the natives and scientists (Type9, 95, 86, 78; Type8, 91, 90, 79, 116, 7);
-- the Defender Ball (Type63) and the Autobot (Type64);
-- operation `0x39` (Megablast): controller `+195` and a Type65 birth.
+- the Defender Ball (Type63) and the Autobot (Type64).
+
+Operation `0x39` (Megablast) runs as a pickup does
+([special weapons](PLAYER_CRAFT.md#special-weapons)).
 
 LSHIFT+D targets the player; a possessed body in `+2A8` is not modelled.
 Complete this World's victims die through the shared `FUN_00410C10`

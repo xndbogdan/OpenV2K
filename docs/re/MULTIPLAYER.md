@@ -315,9 +315,9 @@ limit and names.
 The port sends every cue a `FUN_0044F480` caller it has ported plays, and
 the bursts of `FUN_00440950`. `FUN_00402850`'s cue is zero in the shipped
 data; the callers it has not ported (`FUN_004024E0`, `FUN_00404D50`,
-`FUN_00405760`, `FUN_0040B340`, `FUN_0040B800`, `FUN_0040CAF0`,
-`FUN_00422840` and the special weapon `FUN_00444400`) play nothing here
-either.
+`FUN_00405760`, `FUN_0040B340`, `FUN_0040B800`, `FUN_0040CAF0` and
+`FUN_00422840`) play nothing here either. The Megablast deploy's cue 79
+(`FUN_00444400`) is sent with its rate.
 
 Above it the port keeps retail's messages: the slot table on channel 0, the
 stamped game messages on channel 1 with their 26 kinds and layouts, the
@@ -341,13 +341,13 @@ The port does not run `FUN_00427C30` (the static effect of an
 infected object cell) or the radar's listeners `FUN_0044A850` and
 `FUN_0044AA50` for any cell change, a peer's or its own.
 
+The special weapon's power-up (selector `0x39`) is taken as in single
+player: the count `+195` rises (at most 4) and a Type65 is born at the
+player, and a dying player drops one for its count. Its pods are bodies like
+any other, so peers see them through kind 7 and hear the deploy's cue.
+
 Held, each with a logged stop ("Network: ... is held"):
 
-- the special weapon's power-up (selector 0x39): `FUN_00445A90` raises the
-  count `+195` (at most 4) and builds a Type65, the seedpod, at the player,
-  and the deploy `FUN_00444400` builds three. The port has no Type65, so it
-  refuses the pickup and the power-up stays; with no count, a dying player
-  here never drops one;
 - sending kinds 13 to 15 (attachments), and kind 10: `FUN_00414AE0`'s, whose handle is stale (above), and
   `FUN_00411030`'s, since the port runs no particle hit wrapper
   (`FUN_00411180`, `FUN_00411250`) on a peer's body, only its damage;

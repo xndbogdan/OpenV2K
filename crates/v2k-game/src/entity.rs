@@ -61,7 +61,7 @@ pub(crate) use class0_actor::{
 };
 pub use class0_actor::{
     tick_class0_actor_owner, Class0ActorError, Class0ActorFrame, Class0ActorOutcome,
-    Class0ActorOwner, Class0ActorTick, GeyserLift,
+    Class0ActorOwner, Class0ActorTick, GeyserLift, MegablastBirth,
 };
 #[cfg(test)]
 mod class0_abort_tests;
@@ -1168,8 +1168,8 @@ impl BaseFactoryRuntimeState {
 /// so the loader gives it the same pair. The native Type83 radar's row gets
 /// it too; its selector 1 is the Sub-K word 405610 counts. The loader sets
 /// every row's pair (`FUN_00410090` writes `+0x78` for each row), so Type33
-/// on the Type30 owner, the Type100 mortar, the Type74 Remote Beamer and the
-/// Type110 Queen read the same clock.
+/// on the Type30 owner, the Type100 mortar, the Type74 Remote Beamer, the
+/// Type65 Megablast seedpod and the Type110 Queen read the same clock.
 /// Keeping this as an explicit evidence policy prevents an unobserved type
 /// from acquiring animation merely because its model happens to look similar.
 pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool {
@@ -1184,6 +1184,7 @@ pub(crate) const fn uses_audited_clock_model_callback(entity_type: u32) -> bool 
             | 47
             | 56
             | 61
+            | 65
             | 71
             | 74
             | 83
@@ -2153,6 +2154,14 @@ impl Entity {
             // Selector 1 is Sub-K word 1, which 054C0 charges; 054A0 zeroes
             // it with the task, so no task reads as zero.
             vars.dynamic[1] = i32::from(*k1);
+        }
+        if let Some(ActorTaskRuntime::Megablast(task)) =
+            self.actor_task_state(ActorTaskSlot::Primary)
+        {
+            // Type65's Sub-K binds variable 1 (the charge) to selector 1 and
+            // variable 2 (the mode) to selector 2.
+            vars.dynamic[1] = i32::from(task.charge);
+            vars.dynamic[2] = i32::from(task.mode as u16);
         }
         if let Some(runtime) = self.intro2_type10_runtime {
             // 09A80 binds only the row's components: Type29 has no K.

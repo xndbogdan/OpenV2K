@@ -213,7 +213,7 @@ fn a_drawn_gun_carries_the_held_body_and_turns() {
 }
 
 /// Every owner world 47 builds, as a loaded world adopts them.
-fn adopt_world(manager: &mut EntityManager) -> SpecializedActorTaskScheduler {
+pub(super) fn adopt_world(manager: &mut EntityManager) -> SpecializedActorTaskScheduler {
     let mut tasks = SpecializedActorTaskScheduler::new();
     tasks.adopt_intro2_type13_search_attack(manager);
     tasks.adopt_intro2_type47_guards(manager);

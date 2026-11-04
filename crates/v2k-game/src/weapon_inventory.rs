@@ -667,6 +667,8 @@ impl Default for WeaponInventory {
 pub struct PlayerCapabilities {
     targetter: bool,
     turbo: bool,
+    /// Controller `+195`: Megablasts left to deploy (`FUN_00444400`).
+    megablasts: u8,
 }
 
 impl PlayerCapabilities {
@@ -675,7 +677,26 @@ impl PlayerCapabilities {
         Self {
             targetter: flags & 1 != 0,
             turbo: flags & 2 != 0,
+            megablasts: 0,
         }
+    }
+
+    /// Saved-profile `+121` (state `+145`), controller `+195`.
+    pub const fn with_megablasts(self, megablasts: u8) -> Self {
+        Self { megablasts, ..self }
+    }
+
+    pub const fn megablasts(&self) -> u8 {
+        self.megablasts
+    }
+
+    /// `FUN_00445A90`'s operation `0x39`: a byte add, held at 4.
+    pub fn add_megablasts(&mut self, amount: i32) {
+        self.megablasts = crate::megablast::add_count(self.megablasts, amount);
+    }
+
+    pub fn megablasts_mut(&mut self) -> &mut u8 {
+        &mut self.megablasts
     }
     /// `FUN_00451AF0` in a network game sets profile `+123` bit 0: every
     /// network player has the Targetter.
@@ -683,6 +704,7 @@ impl PlayerCapabilities {
         Self {
             targetter: true,
             turbo: false,
+            megablasts: 0,
         }
     }
 

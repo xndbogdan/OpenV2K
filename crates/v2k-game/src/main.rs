@@ -903,6 +903,8 @@ struct GameplayInputEdges {
     targetter_toggle: bool,
     /// The craft set's E (`FUN_004442E0`).
     rotate_hold: bool,
+    /// A and `/` held together (`0x004C2BB0`): the deploy `FUN_00444400`.
+    special_weapon: bool,
 }
 
 fn gameplay_key_transition(
@@ -917,6 +919,7 @@ fn gameplay_key_transition(
     let targetter_was_down =
         !keys_down.contains(&Keycode::LShift) && keys_down.contains(&Keycode::T);
     let rotate_was_down = keys_down.contains(&Keycode::E);
+    let special_was_down = keys_down.contains(&Keycode::A) && keys_down.contains(&Keycode::Slash);
 
     if pressed {
         keys_down.insert(key);
@@ -931,7 +934,9 @@ fn gameplay_key_transition(
     let targetter_is_down =
         !keys_down.contains(&Keycode::LShift) && keys_down.contains(&Keycode::T);
     let rotate_is_down = keys_down.contains(&Keycode::E);
+    let special_is_down = keys_down.contains(&Keycode::A) && keys_down.contains(&Keycode::Slash);
     GameplayInputEdges {
+        special_weapon: special_is_down && !special_was_down,
         targetter_toggle: targetter_is_down && !targetter_was_down,
         rotate_hold: rotate_is_down && !rotate_was_down,
         collect: collect_is_down && !collect_was_down,
@@ -3202,7 +3207,7 @@ fn run_game(
                                             slot,
                                             save.level_id,
                                             restore.session_flags_raw,
-                                            restore.controller_195_raw,
+                                            restore.capabilities.megablasts(),
                                         );
                                         LoadingPurpose::NativeSave {
                                             restore: Box::new(restore),
@@ -6610,6 +6615,8 @@ fn run_game(
                 let mut mouse_motion = (0i32, 0i32);
                 let mut wheel_away = 0i32;
                 let mut in_play_cheat_keys: Vec<InPlayCheatKey> = Vec::new();
+                // Presses of the deploy (A and / together, or the pad's chord) this frame.
+                let mut megablast_deploys = 0u32;
 
                 for event in &events {
                     match event {
@@ -6640,6 +6647,7 @@ fn run_game(
                             }
                             let keys_before = keys_down.clone();
                             let input_edges = gameplay_key_transition(&mut keys_down, *kc, true);
+                            megablast_deploys += u32::from(input_edges.special_weapon);
                             in_play_cheat_keys.extend(v2k_game::cheats::newly_active_in_play_keys(
                                 &keys_before,
                                 &keys_down,
@@ -6740,6 +6748,10 @@ fn run_game(
                             weapon_cycle: Some(WeaponCycleDirection::Backward),
                             ..GameplayInputEdges::default()
                         },
+                        PadAction::SpecialWeapon => {
+                            megablast_deploys += 1;
+                            continue;
+                        }
                         _ => continue,
                     };
                     apply_gameplay_input_edges(
@@ -6749,6 +6761,25 @@ fn run_game(
                         em,
                         &mut weapon_inventory,
                         &mut player_craft,
+                    );
+                }
+
+                // FUN_00444400 for each press of the deploy.
+                for _ in 0..std::mem::take(&mut megablast_deploys) {
+                    if em.player().is_none() || player_hull.dying {
+                        break;
+                    }
+                    megablast_deploy(
+                        MegablastFrame {
+                            entities: em,
+                            scheduler: &mut specialized_actor_tasks,
+                            cache: &session.cache,
+                            world_fx: &mut world_fx,
+                            notifications: &mut gameplay_notifications,
+                            craft: &player_craft,
+                            retail_tick,
+                        },
+                        player_capabilities.megablasts_mut(),
                     );
                 }
 
@@ -6907,7 +6938,7 @@ fn run_game(
                                 (descriptor.selector(), descriptor.stored_resource_count())
                             })
                             .collect(),
-                        special: 0,
+                        special: player_capabilities.megablasts(),
                         refused: Vec::new(),
                     });
                     if net.is_host() {
@@ -7986,6 +8017,13 @@ fn run_game(
                     .into_iter()
                     .next()
                     .or_else(|| base_factory_progression.terminal_abort_origin.take());
+                // A Megablast's FUN_00456740 (session +293) and FUN_00456750.
+                if specialized_pass.terrain_flash {
+                    terrain_lights.request_uniform_flash();
+                }
+                if specialized_pass.full_frame_flash {
+                    main_base_level_abort.outer_frame_sequence.request();
+                }
                 if base_factory_progression.full_frame_sequence_requested {
                     // FUN_00419B50 stage 32, param_3 == 0: FUN_00456750.
                     main_base_level_abort.outer_frame_sequence.request();
@@ -9837,6 +9875,19 @@ fn run_game(
                             if feedback.hull_state_changed {
                                 em.sync_player_hull_collision_state(&player_hull);
                             }
+                            for _ in pass.accepted().filter(|contact| {
+                                matches!(contact, AcceptedPowerUpContact::Megablast { .. })
+                            }) {
+                                megablast_pickup(MegablastFrame {
+                                    entities: em,
+                                    scheduler: &mut specialized_actor_tasks,
+                                    cache: &session.cache,
+                                    world_fx: &mut world_fx,
+                                    notifications: &mut gameplay_notifications,
+                                    craft: &player_craft,
+                                    retail_tick,
+                                });
+                            }
                             if pass.accepted().any(|contact| {
                                 matches!(contact,
                                     AcceptedPowerUpContact::Trophy { acquisition, .. }
@@ -9853,17 +9904,6 @@ fn run_game(
                             if network_game.is_some() {
                                 network_removals
                                     .extend(pass.accepted().map(|contact| contact.entity_id()));
-                                if pass.contacts.iter().any(|contact| {
-                                    matches!(contact, PowerUpContactOutcome::Rejected(rejected)
-                                    if rejected.reason
-                                        == PowerUpContactRejection::UnsupportedSelector {
-                                            selector: 0x39,
-                                        })
-                                }) {
-                                    network_play::report_held(
-                                        "a special-weapon power-up (Type65)".into(),
-                                    );
-                                }
                             }
                             if !pass.contacts.is_empty() {
                                 log!("Power Up contacts: {:?}", pass.contacts);
@@ -13738,6 +13778,7 @@ struct CheatOperationContext<'a> {
     world_fx: &'a mut WorldFx,
     targetter: &'a mut TargetterRuntime,
     main_base_level_abort: &'a mut MainBaseAbortBridgeState,
+    /// Operation `0x39`'s Type65 joins this scheduler too.
     cache: &'a v2k_game::resource_cache::ResourceCache,
     scheduler: &'a mut v2k_game::specialized_actor_task_production::SpecializedActorTaskScheduler,
     retail_tick: u32,
@@ -13749,10 +13790,6 @@ impl CheatOperationContext<'_> {
     /// the operation stopped (a held branch or unresolved player state), so
     /// a cheat granting several stops there too.
     fn apply(&mut self, code: u32) -> bool {
-        if let Some(held) = v2k_game::cheats::held_operation(code) {
-            eprintln!("Cheat operation {code:#x} held: {held:?} has no port owner");
-            return false;
-        }
         if let Some(entity_type) = v2k_game::cheats::add_to_hold_type(code) {
             let Some(level) = self.cache.level_desc() else {
                 eprintln!("Cheat operation {code:#x} stopped: no world descriptor");
@@ -13826,6 +13863,20 @@ impl CheatOperationContext<'_> {
         if feedback.targetter_acquired {
             self.targetter.install();
         }
+        for _ in pass
+            .accepted()
+            .filter(|contact| matches!(contact, AcceptedPowerUpContact::Megablast { .. }))
+        {
+            megablast_pickup(MegablastFrame {
+                entities: self.entities,
+                scheduler: self.scheduler,
+                cache: self.cache,
+                world_fx: self.world_fx,
+                notifications: self.notifications,
+                craft: self.craft,
+                retail_tick: self.retail_tick,
+            });
+        }
         log!("Cheat operation {code:#x}: {:?}", pass.contacts);
         true
     }
@@ -13870,6 +13921,57 @@ fn queue_trophy_acquisition_feedback(
         );
     } else {
         world_fx.queue_fixed_positional_sound_raw(TROPHY_PICKUP_SOUND_ID, position_raw);
+    }
+}
+
+/// What operation `0x39`'s birth and the deploy reach.
+struct MegablastFrame<'a> {
+    entities: &'a mut EntityManager,
+    scheduler: &'a mut SpecializedActorTaskScheduler,
+    cache: &'a v2k_game::resource_cache::ResourceCache,
+    world_fx: &'a mut WorldFx,
+    notifications: &'a mut GameplayNotifications,
+    craft: &'a PlayerCraft,
+    retail_tick: u32,
+}
+
+fn megablast_world(frame: MegablastFrame<'_>) -> Option<v2k_game::megablast::MegablastWorld<'_>> {
+    let terrain = frame.cache.terrain()?;
+    let heading = frame.entities.player()?.rotation_heading_pitch_roll_raw()[0];
+    let [pitch, roll] = frame.craft.body_angle_words();
+    Some(v2k_game::megablast::MegablastWorld {
+        entities: frame.entities,
+        scheduler: frame.scheduler,
+        terrain,
+        waves_enabled: frame
+            .cache
+            .level_desc()
+            .and_then(|level| level.raw_u32(0x84))
+            .unwrap_or(0)
+            != 0,
+        world_fx: frame.world_fx,
+        notifications: frame.notifications,
+        retail_tick: frame.retail_tick,
+        player_rotation_raw: [heading, pitch, roll],
+    })
+}
+
+/// `FUN_00445A90`'s operation `0x39` after the count: the Type65 birth.
+fn megablast_pickup(frame: MegablastFrame<'_>) {
+    match megablast_world(frame).map(|mut world| world.pickup()) {
+        Some(Ok(id)) => log!("Megablast: a Type65 ({id}) at the player"),
+        Some(Err(error)) => eprintln!("Megablast pickup's Type65 stopped: {error}"),
+        None => eprintln!("Megablast pickup's Type65 stopped: no player or terrain"),
+    }
+}
+
+/// The deploy, `FUN_00444400`.
+fn megablast_deploy(frame: MegablastFrame<'_>, count: &mut u8) {
+    match megablast_world(frame).map(|mut world| world.deploy(count)) {
+        Some(Ok(ids)) if !ids.is_empty() => log!("Megablast deployed: Type65 {ids:?}"),
+        Some(Ok(_)) => {}
+        Some(Err(error)) => eprintln!("Megablast deploy stopped: {error}"),
+        None => eprintln!("Megablast deploy stopped: no player or terrain"),
     }
 }
 
@@ -13960,6 +14062,8 @@ fn apply_power_up_contact_feedback(
                     }
                 }
             },
+            // The caller builds the Type65, then its sound and text follow.
+            PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Megablast { .. }) => {}
             PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Trophy {
                 position_raw,
                 acquisition,

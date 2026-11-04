@@ -379,12 +379,24 @@ pub struct ClosingSceneMove {
     >; 2],
 }
 
-/// `FUN_00410C10` on another body, through that body's own death owner.
+/// What a class0 visit asks of the playing world.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Class0WorldCall {
+    /// `FUN_00410C10` on another body, through that body's own death owner.
+    Death(u32),
+    /// `FUN_004566E0`: the static cells, then the live list.
+    Radial {
+        origin_raw: [i16; 3],
+        template: crate::radial_damage::RadialDamageTemplate,
+    },
+}
+
+/// The playing world's [`Class0WorldCall`]s.
 pub type GenericDeath<'a> = dyn FnMut(
         &mut EntityManager,
         &mut crate::resource_cache::ResourceCache,
         &mut WorldFx,
-        u32,
+        Class0WorldCall,
     ) -> Result<(), Class0ActorError>
     + 'a;
 
@@ -815,7 +827,12 @@ fn die(
                 .ok_or(Class0ActorError::Runtime(
                     "Queen death sweep: no FUN_00410C10 owner outside play",
                 ))?;
-            death(manager, &mut *frame.resources, &mut *frame.world_fx, other)?;
+            death(
+                manager,
+                &mut *frame.resources,
+                &mut *frame.world_fx,
+                Class0WorldCall::Death(other),
+            )?;
         }
         current = manager
             .retail_live_successor_id(other)
