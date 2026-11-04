@@ -81,7 +81,8 @@ use crate::type60_exploding_ring_production::Type60ExplodingRingProductionOwner;
 use crate::world_fx::WorldFx;
 
 const MAIN_BASE_ENTITY_TYPE: u32 = 6;
-const QUIET_DEATH_ENTITY_TYPES: [u32; 4] = [52, 62, 68, 106];
+// Type63 and Type65 take the same class2 death on the class0 host.
+const QUIET_DEATH_ENTITY_TYPES: [u32; 6] = [52, 62, 68, 106, 63, 65];
 
 /// One actor whose exact callback (or callback-free route) completed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

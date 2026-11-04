@@ -424,6 +424,13 @@ return; its enclosing transaction retains rollback on any later-family block.
 Attached cargo retains the separate callback-free relation route. Type93's
 abnormal teardown marks its child without invoking this normal release path.
 
+The hold's class0 bodies, the Megablast pod (Type65, class55) and the
+Defender Ball (Type63, class50), have capability `0x40` and no
+`0x10001000` state, so the abort's walk gives each `10C10` as well: the same
+remote/dying entries, cue 62, alternate class2, tasks cleared and removal
+staged. A pod inside its own visit (its blast) has no adoptable graph and
+stops the abort with a typed block.
+
 Regression coverage lives in `tests/shared_world_construction.rs` and
 `entity/class0_actor/{tests,live/tests,cargo_tests,later_world_tests}.rs` and
 `class0_impact/tests.rs`, with abort controls in

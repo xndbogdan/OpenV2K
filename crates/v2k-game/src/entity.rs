@@ -10599,7 +10599,8 @@ impl EntityManager {
     }
 
     /// Execute the shared ordinary-death/class-2 path for native Type52/62/68,
-    /// or the bounded authenticated first-world Type52/62/68 replay path.
+    /// the native Type63 and Type65 hold bodies, or the bounded authenticated
+    /// first-world Type52/62/68 replay path.
     ///
     /// This is deliberately one callback adapter, not a whole-list sweep. It
     /// preflights every fallible custody check before reproducing
@@ -10639,6 +10640,12 @@ impl EntityManager {
         });
         if route != (MainBaseAbortActorRoute::OrdinaryDeath { entity_id }) {
             return Err(MainBaseAbortQuietDeathBlock::NotOrdinaryRoute(route));
+        }
+        if matches!(
+            entity.entity_type,
+            class0_actor::DEFENDER_BALL_ENTITY_TYPE | crate::megablast::ENTITY_TYPE
+        ) {
+            return self.apply_main_base_abort_class2_hold_death(entity_id, world_fx);
         }
         let profile = fresh_level_one_quiet_death_profile(entity.entity_type).ok_or(
             MainBaseAbortQuietDeathBlock::UnsupportedEntityType {
@@ -10841,6 +10848,80 @@ impl EntityManager {
             entity_id,
             entity_type,
             death_sound_id: profile.death_sound_id,
+        };
+        Ok(self.finish_main_base_abort_quiet_death(entity_id, outcome))
+    }
+
+    /// `FUN_00410C10` from the abort on a Megablast pod (Type65) or a
+    /// Defender Ball (Type63), both class0-constructor bodies whose alternate
+    /// is class2: health 0, dying, cue 62, tasks cleared, removal staged.
+    fn apply_main_base_abort_class2_hold_death(
+        &mut self,
+        entity_id: u32,
+        world_fx: &mut WorldFx,
+    ) -> Result<MainBaseAbortQuietDeathAdvance, MainBaseAbortQuietDeathBlock> {
+        let entity = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == entity_id)
+            .ok_or(MainBaseAbortQuietDeathBlock::EntityMissing)?;
+        let entity_type = entity.entity_type;
+        let metadata = self
+            .type_metadata
+            .get(entity_type as usize)
+            .ok_or(MainBaseAbortQuietDeathBlock::TypeMetadataUnavailable)?;
+        if !self.native_class0_allocation_authenticates(entity_id) {
+            return Err(MainBaseAbortQuietDeathBlock::NativeConstructorReceiptMismatch);
+        }
+        if class0_actor::authenticate_metadata(entity_type, metadata).is_err() {
+            return Err(MainBaseAbortQuietDeathBlock::TypeMetadataMismatch);
+        }
+        let state = |mask| match entity.collision.state_flags_at_0x08.masked(mask) {
+            RetailRuntimeValue::Known(value) => Some(value != 0),
+            RetailRuntimeValue::Unresolved => None,
+        };
+        let remote_owned = state(REMOTE_OWNED_STATE_BIT)
+            .ok_or(MainBaseAbortQuietDeathBlock::RemoteOwnershipUnresolved)?;
+        let already_dying =
+            state(DYING_STATE_BIT).ok_or(MainBaseAbortQuietDeathBlock::DyingStateUnresolved)?;
+        match classify_generic_death_entry(remote_owned, already_dying) {
+            GenericDeathEntry::RemoteOwnedNoOp => {
+                let outcome = MainBaseAbortQuietDeathOutcome::RemoteOwnedNoOp {
+                    entity_id,
+                    entity_type,
+                };
+                return Ok(self.finish_main_base_abort_quiet_death(entity_id, outcome));
+            }
+            GenericDeathEntry::AlreadyDyingNoOp => {
+                let outcome = MainBaseAbortQuietDeathOutcome::AlreadyDyingNoOp {
+                    entity_id,
+                    entity_type,
+                };
+                return Ok(self.finish_main_base_abort_quiet_death(entity_id, outcome));
+            }
+            GenericDeathEntry::Dispatch => {}
+        }
+        if self.native_class0_has_pending_prefix(entity_id) {
+            return Err(MainBaseAbortQuietDeathBlock::PendingNativePrefix);
+        }
+        match state(DEFERRED_DESTROY_PENDING_STATE_BIT) {
+            Some(false) => {}
+            Some(true) => return Err(MainBaseAbortQuietDeathBlock::DeferredDestroyAlreadyPending),
+            None => return Err(MainBaseAbortQuietDeathBlock::DeferredDestroyStateUnresolved),
+        }
+        if self.pending_actor_deferred_destroy_ids.contains(&entity_id) {
+            return Err(MainBaseAbortQuietDeathBlock::DeferredDestroyAlreadyQueued);
+        }
+        // A body inside its own visit (a pod's blast) has no adoptable graph.
+        if Class0ActorOwner::adopt(self, entity_id).is_err() {
+            return Err(MainBaseAbortQuietDeathBlock::UnexpectedPublishedTask);
+        }
+        self.apply_megablast_death(entity_id, world_fx)
+            .map_err(|_| MainBaseAbortQuietDeathBlock::CurrentBehaviorContextMismatch)?;
+        let outcome = MainBaseAbortQuietDeathOutcome::DeferredDestroyStaged {
+            entity_id,
+            entity_type,
+            death_sound_id: Some(62),
         };
         Ok(self.finish_main_base_abort_quiet_death(entity_id, outcome))
     }
