@@ -733,6 +733,12 @@ impl ResourceCache {
         changed
     }
 
+    /// A direct height write through [`Self::level_terrain_mut`] needs the
+    /// next terrain submission to rebuild its mesh.
+    pub fn mark_level_terrain_presentation_dirty(&mut self) {
+        self.level_terrain_presentation_dirty = true;
+    }
+
     /// Consume the terrain rebuild request made by a live program write.
     pub fn take_level_terrain_presentation_dirty(&mut self) -> bool {
         std::mem::take(&mut self.level_terrain_presentation_dirty)

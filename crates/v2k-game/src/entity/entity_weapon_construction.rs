@@ -131,28 +131,33 @@ impl EntityManager {
             self.common_environment_physics().waves_enabled,
         )
         .ok_or(EntityWeaponBlock::Terrain)?;
-        let source = self
-            .entities
-            .iter()
-            .find(|actor| actor.id == request.source_actor_id)
-            .ok_or(EntityWeaponBlock::SourceAllocation)?;
+        // Type85's death launches with no shooter (+60 stays zero).
+        let source = (request.source_actor_id != 0)
+            .then(|| {
+                self.entities
+                    .iter()
+                    .find(|actor| actor.id == request.source_actor_id)
+                    .ok_or(EntityWeaponBlock::SourceAllocation)
+            })
+            .transpose()?;
         // Creation consumes the current source allocation, rather than granting
         // a type/model fixture native shooter custody.14870 serializes source
         // bit31 into packet+28;44E770 rejects that remote request before438080.
         // The dying bit4000 is not a launch gate: a queued transient may still
         // drain while its current source allocation remains linked.
-        if !source.active
-            || !matches!(
-                source.construction_stamp_at_0xb4,
-                RetailRuntimeValue::Known(_)
-            )
-            || source.collision.state_flags_at_0x08.masked(0x8000_0000)
-                != RetailRuntimeValue::Known(0)
-            || resources
-                .global_entity_type(source.entity_type as usize)
-                .is_none()
-            || self.main_base_abort_actor_observation(source.id).is_none()
-        {
+        if source.is_some_and(|source| {
+            !source.active
+                || !matches!(
+                    source.construction_stamp_at_0xb4,
+                    RetailRuntimeValue::Known(_)
+                )
+                || source.collision.state_flags_at_0x08.masked(0x8000_0000)
+                    != RetailRuntimeValue::Known(0)
+                || resources
+                    .global_entity_type(source.entity_type as usize)
+                    .is_none()
+                || self.main_base_abort_actor_observation(source.id).is_none()
+        }) {
             return Err(EntityWeaponBlock::SourceAllocation);
         }
         if !matches!(
@@ -329,8 +334,9 @@ impl EntityManager {
         linked.physical_body_basis_q31 =
             RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(heading, pitch, roll));
         linked.collision.state_flags_at_0x08.overwrite(4, 4);
-        linked.collision.recent_relation_id_at_0x60 =
-            RetailRuntimeValue::Known(Some(request.source_actor_id));
+        linked.collision.recent_relation_id_at_0x60 = RetailRuntimeValue::Known(
+            (request.source_actor_id != 0).then_some(request.source_actor_id),
+        );
         Ok(NativeEntityWeaponOwner {
             actor: allocation,
             kind: request.kind,

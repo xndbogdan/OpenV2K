@@ -286,7 +286,7 @@ fn run(
             if !is_change_sea_level_type(entity_type) {
                 return Err(Class0DeathBlock::UnsupportedAlternate { entity_type });
             }
-            change_sea_level_death(manager, world_fx, scheduler, resources, id)
+            change_sea_level_death(manager, world_fx, scheduler, resources, id, retail_tick)
         },
     )
     .map_err(|error| {
@@ -385,6 +385,7 @@ fn change_sea_level_death(
     scheduler: &mut SpecializedActorTaskScheduler,
     resources: &crate::resource_cache::ResourceCache,
     id: u32,
+    retail_tick: u32,
 ) -> Result<LiveActorDeathResult<Class0Death>, Class0DeathBlock> {
     let restore = |manager: &EntityManager, scheduler: &mut SpecializedActorTaskScheduler| {
         if let Ok(owner) = Class0ActorOwner::adopt(manager, id) {
@@ -407,12 +408,16 @@ fn change_sea_level_death(
     if !scheduler.take_class0_actor_external_mutation(manager, id) {
         return Err(Class0DeathBlock::Custody);
     }
-    let advance = match manager.apply_main_base_abort_type54_death(
+    let advance = match manager.apply_class38_death(
         lease,
         terrain,
         extent,
         MainBaseType54NetworkSession::SoloNetworkingDisabled,
         world_fx,
+        crate::entity::Class38DeathWorld {
+            resources,
+            retail_tick,
+        },
     ) {
         Ok(advance) => advance,
         Err(error) => {

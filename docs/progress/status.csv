@@ -1004,3 +1004,6 @@ address,status,note
 0x0040EAB0,implemented,checked-damage shield of a hold body by its effective policy (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00456740,implemented,session +293: the next frame's uniform terrain light (docs/re/RENDER_PIPELINE.md)
 0x00444400,implemented,Megablast deploy: count, cue 79, three Type65 in mode 1, text 0xC9 (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x004371B0,implemented,terrain_ripple.rs: one ripple frame's height change and its fallen cells
+0x004374B0,implemented,terrain_ripple.rs advance_terrain_ripples after the static programs and the radar sea redraw (main.rs)
+0x00437470,implemented,WorldFx::clear drops the ripple queue with the world

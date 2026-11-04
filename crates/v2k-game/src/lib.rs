@@ -282,6 +282,7 @@ pub mod targetter;
 pub mod terrain_contact;
 mod terrain_crater;
 pub mod terrain_render;
+pub mod terrain_ripple;
 pub mod time_trophy;
 pub mod type13_c690;
 pub mod type13_common_mover;

@@ -2279,6 +2279,11 @@ pub struct WorldFx {
     /// as the environment frame last published them.
     particle_wind: Option<crate::common_mover::environment::CommonWindDrag>,
     wind_trail_stop_reported: bool,
+    /// `004DC618`: the deferred terrain ripples, in queue order.
+    terrain_ripples: Vec<crate::terrain_ripple::TerrainRipple>,
+    /// A `FUN_00456750` flash requested where the frame's sequence owner is
+    /// out of reach; the frame loop starts it before its next presentation.
+    full_frame_flash_requested: bool,
 }
 
 /// What these effects send to the other machines of a network game.
@@ -2386,7 +2391,20 @@ impl WorldFx {
             weather: self.weather,
             particle_wind: self.particle_wind,
             wind_trail_stop_reported: self.wind_trail_stop_reported,
+            terrain_ripples: self.terrain_ripples.clone(),
+            full_frame_flash_requested: self.full_frame_flash_requested,
         }
+    }
+
+    /// Put the shared random stream at a recorded retail state.
+    #[cfg(test)]
+    pub(crate) fn set_shared_retail_random_state(&mut self, state: u32) {
+        self.rng_state = state;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn shared_retail_random_state(&self) -> u32 {
+        self.rng_state
     }
 
     /// Start or stop collecting a network game's sends.
@@ -4620,6 +4638,32 @@ impl WorldFx {
         self.exploding_rings.clear();
         self.ready_sounds.clear();
         self.last_retail_tick = None;
+        // FUN_00437470 frees the ripples with the world.
+        self.terrain_ripples.clear();
+        self.full_frame_flash_requested = false;
+    }
+
+    /// `FUN_00437390`'s deferred branch: append one ripple record.
+    pub fn queue_terrain_ripple(&mut self, ripple: crate::terrain_ripple::TerrainRipple) {
+        self.terrain_ripples.push(ripple);
+    }
+
+    /// The queued ripples, for `FUN_004374B0`'s pass.
+    pub fn take_terrain_ripples(&mut self) -> Vec<crate::terrain_ripple::TerrainRipple> {
+        std::mem::take(&mut self.terrain_ripples)
+    }
+
+    pub fn terrain_ripples(&self) -> &[crate::terrain_ripple::TerrainRipple] {
+        &self.terrain_ripples
+    }
+
+    /// `FUN_00456750` from an owner without the frame's sequence.
+    pub fn request_full_frame_flash(&mut self) {
+        self.full_frame_flash_requested = true;
+    }
+
+    pub fn take_full_frame_flash_request(&mut self) -> bool {
+        std::mem::take(&mut self.full_frame_flash_requested)
     }
 
     /// Enqueue one full-gain, fixed-rate positional sound at signed-word

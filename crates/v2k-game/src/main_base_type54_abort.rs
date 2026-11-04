@@ -592,6 +592,8 @@ pub enum MainBaseType54DeathBlock {
     DeferredDestroyStateUnresolved,
     DeferredDestroyAlreadyPending,
     DeferredDestroyAlreadyQueued,
+    /// Type85's meteors need the world's cache and tick.
+    Type85WorldUnavailable,
 }
 
 #[derive(Debug, PartialEq, Eq)]
