@@ -51,6 +51,9 @@ pub const HULL_REPAIR_SELECTOR: u8 = 0x37;
 pub const CARGO_CAPACITY_SELECTOR: u8 = 0x3a;
 /// `FUN_00445A90`'s operation `0x39`, the Megablast.
 pub const MEGABLAST_SELECTOR: u8 = 0x39;
+/// `FUN_00445A90`'s operation `0x38`: a body of the amount's type at the
+/// player, for the cargo or the controller's `+220` list.
+pub const ADD_TO_HOLD_SELECTOR: u8 = 0x38;
 pub const SHIELD_BUFFER_MAX_RAW: i32 = 100_000;
 pub const HULL_REPAIR_ACCEPT_BELOW_RAW: i32 = 0x9471;
 pub const HULL_REPAIR_MAX_RAW: i32 = 40_000;
@@ -408,6 +411,14 @@ pub enum AcceptedPowerUpContact {
         position_raw: [i16; 3],
         payload: PowerUpPayload,
     },
+    /// Operation `0x38` with room in the `+220` list: the caller builds the
+    /// body ([`crate::entity::EntityManager::dispatch_controller_operation_0x38`]).
+    /// The operation has no cue or text.
+    AddToHold {
+        entity_id: u32,
+        position_raw: [i16; 3],
+        payload: PowerUpPayload,
+    },
 }
 
 impl AcceptedPowerUpContact {
@@ -418,7 +429,8 @@ impl AcceptedPowerUpContact {
             | Self::Turbo { entity_id, .. }
             | Self::NonSpawning { entity_id, .. }
             | Self::Trophy { entity_id, .. }
-            | Self::Megablast { entity_id, .. } => entity_id,
+            | Self::Megablast { entity_id, .. }
+            | Self::AddToHold { entity_id, .. } => entity_id,
         }
     }
 }
@@ -426,13 +438,38 @@ impl AcceptedPowerUpContact {
 /// Why an exact player/Power-Up overlap left the allocation alive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PowerUpContactRejection {
-    UnsupportedSelector { selector: u8 },
+    UnsupportedSelector {
+        selector: u8,
+    },
     WeaponInventory(WeaponAcquisitionRejection),
     TargetterAlreadyAcquired,
     TurboAlreadyAcquired,
-    FuelAtCapacity { fuel_raw: i32 },
-    HullRepairAtCapacity { health_raw: i32 },
+    FuelAtCapacity {
+        fuel_raw: i32,
+    },
+    HullRepairAtCapacity {
+        health_raw: i32,
+    },
     Trophy(TrophyAcquisitionRejection),
+    /// Operation `0x38` refused by the `+220` list (a second live Type64, or
+    /// 15 live bodies): retail still builds the body and removes it
+    /// (`FUN_00410B70`), which the caller repeats.
+    HoldRefused {
+        entity_type: u32,
+    },
+    /// Operation `0x38` for a type the port cannot build at the player, or
+    /// one with capability `0x1000` (the cargo branch): a logged stop.
+    AddToHoldHeld {
+        entity_type: u32,
+    },
+}
+
+/// The controller's `+220` list as operation `0x38` finds it: live bodies
+/// and whether one is a Type64. A contact pass stages its own births.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StagedHold {
+    pub live: usize,
+    pub autobot: bool,
 }
 
 /// One rejected exact contact, retained for presentation/debug policy without
@@ -610,6 +647,7 @@ pub fn resolve_player_power_up_contacts<P: CollisionModelPool + ?Sized>(
         capacity_max: cargo_capacity_max,
     };
     let mut pass = PlayerPowerUpContactPass::default();
+    let mut staged_hold = entities.controller_hold_admission();
 
     for (entity_id, position_raw, heading, model_id, packed_payload, target_anim_vars) in candidates
     {
@@ -650,6 +688,16 @@ pub fn resolve_player_power_up_contacts<P: CollisionModelPool + ?Sized>(
         if payload.selector == CARGO_CAPACITY_SELECTOR && !cargo_runtime_resolved {
             return Err(PlayerPowerUpContactError::PlayerAttachmentRuntimeUnavailable);
         }
+        if payload.selector == ADD_TO_HOLD_SELECTOR {
+            pass.contacts.push(stage_add_to_hold(
+                entities,
+                entity_id,
+                position_raw,
+                payload,
+                &mut staged_hold,
+            ));
+            continue;
+        }
         pass.contacts.push(dispatch_power_up_payload(
             entity_id,
             position_raw,
@@ -677,6 +725,43 @@ pub fn resolve_player_power_up_contacts<P: CollisionModelPool + ?Sized>(
         .collect::<Vec<_>>();
     entities.queue_power_up_destroys(&accepted_ids);
     Ok(pass)
+}
+
+/// `FUN_00445A90`'s operation `0x38` decided at the contact: a body without
+/// capability `0x1000` joins the `+220` list unless it is a second live
+/// Type64 or the list holds 15 live bodies, which refuses the power-up.
+fn stage_add_to_hold(
+    entities: &EntityManager,
+    entity_id: u32,
+    position_raw: [i16; 3],
+    payload: PowerUpPayload,
+    hold: &mut StagedHold,
+) -> PowerUpContactOutcome {
+    let entity_type = payload.amount as u32;
+    let rejected = |reason| {
+        PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+            entity_id,
+            position_raw,
+            payload,
+            reason,
+        })
+    };
+    let cargo = entities
+        .type_runtime_metadata(entity_type)
+        .map(|metadata| metadata.capability_flags & 0x1000 != 0);
+    if cargo != Some(false) || !EntityManager::controller_0x38_constructor_ported(entity_type) {
+        return rejected(PowerUpContactRejection::AddToHoldHeld { entity_type });
+    }
+    if (entity_type == 64 && hold.autobot) || hold.live > 14 {
+        return rejected(PowerUpContactRejection::HoldRefused { entity_type });
+    }
+    hold.live += 1;
+    hold.autobot |= entity_type == 64;
+    PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::AddToHold {
+        entity_id,
+        position_raw,
+        payload,
+    })
 }
 
 /// `FUN_00413600(player, code)` outside a contact: type 46's `FUN_00445A90`
@@ -1585,5 +1670,58 @@ mod tests {
         assert_eq!(acquisition.trophy_count, 0);
         assert_eq!(acquisition.extra_lives, 8);
         assert!(acquisition.awarded_extra_life);
+    }
+
+    /// Worlds 20 and 24 author a Defender Ball (`0x3F38`) and an Autobot
+    /// (`0x4038`) power-up. The ball joins the list; the Autobot, with no
+    /// port constructor, stays on the ground with a logged stop; a second
+    /// staged Type64 or a full list refuses.
+    #[v2k_test_support::retail_test]
+    fn operation_0x38_power_ups_stage_the_hold() {
+        for world in [20, 24] {
+            let (_session, entities, _) =
+                crate::native_type122::construction_tests::native_fixture_with_player(world);
+            let payloads: Vec<_> = entities
+                .iter_all()
+                .filter(|entity| entity.entity_type == 61)
+                .filter_map(|entity| entity.power_up_payload_packed)
+                .filter(|&word| word as u8 == ADD_TO_HOLD_SELECTOR)
+                .collect();
+            assert_eq!(payloads.len(), 2, "world {world}");
+            let mut hold = entities.controller_hold_admission();
+            assert_eq!(hold, StagedHold::default());
+            let stage = |word, hold: &mut StagedHold| {
+                stage_add_to_hold(
+                    &entities,
+                    1,
+                    [0; 3],
+                    PowerUpPayload::from_runtime_word(word),
+                    hold,
+                )
+            };
+            assert!(matches!(
+                stage(0x3F38, &mut hold),
+                PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::AddToHold { .. })
+            ));
+            assert_eq!(hold.live, 1);
+            assert!(matches!(
+                stage(0x4038, &mut hold),
+                PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+                    reason: PowerUpContactRejection::AddToHoldHeld { entity_type: 64 },
+                    ..
+                })
+            ));
+            let mut full = StagedHold {
+                live: 15,
+                autobot: false,
+            };
+            assert!(matches!(
+                stage(0x3F38, &mut full),
+                PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
+                    reason: PowerUpContactRejection::HoldRefused { entity_type: 63 },
+                    ..
+                })
+            ));
+        }
     }
 }

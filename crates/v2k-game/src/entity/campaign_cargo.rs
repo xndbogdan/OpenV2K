@@ -597,6 +597,32 @@ impl EntityManager {
         Ok(())
     }
 
+    /// Whether [`Self::dispatch_controller_operation_0x38`] can build this
+    /// type at the player.
+    pub fn controller_0x38_constructor_ported(entity_type: u32) -> bool {
+        matches!(entity_type, 52 | 63 | 68 | 74 | 83 | 92 | 96 | 97 | 100)
+    }
+
+    /// The `+220` list as operation `0x38` walks it: live (nonzero state, not
+    /// dying) bodies, and whether one is a Type64.
+    pub fn controller_hold_admission(&self) -> crate::power_up_contact::StagedHold {
+        let mut hold = crate::power_up_contact::StagedHold::default();
+        for &id in &self.auxiliary_owned_ids {
+            let Some(entity) = self.iter_all().find(|entity| entity.id == id) else {
+                continue;
+            };
+            if let RetailRuntimeValue::Known(state) =
+                entity.collision.state_flags_at_0x08.masked(u32::MAX)
+            {
+                if state != 0 && state & DYING_STATE_BIT == 0 {
+                    hold.live += 1;
+                    hold.autobot |= entity.entity_type == 64;
+                }
+            }
+        }
+        hold
+    }
+
     fn construct_controller_0x38_body(
         &mut self,
         entity_type: u32,

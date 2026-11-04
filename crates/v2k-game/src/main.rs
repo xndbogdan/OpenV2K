@@ -10163,6 +10163,15 @@ fn run_game(
                             if feedback.hull_state_changed {
                                 em.sync_player_hull_collision_state(&player_hull);
                             }
+                            power_up_hold_births(
+                                &pass,
+                                em,
+                                &mut specialized_actor_tasks,
+                                &session.cache,
+                                &mut world_fx,
+                                &mut gameplay_notifications,
+                                retail_tick,
+                            );
                             for _ in pass.accepted().filter(|contact| {
                                 matches!(contact, AcceptedPowerUpContact::Megablast { .. })
                             }) {
@@ -14285,6 +14294,61 @@ fn queue_trophy_acquisition_feedback(
 }
 
 /// What operation `0x39`'s birth and the deploy reach.
+/// Operation `0x38` from the contact pass, in contact order: each accepted
+/// power-up's body, and each refused one's, which retail builds and removes.
+fn power_up_hold_births(
+    pass: &v2k_game::power_up_contact::PlayerPowerUpContactPass,
+    entities: &mut EntityManager,
+    scheduler: &mut v2k_game::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    cache: &v2k_game::resource_cache::ResourceCache,
+    world_fx: &mut WorldFx,
+    notifications: &mut GameplayNotifications,
+    retail_tick: u32,
+) {
+    for contact in &pass.contacts {
+        let payload = match *contact {
+            PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::AddToHold {
+                payload, ..
+            }) => payload,
+            PowerUpContactOutcome::Rejected(rejected) => match rejected.reason {
+                PowerUpContactRejection::HoldRefused { .. } => rejected.payload,
+                PowerUpContactRejection::AddToHoldHeld { entity_type } => {
+                    eprintln!(
+                        "Power-up operation 0x38 held: Type{entity_type} has no port constructor at the player"
+                    );
+                    continue;
+                }
+                _ => continue,
+            },
+            _ => continue,
+        };
+        let entity_type = payload.amount as u32;
+        let Some(level) = cache.level_desc() else {
+            eprintln!("Power-up operation 0x38 stopped: no world descriptor");
+            return;
+        };
+        let model_extent_raw = |id| cache.global_model(id).map(|model| model.radius);
+        match entities.dispatch_controller_operation_0x38(
+            entity_type,
+            &mut v2k_game::entity::CampaignCargoRestoreContext {
+                level,
+                resources: v2k_game::entity::EntityConstructionResources {
+                    terrain: cache.terrain(),
+                    terrain_objects: cache.terrain_objects(),
+                    model_extent_raw: Some(&model_extent_raw),
+                },
+                retail_tick,
+                scheduler: &mut *scheduler,
+                world_fx: &mut *world_fx,
+                notifications: &mut *notifications,
+            },
+        ) {
+            Ok(()) => log!("Power-up operation 0x38: Type{entity_type} born at the player"),
+            Err(error) => eprintln!("Power-up operation 0x38 held: Type{entity_type}: {error:?}"),
+        }
+    }
+}
+
 struct MegablastFrame<'a> {
     entities: &'a mut EntityManager,
     scheduler: &'a mut SpecializedActorTaskScheduler,
@@ -14424,6 +14488,8 @@ fn apply_power_up_contact_feedback(
             },
             // The caller builds the Type65, then its sound and text follow.
             PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Megablast { .. }) => {}
+            // Operation 0x38 has no cue or text; the caller builds the body.
+            PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::AddToHold { .. }) => {}
             PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Trophy {
                 position_raw,
                 acquisition,
@@ -14466,6 +14532,8 @@ fn apply_power_up_contact_feedback(
                     notifications.queue_hull_repair_full(retail_tick as i32);
                 }
                 PowerUpContactRejection::UnsupportedSelector { .. }
+                | PowerUpContactRejection::HoldRefused { .. }
+                | PowerUpContactRejection::AddToHoldHeld { .. }
                 | PowerUpContactRejection::Trophy(_) => {}
             },
         }

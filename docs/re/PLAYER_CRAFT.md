@@ -1813,6 +1813,17 @@ pair pass), and a pair contact on the craft while a live ball is in the hold
 `0x2D` when the craft has no shield and its health less the damage lies in
 5,001..30,000, at most once per 120 ticks) is not ported for any hit.
 
+**Power-ups carrying operation `0x38`.** Worlds 20 and 24 each author a
+Defender Ball (`0x3F38`) and an Autobot (`0x4038`) power-up, the only `0x38`
+payloads in worlds 13 to 49. `FUN_00445A90` takes the power-up (returns 1)
+with no cue or text, unless the `+220` list refuses the body (a second live
+Type64, or 15 live bodies): then it still builds the body, removes it
+(`FUN_00410B70`) and leaves the power-up. The port decides that at the
+contact, staging the pass's own births, and builds the bodies after the pass
+in contact order, the refused ones too. A type with no port constructor at
+the player (the Autobot), or one with capability `0x1000` (the cargo branch,
+which no power-up carries), leaves the power-up with a logged stop.
+
 **Lightning Shield.** No Section-12 type selects class 52, as a behavior or as
 its alternate, so `FUN_0040B1B0`, `FUN_004076E0` and `FUN_00407770` never run.
 
