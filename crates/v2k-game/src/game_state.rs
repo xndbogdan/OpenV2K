@@ -230,6 +230,8 @@ pub enum ClosingSceneDestination {
     /// `FUN_004561A0`: the session restored from its entry snapshot
     /// (`FUN_00448E50`) reloads that snapshot's world.
     ReplayWorld,
+    /// Phase 5: `FUN_00453E00` switches to the progress map `4D0AA0`.
+    ProgressMap(crate::campaign_transition::CampaignTransition),
 }
 
 // ── Shell events (menu side effects for the main loop) ──
@@ -701,6 +703,8 @@ pub struct MenuShell {
     /// Set when a GameStart/PostIntro phase reaches its verified cutoff.
     transition_ready: bool,
     pause_switch_away: PauseSwitchAway,
+    /// `FUN_00456170` marked the session for resume (`+297`).
+    continue_chosen: bool,
     /// Whether this shell owns the live Klaus/frontend actor scene. This is
     /// deliberately separate from `from_gameplay`: the frontend always owns
     /// Klaus and its ring Load flow, while the pause shell owns gameplay Save
@@ -867,10 +871,11 @@ impl MenuShell {
 
     /// P on the pause menu (`FUN_004564A0` -> `FUN_0043A9F0`): the stack
     /// drops to its root at once and the root pops with its 0x7000 fly-out,
-    /// silently; its switch-away resumes play. Returns false when the root
-    /// is not the in-play pause menu.
+    /// silently; its switch-away resumes play. The map's save menu shares
+    /// the table; its switch-away (`FUN_00450E60`) only clears `+28B`.
+    /// Returns false when the root is neither.
     pub fn close_to_play(&mut self, ctx: &MenuCtx) -> bool {
-        if self.engine.root_va() != Some(PAUSE_FULL) {
+        if !matches!(self.engine.root_va(), Some(PAUSE_FULL | PAUSE_SIMPLE)) {
             return false;
         }
         self.overlay = None;
@@ -931,6 +936,7 @@ impl MenuShell {
             },
             transition_ready: false,
             pause_switch_away: PauseSwitchAway::Inactive,
+            continue_chosen: false,
             frontend_actor_active: !from_gameplay,
             from_gameplay,
         };
@@ -970,6 +976,57 @@ impl MenuShell {
         self.klaus_model_state = 0;
         self.transition_ready = false;
         self.prime_klaus_opening();
+    }
+
+    /// `FUN_0042CEA0`: the command Klaus's next callback consumes.
+    pub fn queue_klaus_command(&mut self, command: u8) {
+        self.pending_intro_sequence_command = Some(command);
+    }
+
+    /// `FUN_0042CEB0`: `DAT_004DB218 = (argument == 0)`.
+    pub fn set_klaus_model_argument(&mut self, argument: u32) {
+        self.klaus_model_state = u16::from(argument == 0);
+    }
+
+    /// `FUN_0042D210`: the selected, fly-off and hidden states are done;
+    /// the idle and opening states once their morph is zero.
+    pub fn klaus_finished(&self) -> bool {
+        match self.klaus_sequence_state {
+            KlausSequenceState::Selected
+            | KlausSequenceState::FlyOff
+            | KlausSequenceState::Hidden => true,
+            KlausSequenceState::Idle | KlausSequenceState::Opening => {
+                self.klaus_morph_progress_raw == 0
+            }
+        }
+    }
+
+    /// One `FUN_00412D80` visit of Klaus alone, as the progress map's and
+    /// its save menu's ticks run it.
+    pub fn visit_klaus(&mut self, micros: u32, effects: &mut impl KlausEffects) {
+        self.update_klaus(micros, effects);
+    }
+
+    /// `FUN_00454FA0`, the map's entry: command 2 and a 1-us actor visit.
+    pub fn open_over_campaign_map(&mut self) {
+        self.pending_intro_sequence_command = Some(2);
+        self.update_klaus(1, &mut OpeningPrimeEffects);
+    }
+
+    /// `FUN_00451710` after the progress map: command 2 and its 125,000-us
+    /// visit, without `FUN_00453C20`'s model write, so a save menu's
+    /// `FUN_0042CEB0(0)` survives into the opening as it does in retail.
+    pub fn begin_world_opening(&mut self) {
+        self.phase = MenuPhase::PostIntro {
+            stage: PostIntroStage::AfterWorldLoad,
+        };
+        self.transition_ready = false;
+        self.prime_klaus_opening();
+    }
+
+    /// `FUN_00456170`'s `+297`: Continue (not P or Escape) closed the save menu.
+    pub fn continue_chosen(&self) -> bool {
+        self.continue_chosen
     }
 
     /// FUN_00451710 queues command 2 and requests one 125,000-us actor
@@ -1616,6 +1673,7 @@ impl MenuShell {
                         remaining: FLY_LEG_SECS,
                     };
                     self.pause_switch_away = PauseSwitchAway::ResumeAfterFlyOut;
+                    self.continue_chosen = true;
                 }
                 MenuCommand::ResumeGame => events.push(ShellEvent::ResumeGame),
                 MenuCommand::OpenSaveFlow => {
@@ -2400,9 +2458,68 @@ mod tests {
             },
             transition_ready: false,
             pause_switch_away: PauseSwitchAway::Inactive,
+            continue_chosen: false,
             frontend_actor_active: true,
             from_gameplay: false,
         }
+    }
+
+    /// The lab's Cheats skip to world 14 at 20-ms passes, Klaus's block
+    /// dumped each pass: the map's entry at 1603 (morph 1250 at 1604), S at
+    /// 1620 (morph 0xFFFF - 1250 at 1621), closed and switched at 1673, the
+    /// save menu from 1674, its root closed at 1751 (command 1), and the map
+    /// again from 1802 (morph 2500 at 1804).
+    #[test]
+    fn campaign_map_klaus_legs_follow_the_lab() {
+        use crate::campaign_map::{CampaignMapKlaus, CampaignMapSwitch};
+        let mut effects = test_effects(|| 1);
+        let mut shell = presentation_test_shell();
+        shell.klaus_morph_progress_raw = 0;
+        let mut map = CampaignMapKlaus::new(shell);
+        map.enter_map();
+        assert_eq!(map.tick_map(20_000, &mut effects), None);
+        assert_eq!(map.klaus.klaus_sequence_state, KlausSequenceState::Opening);
+        assert_eq!(map.klaus.klaus_morph_progress_raw, 1250);
+        // 1604..1619, then S in 1620's tick.
+        for _ in 1604..1620 {
+            assert_eq!(map.tick_map(20_000, &mut effects), None);
+        }
+        assert_eq!(map.klaus.klaus_morph_progress_raw, 21_250);
+        map.request_leave(true);
+        assert_eq!(map.tick_map(20_000, &mut effects), None);
+        assert_eq!(map.klaus.klaus_render_anim_state.morph_progress, 0xFFFF);
+        assert_eq!(map.klaus.klaus_morph_progress_raw, 64_285);
+        let mut pass = 1621;
+        let switch = loop {
+            if let Some(switch) = map.tick_map(20_000, &mut effects) {
+                break switch;
+            }
+            pass += 1;
+        };
+        assert_eq!((pass, switch), (1673, CampaignMapSwitch::SaveMenu));
+        assert_eq!(map.enter_save_menu(20_000, &mut effects), None);
+        assert_eq!(map.klaus.klaus_sequence_state, KlausSequenceState::Selected);
+        assert_eq!(map.klaus.klaus_primary_phase_raw, 626);
+        assert_eq!(map.klaus.klaus_model_state, 1);
+        for _ in 1675..1751 {
+            assert_eq!(map.tick_save_menu(20_000, &mut effects), None);
+        }
+        map.close_save_menu(false);
+        assert_eq!(map.tick_save_menu(20_000, &mut effects), None);
+        assert_eq!(map.klaus.klaus_sequence_state, KlausSequenceState::Idle);
+        assert_eq!(map.klaus.klaus_model_state, 0);
+        let mut pass = 1752;
+        let switch = loop {
+            if let Some(switch) = map.tick_save_menu(20_000, &mut effects) {
+                break switch;
+            }
+            pass += 1;
+        };
+        assert_eq!((pass, switch), (1801, CampaignMapSwitch::Map));
+        map.enter_map();
+        map.tick_map(20_000, &mut effects);
+        map.tick_map(20_000, &mut effects);
+        assert_eq!(map.klaus.klaus_morph_progress_raw, 2500);
     }
 
     /// Advance long synthetic test durations through the same maximum frame
@@ -2601,9 +2718,18 @@ mod tests {
         update_shell_for(&mut shell, FLY_LEG_SECS);
         assert_eq!(shell.take_switch_away_event(), Some(ShellEvent::ResumeGame));
 
+        // The map's save menu shares the table: its root flies out too, and
+        // its switch-away tells the map leg P (not Continue) closed it.
         let mut save_menu =
             MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::CampaignSave);
-        assert!(!save_menu.close_to_play(&ctx));
+        update_shell_for(&mut save_menu, FLY_LEG_SECS);
+        assert!(save_menu.close_to_play(&ctx));
+        update_shell_for(&mut save_menu, FLY_LEG_SECS);
+        assert_eq!(
+            save_menu.take_switch_away_event(),
+            Some(ShellEvent::ResumeGame)
+        );
+        assert!(!save_menu.continue_chosen());
     }
 
     #[test]

@@ -50,6 +50,7 @@ use v2k_game::actor_standard_death_live::Type17CommonDyingPublicationOutcome;
 use v2k_game::campaign_failure::{
     CampaignCasualtyFrame, CampaignSelectorCursor, CampaignSelectorEntry, CampaignSelectorStep,
 };
+use v2k_game::campaign_map::{CampaignMapKlaus, CampaignMapSwitch};
 use v2k_game::campaign_transition::{
     CampaignArrivalCatalog, CampaignTransition, CampaignWarpRuntime, CheatSkipWorld,
     FailedWorldRetry,
@@ -2456,6 +2457,9 @@ fn run_game(
     // Session +290 after a phase-3 exit (FUN_00456F20 or FUN_00452770). The
     // next FUN_0044FFA0 visit consumes it and leaves for 4D0A30.
     let mut closing_scene_exit: Option<ClosingSceneDestination> = None;
+    // Klaus over the progress map and its save menu (4D0AA0, 4D0AD8).
+    let mut campaign_map: Option<CampaignMapKlaus> = None;
+    let mut campaign_map_switch: Option<CampaignMapSwitch> = None;
     // FUN_004561A0's entry snapshot (`None`: a new game's, before any
     // checkpoint), carried through the closing leg, and the Klaus that
     // then opens over the reloaded world.
@@ -2495,6 +2499,67 @@ fn run_game(
     // mode's exit (FUN_00451580, FUN_00451550): the music poll FUN_00456A00
     // plays the track again when Ambient is on, and the craft reader reads
     // no fire for half a second (session +264).
+    // FUN_0044FFA0's event 2 for a world exit: 4D0A30's entry 453BA0, where
+    // 453C20 stands the camera proxy on the player and closes Klaus.
+    macro_rules! enter_closing_leg {
+        ($destination:expr) => {{
+            let destination: ClosingSceneDestination = $destination;
+            // A phase-5 exit keeps the world's sounds through the
+            // leg; the map's entry masks them (454EE0's 44F3E0(8)).
+            if !matches!(destination, ClosingSceneDestination::ProgressMap(_)) {
+                if let Some(ref mut sm) = sound_manager {
+                    sm.stop_all();
+                }
+            }
+            intro_camera = match (closing_scene.take(), destination) {
+                (Some(scene), _) => scene.camera,
+                // 453C20 stands the class-1 proxy on the player, at
+                // rest; ED10 keeps its springs.
+                (None, ClosingSceneDestination::ClosingScene { carried_camera_raw }) => {
+                    IntroCameraController::at_rest(
+                        carried_camera_raw,
+                        session
+                            .cache
+                            .level_desc()
+                            .map_or(0, |level| level.world_style),
+                        chase_camera.clone(),
+                    )
+                }
+                (
+                    None,
+                    ClosingSceneDestination::ReplayWorld | ClosingSceneDestination::ProgressMap(_),
+                ) => IntroCameraController::at_rest(
+                    entity_manager
+                        .as_ref()
+                        .and_then(|manager| manager.player())
+                        .expect("Replay this World and phase-5 exits leave worlds with a player")
+                        .position_raw(),
+                    session
+                        .cache
+                        .level_desc()
+                        .map_or(0, |level| level.world_style),
+                    chase_camera.clone(),
+                ),
+                (None, ClosingSceneDestination::FirstWorld) => {
+                    unreachable!("only the closing scene leaves for the first world")
+                }
+            };
+            let ctx = MenuCtx {
+                cache: &session.cache,
+                config: &config,
+                saves: Some(&save_manager),
+                display_modes: &display_modes,
+            };
+            // 453BA0 selects world[4]; 44FE20 resets the 50-Hz clock.
+            retail_clock.reset();
+            keys_down.clear();
+            mouse_buttons_down.clear();
+            state = GameState::ClosingSceneLeg {
+                shell: MenuShell::new_post_intro(&ctx),
+                destination,
+            };
+        }};
+    }
     macro_rules! resume_play_after_pause {
         () => {{
             music_held = false;
@@ -3062,13 +3127,6 @@ fn run_game(
                                         shell_events.push(ShellEvent::Sound(3));
                                     }
                                     continue;
-                                }
-                                if *kc == Keycode::P
-                                    && shell.engine.root_va() == Some(menu_data::PAUSE_SIMPLE)
-                                {
-                                    eprintln!(
-                                        "Pause: P on the progress map's save menu is blocked:                                          FUN_0043A9F0 pops 0x4D1090 into FUN_00450E60 without                                          Continue's +297, and the map's Klaus is not ported"
-                                    );
                                 }
                             }
 
@@ -3684,7 +3742,62 @@ fn run_game(
                         sound_manager.as_mut(),
                     ),
                 );
-                if menu_is_paused {
+                let save_menu_klaus = menu_is_paused
+                    && campaign_map
+                        .as_ref()
+                        .is_some_and(|map| map.save_menu_open());
+                if save_menu_klaus {
+                    // 4558A0 after the menu transition: FUN_00450E60 cleared
+                    // +28B at the root's pop; +297 says Continue did it.
+                    let closed = shell.take_switch_away_event().is_some();
+                    let map = campaign_map.as_mut().expect("save menu Klaus");
+                    if closed {
+                        map.close_save_menu(shell.continue_chosen());
+                        map_save_checkpoint = None;
+                        keys_down.clear();
+                        mouse_buttons_down.clear();
+                    }
+                    retail_tick = retail_clock.advance(u64::from(elapsed_micros));
+                    let switch = map.tick_save_menu(
+                        elapsed_micros,
+                        &mut GlobalSoundRuntime::new(
+                            &session.cache,
+                            &mut world_fx,
+                            sound_manager.as_mut(),
+                        ),
+                    );
+                    if switch == Some(CampaignMapSwitch::Load) {
+                        replay_world_cover = campaign_map.take().map(CampaignMapKlaus::into_klaus);
+                        next_state = world_complete_results.continue_progress_map().map(|route| {
+                            GameState::Loading {
+                                level_id: route.destination_level_id(),
+                                purpose: LoadingPurpose::CampaignWarp {
+                                    source_level_id: route.source_level_id(),
+                                    arrival: route.arrival(),
+                                },
+                            }
+                        });
+                    } else if closed {
+                        // 4D0AD8 stays current, its screen gone: Klaus's
+                        // command 1 over black, then the map.
+                        next_state = Some(GameState::Playing);
+                    }
+                    // 4D0810: Klaus alone, then the menu's own queue over him.
+                    renderer.begin_scene(RenderScene::Menu);
+                    renderer.clear(0.0, 0.0, 0.0);
+                    if let Some(map) = campaign_map.as_ref() {
+                        draw_klaus_handoff_overlay(
+                            renderer.as_mut(),
+                            KlausHandoffFrame {
+                                shell: &map.klaus,
+                                cache: &session.cache,
+                                colors: &face_colors,
+                                retail_tick,
+                            },
+                        );
+                    }
+                    paused_world_frame = renderer.capture_frame(FrameCaptureSource::CurrentScene);
+                } else if menu_is_paused {
                     if let Some(ShellEvent::ResumeGame) = shell.take_switch_away_event() {
                         // The 0x7000 fly-out has reached PAUSE_FULL's
                         // switch-away boundary. Schedule the live world for
@@ -3712,34 +3825,8 @@ fn run_game(
                 }
                 let begin_intro = shell.take_transition_ready();
                 if menu_is_paused {
-                    if redraw_paused_world {
-                        if world_complete_results.is_progress_map_active() {
-                            renderer.begin_scene(RenderScene::Menu);
-                            renderer.clear(0.0, 0.0, 0.0);
-                            if let (Some(backdrop), Some(fonts)) =
-                                (overlay_51_backdrop.as_ref(), menu_fonts.as_ref())
-                            {
-                                draw_overlay_51_backdrop(
-                                    renderer.as_mut(),
-                                    fonts,
-                                    backdrop,
-                                    &player_campaign_progress,
-                                    world_complete_results.age_ms(),
-                                );
-                                if let Some(prompt) = world_complete_results
-                                    .continue_prompt_line(|id| session.cache.global_string(id))
-                                {
-                                    draw_gameplay_notifications(
-                                        renderer.as_mut(),
-                                        fonts,
-                                        &[prompt],
-                                        GameplayTextContext::AuthoredCanvas,
-                                    );
-                                }
-                            }
-                            paused_world_frame =
-                                renderer.capture_frame(FrameCaptureSource::CurrentScene);
-                        } else if let Some(paused) = &paused_gameplay_scene {
+                    if redraw_paused_world && !save_menu_klaus {
+                        if let Some(paused) = &paused_gameplay_scene {
                             paused.redraw(
                                 renderer.as_mut(),
                                 PausedGameplayDraw {
@@ -5118,7 +5205,7 @@ fn run_game(
                     LoadingPurpose::Normal => GameState::Playing,
                 };
                 if let Some(mut shell) = replay_world_cover.take() {
-                    shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
+                    shell.begin_world_opening();
                     post_intro_world_cover = Some(shell);
                 }
                 // FUN_00451710 stands the class-1 proxy above and behind
@@ -6045,7 +6132,12 @@ fn run_game(
                     &mut entity_positional_audio,
                 );
                 renderer.present();
-                if shell.take_transition_ready() {
+                let leg_done = match destination {
+                    // 453E00 follows 50C00's visit in the same frame.
+                    ClosingSceneDestination::ProgressMap(_) => shell.klaus_finished(),
+                    _ => shell.take_transition_ready(),
+                };
+                if leg_done {
                     let ctx = MenuCtx {
                         cache: &session.cache,
                         config: &config,
@@ -6063,6 +6155,14 @@ fn run_game(
                                     carried_camera_raw,
                                 },
                             }
+                        }
+                        ClosingSceneDestination::ProgressMap(route) => {
+                            // 453E00 -> 4D0AA0; its entry (454EE0) runs on
+                            // the next frame with the map's first tick.
+                            world_complete_results.open_progress_map(route);
+                            campaign_map = Some(CampaignMapKlaus::new(shell));
+                            campaign_map_switch = Some(CampaignMapSwitch::Map);
+                            GameState::Playing
                         }
                         ClosingSceneDestination::ReplayWorld => {
                             // 453E00 -> the map, which +292 leaves at once
@@ -6284,55 +6384,7 @@ fn run_game(
                 // else; event 2 leaves for 4D0A30, where 453BA0/453C20 close
                 // Klaus over this world.
                 if let Some(destination) = closing_scene_exit.take() {
-                    if let Some(ref mut sm) = sound_manager {
-                        sm.stop_all();
-                    }
-                    intro_camera = match (closing_scene.take(), destination) {
-                        (Some(scene), _) => scene.camera,
-                        // 453C20 stands the class-1 proxy on the player, at
-                        // rest; ED10 keeps its springs.
-                        (None, ClosingSceneDestination::ClosingScene { carried_camera_raw }) => {
-                            IntroCameraController::at_rest(
-                                carried_camera_raw,
-                                session
-                                    .cache
-                                    .level_desc()
-                                    .map_or(0, |level| level.world_style),
-                                chase_camera.clone(),
-                            )
-                        }
-                        (None, ClosingSceneDestination::ReplayWorld) => {
-                            IntroCameraController::at_rest(
-                                entity_manager
-                                    .as_ref()
-                                    .and_then(|manager| manager.player())
-                                    .expect("Replay this World admits only a world with a player")
-                                    .position_raw(),
-                                session
-                                    .cache
-                                    .level_desc()
-                                    .map_or(0, |level| level.world_style),
-                                chase_camera.clone(),
-                            )
-                        }
-                        (None, ClosingSceneDestination::FirstWorld) => {
-                            unreachable!("only the closing scene leaves for the first world")
-                        }
-                    };
-                    let ctx = MenuCtx {
-                        cache: &session.cache,
-                        config: &config,
-                        saves: Some(&save_manager),
-                        display_modes: &display_modes,
-                    };
-                    // 453BA0 selects world[4]; 44FE20 resets the 50-Hz clock.
-                    retail_clock.reset();
-                    keys_down.clear();
-                    mouse_buttons_down.clear();
-                    state = GameState::ClosingSceneLeg {
-                        shell: MenuShell::new_post_intro(&ctx),
-                        destination,
-                    };
+                    enter_closing_leg!(destination);
                     continue;
                 }
                 // Phase 3 installs no craft keys (453330). The in-play table
@@ -6385,9 +6437,131 @@ fn run_game(
                     }
                 }
 
-                // Descriptor 004D0AA0 owns a modal progress map after the
-                // exit. Gameplay no longer runs while its input table waits.
+                // Descriptors 004D0AA0 (the map) and 004D0AD8 (its save
+                // menu, here once its screen closed) own the frame after the
+                // exit leg; gameplay no longer runs. Klaus's opaque iris
+                // covers the map until he opens.
                 if world_complete_results.is_progress_map_active() {
+                    // The descriptor a switch selected last frame runs its
+                    // entry now, with its first tick.
+                    match campaign_map_switch.take() {
+                        Some(CampaignMapSwitch::Map) => {
+                            // 454EE0: mask 8, the map clock, then 454FA0.
+                            if let Some(route) = world_complete_results.progress_map_route() {
+                                world_complete_results.open_progress_map(route);
+                            }
+                            suspend_world_audio(
+                                &mut world_fx,
+                                &mut sound_manager,
+                                &mut entity_positional_audio,
+                                &mut player_fan_audio,
+                            );
+                            if let Some(ref mp) = music_player {
+                                apply_session_music_gate(&config, mp, true);
+                            }
+                            if let Some(map) = campaign_map.as_mut() {
+                                map.enter_map();
+                            }
+                        }
+                        Some(CampaignMapSwitch::SaveMenu) => {
+                            let checkpoint = (|| -> Result<_, String> {
+                                let route = world_complete_results
+                                    .progress_map_route()
+                                    .ok_or("campaign map route unavailable")?;
+                                let manager = entity_manager
+                                    .as_ref()
+                                    .ok_or("player manager unavailable")?;
+                                let player = manager.player().ok_or("player unavailable")?;
+                                let v2k_game::entity_collision_state::RetailRuntimeValue::Known(
+                                    cargo,
+                                ) = manager.campaign_cargo_controller_state()
+                                else {
+                                    return Err("cargo snapshot unavailable".into());
+                                };
+                                // 4D0568's low words are153..188 for logical1..36;
+                                // 451FB0 uses only that half of the name/briefing pair.
+                                let name = session
+                                    .cache
+                                    .global_string(152 + route.destination_logical_level() as usize)
+                                    .or_else(|| session.cache.global_string(128))
+                                    .ok_or("checkpoint name unavailable")?;
+                                let snapshot = v2k_game::save::NativeSaveSnapshot {
+                                    logical_level_id: route.destination_logical_level(),
+                                    player: SavedPlayerState {
+                                        position_raw: player.position_raw(),
+                                        velocity_raw: player.velocity_raw(),
+                                        heading_raw: player.heading_raw(),
+                                        pitch_raw: 0,
+                                        roll_raw: 0,
+                                        health_raw: player_hull.health_raw,
+                                    },
+                                    craft: &player_craft,
+                                    hull: &player_hull,
+                                    inventory: &weapon_inventory,
+                                    capabilities: &player_capabilities,
+                                    cargo: &cargo,
+                                    campaign: &player_campaign_progress,
+                                };
+                                let mut checkpoint = snapshot
+                                    .encode_campaign_checkpoint(
+                                        &save_baseline,
+                                        route.arrival(),
+                                        name,
+                                    )
+                                    .map_err(|error| format!("checkpoint snapshot: {error:?}"))?;
+                                // The save keeps session +1C4 at state +1B0.
+                                checkpoint.set_session_flags_raw(session_cheats);
+                                Ok(checkpoint)
+                            })();
+                            match checkpoint {
+                                Ok(checkpoint) => {
+                                    save_baseline = checkpoint.state_payload;
+                                    // FUN_00450EF0 reads session +0x14 and
+                                    // the live rank; both are the snapshot's.
+                                    let name_end = save_baseline[..0x20]
+                                        .iter()
+                                        .position(|&byte| byte == 0)
+                                        .unwrap_or(0x1f);
+                                    v2k_game::game_state::set_session_save_row(Some((
+                                        String::from_utf8_lossy(&save_baseline[..name_end])
+                                            .into_owned(),
+                                        v2k_game::save::native_rank_score(&save_baseline),
+                                    )));
+                                    map_save_checkpoint = Some(checkpoint);
+                                    keys_down.clear();
+                                    mouse_buttons_down.clear();
+                                    let ctx = MenuCtx {
+                                        cache: &session.cache,
+                                        config: &config,
+                                        saves: Some(&save_manager),
+                                        display_modes: &display_modes,
+                                    };
+                                    let mut shell = MenuShell::new_single_player_menu(
+                                        &ctx,
+                                        v2k_game::game_state::SinglePlayerMenuKind::CampaignSave,
+                                    );
+                                    shell.engine.apply_cheat_enables(session_cheats);
+                                    // 4557D0's Klaus command 4, then 4558A0's
+                                    // first visit with the menu up.
+                                    if let Some(map) = campaign_map.as_mut() {
+                                        map.enter_save_menu(
+                                            elapsed_micros,
+                                            &mut GlobalSoundRuntime::new(
+                                                &session.cache,
+                                                &mut world_fx,
+                                                sound_manager.as_mut(),
+                                            ),
+                                        );
+                                    }
+                                    state = GameState::Paused { shell };
+                                    continue 'main_loop;
+                                }
+                                Err(error) => eprintln!("Campaign save blocked: {error}"),
+                            }
+                        }
+                        Some(CampaignMapSwitch::Load) | None => {}
+                    }
+                    let in_save_menu = campaign_map.as_ref().is_some_and(|map| map.in_save_menu());
                     // S and Space in event order, then the pad's progress set.
                     let mut progress_inputs = Vec::new();
                     for event in &events {
@@ -6411,153 +6585,104 @@ fn run_game(
                         PadAction::Continue => Some(ProgressMapInput::Continue),
                         _ => None,
                     }));
+                    if in_save_menu {
+                        // 4D0AD8 binds no keys once its screen is gone.
+                        progress_inputs.clear();
+                    }
                     for input in progress_inputs {
-                        match input {
-                            // FUN_00455CF0: S plays sound 3 and asks for the save menu.
-                            ProgressMapInput::Save => {
-                                let checkpoint = (|| -> Result<_, String> {
-                                    let route = world_complete_results
-                                        .progress_map_route()
-                                        .ok_or("campaign map route unavailable")?;
-                                    let manager = entity_manager
-                                        .as_ref()
-                                        .ok_or("player manager unavailable")?;
-                                    let player = manager.player().ok_or("player unavailable")?;
-                                    let v2k_game::entity_collision_state::RetailRuntimeValue::Known(
-                                        cargo,
-                                    ) = manager.campaign_cargo_controller_state()
-                                    else {
-                                        return Err("cargo snapshot unavailable".into());
-                                    };
-                                    // 4D0568's low words are153..188 for logical1..36;
-                                    // 451FB0 uses only that half of the name/briefing pair.
-                                    let name = session
-                                        .cache
-                                        .global_string(
-                                            152 + route.destination_logical_level() as usize,
-                                        )
-                                        .or_else(|| session.cache.global_string(128))
-                                        .ok_or("checkpoint name unavailable")?;
-                                    let snapshot = v2k_game::save::NativeSaveSnapshot {
-                                        logical_level_id: route.destination_logical_level(),
-                                        player: SavedPlayerState {
-                                            position_raw: player.position_raw(),
-                                            velocity_raw: player.velocity_raw(),
-                                            heading_raw: player.heading_raw(),
-                                            pitch_raw: 0,
-                                            roll_raw: 0,
-                                            health_raw: player_hull.health_raw,
-                                        },
-                                        craft: &player_craft,
-                                        hull: &player_hull,
-                                        inventory: &weapon_inventory,
-                                        capabilities: &player_capabilities,
-                                        cargo: &cargo,
-                                        campaign: &player_campaign_progress,
-                                    };
-                                    let mut checkpoint = snapshot
-                                        .encode_campaign_checkpoint(
-                                            &save_baseline,
-                                            route.arrival(),
-                                            name,
-                                        )
-                                        .map_err(|error| {
-                                            format!("checkpoint snapshot: {error:?}")
-                                        })?;
-                                    // The save keeps session +1C4 at state +1B0.
-                                    checkpoint.set_session_flags_raw(session_cheats);
-                                    Ok(checkpoint)
-                                })();
-                                match checkpoint {
-                                    Ok(checkpoint) => {
-                                        save_baseline = checkpoint.state_payload;
-                                        // FUN_00450EF0 reads session +0x14 and
-                                        // the live rank; both are the snapshot's.
-                                        let name_end = save_baseline[..0x20]
-                                            .iter()
-                                            .position(|&byte| byte == 0)
-                                            .unwrap_or(0x1f);
-                                        v2k_game::game_state::set_session_save_row(Some((
-                                            String::from_utf8_lossy(&save_baseline[..name_end])
-                                                .into_owned(),
-                                            v2k_game::save::native_rank_score(&save_baseline),
-                                        )));
-                                        map_save_checkpoint = Some(checkpoint);
-                                        keys_down.clear();
-                                        mouse_buttons_down.clear();
-                                        paused_world_frame =
-                                            renderer.capture_frame(FrameCaptureSource::Presented);
-                                        paused_world_redraw_pending = resized_before_pause;
-                                        let ctx = MenuCtx {
-                                            cache: &session.cache,
-                                            config: &config,
-                                            saves: Some(&save_manager),
-                                            display_modes: &display_modes,
-                                        };
-                                        let mut shell = MenuShell::new_single_player_menu(
-                                            &ctx, v2k_game::game_state::SinglePlayerMenuKind::CampaignSave,
-                                        );
-                                        shell.engine.apply_cheat_enables(session_cheats);
-                                        state = GameState::Paused { shell };
-                                        GlobalSoundRuntime::new(
-                                            &session.cache,
-                                            &mut world_fx,
-                                            sound_manager.as_mut(),
-                                        )
-                                        .play_global_sound(3);
-                                        continue 'main_loop;
-                                    }
-                                    Err(error) => eprintln!("Campaign save blocked: {error}"),
-                                }
-                            }
-                            ProgressMapInput::Continue => {
-                                if let Some(route) = world_complete_results.continue_progress_map()
-                                {
-                                    GlobalSoundRuntime::new(
-                                        &session.cache,
-                                        &mut world_fx,
-                                        sound_manager.as_mut(),
-                                    )
-                                    .play_global_sound(v2k_game::world_complete_results::FUN_00455CC0_CONTINUE_SOUND_ID);
-                                    keys_down.clear();
-                                    mouse_buttons_down.clear();
-                                    state = GameState::Loading {
-                                        level_id: route.destination_level_id(),
-                                        purpose: LoadingPurpose::CampaignWarp {
-                                            source_level_id: route.source_level_id(),
-                                            arrival: route.arrival(),
-                                        },
-                                    };
-                                    continue 'main_loop;
-                                }
-                            }
+                        // FUN_00455CC0 / FUN_00455CF0: sound 3 and +294; S
+                        // adds +28B. Both stay bound while Klaus closes.
+                        GlobalSoundRuntime::new(
+                            &session.cache,
+                            &mut world_fx,
+                            sound_manager.as_mut(),
+                        )
+                        .play_global_sound(
+                            v2k_game::world_complete_results::FUN_00455CC0_CONTINUE_SOUND_ID,
+                        );
+                        if let Some(map) = campaign_map.as_mut() {
+                            map.request_leave(input == ProgressMapInput::Save);
                         }
                     }
+                    let switch = match campaign_map.as_mut() {
+                        Some(map) => {
+                            let mut effects = GlobalSoundRuntime::new(
+                                &session.cache,
+                                &mut world_fx,
+                                sound_manager.as_mut(),
+                            );
+                            if in_save_menu {
+                                // 4558A0's 428B00 runs the world clock.
+                                retail_tick = retail_clock.advance(u64::from(elapsed_micros));
+                                map.tick_save_menu(elapsed_micros, &mut effects)
+                            } else {
+                                map.tick_map(elapsed_micros, &mut effects)
+                            }
+                        }
+                        None => None,
+                    };
                     world_complete_results.advance(elapsed_micros);
+                    // 4D07E8: the map's links, nodes, labels and prompt go
+                    // straight to the screen, then the queue drains Klaus
+                    // over them. 4D0810 has no map: the live list holds only
+                    // Klaus and the camera proxy here.
                     renderer.begin_scene(RenderScene::Menu);
                     renderer.clear(0.0, 0.0, 0.0);
-                    if let (Some(backdrop), Some(fonts)) =
-                        (overlay_51_backdrop.as_ref(), menu_fonts.as_ref())
-                    {
-                        draw_overlay_51_backdrop(
-                            &mut *renderer,
-                            fonts,
-                            backdrop,
-                            &player_campaign_progress,
-                            world_complete_results.age_ms(),
-                        );
-                        if let Some(prompt) = world_complete_results
-                            .continue_prompt_line(|id| session.cache.global_string(id))
+                    if !in_save_menu {
+                        if let (Some(backdrop), Some(fonts)) =
+                            (overlay_51_backdrop.as_ref(), menu_fonts.as_ref())
                         {
-                            draw_gameplay_notifications(
+                            draw_overlay_51_backdrop(
                                 &mut *renderer,
                                 fonts,
-                                &[prompt],
-                                GameplayTextContext::AuthoredCanvas,
+                                backdrop,
+                                &player_campaign_progress,
+                                world_complete_results.age_ms(),
                             );
+                            if let Some(prompt) = world_complete_results
+                                .continue_prompt_line(|id| session.cache.global_string(id))
+                            {
+                                draw_gameplay_notifications(
+                                    &mut *renderer,
+                                    fonts,
+                                    &[prompt],
+                                    GameplayTextContext::AuthoredCanvas,
+                                );
+                            }
                         }
                     }
+                    if let Some(map) = campaign_map.as_ref() {
+                        draw_klaus_handoff_overlay(
+                            &mut *renderer,
+                            KlausHandoffFrame {
+                                shell: &map.klaus,
+                                cache: &session.cache,
+                                colors: &face_colors,
+                                retail_tick,
+                            },
+                        );
+                    }
                     renderer.present();
+                    match switch {
+                        Some(CampaignMapSwitch::Load) => {
+                            // 4D0918 loads on the next frame, and its 451710
+                            // opens Klaus over the new world.
+                            replay_world_cover =
+                                campaign_map.take().map(CampaignMapKlaus::into_klaus);
+                            if let Some(route) = world_complete_results.continue_progress_map() {
+                                keys_down.clear();
+                                mouse_buttons_down.clear();
+                                state = GameState::Loading {
+                                    level_id: route.destination_level_id(),
+                                    purpose: LoadingPurpose::CampaignWarp {
+                                        source_level_id: route.source_level_id(),
+                                        arrival: route.arrival(),
+                                    },
+                                };
+                            }
+                        }
+                        other => campaign_map_switch = other,
+                    }
                     continue 'main_loop;
                 }
 
@@ -10730,20 +10855,19 @@ fn run_game(
                     }
                     keys_down.clear();
                     mouse_buttons_down.clear();
-                    world_complete_results.open_progress_map(route);
-                    suspend_world_audio(
-                        &mut world_fx,
-                        &mut sound_manager,
-                        &mut entity_positional_audio,
-                        &mut player_fan_audio,
-                    );
                     // 450344 selects the destination before 454FF0
                     // builds the map's current-world blink node. Secret
                     // pads use the same phase-5 map as ordinary exits.
                     player_campaign_progress
                         .set_current_control_slot(world_control_slot(route.destination_level_id()));
-                    if let Some(ref mp) = music_player {
-                        apply_session_music_gate(&config, mp, true);
+                    // Event 2 selects 4D0A30: Klaus closes over this world
+                    // (453BA0/453C20) before 453E00 opens the map. A route's
+                    // +290 waits for the next visit; the Cheats selector's
+                    // +28C dispatches at the end of this one.
+                    if matches!(route, CampaignTransition::CheatSkip(_)) {
+                        enter_closing_leg!(ClosingSceneDestination::ProgressMap(route));
+                    } else {
+                        closing_scene_exit = Some(ClosingSceneDestination::ProgressMap(route));
                     }
                     continue 'main_loop;
                 }

@@ -1,6 +1,7 @@
 //! A menu replay through retail's cheats: the master code typed in play
 //! (Left Shift held over C H E A T S E Q), then Pause -> Cheats -> Skip to
-//! World, Right once for Mediaeval, and Space on the campaign map.
+//! World, Right once for Mediaeval, and Space on the campaign map once Klaus
+//! has closed over the world (about 53 frames) and the map is up.
 
 use std::path::Path;
 use std::process::Command;
@@ -40,7 +41,7 @@ fn replay() -> String {
     frame += 100;
     press(&mut keys, frame, "Right"); // world 1 -> 2
     press(&mut keys, frame + 30, "Return");
-    press(&mut keys, frame + 90, "Space"); // the campaign map
+    press(&mut keys, frame + 120, "Space"); // the campaign map
     format!("[{}]", keys.join(",\n"))
 }
 
@@ -72,7 +73,7 @@ fn skip_to_world_keeps_the_players_pose_into_the_chosen_world() {
         .arg("--input-replay")
         .arg(dir.join("keys.json"))
         .args(["--hidden", "--renderer", "software"])
-        .args(["--fixed-step-micros", "20000", "--frames", "520"])
+        .args(["--fixed-step-micros", "20000", "--frames", "620"])
         .arg("--event-log")
         .arg(&events)
         .output()
@@ -113,6 +114,8 @@ fn skip_to_world_keeps_the_players_pose_into_the_chosen_world() {
             ("playing", 13),
             ("paused", 13),
             ("playing", 13),
+            ("closing_scene_leg", 13),
+            ("playing", 13),
             ("loading", 13),
             ("playing", 14),
         ]
@@ -131,8 +134,9 @@ fn skip_to_world_keeps_the_players_pose_into_the_chosen_world() {
         .iter()
         .position(|(state, level)| state == "playing" && *level == 14)
         .unwrap();
-    // The skip leaves after one more tick; the map holds the world, so the
-    // destination's first frame has the pose the source left with.
+    // The skip leaves after one more tick; the exit leg and the map hold the
+    // world, so the destination's first frame has the pose the source left
+    // with.
     assert_eq!(pose(players[arrival - 1]), pose(players[arrival]));
     // One tick ran between the pause menu closing and the map.
     let resumed = states
@@ -145,5 +149,12 @@ fn skip_to_world_keeps_the_players_pose_into_the_chosen_world() {
         .filter(|line| line["ev"] == "frame")
         .map(|line| line["tick"].as_u64().unwrap())
         .collect();
-    assert_eq!(ticks[arrival - 1], ticks[resumed - 1] + 1);
+    // One frame of play runs the skip's tick, whose +28C starts the exit leg
+    // at once; the leg's 453BA0 then restarts the clock (44FE20).
+    let leg = states
+        .iter()
+        .position(|(state, _)| state == "closing_scene_leg")
+        .unwrap();
+    assert_eq!(leg, resumed + 1);
+    assert_eq!(ticks[leg], 0);
 }

@@ -16,6 +16,7 @@ pub mod attract_attention;
 pub mod base_factory_progression;
 pub mod behavior;
 pub mod campaign_failure;
+pub mod campaign_map;
 pub mod campaign_transition;
 pub mod chase_camera;
 pub mod chase_target;
