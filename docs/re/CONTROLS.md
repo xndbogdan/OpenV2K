@@ -90,14 +90,22 @@ The craft descriptors with callbacks: `0x4CD850` held fire (the PC's),
 \* A foreground retail capture observes Enter and right mouse feeding the same
 held trigger. This supersedes the earlier Ctrl inference from the isolated
 input-reader decompile; Ctrl does not fire in the captured retail configuration.
-The table's Ctrl records name descriptor `0x4FE6A0`, which nothing fills.
+The table's Ctrl records name descriptor `0x4FE6A0`, an empty descriptor
+whose slot-map entry (`0x004CDBA0`) is the controller's `+0x44`: Ctrl alone
+does nothing, but `FUN_004443B0`, the fire descriptor's callback, deploys the
+special weapon (`FUN_00444400`) when fire is pressed while Ctrl is held. The
+press is the fire descriptor's shared counter rising, so any fire source
+counts (a key, the right mouse button, joystick button 1).
 
 Fire has three keyboard records, each excluding a chord: ENTER requires LALT
 up (LALT+ENTER is the Full Screen toggle, bound by the screen sets below), `/`
 requires A up, and A requires `/` and LSHIFT up. Record `0x004C2BB0` then binds
 A and `/` held together to the special-weapon callback `0x00444400`. The older
 table read A alone as the special deploy and LALT+ENTER as a confirm. These
-rows are static readings that no capture has exercised yet.
+rows are static readings that no capture has exercised yet. The port binds
+them as the table does: `/` and A fire with their exclusions, Return fires
+with LAlt up, and a fire press while Ctrl is held deploys as the chord
+does.
 
 The beam bindings deliberately **exclude** LShift. Their raw records require
 DIK D (`0x20`) or C (`0x2E`) at `+4` and place DIK LShift (`0x2A`) in the
@@ -134,6 +142,13 @@ subtracts that step from roll before its near-surface force correction, after
 which `FUN_0041A690` applies one `roll -= ((dt>>10)*roll)>>8` damping pass. The
 trimmed July 17 trace replays all 53 clean sustained steering transitions
 exactly; short partial-key frames remain a duty-cycle sampling limitation.
+Retail weighs each of the reader's ten held keys by its time held within
+the frame (`FUN_00471400`: the value record's on-time since the frame
+pump's stamp), clamped to the frame's duration `dt`: the arrows give
+`(sensitivity × held / 15) × 0xD80 / dt`, S and X `held × 0x900 / dt`.
+The port counts a key down at the frame's end as held for the whole frame
+and one released within it as not held; matching retail needs each key
+event's time within the frame. Not ported.
 
 The pitch-channel signs are statically conclusive: binding records `0x4C2CC8`
 (UP) and `0x4C2CF0` (DOWN) map through slots `+0x50/+0x54`; the reader adds UP
@@ -487,6 +502,25 @@ write value records that the frame pump stamps and drains each frame.
 | `FUN_00471400` | the time a value record has been held: while it is on (`+18`), adds the clock's advance since `+20/+24` to `+28/+2C` and moves `+20/+24` to now; returns the low word of the total (ten reads in `FUN_004445E0`) |
 | `FUN_00428C10` | counts the devices with an input state (`004DB0E8`, twelve slots) whose value record at `004DB118` reads zero (`FUN_004715E0`) |
 | `FUN_00428C60` | the same count over device slots 1, 2 and 8 only, for the menu's visibility mask |
+
+The value record each device's count reads (`004DB118`, aimed at
+`004DB148` by `FUN_00428B40`) changes only through the global set
+`004BEE20`, which binds input 31, a device's absent flag, for the mouse and
+the console slots 6 and 8. The PC's keyboard has an input state in every
+mode with keys, and nothing binds its record, so `FUN_00428C10` never
+counts zero on the PC: the suspension for a missing device (`FUN_00453AD0`
+opening `0x4C5008` past phase 4) and the results screens' string 132
+("Paused - please insert controller", `FUN_004514A0`) never show, and the
+port has neither. `FUN_00428C60` sets visibility bit `0x10` with a mouse,
+but no PC menu row carries that bit (the hidden Vibration row has none), so
+it shows nothing either.
+
+A value record with a period re-delivers its axis value only when its timer
+fires (`FUN_00471540` arms it, `FUN_00471710` is the timer, `FUN_004715B0`
+stops it). The period is the record's descriptor's third word. The PC's
+axis descriptors are the zeroed `004FE660..004FE6C0` (mouse and joystick
+axes, slot map `0x004CDB58`), which no code writes, so no PC axis is
+throttled: every change is delivered at once, as in the port.
 
 ## Port controller layouts
 

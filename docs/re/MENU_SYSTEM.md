@@ -1005,6 +1005,21 @@ proof of the inter-world demo-end branch. The independent completion-mode
 trace below proves that the promotional page is a renderer substitution, not
 an attract-table policy.
 
+### The attract demo in the port
+
+Not ported. The idle frontend's countdown (`FUN_0042B5D0`: 60 s, then 10 s
+reloads) starts game mode 4 seven times in eight and mode 1 otherwise.
+Mode 4 (`FUN_0044F650`) draws one RNG word and picks a logical world from
+the 12-row table at `004D0CC8` (worlds 7, 27, 2, 3, 5, 6, 11, 12, 31, 11,
+24 and 26), with the player's pose from the row's `+0A` and `+0E`; the
+session runs it in phase 4, where `FUN_00453330` installs no craft keys,
+the HUD is off, the cinematic follow and Section-2 records of phases below
+5 run, logical world 11 builds no player (`FUN_00450390`), and the exit
+(`FUN_00453E00`) returns to the frontend (`FUN_0044FEB0`). Mode 1 plays
+Intro2 the same way. The lab's idle frontend starts the demo at pass 3133
+and is back at 5986. What ends the demo world after about 57 s, and the
+world records it plays, are not traced.
+
 ## Screen tree highlights (full tree in ../port/crates/v2k-game/data/menu_tree.json)
 
 - **0x4C0CF8 = MAIN MENU RING** (flags 0xC4, 7 prop items): `player4`(start),
@@ -1342,6 +1357,30 @@ without Continue's Klaus command; the port logs that as blocked until the
 map's Klaus is ported.
 
 ### Progress map
+
+In phase 5 every world exit (`+290`) goes through Klaus. Descriptor
+`4D0A30`'s entry `FUN_00453BA0` runs `FUN_00453C20`: the class-1 proxy on
+the player, at rest, and Klaus's closing command 3 over the world; its tick
+`FUN_00453E00` waits for Klaus (`FUN_0042D210`) and switches to the map
+`4D0AA0`. The map's entry `FUN_00454EE0` sets pause mask 8, loads overlay 51
+and, unless `+292` (Replay this World) is set, queues Klaus's command 2 with
+one actor visit (`FUN_00454FA0`); with `+28E` it goes straight to the load.
+Space (`FUN_00455CC0`) and S (`FUN_00455CF0`, which also sets `+28B`) play
+sound 3 and set `+294`. The map's tick `FUN_004555A0` leaves at once with
+`+292` or `+28E`; with `+294` it runs `FUN_00453C20` again, waits for Klaus
+and switches to the load `4D0918`, or with `+28B` to the save menu
+`4D0AD8`. Its exit `FUN_004556A0` takes the entry snapshot unless `+292`.
+The save menu's entry `FUN_004557D0` gives Klaus command 4 and opens
+`0x4D1090`; its tick `FUN_004558A0` loads the next world once Continue set
+`+297`, and after P (or Escape at the root, which clears `+28B` through
+`FUN_00450E60`) gives Klaus command 1 and returns to the map after 1000 ms.
+
+The retail lab (Cheats Skip to World, 20-ms passes): the selection at 1548,
+Klaus closed by about 1600, the map from 1606, Space at 1608, Klaus closing
+again over black from 1612, the next world loading at 1662 and Klaus open
+over it by 1710. The port opens the map at the exit and loads at Space,
+without these Klaus legs; P on the save menu stays a logged stop until they
+are ported.
 
 | Routine | Does |
 | --- | --- |
