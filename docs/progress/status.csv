@@ -1088,7 +1088,7 @@ address,status,note
 0x0042CEA0,implemented,Klaus command word DAT_004DB210
 0x0042CEB0,implemented,Klaus model argument DAT_004DB218
 0x00457730,implemented,32-bit integer square root: zero below one, 0xFFFF from 0x40000000 (v2k_formats::fixed_math::retail_integer_sqrt)
-0x00456FB0,documented,the loading card's timer callback: real-time deltas, Klaus, the eye and +270; the port runs the final callback's Klaus visit and eye, not the callbacks during a long load (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
+0x00456FB0,approximated,the loading card's timer callback: real-time deltas, Klaus, the eye, the card and the 9/8 re-arm; the port runs it during the overlay read and after the load, but a callback due while the world is built runs once late (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
 0x0043A8E0,implemented,fly clock armed from the top screen's flags before a switch: 0x40 in the frontend; 0x08 in play; with 0x20 only on a pop from the base depth (fly_transition_armed; docs/re/MENU_SYSTEM.md#runtime-state-bss)
 0x00454390,implemented,progress map prompt: global string 25 centred in the green font 0 of 004FE630 (docs/re/MENU_SYSTEM.md#progress-map)
 0x00456680,implemented,in-game descriptor switch; its pass draws nothing (docs/re/MENU_SYSTEM.md#progress-map)
@@ -1100,3 +1100,4 @@ address,status,note
 0x0042B040,implemented,the card's green Loading at layout point 12 on the clock's even 20-tick half; the branding sprites only with the record's +0C (the frontend's card and its frames; never a world load's) (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
 0x00454460,implemented,progress map nodes: the current slot blinks on odd +270 / 100; the map clock reads 0 on the map's first frame (docs/re/MENU_SYSTEM.md#progress-map)
 0x00442B40,documented,the particle free runs the class's +2C callback: ported for the Virus and Antidote Bombs (FUN_00441850) and the class-41 bolt; the class-4/54 shells' FUN_00441850 at a free is not (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x004571B0,implemented,a world load waits for the card timer's next callback before returning (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
