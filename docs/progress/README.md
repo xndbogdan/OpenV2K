@@ -43,12 +43,12 @@ Where the code's references are thinnest:
 |---|---:|---:|---:|
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 25 | 3 | 101 |
 | [Controls](../re/CONTROLS.md) | 17 | 1 | 53 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 103 |
-| [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 28 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 139 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 102 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 27 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 138 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
-| [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 151 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 59 |
+| [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 156 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 57 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 2 | 0 | 45 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 2 | 1 | 54 |
 

@@ -1404,6 +1404,21 @@ twelve passes after Space, only the tip of Klaus's closing shows at the
 bottom; and after the load the map's prompt ("Press S to Save, Space to
 Continue") still shows over the glide (1670) and play's first frames (1680).
 
+Draw order: Klaus is drawn over the map art. In the map's list the world's
+view (`FUN_00453570`) and its actors (`FUN_00453760`) only append records to
+the primitive queue that `FUN_0042AA40` reset. `FUN_00454390` then draws the
+map's links, nodes and labels at once, through the device's sprite and quad
+slots (`+1030` via `FUN_0047A7A0`, `+1098` via `FUN_0047AA20`, the text
+through `FUN_00470A70`), after the scene starts (`FUN_0042AA80`) and before
+`FUN_0042AA90` drains the queue. Klaus and the world's view are therefore
+drawn over the art, and the prompt (`FUN_00453AA0`) over both. The loading
+card is the other way round: `FUN_0042AF00` drains Klaus first and then
+draws the card (`FUN_0042B040`) over him. In the lab (Skip to World, then S
+on the map and P on the save menu) the map art and Klaus's tip share frames
+(1630, 1845) without touching, so the order rests on the code. After
+P, Klaus's command 1 runs over black for about a second before the map
+returns.
+
 | Routine | Does |
 | --- | --- |
 | `FUN_00454C00` | the progress map's point transform (from `FUN_00454520`): rotates (x, y) by a Q15 sine and cosine and scales each axis by the screen's scale (`004FE620`) over 256 |
