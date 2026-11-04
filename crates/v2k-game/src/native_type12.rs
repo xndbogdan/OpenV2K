@@ -296,6 +296,7 @@ pub fn tick_type12_family(
     frame: Type12Frame<'_>,
 ) -> Type12FamilyTick {
     let shared_frame = shared::NativeGroundActorFrame {
+        terminal: None,
         resources: shared::NativeGroundResources::ReadOnly(frame.resources),
         world_fx: frame.world_fx,
         elapsed_micros: frame.elapsed_micros,

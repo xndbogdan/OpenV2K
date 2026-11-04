@@ -973,6 +973,11 @@ impl EntityManager {
                     &mut || u32::from(world_fx.next_shared_retail_random_u16()),
                 )
                 .map_err(|error| format!("working factory: {error:?}"))?;
+                // 410090 installs 4C8A30 for every row; no type copy writes
+                // its null +30 type-hit hook (Type66 holds it from its
+                // constructor identity already).
+                entity.collision.pair_callbacks.type_hit_callback_address =
+                    RetailRuntimeValue::Known(None);
             }
             6 => {
                 crate::main_base_runtime::publish_main_base(

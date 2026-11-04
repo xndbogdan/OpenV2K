@@ -674,11 +674,14 @@ world runs more than 8,200 general visits over 67 pair kinds in 32 worlds
 | Hive x Type79, Type90, Type116 | the Hive's `0xC00` consuming branch (operation 33, deferred destroy) is unported | 28, 29, 41 |
 | Type9 x Type53, Type86 x Type94, Type94 x Type95 | `C910` capture by a Type53 or Type94, which no captor lane owns | 15, 24, 40 |
 | Type57 x Type57, Type57 x Type94 | the Hive-born Type57's owner is pending | 20, 21, 24, 36 |
-| Type116 x Type83, Type8 x Type83 | Type83 has tasks and no native owner | 39, 42, 46 |
 | Type125 x Type86 | Type125 has tasks and no native owner | 37 |
 | Type110 x Type33 | Type110 has tasks and no native owner | 47 |
 | Type40 x Type30, Type5 x Type5 | the native owner was not complete at that tick | 19, 47 |
 | Type76 x Type3 | the response would move a Type3, which has no native owner | 31 |
+
+The Portable Radar's Primary (`405540`) writes only its `4055C0` destructor
+(`+0x14`) after `405FF0`, so its contact hook is null and Type83's pairs
+(Type116 and Type8 in worlds 39, 42 and 46) take the general visit.
 
 ### Retail comparison
 

@@ -198,27 +198,45 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
             grounded,
         );
     }
-    run_surface::<P>(
-        manager,
-        id,
-        crate::intro2_common_dying::Intro2ActorSurfaceFrame {
-            metadata,
-            terrain,
-            active_model_extent_raw: model.radius,
-            elapsed_micros: dt,
-            retail_tick: frame.retail_tick,
-            particle_environment: crate::world_fx::ParticleEnvironment::Terrain(
-                crate::world_fx::TerrainCollisionContext::from_current_level_cache(
-                    &frame.resources,
-                )
+    let surface_frame = crate::intro2_common_dying::Intro2ActorSurfaceFrame {
+        metadata,
+        terrain,
+        active_model_extent_raw: model.radius,
+        elapsed_micros: dt,
+        retail_tick: frame.retail_tick,
+        particle_environment: crate::world_fx::ParticleEnvironment::Terrain(
+            crate::world_fx::TerrainCollisionContext::from_current_level_cache(&frame.resources)
                 .ok_or(Block::Runtime("particle terrain context"))?,
-            ),
-        },
-        frame.world_fx,
-        death,
-        &mut frame.capture,
-        &frame.resources,
-    )?;
+        ),
+    };
+    if frame.terminal.is_some() {
+        if !matches!(
+            frame.capture,
+            NativeCaptureDispatch::NoCapture | NativeCaptureDispatch::Turret { .. }
+        ) || !P::manager_authenticates(manager, id)
+        {
+            return Err(Block::Allocation);
+        }
+        let extent = surface_frame.active_model_extent_raw;
+        let head = crate::intro2_common_dying::run_actor_surface_head(
+            manager,
+            id,
+            &surface_frame,
+            P::allocation_authenticates,
+        )
+        .map_err(Block::Surface)?;
+        run_lent_terminal_surface::<P>(manager, id, metadata, extent, head, frame, death)?;
+    } else {
+        run_surface::<P>(
+            manager,
+            id,
+            surface_frame,
+            frame.world_fx,
+            death,
+            &mut frame.capture,
+            &frame.resources,
+        )?;
+    }
     // 413135..413149 runs18640 with the rebuilt basis and pre-integration
     // parent origin, after the complete type callback and before12DA0 motion.
     P::update_attachment(manager, id)?;
@@ -228,6 +246,77 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
     // intrusive walk owns 11AD0 terrain/static/pair contacts after particles.
     // A missing contact adapter must not freeze this earlier actor callback.
     Ok(())
+}
+
+/// E370 with the lent world, after its timer write: `162B0` runs `16750`,
+/// then `10C10`'s terminal (`BAC0`/`BC90`, `BAF0`'s radial) inside the tick,
+/// before the bubble and sound tail, which meets the terrain that radial may
+/// have cratered.
+fn run_lent_terminal_surface<P: NativeGroundActorProfile>(
+    manager: &mut EntityManager,
+    id: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+    extent: u16,
+    head: crate::intro2_common_dying::ActorSurfaceHead,
+    frame: &mut NativeGroundActorFrame<'_>,
+    death: &mut Option<NativeGroundTerminalPublication>,
+) -> Result<(), NativeGroundActorBlock> {
+    use crate::intro2_common_dying::{
+        release_surface_relation, run_actor_surface_tail, ActorSurfaceHead,
+    };
+    use NativeGroundActorBlock as Block;
+    let remaining = match head {
+        ActorSurfaceHead::Tail(remaining) => remaining,
+        ActorSurfaceHead::Lifecycle(after) => {
+            release_surface_relation(manager, id, metadata).map_err(Block::Surface)?;
+            let (NativeGroundResources::Mutable(resources), Some(lent)) =
+                (&mut frame.resources, frame.terminal.as_mut())
+            else {
+                return Err(Block::Runtime("E370 terminal death without the lent world"));
+            };
+            let player = match &mut lent.world {
+                crate::specialized_actor_task_production::SpecializedActorTaskWorld::Playing {
+                    player_hull,
+                    extra_lives,
+                } => Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                    hull: player_hull,
+                    extra_lives: *extra_lives,
+                }),
+                crate::specialized_actor_task_production::SpecializedActorTaskWorld::Cinematic => {
+                    None
+                }
+            };
+            *death = P::publish_direct_surface_death(
+                manager,
+                id,
+                &mut NativeGroundDeathContext::Terminal {
+                    resources,
+                    fx: frame.world_fx,
+                    static_damage: lent.static_damage,
+                    notifications: lent.notifications,
+                    retail_tick: frame.retail_tick,
+                    tasks: lent.scheduler,
+                    player,
+                },
+            )
+            .map_err(Block::Surface)?
+            .publication;
+            (after < 75).then_some(after)
+        }
+    };
+    let context =
+        crate::world_fx::TerrainCollisionContext::from_current_level_cache(&frame.resources)
+            .ok_or(Block::Runtime("particle terrain context"))?;
+    run_actor_surface_tail(
+        manager,
+        id,
+        remaining,
+        extent,
+        crate::world_fx::ParticleEnvironment::Terrain(context),
+        frame.retail_tick,
+        frame.world_fx,
+    )
+    .map_err(Block::Surface)
 }
 
 fn run_surface<P: NativeGroundActorProfile>(

@@ -441,6 +441,22 @@ impl GameplayNotifications {
         self.queue_direct(0xc8, 0, retail_tick);
     }
 
+    /// Queue `FUN_00419010`'s direct text `0xCF` when the understaffed
+    /// countdown runs out, just before its `10C10` on the factory.
+    pub fn queue_factory_understaffed(&mut self, retail_tick: i32) {
+        self.queue_direct(
+            crate::factory_production_owner::FACTORY_OWNER_UNDERSTAFFED_DIRECT_TEXT_ID.into(),
+            0,
+            retail_tick,
+        );
+    }
+
+    /// Queue `FUN_004198A0`'s direct text `0xD6`, once per live actor that a
+    /// factory's global death broadcast visits.
+    pub fn queue_global_death_broadcast(&mut self, retail_tick: i32) {
+        self.queue_direct(0xd6, 0, retail_tick);
+    }
+
     /// Queue retail string `0xCE` after repair or a visible staffing clamp
     /// reaches capacity.
     pub fn queue_factory_capacity_staffing(&mut self, retail_tick: i32) {

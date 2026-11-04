@@ -147,6 +147,15 @@ pub struct Intro2Type66Frame<'a> {
     pub retail_tick: u32,
     pub world_style_raw: u32,
     pub main_base_abort_active: bool,
+    /// Lent by the scheduler: a terminal `19750` with its global death
+    /// broadcast (bit `0x10`) runs `10C10` on other actors.
+    pub lent: Option<Intro2Type66LentWorld<'a>>,
+}
+
+/// Every owner of the pass and the scene's player.
+pub struct Intro2Type66LentWorld<'a> {
+    pub scheduler: &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    pub world: crate::specialized_actor_task_production::SpecializedActorTaskWorld<'a>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -545,9 +554,14 @@ fn run_factory_callback(
                         let death = super::death::finish_intro2_type66_progressive_death(
                             manager,
                             id,
-                            frame.resources,
                             frame.world_fx,
-                            frame.static_damage,
+                            &mut super::death::Intro2Type66TerminalWorld {
+                                resources: frame.resources,
+                                static_damage: frame.static_damage,
+                                notifications: frame.notifications,
+                                retail_tick: frame.retail_tick,
+                                lent: frame.lent.as_mut(),
+                            },
                         )
                         .map_err(Block::Death)?;
                         tick.progressive_death_presentation_requested |=
@@ -588,6 +602,24 @@ fn run_factory_callback(
                     } => frame
                         .notifications
                         .queue_factory_capacity_staffing(frame.retail_tick as i32),
+                    // 419010 queues 0xCF, then 10C10 on its own factory: a
+                    // live one revives through 19750 and AC60 republishes
+                    // Working Factory, retiring this executing wrapper.
+                    FactoryProductionOwnerAction::EmitDirectText {
+                        direct_text_id: FACTORY_OWNER_UNDERSTAFFED_DIRECT_TEXT_ID,
+                        sub_parameter: 0,
+                        ..
+                    } => frame
+                        .notifications
+                        .queue_factory_understaffed(frame.retail_tick as i32),
+                    FactoryProductionOwnerAction::InvokeUnderstaffedDeath { .. } => {
+                        super::death::publish_intro2_type66_standard_death(
+                            manager,
+                            id,
+                            frame.world_fx,
+                        )
+                        .map_err(Block::Death)?;
+                    }
                     FactoryProductionOwnerAction::QueueHudResource {
                         resource_id: FACTORY_OWNER_CAPACITY_HUD_RESOURCE_ID,
                         ..

@@ -476,9 +476,11 @@ pub struct Type38Frame<'a> {
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
-    /// The turrets' 425160 hands 4147A0's infected firing hint here.
-    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
+    /// The turrets' 425160 hands 4147A0's infected firing hint to the lent
+    /// notifications.
     pub notification_phase: crate::gameplay_notifications::GameplayNotificationPhase,
+    /// E370's 162B0 runs the class49 terminal inside the tick.
+    pub terminal: shared::NativeGroundTerminalWorld<'a>,
 }
 
 pub fn tick_type38_family(
@@ -494,15 +496,15 @@ pub fn tick_type38_family(
         capture: match owner {
             Type38FamilyOwner::Type107(_) | Type38FamilyOwner::Type121(_) => {
                 shared::NativeCaptureDispatch::Turret {
-                    notifications: frame.notifications,
                     notification_phase: frame.notification_phase,
                 }
             }
             _ => shared::NativeCaptureDispatch::NoCapture,
         },
+        terminal: Some(frame.terminal),
     };
-    // No row has a class12 publication: a terminal death leaves no
-    // replacement owner (E370's lifecycle death is a held boundary).
+    // No row has a class12 publication: a terminal death, from a hit or
+    // E370's lifecycle, leaves no replacement owner.
     macro_rules! tick {
         ($owner:expr, $variant:ident) => {{
             let tick = shared::tick_native_ground_actor(manager, $owner, shared_frame);

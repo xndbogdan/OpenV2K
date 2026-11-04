@@ -63,12 +63,21 @@ pub enum NativeCaptureDispatch<'a> {
         tasks: &'a mut dyn crate::intro2_type17::capture::CaptureTaskCustody,
         notifications: &'a mut GameplayNotifications,
     },
-    /// No capture; class29's turret task lends `425160` the notification
-    /// sink for `4147A0`'s infected firing hint.
+    /// No capture; class29's turret task lends `425160` the frame's
+    /// notification sink for `4147A0`'s infected firing hint.
     Turret {
-        notifications: &'a mut GameplayNotifications,
         notification_phase: crate::gameplay_notifications::GameplayNotificationPhase,
     },
+}
+
+/// What a visit borrows when E370's `162B0` may run a class1/49/63 terminal
+/// inside the tick: every owner of the pass, the static queue, the
+/// notifications and the scene's player, as the weapon pass lends them.
+pub struct NativeGroundTerminalWorld<'a> {
+    pub scheduler: &'a mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler,
+    pub static_damage: &'a mut crate::static_damage::StaticDamageScheduler,
+    pub notifications: &'a mut GameplayNotifications,
+    pub world: crate::specialized_actor_task_production::SpecializedActorTaskWorld<'a>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

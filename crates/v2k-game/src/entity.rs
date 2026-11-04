@@ -7647,7 +7647,7 @@ impl EntityManager {
             && request.requested_handle == FactoryRequestedEntityHandle::Allocate
             && request.entity_type == LEVEL_ONE_TYPE61_ENTITY_TYPE
             && entity.power_up_payload_packed == Some(request.spawn_parameter_6)
-            && entity.position_raw() == request.position_raw
+            // A pair push moves a product off its birth point; motion owns it.
             && entity.collision.recent_relation_id_at_0x60
                 == RetailRuntimeValue::Known(Some(source_factory.entity_id))
             && self.live_type66_matches_factory_birth_source(source_factory)

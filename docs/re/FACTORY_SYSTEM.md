@@ -391,6 +391,18 @@ delivery pose idles on the first dying frame. Stage 32 with `param_3 == 0`
 requests the shared session-`+0x295` flash through `FUN_00456750`. A zero
 or missing pickup handle is still a no-op.
 
+The native Working Factory owner (Type66, Type82, Type125) runs the
+understaffed death in place: when `+0x6C` reaches the limit `+0x14`,
+`FUN_00419010` queues text `0xCF` and calls `FUN_00410C10` on its own
+factory, whose `FUN_00419750` revives it into the staged death and whose
+`AC60` republishes Working Factory; `FUN_00456BD0` and the rest of the
+callback follow. `+0x6C` is not reset, but `+0x94` is now nonzero, so later
+frames take `FUN_00419B50`. A terminal template with bit `0x10` makes
+`FUN_00419750` walk the live list after `FUN_00419630`: `FUN_004198A0` queues
+text `0xD6` for each actor and runs `FUN_00410C10` on capability-`0x4000`
+bodies (the Type106 of worlds 37, 38 and 40). See the
+[mid-play abort](CAMPAIGN_FAILURE.md#mid-play-abort).
+
 The focused activation transcript
 `runtime_re/captures/local/20260731-001224-second-scientist-factory-activation-v2.txt`
 closes that fixture's retail handoff and first product. Main Base source

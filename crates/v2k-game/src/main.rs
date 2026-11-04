@@ -7822,6 +7822,8 @@ fn run_game(
                             eprintln!("Radar redraw after the sea change stopped: {error}");
                         }
                         // Then the queued terrain ripples (FUN_004371B0).
+                        let extra_lives =
+                            RetailRuntimeValue::Known(player_campaign_progress.extra_lives());
                         for stop in v2k_game::terrain_ripple::advance_terrain_ripples(
                             elapsed_micros,
                             &mut session.cache,
@@ -7829,6 +7831,24 @@ fn run_game(
                             &mut world_fx,
                             &mut static_damage,
                             &mut main_base_level_abort.outer_frame_sequence,
+                            &mut |cache, entities, world_fx, scheduler, origin_raw, template| {
+                                apply_playing_world_radial(
+                                    PlayingWorldRadialFrame {
+                                        cache,
+                                        entities,
+                                        scheduler,
+                                        world_fx,
+                                        player_hull: &mut player_hull,
+                                        extra_lives,
+                                        actor_tasks: &mut specialized_actor_tasks,
+                                        notifications: &mut gameplay_notifications,
+                                        retail_tick,
+                                    },
+                                    origin_raw,
+                                    template,
+                                );
+                                Ok(())
+                            },
                         ) {
                             eprintln!(
                                 "Terrain ripple stopped at {} (terrain changed: {})",

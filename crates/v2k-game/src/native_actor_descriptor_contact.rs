@@ -866,6 +866,8 @@ pub(crate) fn task_has_null_contact(task: &ActorTaskRuntime) -> bool {
             | ActorTaskRuntime::MobbingDive(_)
             // 05420 writes only the 054A0 destructor (+14) after 05FF0.
             | ActorTaskRuntime::RemoteBeamer(_)
+            // 05540 writes only the 055C0 destructor (+14) after 05FF0.
+            | ActorTaskRuntime::PortableRadar
             // 07800's 01020 template leaves +18 zero.
             | ActorTaskRuntime::Megablast(_)
             // 07070's 01020 template leaves +18 zero too.

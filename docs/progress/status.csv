@@ -1005,7 +1005,7 @@ address,status,note
 0x00456740,implemented,session +293: the next frame's uniform terrain light (docs/re/RENDER_PIPELINE.md)
 0x00444400,implemented,Megablast deploy: count, cue 79, three Type65 in mode 1, text 0xC9 (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x004371B0,implemented,terrain_ripple.rs: one ripple frame's height change and its fallen cells
-0x004374B0,implemented,terrain_ripple.rs advance_terrain_ripples after the static programs and the radar sea redraw (main.rs)
+0x004374B0,implemented,terrain_ripple.rs advance_terrain_ripples after the static programs and the radar sea redraw (main.rs); a finished record runs its flash then 4566E0 radial (bit 0x04) then crater
 0x00437470,implemented,WorldFx::clear drops the ripple queue with the world
 0x0042A850,implemented,HUD setting at every world start: on; off past logical world 36 or below phase 5 (docs/re/HUD_RENDERING.md)
 0x0043BB20,implemented,save slot rows: number; rank and name columns (docs/re/MENU_SYSTEM.md#frontend-load-sequence-and-slot-count-runtime-confirmed-2026-07-17)
@@ -1074,7 +1074,7 @@ address,status,note
 0x00456BD0,documented,session HUD countdown words +2C8/+2CC; nothing in the simulation reads them and the port draws no countdown (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00401D30,documented,Trash Furniture's 0x24-byte record from CRT malloc; X and Z zeroed and Y left as heap residue (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00401DA0,implemented,Trash Furniture callback; a failed first scan steers toward the residue Y and is held with a logged stop (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
-0x00437390,implemented,template effects: bit 0x01 queues the deferred terrain ripple; flash and crater run at once; a radial bit is a logged stop (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
+0x00437390,implemented,template effects: bit 0x01 queues the deferred terrain ripple; flash and crater run at once; a radial bit without 0x01 is a logged stop (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00414AE0,documented,dynamic radial walk visits every live actor with no type filter; Type57 and the quiet flyers take their own deaths (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00454EE0,implemented,progress map entry: pause mask 8, the map clock, Klaus's 454FA0; overlay 51 is resident from startup (docs/re/MENU_SYSTEM.md#progress-map)
 0x00454FA0,implemented,map entry: Klaus command 2 with a 1-us visit (campaign_map.rs)
@@ -1092,3 +1092,7 @@ address,status,note
 0x0043A8E0,implemented,fly clock armed from the top screen's flags before a switch: 0x40 in the frontend; 0x08 in play; with 0x20 only on a pop from the base depth (fly_transition_armed; docs/re/MENU_SYSTEM.md#runtime-state-bss)
 0x00454390,implemented,progress map prompt: global string 25 centred in the green font 0 of 004FE630 (docs/re/MENU_SYSTEM.md#progress-map)
 0x00456680,implemented,in-game descriptor switch; its pass draws nothing (docs/re/MENU_SYSTEM.md#progress-map)
+0x004198A0,implemented,global death broadcast visit: queues text 0xD6 then 10C10 on a capability-0x4000 actor; returns zero (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
+0x00419750,implemented,factory death: revives into the staged death or at -1 runs the terminal template then the bit-0x10 live-list broadcast (docs/re/FACTORY_SYSTEM.md)
+0x00419010,implemented,native Working Factory update; the understaffed limit queues text 0xCF and 10C10s its own factory (docs/re/FACTORY_SYSTEM.md)
+0x0040E370,implemented,surface lifecycle; a Type38-family death runs the class49 terminal inside the tick in the lent world (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)

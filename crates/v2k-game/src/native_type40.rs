@@ -146,6 +146,7 @@ pub fn tick_type40(
         manager,
         owner,
         shared::NativeGroundActorFrame {
+            terminal: None,
             resources: shared::NativeGroundResources::ReadOnly(frame.resources),
             world_fx: frame.world_fx,
             elapsed_micros: frame.elapsed_micros,

@@ -183,6 +183,8 @@ pub struct NativeGroundActorFrame<'a> {
     pub elapsed_micros: u32,
     pub retail_tick: u32,
     pub capture: NativeCaptureDispatch<'a>,
+    /// Lent only to a profile whose E370 death is a class1/49/63 terminal.
+    pub terminal: Option<super::NativeGroundTerminalWorld<'a>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -660,10 +662,10 @@ fn run_frame<P: NativeGroundActorProfile>(
         }
         // Class29 D190's 408BD0, which no Primary precedes.
         Some(ActorTaskRuntime::Intro2GunTurret(_)) => {
-            let NativeCaptureDispatch::Turret {
-                notifications,
-                notification_phase,
-            } = &mut frame.capture
+            let (
+                NativeCaptureDispatch::Turret { notification_phase },
+                Some(super::NativeGroundTerminalWorld { notifications, .. }),
+            ) = (&frame.capture, &mut frame.terminal)
             else {
                 return Err(Block::Runtime("turret notification custody"));
             };

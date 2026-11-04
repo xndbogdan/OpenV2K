@@ -296,6 +296,7 @@ pub fn tick_type30(
     frame: Type30Frame<'_>,
 ) -> Type30FamilyTick {
     let shared_frame = shared::NativeGroundActorFrame {
+        terminal: None,
         resources: shared::NativeGroundResources::Mutable(frame.resources),
         world_fx: frame.world_fx,
         elapsed_micros: frame.elapsed_micros,
