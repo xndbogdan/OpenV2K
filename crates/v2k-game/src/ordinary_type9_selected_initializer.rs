@@ -46,7 +46,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OrdinaryType9SelectedEvidence {
     pub owner_id: u32,
-    pub authored_spawn_index: usize,
+    pub authored_spawn_index: Option<usize>,
     /// Exact constructor-final birth position copied into selected component
     /// `+0x90`; retained after task-private target state begins evolving.
     pub immutable_anchor_raw_at_0x90: [i16; 3],
@@ -77,7 +77,7 @@ pub enum OrdinaryType9SelectedInitializerPreflightError {
         actual: FreshLevel1Type9EntityRef,
     },
     AuthoredSpawnMismatch {
-        expected: usize,
+        expected: Option<usize>,
         actual: Option<usize>,
     },
     UnexpectedModelSlots {
@@ -227,7 +227,7 @@ pub(crate) fn preflight_fresh_level1_type9_selected_initializer(
             },
         );
     }
-    if entity.authored_spawn_index != Some(receipt.authored_spawn_index()) {
+    if entity.authored_spawn_index != receipt.authored_spawn_index() {
         return Err(
             OrdinaryType9SelectedInitializerPreflightError::AuthoredSpawnMismatch {
                 expected: receipt.authored_spawn_index(),
