@@ -4628,9 +4628,9 @@ fn run_game(
                 // CD tracks 2-7; track02.ogg = index 0 → index = world-1).
                 // Selection occurs even at Ambient=0; that setting only
                 // pauses the selected descriptor at its preserved cursor.
-                // Intro2 owns no CD track, and unproven retail mode overrides
-                // remain intentionally absent, except phase 4's: outside
-                // world style 6 an even random word selects track 8.
+                // Phase 4 (the attract world) outside world style 6 selects
+                // track 8 on an even random word; Intro2, loaded only in
+                // phases 1 and 2, takes phase-below-3's track 9.
                 let attract_track = matches!(purpose, LoadingPurpose::AttractDemo { .. })
                     && session
                         .cache
@@ -4638,29 +4638,21 @@ fn run_game(
                         .is_some_and(|level| level.world_style != 6)
                     && world_fx.next_shared_retail_random_u16() & 1 == 0;
                 if let Some(ref mut mp) = music_player {
-                    if lid == INTRO2_LEVEL_ID {
-                        // Intro2 is an in-engine story level, not an ordinary
-                        // world session, and owns no CD-audio descriptor.
+                    let world_style = session
+                        .cache
+                        .level_desc()
+                        .map(|d| d.world_style)
+                        .unwrap_or(1);
+                    let track = if attract_track {
+                        8
+                    } else {
+                        world_music_track(lid, world_style)
+                    };
+                    if let Err(e) = mp.select_cd_track(track) {
+                        eprintln!("Music track switch error: {}", e);
                         mp.stop();
                     } else {
-                        let world_style = session
-                            .cache
-                            .level_desc()
-                            .map(|d| d.world_style)
-                            .unwrap_or(1);
-                        let track = if attract_track {
-                            Some(8)
-                        } else {
-                            normal_world_music_track(lid, world_style)
-                        };
-                        if let Some(track) = track {
-                            if let Err(e) = mp.select_cd_track(track) {
-                                eprintln!("Music track switch error: {}", e);
-                                mp.stop();
-                            } else {
-                                apply_session_music_gate(&config, mp, false);
-                            }
-                        }
+                        apply_session_music_gate(&config, mp, false);
                     }
                 }
                 // Drop the previous level's cached terrain mesh so this level
@@ -15517,11 +15509,13 @@ fn sync_player_weapon_after_ammo_commit(
 
 /// Retail ordinary worlds select the physical CD track world-style + 1, the
 /// style read from the level record's word `+48` (FUN_0042E8F0).
-fn normal_world_music_track(level_id: u32, world_style: u32) -> Option<u8> {
+/// `FUN_00456AF0` outside phase 4: below phase 3 (Intro2, phases 1 and 2)
+/// track 9, else the world's style plus one.
+fn world_music_track(level_id: u32, world_style: u32) -> u8 {
     if level_id == INTRO2_LEVEL_ID {
-        return None;
+        return 9;
     }
-    Some((world_style.clamp(1, 6) + 1) as u8)
+    (world_style.clamp(1, 6) + 1) as u8
 }
 
 /// Dispatch menu rendering based on layout type.
@@ -19719,13 +19713,13 @@ mod menu_visual_tests {
     fn ordinary_world_music_is_selected_even_when_the_gate_may_be_off() {
         for world_style in 1..=6 {
             assert_eq!(
-                normal_world_music_track(FIRST_WORLD_LEVEL_ID, world_style),
-                Some((world_style + 1) as u8)
+                world_music_track(FIRST_WORLD_LEVEL_ID, world_style),
+                (world_style + 1) as u8
             );
         }
 
-        assert_eq!(normal_world_music_track(INTRO2_LEVEL_ID, 1), None);
-        assert_eq!(normal_world_music_track(FIRST_WORLD_LEVEL_ID, 6), Some(7));
+        assert_eq!(world_music_track(INTRO2_LEVEL_ID, 1), 9);
+        assert_eq!(world_music_track(FIRST_WORLD_LEVEL_ID, 6), 7);
     }
 
     #[test]
