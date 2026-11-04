@@ -57,7 +57,7 @@ mod cargo_runtime;
 mod class0_actor;
 pub(crate) use class0_actor::{
     living_class as class0_living_class, Class0FlareDeath, Class0GeyserDeath,
-    NativeType68ZeroRecordConstruction,
+    NativeType68ZeroRecordConstruction, AUTOBOT_ENTITY_TYPE,
 };
 pub use class0_actor::{
     tick_class0_actor_owner, Class0ActorError, Class0ActorFrame, Class0ActorOutcome,
@@ -67,6 +67,7 @@ pub use class0_actor::{
 mod class0_abort_tests;
 mod player_hard_water_entry_live;
 mod player_hit;
+pub(crate) use player_hit::PlayerHoldWalk;
 pub use player_hit::{
     PlayerCheckedDamageBlock, PlayerCheckedDamageFrame, PlayerCheckedDamageOutcome,
     PlayerCheckedDamageRequest, PlayerDamageEntry, PlayerDyingContactBurstRequest,
@@ -14784,7 +14785,8 @@ fn apply_hover_lift_raw(
     );
 }
 
-fn apply_environment_gravity_raw(velocity_raw: &mut [i16; 3], elapsed_micros: u32) {
+/// `FUN_0040E100`'s gravity: `q31(elapsed, 0x300000)` off the vertical velocity.
+pub(crate) fn apply_environment_gravity_raw(velocity_raw: &mut [i16; 3], elapsed_micros: u32) {
     let gravity_raw = ((i64::from(elapsed_micros) * ENVIRONMENT_GRAVITY_RAW) >> 31) as i16;
     velocity_raw[1] = velocity_raw[1].wrapping_sub(gravity_raw);
 }

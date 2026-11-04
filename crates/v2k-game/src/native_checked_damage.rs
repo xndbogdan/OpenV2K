@@ -160,6 +160,16 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::MainBase)
         }
+        // The Autobot's class11 tumble: its class0 owner keeps the body.
+        crate::entity::AUTOBOT_ENTITY_TYPE if manager.native_class0_allocation_authenticates(id) => {
+            manager
+                .apply_autobot_death(id, world_fx)
+                .map(|()| LiveActorDeathResult {
+                    returned_nonzero: true,
+                    publication: None,
+                })
+                .map_err(DynamicRadialLiveBlockReason::Autobot)
+        }
         10 | 5 | 29 if crate::intro2_type10::type10_manager_allocation_authenticates(manager, id) => {
             crate::intro2_type10::death::publish_intro2_type10_standard_death(manager, id, world_fx)
                 .map(|owner| LiveActorDeathResult {

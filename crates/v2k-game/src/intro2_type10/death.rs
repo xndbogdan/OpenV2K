@@ -1,6 +1,10 @@
 //! Type10's10C10 -> alternate11 -> C660/404360, then404460 and C750/BAC0.
 //! A falling Primary has lifetime zero. Only the contact callbacks select the
 //! explosion variant; neither elapsed time nor a guessed ground Y ends it.
+//!
+//! The class11 owner, its spin and its BAC0 terminal are shared with the
+//! Autobot (Type64), whose tumble runs on the class0 host
+//! ([`Class11TumbleHost`]).
 
 use super::*;
 use crate::{
@@ -37,6 +41,29 @@ pub enum Intro2Type10DeathBlock {
     AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
+/// Who hosts a class11 tumble: Type10's family on its own native owner, or
+/// the Autobot on the class0 host. Everything else in class11 is shared.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Class11TumbleHost {
+    Type10,
+    Autobot,
+}
+
+pub(crate) fn class11_tumble_host(
+    manager: &EntityManager,
+    entity: &Entity,
+) -> Option<Class11TumbleHost> {
+    if intro2_type10_allocation_authenticates(entity) {
+        Some(Class11TumbleHost::Type10)
+    } else if entity.entity_type == crate::entity::AUTOBOT_ENTITY_TYPE
+        && manager.native_class0_allocation_authenticates(entity.id)
+    {
+        Some(Class11TumbleHost::Autobot)
+    } else {
+        None
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Intro2Type10TumbleTask {
     elapsed_ms: u32,
@@ -46,13 +73,13 @@ impl Intro2Type10TumbleTask {
     pub const fn elapsed_ms(self) -> u32 {
         self.elapsed_ms
     }
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             elapsed_ms: 0,
             terminal: None,
         }
     }
-    fn advance(&mut self, elapsed_micros: u32) -> i32 {
+    pub(crate) fn advance(&mut self, elapsed_micros: u32) -> i32 {
         self.elapsed_ms = self.elapsed_ms.wrapping_add(elapsed_micros / 1000);
         // 4044B5 uses signed division of the retained dword, not frame dt.
         3i32.wrapping_sub((self.elapsed_ms as i32) / 1000).max(1)
@@ -86,7 +113,7 @@ impl Intro2Type10TumbleOwner {
             .iter_all()
             .find(|e| e.id == id)
             .ok_or(Intro2Type10DeathBlock::Allocation)?;
-        if !intro2_type10_allocation_authenticates(entity) {
+        if class11_tumble_host(manager, entity).is_none() {
             return Err(Intro2Type10DeathBlock::Allocation);
         }
         let visit = current_visit(entity)?;
@@ -400,13 +427,9 @@ fn run_frame(
     })
 }
 
-/// Retail FUN_00404460's detailed visit: the tumble spin.
-fn tick_detailed_components(
-    entity: &mut Entity,
-    multiplier: i32,
-    dt: u32,
-) -> Result<(), Intro2Type10DeathBlock> {
-    use Intro2Type10DeathBlock as Block;
+/// FUN_00404460's spin on a detailed visit: roll by the multiplier times
+/// `dt >> 7`, heading by it times `dt >> 8`, pitch by it times their sum.
+pub(crate) fn tumble_spin(entity: &mut Entity, multiplier: i32, dt: u32) {
     let [mut heading, mut pitch, mut roll] = entity.rotation_heading_pitch_roll_raw();
     let yaw_step = multiplier.wrapping_mul((dt >> 8) as i32);
     let roll_step = multiplier.wrapping_mul((dt >> 7) as i32);
@@ -414,6 +437,16 @@ fn tick_detailed_components(
     heading = heading.wrapping_add(yaw_step as i16);
     pitch = pitch.wrapping_add(roll_step.wrapping_add(yaw_step) as i16);
     entity.set_rotation_heading_pitch_roll_raw([heading, pitch, roll]);
+}
+
+/// Retail FUN_00404460's detailed visit: the tumble spin.
+fn tick_detailed_components(
+    entity: &mut Entity,
+    multiplier: i32,
+    dt: u32,
+) -> Result<(), Intro2Type10DeathBlock> {
+    use Intro2Type10DeathBlock as Block;
+    tumble_spin(entity, multiplier, dt);
     // Direct018A0 has no target prelude, Sub-D, 019C0 or14E0/1780 writes.
     let RetailRuntimeValue::Known(Some(sub_g)) = &mut entity.sub_g_06070_runtime else {
         return Err(Block::Runtime("Sub-G"));
@@ -485,6 +518,11 @@ pub fn begin_intro2_type10_tumble_contact(
 ) -> Result<Option<Intro2Type10TerminalReceipt>, Intro2Type10DeathBlock> {
     use Intro2Type10DeathBlock as Block;
     let owner = Intro2Type10TumbleOwner::adopt(manager, id)?;
+    let host = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .and_then(|entity| class11_tumble_host(manager, entity))
+        .ok_or(Block::Allocation)?;
     let entity = manager.entity_mut(id).unwrap();
     let ActorTaskRuntime::TumbleOutOfSky(task) =
         entity.actor_tasks.task_state(owner.visit.task_id).unwrap()
@@ -504,7 +542,11 @@ pub fn begin_intro2_type10_tumble_contact(
     if flags & REMOTE_OWNED_STATE_BIT != 0 {
         return Err(Block::Runtime("local terminal owner"));
     }
-    if entity.capability_flags != 8 {
+    let capability = match host {
+        Class11TumbleHost::Type10 => 8,
+        Class11TumbleHost::Autobot => 0x40,
+    };
+    if entity.capability_flags != capability {
         return Err(Block::Metadata);
     }
     let model_slot = crate::entity_collision_state::active_model_slot_from_state_flags(flags);
@@ -556,12 +598,25 @@ pub fn begin_intro2_type10_tumble_contact(
         unreachable!()
     };
     task.terminal = Some(TerminalPhase::Issued(receipt));
-    fx.emit_intro2_type10_terminal_raw(
-        receipt.position_raw,
-        id,
-        extent,
-        resources.level_terrain().map(|t| t.sea_level_raw()),
-    );
+    let sea_level_raw = resources.level_terrain().map(|t| t.sea_level_raw());
+    match host {
+        Class11TumbleHost::Type10 => {
+            fx.emit_intro2_type10_terminal_raw(receipt.position_raw, id, extent, sea_level_raw)
+        }
+        // BAF0: no F, H, N or G block, capability 0x40: sixteen of 94 and 95.
+        Class11TumbleHost::Autobot => {
+            fx.emit_explode_with_ring_burst_raw(crate::world_fx::ExplodeWithRingBurstRequest {
+                position_raw: receipt.position_raw,
+                source_extent_raw: extent,
+                sea_level_raw,
+                logical_owner_entity_id: id,
+                logical_owner_entity_type: own_type as u8,
+                scatter_count: 16,
+                scatter_classes: [94, 95],
+                suppresses_impact_damage: false,
+            })
+        }
+    }
     Ok(Some(receipt))
 }
 
@@ -570,7 +625,7 @@ fn receipt_current(manager: &EntityManager, receipt: &Intro2Type10TerminalReceip
         .iter_all()
         .find(|e| e.id == receipt.entity_id)
         .is_some_and(|entity| {
-            intro2_type10_allocation_authenticates(entity)
+            class11_tumble_host(manager, entity).is_some()
                 && current_visit(entity).ok() == Some(receipt.visit)
                 && matches!(entity.current_behavior_context,RetailRuntimeValue::Known(Some(context))
             if context.active_style().style_address()==0x4c7fa8)

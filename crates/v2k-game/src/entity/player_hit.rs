@@ -85,6 +85,14 @@ impl PlayerDyingContactRuntime {
     }
 }
 
+/// Who `FUN_004484A0`'s walk hands the packet: the first live Defender Ball
+/// alone, or else every live body in the list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PlayerHoldWalk {
+    Ball(u32),
+    Bodies(Vec<u32>),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerCheckedDamageBlock {
     Runtime(&'static str),
@@ -156,7 +164,7 @@ pub(super) enum PlayerDamagePlan {
         position_raw: [i16; 3],
         /// The live Defender Ball 4484A0 hands the packet to; the craft then
         /// takes none.
-        hold_ball: Option<(u32, DamageDeliveryRecord)>,
+        hold_ball: Option<(PlayerHoldWalk, DamageDeliveryRecord)>,
         /// What 4484A0 returns, when it runs (its closing cue reads it).
         modifier_damage: Option<i32>,
     },
@@ -164,7 +172,7 @@ pub(super) enum PlayerDamagePlan {
         index: usize,
         /// The filtered amount 4484A0 receives (its feedback reads it).
         filtered_damage_raw: i32,
-        hold_ball: Option<(u32, DamageDeliveryRecord)>,
+        hold_ball: Option<(PlayerHoldWalk, DamageDeliveryRecord)>,
         modifier_damage: Option<i32>,
         transition: GenericEntityDamageTransition,
         generic_hit_sound_id: Option<u16>,
@@ -499,11 +507,16 @@ impl EntityManager {
             None => None,
             Some(0x0044_84A0) => self
                 .plan_player_hold_walk()?
-                .map(|ball| (ball, request.delivery)),
+                .map(|walk| (walk, request.delivery)),
             Some(address) => return Err(PlayerCheckedDamageBlock::Modifier(address)),
         };
-        // A live ball takes the packet and 4484A0 returns zero.
-        let applied = if hold_ball.is_some() { 0 } else { filtered };
+        // A live ball takes the packet and 4484A0 returns zero; other live
+        // bodies take it too and the craft keeps it.
+        let applied = if matches!(hold_ball, Some((PlayerHoldWalk::Ball(_), _))) {
+            0
+        } else {
+            filtered
+        };
         let modifier_damage = modifier.map(|_| applied);
         if known(
             collision.state_flags_at_0x08.masked(REMOTE_OWNED_STATE_BIT),
@@ -717,9 +730,13 @@ impl EntityManager {
     /// `FUN_004484A0`'s walk of the controller's `+220` list. The first
     /// live (nonzero state, not dying) Type63 takes the packet and the craft
     /// none; without one, every live body in the list takes it under a
-    /// temporary `0x8000`, which needs that body's own owner.
-    pub(crate) fn plan_player_hold_walk(&self) -> Result<Option<u32>, PlayerCheckedDamageBlock> {
-        let mut live = Vec::new();
+    /// temporary `0x8000`, which needs that body's own owner (the Autobot's
+    /// is ported).
+    pub(crate) fn plan_player_hold_walk(
+        &self,
+    ) -> Result<Option<PlayerHoldWalk>, PlayerCheckedDamageBlock> {
+        let mut bodies = Vec::new();
+        let mut unowned = None;
         for &id in &self.auxiliary_owned_ids {
             let Some(entity) = self.entities.iter().find(|entity| entity.id == id) else {
                 continue;
@@ -735,13 +752,19 @@ impl EntityManager {
                 if !self.defender_ball_hit_ready(id) {
                     return Err(PlayerCheckedDamageBlock::Runtime("Defender Ball custody"));
                 }
-                return Ok(Some(id));
+                return Ok(Some(PlayerHoldWalk::Ball(id)));
             }
-            live.push(entity.entity_type);
+            if entity.entity_type == super::class0_actor::AUTOBOT_ENTITY_TYPE
+                && self.autobot_hit_ready(id)
+            {
+                bodies.push(id);
+            } else {
+                unowned.get_or_insert(entity.entity_type);
+            }
         }
-        match live.first() {
-            None => Ok(None),
-            Some(&entity_type) => Err(PlayerCheckedDamageBlock::HoldBody(entity_type)),
+        match unowned {
+            Some(entity_type) => Err(PlayerCheckedDamageBlock::HoldBody(entity_type)),
+            None => Ok((!bodies.is_empty()).then_some(PlayerHoldWalk::Bodies(bodies))),
         }
     }
 
@@ -768,23 +791,46 @@ impl EntityManager {
 
     fn hit_hold_ball(
         &mut self,
-        hold_ball: Option<(u32, DamageDeliveryRecord)>,
+        hold_ball: Option<(PlayerHoldWalk, DamageDeliveryRecord)>,
         fx: &mut WorldFx,
         notifications: &mut crate::gameplay_notifications::GameplayNotifications,
         retail_tick: u32,
     ) {
-        let Some((ball, delivery)) = hold_ball else {
+        let Some((walk, delivery)) = hold_ball else {
             return;
         };
-        let feedback = crate::live_actor_checked_damage::LiveActorDamageFeedback {
-            notifications,
-            retail_tick,
+        let bodies = match walk {
+            PlayerHoldWalk::Ball(ball) => vec![ball],
+            PlayerHoldWalk::Bodies(bodies) => bodies,
         };
-        // The plan proved the ball ready; nothing runs between it and here.
-        if let Err(error) =
-            self.apply_defender_ball_checked_damage(ball, delivery, fx, Some(feedback))
-        {
-            eprintln!("Player damage modifier: {error} on Type63 {ball}");
+        // The plan proved each body ready; nothing runs between it and here
+        // but the earlier bodies' hits.
+        for body in bodies {
+            let feedback = crate::live_actor_checked_damage::LiveActorDamageFeedback {
+                notifications: &mut *notifications,
+                retail_tick,
+            };
+            if let Err(error) = self.apply_hold_body_checked_damage(body, delivery, fx, feedback) {
+                eprintln!("Player damage modifier: {error} on body {body}");
+            }
+        }
+    }
+
+    /// `FUN_00415040(body, packet, 0, 0)` from the walk: the Defender Ball's,
+    /// or the Autobot's under its temporary `0x8000`.
+    pub(crate) fn apply_hold_body_checked_damage(
+        &mut self,
+        id: u32,
+        delivery: DamageDeliveryRecord,
+        fx: &mut WorldFx,
+        feedback: crate::live_actor_checked_damage::LiveActorDamageFeedback<'_>,
+    ) -> Result<bool, &'static str> {
+        if self.entities.iter().any(|entity| {
+            entity.id == id && entity.entity_type == super::class0_actor::AUTOBOT_ENTITY_TYPE
+        }) {
+            self.apply_autobot_walk_damage(id, delivery, fx, feedback)
+        } else {
+            self.apply_defender_ball_checked_damage(id, delivery, fx, Some(feedback))
         }
     }
 

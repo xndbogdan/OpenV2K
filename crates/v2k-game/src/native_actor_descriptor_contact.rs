@@ -743,7 +743,8 @@ pub(crate) fn completed_contact_owner(
                 && (tasks.intro2_type10_completed_owner(manager, id)
                     || tasks.intro2_type10_tumble_completed_owner(manager, id))
         }
-        63 => manager.defender_ball_owner_completed(id),
+        // The Autobot's class0 owner, living or tumbling.
+        63 | 64 => manager.defender_ball_owner_completed(id),
         57 => {
             !tasks.intro2_type57_has_pending_prefix(id)
                 && (tasks.intro2_type57_completed_owner(manager, id)

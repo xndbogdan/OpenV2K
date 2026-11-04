@@ -1048,7 +1048,7 @@ address,status,note
 0x0040B200,implemented,class53 initializer: T and S cleared, 071F0's Primary (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x004202E0,implemented,Sub-D pitch rate toward the target's vertical projection (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00424E30,implemented,Sub-E constructor: zeroed with the method and sound words; no random word (docs/re/PLAYER_CRAFT.md#special-weapons)
-0x004484A0,documented,player damage modifier: feedback, the Defender Ball walk and the low-hull cue ported; the second branch (Autobot) held (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x004484A0,implemented,player damage modifier: feedback, the Defender Ball walk, the second branch (each live Autobot under a temporary 0x8000) and the low-hull cue (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x004393C0,implemented,network line files from the Save Path folder (docs/re/MULTIPLAYER.md#names-and-announcements)
 0x004394F0,implemented,a line file's lines: leading blanks skipped, empty and # lines dropped (docs/re/MULTIPLAYER.md#names-and-announcements)
 0x00443D30,implemented,cargo drop; a peer's body goes to its owner as kind 15 (docs/re/MULTIPLAYER.md#bodies-between-machines)

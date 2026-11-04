@@ -9822,6 +9822,38 @@ fn run_game(
                         retail_tick,
                         actor_tasks: &mut specialized_actor_tasks,
                     };
+                    // The Autobot's 11AD0 (its living body lacks 0x8000): the
+                    // shared class11 tumble's terrain, water and static phases.
+                    if contact_frame
+                        .entities
+                        .iter_all()
+                        .any(|entity| entity.id == id && entity.entity_type == 64)
+                    {
+                        use v2k_game::intro2_type10::contact::{
+                            resolve_intro2_type10_tumble_contact_with_playing,
+                            Intro2Type10ContactOutcome,
+                        };
+                        let outcome = resolve_intro2_type10_tumble_contact_with_playing(
+                            &mut contact_frame,
+                            id,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        match &outcome {
+                            Intro2Type10ContactOutcome::Ineligible => {}
+                            Intro2Type10ContactOutcome::Blocked { .. } => {
+                                eprintln!("Autobot {id} tumble contact blocked: {outcome:?}")
+                            }
+                            Intro2Type10ContactOutcome::Applied(_) => {
+                                log!("Autobot {id} tumble contact: {outcome:?}")
+                            }
+                        }
+                        continue;
+                    }
                     let native_flyer = contact_frame
                         .entities
                         .iter_all()

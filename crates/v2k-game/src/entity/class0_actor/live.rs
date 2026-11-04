@@ -11,6 +11,8 @@
 //! dying, for class16's flares. Type74's detailed visits charge class59's
 //! Sub-K word; its coarse ones skip the walk. Type110, the Queen, keeps it
 //! living and dying for class67, whose visits may spawn the Type68 she holds.
+//! A dead Type64, the Autobot, keeps it for class11's tumble, which falls
+//! under gravity (its effective flags are 0) until a contact ends it.
 
 use super::{authenticate_metadata, living_class, reselect_class0_actor, Class0ActorError};
 use crate::{
@@ -53,6 +55,21 @@ impl Class0ActorOwner {
         self
     }
 
+    /// This owner holds `current`: the same, or the Autobot's class11 owner
+    /// after a death outside its visit (the hold walk has no scheduler) left
+    /// this one on its class53 Primary.
+    pub(crate) fn holds(self, current: Self) -> bool {
+        self == current
+            || (self.allocation == current.allocation
+                && Some(self.context.active_style().style_address())
+                    == audited_behavior_program(super::autobot::BEHAVIOR_CLASS)
+                        .map(|program| program.initial_style.frame_address)
+                && current.context.active_style().style_address()
+                    == crate::entity_behavior::TUMBLE_OUT_OF_SKY_BEHAVIOR_PROGRAM
+                        .initial_style
+                        .frame_address)
+    }
+
     pub fn adopt(manager: &EntityManager, id: u32) -> Result<Self, Class0ActorError> {
         if !manager.native_class0_allocation_authenticates(id) {
             return Err(Class0ActorError::Allocation);
@@ -77,8 +94,9 @@ impl Class0ActorOwner {
             || match living {
                 65 => bits(entity, DYING_STATE_BIT)? == 0,
                 // Class16 is Type36's alternate too, class67 Type110's: the
-                // dying body keeps it.
+                // dying body keeps it. Class11 is the Autobot's alternate.
                 16 | 67 => false,
+                11 => bits(entity, DYING_STATE_BIT)? == 0,
                 _ => bits(entity, DYING_STATE_BIT)? != 0,
             }
         {
@@ -106,6 +124,7 @@ impl Class0ActorOwner {
                     | (55, Some(ActorTaskRuntime::Megablast(_)))
                     | (50, Some(ActorTaskRuntime::DefenderBall))
                     | (53, Some(ActorTaskRuntime::DefenderDrone))
+                    | (11, Some(ActorTaskRuntime::TumbleOutOfSky(_)))
             )
             // A finished class38 has staged its removal.
             || (living == 38 && bits(entity, DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0)
@@ -132,15 +151,21 @@ impl Class0ActorOwner {
     }
 }
 
-/// The program an allocation runs now: its living class, or class65 once a
-/// Type118 has died into its Geyser.
+/// The program an allocation runs now: its living class, class65 once a
+/// Type118 has died into its Geyser, or class11 once a Type64 has died into
+/// its tumble.
 fn current_class(entity_type: u32, context: BehaviorContextRuntime) -> u32 {
     // Class65's style 4C7540 carries no callbacks or policy words.
     let geyser = crate::entity_behavior::behavior_program(65).expect("class65 program");
+    let tumble = &crate::entity_behavior::TUMBLE_OUT_OF_SKY_BEHAVIOR_PROGRAM;
     if entity_type == crate::main_base_type54_abort::TYPE118_ENTITY_TYPE
         && context.active_style().style_address() == geyser.initial_style.frame_address
     {
         65
+    } else if entity_type == super::autobot::ENTITY_TYPE
+        && context.active_style().style_address() == tumble.initial_style.frame_address
+    {
+        11
     } else {
         living_class(entity_type)
     }
@@ -256,7 +281,8 @@ pub fn tick_class0_actor_owner(
             full_frame_flash: false,
         };
     }
-    if Class0ActorOwner::adopt(manager, id) != Ok(owner) {
+    let current = Class0ActorOwner::adopt(manager, id);
+    if !current.is_ok_and(|current| owner.holds(current)) {
         return Class0ActorTick {
             outcome: Class0ActorOutcome::Dropped { entity_id: id },
             retained_owner: None,
@@ -268,6 +294,7 @@ pub fn tick_class0_actor_owner(
             full_frame_flash: false,
         };
     }
+    let owner = current.expect("held owner");
     let mut sea_level_receipt = None;
     let mut geyser_lift = None;
     let mut queen = crate::queen::QueenTick::default();
@@ -786,6 +813,24 @@ fn run_callback(
                 return Err(Class0ActorError::Graph);
             }
         }
+        Some(ActorTaskRuntime::TumbleOutOfSky(_)) => {
+            // FUN_00404460: the task's elapsed time sets the spin's
+            // multiplier, a detailed visit (DCA0 passes 0) spins, and
+            // FUN_004018A0 finds none of the Autobot's components.
+            let multiplier = entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |runtime| match runtime {
+                    ActorTaskRuntime::TumbleOutOfSky(task) => task.advance(dt),
+                    _ => unreachable!("matched tumble Primary"),
+                })
+                .ok_or(Class0ActorError::Graph)?;
+            if detailed {
+                crate::intro2_type10::death::tumble_spin(entity, multiplier, dt);
+            }
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+        }
         Some(ActorTaskRuntime::DefenderDrone) => {
             entity
                 .actor_tasks
@@ -920,16 +965,26 @@ fn run_callback(
                 .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
-    // These admitted class0 profiles omit E640, gravity/drag and infected-ground
-    // damage. This checks the consumed branch bits, not surface position.
+    // These admitted class0 profiles omit E640, drag and infected-ground
+    // damage, and gravity but for the Autobot's class11 (effective 0). This
+    // checks the consumed branch bits, not surface position.
     let profile = effective & (0x10 | 0x4000 | 4 | 8 | 0x800);
-    if profile != 0x4004 && profile != 0x0004 {
+    if profile != 0x4004 && profile != 0x0004 && profile != 0 {
         return Err(Class0ActorError::Runtime("environment callback profile"));
     }
     // 413F70 rebuilds the basis from the Euler words unless 0x4000 keeps it
     // (Type72's `+C0` clears it).
     if effective & 0x4000 == 0 {
         entity.apply_d720_euler_body_basis();
+    }
+    // E100 with bit 4 clear: gravity. Its underwater branch needs a Sub-C.
+    if effective & 4 == 0 {
+        if metadata.sub_c_lift_descriptor != RetailRuntimeValue::Known(None) {
+            return Err(Class0ActorError::Runtime("environment Sub-C lift"));
+        }
+        let mut velocity = entity.velocity_raw();
+        crate::entity::apply_environment_gravity_raw(&mut velocity, dt);
+        entity.set_velocity_raw(velocity);
     }
     if effective & 2 != 0 {
         let terrain = frame

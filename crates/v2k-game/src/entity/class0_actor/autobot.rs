@@ -18,6 +18,10 @@
 //! quarter of the way to the owner's and aims 350 along the owner's lateral
 //! row and 150 along its up row. Either way it then closes on the goal by
 //! q31(elapsed << 13, goal - position) per axis. Every visit damps the roll.
+//!
+//! Its death (`FUN_00410C10`) takes the alternate class11 (`FUN_0040C660`,
+//! `FUN_00404360`): the tumble, visited by the class0 host, whose contacts
+//! end it in class11's explosion like Type10's.
 
 use super::*;
 use crate::common_mover::sub_d::{
@@ -34,6 +38,8 @@ use crate::search_attack::{
 };
 use v2k_formats::collision::{ProjectileEmitterDescriptor, SubDSteeringDescriptor};
 
+#[cfg(test)]
+mod death_tests;
 mod emitter;
 #[cfg(test)]
 mod tests;
@@ -350,6 +356,177 @@ impl EntityManager {
             .get_mut(&id)
             .and_then(|runtime| runtime.autobot.as_mut())
             .ok_or(Class0ActorError::Runtime("Autobot components"))
+    }
+
+    /// `FUN_00410C10` on a living Autobot: health 0 and dying, the type's
+    /// sound 62, no `+8C` attachment, then its alternate class11
+    /// (`FUN_0040C660`): Secondary then Tertiary cleared and `FUN_00404360`'s
+    /// tumble Primary, with no timeout. The Autobot has no Sub-A, G or H for
+    /// `FUN_00406070` to reset, so nothing draws a random word. A dying body
+    /// is a no-op that returns 1; a remote one never reaches here (the class0
+    /// host refuses it).
+    pub(crate) fn apply_autobot_death(
+        &mut self,
+        id: u32,
+        world_fx: &mut WorldFx,
+    ) -> Result<(), Class0ActorError> {
+        if !self.native_class0_allocation_authenticates(id) {
+            return Err(Class0ActorError::Allocation);
+        }
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .ok_or(Class0ActorError::Allocation)?;
+        if entity.entity_type != ENTITY_TYPE {
+            return Err(Class0ActorError::Metadata);
+        }
+        match entity
+            .collision
+            .state_flags_at_0x08
+            .masked(REMOTE_OWNED_STATE_BIT | DYING_STATE_BIT)
+        {
+            RetailRuntimeValue::Known(0) => {}
+            RetailRuntimeValue::Known(DYING_STATE_BIT) => return Ok(()),
+            _ => return Err(Class0ActorError::Runtime("Autobot death entry")),
+        }
+        let selected = class11_context(entity)?;
+        entity.collision.health_raw = RetailRuntimeValue::Known(0);
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
+        world_fx.queue_networked_positional_sound_raw(62, entity.position_raw());
+        install_class11(entity, selected);
+        Ok(())
+    }
+
+    /// The rest of [`Self::apply_autobot_death`] for a body whose health,
+    /// dying bit and death cue a radial plan already wrote.
+    pub(crate) fn finish_autobot_death(&mut self, id: u32) -> Result<(), Class0ActorError> {
+        let entity = self.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+        let selected = class11_context(entity)?;
+        install_class11(entity, selected);
+        Ok(())
+    }
+}
+
+/// The class53 style's null death slot, no `+8C`, and class11's context.
+fn class11_context(entity: &Entity) -> Result<BehaviorContextRuntime, Class0ActorError> {
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return Err(Class0ActorError::Graph);
+    };
+    let program =
+        crate::entity_behavior::audited_behavior_program(11).ok_or(Class0ActorError::Graph)?;
+    if Some(context.active_style().style_address())
+        != crate::entity_behavior::audited_behavior_program(BEHAVIOR_CLASS)
+            .map(|program| program.initial_style.frame_address)
+        || context.active_style().death_callback_policy() != DeathCallbackPolicy::None
+        || entity.collision.constructor_sound_attachment_id_at_0x8c
+            != RetailRuntimeValue::Known(None)
+    {
+        return Err(Class0ActorError::Graph);
+    }
+    context
+        .reselect_audited_type_default(program, 0, program.initial_style)
+        .ok_or(Class0ActorError::Graph)
+}
+
+/// `FUN_0040C660` after the style switch: class11's state policy, Secondary
+/// then Tertiary cleared, and `FUN_00404360`'s tumble Primary.
+fn install_class11(entity: &mut Entity, selected: BehaviorContextRuntime) {
+    let program = &crate::entity_behavior::TUMBLE_OUT_OF_SKY_BEHAVIOR_PROGRAM;
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));
+    // Class11's policy sets 0x8000 and 0x10000: checked damage and the
+    // terrain and water contacts reach the falling body.
+    let policy = initial_behavior_state_policy(program);
+    entity
+        .collision
+        .state_flags_at_0x08
+        .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+    entity.actor_tasks.replace_prepared(
+        ActorTaskSlot::Primary,
+        PreparedActorTask::new(ActorTaskRuntime::TumbleOutOfSky(
+            crate::intro2_type10::death::Intro2Type10TumbleTask::new(),
+        )),
+    );
+}
+
+impl EntityManager {
+    /// Whether the walk's `FUN_00415040` on this Autobot can run to its end:
+    /// a local, living class53 body with no modifier or hit callback.
+    pub(crate) fn autobot_hit_ready(&self, id: u32) -> bool {
+        self.hold_body_hit_ready(id, ENTITY_TYPE, BEHAVIOR_CLASS)
+    }
+
+    /// `FUN_004484A0`'s hit on a live Autobot: `0x8000` set for
+    /// `FUN_00415040(body, packet, 0, 0)` (admission, the type's filter,
+    /// buffer and health, and at zero health [`Self::apply_autobot_death`]),
+    /// then cleared when it was clear before and the body still lives.
+    /// Returns whether the filtered damage was nonzero.
+    pub(crate) fn apply_autobot_walk_damage(
+        &mut self,
+        id: u32,
+        delivery: crate::damage::DamageDeliveryRecord,
+        world_fx: &mut WorldFx,
+        feedback: crate::live_actor_checked_damage::LiveActorDamageFeedback<'_>,
+    ) -> Result<bool, &'static str> {
+        use crate::live_actor_checked_damage::{
+            apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageRequest,
+            LiveActorDeathResult,
+        };
+        if !self.autobot_hit_ready(id) {
+            return Err("Autobot hit: body not ready");
+        }
+        let entity = self.entity_mut(id).ok_or("Autobot hit: allocation")?;
+        let RetailRuntimeValue::Known(before) = entity.collision.state_flags_at_0x08.masked(0x8000)
+        else {
+            return Err("Autobot hit: state");
+        };
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(0x8000, 0x8000);
+        let outcome = apply_live_actor_checked_damage(
+            self,
+            world_fx,
+            LiveActorDamageRequest {
+                entity_id: id,
+                delivery,
+                entry: LiveActorDamageEntry::Checked,
+                ratio_numerator: 0,
+                ratio_denominator: 0,
+                feedback: Some(feedback),
+            },
+            |manager, world_fx, _| {
+                manager.apply_autobot_death(id, world_fx)?;
+                Ok::<_, Class0ActorError>(LiveActorDeathResult {
+                    returned_nonzero: true,
+                    publication: Some(()),
+                })
+            },
+        )
+        .map_err(|_| "Autobot hit stopped")?;
+        let entity = self.entity_mut(id).ok_or("Autobot hit: allocation")?;
+        if before == 0
+            && matches!(entity.collision.state_flags_at_0x08.masked(u32::MAX),
+                RetailRuntimeValue::Known(state) if state != 0 && state & DYING_STATE_BIT == 0)
+        {
+            entity.collision.state_flags_at_0x08.overwrite(0x8000, 0);
+        }
+        Ok(outcome.filtered_damage_raw != 0)
+    }
+
+    /// The tumbling body's class0 owner, outside its visit.
+    pub(crate) fn class0_tumble_owner_completed(&self, id: u32) -> bool {
+        Class0ActorOwner::adopt(self, id).is_ok()
+    }
+
+    /// A contact committed part of its prefix: the owner stops visiting.
+    pub(crate) fn park_class0_tumble_prefix(&mut self, id: u32) {
+        self.set_native_class0_pending_prefix(id, true);
     }
 
     /// `FUN_00407280`. `frame_dt` is the frame's elapsed time, which

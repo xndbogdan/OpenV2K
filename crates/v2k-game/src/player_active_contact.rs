@@ -377,7 +377,7 @@ struct PlayerPairOracle<'a, P: CollisionModelPool + ?Sized> {
     rolling_boulder_wakes: Vec<u32>,
     world_fx: &'a mut WorldFx,
     /// The live Defender Ball `4484A0`'s walk hands the craft's packet to.
-    hold_ball: Option<u32>,
+    hold_ball: Option<crate::entity::PlayerHoldWalk>,
     /// The packets `4484A0` handed the ball, in walk order.
     hold_ball_hits: Vec<(u32, crate::damage::DamageDeliveryRecord)>,
     /// `4484A0`'s closing cue inputs: health, buffer, returned damage.
@@ -622,25 +622,30 @@ impl<P: CollisionModelPool + ?Sized> ActivePairOracle<()> for PlayerPairOracle<'
             runtime.pair_callbacks.damage_modifier_address
                 == RetailRuntimeValue::Known(Some(0x0044_84A0))
         });
-        // 4484A0's walk: a live ball takes the packet, the craft none. A
-        // second packet in one pass, after the ball's hit, stays unresolved.
+        // 4484A0's walk: a live ball takes the packet, the craft none; else
+        // every live body (an Autobot) takes it and the craft keeps it. A
+        // second packet in one pass, after the walk's hits, stays unresolved.
         if craft
             && outcome == PairDamageModifierOutcome::Unresolved
             && self.hold_ball_hits.is_empty()
         {
-            if let (Some(ball), Some(source)) = (self.hold_ball, self.runtime(request.opposite.id))
+            if let (Some(walk), Some(source)) =
+                (self.hold_ball.clone(), self.runtime(request.opposite.id))
             {
-                self.hold_ball_hits.push((
-                    ball,
-                    crate::damage::DamageDeliveryRecord {
-                        packet: crate::damage::DamagePacket::collision(
-                            request.capped_pair_damage_raw,
-                        ),
-                        source_entity_type_raw: source.entity_type,
-                        owner_handle: source.id,
-                    },
-                ));
-                outcome = PairDamageModifierOutcome::Modified(0);
+                let delivery = crate::damage::DamageDeliveryRecord {
+                    packet: crate::damage::DamagePacket::collision(request.capped_pair_damage_raw),
+                    source_entity_type_raw: source.entity_type,
+                    owner_handle: source.id,
+                };
+                let (bodies, returned) = match walk {
+                    crate::entity::PlayerHoldWalk::Ball(ball) => (vec![ball], 0),
+                    crate::entity::PlayerHoldWalk::Bodies(bodies) => {
+                        (bodies, request.filtered_damage_raw)
+                    }
+                };
+                self.hold_ball_hits
+                    .extend(bodies.into_iter().map(|body| (body, delivery)));
+                outcome = PairDamageModifierOutcome::Modified(returned);
             }
         }
         if craft && outcome != PairDamageModifierOutcome::Unresolved {
@@ -1086,16 +1091,16 @@ fn resolve_player_active_segment(
         &candidate_death_dispatches,
         &rolling_boulder_wakes,
     )?;
-    // 4484A0 ran inside the craft's 15040: the ball's hit and the closing cue
-    // precede the craft's own hit sound, which the caller submits.
-    for (ball, delivery) in hold_ball_hits {
+    // 4484A0 ran inside the craft's 15040: the walk's hits and the closing
+    // cue precede the craft's own hit sound, which the caller submits.
+    for (body, delivery) in hold_ball_hits {
         let feedback = crate::live_actor_checked_damage::LiveActorDamageFeedback {
             notifications: &mut *notifications,
             retail_tick,
         };
         entities
-            .apply_defender_ball_checked_damage(ball, delivery, world_fx, Some(feedback))
-            .map_err(|_| PlayerActivePairError::HoldBall { entity_id: ball })?;
+            .apply_hold_body_checked_damage(body, delivery, world_fx, feedback)
+            .map_err(|_| PlayerActivePairError::HoldBall { entity_id: body })?;
     }
     for [health, buffer, damage] in hull_cues {
         world_fx.poll_damage_modifier_hull_cue(health, buffer, damage, retail_tick as i32);
