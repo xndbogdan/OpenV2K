@@ -39,6 +39,7 @@ pub enum NativeMainBaseAbortDeathBlock {
     Fish(crate::shared_fish::death::SharedFishDeathBlock),
     GunTurret(crate::class49_terminal::Class49TerminalBlock),
     Type10(crate::intro2_type10::death::Intro2Type10DeathBlock),
+    Type57(crate::intro2_type57::Intro2Type57DeathBlock),
     Flyer(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
     Type16(crate::native_actor_capture::CaptureBlock),
     Type94(crate::intro2_common_dying::Intro2CommonDyingBlock),
@@ -201,6 +202,7 @@ fn retire_native_ground_death(
 enum NativeActor {
     MainBase,
     Type10Family,
+    Type57,
     Worker,
     Type123Person,
     FourChoice,
@@ -278,6 +280,10 @@ pub(super) fn dispatch_native_actor(
                     .is_some_and(|runtime| runtime.ordinary_allocation.is_some()) =>
         {
             NativeActor::Type10Family
+        }
+        // The bat (Intro2's and the Hive's children) takes Type10's class11.
+        57 if crate::intro2_type57::intro2_type57_allocation_authenticates(entity) => {
+            NativeActor::Type57
         }
         22 | 23 | 24 | 62 | 25 | 37 | 21 if entity.shared_fish_runtime.is_some() => {
             NativeActor::SharedFish
@@ -418,6 +424,10 @@ fn dispatch(
                     && !specialized_tasks.shared_fish_has_pending_prefix(id)
             }
             NativeActor::Flyer => specialized_tasks.intro2_flyer_completed_owner(entities, id),
+            NativeActor::Type57 => {
+                specialized_tasks.intro2_type57_completed_owner(entities, id)
+                    && !specialized_tasks.intro2_type57_has_pending_prefix(id)
+            }
             NativeActor::CapturingInsect
             | NativeActor::Type26
             | NativeActor::ShootingInsect
@@ -454,6 +464,20 @@ fn dispatch(
             .map_err(|error| block(Block::Type10(error)))?;
             if let Some(owner) = owner {
                 specialized_tasks.register_intro2_type10_tumble(owner);
+                publications.type10_tumble += 1;
+            }
+            MainBaseAbortActorDisposition::Type10Death
+        }
+        NativeActor::Type57 => {
+            // 10C10 -> DB80 -> alternate class11, as a lethal hit's publisher.
+            let owner = crate::intro2_type57::death::publish_intro2_type57_standard_death(
+                entities, id, world_fx,
+            )
+            .map_err(|error| block(Block::Type57(error)))?;
+            if let Some(owner) = owner {
+                specialized_tasks.register_radial_death_publications(&[
+                    crate::entity::DynamicRadialDeathPublication::Intro2Type57Tumble(owner),
+                ]);
                 publications.type10_tumble += 1;
             }
             MainBaseAbortActorDisposition::Type10Death

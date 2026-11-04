@@ -526,3 +526,106 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
         }
     }
 }
+
+/// The loss arrives mid-play: retail loses worlds 32 and 35 about 1,100
+/// ticks after arrival. Every actor has run its own tasks by then, and an
+/// owner its tick parked would refuse the abort's custody. Type40's chase
+/// (Sub-D), Type32's Follow Beacons death styles and the Type125 factories'
+/// understaffed countdown each did.
+#[v2k_test_support::retail_test]
+fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
+    use v2k_game::gameplay_notifications::GameplayNotificationPhase;
+    use v2k_game::specialized_actor_task_production::{
+        SpecializedActorTaskProductionFrame, SpecializedActorTaskWorld,
+    };
+    let data = v2k_test_support::retail_dir();
+    let mut session = GameSession::init(&data).unwrap();
+    session.load_auxiliary_ovl(3, 1).unwrap();
+    let metadata: Vec<_> = session
+        .cache
+        .global_entity_model_table()
+        .iter()
+        .copied()
+        .enumerate()
+        .map(|(id, model_slots)| {
+            session
+                .cache
+                .global_entity_type(id)
+                .map(EntityTypeRuntimeMetadata::from_section12)
+                .unwrap_or(EntityTypeRuntimeMetadata {
+                    model_slots,
+                    ..Default::default()
+                })
+        })
+        .collect();
+    for world in [32, 37, 40] {
+        session.load_level_by_id(world, 1).unwrap();
+        let mut fx = WorldFx::new();
+        let mut manager = construct_world(&session, &metadata, world, &mut fx);
+        let mut tasks = adopt_authored_tasks(&mut manager);
+        // 44AFB0 builds the radar after authored construction, as the game does.
+        session
+            .cache
+            .initialize_level_terrain_radar(&mut || fx.next_shared_retail_random_u16())
+            .unwrap();
+        let mut hull = PlayerHull::default();
+        let mut static_damage = StaticDamageScheduler::new();
+        let mut notifications = GameplayNotifications::new();
+        for tick in 1..=1_100u32 {
+            let pass = tasks.tick(
+                &mut manager,
+                SpecializedActorTaskProductionFrame {
+                    world: SpecializedActorTaskWorld::Playing {
+                        player_hull: &mut hull,
+                        extra_lives: RetailRuntimeValue::Known(0),
+                    },
+                    hive_components: None,
+                    notification_phase: GameplayNotificationPhase::Playing,
+                    resources: &mut session.cache,
+                    world_fx: &mut fx,
+                    static_damage: &mut static_damage,
+                    elapsed_micros: 20_000,
+                    global_elapsed_micros: 20_000,
+                    retail_tick: tick,
+                    main_base_abort_active: false,
+                },
+                &mut notifications,
+            );
+            for outcome in &pass.outcomes {
+                assert_eq!(outcome.stopped_actor(), None, "world{world} tick{tick}");
+            }
+        }
+        let mut progress = PlayerCampaignProgress::new();
+        progress.set_current_control_slot(Some((world - 12) as usize));
+        let (mut controller, _) = MainBaseAbortControllerStorage::from_loaded_level(
+            NonZeroU64::new(u64::from(world)).unwrap(),
+            session.cache.level_desc().unwrap(),
+            false,
+            &mut progress,
+        )
+        .unwrap();
+        let result = execute_campaign_abort(
+            MainBaseAbortTransactionId::new(u64::from(world)).unwrap(),
+            None,
+            &mut controller,
+            &mut manager,
+            &mut session.cache,
+            &mut static_damage,
+            &mut hull,
+            &mut fx,
+            &mut tasks,
+            MainBaseAbortGameplayContext {
+                extra_lives: RetailRuntimeValue::Known(0),
+                notifications: &mut notifications,
+                retail_tick: 1_101,
+            },
+        );
+        let report = result.unwrap_or_else(|failure| {
+            panic!(
+                "world{world}: mid-play abort fell back: {:?}",
+                failure.diagnostic
+            )
+        });
+        assert!(report.completion.full_frame_submitted, "world{world}");
+    }
+}

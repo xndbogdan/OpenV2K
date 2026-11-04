@@ -19,9 +19,9 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 394 |
+| implemented | 395 |
 | approximated | 7 |
-| documented | 35 |
+| documented | 37 |
 | not-needed | 629 |
 
 10 `FUN_` citations don't match a retail function

@@ -152,11 +152,13 @@ fn admit_slot(
         //4086D0 writes the template+18 null explicitly at408721. A native
         //receipt and completed current Class29 graph authorize that null;
         //a task enum by itself does not confer body mutation custody.
-        if !crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(
+        // The mobile Type107/121 run the same class29 task on the ground host,
+        // whose completed owner authenticates that graph.
+        let turret = (crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(
             entities, id,
-        ) || !crate::intro2_gun_turret::task::graph_authenticates(entity)
-            || !tasks.prepare_native_actor_mutation(entities, id)
-        {
+        ) && crate::intro2_gun_turret::task::graph_authenticates(entity))
+            || crate::native_type38::manager_allocation_authenticates(entities, id);
+        if !turret || !tasks.prepare_native_actor_mutation(entities, id) {
             return Err(Error::Runtime("completed native turret contact owner"));
         }
         return Ok(SlotAdmission::Null);

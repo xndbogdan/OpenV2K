@@ -29,7 +29,7 @@ use crate::{
 };
 use v2k_formats::collision::{
     BehaviorChoice, CommonAxisDescriptor, ProjectileEmitterDescriptor, SubAPropulsionDescriptor,
-    SubBLateralDescriptor, SubCLiftDescriptor, SubDSteeringDescriptor,
+    SubBLateralDescriptor, SubCLiftDescriptor,
 };
 
 pub(crate) const MODEL: usize = 1040;
@@ -226,15 +226,7 @@ pub(crate) fn authenticate_metadata(m: &EntityTypeRuntimeMetadata) -> Result<(),
                 reserved_at_0x0e: [0; 2],
             }))
         || m.sub_d_steering_descriptor
-            != RetailRuntimeValue::Known(Some(SubDSteeringDescriptor {
-                steering_divisor_raw: 128,
-                couple_yaw_into_roll_raw: 0,
-                enable_pitch_steering_raw: 0,
-                forward_probe_raw: 512,
-                lateral_probe_raw: 256,
-                classifier_flags: 19,
-                reserved_at_0x0b: 0,
-            }))
+            != RetailRuntimeValue::Known(Some(crate::common_mover::sub_d::NATIVE_TYPE40_SUB_D))
         || m.sub_j_attachment_descriptor != RetailRuntimeValue::Known(None)
         || m.sub_f_swimming_descriptor != RetailRuntimeValue::Known(None)
         || m.actor_animation_descriptor != RetailRuntimeValue::Known(None)

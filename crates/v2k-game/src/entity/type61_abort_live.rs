@@ -285,10 +285,10 @@ impl EntityManager {
                             != captured.rotation_raw
                         || entity.collision.pre_health_damage_buffer_raw
                             != RetailRuntimeValue::Known(captured.initial_damage_buffer_raw)
-                        || entity.collision.state_flags_at_0x08
-                            != crate::entity_collision_state::RetailStateWord::exact(
-                                expected_preabort_state_raw,
-                            )
+                        || !detail_free_state_matches(
+                            entity.collision.state_flags_at_0x08,
+                            expected_preabort_state_raw,
+                        )
                     {
                         return Err(MainBaseType61DeathBlock::CapturedSpawnStateMismatch);
                     }
@@ -316,10 +316,10 @@ impl EntityManager {
                         || entity.rotation_heading_pitch_roll_raw() != [0; 3]
                         || entity.collision.pre_health_damage_buffer_raw
                             != RetailRuntimeValue::Known(0)
-                        || entity.collision.state_flags_at_0x08
-                            != crate::entity_collision_state::RetailStateWord::exact(
-                                expected_preabort_state_raw,
-                            )
+                        || !detail_free_state_matches(
+                            entity.collision.state_flags_at_0x08,
+                            expected_preabort_state_raw,
+                        )
                         || entity.collision.recent_relation_id_at_0x60
                             != RetailRuntimeValue::Known(Some(source_factory.entity_id))
                         || !self.live_type66_matches_factory_birth_source(source_factory)
@@ -827,6 +827,31 @@ impl EntityManager {
             Err(()) => MainBaseType60RingDeathAdvance::SuccessorUnavailableAfterCommit { outcome },
         }
     }
+}
+
+/// The world draw rewrites the detail bits `0x0600_0000` every frame, so a
+/// product that has been on screen keeps its provenance with them changed.
+/// The death overwrites only the dying bit of the live word.
+fn detail_free_state_matches(
+    state: crate::entity_collision_state::RetailStateWord,
+    expected_raw: u32,
+) -> bool {
+    const DETAIL_BITS: u32 = 0x0600_0000;
+    state.masked(!DETAIL_BITS) == RetailRuntimeValue::Known(expected_raw & !DETAIL_BITS)
+}
+
+#[test]
+fn factory_product_keeps_provenance_through_detail_bits_only() {
+    use crate::entity_collision_state::RetailStateWord;
+    let newborn = FACTORY_TYPE61_NEWBORN_STATE_RAW;
+    for detail in [0, 0x0200_0000, 0x0400_0000, 0x0600_0000] {
+        let state = RetailStateWord::exact((newborn & !0x0600_0000) | detail);
+        assert!(detail_free_state_matches(state, newborn));
+    }
+    assert!(!detail_free_state_matches(
+        RetailStateWord::exact(newborn | DYING_STATE_BIT),
+        newborn
+    ));
 }
 
 #[cfg(test)]

@@ -2344,6 +2344,7 @@ fn run_game(
     let mut specialized_actor_tasks = SpecializedActorTaskScheduler::new();
     let mut specialized_actor_task_error_reported = false;
     let mut particle_collision_error_reported = HashSet::<u32>::new();
+    let mut actor_stops_reported = HashSet::<u32>::new();
     let mut type9_task_diagnostics = type9_task_diagnostics::Type9TaskDiagnostics::default();
     let mut current_level_id: Option<u32> = None;
     // Session+38 retains entry XYZ across movement.456D10 reuses these words
@@ -3952,6 +3953,7 @@ fn run_game(
                 specialized_actor_tasks.clear_after_manager_reset();
                 specialized_actor_task_error_reported = false;
                 particle_collision_error_reported.clear();
+                actor_stops_reported.clear();
                 type9_task_diagnostics.reset_level();
                 current_level_id = None;
                 return_to_frontend_pending = false;
@@ -4103,6 +4105,7 @@ fn run_game(
                 specialized_actor_tasks.clear_after_manager_reset();
                 specialized_actor_task_error_reported = false;
                 particle_collision_error_reported.clear();
+                actor_stops_reported.clear();
                 type9_task_diagnostics.reset_level();
                 main_base_level_abort = MainBaseAbortBridgeState::default();
                 current_world_entry_position_raw = None;
@@ -8584,6 +8587,13 @@ fn run_game(
                     log!("Main Base Type-54 task updated the live sea level");
                 }
                 for owner_outcome in specialized_pass.outcomes {
+                    if let Some((entity_id, reason)) = owner_outcome.stopped_actor() {
+                        if actor_stops_reported.insert(entity_id) {
+                            eprintln!(
+                                "Playing entity {entity_id} stopped in its own tick: {reason}"
+                            );
+                        }
+                    }
                     if let Some(message) =
                         type9_task_diagnostics.observe(&owner_outcome, retail_tick, |entity_id| {
                             em.iter_all()

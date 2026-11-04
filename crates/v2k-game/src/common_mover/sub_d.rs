@@ -316,6 +316,14 @@ pub const NATIVE_TYPE33_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     ..NATIVE_TYPE38_SUB_D
 };
 
+/// The Type40 ice louse: Type16's no-pitch 1F660 path with divisor128,
+/// probes512/256 and the object/water/slope13 arms. Its split Type56s carry
+/// Type47's descriptor.
+pub const NATIVE_TYPE40_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    forward_probe_raw: 512,
+    ..INTRO2_TYPE16_SUB_D
+};
+
 /// Ordinary Type18 (eight worlds): the no-pitch 1F660 path with divisor40,
 /// probes350/256 and flags10, the steepness arm alone (no water or object).
 pub const NATIVE_TYPE18_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
@@ -463,6 +471,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | INTRO2_TYPE58_SUB_D
             | NATIVE_TYPE30_SUB_D
             | NATIVE_TYPE38_SUB_D
+            | NATIVE_TYPE40_SUB_D
             | NATIVE_TYPE33_SUB_D
             | NATIVE_TYPE119_SUB_D
             | NATIVE_TYPE31_SUB_D

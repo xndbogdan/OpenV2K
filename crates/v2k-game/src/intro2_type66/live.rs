@@ -597,6 +597,10 @@ fn run_factory_callback(
                     FactoryProductionOwnerAction::Production { action, .. } => {
                         resume = super::production::apply_action(manager, frame, factory, action)?;
                     }
+                    // 456BD0 writes only the session's HUD countdown (+2C8/+2CC),
+                    // which nothing in the simulation reads; the port draws no
+                    // countdown, as on the Level-1 factory's path.
+                    FactoryProductionOwnerAction::PublishCountdownSeconds { .. } => {}
                     _ => return Err(Block::UnsupportedProduction(phase)),
                 }
                 machine
