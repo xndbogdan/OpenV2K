@@ -190,6 +190,7 @@ impl World {
                 retail_tick: 100,
                 world_style_raw: 6,
                 main_base_abort_active: false,
+                lent: None,
             },
         )
         .outcome

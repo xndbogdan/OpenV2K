@@ -527,26 +527,117 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
     }
 }
 
-/// The loss arrives mid-play: retail loses worlds 32 and 35 about 1,100
-/// ticks after arrival. Every actor has run its own tasks by then, and an
-/// owner its tick parked would refuse the abort's custody. Type40's chase
-/// (Sub-D), Type32's Follow Beacons death styles, the Type125 factories'
-/// understaffed countdown and the Hive-born Type57's first callback each did.
-/// World 35 is held: its Type12's first Trash Furniture scan steers toward
-/// allocator residue.
-#[v2k_test_support::retail_test]
-fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
-    use v2k_game::entity_view_detail::RetailViewDetailContext;
-    use v2k_game::gameplay_notifications::GameplayNotificationPhase;
-    use v2k_game::specialized_actor_task_production::{
-        HiveComponentProductionContext, SpecializedActorTaskProductionFrame,
-        SpecializedActorTaskWorld,
-    };
-    use v2k_game::world_complete_results::WorldCompleteTally;
-    let data = v2k_test_support::retail_dir();
-    let mut session = GameSession::init(&data).unwrap();
-    session.load_auxiliary_ovl(3, 1).unwrap();
-    let metadata: Vec<_> = session
+/// A loaded campaign world ticked by the real scheduler with an idle player
+/// and the Hive's components, as `44FFA0`'s actor pass runs it.
+struct PlayingWorld {
+    manager: EntityManager,
+    tasks: SpecializedActorTaskScheduler,
+    fx: WorldFx,
+    hull: PlayerHull,
+    static_damage: StaticDamageScheduler,
+    notifications: GameplayNotifications,
+    tally: v2k_game::world_complete_results::WorldCompleteTally,
+    view: [i32; 3],
+}
+
+impl PlayingWorld {
+    fn load(session: &mut GameSession, metadata: &[EntityTypeRuntimeMetadata], world: u32) -> Self {
+        session.load_level_by_id(world, 1).unwrap();
+        let mut fx = WorldFx::new();
+        let mut manager = construct_world(session, metadata, world, &mut fx);
+        let tasks = adopt_authored_tasks(&mut manager);
+        // 44AFB0 builds the radar after authored construction, as the game does.
+        session
+            .cache
+            .initialize_level_terrain_radar(&mut || fx.next_shared_retail_random_u16())
+            .unwrap();
+        let view = manager.player().unwrap().position_raw().map(i32::from);
+        Self {
+            manager,
+            tasks,
+            fx,
+            hull: PlayerHull::default(),
+            static_damage: StaticDamageScheduler::new(),
+            notifications: GameplayNotifications::new(),
+            tally: Default::default(),
+            view,
+        }
+    }
+
+    /// One pass; panics if an actor stopped in its own tick.
+    fn tick(&mut self, session: &mut GameSession, world: u32, tick: u32) {
+        use v2k_game::entity_view_detail::RetailViewDetailContext;
+        use v2k_game::gameplay_notifications::GameplayNotificationPhase;
+        use v2k_game::specialized_actor_task_production::{
+            HiveComponentProductionContext, SpecializedActorTaskProductionFrame,
+            SpecializedActorTaskWorld,
+        };
+        let pass = self.tasks.tick(
+            &mut self.manager,
+            SpecializedActorTaskProductionFrame {
+                world: SpecializedActorTaskWorld::Playing {
+                    player_hull: &mut self.hull,
+                    extra_lives: RetailRuntimeValue::Known(0),
+                },
+                // The Hive gives birth through its own components.
+                hive_components: Some(HiveComponentProductionContext {
+                    world_complete_tally: &mut self.tally,
+                    view_detail: RetailViewDetailContext::from_raw(self.view, 0, (52, 30)),
+                }),
+                notification_phase: GameplayNotificationPhase::Playing,
+                resources: &mut session.cache,
+                world_fx: &mut self.fx,
+                static_damage: &mut self.static_damage,
+                elapsed_micros: 20_000,
+                global_elapsed_micros: 20_000,
+                retail_tick: tick,
+                main_base_abort_active: false,
+            },
+            &mut self.notifications,
+        );
+        for outcome in &pass.outcomes {
+            assert_eq!(outcome.stopped_actor(), None, "world{world} tick{tick}");
+        }
+    }
+
+    fn abort(&mut self, session: &mut GameSession, world: u32, tick: u32) {
+        let mut progress = PlayerCampaignProgress::new();
+        progress.set_current_control_slot(Some((world - 12) as usize));
+        let (mut controller, _) = MainBaseAbortControllerStorage::from_loaded_level(
+            NonZeroU64::new(u64::from(world)).unwrap(),
+            session.cache.level_desc().unwrap(),
+            false,
+            &mut progress,
+        )
+        .unwrap();
+        let result = execute_campaign_abort(
+            MainBaseAbortTransactionId::new(u64::from(world)).unwrap(),
+            None,
+            &mut controller,
+            &mut self.manager,
+            &mut session.cache,
+            &mut self.static_damage,
+            &mut self.hull,
+            &mut self.fx,
+            &mut self.tasks,
+            MainBaseAbortGameplayContext {
+                extra_lives: RetailRuntimeValue::Known(0),
+                notifications: &mut self.notifications,
+                retail_tick: tick,
+            },
+        );
+        let report = result.unwrap_or_else(|failure| {
+            panic!(
+                "world{world}: mid-play abort fell back: {:?}",
+                failure.diagnostic
+            )
+        });
+        assert!(report.completion.full_frame_submitted, "world{world}");
+    }
+}
+
+fn type_metadata(session: &GameSession) -> Vec<EntityTypeRuntimeMetadata> {
+    session
         .cache
         .global_entity_model_table()
         .iter()
@@ -562,83 +653,82 @@ fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
                     ..Default::default()
                 })
         })
-        .collect();
-    for world in [
-        13, 14, 15, 16, 17, 18, 19, 21, 24, 26, 31, 32, 34, 36, 37, 39, 40, 42, 43, 46,
-    ] {
-        session.load_level_by_id(world, 1).unwrap();
-        let mut fx = WorldFx::new();
-        let mut manager = construct_world(&session, &metadata, world, &mut fx);
-        let mut tasks = adopt_authored_tasks(&mut manager);
-        // 44AFB0 builds the radar after authored construction, as the game does.
-        session
-            .cache
-            .initialize_level_terrain_radar(&mut || fx.next_shared_retail_random_u16())
-            .unwrap();
-        let mut hull = PlayerHull::default();
-        let mut static_damage = StaticDamageScheduler::new();
-        let mut notifications = GameplayNotifications::new();
-        let mut tally = WorldCompleteTally::default();
-        let view = manager.player().unwrap().position_raw().map(i32::from);
+        .collect()
+}
+
+/// The loss arrives mid-play: retail loses worlds 32 and 35 about 1,100
+/// ticks after arrival. Every actor has run its own tasks by then, and an
+/// owner its tick parked would refuse the abort's custody. Type40's chase
+/// (Sub-D), Type32's Follow Beacons death styles, the Type125 factories'
+/// understaffed countdown and the Hive-born Type57's first callback each did.
+/// The abort body is the same in every campaign world, so all 36 run it.
+#[v2k_test_support::retail_test]
+fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
+    let data = v2k_test_support::retail_dir();
+    let mut session = GameSession::init(&data).unwrap();
+    session.load_auxiliary_ovl(3, 1).unwrap();
+    let metadata = type_metadata(&session);
+    for world in 13..=48 {
+        let mut playing = PlayingWorld::load(&mut session, &metadata, world);
         for tick in 1..=1_100u32 {
-            let pass = tasks.tick(
-                &mut manager,
-                SpecializedActorTaskProductionFrame {
-                    world: SpecializedActorTaskWorld::Playing {
-                        player_hull: &mut hull,
-                        extra_lives: RetailRuntimeValue::Known(0),
-                    },
-                    // The Hive gives birth through its own components.
-                    hive_components: Some(HiveComponentProductionContext {
-                        world_complete_tally: &mut tally,
-                        view_detail: RetailViewDetailContext::from_raw(view, 0, (52, 30)),
-                    }),
-                    notification_phase: GameplayNotificationPhase::Playing,
-                    resources: &mut session.cache,
-                    world_fx: &mut fx,
-                    static_damage: &mut static_damage,
-                    elapsed_micros: 20_000,
-                    global_elapsed_micros: 20_000,
-                    retail_tick: tick,
-                    main_base_abort_active: false,
-                },
-                &mut notifications,
-            );
-            for outcome in &pass.outcomes {
-                assert_eq!(outcome.stopped_actor(), None, "world{world} tick{tick}");
-            }
+            playing.tick(&mut session, world, tick);
         }
-        let mut progress = PlayerCampaignProgress::new();
-        progress.set_current_control_slot(Some((world - 12) as usize));
-        let (mut controller, _) = MainBaseAbortControllerStorage::from_loaded_level(
-            NonZeroU64::new(u64::from(world)).unwrap(),
-            session.cache.level_desc().unwrap(),
-            false,
-            &mut progress,
-        )
-        .unwrap();
-        let result = execute_campaign_abort(
-            MainBaseAbortTransactionId::new(u64::from(world)).unwrap(),
-            None,
-            &mut controller,
-            &mut manager,
-            &mut session.cache,
-            &mut static_damage,
-            &mut hull,
-            &mut fx,
-            &mut tasks,
-            MainBaseAbortGameplayContext {
-                extra_lives: RetailRuntimeValue::Known(0),
-                notifications: &mut notifications,
-                retail_tick: 1_101,
-            },
-        );
-        let report = result.unwrap_or_else(|failure| {
-            panic!(
-                "world{world}: mid-play abort fell back: {:?}",
-                failure.diagnostic
-            )
-        });
-        assert!(report.completion.full_frame_submitted, "world{world}");
+        playing.abort(&mut session, world, 1_101);
     }
+}
+
+/// World 40's quickest Type125 runs out of staff 80 seconds in. `419010`
+/// queues text `0xCF` and `10C10`s its own factory, whose `19750` revives it
+/// into the staged death; at stage 32 its terminal template's global death
+/// broadcast (bit `0x10`) runs `10C10` on the capability-`0x4000` Type106,
+/// emptying census bucket 1, which loses the world. The abort then completes.
+#[v2k_test_support::retail_test]
+fn an_understaffed_type125_dies_and_its_broadcast_kills_the_type106() {
+    use v2k_game::gameplay_notifications::TextTypewriterCadence;
+    let data = v2k_test_support::retail_dir();
+    let mut session = GameSession::init(&data).unwrap();
+    session.load_auxiliary_ovl(3, 1).unwrap();
+    let metadata = type_metadata(&session);
+    let mut playing = PlayingWorld::load(&mut session, &metadata, 40);
+    let factory = |manager: &EntityManager| {
+        let entity = manager.iter_all().find(|entity| entity.id == 9).unwrap();
+        let RetailRuntimeValue::Known(Some(base)) = entity.base_factory_runtime else {
+            panic!("Sub-M")
+        };
+        (entity.entity_type, base, entity.collision.health_raw)
+    };
+    let (entity_type, base, _) = factory(&playing.manager);
+    assert_eq!(entity_type, 125);
+    let limit = base.production.unwrap().understaffed_limit_micros_raw;
+    assert_eq!(limit, 80_000_000);
+    assert_eq!(playing.manager.fun_0042e210_bucket_counts()[1], 1);
+    // One pass short of the limit.
+    let entity = playing.manager.entity_mut(9).unwrap();
+    let RetailRuntimeValue::Known(Some(base)) = &mut entity.base_factory_runtime else {
+        unreachable!()
+    };
+    base.production
+        .as_mut()
+        .unwrap()
+        .understaffed_countdown_micros_raw = limit - 20_000;
+    playing.tick(&mut session, 40, 1);
+    let (_, base, health) = factory(&playing.manager);
+    assert_eq!(base.progressive_death.elapsed_micros_raw, 1);
+    assert_eq!(health, RetailRuntimeValue::Known(10_000_000));
+    let mut texts = Vec::new();
+    playing
+        .notifications
+        .presentation(1, &mut TextTypewriterCadence::default(), |id| {
+            texts.push(id);
+            Some("")
+        });
+    assert!(texts.contains(&0xcf), "{texts:x?}");
+    // 3.2 seconds of staged death, then the terminal template.
+    for tick in 2..=200 {
+        playing.tick(&mut session, 40, tick);
+    }
+    let (_, base, _) = factory(&playing.manager);
+    assert_eq!(base.progressive_death.elapsed_micros_raw, -1);
+    assert_eq!(playing.manager.fun_0042e210_bucket_counts()[1], 0);
+    playing.abort(&mut session, 40, 201);
 }

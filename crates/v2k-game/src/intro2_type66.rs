@@ -11,8 +11,8 @@ mod production;
 mod terminal_effects;
 
 pub use live::{
-    tick_intro2_type66_owner, Intro2Type66Block, Intro2Type66Frame, Intro2Type66Outcome,
-    Intro2Type66Owner, Intro2Type66Tick,
+    tick_intro2_type66_owner, Intro2Type66Block, Intro2Type66Frame, Intro2Type66LentWorld,
+    Intro2Type66Outcome, Intro2Type66Owner, Intro2Type66Tick,
 };
 pub use native::apply_intro2_type66_post_load_health;
 pub(crate) use native::{authenticate_metadata, publish_working_factory, reselect_working_factory};

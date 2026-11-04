@@ -474,6 +474,7 @@ pub fn tick_type31_family(
     // Class4's 02850 writes the terrain the later actor phases read. Class18
     // births its children inline, so the surface death needs task custody.
     let shared_frame = shared::NativeGroundActorFrame {
+        terminal: None,
         resources: shared::NativeGroundResources::Mutable(frame.resources),
         world_fx: frame.world_fx,
         elapsed_micros: frame.elapsed_micros,

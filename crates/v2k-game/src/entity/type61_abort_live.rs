@@ -311,13 +311,19 @@ impl EntityManager {
                     if birth_request.requested_handle != FactoryRequestedEntityHandle::Allocate
                         || birth_request.entity_type != LEVEL_ONE_TYPE61_ENTITY_TYPE
                         || entity.authored_spawn_index.is_some()
-                        || entity.position_raw() != birth_request.position_raw
                         || entity.power_up_payload_packed != Some(birth_request.spawn_parameter_6)
                         || entity.rotation_heading_pitch_roll_raw() != [0; 3]
                         || entity.collision.pre_health_damage_buffer_raw
                             != RetailRuntimeValue::Known(0)
                         || !detail_free_state_matches(
-                            entity.collision.state_flags_at_0x08,
+                            {
+                                let mut state = entity.collision.state_flags_at_0x08;
+                                state.overwrite(
+                                    MOTION_OWNED_BITS,
+                                    expected_preabort_state_raw & MOTION_OWNED_BITS,
+                                );
+                                state
+                            },
                             expected_preabort_state_raw,
                         )
                         || entity.collision.recent_relation_id_at_0x60
@@ -832,6 +838,10 @@ impl EntityManager {
         }
     }
 }
+
+/// A pair response can push a product off its birth point; `12DA0`'s master
+/// motion then moves it and sets `0x20`. Position and that bit are motion's.
+const MOTION_OWNED_BITS: u32 = 0x20;
 
 /// The world draw rewrites the detail bits `0x0600_0000` every frame, so a
 /// product that has been on screen keeps its provenance with them changed.

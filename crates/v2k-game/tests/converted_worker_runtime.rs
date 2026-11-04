@@ -316,6 +316,7 @@ fn native_worker_ejections_retain_own_birth_and_materialiser_lifetimes() {
                 retail_tick: 100,
                 world_style_raw: style,
                 main_base_abort_active: false,
+                lent: None,
             },
         );
         // The same-id foreign manager must not own even the first body attempt.
@@ -339,6 +340,7 @@ fn native_worker_ejections_retain_own_birth_and_materialiser_lifetimes() {
                 retail_tick: 100,
                 world_style_raw: style,
                 main_base_abort_active: false,
+                lent: None,
             },
         );
         assert!(
@@ -805,6 +807,7 @@ fn windy_ice_authors_no_factory_ejection_while_native_people_keep_running() {
             retail_tick: 5,
             world_style_raw: 4,
             main_base_abort_active: false,
+            lent: None,
         },
     )
     .outcome;

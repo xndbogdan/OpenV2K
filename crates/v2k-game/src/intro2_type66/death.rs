@@ -184,31 +184,99 @@ pub fn publish_intro2_type66_standard_death(
     })
 }
 
-/// Terminal19B50 callback. Its caller has already committed clock−1 and
+/// Terminal19B50 callback. Its caller has already committed clock-1 and
 /// deferred the tracked pickup; this function owns only10C10/19750/DB80.
 pub(crate) fn finish_intro2_type66_progressive_death(
     manager: &mut EntityManager,
     entity_id: u32,
-    resources: &mut crate::resource_cache::ResourceCache,
     world_fx: &mut WorldFx,
-    static_damage: &mut crate::static_damage::StaticDamageScheduler,
+    world: &mut Intro2Type66TerminalWorld<'_, '_>,
 ) -> Result<Intro2Type66DeathOutcome, Intro2Type66DeathBlock> {
-    finish_with_effects(
+    finish_with_world(
         manager,
         entity_id,
         world_fx,
-        |manager, world_fx, request| {
+        world,
+        |manager, world_fx, world, request| {
             super::terminal_effects::apply_intro2_type66_terminal_effects(
                 manager,
-                resources,
+                world.resources,
                 world_fx,
-                static_damage,
+                world.static_damage,
                 request,
             )
         },
+        run_global_death_broadcast,
     )
 }
 
+/// What a terminal `19750` reaches: `37390`'s world and, for an authored
+/// global death broadcast (bit `0x10`), the pass's owners and the player.
+pub(crate) struct Intro2Type66TerminalWorld<'w, 'a> {
+    pub resources: &'w mut crate::resource_cache::ResourceCache,
+    pub static_damage: &'w mut crate::static_damage::StaticDamageScheduler,
+    pub notifications: &'w mut crate::gameplay_notifications::GameplayNotifications,
+    pub retail_tick: u32,
+    pub lent: Option<&'w mut super::Intro2Type66LentWorld<'a>>,
+}
+
+/// `19750`'s bit `0x10`: every live actor in list order takes `4198A0`,
+/// which queues text `0xD6` and runs `10C10` on a capability-`0x4000` body.
+/// `4198A0` always returns zero, so the walk never stops early. Returns
+/// whether a victim's death changed the terrain.
+fn run_global_death_broadcast(
+    manager: &mut EntityManager,
+    world_fx: &mut WorldFx,
+    world: &mut Intro2Type66TerminalWorld<'_, '_>,
+) -> Result<bool, &'static str> {
+    use crate::specialized_actor_task_production::SpecializedActorTaskWorld;
+    let Some(lent) = world.lent.as_deref_mut() else {
+        return Err("terminal global death broadcast without the lent world");
+    };
+    let SpecializedActorTaskWorld::Playing {
+        player_hull,
+        extra_lives,
+    } = &mut lent.world
+    else {
+        return Err("terminal global death broadcast without the player");
+    };
+    let mut terrain_changed = false;
+    let mut current = manager.retail_live_order_ids().next();
+    while let Some(id) = current {
+        world
+            .notifications
+            .queue_global_death_broadcast(world.retail_tick as i32);
+        if manager
+            .iter_all()
+            .any(|entity| entity.id == id && entity.capability_flags & 0x4000 != 0)
+        {
+            terrain_changed |= crate::main_base_abort_production::run_generic_death(
+                id,
+                crate::main_base_abort_production::GenericDeathFrame {
+                    entities: manager,
+                    resources: world.resources,
+                    static_damage: world.static_damage,
+                    player_hull,
+                    world_fx,
+                    scheduler: lent.scheduler,
+                    notifications: world.notifications,
+                    retail_tick: world.retail_tick,
+                    extra_lives: *extra_lives,
+                },
+            )
+            .map_err(|block| {
+                eprintln!("Factory global death broadcast: 10C10 on actor {id} stopped: {block:?}");
+                "terminal global death broadcast: a victim's 10C10"
+            })?;
+        }
+        current = manager
+            .retail_live_successor_id(id)
+            .map_err(|()| "terminal global death broadcast: visited actor removed")?;
+    }
+    Ok(terrain_changed)
+}
+
+#[cfg(test)]
 fn finish_with_effects(
     manager: &mut EntityManager,
     entity_id: u32,
@@ -218,6 +286,29 @@ fn finish_with_effects(
         &mut WorldFx,
         Intro2Type66TerminalEffectRequest,
     ) -> Result<Intro2Type66TerminalEffectsOutcome, Intro2Type66DeathBlock>,
+) -> Result<Intro2Type66DeathOutcome, Intro2Type66DeathBlock> {
+    finish_with_world(
+        manager,
+        entity_id,
+        world_fx,
+        &mut (),
+        |manager, world_fx, _, request| effects(manager, world_fx, request),
+        |_, _, _| Err("terminal global death broadcast without the lent world"),
+    )
+}
+
+fn finish_with_world<W>(
+    manager: &mut EntityManager,
+    entity_id: u32,
+    world_fx: &mut WorldFx,
+    world: &mut W,
+    effects: impl FnOnce(
+        &mut EntityManager,
+        &mut WorldFx,
+        &mut W,
+        Intro2Type66TerminalEffectRequest,
+    ) -> Result<Intro2Type66TerminalEffectsOutcome, Intro2Type66DeathBlock>,
+    broadcast: impl FnOnce(&mut EntityManager, &mut WorldFx, &mut W) -> Result<bool, &'static str>,
 ) -> Result<Intro2Type66DeathOutcome, Intro2Type66DeathBlock> {
     if !super::type66_manager_allocation_authenticates(manager, entity_id) {
         return Err(block("native allocation", false));
@@ -308,37 +399,41 @@ fn finish_with_effects(
     world_fx.queue_networked_positional_sound_raw(62, request.position_raw);
     // 37390 executes before staff/capacity, both animation resets and19630.
     // The crater's EB20 pass can change this actor's Y/basis here.
-    let effects = effects(manager, world_fx, request).map_err(|mut error| {
+    let mut effects = effects(manager, world_fx, world, request).map_err(|mut error| {
         error.committed_prefix = true;
         error.presentation_requested |= request.template_words[0] & 2 != 0;
         error
     })?;
-    let post_effect_block = |phase| Intro2Type66DeathBlock {
-        phase,
-        committed_prefix: true,
-        presentation_requested: effects.presentation_requested,
-        terrain_changed: effects.terrain_changed,
-    };
+    let post_effect_block =
+        |phase, effects: Intro2Type66TerminalEffectsOutcome| Intro2Type66DeathBlock {
+            phase,
+            committed_prefix: true,
+            presentation_requested: effects.presentation_requested,
+            terrain_changed: effects.terrain_changed,
+        };
     let entity = manager
         .entity_mut(entity_id)
-        .ok_or(post_effect_block("post-template allocation"))?;
+        .ok_or(post_effect_block("post-template allocation", effects))?;
     if !intro2_type66_allocation_authenticates(entity) {
-        return Err(post_effect_block("post-template native allocation"));
+        return Err(post_effect_block(
+            "post-template native allocation",
+            effects,
+        ));
     }
     let RetailRuntimeValue::Known(Some(factory)) = &mut entity.base_factory_runtime else {
         unreachable!()
     };
     let mut production = factory
         .production
-        .ok_or(post_effect_block("post-template Sub-M"))?;
+        .ok_or(post_effect_block("post-template Sub-M", effects))?;
     production.current_scientists_raw = 0;
     production.scientist_capacity_raw = 0;
     production.silence_voices();
     factory.production = Some(production);
-    let owner = factory
-        .live_owner
-        .as_mut()
-        .ok_or(post_effect_block("post-template factory allocation"))?;
+    let owner = factory.live_owner.as_mut().ok_or(post_effect_block(
+        "post-template factory allocation",
+        effects,
+    ))?;
     let reset = crate::factory_production_live::FactoryAnimationRange {
         start_raw_16_16: 0,
         end_raw_16_16: 0x1_0000,
@@ -350,15 +445,14 @@ fn finish_with_effects(
         crate::factory_production_live::published_status(production),
     )
     .after;
-    // Ordinary corpus factories and both Intro2 templates omit19750 bit10.
-    // An authored broadcast must be serviced by its live-list owner, never
-    // acknowledged by the local factory adapter alone.
+    // 19750's bit 0x10 walks the live list after 19630's status clear.
     if config[6] & 0x10 != 0 {
-        return Err(post_effect_block("terminal global death broadcast"));
+        effects.terrain_changed |= broadcast(manager, world_fx, world)
+            .map_err(|phase| post_effect_block(phase, effects))?;
     }
     // DB80 re-resolves, then AC60 selects alternate0 without RNG.
     let owner = reselect_intro2_type66_dormant(manager, entity_id)
-        .map_err(|error| post_effect_block(error.phase))?;
+        .map_err(|error| post_effect_block(error.phase, effects))?;
     Ok(Intro2Type66DeathOutcome {
         returned_nonzero: true,
         owner: Some(owner),

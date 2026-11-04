@@ -4188,6 +4188,7 @@ mod tests {
                     retail_tick: tick,
                     world_style_raw,
                     main_base_abort_active: false,
+                    lent: None,
                 },
             );
             assert!(

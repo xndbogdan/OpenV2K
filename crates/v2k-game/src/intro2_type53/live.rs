@@ -21,6 +21,7 @@ pub fn tick_intro2_type53(
         manager,
         owner,
         shared::NativeGroundActorFrame {
+            terminal: None,
             resources: shared::NativeGroundResources::ReadOnly(frame.resources),
             world_fx: frame.world_fx,
             elapsed_micros: frame.elapsed_micros,

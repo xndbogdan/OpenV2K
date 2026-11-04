@@ -173,20 +173,17 @@ macro_rules! type38_profile {
             > {
                 context.run_class49_terminal(manager, id)
             }
+            // E370's 162B0 runs the same 10C10 terminal inside the tick, in
+            // the world the scheduler lends the visit.
             fn publish_direct_surface_death(
-                _: &mut EntityManager,
-                _: u32,
-                _: &mut shared::NativeGroundDeathContext<'_>,
+                manager: &mut EntityManager,
+                id: u32,
+                context: &mut shared::NativeGroundDeathContext<'_>,
             ) -> Result<
                 LiveActorDeathResult<NativeGroundTerminalPublication>,
                 crate::intro2_common_dying::Intro2CommonDyingBlock,
             > {
-                // E370's 162B0 lifecycle would run BAC0/BC90 inside the tick,
-                // whose surface frame still borrows the static world BAF0
-                // mutates. Held until the tick can lend that world.
-                Err(crate::intro2_common_dying::Intro2CommonDyingBlock::Runtime(
-                    "E370 terminal death needs the tick's static world",
-                ))
+                context.run_class49_terminal(manager, id)
             }
             fn acquire_capture(
                 _: &mut EntityManager,

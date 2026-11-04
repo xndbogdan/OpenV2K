@@ -200,12 +200,14 @@ impl SpecializedActorTaskScheduler {
         pending: &mut Vec<SpecializedActorTaskOwner>,
         retained: &mut Vec<SpecializedActorTaskOwner>,
     ) {
-        let live_order: Vec<_> = manager.retail_live_order_ids().collect();
-        let current_index = live_order.iter().position(|&id| id == entity_id);
+        let live_order: std::collections::HashMap<u32, usize> = manager
+            .retail_live_order_ids()
+            .enumerate()
+            .map(|(index, id)| (id, index))
+            .collect();
+        let current_index = live_order.get(&entity_id).copied();
         for retained_owner in std::mem::take(&mut self.owners) {
-            let index = live_order
-                .iter()
-                .position(|&id| id == retained_owner.entity_id());
+            let index = live_order.get(&retained_owner.entity_id()).copied();
             if matches!((current_index, index), (Some(current), Some(index)) if index <= current) {
                 retained.push(retained_owner);
             } else {

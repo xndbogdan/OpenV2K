@@ -323,10 +323,26 @@ death: it queues the terrain ripple that `4374B0` advances on later frames and
 finishes with the template's flash, radial and crater. The factory death now
 queues it.
 
+A third pass closed the rest that the probe reached:
+
+| World | Actor | Earlier stop | Fix |
+|---|---|---|---|
+| 32 | Type32 (Type38 family) | `E370`'s lifecycle death needed the static world its own tick had borrowed | the scheduler lends the visit every owner, the static queue and the player, as the weapon pass and Type128's drowning do; `162B0` runs `16750`, then the class49 terminal, between `E370`'s timer write and its bubble tail |
+| 37, 40 | Type125 factory | `419010`'s understaffed death | when the countdown runs out it queues text `0xCF`, then `10C10`s its own factory: `19750` revives it (health 10,000,000, `+0x94 = 1`) and `AC60` republishes Working Factory, retiring the running wrapper; `456BD0` follows, then the rest of `419010` |
+| 37, 40 | Type125 factory | the terminal `19750`'s global death broadcast (template bit `0x10`) | after `19630`'s status clear, `19750` walks the live list: each actor takes `4198A0`, which queues text `0xD6` and `10C10`s a capability-`0x4000` body. `4198A0` returns zero, so the walk never stops early. The Type106 (bucket 1) dies, and the world is lost |
+| 37, 40 | Type125's ripple | the ripple pass refused the radial bit (`0x04`) | when a record finishes, `4374B0` runs its flash, then `4566E0` with record words 4..11 (the source type and handle `19750` wrote), then its crater |
+| 22, 25, 32 | factory-born Type61 | its class49 radial preflight met a Type82 factory's unresolved type-hit hook | `410090` installs `4C8A30`, whose `+30` is null, for every row; Type82 and Type125 now hold it as Type66 does |
+| 28 | factory-born Type61 | provenance compared its birth position; a pair push had moved it and `12DA0` set state bit `0x20` | position and bit `0x20` are motion's; the visit bound counts the moved product's ring again |
+
+World 40's quickest Type125 (limit 80 s) dies 4,000 ticks in; its terminal
+template follows 3.2 s later and the Type106's death empties bucket 1.
+[`an_understaffed_type125_dies_and_its_broadcast_kills_the_type106`](../../crates/v2k-game/tests/campaign_abort_coverage.rs)
+runs that from one tick before the limit.
+
 [`casualty_abort_completes_after_a_minute_of_actor_ticks`](../../crates/v2k-game/tests/campaign_abort_coverage.rs)
-runs every casualty world but 35 (20 worlds) for 1,100 ticks of the real
-scheduler with the Hive's components, asserts no actor stopped, then runs the
-abort and requires it to complete.
+runs every campaign world (13-48, 36 worlds; the abort body is the same in
+each) for 1,100 ticks of the real scheduler with the Hive's components,
+asserts no actor stopped, then runs the abort and requires it to complete.
 
 **World 21's loss tick.** Retail (lab, idle player) loses world 21 at clock
 1791, the port at 1346. In both, the people are ten Type86s (capability
@@ -346,22 +362,17 @@ Still held, each behind its logged stop:
   the 3D normalisation in `1E700` and the Sub-L pitch output. A Type12 picks
   Trash Buildings when a building lies within its axis, then can step a cell
   away before the first scan, which then misses it.
-- **A Type38-family surface death in its own tick** (world 32's Type32):
-  `E370`'s lifecycle runs the class49 terminal inside the tick, while the
-  surface frame still borrows the static world that terminal mutates.
-- **Type125's understaffed death**: when the countdown runs out, `419010`
-  queues text `0xCF` and calls `10C10` on the factory from inside its own
-  callback; the live owner does not run that reentrant death yet (worlds 37
-  and 40 reach it inside two minutes).
-- **Type125's terminal death** (world 37): its template sets `19750`'s
-  global death broadcast (bit `0x10`), and its queued ripple the radial bit
-  (`0x04`), which the ripple pass does not run yet.
-- Outside the casualty worlds the same sweep still parks a Type15 (world 20),
-  a Type127's Trash Furniture scan (27), factory-born Type61s whose radial
-  preflight (22, 25) or provenance (28) refuses them.
+- **A Type127's Trash Furniture scan** (world 27, about 1,580 ticks in) is
+  the same residue: its first scan fails and `401DA0` steers toward the
+  record's unwritten Y.
 
-Of the 21 casualty worlds, the every-25-ticks check now passes for two idle
-minutes in all but 32, 35 and 40.
+The every-25-ticks probe, run in the game for two idle minutes (6,000
+frames) from each arrival or until the world is lost, now completes the
+abort at every probe in every campaign world but 27 and 35, the two held
+Trash Furniture scans. Driven by the scheduler alone for 6,000 ticks, world
+25 also fails five late probes: a Type128's class49 radial reaches a Type9
+in Wander Near Location whose style has a null death hook, which the
+retained radial does not run (in the game, world 25 is lost at tick 400).
 
 Worlds 26, 31 and 40 complete with their
 [Type107 and Type121 mobile turrets](TYPE107_MOBILE_TURRETS.md), which take

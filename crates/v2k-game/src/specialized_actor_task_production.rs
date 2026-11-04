@@ -5673,6 +5673,13 @@ impl SpecializedActorTaskScheduler {
                     ));
                 }
                 SpecializedActorTaskOwner::NativeType38Family(owner) => {
+                    // E370's 162B0 runs the class49 terminal (BAF0) inside
+                    // the tick: lend it every owner, as Type128's drowning.
+                    self.lend_owners(
+                        &mut pending,
+                        &mut retained,
+                        SpecializedActorTaskOwner::NativeType38Family(owner),
+                    );
                     let tick = crate::native_type38::tick_type38_family(
                         manager,
                         owner,
@@ -5681,10 +5688,18 @@ impl SpecializedActorTaskScheduler {
                             world_fx,
                             elapsed_micros,
                             retail_tick,
-                            notifications,
                             notification_phase,
+                            terminal: crate::native_ground_actor::NativeGroundTerminalWorld {
+                                scheduler: self,
+                                static_damage,
+                                notifications,
+                                world: world.reborrow(),
+                            },
                         },
                     );
+                    // The visit's own result replaces its lent copy.
+                    self.owners.retain(|owner| owner.entity_id() != entity_id);
+                    self.return_lent_owners(manager, entity_id, &mut pending, &mut retained);
                     if let Some(owner) = tick.retained_owner {
                         retained.push(SpecializedActorTaskOwner::NativeType38Family(owner));
                     }
@@ -6086,6 +6101,13 @@ impl SpecializedActorTaskScheduler {
                         ));
                         continue;
                     };
+                    // A terminal 19750's global death broadcast runs 10C10
+                    // on other actors: lend it every owner, as weapons are.
+                    self.lend_owners(
+                        &mut pending,
+                        &mut retained,
+                        SpecializedActorTaskOwner::Intro2Type66(owner),
+                    );
                     let tick = crate::intro2_type66::tick_intro2_type66_owner(
                         manager,
                         owner,
@@ -6098,8 +6120,16 @@ impl SpecializedActorTaskScheduler {
                             retail_tick,
                             world_style_raw,
                             main_base_abort_active,
+                            lent: Some(crate::intro2_type66::Intro2Type66LentWorld {
+                                scheduler: self,
+                                world: world.reborrow(),
+                            }),
                         },
                     );
+                    // The visit's own result replaces its lent copy.
+                    let entity_id = owner.entity_id();
+                    self.owners.retain(|owner| owner.entity_id() != entity_id);
+                    self.return_lent_owners(manager, entity_id, &mut pending, &mut retained);
                     if let Some(owner) = tick.retained_owner {
                         retained.push(SpecializedActorTaskOwner::Intro2Type66(owner));
                     }

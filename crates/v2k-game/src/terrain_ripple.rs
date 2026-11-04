@@ -135,6 +135,18 @@ pub struct TerrainRippleStop {
     pub terrain_changed: bool,
 }
 
+/// `FUN_004566E0` at a finished record (bit 0x04): the static cells, then
+/// the live list, in the world the caller owns.
+pub type TerrainRippleRadial<'a> = dyn FnMut(
+        &mut ResourceCache,
+        &mut EntityManager,
+        &mut WorldFx,
+        &mut StaticDamageScheduler,
+        [i16; 3],
+        crate::radial_damage::RadialDamageTemplate,
+    ) -> Result<(), &'static str>
+    + 'a;
+
 /// `FUN_004374B0`'s ripple pass over the queue held in `world_fx`, in queue
 /// order. A record that stops is dropped with its logged phase; the rest
 /// still run.
@@ -145,6 +157,7 @@ pub fn advance_terrain_ripples(
     world_fx: &mut WorldFx,
     static_damage: &mut StaticDamageScheduler,
     flash: &mut FullFrameSpriteSequence,
+    radial: &mut TerrainRippleRadial<'_>,
 ) -> Vec<TerrainRippleStop> {
     let mut stops = Vec::new();
     for mut ripple in world_fx.take_terrain_ripples() {
@@ -156,6 +169,7 @@ pub fn advance_terrain_ripples(
             world_fx,
             static_damage,
             flash,
+            radial,
         ) {
             Ok(true) => {}
             Ok(false) => world_fx.queue_terrain_ripple(ripple),
@@ -174,15 +188,12 @@ fn advance_one(
     world_fx: &mut WorldFx,
     static_damage: &mut StaticDamageScheduler,
     flash: &mut FullFrameSpriteSequence,
+    radial: &mut TerrainRippleRadial<'_>,
 ) -> Result<bool, TerrainRippleStop> {
     let stop = |phase, terrain_changed| TerrainRippleStop {
         phase,
         terrain_changed,
     };
-    if ripple.template.flags & 0x04 != 0 {
-        // No ported template sets the radial bit.
-        return Err(stop("ripple radial template", false));
-    }
     let terrain = resources
         .level_terrain_mut()
         .ok_or_else(|| stop("ripple terrain", false))?;
@@ -197,6 +208,30 @@ fn advance_one(
     }
     if ripple.template.flags & 0x02 != 0 {
         flash.request();
+    }
+    if ripple.template.flags & 0x04 != 0 {
+        // Record +0x20, words 4..11: 4566E0's template, whose trailing
+        // source type/handle 19750 wrote before 37390 copied it.
+        let w = ripple.template.radial_words;
+        let template = crate::radial_damage::RadialDamageTemplate {
+            inner_radius_raw: w[0] as u16 as i16,
+            outer_radius_raw: (w[0] >> 16) as u16 as i16,
+            impulse_raw: w[1] as i32,
+            packet: crate::damage::DamagePacket {
+                channels: [w[2] as i32, w[3] as i32],
+                amounts_raw: [w[4] as i32, w[5] as i32],
+            },
+            trailing_raw: [w[6] as i32, w[7] as i32],
+        };
+        radial(
+            resources,
+            manager,
+            world_fx,
+            static_damage,
+            ripple.position_raw,
+            template,
+        )
+        .map_err(|phase| stop(phase, true))?;
     }
     if ripple.template.flags & 0x08 != 0 {
         let world_style = resources

@@ -159,6 +159,7 @@ fn type85s_death_ripples_launches_and_craters_as_retail() {
             &mut fx,
             &mut static_damage,
             &mut flash,
+            &mut |_, _, _, _, _, _| Err("no radial template"),
         );
         assert!(stops.is_empty(), "{stops:?}");
         if let Some((_, expected)) = RETAIL_ROWS.iter().find(|(at, _)| *at == frame) {
@@ -196,4 +197,55 @@ fn a_zero_frame_ends_a_fresh_ripple_and_the_period_wraps_the_clock() {
     assert!(fallen > 0);
     // Each frame writes only its change, so the ground ends where it began.
     assert!(terrain.cells.iter().all(|cell| cell.height == 0));
+}
+
+/// `4374B0` runs a finished record's radial (bit 0x04) after its flash and
+/// before its crater, with `37390`'s words 4..11 as `4566E0`'s template.
+#[v2k_test_support::retail_test]
+fn a_finished_ripple_runs_its_radial_template() {
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(43);
+    let template = TerrainRippleTemplate {
+        flags: 0x06,
+        radial_words: [0x0400_0200, 200, 1, 4, 10_000, 8_000, 125, 9],
+        period_us: 40_000,
+        ..TYPE85_DEATH_RIPPLE
+    };
+    fx.queue_terrain_ripple(TerrainRipple::new([0x7f00, 0x840, 0x7e00], template));
+    let mut static_damage = StaticDamageScheduler::new();
+    let mut flash = FullFrameSpriteSequence::default();
+    let mut calls = Vec::new();
+    for _ in 0..2 {
+        let stops = advance_terrain_ripples(
+            20_000,
+            &mut session.cache,
+            &mut manager,
+            &mut fx,
+            &mut static_damage,
+            &mut flash,
+            &mut |_, _, _, _, origin, radial| {
+                calls.push((origin, radial));
+                Ok(())
+            },
+        );
+        assert!(stops.is_empty(), "{stops:?}");
+    }
+    assert!(flash.is_active());
+    assert_eq!(
+        calls,
+        [(
+            [0x7f00, 0x840, 0x7e00],
+            crate::radial_damage::RadialDamageTemplate {
+                inner_radius_raw: 0x200,
+                outer_radius_raw: 0x400,
+                impulse_raw: 200,
+                packet: crate::damage::DamagePacket {
+                    channels: [1, 4],
+                    amounts_raw: [10_000, 8_000],
+                },
+                trailing_raw: [125, 9],
+            }
+        )]
+    );
+    assert!(fx.terrain_ripples().is_empty());
 }

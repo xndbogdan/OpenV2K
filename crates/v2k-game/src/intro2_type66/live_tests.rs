@@ -56,6 +56,7 @@ fn step(
             retail_tick: now,
             world_style_raw,
             main_base_abort_active: false,
+            lent: None,
         },
     )
 }

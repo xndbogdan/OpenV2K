@@ -656,3 +656,77 @@ fn reselection_nearby_reads_the_live_axis() {
         assert_eq!(reselect_once(&mut manager, &mut fx), 5);
     }
 }
+
+/// E370's 162B0 runs a drowned Type32's class49 terminal (BAC0's burst and
+/// BAF0's radial) inside its own tick, in the world the scheduler lends it.
+#[v2k_test_support::retail_test]
+fn a_drowned_type32_runs_its_terminal_inside_its_own_tick() {
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(32);
+    manager.cleanup_pending_actor_deferred_destroys();
+    let ids = ids(&manager, Type38Row::Type32);
+    activate(&mut manager, &ids);
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    assert_eq!(tasks.adopt_type38_family(&manager), ids.len());
+    let id = ids[0];
+    let metadata = manager.type_runtime_metadata(32).unwrap().clone();
+    let RetailRuntimeValue::Known(effects) = metadata.common_world_effects else {
+        panic!("authored surface profile")
+    };
+    assert_eq!(effects.surface_selectors, [1, 0]);
+    let terrain = session.cache.level_terrain().unwrap();
+    let sea = terrain.sea_level_raw();
+    // A cell whose floor lies well below the sea.
+    let (x, z, floor) = (0..256usize)
+        .flat_map(|z| (0..256usize).map(move |x| (x, z)))
+        .find_map(|(x, z)| {
+            let floor = i16::from(terrain.cell(x, z).unwrap().height as i8) * 0x20;
+            (floor < sea - 0x400).then_some((x, z, floor))
+        })
+        .expect("world 32 has deep water");
+    let entity = manager.entity_mut(id).unwrap();
+    entity.set_motion_raw(
+        [
+            ((x << 8) + 0x80) as u16 as i16,
+            floor + 0x40,
+            ((z << 8) + 0x80) as u16 as i16,
+        ],
+        [0; 3],
+    );
+    entity.surface_lifetime_timer_ms_at_0x48 =
+        RetailRuntimeValue::Known(effects.surface_lifetime_ms);
+    let mut static_damage = StaticDamageScheduler::new();
+    let mut notifications = GameplayNotifications::new();
+    let mut hull = PlayerHull::default();
+    let pass = tasks.tick(
+        &mut manager,
+        SpecializedActorTaskProductionFrame {
+            world: SpecializedActorTaskWorld::Playing {
+                player_hull: &mut hull,
+                extra_lives: RetailRuntimeValue::Known(3),
+            },
+            hive_components: None,
+            notification_phase: GameplayNotificationPhase::Playing,
+            resources: &mut session.cache,
+            world_fx: &mut fx,
+            static_damage: &mut static_damage,
+            elapsed_micros: 20_000,
+            global_elapsed_micros: 20_000,
+            retail_tick: 600,
+            main_base_abort_active: false,
+        },
+        &mut notifications,
+    );
+    assert_no_block(&pass, "world32");
+    assert!(pass
+        .outcomes
+        .iter()
+        .all(|outcome| outcome.stopped_actor().is_none()));
+    assert_eq!(style(&manager, id), 0x004c_7150, "BAC0's class1 corpse");
+    assert!(crate::class49_death::finished_terminal_hit_authenticates(
+        &manager, id
+    ));
+    assert!(manager.pending_actor_deferred_destroy_ids().contains(&id));
+    // The other Type32s keep their living owners.
+    assert_eq!(tasks.adopt_type38_family(&manager), 0);
+}
