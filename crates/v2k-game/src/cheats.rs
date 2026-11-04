@@ -330,10 +330,6 @@ pub fn set_skip_world(world: u32) {
 /// port owner. Each stops its cheat with this logged reason.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HeldCheatOperation {
-    /// Operation `0x38`: a zero-record body of this type is born at the
-    /// player (`FUN_00438080`) and joins the hold (`FUN_00414930` or
-    /// `FUN_00443B50`).
-    AddToHold { entity_type: i32 },
     /// Operation `0x39`: controller `+195` gains the count (at most 4) and a
     /// Type65 is born at the player.
     Megablast { count: i32 },
@@ -343,14 +339,18 @@ pub enum HeldCheatOperation {
 pub fn held_operation(code: u32) -> Option<HeldCheatOperation> {
     let payload = crate::weapon_inventory::PowerUpPayload::from_runtime_word(code);
     match payload.selector {
-        0x38 => Some(HeldCheatOperation::AddToHold {
-            entity_type: payload.amount,
-        }),
         0x39 => Some(HeldCheatOperation::Megablast {
             count: payload.amount,
         }),
         _ => None,
     }
+}
+
+/// The type operation `0x38` births into the hold, when `code` is one
+/// (`EntityManager::dispatch_controller_operation_0x38`).
+pub fn add_to_hold_type(code: u32) -> Option<u32> {
+    let payload = crate::weapon_inventory::PowerUpPayload::from_runtime_word(code);
+    (payload.selector == 0x38).then_some(payload.amount as u32)
 }
 
 /// `FUN_00455E20`'s codes: every Cheats -> Weapons row whose callback is
@@ -616,18 +616,17 @@ mod tests {
         assert_eq!(codes.len(), 25);
         assert_eq!(codes[0], 0x3E712);
         assert_eq!(codes[24], 0x3E71F);
-        // Megablast, Autobot and Defender Ball are the held operations.
+        // Megablast is the held operation; Autobot and Defender Ball go to
+        // the hold.
         let held: Vec<_> = codes
             .iter()
             .filter_map(|&code| held_operation(code))
             .collect();
-        assert_eq!(
-            held,
-            vec![
-                HeldCheatOperation::Megablast { count: 5 },
-                HeldCheatOperation::AddToHold { entity_type: 64 },
-                HeldCheatOperation::AddToHold { entity_type: 63 },
-            ]
-        );
+        assert_eq!(held, vec![HeldCheatOperation::Megablast { count: 5 }]);
+        let hold: Vec<_> = codes
+            .iter()
+            .filter_map(|&code| add_to_hold_type(code))
+            .collect();
+        assert_eq!(hold, vec![64, 63]);
     }
 }

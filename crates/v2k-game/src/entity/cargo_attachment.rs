@@ -57,7 +57,8 @@ impl EntityManager {
             };
             return callbacks.attach_to_player(self, cargo);
         }
-        if entity.entity_type != 68 || !self.native_class0_construction_present(cargo) {
+        if !matches!(entity.entity_type, 68 | 74) || !self.native_class0_construction_present(cargo)
+        {
             return Err(PlayerCargoAttachmentError::UnsupportedCallback {
                 entity_type: entity.entity_type,
             });

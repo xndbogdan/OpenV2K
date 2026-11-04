@@ -41,15 +41,15 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 30 | 3 | 99 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 30 | 3 | 98 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 23 | 0 | 124 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 19 | 1 | 91 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 19 | 1 | 98 |
 | [Controls](../re/CONTROLS.md) | 16 | 2 | 49 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 13 | 1 | 30 |
 | [Menu system](../re/MENU_SYSTEM.md) | 9 | 2 | 143 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 141 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 4 | 1 | 45 |
-| [Actor](../re/ACTOR_RUNTIME.md) | 3 | 0 | 46 |
+| [Actor](../re/ACTOR_RUNTIME.md) | 3 | 0 | 45 |
 | [Demo re](../re/DEMO_RE.md) | 3 | 0 | 5 |
 
 ## Omitted
