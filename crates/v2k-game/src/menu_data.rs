@@ -330,6 +330,9 @@ pub struct ScreenDef {
     /// Screen flags (0x100 spinner-row arrows=select, 0x80 up=prev,
     /// 4 wrap, 0xC4 = main ring).
     pub flags: u32,
+    /// Record `+4`: `FUN_0043C7F0` starts a pushed screen here and steps
+    /// past hidden rows; only the Yes/No confirmations start off row 0 (No).
+    pub default_row: usize,
     pub groups: Vec<RowGroup>,
     pub items: Vec<ItemDef>,
 }
@@ -351,6 +354,9 @@ impl ScreenDef {
 #[derive(Deserialize)]
 struct RawScreen {
     va: u32,
+    /// Record `+4`: the row a push starts on.
+    #[serde(default)]
+    default_row: usize,
     flags: u32,
     groups: Vec<RawGroup>,
     items: Vec<RawItem>,
@@ -515,6 +521,7 @@ impl MenuTree {
                     ScreenDef {
                         va: rs.va,
                         flags: rs.flags,
+                        default_row: rs.default_row,
                         groups,
                         items,
                     },
@@ -599,6 +606,7 @@ impl MenuTree {
             ScreenDef {
                 va: ADDRESS_PROMPT,
                 flags: 0x11,
+                default_row: 0,
                 groups: vec![RowGroup {
                     flags: 0x08,
                     window_rows: 2,

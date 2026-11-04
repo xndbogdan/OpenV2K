@@ -236,6 +236,12 @@ screen of the stack is rendered (no parents behind).
 
 ### Runtime state (BSS)
 
+- A push starts on the screen record's `+4` row and steps past hidden rows
+  (item flag 8) in `FUN_0043C7F0`'s switch. Only the four Yes/No
+  confirmations (`0x4C4E78` Replay this World, `0x4C4DD0` Quit Game,
+  `0x4C1598` Overwrite, `0x4C1660` Format) set it, to 3: they open on No
+  (the lab's Replay this World screen shows No selected, then Yes after Up).
+
 - `DAT_004DCEDC` = depth in the screen stack; slots at `0x4DCA10 + depth*8`
   = `{screen_ptr, s16 sel_index, s16 window_scroll}` (max 10 deep).
 - `DAT_004DCEBC` (ring/horizontal) / `DAT_004DCEC0` (list/vertical) =
@@ -1411,6 +1417,19 @@ prompt alike: the map shows only while he is open. The save menu's list
 (`4D0810`) drains Klaus, then queues and drains the menu over him. The
 loading card is drawn over him too (`FUN_0042AF00` drains Klaus first).
 
+The map's nodes come from the 37 campaign words (`FUN_00454FF0`): a world
+shows once bit 4 is set (`FUN_0042EDA0`), with bit 1 (saved) as well, and
+the session's next world (`+34`) blinks whatever its bits. Bit 4 is set on
+the current slot by every world install (`FUN_0042E570`, before its time
+trophy check), so each world played shows from the next map on. A world
+without a time limit also claims its time trophy there (bit 8), which draws
+sprite 532 beside the node. The lab's Cheats skip from world 1 to 2 shows
+both: world 1 with bits `0x0C` (written at the load, `0042E6BD` then
+`0042ED73`), world 2 blinking. The port set bit 8 but not bit 4, so a
+played world never showed until saved, after a skip and an ordinary route
+alike. The prompt is centred as `(width - text width) / 2`, one signed
+division (both `FUN_00454390` and `FUN_00452790`).
+
 Each switch above selects the next descriptor, whose entry runs on the next
 frame with its first tick. `FUN_00453E00` checks Klaus after the leg's
 visit (`FUN_00450C00`) in the same frame; `FUN_004555A0` checks before its
@@ -1498,7 +1517,7 @@ and the load restarts it.
 | `FUN_00450D70` | the Cheats world selector's callback: left and right step the world number (`004D04E0`) between 1 and the maximum, skipping 13, 15, 16, 17, 29 and 32, with menu sound 1 (sound 0 at a limit); selecting plays sound 3, sets session `+28C`, clears the fly clocks (`FUN_0043C7D0`) and runs Skip to World (`FUN_004512E0`) |
 | `FUN_00450E80` | the Cheats world selector's draw: string 138 formatted with the world's name, string 152 + the world number (string 127 when absent) |
 | `FUN_00450EF0` | the progress map save menu's Save Game row (`0x4D1090`): `%s: %s %s` with its label, the session's text at `+14` (`FUN_00456C10`) and the rank (`FUN_00456E20`, the name of `FUN_00456EF0`'s score over a fresh controller snapshot and the world's control words); nothing without a session. Session `+14` is the name `FUN_00451FB0` writes at each world load and at the map's exit, there the destination's; in the port it is the map checkpoint's name |
-| `FUN_004561A0` | "Replay this World?" (`0x4C4E78`) Yes: menu sound 3, the menu emptied at once (`FUN_0043C7D0`) and play resumed (`FUN_004512E0`), then the session restored from the entry snapshot (`FUN_00448E50`, `FUN_0042ECC0`, `FUN_00443560`, the cheats again through `FUN_0044F830`), `+292` set and `+290` leaving the world. Klaus closes over it (`4D0A30`), the map's first tick leaves at once for `+292` (`FUN_004555A0`) and the snapshot's world loads with Klaus opening over it; the hint history is kept. The snapshot is the one `FUN_00448E30` copied at the last map exit, the New Game or the loaded save; a New Game's restores the first world as it began, without cheats. The lab measures 56 passes from Yes to the load, the port 55 |
+| `FUN_004561A0` | "Replay this World?" (`0x4C4E78`) Yes: menu sound 3, the menu emptied at once (`FUN_0043C7D0`) and play resumed (`FUN_004512E0`), then the session restored from the entry snapshot (`FUN_00448E50`, `FUN_0042ECC0`, `FUN_00443560`, the cheats again through `FUN_0044F830`), `+292` set and `+290` leaving the world. Klaus closes over it (`4D0A30`), the map's first tick leaves at once for `+292` (`FUN_004555A0`) and the snapshot's world loads with Klaus opening over it; the hint history is kept. The snapshot is the one `FUN_00448E30` copied at the last map exit, the New Game or the loaded save; a New Game's restores the first world as it began, without cheats. The map's pass with `+292` still visits Klaus (`FUN_004555A0` stages the load, then visits) and draws nothing, so the load comes a pass after the leg's switch: Yes at 1640 in the lab, the leg's switch at 1694 (no frame), the map's pass at 1695 (no frame), the load and its card at 1696; the port matches each pass |
 
 ## Decompilation artifacts & tools
 
