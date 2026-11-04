@@ -159,17 +159,32 @@ campaign restore's own owner (`EntityManager::dispatch_controller_operation_0x38
 a zero record of the type at the player's position, attitude and velocity
 (`FUN_00438080`), owned by the player (`+60`), then the cargo
 (`FUN_00443B50`, when `FUN_00418410` finds a slot) for a body with
-capability `0x1000`, or the controller's `+220` list. The weight (Type68),
-mini radar (Type83), remote beam-out (Type74), Defender Ball (Type63) and
-Autobot (Type64) rows work (the Autobot's own limits are in
-[special weapons](PLAYER_CRAFT.md#special-weapons)). A retail lab run
-(Level 1, every row once at tick 791) births the five bodies at the player
-`(19708, -604, 13935)`; the weight takes the one free slot and the radar,
-beamer, native and scientist stay on the ground under the player at Y -883.
-The port's test repeats the weight, radar and beamer. A type with no port
-constructor is a logged stop that also ends All weapons at that row:
+capability `0x1000`, or the controller's `+220` list. `FUN_004104B0` copies
+the record's position, velocity and angle words before the type's
+constructor, which sees the whole live list, as for a Hive birth. The weight
+(Type68), mini radar (Type83), remote beam-out (Type74), Defender Ball
+(Type63) and Autobot (Type64) rows work (the Autobot's own limits are in
+[special weapons](PLAYER_CRAFT.md#special-weapons)), and so do the
+scientists (Type8, 91, 90, 79, 116 through the workers' constructor, Type7
+through the four-choice one) and the natives of themes 2 to 4 (Type95, 86,
+78, four-choice); a person's attention text is queued at its birth. A
+cargo refusal other than a full hold is a logged stop.
 
-- the natives and scientists (Type9, 95, 86, 78; Type8, 91, 90, 79, 116, 7).
+A retail lab run (Level 1, every row once at tick 791) births the five
+bodies at the player `(19708, -604, 13935)`: the weight takes the one free
+slot; the native, scientist, radar and beamer land under the player at Y
+-883. On the next tick the loose Remote Beamer, touching the native and the
+scientist, beams both to its owner, the player
+([Type74](CLASS0_RUNTIME.md)): two Type93 are born at the player's X and Z
+less 0x100 (`(19708, -897, 13676)`), part to X ± 82 and carry the two
+people there. The port's test repeats the weight, radar and beamer, and
+births every theme's people at the player; a port run of the same keys
+beams its scientist through one Type93 at the player's X, Z less 0x100 on
+the first tick after the menus close. Still a logged stop, which also ends
+All weapons at that row:
+
+- the first theme's native, Type9: its port constructor ties the initial
+  task selection to Level 1's authored spawns, so its zero record is held.
 
 Operation `0x39` (Megablast) runs as a pickup does
 ([special weapons](PLAYER_CRAFT.md#special-weapons)).

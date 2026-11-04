@@ -468,6 +468,24 @@ impl EntityManager {
         context: NativeHiveChildConstructionContext<'_>,
         world_fx: &mut WorldFx,
     ) -> Result<crate::intro2_type8::Intro2Type8Owner, HiveNativeBirthBlock> {
+        let record = NativeCreationRecord::zeroed(NativeInstanceBodyRequest {
+            entity_type: request.entity_type,
+            position_raw: request.position_raw,
+            objective: request.objective,
+        });
+        self.append_native_worker(record, [0; 3], context, world_fx)
+    }
+
+    /// A worker from a creation record: `FUN_004104B0` copies the record's
+    /// position, velocity and angle words before the shared constructor.
+    pub(crate) fn append_native_worker(
+        &mut self,
+        record: NativeCreationRecord,
+        velocity_raw: [i16; 3],
+        context: NativeHiveChildConstructionContext<'_>,
+        world_fx: &mut WorldFx,
+    ) -> Result<crate::intro2_type8::Intro2Type8Owner, HiveNativeBirthBlock> {
+        let request = record;
         let metadata = self
             .type_metadata
             .get(request.entity_type as usize)
@@ -512,18 +530,20 @@ impl EntityManager {
         let body = NativeInstanceBodyRequest {
             entity_type: request.entity_type,
             position_raw: request.position_raw,
-            objective: request.objective,
+            objective: request.param != 0,
         };
         let stamp = self.begin_common_body_attempt();
         let sub_d = world_fx.construct_entity_sub_d(descriptor);
         let mut entity = native_instance_body(id, stamp, &metadata, terrain, body);
+        entity.set_rotation_heading_pitch_roll_raw(record.rotation.map(|word| word as i16));
+        entity.set_velocity_raw(velocity_raw);
         let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
         crate::intro2_type8::publish_authored_type8(
             crate::intro2_type8::Type8AuthoredConstructionRequest {
                 entity: &mut entity,
                 allocation,
                 metadata: &metadata,
-                record: NativeCreationRecord::zeroed(body),
+                record,
                 preceding: &self.entities,
                 terrain,
                 sub_d,

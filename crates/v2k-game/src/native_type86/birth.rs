@@ -34,7 +34,7 @@ use crate::{
     wrapped_axis_range::WrappedAxisRange,
 };
 use std::convert::Infallible;
-use v2k_formats::{levels::EntitySpawn, terrain::TerrainGrid};
+use v2k_formats::terrain::TerrainGrid;
 
 /// Rule-7 BaddieNearby capability mask (`FUN_00416560`).
 const BADDIE_NEARBY_MASK: u32 = 0x08;
@@ -49,7 +49,9 @@ pub(crate) struct Type86AuthoredConstructionRequest<'a> {
     pub entity: &'a mut Entity,
     pub allocation: crate::main_base_abort::MainBaseAbortActorLease,
     pub metadata: &'a EntityTypeRuntimeMetadata,
-    pub spawn: &'a EntitySpawn,
+    /// An authored Section-13 spawn's words, or a zero record's (operation
+    /// `0x38` at the player).
+    pub record: crate::entity::NativeCreationRecord,
     pub preceding: &'a [Entity],
     pub terrain: &'a TerrainGrid,
     pub sub_d: NativeSubDConstruction,
@@ -64,7 +66,7 @@ pub(crate) fn publish_authored_type86(
         entity,
         allocation,
         metadata,
-        spawn,
+        record,
         preceding,
         terrain,
         sub_d,
@@ -75,25 +77,30 @@ pub(crate) fn publish_authored_type86(
     validate_metadata(profile, metadata)?;
     if !entity.active
         || entity.id != allocation.entity_id
-        || spawn.entity_type != profile.entity_type()
-        || entity.authored_spawn_index != Some(spawn.index)
+        || record.entity_type != profile.entity_type()
+        || entity.authored_spawn_index != record.authored_spawn_index
         || entity.model_slots != [Some(profile.model_id()); 4]
         || entity.capability_flags != profile.capability()
-        || entity.rotation_heading_pitch_roll_raw() != spawn.rotation.map(|word| word as i16)
+        || entity.rotation_heading_pitch_roll_raw() != record.rotation.map(|word| word as i16)
         || entity.native_type86_runtime.is_some()
         || entity.current_behavior_context != RetailRuntimeValue::Unresolved
         || entity.initial_behavior != RetailRuntimeValue::Unresolved
         || ActorTaskSlot::IN_RETAIL_TICK_ORDER
             .iter()
             .any(|&s| entity.actor_tasks.task_in_slot(s).is_some())
-        || preceding
-            .iter()
-            .any(|e| e.id == entity.id || e.authored_spawn_index.is_some_and(|i| i >= spawn.index))
-        || preceding.windows(2).any(|pair| {
-            matches!(
-                (pair[0].authored_spawn_index, pair[1].authored_spawn_index),
-                (Some(a), Some(b)) if a >= b
-            )
+        || preceding.iter().any(|e| e.id == entity.id)
+        // An authored birth sees only the spawns before it; a zero record
+        // the whole live list.
+        || record.authored_spawn_index.is_some_and(|index| {
+            preceding
+                .iter()
+                .any(|e| e.authored_spawn_index.is_some_and(|i| i >= index))
+                || preceding.windows(2).any(|pair| {
+                    matches!(
+                        (pair[0].authored_spawn_index, pair[1].authored_spawn_index),
+                        (Some(a), Some(b)) if a >= b
+                    )
+                })
         })
     {
         return Err(Type86Block::Runtime("authored Type86 birth"));
@@ -115,13 +122,13 @@ pub(crate) fn publish_authored_type86(
             "unconsumed native Type86 Sub-A constructor",
         ));
     }
-    let [x, _, z] = spawn.position_raw();
+    let [x, _, z] = record.position_raw;
     let cell = terrain
         .cell(usize::from((x as u16) >> 8), usize::from((z as u16) >> 8))
         .ok_or(Type86Block::Runtime("authored terrain cell"))?;
     let anchor = [x, terrain.bilinear_height_raw(x, z), z];
     let mut state =
-        RetailStateWord::exact(0x0607_8801 | if spawn.param != 0 { 0x0100_0000 } else { 0 });
+        RetailStateWord::exact(0x0607_8801 | if record.param != 0 { 0x0100_0000 } else { 0 });
     state.overwrite(SURFACE_STATE_MASK, constructor_surface_bits);
     state.overwrite(
         ACTIVE_MODEL_SLOT_HIGH_STATE_BIT,

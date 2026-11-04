@@ -890,7 +890,7 @@ impl EntityManager {
                         entity: &mut entity,
                         allocation,
                         metadata,
-                        spawn,
+                        record: super::NativeCreationRecord::authored(spawn),
                         preceding: &self.entities,
                         terrain,
                         sub_d,

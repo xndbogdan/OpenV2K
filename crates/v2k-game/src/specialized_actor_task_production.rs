@@ -2246,6 +2246,10 @@ impl SpecializedActorTaskScheduler {
             if owner.entity_id()==id && owner.completed_hit_boundary(manager))
         })
     }
+    /// An owner born outside a Hive pass (operation `0x38`'s scientists).
+    pub(crate) fn register_native_newborn(&mut self, newborn: crate::entity::NativeHiveNewborn) {
+        self.owners.push(SpecializedActorTaskOwner::from(newborn));
+    }
     pub(crate) fn register_native_type86(&mut self, owner: crate::native_type86::Type86Owner) {
         if self.has_native_contact_prefix(owner.entity_id()) {
             return;
