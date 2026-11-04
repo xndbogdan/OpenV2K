@@ -528,6 +528,15 @@ impl CellWorld<'_> {
         ]);
     }
 
+    /// `FUN_00433900`'s first listener, the radar's `FUN_0044AA50`.
+    fn radar_listener(&mut self, cell: [u8; 2]) {
+        if let Err(phase) =
+            v2k_game::static_terrain_burn::radar_cell_listener(cell, self.cache, self.world_fx)
+        {
+            report_held(format!("a peer's attribute at a cell ({phase})"));
+        }
+    }
+
     /// `FUN_004337E0` and its `FUN_00427760` callback.
     fn burn(&mut self, cell: [u8; 2], burned: bool) {
         if let Err(failure) = v2k_game::static_terrain_burn::apply_network_terrain_burn(
@@ -622,6 +631,7 @@ impl CellWorld<'_> {
                 world
                     .cache
                     .set_level_terrain_object_attribute(cell, attribute);
+                world.radar_listener(cell);
             }
             if world
                 .cell(cell)
@@ -666,6 +676,7 @@ impl CellWorld<'_> {
             4 if now.attribute != attribute => {
                 self.cache
                     .set_level_terrain_object_attribute(cell, attribute);
+                self.radar_listener(cell);
             }
             _ => {}
         }

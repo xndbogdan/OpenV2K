@@ -42,6 +42,8 @@ pub struct ResourceCache {
     /// `FUN_00438F60`'s subscriptions in network play; `None` outside it and
     /// while a peer's terrain is applied (`004DC9B4`).
     network_cell_changes: Option<Vec<NetworkCellChange>>,
+    /// The held infection listeners are logged once a world.
+    infection_listeners_reported: bool,
     /// `FUN_00437550`'s words: the sea it last saw (`0x004CAD70`), the block
     /// a redraw started at (`0x004DC68C`) and the next block (`0x004DC688`).
     radar_sea_refresh: RadarSeaRefresh,
@@ -312,6 +314,7 @@ impl ResourceCache {
             level_terrain_radar: None,
             level_terrain_presentation_dirty: false,
             network_cell_changes: None,
+            infection_listeners_reported: false,
             radar_sea_refresh: RadarSeaRefresh::default(),
         }
     }
@@ -337,6 +340,16 @@ impl ResourceCache {
     }
 
     fn note_cell_changes(&mut self, changes: impl IntoIterator<Item = NetworkCellChange>) {
+        let mut changes = changes.into_iter().peekable();
+        if !self.infection_listeners_reported
+            && changes.peek().is_some_and(|change| change.list == 0)
+        {
+            self.infection_listeners_reported = true;
+            eprintln!(
+                "Infection listeners held: an infected or cured cell skips the radar redraw \
+                 (FUN_0044A850) and its static object's effect (FUN_00427C30)"
+            );
+        }
         if let Some(journal) = self.network_cell_changes.as_mut() {
             journal.extend(changes);
         }
@@ -493,6 +506,7 @@ impl ResourceCache {
     /// (`FUN_00493B70`, which runs each section's release, `FUN_00493AF0`).
     pub fn unload_level(&mut self) {
         self.layers.retain(|l| l.kind != LayerKind::Level);
+        self.infection_listeners_reported = false;
         self.level_abort_terrain_transformed = false;
         self.level_terrain_radar = None;
         self.level_terrain_presentation_dirty = false;
