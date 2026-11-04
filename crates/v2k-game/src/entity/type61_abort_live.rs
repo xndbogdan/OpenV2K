@@ -334,7 +334,11 @@ impl EntityManager {
                 }
             };
         if entity.model_slots != expected_model_slots
-            || entity.collision.active_model_slot() != RetailRuntimeValue::Known(0)
+            // Slot 2 is an infected hit's (bit 0x2000), holding the same model.
+            || !matches!(
+                entity.collision.active_model_slot(),
+                RetailRuntimeValue::Known(0 | 2)
+            )
             || entity.model_index != Some(expected_active_model)
             || request.active_model_extent_raw != expected_model_extent_raw
         {
@@ -831,21 +835,31 @@ impl EntityManager {
 
 /// The world draw rewrites the detail bits `0x0600_0000` every frame, so a
 /// product that has been on screen keeps its provenance with them changed.
-/// The death overwrites only the dying bit of the live word.
+/// An infected hit (`11250`) sets `0x2000` on any actor and a cured one
+/// (`11320`) clears it; all four Type61 slots hold the same model. The death
+/// overwrites only the dying bit of the live word.
 fn detail_free_state_matches(
     state: crate::entity_collision_state::RetailStateWord,
     expected_raw: u32,
 ) -> bool {
-    const DETAIL_BITS: u32 = 0x0600_0000;
-    state.masked(!DETAIL_BITS) == RetailRuntimeValue::Known(expected_raw & !DETAIL_BITS)
+    const HIT_OWNED_BITS: u32 =
+        0x0600_0000 | crate::entity_collision_state::ACTIVE_MODEL_SLOT_HIGH_STATE_BIT;
+    state.masked(!HIT_OWNED_BITS) == RetailRuntimeValue::Known(expected_raw & !HIT_OWNED_BITS)
 }
 
 #[test]
-fn factory_product_keeps_provenance_through_detail_bits_only() {
+fn factory_product_keeps_provenance_through_detail_and_infection_bits_only() {
     use crate::entity_collision_state::RetailStateWord;
     let newborn = FACTORY_TYPE61_NEWBORN_STATE_RAW;
-    for detail in [0, 0x0200_0000, 0x0400_0000, 0x0600_0000] {
-        let state = RetailStateWord::exact((newborn & !0x0600_0000) | detail);
+    for detail in [
+        0,
+        0x0200_0000,
+        0x0400_0000,
+        0x0600_0000,
+        0x0600_2000,
+        0x2000,
+    ] {
+        let state = RetailStateWord::exact((newborn & !0x0600_2000) | detail);
         assert!(detail_free_state_matches(state, newborn));
     }
     assert!(!detail_free_state_matches(

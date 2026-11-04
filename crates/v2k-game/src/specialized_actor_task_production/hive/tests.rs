@@ -979,6 +979,20 @@ fn world20_hive_births_type57_through_its_own_constructor() {
             .find(|entity| entity.id == id)
             .is_some_and(crate::intro2_type57::intro2_type57_allocation_authenticates)
     });
+    // Its first callback reads +B2 as mass (zero under zeroed allocations),
+    // and a radial reaches it through 4C8A30's null +30 type-hit hook.
+    let child = manager
+        .iter_all()
+        .find(|entity| entity.id == type57[0].2)
+        .unwrap();
+    assert_eq!(
+        child.collision.animation_offset_at_0xb2,
+        RetailRuntimeValue::Known(0)
+    );
+    assert_eq!(
+        child.collision.pair_callbacks.type_hit_callback_address,
+        RetailRuntimeValue::Known(None)
+    );
 }
 
 /// Retail (lab): world26's Hive gives birth to a Type26 (stag beetle) at tick

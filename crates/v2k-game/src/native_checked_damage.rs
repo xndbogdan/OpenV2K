@@ -464,8 +464,8 @@ fn dispatch_standard_death(
 }
 
 /// Radial and direct attachment share native fish custody, including the
-/// completed class2 allocation until14990. Type16/Type57 remain direct-only;
-/// their primary hit wrappers do not participate in this source call.
+/// completed class2 allocation until14990. 14AE0 visits every live actor, so
+/// Type57 takes both; Type16 remains direct-only here.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NativeMutationCaller {
     Radial,
@@ -541,10 +541,9 @@ pub(crate) fn prepare_native_actor_damage_mutation(
     let native_weapon_valid = native_weapon
         && crate::native_entity_weapons::entity_authenticates(entity)
         && crate::class49_death::allocation_authenticates(manager, id);
-    let direct_extra = caller == NativeMutationCaller::Attached
-        && (entity.intro2_type16_runtime.is_some()
-            || entity.intro2_type57_runtime.is_some()
-            || entity.shared_fish_runtime.is_some());
+    let direct_extra = entity.intro2_type57_runtime.is_some()
+        || (caller == NativeMutationCaller::Attached
+            && (entity.intro2_type16_runtime.is_some() || entity.shared_fish_runtime.is_some()));
     let direct_extra_valid = if entity.intro2_type16_runtime.is_some() {
         crate::intro2_type16::intro2_type16_allocation_authenticates(entity)
     } else if entity.intro2_type57_runtime.is_some() {
@@ -552,6 +551,8 @@ pub(crate) fn prepare_native_actor_damage_mutation(
     } else {
         crate::shared_fish::allocation_authenticates(manager, id)
     };
+    let quiet_flyer = matches!(entity.entity_type, 15 | 87 | 108 | 41)
+        && entity.intro2_flyer_frame_owner.is_some();
     let native_actor = direct_extra
         || native_weapon
         || entity.shared_fish_runtime.is_some()
@@ -584,6 +585,7 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         || entity.intro2_gun_turret_runtime.is_some()
         || entity.cleansing_vehicle_runtime.is_some()
         || entity.rolling_boulder_runtime.is_some()
+        || quiet_flyer
         || crate::native_type61::has_native_allocation(entity)
         || matches!(
             entity.actor_task_state(crate::actor_task_owner::ActorTaskSlot::Primary),
@@ -655,6 +657,8 @@ pub(crate) fn prepare_native_actor_damage_mutation(
         native_gun_turret_valid
     } else if entity.rolling_boulder_runtime.is_some() {
         crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(manager, id)
+    } else if quiet_flyer {
+        crate::intro2_flyers_live::flyer_manager_identity_authenticates(manager, id)
     } else if crate::native_type61::has_native_allocation(entity) {
         native_power_up_valid
     } else {

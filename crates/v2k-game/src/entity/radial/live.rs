@@ -156,6 +156,7 @@ pub enum DynamicRadialLiveBlockReason {
     NativeType40(crate::native_type40::death::Type40DeathBlock),
     NativeType31(crate::native_type31::death::Type31DeathBlock),
     RollingBoulder(crate::rolling_boulder::death::RollingBoulderDeathBlock),
+    NativeFlyer(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
     UnsupportedDeath {
         entity_type: u32,
         alternate_class: Option<u32>,

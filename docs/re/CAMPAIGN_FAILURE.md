@@ -300,14 +300,41 @@ parked owners, now closed:
 | 40 | Type118 geyser | a particle hit met an unresolved type-hit hook | `410090` installs `4C8A30`, whose `+30` is null, for every row |
 | 21, 24 | Hive-born Type57 bat | the abort had no Type57 death | Type10's class11 Tumble publisher, as a lethal hit takes |
 
-[`casualty_abort_completes_after_a_minute_of_actor_ticks`](../../crates/v2k-game/tests/campaign_abort_coverage.rs)
-runs worlds 32, 37 and 40 for 1,100 ticks of the real scheduler, asserts no
-actor stopped, then runs the abort and requires it to complete.
+A second pass of the same probe (an idle player for two minutes from each
+arrival) closed these:
 
-With an idle player for two minutes from each arrival, six casualty worlds
-are lost: 31, 32, 36, 40 and 46 through the complete abort, and 21 through
-the bounded body (its Hive-born bats, below). The port does not lose world 35
-in that time; retail does, about 1,163 ticks after arrival.
+| World | Actor | Earlier stop | Fix |
+|---|---|---|---|
+| 20, 21, 24, 36 | Hive-born Type57 bat | its first callback read `+0xB2` as mass before anything cleared it | the port's fresh-heap rule, below |
+| 21, 24 | Hive-born Type57 bat | a radial met its unresolved type-hit hook, then the walk had no Type57 target | `4C8A30`'s null `+30`; `14AE0` visits every live actor, so the bat takes its class11 Tumble from a radial as from a hit |
+| 21 | Type14 dying in a pair visit | its class1 radial ran with the cinematic context and refused the player | the general pair walk lends Playing's player to a flyer's death |
+| 42 | Type108 (and the other quiet flyers 15, 87, and Type41) | a radial had no death for them, and a corpse whose quiet death had finished lost its custody | the radial runs their alternate class2 (class12 for Type41); the finished corpse keeps its deferred allocation until `14990`, as a class1 corpse does |
+| 42 | factory-born Type61 | an infected hit (`11250`) sets state bit `0x2000` on any actor, which the provenance compared | `0x2000` and slot 2 are hit-owned, like the detail bits; all four Type61 slots hold one model |
+
+`104B0` never writes `+0xB2`. Retail's lab shows the Hive-born bat's first
+visit reading allocator residue there: 0, `0x0020`, `0x4F00`, `0x5509` and
+`0xFFFF` in worlds 20, 24 and 36 on normal runs, and 0 for every birth with
+zeroed allocations. The port takes zero, its fresh-heap rule, as for the other
+native Hive children; a normal run's value depends on the whole allocation
+history.
+
+A factory's terminal template with bit `0x01` (`37390`) applies nothing at the
+death: it queues the terrain ripple that `4374B0` advances on later frames and
+finishes with the template's flash, radial and crater. The factory death now
+queues it.
+
+[`casualty_abort_completes_after_a_minute_of_actor_ticks`](../../crates/v2k-game/tests/campaign_abort_coverage.rs)
+runs every casualty world but 35 (20 worlds) for 1,100 ticks of the real
+scheduler with the Hive's components, asserts no actor stopped, then runs the
+abort and requires it to complete.
+
+**World 21's loss tick.** Retail (lab, idle player) loses world 21 at clock
+1791, the port at 1346. In both, the people are ten Type86s (capability
+`0x800`, threshold 8); one is wounded early (retail 292, the port 410), one
+dies at 860 (the port 885), and the loss comes on the tick the next one dies
+of a Type86 contact. The ticks differ because those contacts follow the
+Type86s' random wandering, and the port's random stream is not in step with
+retail's: drift, not a different rule.
 
 Still held, each behind its logged stop:
 
@@ -319,13 +346,23 @@ Still held, each behind its logged stop:
   the 3D normalisation in `1E700` and the Sub-L pitch output. A Type12 picks
   Trash Buildings when a building lies within its axis, then can step a cell
   away before the first scan, which then misses it.
-- **The Hive-born Type57's first callback** reads `+0xB2`, the transient
-  mass word, before any wait has cleared it (`callback B2`); the bat stops
-  and the abort refuses it.
-- **Type125's understaffed death**: its template sets the deferred bit of
-  `37390`, which the factory death does not run yet.
-- Radial chains of a class1/class49 death that reach a body without an owned
-  death policy (worlds 21, 42) or type-hit hook (24).
+- **A Type38-family surface death in its own tick** (world 32's Type32):
+  `E370`'s lifecycle runs the class49 terminal inside the tick, while the
+  surface frame still borrows the static world that terminal mutates.
+- **Type125's understaffed death**: when the countdown runs out, `419010`
+  queues text `0xCF` and calls `10C10` on the factory from inside its own
+  callback; the live owner does not run that reentrant death yet (worlds 37
+  and 40 reach it inside two minutes).
+- **Type125's terminal death** (world 37): its template sets `19750`'s
+  global death broadcast (bit `0x10`), and its queued ripple the radial bit
+  (`0x04`), which the ripple pass does not run yet.
+- Outside the casualty worlds the same sweep still parks a Type15 (world 20),
+  a Type127's Trash Furniture scan (27), factory-born Type61s whose radial
+  preflight (22, 25) or provenance (28) refuses them.
+
+Of the 21 casualty worlds, the every-25-ticks check now passes for two idle
+minutes in all but 32, 35 and 40.
+
 Worlds 26, 31 and 40 complete with their
 [Type107 and Type121 mobile turrets](TYPE107_MOBILE_TURRETS.md), which take
 class49 (`BAF0`, then `BD20`'s ring). In world 26 a Type49 turret's class49

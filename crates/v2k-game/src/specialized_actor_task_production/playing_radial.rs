@@ -136,6 +136,8 @@ impl SpecializedActorTaskScheduler {
                         || crate::class49_death::source_profile(entity).is_some()
                 }
                 17 => entity.intro2_type17_runtime.is_some(),
+                57 => entity.intro2_type57_runtime.is_some(),
+                15 | 87 | 108 | 41 => entity.intro2_flyer_frame_owner.is_some(),
                 47 | 71 => entity.native_type47_construction.is_some(),
                 94 => entity.intro2_type94_runtime.is_some(),
                 53 => entity.intro2_type53_runtime.is_some(),
@@ -190,6 +192,7 @@ impl SpecializedActorTaskScheduler {
                         if block.target_prefix_committed {
                             callbacks.scheduler.park_intro2_type8_external_prefix(id);
                             callbacks.scheduler.park_intro2_type10_external_prefix(id);
+                            callbacks.scheduler.park_intro2_type57_external_prefix(id);
                             callbacks.scheduler.park_native_type123_external_prefix(id);
                             callbacks.scheduler.park_native_type86_external_prefix(id);
                             callbacks.scheduler.park_intro2_type17_external_prefix(id);
@@ -485,6 +488,29 @@ impl DynamicRadialLiveCallbacks for PlayingNativeCallbacks<'_> {
                     },
                 )
                 .map_err(crate::entity::DynamicRadialLiveBlockReason::RollingBoulder),
+            );
+        }
+        // 10C10 gives the quiet flyers alternate class2 and Type41 its class12 fall.
+        if matches!(kind, 15 | 87 | 108 | 41)
+            && crate::intro2_flyers_live::flyer_manager_identity_authenticates(entities, id)
+        {
+            return Some(
+                crate::native_flying_surface_contact::publish_native_flying_standard_death(
+                    entities, id, world_fx,
+                )
+                .map(|result| {
+                    if let Some(publication) = result.publication {
+                        crate::native_flying_surface_contact::register_native_flying_death(
+                            self.scheduler,
+                            publication,
+                        );
+                    }
+                    crate::live_actor_checked_damage::LiveActorDeathResult {
+                        returned_nonzero: result.returned_nonzero,
+                        publication: None,
+                    }
+                })
+                .map_err(crate::entity::DynamicRadialLiveBlockReason::NativeFlyer),
             );
         }
         if kind == 31 && crate::native_type31::manager_allocation_authenticates(entities, id) {
