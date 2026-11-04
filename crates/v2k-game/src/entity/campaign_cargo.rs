@@ -49,6 +49,16 @@ pub enum CampaignCargoRestoreError {
         entity_type: u32,
         reason: crate::native_type123::Type123Block,
     },
+    /// A scientist's zero record stopped (before or after `FUN_004104B0`).
+    NativeWorker {
+        entity_type: u32,
+        reason: HiveNativeBirthBlock,
+    },
+    /// A native's or Type7's zero record stopped.
+    NativePerson {
+        entity_type: u32,
+        reason: crate::native_type86::Type86Block,
+    },
     CleansingVehicle(crate::cleansing_vehicle::CleansingVehicleError),
     PortableRadar(crate::portable_radar::PortableRadarError),
     Attachment {
@@ -579,7 +589,18 @@ impl EntityManager {
             .map(|entity| entity.capability_flags)
             .unwrap_or(0);
         if capability & 0x1000 != 0 {
-            let _ = self.attach_campaign_cargo(newborn, context);
+            // FUN_00443B50 leaves the body where it was born when the cargo
+            // is full; any other refusal is the port's and stops loudly.
+            match self.attach_campaign_cargo(newborn, context) {
+                Ok(())
+                | Err(CampaignCargoRestoreError::Attachment {
+                    reason: PlayerCargoAttachmentError::CargoFull,
+                    ..
+                }) => {}
+                Err(error) => {
+                    eprintln!("Operation 0x38 Type{entity_type} cargo attach held: {error:?}")
+                }
+            }
             return Ok(());
         }
         self.compact_auxiliary_owned_ids();
@@ -602,7 +623,24 @@ impl EntityManager {
     pub fn controller_0x38_constructor_ported(entity_type: u32) -> bool {
         matches!(
             entity_type,
-            52 | 63 | 64 | 68 | 74 | 83 | 92 | 96 | 97 | 100
+            7 | 8
+                | 52
+                | 63
+                | 64
+                | 68
+                | 74
+                | 78
+                | 79
+                | 83
+                | 86
+                | 90
+                | 91
+                | 92
+                | 95
+                | 96
+                | 97
+                | 100
+                | 116
         )
     }
 
@@ -659,8 +697,135 @@ impl EntityManager {
             }
             83 => self
                 .append_native_portable_radar([position_raw, rotation_raw, velocity_raw], context),
+            8 | 79 | 90 | 91 | 116 => {
+                let waves_enabled = context.level.raw_u32(0x84).expect("descriptor+84") != 0;
+                let owner = self
+                    .append_native_worker(
+                        zero_record_at_pose(entity_type, position_raw, rotation_raw),
+                        velocity_raw,
+                        NativeHiveChildConstructionContext {
+                            resources: context.resources,
+                            retail_tick: context.retail_tick,
+                            waves_enabled,
+                        },
+                        context.world_fx,
+                    )
+                    .map_err(|reason| CampaignCargoRestoreError::NativeWorker {
+                        entity_type,
+                        reason,
+                    })?;
+                let id = owner.entity_id();
+                context
+                    .scheduler
+                    .register_native_newborn(NativeHiveNewborn::Worker(owner));
+                Ok(id)
+            }
+            7 | 78 | 86 | 95 => {
+                let owner = self
+                    .append_native_person_at_pose(
+                        zero_record_at_pose(entity_type, position_raw, rotation_raw),
+                        velocity_raw,
+                        context,
+                    )
+                    .map_err(|reason| CampaignCargoRestoreError::NativePerson {
+                        entity_type,
+                        reason,
+                    })?;
+                let id = owner.entity_id();
+                context.scheduler.register_native_type86(owner);
+                Ok(id)
+            }
             _ => Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type }),
         }
+    }
+
+    /// A native person's zero record through the four-choice constructor:
+    /// `FUN_004104B0`'s body ordinal, Sub-D and copies, then the class's
+    /// constructor over the current live list, as an authored birth with no
+    /// index. Its attention text is queued at once, as a live birth's is.
+    fn append_native_person_at_pose(
+        &mut self,
+        record: NativeCreationRecord,
+        velocity_raw: [i16; 3],
+        context: &mut CampaignCargoRestoreContext<'_>,
+    ) -> Result<crate::native_type86::Type86Owner, crate::native_type86::Type86Block> {
+        use crate::native_type86::Type86Block;
+        let entity_type = record.entity_type;
+        let metadata = self
+            .type_metadata
+            .get(entity_type as usize)
+            .ok_or(Type86Block::Runtime("person metadata"))?
+            .clone();
+        crate::native_type86::validate_four_choice_metadata(entity_type, &metadata)?;
+        let RetailRuntimeValue::Known(Some(descriptor)) = metadata.sub_d_steering_descriptor else {
+            return Err(Type86Block::Runtime("person Sub-D"));
+        };
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err(Type86Block::Runtime("native body stamp lineage"));
+        }
+        let terrain = context
+            .resources
+            .terrain
+            .filter(|terrain| {
+                terrain.cells.len()
+                    == v2k_formats::terrain::GRID_SIZE * v2k_formats::terrain::GRID_SIZE
+            })
+            .ok_or(Type86Block::Runtime("person complete terrain"))?;
+        let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
+            record.position_raw,
+            terrain,
+            context.retail_tick,
+            context.level.raw_u32(0x84).expect("descriptor+84") != 0,
+        )
+        .ok_or(Type86Block::Runtime("person constructor surface"))?;
+        let id = self.next_entity_id;
+        if id == 0 || self.entities.iter().any(|entity| entity.id == id) {
+            return Err(Type86Block::Runtime("person allocation handle"));
+        }
+        let stamp = self.begin_common_body_attempt();
+        let sub_d = context.world_fx.construct_entity_sub_d(descriptor);
+        let mut entity = native_instance_body(
+            id,
+            stamp,
+            &metadata,
+            terrain,
+            NativeInstanceBodyRequest {
+                entity_type,
+                position_raw: record.position_raw,
+                objective: record.param != 0,
+            },
+        );
+        entity.set_rotation_heading_pitch_roll_raw(record.rotation.map(|word| word as i16));
+        entity.set_velocity_raw(velocity_raw);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        let receipt = crate::native_type86::publish_authored_type86(
+            crate::native_type86::Type86AuthoredConstructionRequest {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+                record,
+                preceding: &self.entities,
+                terrain,
+                sub_d,
+                constructor_surface_bits,
+            },
+            context.world_fx,
+        )?;
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        if let Some(receipt) = receipt {
+            self.pending_fresh_level1_type9_resource_text_receipts
+                .push(receipt);
+            let _ = context
+                .notifications
+                .drain_attract_attention_receipts(self, context.retail_tick as i32);
+        }
+        self.entity_mut(id)
+            .and_then(crate::native_type86::Type86Owner::take_birth)
+            .ok_or(Type86Block::Runtime("person birth receipt"))
     }
 
     fn append_native_class0_at_pose(
@@ -850,5 +1015,22 @@ impl EntityManager {
 
     pub fn auxiliary_owned_entity_ids(&self) -> &[u32] {
         &self.auxiliary_owned_ids
+    }
+}
+
+/// `FUN_00445A90`'s record for operation `0x38`: zeroed but for the type and
+/// the player's position, velocity (given to the body) and angle words.
+fn zero_record_at_pose(
+    entity_type: u32,
+    position_raw: [i16; 3],
+    rotation_raw: [i16; 3],
+) -> NativeCreationRecord {
+    NativeCreationRecord {
+        rotation: rotation_raw.map(|word| word as u16),
+        ..NativeCreationRecord::zeroed(NativeInstanceBodyRequest {
+            entity_type,
+            position_raw,
+            objective: false,
+        })
     }
 }

@@ -1196,3 +1196,82 @@ fn cheat_cargo_rows_birth_at_the_player_and_fill_the_free_slot() {
     }
     assert!(world.entities.auxiliary_owned_entity_ids().is_empty());
 }
+
+/// The Cargo cheat's native and scientist rows for each theme with one
+/// (`FUN_0042EBE0`, `FUN_0042EB70`): operation `0x38` builds the body from a
+/// zero record at the player's pose, owned by the player (`+60`). Type9, the
+/// first theme's native, is still a typed stop.
+#[v2k_test_support::retail_test]
+fn cheat_native_and_scientist_rows_birth_each_themes_people_at_the_player() {
+    let mut covered = std::collections::BTreeSet::new();
+    for level in 13..=48 {
+        let mut world = World::new(level);
+        let theme = world
+            .session
+            .cache
+            .level_desc()
+            .unwrap()
+            .raw_u32(0x48)
+            .unwrap();
+        if theme == 0 || !covered.insert(theme) {
+            continue;
+        }
+        let player = world.entities.player().unwrap();
+        let (player_id, position) = (player.id, player.position_raw());
+        for entity_type in [
+            v2k_game::cheats::native_cargo_type(theme),
+            v2k_game::cheats::scientist_cargo_type(theme),
+        ] {
+            if entity_type == 0 {
+                continue;
+            }
+            let extent = |id| {
+                world
+                    .session
+                    .cache
+                    .global_model(id)
+                    .map(|model| model.radius)
+            };
+            let result = world.entities.dispatch_controller_operation_0x38(
+                entity_type,
+                &mut CampaignCargoRestoreContext {
+                    level: world.session.cache.level_desc().unwrap(),
+                    resources: EntityConstructionResources {
+                        terrain: world.session.cache.terrain(),
+                        terrain_objects: world.session.cache.terrain_objects(),
+                        model_extent_raw: Some(&extent),
+                    },
+                    retail_tick: 791,
+                    scheduler: &mut world.scheduler,
+                    world_fx: &mut world.fx,
+                    notifications: &mut world.notifications,
+                },
+            );
+            if entity_type == 9 {
+                assert!(matches!(
+                    result,
+                    Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type: 9 })
+                ));
+                continue;
+            }
+            result.unwrap_or_else(|error| panic!("level {level} Type{entity_type}: {error:?}"));
+            let body = world
+                .entities
+                .iter_all()
+                .filter(|entity| entity.entity_type == entity_type)
+                .last()
+                .unwrap();
+            assert_eq!(
+                body.collision.recent_relation_id_at_0x60,
+                RetailRuntimeValue::Known(Some(player_id)),
+                "level {level} Type{entity_type}"
+            );
+            assert_eq!(
+                [body.position_raw()[0], body.position_raw()[2]],
+                [position[0], position[2]],
+                "level {level} Type{entity_type}"
+            );
+        }
+    }
+    assert_eq!(covered.len(), 6, "{covered:?}");
+}
