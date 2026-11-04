@@ -157,3 +157,53 @@ fn level_one_bombs_write_retails_cells() {
         assert_eq!(changed, changes);
     }
 }
+
+/// Retail lab (Level 1, master code, F9, the player moved to `(20480, -596,
+/// 13710)` at tick 657, the Virus Bomb fired at tick 664): the bomb's life
+/// ends at `(20615, -768, 15664)`, and `FUN_00414C50` infects one body, the
+/// Type6 at `(20480, -768, 15360)` (state `0x0EC2C805`), through
+/// `FUN_00411250` with no packet. The radial drew nine random words (the
+/// radar's cell redraws, from `0xBA68E32B`) and the body none, leaving
+/// `0x97079B4A`.
+#[v2k_test_support::retail_test]
+fn level_one_virus_bomb_infects_retails_body() {
+    let (mut session, mut manager, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(13);
+    let body = manager
+        .iter_all()
+        .find(|entity| entity.entity_type == 6 && entity.position_raw() == [20480, -768, 15360])
+        .map(|entity| entity.id)
+        .expect("Level 1's Type6");
+    session
+        .cache
+        .initialize_level_terrain_radar(&mut || 0)
+        .unwrap();
+    fx.set_shared_retail_random_state(0xBA68_E32B);
+    let outcome = apply_playing_infection_radial(
+        crate::shared_actor_impact::PlayingActorImpactFrame {
+            resources: &mut session.cache,
+            entities: &mut manager,
+            world_fx: &mut fx,
+            scheduler:
+                &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
+            static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
+            player_hull: &mut crate::player_hull::PlayerHull::default(),
+            extra_lives: RetailRuntimeValue::Known(3),
+            retail_tick: 363,
+        },
+        ParticleInfectionRadial {
+            origin_raw: [20615, -768, 15664],
+            infected: true,
+        },
+    );
+    assert_eq!(outcome.blocked, None);
+    assert_eq!(outcome.bodies, [body]);
+    assert_eq!(outcome.cells_changed, 9);
+    assert_eq!(fx.shared_retail_random_state(), 0x9707_9B4A);
+    let entity = manager.iter_all().find(|entity| entity.id == body).unwrap();
+    assert_eq!(
+        entity.collision.state_flags_at_0x08.masked(0xB800),
+        RetailRuntimeValue::Known(0xA800)
+    );
+}

@@ -3,7 +3,7 @@ use super::*;
 /// F890 then 41850 for a class-54 mortar shell: sound 90, the 4566E0 radial
 /// (template `0x004CD7F8` with the shell's source type and owner), sixteen
 /// class-0x27 records at the full particle rate whatever `+0x1D` says, then
-/// F890's sound 62.
+/// F890's sound 62; FF10's free (442B40) runs 41850 a second time.
 #[test]
 fn class54_static_hit_runs_its_radial_between_sound_90_and_its_debris() {
     for suppressed in [false, true] {
@@ -37,9 +37,10 @@ fn class54_static_hit_runs_its_radial_between_sound_90_and_its_debris() {
             }),
         );
         // The borrowed host cannot run it, so the update lists it.
-        let [radial] = outcome.unrun_world_radials.as_slice() else {
+        let [radial, again] = outcome.unrun_world_radials.as_slice() else {
             panic!("{:?}", outcome.unrun_world_radials)
         };
+        assert_eq!(radial, again);
         assert_eq!(
             radial.template,
             crate::radial_damage::RadialDamageTemplate {
@@ -62,14 +63,14 @@ fn class54_static_hit_runs_its_radial_between_sound_90_and_its_debris() {
             .filter(|p| matches!(p.source_class, 0x27 | 0x2E))
             .inspect(|p| assert_eq!(p.suppresses_impact_damage, suppressed))
             .count();
-        assert_eq!(debris, 16);
+        assert_eq!(debris, 32);
         let sounds: Vec<_> = fx
             .ready_sounds
             .iter()
             .map(|sound| sound.sound_id)
             .filter(|&id| matches!(id, 62 | 90))
             .collect();
-        assert_eq!(sounds, [90, 62]);
+        assert_eq!(sounds, [90, 62, 90]);
         fx.particles.assert_valid_topology();
     }
 }

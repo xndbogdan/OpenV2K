@@ -19,9 +19,9 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 431 |
+| implemented | 433 |
 | approximated | 9 |
-| documented | 30 |
+| documented | 29 |
 | not-needed | 628 |
 
 10 `FUN_` citations don't match a retail function
@@ -41,13 +41,13 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 23 | 3 | 100 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 23 | 3 | 99 |
 | [Controls](../re/CONTROLS.md) | 17 | 1 | 53 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 114 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 118 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 144 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 8 | 0 | 26 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 58 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 57 |
 | [Menu system](../re/MENU_SYSTEM.md) | 3 | 1 | 153 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 44 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 47 |

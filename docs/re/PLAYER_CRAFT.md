@@ -1603,7 +1603,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | held |
 | Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | ported |
 | Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | ported |
-| Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | ported; launch differs |
+| Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | ported |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
 | Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | ported; its pair hook held |
 | Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone, death class 11 | ported |
@@ -1736,7 +1736,7 @@ first's), then left its class-5 debris; no body was in range. The port's
 retail test computes the same 24 writes in the same order from the three
 origins over world 13 and changes the same cells.
 
-The port runs it whole. The particle pool keeps each bomb record it frees
+The port runs it whole. The particle pool keeps each shell or bomb record it frees
 during a traversal slot, and the slot's end runs the tail for each (the
 static hit runs it first itself, then sound 62, then the free's). The
 Playing host runs `FUN_00456710`: the cells through the infection write and
@@ -1753,13 +1753,52 @@ cells and bodies before it stay done and the debris follows. A host
 without the radial (Intro2) logs "Bomb tail held" and still plays the
 sounds and the debris.
 
-Not the same yet: the port's bomb leaves the craft at the right speed
-along Z but not with retail's Y and X components (a retail bomb ended its
-life with its Y word about 290 more than at its launch and X 138 more; the
-port's Y word was about 920 less and its X unchanged), so its explosions land elsewhere and no lab run
-has compared a body walk yet. The class-4 and class-54 shells hold the
-same `+2C` callback: the port runs their `FUN_00441850` once at a static
-hit, where retail runs it twice and again at every other free.
+**Flight.** A bomb leaves as any particle weapon does: `FUN_00424650`
+aims the body's up and forward rows by the barrel angle, and
+`FUN_0044E770` gives it the row's speed (2000) along that direction plus
+the craft's velocity. `FUN_00440A60` then adds the class's `+0x2A`
+vertical bias, +50 for classes 4, 54, 77 and 78. The particle is mode 3:
+`FUN_00440120` integrates its words, `FUN_0043F260` takes the gravity word
+(29 a tick at 20 ms, half while fully submerged), the entity sweep and the
+static sweep run, then the water entry and the terrain test each call
+`+0x18`, `FUN_0043E300`, with the material's selector and the surface word
+(the wave, or the ground: `FUN_0043DB60`'s bilinear height while the record's
+`+1D` bit `0x10` says it is on screen, else the cell's). `FUN_0043E300`
+bursts the class `DAT_004CD788[selector]` (`FUN_00440DC0`, scale 10000, the
+null owner), plays sound 90 and, while both horizontal velocity words are
+below `0x4B1`, returns one so the record is freed (and its `+2C` runs);
+otherwise it puts Y on the surface and halves and reverses the vertical
+word. A bomb or shell moving faster than that skips along the sea and
+slides over the ground until its life ends.
+
+The `FUN_00441A50` debris of the bombs and of class 4 takes the null owner,
+and its record's source-type byte is never written: it is the stack residue
+under the call, the third byte of the particle's address plus 8 (`0x4D`)
+after class 4's `FUN_004566E0`, and the third byte of the class (0) that
+`FUN_00456710` saved.
+
+Retail lab (Level 1, master code, F9, the Virus Bomb fired at tick 664):
+the launch record holds direction (0, −0.140, 0.990), the craft's velocity
+(0, −1, −218) and speed 2000; the bomb is born with (0, −232, 1762), falls
+29 a tick, meets the sea after 17 ticks and bounces (362), settles at 9 or
+10 a tick, rides the beach up and ends its life at (19850, −303, 16072),
+where the tail runs. A port retail test from the same birth over world 13
+matches every tick's vertical word, Y and Z, and the tail's origin. The
+class-4 and class-54 shells share this flight and `FUN_0043E300`, and run
+`FUN_00441850` at every free as the bombs do (twice at a static hit).
+
+A second lab run moved the player to (20480, −596, 13710) before the shot,
+so the first bomb's life ended at (20615, −768, 15664) beside Level 1's
+Type6 at (20480, −768, 15360) (state `0x0EC2C805`): `FUN_00414C50` infected
+that body alone through `FUN_00411250` with no packet. The radial drew nine
+random words, one radar redraw for each of its nine changed cells, and the
+body none. The port's retail test runs the radial from that origin over
+world 13 and infects the same body alone, changes nine cells and leaves the
+random stream where retail's was.
+
+The port computes the launch direction and velocity from the body basis and
+the barrel in floating point and rounds them to words, where retail floors
+its Q31 products, so a launch word can differ from retail's by one.
 
 **Megablast.** Operation `0x39` adds its amount to controller `+195` (at most
 4) and births one Type65 in mode 0 at the player, owned by it (`+60`).

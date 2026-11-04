@@ -175,8 +175,10 @@ underwater). Ownership is decided by construction origin, not type number:
 Intro2's 92/102 identities keep their cinematic owners and campaign
 reconstruction stays separate. Type100's method19 (index 6 in `44EA60`'s
 table) leads its target with gravity, as method16 does, and fires class54
-mortar shells at speed 2000: a body hit runs F6E0's `410EB0`, a static hit
-`FUN_00441850`'s radial and its class `0x27` records. Retail's world-26
+mortar shells at speed 2000: a body hit runs F6E0's `410EB0`, and every
+free of a shell (a body, static, ground or water hit, or its life's end)
+runs `FUN_00441850`'s radial and its class `0x27` records, twice at a static
+hit ([shells](PLAYER_CRAFT.md#special-weapons)). Retail's world-26
 Type100 reads `(-17152, 3712, 27648)`, 32000 health and `0x0942892D` at its
 first visit, as the port's birth does once `FUN_00411400` has cleared the two
 view-detail bits. It chooses the Type66 factory beside it (`408BD0`) and, in

@@ -20,6 +20,7 @@ pub use combat_projectiles::{CombatGroundProgramRequest, CombatProjectileBirth};
 mod intro2_meteors;
 mod presentation;
 mod projectile_sweep;
+mod shell_surface;
 use projectile_sweep::{
     detect_damage_projectile_sweep, ProjectileModelSweepProgram, ProjectileSweepFrame,
 };
@@ -472,6 +473,9 @@ const FUN_004410B0_CLASS_54_UNDERWATER_CLASS: u8 = 0x2e;
 const FUN_00441A50_CLASS_4_COUNT_BASE: i32 = 0x13_880 >> 10;
 /// `40000 >> 10` count base for the bombs' class-5/6 `FUN_00441A50`.
 const FUN_00441A50_BOMB_COUNT_BASE: i32 = 40_000 >> 10;
+/// `FUN_00441A50`'s unwritten source-type byte after class 4's
+/// `FUN_004566E0`: the third byte of the particle address plus 8.
+const FUN_00441850_RADIAL_RESIDUE_SOURCE_TYPE: u8 = 0x4D;
 
 /// The class-1/2/3 primary projectile family. `FUN_00440120`'s mode dispatch
 /// routes on the full descriptor signature: class 87 shares only the
@@ -1919,9 +1923,12 @@ struct ParticlePool {
     links: [ParticleLinks; MAX_WORLD_PARTICLES],
     lists: [ParticleList; PARTICLE_LIST_COUNT],
     live_count: usize,
-    /// Virus and Antidote Bomb records freed during the current traversal
-    /// slot: `FUN_00442B40` runs their `+2C` callback, `FUN_00441850`.
-    freed_bombs: Vec<WorldParticle>,
+    /// Set during a traversal: a freed shell or bomb (classes 4, 54, 77, 78)
+    /// stays linked in `pending_tails` until the slot's end runs its `+2C`
+    /// callback, `FUN_00441850`, and releases it, as `FUN_00442B40` calls the
+    /// callback before it unlinks the record.
+    defer_tails: bool,
+    pending_tails: Vec<usize>,
 }
 
 impl Default for ParticlePool {
@@ -1931,7 +1938,8 @@ impl Default for ParticlePool {
             links: [ParticleLinks::EMPTY; MAX_WORLD_PARTICLES],
             lists: [ParticleList::default(); PARTICLE_LIST_COUNT],
             live_count: 0,
-            freed_bombs: Vec::new(),
+            defer_tails: false,
+            pending_tails: Vec::new(),
         };
 
         // FUN_0043D290 appends physical slots 0..199 to the free-list tail.
@@ -1951,7 +1959,8 @@ impl ParticlePool {
             links: self.links,
             lists: self.lists,
             live_count: self.live_count,
-            freed_bombs: self.freed_bombs.clone(),
+            defer_tails: self.defer_tails,
+            pending_tails: self.pending_tails.clone(),
         }
     }
 
@@ -2091,14 +2100,24 @@ impl ParticlePool {
         let Some(particle) = self.slots[slot] else {
             return false;
         };
-        if matches!(particle.source_class, 77 | 78) {
-            self.freed_bombs.push(particle);
+        if self.defer_tails && matches!(particle.source_class, 4 | 54 | 77 | 78) {
+            if !self.pending_tails.contains(&slot) {
+                self.pending_tails.push(slot);
+            }
+            return true;
+        }
+        self.release(slot);
+        true
+    }
+
+    fn release(&mut self, slot: usize) {
+        if self.slots[slot].is_none() {
+            return;
         }
         self.remove(slot);
         self.slots[slot] = None;
         self.live_count -= 1;
         self.push_front(0, slot);
-        true
     }
 
     fn clear_active(&mut self) {
@@ -5079,17 +5098,29 @@ impl WorldFx {
                     let descriptor = particle_descriptor(projectile_class)
                         .expect("resolved primary projectile has a retail descriptor");
                     let bullet_frame = first_particle_frame(projectile_class);
+                    // FUN_00440A60 adds the class's +0x28 Y and +0x2A
+                    // vertical-velocity biases (+50 for classes 4, 54, 77, 78).
+                    let mut velocity = event.projectile.velocity_world_per_second;
+                    velocity[1] += raw_velocity_to_world([
+                        0,
+                        i32::from(descriptor.spawn_velocity_y_bias_raw()),
+                        0,
+                    ])[1];
                     self.queue(WorldEvent::ParticleBurst(ParticleBurst {
                         origin: event.projectile.origin_world,
                         particles: vec![ParticleSpawn {
                             sprite_id: bullet_frame.sprite_id,
                             source_class: projectile_class,
-                            offset: [0.0; 3],
+                            offset: [
+                                0.0,
+                                f32::from(descriptor.spawn_position_y_bias_raw()) / 256.0,
+                                0.0,
+                            ],
                             presentation_offset: presentation_delta(
                                 event.projectile.presentation_basis.origin_world,
                                 event.projectile.origin_world,
                             ),
-                            velocity: event.projectile.velocity_world_per_second,
+                            velocity,
                             owner_id: Some(event.projectile.owner_id),
                             attached_owner_handle: None,
                             attached_offset_raw: [0; 3],
@@ -6966,6 +6997,7 @@ mod tests {
     mod live_host;
     mod rapid_primary;
     mod shell_radial;
+    mod shell_surface;
     mod static_burn;
     mod surface_transition;
     mod virus_projectile;
@@ -10878,13 +10910,22 @@ mod tests {
             .any(|particle| { particle.source_class == PRIMARY_ABOVE_WATER_IMPACT_CLASS }));
         let mut rng_state = 0;
         let expected_rate = 0x1_0000 + u32::from(retail_random_u16(&mut rng_state) >> 3);
+        // F6E0's sound 90, then the free's 41850 (sound 90 first).
+        let tail_rate = 0x1_0000 + u32::from(retail_random_u16(&mut rng_state) >> 3);
         assert_eq!(
             fx.ready_sounds,
-            [PositionalSoundEvent {
-                sound_id: 90,
-                position: parent.position,
-                frequency_q16: expected_rate,
-            }]
+            [
+                PositionalSoundEvent {
+                    sound_id: 90,
+                    position: parent.position,
+                    frequency_q16: expected_rate,
+                },
+                PositionalSoundEvent {
+                    sound_id: 90,
+                    position: parent.position,
+                    frequency_q16: tail_rate,
+                },
+            ]
         );
         assert!(fx.particles.slots[parent_slot].is_none());
         fx.particles.assert_valid_topology();
@@ -11153,6 +11194,12 @@ mod tests {
                     position: parent.position,
                     frequency_q16: rate_62,
                 },
+                // FF10's free (442B40) runs 41850 again.
+                PositionalSoundEvent {
+                    sound_id: 90,
+                    position: parent.position,
+                    frequency_q16: 0x1_0000 + u32::from(retail_random_u16(&mut rng_state) >> 3),
+                },
             ]
         );
         fx.particles.assert_valid_topology();
@@ -11213,7 +11260,7 @@ mod tests {
                 .flatten()
                 .filter(|particle| particle.source_class == FUN_00441850_CLASS_54_DEBRIS_CLASS)
                 .count(),
-            1
+            2
         );
         let mut rng_state = 0;
         let rate_90 = 0x1_0000 + u32::from(retail_random_u16(&mut rng_state) >> 3);
@@ -11230,6 +11277,12 @@ mod tests {
                     sound_id: 62,
                     position: parent.position,
                     frequency_q16: rate_62,
+                },
+                // FF10's free (442B40) runs 41850 again.
+                PositionalSoundEvent {
+                    sound_id: 90,
+                    position: parent.position,
+                    frequency_q16: 0x1_0000 + u32::from(retail_random_u16(&mut rng_state) >> 3),
                 },
             ]
         );
