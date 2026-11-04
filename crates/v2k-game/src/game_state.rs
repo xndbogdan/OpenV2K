@@ -1033,6 +1033,14 @@ impl MenuShell {
         self.prime_klaus_opening();
     }
 
+    /// The loading card's final callback (`FUN_004571B0` waits for one more
+    /// `FUN_00456FB0` -> `FUN_0042AF00`) after 451710's command 2: one more
+    /// Klaus visit with the callback's clamped delta. Opening draws nothing
+    /// random.
+    pub fn visit_after_load(&mut self, callback_micros: u32) {
+        self.update_klaus(callback_micros, &mut OpeningPrimeEffects);
+    }
+
     /// `FUN_00456170`'s `+297`: Continue (not P or Escape) closed the save menu.
     pub fn continue_chosen(&self) -> bool {
         self.continue_chosen
@@ -4251,6 +4259,9 @@ mod tests {
                 assert_eq!(shell.klaus_morph_progress_raw, 7_812);
                 assert_eq!(shell.menu_backdrop_anim_state().morph_progress, 123);
                 assert_eq!(shell.klaus_twitch_phase_raw, 0);
+                // The lab's final card callback: 7,800 us, morph 8,299.
+                shell.visit_after_load(7_800);
+                assert_eq!(shell.klaus_morph_progress_raw, 8_299);
             }
         }
     }

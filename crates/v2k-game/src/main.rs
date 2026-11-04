@@ -5213,6 +5213,28 @@ fn run_game(
                     shell.begin_world_opening();
                     post_intro_world_cover = Some(shell);
                 }
+                // FUN_004571B0's final card callback opens Klaus by its delta:
+                // the time since the load began (004F72E0), clamped to
+                // 7,800..125,000 us. A fixed-step run takes the lab's: the
+                // scripted clock stands still, so the minimum.
+                let card_callback_micros = match probe.fixed_step_micros {
+                    Some(_) => LOADING_CARD_CALLBACK_MIN_MICROS,
+                    None => (start.elapsed().as_micros().min(u128::from(u32::MAX)) as u32).clamp(
+                        LOADING_CARD_CALLBACK_MIN_MICROS,
+                        LOADING_CARD_CALLBACK_MAX_MICROS,
+                    ),
+                };
+                match &mut state {
+                    GameState::OpeningCinematic {
+                        stage: Intro2PresentationStage::Covered { shell },
+                        ..
+                    } => shell.visit_after_load(card_callback_micros),
+                    _ => {
+                        if let Some(shell) = post_intro_world_cover.as_mut() {
+                            shell.visit_after_load(card_callback_micros);
+                        }
+                    }
+                }
                 // FUN_00451710 stands the class-1 proxy above and behind
                 // the player and starts the eye on it; the load's own frame
                 // already runs FUN_004530D0's first visit. Network play and
@@ -17159,6 +17181,9 @@ const MENU_CAMERA_FAR: f32 = 200.0;
 /// direction-vector basis before normalization (and also happens to match the
 /// flame billboard's sort depth); using it as Klaus's view depth made the
 /// creature exactly 2/3 of its original projected size.
+/// `FUN_00456FB0` clamps each card callback's real-time delta.
+const LOADING_CARD_CALLBACK_MIN_MICROS: u32 = 7_800;
+const LOADING_CARD_CALLBACK_MAX_MICROS: u32 = 125_000;
 const MENU_BACKDROP_VIEW_DEPTH_RAW: f32 = 0x800 as f32;
 const MENU_BILLBOARD_VIEW_DEPTH_RAW: f32 = 0xC00 as f32;
 const MENU_BACKDROP_MODEL_ID: usize = 1;
