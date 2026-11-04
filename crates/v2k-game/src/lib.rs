@@ -242,6 +242,7 @@ pub mod player_shield;
 pub mod player_surface_contact;
 pub mod playing_particle_host;
 pub mod portable_radar;
+pub mod possession_ray;
 pub mod power_up_contact;
 pub mod primary_hit;
 pub mod primary_hit_checked_damage;

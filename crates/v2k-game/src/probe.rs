@@ -284,6 +284,10 @@ pub struct PlayerLine {
     pub attitude: [i16; 2],
     pub mode: &'static str,
     pub health: i32,
+    /// The craft's mind-control lock while it runs: mode, mode time, target
+    /// id (-1 none), locked time, reticle and angle.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mind_control_lock: Option<[i64; 6]>,
 }
 
 impl EventLog {

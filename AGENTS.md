@@ -89,7 +89,7 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
   Take pixel evidence with `--renderer software`.
 - `--event-log` writes JSON lines: each frame's state, level, delta and world
   tick; the player's position, velocity, heading, attitude (pitch, roll),
-  mode and health; and the
+  mode and health, and its mind-control lock while one runs; and the
   entities that appeared (`spawn`) or went (`dispose`).
 - `--actor-log FILE` writes every live entity each frame, one JSON line a
   frame: `[id, type, x, y, z, health, detailed]`, with health and the

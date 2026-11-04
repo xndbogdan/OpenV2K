@@ -154,6 +154,10 @@ use v2k_game::player_hull::{
     HULL_LOW_WARNING_BELOW_RAW, PLAYER_TYPE_46_HULL_PROFILE,
 };
 use v2k_game::player_surface_contact::{PlayerSurfaceContactFrame, PlayerSurfaceContactRequest};
+use v2k_game::possession_ray::{
+    target_model_radius, LockAdvance, LockMode, LockShooter, PlayerMindControlLock,
+    POSSESSION_TAKEOVER_HELD, RETICLE_MODEL_ID,
+};
 use v2k_game::power_up_contact::{
     apply_player_power_up_operation, AcceptedPowerUpContact, CampaignControlSlotError,
     NonSpawningPowerUpAcquisition, PlayerCampaignProgress, PlayerPowerUpContactPass,
@@ -164,9 +168,8 @@ use v2k_game::power_up_contact::{
 #[cfg(test)]
 use v2k_game::primary_weapon::UPGRADED_PRIMARY_PROFILE;
 use v2k_game::primary_weapon::{
-    fire_profile_from_descriptor, PrimaryFireEvent, PrimaryFireGeometry, PrimaryGunChannel,
-    PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon, POSSESSION_RAY_HELD,
-    POSSESSION_RAY_SELECTOR,
+    fire_profile_from_descriptor, PlayerProjectileDelivery, PrimaryFireEvent, PrimaryFireGeometry,
+    PrimaryGunChannel, PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
 };
 use v2k_game::radial_damage::radial_distance_raw;
 use v2k_game::retail_clock::{RetailFramePump, RetailTickClock};
@@ -534,6 +537,7 @@ struct EntityWeaponPresentationFrame<'a> {
     actor_tasks: &'a mut SpecializedActorTaskScheduler,
     retail_tick: u32,
     error_reported: &'a mut bool,
+    mind_control_lock: &'a mut PlayerMindControlLock,
 }
 
 fn publish_player_shots(
@@ -557,6 +561,11 @@ fn publish_player_shots(
             continue;
         }
         let source_actor_id = shot.event.projectile.owner_id;
+        if shot.event.delivery == PlayerProjectileDelivery::MindControlLock {
+            // 44E770 with row 0x1B: FUN_00421800 on the shooter.
+            frame.mind_control_lock.for_body(source_actor_id).start();
+            continue;
+        }
         let Some((source_position, source_velocity, source_rotation)) = frame
             .entities
             .iter_all()
@@ -2477,6 +2486,8 @@ fn run_game(
     let mut power_up_contact_error_reported = false;
     let mut primary_weapon = PrimaryWeapon::new();
     let mut pending_player_shots = Vec::new();
+    let mut mind_control_lock = PlayerMindControlLock::default();
+    let mut mind_control_takeover_reported = false;
     let mut native_entity_weapon_error_reported = false;
     let mut held_weapon_selectors_reported = HashSet::new();
     let mut targetter = TargetterRuntime::new(0);
@@ -2764,6 +2775,7 @@ fn run_game(
                     entity_manager.as_ref(),
                     &player_craft,
                     &player_hull,
+                    &mind_control_lock,
                 )?;
             }
             if let (Some(log), Some(manager)) = (probe.actor_log.as_mut(), entity_manager.as_ref())
@@ -6548,6 +6560,7 @@ fn run_game(
                             specialized_actor_tasks: &specialized_actor_tasks,
                         },
                         targetter,
+                        mind_control_lock.clone(),
                         retail_tick,
                     )
                     .redraw(
@@ -6789,6 +6802,7 @@ fn run_game(
                             abort_frame: None,
                             specialized_actor_tasks: &mut specialized_actor_tasks,
                             pending_player_shots: &mut pending_player_shots,
+                            mind_control_lock: &mut mind_control_lock,
                             entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                             player_craft: &player_craft,
                             player_hull: &player_hull,
@@ -7611,7 +7625,7 @@ fn run_game(
                                     entities, world_fx: &world_fx,
                                     specialized_actor_tasks: &specialized_actor_tasks,
                                 },
-                                targetter, retail_tick,
+                                targetter, mind_control_lock.clone(), retail_tick,
                             )
                         });
                         let mut shell = if kind == GameplayInterruption::Suspend {
@@ -8357,6 +8371,34 @@ fn run_game(
                             config.self_righting,
                         )
                     });
+                    // FUN_00444F60 -> FUN_00420A50 ends the mode controller
+                    // with the lock's advance outside network play.
+                    if !player_hull.dying && network_game.is_none() {
+                        if let Some(player) = em.player() {
+                            let lock = mind_control_lock.for_body(player.id);
+                            let shooter = LockShooter {
+                                body: player,
+                                basis: player_body_basis(&player_craft, player),
+                            };
+                            let elapsed = elapsed_micros
+                                .min(v2k_game::hover::RETAIL_FRAME_DELTA_MAX_US)
+                                as i32;
+                            let bodies: Vec<_> = em.iter_all().collect();
+                            match lock.advance(shooter, bodies.iter().copied(), elapsed) {
+                                Ok(LockAdvance::Continue) => {}
+                                Ok(LockAdvance::TakeOver { target }) => {
+                                    if !std::mem::replace(&mut mind_control_takeover_reported, true)
+                                    {
+                                        eprintln!("{POSSESSION_TAKEOVER_HELD} (body {target})");
+                                    }
+                                }
+                                Err(block) => {
+                                    eprintln!("Possession Ray lock stopped: {block:?}");
+                                    lock.stop();
+                                }
+                            }
+                        }
+                    }
                     // FUN_00444F60 fires at the end of the mode controller, so
                     // FUN_00424650 reads the heading it turned and the pitch
                     // and roll the environment phase has not yet changed.
@@ -9117,13 +9159,9 @@ fn run_game(
                         let selector = descriptor.selector();
                         if primary_trigger.held() && held_weapon_selectors_reported.insert(selector)
                         {
-                            if selector == POSSESSION_RAY_SELECTOR {
-                                eprintln!("{POSSESSION_RAY_HELD}");
-                            } else {
-                                eprintln!(
-                                    "Weapon selector {selector:#04x} held: it has no firing profile in the port (docs/re/PLAYER_CRAFT.md#special-weapons)"
-                                );
-                            }
+                            eprintln!(
+                                "Weapon selector {selector:#04x} held: it has no firing profile in the port (docs/re/PLAYER_CRAFT.md#special-weapons)"
+                            );
                         }
                         // Unrecovered selectors still visit FUN_00444FA0.
                         // Keep A/B phase instead of resetting the scheduler.
@@ -11636,6 +11674,7 @@ fn run_game(
                         abort_frame: main_base_level_abort.submitted_frame_request(),
                         specialized_actor_tasks: &mut specialized_actor_tasks,
                         pending_player_shots: &mut pending_player_shots,
+                        mind_control_lock: &mut mind_control_lock,
                         entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                         player_craft: &player_craft,
                         player_hull: &player_hull,
@@ -11980,6 +12019,7 @@ fn write_probe_events(
     manager: Option<&v2k_game::entity::EntityManager>,
     craft: &PlayerCraft,
     hull: &PlayerHull,
+    mind_control_lock: &PlayerMindControlLock,
 ) -> std::io::Result<()> {
     let state_name = match state {
         GameState::Intro => "intro",
@@ -12008,6 +12048,10 @@ fn write_probe_events(
                 attitude: craft.body_angle_words(),
                 mode: craft.mode.label(),
                 health: hull.health_raw,
+                mind_control_lock: mind_control_lock
+                    .of_body(player.id)
+                    .filter(|lock| lock.mode != LockMode::Idle)
+                    .map(|lock| lock.words()),
             },
         )?;
     }
@@ -12337,6 +12381,7 @@ struct GameplayWorldFrame<'a> {
     abort_frame: Option<MainBaseAbortFrameRequest>,
     specialized_actor_tasks: &'a mut SpecializedActorTaskScheduler,
     pending_player_shots: &'a mut Vec<PendingPlayerShot>,
+    mind_control_lock: &'a mut PlayerMindControlLock,
     entity_weapon_error_reported: &'a mut bool,
     player_craft: &'a PlayerCraft,
     player_hull: &'a PlayerHull,
@@ -12433,6 +12478,7 @@ fn draw_gameplay_world(
         abort_frame,
         specialized_actor_tasks,
         pending_player_shots,
+        mind_control_lock,
         entity_weapon_error_reported,
         player_craft,
         player_hull,
@@ -12574,6 +12620,16 @@ fn draw_gameplay_world(
                         } else {
                             PlayerCraftDrawAnimation::Live(player_craft)
                         };
+                        draw_mind_control_reticle(
+                            renderer,
+                            cache,
+                            face_colors,
+                            camera,
+                            em,
+                            player_craft,
+                            mind_control_lock,
+                            retail_tick,
+                        );
                         let origins = draw_player_craft(
                             renderer,
                             PlayerCraftDrawFrame {
@@ -12600,6 +12656,7 @@ fn draw_gameplay_world(
                                 actor_tasks: specialized_actor_tasks,
                                 retail_tick,
                                 error_reported: entity_weapon_error_reported,
+                                mind_control_lock,
                             },
                             pending_player_shots,
                             &origins,
@@ -12945,6 +13002,7 @@ fn draw_gameplay_world(
                 actor_tasks: specialized_actor_tasks,
                 retail_tick,
                 error_reported: entity_weapon_error_reported,
+                mind_control_lock,
             },
             pending_player_shots,
             &EntityWeaponDrawOrigins::default(),
@@ -14134,6 +14192,77 @@ fn draw_hive_wreck_rings(
             8,
             None,
             &ring.anim_vars(retail_tick),
+        );
+    }
+}
+
+/// `FUN_00421590`'s suffix: the craft's lock reticle (`FUN_00421230`).
+#[allow(clippy::too_many_arguments)]
+fn draw_mind_control_reticle(
+    renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
+    colors: &v2k_game::model_color::ModelMaterialCache,
+    camera: &Camera,
+    em: &v2k_game::entity::EntityManager,
+    craft: &PlayerCraft,
+    lock: &mut PlayerMindControlLock,
+    retail_tick: u32,
+) {
+    let Some(player) = em.player() else {
+        return;
+    };
+    let lock = lock.for_body(player.id);
+    if lock.mode == LockMode::Idle {
+        return;
+    }
+    let target = match lock
+        .target
+        .filter(|_| lock.mode == LockMode::Locked)
+        .and_then(|id| em.iter_all().find(|entity| entity.id == id))
+    {
+        Some(target) => match target_model_radius(cache, target) {
+            Ok(radius) => Some((target, radius)),
+            Err(block) => {
+                eprintln!("Possession Ray reticle stopped: {block:?}");
+                lock.stop();
+                return;
+            }
+        },
+        None => None,
+    };
+    let shooter = LockShooter {
+        body: player,
+        basis: player_body_basis(craft, player),
+    };
+    let points = match lock.reticle_submissions(shooter, target) {
+        Ok(points) => points,
+        Err(block) => {
+            eprintln!("Possession Ray reticle stopped: {block:?}");
+            lock.stop();
+            return;
+        }
+    };
+    let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
+    for point in points {
+        let draw_position = point
+            .unwrapped_position_raw(camera_raw)
+            .map(|raw| raw as f32 / 256.0);
+        ModelTreeRenderer::new_world(
+            renderer,
+            cache,
+            colors,
+            GAMEPLAY_MODEL_SCALE,
+            Some(MenuSceneLight::NEUTRAL),
+            retail_tick as i32,
+        )
+        .with_view(camera.into())
+        .draw_linked(
+            RETICLE_MODEL_ID,
+            point.orientation(),
+            draw_position,
+            8,
+            None,
+            &point.anim_vars(retail_tick),
         );
     }
 }
