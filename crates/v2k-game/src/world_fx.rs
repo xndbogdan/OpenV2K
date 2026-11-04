@@ -4730,12 +4730,10 @@ impl WorldFx {
         damage_raw: i32,
         tick: i32,
     ) {
-        if self.damage_modifier_hull_cue.poll(
-            health_raw,
-            pre_health_buffer_raw,
-            damage_raw,
-            tick,
-        ) {
+        if self
+            .damage_modifier_hull_cue
+            .poll(health_raw, pre_health_buffer_raw, damage_raw, tick)
+        {
             self.centered_sounds
                 .push((HULL_LOW_SOUND_ID, HULL_LOW_SOUND_GAIN));
         }

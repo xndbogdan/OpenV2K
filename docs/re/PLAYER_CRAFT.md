@@ -1806,10 +1806,21 @@ the visit, and the class2 death (`FUN_00410C10`: health 0, dying, cue 62,
 tasks cleared, removal staged) from the hold walk, a particle hit or a radial.
 The walk runs in every player hit that goes through the checked-damage owner
 (shots, particles, radials). A live hold body other than a ball (the Autobot)
-stops the craft's hit with a logged block naming its type. Two pieces stay
-held: the ball's pair hook `FUN_0040C800` (a body touching the ball stops that
-pair pass), and a pair contact on the craft while a live ball is in the hold
-(its modifier stays unresolved there). `FUN_004484A0`'s closing cue is ported for
+stops the craft's hit with a logged block naming its type.
+
+The ball's pair hook `FUN_0040C800` runs in the late pair walk (see
+[ACTOR_RUNTIME](ACTOR_RUNTIME.md#the-ports-walk)): another Type63 returns
+`0x004BE320`'s A300, which cancels the response; any other touching body
+takes a checked `{1, 40000}` attributed to the ball (its type and handle),
+then the visit goes on. The ball never meets the craft it sits on: retail's
+pair probe finds no overlap at their shared centre, and a retail lab run
+(Level 1, F9: the ball lived ticks 811 to 1669 on the player) logs no
+`FUN_00415040` from the hook; the port's probe agrees. A collision on the
+craft while a live ball is in the hold runs the modifier inside the craft's
+pair hit: the ball takes the collision packet (its source the other body)
+and the craft none, the ball's death preceding the craft's hit sound. A
+second craft collision in the same pass after the ball's hit stays
+unresolved (a typed block of the pass). `FUN_004484A0`'s closing cue is ported for
 every hit it modifies: with no shield buffer (`+50`) and the craft's health
 (`+30`) less the modifier's returned damage (zero when a ball took it) in
 5,001..30,000, and the clock more than 120 ticks from the last cue (its own

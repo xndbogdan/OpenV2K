@@ -51,6 +51,12 @@ impl EntityManager {
         Ok(())
     }
 
+    /// The ball's completed class0 owner, which lends its body and its null
+    /// contact hook to a pair visit.
+    pub(crate) fn defender_ball_owner_completed(&self, id: u32) -> bool {
+        Class0ActorOwner::adopt(self, id).is_ok() && !self.native_class0_has_pending_prefix(id)
+    }
+
     /// Whether `FUN_00415040` on this ball can run to its end in the port:
     /// a local, living class50 ball with no modifier or hit callback, whose
     /// lethal hit takes the class2 death. Checked before the player's hit
