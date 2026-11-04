@@ -4228,14 +4228,9 @@ fn run_game(
                 entity_positional_audio.reset_after_audio_stop();
                 campaign_warp.reset_after_audio_stop();
                 log!("Loading level {}...", lid);
-                render_loading_card(
-                    renderer.as_mut(),
-                    &system_strings,
-                    &menu_resources,
-                    menu_fonts.as_ref(),
-                    &session.cache,
-                    retail_tick,
-                );
+                // The card's callbacks (FUN_00456FB0) advance the 50-Hz clock
+                // from its value here; the next world's first 44FE20 resets it.
+                let mut card_clock = retail_clock;
 
                 let start = Instant::now();
                 if let Err(error) = session.load_level_by_id(lid, startup_world_variant) {
@@ -5224,17 +5219,33 @@ fn run_game(
                         LOADING_CARD_CALLBACK_MAX_MICROS,
                     ),
                 };
-                match &mut state {
+                let mut card_klaus = match &mut state {
                     GameState::OpeningCinematic {
                         stage: Intro2PresentationStage::Covered { shell },
                         ..
-                    } => shell.visit_after_load(card_callback_micros),
-                    _ => {
-                        if let Some(shell) = post_intro_world_cover.as_mut() {
-                            shell.visit_after_load(card_callback_micros);
-                        }
-                    }
+                    } => Some(shell),
+                    _ => post_intro_world_cover.as_mut(),
+                };
+                if let Some(shell) = card_klaus.as_deref_mut() {
+                    shell.visit_after_load(card_callback_micros);
                 }
+                // The callback's FUN_0042AF00 then draws the card: Klaus over
+                // black and the blinking "Loading". A world load's record
+                // (004F71B0) leaves the logo flag (+0C) zero.
+                let card_tick = card_clock.advance(u64::from(card_callback_micros));
+                render_loading_card(
+                    renderer.as_mut(),
+                    &system_strings,
+                    menu_fonts.as_ref(),
+                    &session.cache,
+                    card_tick,
+                    card_klaus.map(|shell| KlausHandoffFrame {
+                        shell,
+                        cache: &session.cache,
+                        colors: &face_colors,
+                        retail_tick: card_tick,
+                    }),
+                );
                 // FUN_00451710 stands the class-1 proxy above and behind
                 // the player and starts the eye on it; the load's own frame
                 // already runs FUN_004530D0's first visit. Network play and
@@ -5949,56 +5960,61 @@ fn run_game(
                     renderer.invalidate_terrain_cache();
                 }
                 world_fx.process_pending();
-                let prepared_full_frame_sprite = prepare_full_frame_sprite_command(
-                    &*renderer,
-                    &session.cache,
-                    &mut main_base_level_abort.outer_frame_sequence,
-                );
-                let klaus = KlausHandoffFrame {
-                    shell,
-                    cache: &session.cache,
-                    colors: &face_colors,
-                    retail_tick,
-                };
-                if intro2_final_card {
-                    // The final card's flag (+28A) keeps 53760 on Klaus alone
-                    // until 453EE0 clears it: the black card stays resident.
-                    renderer.begin_scene(RenderScene::World);
-                    renderer.clear(0.0, 0.0, 0.0);
-                    draw_klaus_handoff_overlay(&mut *renderer, klaus);
-                    if let Some(command) = prepared_full_frame_sprite.as_ref() {
-                        draw_prepared_full_frame_sprite_command(&mut *renderer, command);
-                    }
-                    renderer.present();
-                } else {
-                    // A skipped Intro2: the world, as it stood, under Klaus
-                    // and the skip's flash.
-                    render_opening_cinematic(
-                        &mut *renderer,
+                // 453E00 switches to 4D0918 once Klaus is closed; FUN_004942E0
+                // skips the draw chain of a pass whose tick switched.
+                let switched = shell.take_transition_ready();
+                if !switched {
+                    let prepared_full_frame_sprite = prepare_full_frame_sprite_command(
+                        &*renderer,
                         &session.cache,
-                        &face_colors,
-                        entity_manager
-                            .as_mut()
-                            .expect("retained Intro2 entity manager"),
-                        &camera,
-                        *elapsed,
-                        menu_fonts.as_ref(),
-                        sky_background.as_ref(),
-                        terrain_frames.as_ref(),
-                        water_frames.as_ref(),
-                        OpeningWorldEffects {
-                            terrain_lights: &mut terrain_lights,
-                            world_fx: &mut world_fx,
-                            explosion_lights: &[],
-                            full_frame_sprite: prepared_full_frame_sprite.as_ref(),
-                            native_viewport: intro_camera.native_viewport(),
-                            world_projection: Some(world_projection),
-                        },
-                        0,
-                        retail_tick,
-                        elapsed_micros,
-                        OpeningCinematicPresentation::ClosingLeg(klaus),
+                        &mut main_base_level_abort.outer_frame_sequence,
                     );
+                    let klaus = KlausHandoffFrame {
+                        shell,
+                        cache: &session.cache,
+                        colors: &face_colors,
+                        retail_tick,
+                    };
+                    if intro2_final_card {
+                        // The final card's flag (+28A) keeps 53760 on Klaus alone
+                        // until 453EE0 clears it: the black card stays resident.
+                        renderer.begin_scene(RenderScene::World);
+                        renderer.clear(0.0, 0.0, 0.0);
+                        draw_klaus_handoff_overlay(&mut *renderer, klaus);
+                        if let Some(command) = prepared_full_frame_sprite.as_ref() {
+                            draw_prepared_full_frame_sprite_command(&mut *renderer, command);
+                        }
+                        renderer.present();
+                    } else {
+                        // A skipped Intro2: the world, as it stood, under Klaus
+                        // and the skip's flash.
+                        render_opening_cinematic(
+                            &mut *renderer,
+                            &session.cache,
+                            &face_colors,
+                            entity_manager
+                                .as_mut()
+                                .expect("retained Intro2 entity manager"),
+                            &camera,
+                            *elapsed,
+                            menu_fonts.as_ref(),
+                            sky_background.as_ref(),
+                            terrain_frames.as_ref(),
+                            water_frames.as_ref(),
+                            OpeningWorldEffects {
+                                terrain_lights: &mut terrain_lights,
+                                world_fx: &mut world_fx,
+                                explosion_lights: &[],
+                                full_frame_sprite: prepared_full_frame_sprite.as_ref(),
+                                native_viewport: intro_camera.native_viewport(),
+                                world_projection: Some(world_projection),
+                            },
+                            0,
+                            retail_tick,
+                            elapsed_micros,
+                            OpeningCinematicPresentation::ClosingLeg(klaus),
+                        );
+                    }
                 }
                 play_world_audio(
                     WorldAudioFrame {
@@ -6014,7 +6030,7 @@ fn run_game(
                     &mut sound_manager,
                     &mut entity_positional_audio,
                 );
-                if shell.take_transition_ready() {
+                if switched {
                     // Keep --level useful as a direct world override
                     // for development; its default is retail level 13.
                     // An explicit 50 still advances to 13 instead of
@@ -6096,14 +6112,13 @@ fn run_game(
                     renderer.invalidate_terrain_cache();
                 }
                 world_fx.process_pending();
-                // 453E00 switches to the map once Klaus is closed; FUN_004942E0
-                // skips the draw chain of a pass whose tick switched.
-                let map_switch = matches!(destination, ClosingSceneDestination::ProgressMap(_))
-                    && shell.klaus_finished();
+                // 453E00 follows 50C00's visit and switches once Klaus is
+                // closed; FUN_004942E0 skips the draw chain of that pass.
+                let leg_done = shell.take_transition_ready();
                 let em = entity_manager
                     .as_mut()
                     .expect("closing leg world entity manager");
-                if !map_switch {
+                if !leg_done {
                     // The world stays drawn under the closing morph. Klaus is
                     // queued geometry, so the exit's flash sequence (key zero)
                     // covers him too.
@@ -6164,14 +6179,9 @@ fn run_game(
                     &mut sound_manager,
                     &mut entity_positional_audio,
                 );
-                if !map_switch {
+                if !leg_done {
                     renderer.present();
                 }
-                let leg_done = match destination {
-                    // 453E00 follows 50C00's visit in the same frame.
-                    ClosingSceneDestination::ProgressMap(_) => shell.klaus_finished(),
-                    _ => shell.take_transition_ready(),
-                };
                 if leg_done {
                     let ctx = MenuCtx {
                         cache: &session.cache,
@@ -6477,6 +6487,10 @@ fn run_game(
                 // exit leg; gameplay no longer runs. Klaus's opaque iris
                 // covers the map until he opens.
                 if world_complete_results.is_progress_map_active() {
+                    // The installed world callbacks (44FE20 adds the clamped
+                    // delta to +270) run before the mode pump's switch, so
+                    // the entry's zero below is what the first frame draws.
+                    world_complete_results.advance(elapsed_micros);
                     // The descriptor a switch selected last frame runs its
                     // entry now, with its first tick.
                     match campaign_map_switch.take() {
@@ -6684,7 +6698,6 @@ fn run_game(
                         }
                         None => None,
                     };
-                    world_complete_results.advance(elapsed_micros);
                     // FUN_004942E0 skips the draw chain of a pass whose tick
                     // switched descriptors.
                     if switch.is_none() {
@@ -17819,15 +17832,6 @@ fn draw_menu_branding(
     }
 }
 
-/// Draw the authored synchronous-load card before entering the blocking OVL
-/// reader.
-///
-/// Retail `FUN_0042B040` draws the three bottom branding sprites first, then
-/// uses the normal (green) system font at level-2 layout point 12. Its caller
-/// gates the text on the even half of `(DAT_004FED60 / 20) & 1`; the card
-/// itself remains visible while the loader blocks. The port has no proven
-/// retry loop, so this path intentionally requests system string 34
-/// (`Loading`) only.
 /// 42E980's teardown sweep precedes unloading the old world: each deployed
 /// Portable Radar removes its coverage, drawing the process RNG.
 fn retire_world_radars(
@@ -17843,22 +17847,29 @@ fn retire_world_radars(
     }
 }
 
+/// A world load's card, as `FUN_0042AF00` draws it from a card callback:
+/// Klaus over black, then `FUN_0042B040`'s text in the normal (green) system
+/// font at level-2 layout point 12, on the even half of
+/// `(DAT_004FED60 / 20) & 1`. Its branding sprites need the record's `+0C`,
+/// which only the frontend's card (`004DB1D8`) sets. The port has no proven
+/// retry loop, so it requests system string 34 (`Loading`) only.
 fn render_loading_card(
     renderer: &mut dyn v2k_render::Renderer,
     system_strings: &[String],
-    menu_resources: &v2k_game::menu::MenuResources,
     fonts: Option<&v2k_game::menu_text::MenuFonts>,
     cache: &v2k_game::resource_cache::ResourceCache,
     retail_tick: u32,
+    klaus: Option<KlausHandoffFrame<'_>>,
 ) {
     use v2k_game::game_state::menu_strings;
 
     renderer.begin_scene(RenderScene::Menu);
     renderer.clear(0.0, 0.0, 0.0);
+    if let Some(klaus) = klaus {
+        draw_klaus_handoff_overlay(renderer, klaus);
+    }
 
     let (vw, vh) = renderer.viewport_size();
-    draw_menu_branding(renderer, system_strings, menu_resources, vw, vh);
-
     if loading_text_visible(retail_tick) {
         let text = system_strings
             .get(menu_strings::LOADING)

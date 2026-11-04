@@ -441,12 +441,23 @@ What a load leaves behind therefore depends on real time:
   (`FUN_0044FE20`) resets it through `+274`. The eye ends where the final
   callback's reset and ED10 leave it, whatever the time.
 
+The card a world load draws is Klaus and the green "Loading" over black,
+with no branding: `FUN_0042B040` draws the three bottom sprites only when
+its record's `+0C` is set, and the world load's record (`004F71B0`, built
+by `FUN_004515E0`) never sets it. Only the frontend's entry
+(`FUN_0042B230`) uses a record with it set (`004DB1D8`, `+0C` 1, drawn by
+its own timer callback `FUN_0042D620` while it reads overlays 12, 5 and 3).
+Nothing is drawn before the first callback: a load shorter than one period
+shows only the final callback's card, after the load.
+
 The lab's stub fires each load's timer once, with the scripted clock
 standing still: only the final callback runs, with the minimum 7,800 us
-(Klaus's morph 8,299 after the load, `+270` 7). The port loads in one
-blocking step and draws the card once before it, holding still. Of the
-final callback it runs the spring reset and ED10 (`start_eye_after_load`)
-and the Klaus visit (`MenuShell::visit_after_load`): with
+(Klaus's morph 8,299 after the load, `+270` 7). After Intro2 the lab shows
+nothing at pass 853 (the leg's switch) and this card at 854, the load's
+pass. The port loads in one blocking step and draws that card once, after
+it. Of the final callback it runs the 50-Hz clock's advance (the text's
+blink), the spring reset and ED10 (`start_eye_after_load`), the Klaus visit
+(`MenuShell::visit_after_load`) and the card: with
 `--fixed-step-micros` the lab's 7,800 us, so the morph after the load is
 8,299 as in the lab; otherwise the real time since the load began, clamped
 as the callback clamps it, which is retail's delta when no earlier callback
