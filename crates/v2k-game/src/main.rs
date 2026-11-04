@@ -2955,9 +2955,10 @@ fn run_game(
             );
         }
         let mut pad_actions = Vec::new();
+        let mut pad_releases = Vec::new();
         for event in &events {
             if let GameEvent::PadButton { button, pressed } = event {
-                pad_bindings.button(*button, *pressed, &mut pad_actions);
+                pad_bindings.button(*button, *pressed, &mut pad_actions, &mut pad_releases);
             }
         }
         // The active pad or joystick, as of this frame's poll.
@@ -3314,8 +3315,16 @@ fn run_game(
 
                 // A pad's menu set. Back is Escape's: inert at a root, which
                 // retail cannot pop, and otherwise it saves the settings.
+                // The frontend's joystick tables bind the same handlers,
+                // which reset the idle countdown on a press and a release.
+                if !menu_is_paused
+                    && pad_releases.iter().any(|action| {
+                        matches!(action, PadAction::Menu(_) | PadAction::PauseResumeOrBack)
+                    })
+                {
+                    idle_countdown.key();
+                }
                 for &action in &pad_actions {
-                    // The frontend's joystick tables bind the same handlers.
                     if !menu_is_paused
                         && matches!(action, PadAction::Menu(_) | PadAction::PauseResumeOrBack)
                     {

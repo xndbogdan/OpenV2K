@@ -1031,8 +1031,10 @@ steers the craft's drift in the same routine. The frontend's handlers for
 Return and Space (not with Alt), Escape (with or without Shift) and the
 arrows (`FUN_0042BD90`, `FUN_0042BAD0`, `FUN_0042BAA0`, `FUN_0042BB30` to
 `FUN_0042BBC0`) set both words to 60,000 on every press and release; their
-joystick rows reach the same handlers, and the port resets on a pad's menu
-actions. Below 1 both become 10,000 and `FUN_0043A9A0` starts one screen's
+joystick rows reach the same handlers (`FUN_00472320` calls a descriptor's
+handler whenever its count of satisfied records crosses zero, either way),
+so the port resets on a pad's menu actions when they start and when their
+last record ends. Below 1 both become 10,000 and `FUN_0043A9A0` starts one screen's
 pop, returning the depth it pops from: at the ring (depth 1) the game starts
 in mode 4, or in mode 1 when one random word's low three bits are zero, and
 Klaus gets command 5 (the ring flies off as for New Game, without its cue);

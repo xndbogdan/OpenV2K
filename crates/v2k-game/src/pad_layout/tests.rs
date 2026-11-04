@@ -11,13 +11,13 @@ fn bindings(layout: ControllerLayout, context: PadContext) -> PadBindings {
 
 fn press(bindings: &mut PadBindings, button: PadButton) -> Vec<PadAction> {
     let mut started = Vec::new();
-    bindings.button(button, true, &mut started);
+    bindings.button(button, true, &mut started, &mut Vec::new());
     started
 }
 
 fn release(bindings: &mut PadBindings, button: PadButton) -> Vec<PadAction> {
     let mut started = Vec::new();
-    bindings.button(button, false, &mut started);
+    bindings.button(button, false, &mut started, &mut Vec::new());
     started
 }
 
@@ -272,4 +272,20 @@ fn right_stick_drives_the_chase_camera_parameters() {
             ChaseCameraParameters::default()
         );
     }
+}
+
+#[test]
+fn a_release_ends_its_descriptor_once_no_record_holds_it() {
+    let mut menu = bindings(ControllerLayout::ConsoleOriginal, PadContext::FrontendMenu);
+    let (mut started, mut ended) = (Vec::new(), Vec::new());
+    menu.button(PadButton::South, true, &mut started, &mut ended);
+    assert_eq!((started, ended), (vec![Menu(MenuInput::Select)], vec![]));
+    let (mut started, mut ended) = (Vec::new(), Vec::new());
+    menu.button(PadButton::South, false, &mut started, &mut ended);
+    assert_eq!((started, ended), (vec![], vec![Menu(MenuInput::Select)]));
+    // A button no record names ends nothing.
+    let (mut started, mut ended) = (Vec::new(), Vec::new());
+    menu.button(PadButton::East, true, &mut started, &mut ended);
+    menu.button(PadButton::East, false, &mut started, &mut ended);
+    assert!(started.is_empty() && ended.is_empty());
 }
