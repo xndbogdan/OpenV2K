@@ -2695,7 +2695,45 @@ fn run_game(
         // Process events — behavior depends on game state
         let mut events = Vec::new();
         let mut polled = game_window.poll_events();
-        polled.extend(probe.input.events(frames_done));
+        // Where in this frame each key event happened, for the reader's
+        // on-times (FUN_00471400). Scripted and fixed-step frames count every
+        // event from the frame's start.
+        let frame_key_events = {
+            let times = game_window.key_event_times();
+            let mut stamps = times.events_ms.iter().copied();
+            let scripted = probe.fixed_step_micros.is_some();
+            let mut key_events: Vec<(Keycode, bool, u32)> = Vec::new();
+            let mut push = |key: Keycode, pressed: bool, at: Option<u32>| {
+                let at = if scripted { None } else { at };
+                key_events.push((
+                    key,
+                    pressed,
+                    v2k_game::key_hold::FrameKeyEvents::offset_us(
+                        at,
+                        times.previous_poll_ms,
+                        times.poll_ms,
+                        elapsed_micros,
+                    ),
+                ));
+            };
+            for event in &polled {
+                match *event {
+                    GameEvent::KeyDown(key) => push(key, true, stamps.next()),
+                    GameEvent::KeyUp(key) => push(key, false, stamps.next()),
+                    _ => {}
+                }
+            }
+            let scripted_events = probe.input.events(frames_done);
+            for event in &scripted_events {
+                match *event {
+                    GameEvent::KeyDown(key) => push(key, true, None),
+                    GameEvent::KeyUp(key) => push(key, false, None),
+                    _ => {}
+                }
+            }
+            polled.extend(scripted_events);
+            key_events
+        };
         for event in polled {
             match event {
                 // Backquote/tilde owns the text console in every state and
@@ -7331,6 +7369,13 @@ fn run_game(
                     .copied()
                     .chain(pad_bindings.held_keys())
                     .collect();
+                // This frame's key events against the keys down at its end;
+                // the pad's keys count as held all frame.
+                let craft_frame = v2k_game::key_hold::FrameKeyEvents {
+                    dt_us: elapsed_micros,
+                    keys_after: craft_keys.clone(),
+                    events: frame_key_events.clone(),
+                };
                 // 12DA0 visits every power-up this frame, whatever the camera.
                 em.clear_power_up_b2();
                 // FUN_004374B0, the static damage programs, with the eye's
@@ -7422,15 +7467,14 @@ fn run_game(
                             &mut weapon_inventory,
                             &mut player_craft,
                         );
-                        MotionChannels::from_input(
-                            &craft_keys,
+                        MotionChannels::from_frame(
+                            &craft_frame,
                             AnalogInput {
                                 mouse_dx: mouse_motion.0,
                                 mouse_dy: mouse_motion.1,
                                 mouse_thrust: mouse_buttons_down.contains(&MouseButton::Left),
                                 joystick,
                             },
-                            elapsed_micros,
                             ReaderSettings {
                                 sensitivity,
                                 joystick_mode: JoystickMode::from_setting(config.joystick_mode),
@@ -7442,12 +7486,11 @@ fn run_game(
                         if player_hull.dying {
                             return VehicleFrameForces::DyingCommon;
                         }
-                        player_craft.integrate_configured_micros_with_sensitivity(
+                        player_craft.integrate_configured_micros_forces(
                             elapsed_micros,
                             &channels,
                             player,
                             config.self_righting,
-                            sensitivity,
                         )
                     });
                     // 12DA0 zeroes +B2 after the controlled player's callbacks,
@@ -8102,8 +8145,10 @@ fn run_game(
                 // resume's lockout runs (FUN_00456C90).
                 let fire_allowed = !player_hull.dying && pause_fire_lockout_micros == 0;
                 let primary_trigger = PrimaryTriggerInput {
+                    // The reader tests the fire record's on-time for nonzero,
+                    // so a tap inside the frame fires.
                     source_a: fire_allowed
-                        && (keyboard_fire_held(&craft_keys)
+                        && (craft_frame.on_time_us(keyboard_fire_held) > 0
                             || joystick.is_some_and(JoystickSample::fire)),
                     source_b: fire_allowed && mouse_buttons_down.contains(&MouseButton::Right),
                 };
@@ -16062,12 +16107,11 @@ mod player_environment_presentation_tests {
         )
         .unwrap();
         let mut craft = PlayerCraft::new();
-        let force = craft.integrate_configured_micros_with_sensitivity(
+        let force = craft.integrate_configured_micros_forces(
             0,
             &MotionChannels::default(),
             manager.player_mut().unwrap(),
             0,
-            5,
         );
         // Complete the ordinary player's first F70 boundary before modeling
         // the later EC60 angle-only writes.

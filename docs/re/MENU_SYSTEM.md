@@ -1016,9 +1016,17 @@ session runs it in phase 4, where `FUN_00453330` installs no craft keys,
 the HUD is off, the cinematic follow and Section-2 records of phases below
 5 run, logical world 11 builds no player (`FUN_00450390`), and the exit
 (`FUN_00453E00`) returns to the frontend (`FUN_0044FEB0`). Mode 1 plays
-Intro2 the same way. The lab's idle frontend starts the demo at pass 3133
-and is back at 5986. What ends the demo world after about 57 s, and the
-world records it plays, are not traced.
+Intro2 the same way.
+
+The demo world ends on its clock: in phase 4 the cinematic follow
+(`FUN_004503C0`) sets `+290` once the 50 Hz clock passes `0xB22` (2850
+ticks, 57.0 s; Intro2's phases 1 and 2 use `0x10CC`), the next visit sends
+event 2 (`FUN_0044FCD0` selects `4D0A30`), and its exit (`FUN_00453E00`)
+returns to the frontend. In the lab's idle frontend (no keys) the demo
+world loads at pass 3033, ticks 2852 times and the frontend is back at
+pass 5886, clock 2853. Phase 4 also has its own camera-subject choices in
+`FUN_004503C0` (random picks among the world's actors), not traced in
+detail.
 
 ## Screen tree highlights (full tree in ../port/crates/v2k-game/data/menu_tree.json)
 

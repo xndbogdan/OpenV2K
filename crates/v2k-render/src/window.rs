@@ -409,6 +409,20 @@ pub struct GameWindow {
     controllers: Option<Controllers>,
     primary_window_id: Cell<Option<u32>>,
     hidden: bool,
+    timer: sdl2::TimerSubsystem,
+    /// SDL ticks (ms) at the previous and the latest poll, and the SDL
+    /// timestamp of each key event the latest poll returned, in order.
+    key_times: KeyEventTimes,
+}
+
+/// When the latest poll's key events happened: SDL's millisecond clock at
+/// the previous poll and at this one, and each `KeyDown`/`KeyUp` event's
+/// timestamp in the order the poll returned them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct KeyEventTimes {
+    pub previous_poll_ms: u32,
+    pub poll_ms: u32,
+    pub events_ms: Vec<u32>,
 }
 
 impl GameWindow {
@@ -446,6 +460,8 @@ impl GameWindow {
             })
             .flatten();
         let event_pump = sdl.event_pump()?;
+        let timer = sdl.timer()?;
+        let now = timer.ticks();
 
         Ok(Self {
             sdl,
@@ -456,6 +472,12 @@ impl GameWindow {
             controllers,
             primary_window_id: Cell::new(None),
             hidden,
+            timer,
+            key_times: KeyEventTimes {
+                previous_poll_ms: now,
+                poll_ms: now,
+                events_ms: Vec::new(),
+            },
         })
     }
 
@@ -539,12 +561,20 @@ impl GameWindow {
         Ok(window)
     }
 
+    /// The latest poll's key event times (see [`KeyEventTimes`]).
+    pub fn key_event_times(&self) -> &KeyEventTimes {
+        &self.key_times
+    }
+
     /// Poll all pending SDL2 events, returning game-level events. Retail
     /// FUN_0042D780 pumps one waiting window message; its quit message ends
     /// the game, as `Quit` does here.
     pub fn poll_events(&mut self) -> Vec<GameEvent> {
         // Collect raw SDL events first to avoid borrow conflicts
         let sdl_events: Vec<Event> = self.event_pump.poll_iter().collect();
+        self.key_times.previous_poll_ms = self.key_times.poll_ms;
+        self.key_times.poll_ms = self.timer.ticks();
+        self.key_times.events_ms.clear();
 
         let mut events = Vec::new();
         for event in sdl_events {
@@ -585,19 +615,23 @@ impl GameWindow {
                     events.push(GameEvent::FocusGained);
                 }
                 Event::KeyDown {
+                    timestamp,
                     window_id,
                     keycode: Some(kc),
                     repeat: false,
                     ..
                 } if self.primary_window_id.get() == Some(window_id) || kc == Keycode::F12 => {
+                    self.key_times.events_ms.push(timestamp);
                     events.push(GameEvent::KeyDown(kc));
                 }
                 Event::KeyUp {
+                    timestamp,
                     window_id,
                     keycode: Some(kc),
                     repeat: false,
                     ..
                 } if self.primary_window_id.get() == Some(window_id) => {
+                    self.key_times.events_ms.push(timestamp);
                     events.push(GameEvent::KeyUp(kc));
                 }
                 Event::MouseMotion {

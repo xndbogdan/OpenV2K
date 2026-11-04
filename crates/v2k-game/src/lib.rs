@@ -115,6 +115,7 @@ pub mod intro2_type9;
 pub mod intro2_type94;
 pub mod intro2_type9_class14;
 pub mod job_nearby;
+pub mod key_hold;
 pub mod launcher_preferences;
 pub mod level;
 pub mod level_weather;

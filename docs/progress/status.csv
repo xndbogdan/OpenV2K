@@ -201,7 +201,7 @@ address,status,note
 0x0044E0E0,implemented,Display-menu display rebuild; a display or renderer that cannot start leaves the previous one and its tier resources with the setting as chosen (docs/re/MENU_SYSTEM.md)
 0x00444B90,implemented,Joystick Absolute-mode bearing steering; instruction-matched including the saturated-ratio quirk (crates/v2k-game/src/retail_input.rs)
 0x00457F70,implemented,inverse sine lookup; the generated table equals all 1024 retail words (crates/v2k-formats/src/fixed_math.rs)
-0x004445E0,approximated,craft input reader; mouse joystick wheel and Absolute dispatch are exact but held keys still count for the whole frame (docs/re/CONTROLS.md)
+0x004445E0,implemented,craft input reader; keys weighed by their on-time within the frame from SDL event times (docs/re/CONTROLS.md)
 0x004AC110,approximated,WinMM joystick probe; the port opens SDL pads and joysticks as they are plugged in and reads the one used last (crates/v2k-render/src/window.rs)
 0x004AC2A0,approximated,20 ms WinMM joystick poll; the port samples the controller used last once per frame (crates/v2k-render/src/window.rs)
 0x004715E0,implemented,FGDK channel read feeding FUN_0040ED10 parameters 3/4; the bound right-stick values arrive unfiltered (crates/v2k-game/src/pad_layout.rs)
@@ -1061,3 +1061,4 @@ address,status,note
 0x00456710,documented,bomb radial infect/cure; held (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00437630,documented,bomb terrain cells; held (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00414C50,documented,bomb bodies; held (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x00471400,implemented,a value record's on-time within the frame (crates/v2k-game/src/key_hold.rs; docs/re/CONTROLS.md)
