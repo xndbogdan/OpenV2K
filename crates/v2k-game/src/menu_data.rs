@@ -206,6 +206,9 @@ pub enum DrawKind {
     NetworkText { string_id: u32 },
     /// FUN_004510C0 / FUN_00452020 — player-status / results rows.
     StatusText { string_id: u32 },
+    /// FUN_00450EF0 — the progress map save menu's Save Game row:
+    /// "label: name rank" from the live session, blank without one.
+    SessionSaveRow { string_id: u32 },
     /// FUN_00450E80 — the Cheats world selector: string 138 formatted with
     /// the selected world's name (string 152 + world, else 127).
     CheatSkipWorld { string_id: u32 },
@@ -250,6 +253,9 @@ pub enum SelectAction {
     CheatAnyKey(crate::cheats::CheatMenuAction),
     /// FUN_00456050, FUN_004562A0, FUN_00456300 — rows acting on select only.
     CheatOnSelect(crate::cheats::CheatMenuAction),
+    /// FUN_004561A0 — "Replay this World?" Yes: the world again from the
+    /// session's entry snapshot.
+    ReplayWorld,
     /// FUN_00450D70 — the Cheats world selector: Left and Right step the
     /// world up to `max`, select skips to it.
     CheatSkipWorld { max: u32 },
@@ -400,7 +406,8 @@ fn classify_draw(it: &RawItem) -> DrawKind {
         0x43BB20 => DrawKind::ColumnText { string_id: sid },
         0x43CF30 => DrawKind::DynamicText,
         0x43CEF0 => DrawKind::NetworkText { string_id: sid },
-        0x4510C0 | 0x452020 | 0x450EF0 => DrawKind::StatusText { string_id: sid },
+        0x4510C0 | 0x452020 => DrawKind::StatusText { string_id: sid },
+        0x450EF0 => DrawKind::SessionSaveRow { string_id: sid },
         0x450E80 => DrawKind::CheatSkipWorld { string_id: sid },
         addr => DrawKind::Unknown {
             addr,
@@ -449,6 +456,7 @@ fn classify_select(it: &RawItem) -> SelectAction {
         0x4562A0 => SelectAction::CheatOnSelect(CheatMenuAction::CompleteThisWorld),
         0x456300 => SelectAction::CheatOnSelect(CheatMenuAction::CompleteAllWorlds),
         0x450D70 => SelectAction::CheatSkipWorld { max: it.arg1 },
+        0x4561A0 => SelectAction::ReplayWorld,
         0x43BF30 => SelectAction::SaveSlot,
         0x43BFC0 => SelectAction::LoadSlot,
         0x43CB20 => SelectAction::AdvanceCursor,

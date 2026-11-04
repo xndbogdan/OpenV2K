@@ -145,10 +145,10 @@ pub struct WorldCompleteStats {
     pub virus_percent: i32,
     pub time_trophy: bool,
     pub hidden_trophy: bool,
-    /// `FUN_00456ef0` name after the recovered threshold table. The EXE
-    /// has no writer of `player_state+0x126`; new-game rank is saved-world
-    /// count only.
-    pub rank_name: &'static str,
+    /// `FUN_00456EF0`'s score, named at presentation by
+    /// [`rank_name_from_strings`]. The EXE has no writer of controller
+    /// `+0x126`, so it is the saved-world count.
+    pub rank_score: i32,
 }
 
 impl Default for WorldCompleteStats {
@@ -161,7 +161,7 @@ impl Default for WorldCompleteStats {
             virus_percent: 0,
             time_trophy: false,
             hidden_trophy: false,
-            rank_name: RANK_ABSOLUTE_BEGINNER,
+            rank_score: 0,
         }
     }
 }
@@ -235,12 +235,10 @@ impl WorldCompleteTally {
             virus_percent,
             time_trophy,
             hidden_trophy,
-            rank_name: rank_name_for_saved_worlds(saved_worlds),
+            rank_score: saved_worlds,
         }
     }
 }
-
-const RANK_ABSOLUTE_BEGINNER: &str = "Absolute Beginner";
 
 /// Exact `FUN_004366F0` display percentage from live `DAT_004dc684`.
 ///
@@ -292,32 +290,46 @@ pub const fn fun_00452270_case1_minutes_and_seconds(ticks_0x2bc: i32) -> (i32, i
     (ticks_0x2bc / 3000, ticks_0x2bc / 50 % 60)
 }
 
-/// Thresholds recovered with `FUN_00456ef0`. Score is the count of control
-/// slots that already carry campaign-completion bit `0x01`. Retail
-/// `FUN_00456E20` composes that score with the name lookup, `FUN_00456E50`:
-/// the highest threshold not above the score names the rank.
-pub fn rank_name_for_saved_worlds(saved_worlds: i32) -> &'static str {
-    const RANKS: &[(i32, &str)] = &[
-        (90, "Elite"),
-        (80, "Genius"),
-        (70, "Ace"),
-        (60, "Hero"),
-        (50, "Expert"),
-        (40, "Competent"),
-        (30, "Dependable"),
-        (25, "Reliable"),
-        (20, "Just Qualified"),
-        (15, "Cadet"),
-        (10, "Good Trainee"),
-        (5, "Trainee"),
-        (3, "Beginner"),
-        (0, RANK_ABSOLUTE_BEGINNER),
-    ];
-    RANKS
-        .iter()
-        .find(|(threshold, _)| saved_worlds >= *threshold)
-        .map(|(_, name)| *name)
-        .unwrap_or(RANK_ABSOLUTE_BEGINNER)
+/// `FUN_00456E50` over global strings 286..=299 ("<threshold>name" rows in
+/// ascending order): the text after `>` of the last row whose threshold is
+/// at most `score`, stopping at the first equal or greater one. Rows with no
+/// digit are skipped; no row at or below the score gives retail's
+/// "Error: No ranking". `score` is `FUN_00456EF0`'s: the saved worlds plus
+/// controller byte `+0x126`.
+pub fn rank_name_from_strings<'a>(
+    mut strings: impl FnMut(usize) -> Option<&'a str>,
+    score: i32,
+) -> String {
+    let mut chosen = None;
+    for id in 286..=299 {
+        let row = strings(id).unwrap_or("");
+        let digits = row.trim_start_matches(|c: char| !c.is_ascii_digit());
+        if digits.is_empty() {
+            continue;
+        }
+        let threshold = retail_atoi(digits);
+        if threshold > score {
+            break;
+        }
+        chosen = Some(digits);
+        if threshold == score {
+            break;
+        }
+    }
+    match chosen {
+        Some(row) => row.split_once('>').map_or("", |(_, name)| name).to_string(),
+        None => "Error: No ranking".to_string(),
+    }
+}
+
+/// The CRT's `atoi` on a string that starts with a digit.
+fn retail_atoi(digits: &str) -> i32 {
+    digits
+        .bytes()
+        .take_while(u8::is_ascii_digit)
+        .fold(0i32, |value, digit| {
+            value.wrapping_mul(10).wrapping_add(i32::from(digit - b'0'))
+        })
 }
 
 impl WorldCompleteStats {
@@ -459,6 +471,7 @@ impl WorldCompleteResultsRuntime {
             return GameplayNotificationPresentation::default();
         }
         let mut presentation = GameplayNotificationPresentation::default();
+        let rank = rank_name_from_strings(&mut resolve_string, self.stats.rank_score);
         for &(string_id, required) in RESULT_LINES {
             if !self.should_show(required) {
                 continue;
@@ -467,7 +480,7 @@ impl WorldCompleteResultsRuntime {
                 continue;
             };
             let Some(parsed) =
-                present_results_line(string_id, raw, self.stats, self.age_ms, retail_tick)
+                present_results_line(string_id, raw, self.stats, &rank, self.age_ms, retail_tick)
             else {
                 continue;
             };
@@ -522,6 +535,7 @@ fn present_results_line(
     string_id: usize,
     raw: &str,
     stats: WorldCompleteStats,
+    rank: &str,
     age_ms: i32,
     retail_tick: i32,
 ) -> Option<PresentedResultsLine> {
@@ -545,7 +559,7 @@ fn present_results_line(
     let baseline_percent = fields.get(4).copied().unwrap_or(30);
     let width_percent = fields.get(5).copied().unwrap_or(85);
     let field7 = fields.get(7).copied().unwrap_or(0);
-    let formatted = fun_00452270_apply(field7, body, stats, retail_tick);
+    let formatted = fun_00452270_apply(field7, body, stats, rank, retail_tick);
     let (text, reveal_incomplete) = type_on_results_body(
         formatted,
         age_ms.saturating_sub(delay_ms),
@@ -600,6 +614,7 @@ fn fun_00452270_apply(
     field7: i32,
     body: &str,
     stats: WorldCompleteStats,
+    rank: &str,
     retail_tick: i32,
 ) -> String {
     let formatted = match field7 {
@@ -623,7 +638,7 @@ fn fun_00452270_apply(
                 String::new()
             }
         }
-        0x0d => body.replacen("%s", stats.rank_name, 1),
+        0x0d => body.replacen("%s", rank, 1),
         0x0e => {
             if !stats.time_trophy || fun_00452270_case_e_hides_line(retail_tick) {
                 String::new()
@@ -677,7 +692,7 @@ mod tests {
             virus_percent: 12,
             time_trophy: true,
             hidden_trophy: false,
-            rank_name: RANK_ABSOLUTE_BEGINNER,
+            rank_score: 0,
         }
     }
 
@@ -690,6 +705,7 @@ mod tests {
             0xc1 => Some(" <2000,10000,*,15,44,85,30,4>You killed %d alien creatures."),
             0xc2 => Some(" <2500,10000,*,15,51,85,30,5>The landscape was %d%% virused."),
             0xc3 => Some(" <3000,10000,*,15,58,85,30,13>Your rank is %s."),
+            286 => Some("<0>Absolute Beginner"),
             0xc4 => Some(" <3500,10000,*,15,65,85,30,12>You found the hidden trophy."),
             _ => None,
         }
@@ -704,10 +720,17 @@ mod tests {
         assert_eq!(fun_00452270_case1_minutes_and_seconds(3_000), (1, 0));
         assert_eq!(fun_00452270_case1_minutes_and_seconds(6_250), (2, 5));
         assert_eq!(stats().saved_minutes_and_seconds(), (2, 5));
-        let line = present_results_line(0xbd, resolve(0xbd).unwrap(), stats(), 600, 0)
-            .unwrap()
-            .line
-            .unwrap();
+        let line = present_results_line(
+            0xbd,
+            resolve(0xbd).unwrap(),
+            stats(),
+            "Absolute Beginner",
+            600,
+            0,
+        )
+        .unwrap()
+        .line
+        .unwrap();
         assert_eq!(line.text, "World saved in 2:05.");
         assert_eq!(line.x_percent, 10);
         assert_eq!(line.baseline_percent, 10);
@@ -716,15 +739,15 @@ mod tests {
     #[test]
     fn field_six_types_on_after_the_row_delay() {
         let raw = resolve(0xbd).unwrap();
-        let at_open = present_results_line(0xbd, raw, stats(), 0, 0).unwrap();
+        let at_open = present_results_line(0xbd, raw, stats(), "Absolute Beginner", 0, 0).unwrap();
         assert!(at_open.line.is_none());
         assert!(at_open.reveal_incomplete);
-        let partial = present_results_line(0xbd, raw, stats(), 150, 0)
+        let partial = present_results_line(0xbd, raw, stats(), "Absolute Beginner", 150, 0)
             .unwrap()
             .line
             .unwrap();
         assert_eq!(partial.text, "World");
-        let complete = present_results_line(0xbd, raw, stats(), 600, 0)
+        let complete = present_results_line(0xbd, raw, stats(), "Absolute Beginner", 600, 0)
             .unwrap()
             .line
             .unwrap();
@@ -770,19 +793,36 @@ mod tests {
 
     #[test]
     fn virus_line_collapses_printf_percent_escapes() {
-        let line = present_results_line(0xc2, resolve(0xc2).unwrap(), stats(), 3_500, 0)
-            .unwrap()
-            .line
-            .unwrap();
+        let line = present_results_line(
+            0xc2,
+            resolve(0xc2).unwrap(),
+            stats(),
+            "Absolute Beginner",
+            3_500,
+            0,
+        )
+        .unwrap()
+        .line
+        .unwrap();
         assert_eq!(line.text, "The landscape was 12% virused.");
     }
 
     #[test]
-    fn rank_follows_saved_world_thresholds() {
-        assert_eq!(rank_name_for_saved_worlds(0), "Absolute Beginner");
-        assert_eq!(rank_name_for_saved_worlds(1), "Absolute Beginner");
-        assert_eq!(rank_name_for_saved_worlds(3), "Beginner");
-        assert_eq!(rank_name_for_saved_worlds(90), "Elite");
+    fn rank_from_strings_follows_fun_00456e50() {
+        let rows = |id: usize| match id {
+            286 => Some("<0>Absolute Beginner"),
+            287 => Some("<3>Beginner"),
+            288 => Some(""),
+            289 => Some("<5>Trainee"),
+            290..=299 => Some("<90>Elite"),
+            _ => None,
+        };
+        assert_eq!(rank_name_from_strings(rows, 0), "Absolute Beginner");
+        assert_eq!(rank_name_from_strings(rows, 2), "Absolute Beginner");
+        assert_eq!(rank_name_from_strings(rows, 3), "Beginner");
+        assert_eq!(rank_name_from_strings(rows, 6), "Trainee");
+        assert_eq!(rank_name_from_strings(rows, 95), "Elite");
+        assert_eq!(rank_name_from_strings(rows, -1), "Error: No ranking");
     }
 
     #[test]
@@ -815,13 +855,15 @@ mod tests {
         assert!(!fun_00452270_case_e_hides_line(79));
         assert!(fun_00452270_case_e_hides_line(80));
         let raw = resolve(0xbe).unwrap();
-        let hidden = present_results_line(0xbe, raw, stats(), 6_000, 0).unwrap();
+        let hidden =
+            present_results_line(0xbe, raw, stats(), "Absolute Beginner", 6_000, 0).unwrap();
         assert!(hidden.line.is_none());
         assert!(!hidden.reveal_incomplete);
-        let mid_type_on = present_results_line(0xbe, raw, stats(), 5_150, 0).unwrap();
+        let mid_type_on =
+            present_results_line(0xbe, raw, stats(), "Absolute Beginner", 5_150, 0).unwrap();
         assert!(mid_type_on.line.is_none());
         assert!(!mid_type_on.reveal_incomplete);
-        let shown = present_results_line(0xbe, raw, stats(), 6_000, 40)
+        let shown = present_results_line(0xbe, raw, stats(), "Absolute Beginner", 6_000, 40)
             .unwrap()
             .line
             .unwrap();
@@ -834,6 +876,7 @@ mod tests {
             0x99,
             "<*,10000,*,10,10,90,30,1>World saved in %d:%02d.",
             stats(),
+            "Absolute Beginner",
             600,
             0,
         )
@@ -845,6 +888,7 @@ mod tests {
             0x99,
             "<*,10000,*,15,30,85,30,2>You rescued %d natives.",
             stats(),
+            "Absolute Beginner",
             1_000,
             0,
         )

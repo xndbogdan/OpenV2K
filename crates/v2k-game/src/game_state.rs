@@ -198,9 +198,11 @@ pub enum GameState {
         elapsed: f32,
         stage: Intro2PresentationStage,
     },
-    /// Klaus closes over the completed Intro2 before the first-world load.
-    /// The opening leg after load is a presentation owner over live gameplay.
-    PostIntro { shell: MenuShell },
+    /// Klaus closes over Intro2 before the first-world load (descriptor
+    /// `4D0A30`): its world stays drawn as it stood at `elapsed`, black once
+    /// the final card is up. The opening leg after load is a presentation
+    /// owner over live gameplay.
+    PostIntro { shell: MenuShell, elapsed: f32 },
     /// `FUN_00453BA0`/`FUN_00453E00` after a phase-3 exit: Klaus closes over
     /// the resident world (`FUN_00450C00` still runs the eye and particles),
     /// then the next world loads.
@@ -225,6 +227,9 @@ pub enum ClosingSceneDestination {
     ClosingScene { carried_camera_raw: [i16; 3] },
     /// `FUN_00452770`: logical world 1 in phase 5.
     FirstWorld,
+    /// `FUN_004561A0`: the session restored from its entry snapshot
+    /// (`FUN_00448E50`) reloads that snapshot's world.
+    ReplayWorld,
 }
 
 // ── Shell events (menu side effects for the main loop) ──
@@ -250,6 +255,8 @@ pub enum ShellEvent {
     SettingChanged(SettingId, u32),
     /// A Cheats screen row's action on the live session.
     Cheat(crate::cheats::CheatMenuAction),
+    /// `FUN_004561A0`: "Replay this World?" Yes.
+    ReplayWorld,
     /// `FUN_0043CEB0`: the connection row was chosen.
     NetworkConnection,
     /// `FUN_0043CD50`: "Host session on this machine".
@@ -306,6 +313,8 @@ pub mod menu_strings {
     pub const SAVE_GAME: usize = 62;
     pub const LOAD_GAME: usize = 64;
     pub const USED_FOR_GAME_SETTINGS: usize = 80;
+    /// A corrupt slot row's name column (`FUN_0043BB20`, state 3).
+    pub const CORRUPT: usize = 79;
 }
 
 // ── Menu layout ──
@@ -340,6 +349,10 @@ pub struct MenuItem {
     /// original's glyphs 0x1B-0x1E instead of a number. Used by volume,
     /// sensitivity and Active Camera rows. When set, `value_label` is ignored.
     pub bar: Option<(u32, u32)>,
+    /// Further texts drawn on the row, left-aligned at the row origin plus
+    /// the given layout point's X (`FUN_0043BB20`'s slot rows: the rank at
+    /// point 10 and the name at point 9).
+    pub columns: Vec<(usize, String)>,
     /// RGBA icon pixels (carousel mode only).
     pub icon_rgba: Vec<u8>,
     /// Icon width in pixels.
@@ -524,6 +537,24 @@ impl MenuState {
             retype_scrolled_rows: false,
         }
     }
+}
+
+// ── The live session's save row ──
+
+/// Session `+0x14` (the name of the world the snapshot enters) and the
+/// `FUN_00456EF0` rank score the Save Game row reads from retail's session
+/// pointer `DAT_004F72C8`; `None` outside a game.
+static SESSION_SAVE_ROW: std::sync::Mutex<Option<(String, i32)>> = std::sync::Mutex::new(None);
+
+pub fn set_session_save_row(row: Option<(String, i32)>) {
+    *SESSION_SAVE_ROW.lock().unwrap_or_else(|e| e.into_inner()) = row;
+}
+
+fn session_save_row() -> Option<(String, i32)> {
+    SESSION_SAVE_ROW
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
 
 // ── View-building context ──
@@ -1596,6 +1627,7 @@ impl MenuShell {
                     });
                 }
                 MenuCommand::Cheat(action) => events.push(ShellEvent::Cheat(action)),
+                MenuCommand::ReplayWorld => events.push(ShellEvent::ReplayWorld),
                 MenuCommand::NetworkConnection => events.push(ShellEvent::NetworkConnection),
                 MenuCommand::NetworkHost => events.push(ShellEvent::NetworkHost),
                 MenuCommand::NetworkJoin(row) => events.push(ShellEvent::NetworkJoin(row as usize)),
@@ -1844,16 +1876,36 @@ fn build_overlay_view(overlay: &SlotOverlay, engine: &MenuEngine, ctx: &MenuCtx)
     let mut items = Vec::with_capacity(NUM_SLOTS);
     for i in 0..NUM_SLOTS {
         let settings_row = i == SETTINGS_SLOT;
-        let label = if settings_row {
+        // FUN_0043BB20: the row's number, then for an occupied row the rank
+        // (FUN_004490D0) at point 10 and the saved name at point 9; the
+        // settings row's string and a corrupt row's go in the name column.
+        let name = if settings_row {
             ctx.string_or(
                 menu_strings::USED_FOR_GAME_SETTINGS,
                 "Used for game settings",
             )
         } else {
-            ctx.saves.map(|s| s.slot_label(i)).unwrap_or_default()
+            match ctx.saves.map(|s| s.slot_status(i)) {
+                Some(SaveSlotStatus::Corrupt) => ctx.string_or(menu_strings::CORRUPT, "Corrupt"),
+                _ => ctx.saves.map(|s| s.slot_label(i)).unwrap_or_default(),
+            }
         };
+        let mut columns = Vec::new();
+        if let Some(score) = ctx.saves.and_then(|s| s.slot_rank_score(i)) {
+            columns.push((
+                10,
+                crate::world_complete_results::rank_name_from_strings(
+                    |id| ctx.cache.global_string(id),
+                    score,
+                ),
+            ));
+        }
+        if !name.is_empty() {
+            columns.push((9, name));
+        }
         items.push(MenuItem {
-            label,
+            label: (i + 1).to_string(),
+            columns,
             model_id: None,
             selectable: !settings_row,
             // Retail gives all fourteen slot rows flags 4 plus the selection
@@ -1935,6 +1987,7 @@ fn build_screen_view_with_selected(
             enabled: engine.item_available(item),
             value_label,
             bar,
+            columns: Vec::new(),
             icon_rgba,
             icon_width,
             icon_height,
@@ -2009,6 +2062,16 @@ fn item_label(item: &crate::menu_data::ItemDef, ctx: &MenuCtx) -> String {
         | DrawKind::Unknown { string_id, .. } => ctx.string(string_id as usize),
         DrawKind::Prop { label_id, .. } => label_id.and_then(|id| ctx.string(id as usize)),
         DrawKind::DynamicText => None,
+        // FUN_00450EF0: "%s: %s %s", the label, session +0x14 (FUN_00456C10)
+        // and the rank (FUN_00456E20); nothing without a session.
+        DrawKind::SessionSaveRow { string_id } => session_save_row().map(|(name, score)| {
+            let rank = crate::world_complete_results::rank_name_from_strings(
+                |id| ctx.cache.global_string(id),
+                score,
+            );
+            let label = ctx.string(string_id as usize).unwrap_or_default();
+            format!("{label}: {name} {rank}")
+        }),
         // FUN_00450E80: sprintf(string 138, world name), the name string
         // 152 + world, or 127 when that string is absent.
         DrawKind::CheatSkipWorld { string_id } => {
@@ -2762,6 +2825,7 @@ mod tests {
             items: (0..6)
                 .map(|index| MenuItem {
                     label: format!("Row {index}"),
+                    columns: Vec::new(),
                     model_id: None,
                     selectable: true,
                     enabled: true,
@@ -2906,7 +2970,11 @@ mod tests {
             assert!(row.is_interactive());
         }
         let settings_row = &shell.view().items[SETTINGS_SLOT];
-        assert_eq!(settings_row.label, "Used for game settings");
+        assert_eq!(settings_row.label, (SETTINGS_SLOT + 1).to_string());
+        assert_eq!(
+            settings_row.columns,
+            vec![(9, "Used for game settings".to_string())]
+        );
         assert!(!settings_row.selectable);
         assert!(settings_row.enabled);
 

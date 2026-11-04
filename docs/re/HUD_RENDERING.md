@@ -14,6 +14,12 @@ directly into the framebuffer and `FUN_0044AFF0` to plot nearby entities; the
 models 235..239 Targetter/crosshair path is a separate overlay. The older
 all-3D interpretation conflated those subsystems.
 
+Every world start turns the HUD setting (`+0x38`, read only by
+`FUN_004292B0`) on, then off again for a world past logical 36 or below
+phase 5: `FUN_004515E0` calls `FUN_0042A850`, the setting's only writer,
+before the load. Intro2 and the closing scene (overlays 50 and 49) are the
+port's two such worlds.
+
 Retail reloads every active OVL after a Display -> Resolution change
 (`FUN_0044E1F0` -> `FUN_00493A40`). Level-3 variant 0 therefore supplies the
 low orb at base `(7,165)` in 320x240, while variant 1 supplies the high orb at

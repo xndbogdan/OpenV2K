@@ -116,6 +116,8 @@ pub enum MenuCommand {
     /// to the engine; shell tracks its own slot list).
     SaveSlotPicked,
     LoadSlotPicked,
+    /// `FUN_004561A0`: replay the world from the session's entry snapshot.
+    ReplayWorld,
     /// A Cheats screen row's action on the session.
     Cheat(crate::cheats::CheatMenuAction),
     /// FUN_0043CEB0: initialize the connection and list its sessions.
@@ -466,6 +468,7 @@ impl MenuEngine {
             SelectAction::CheatAnyKey(action) | SelectAction::CheatOnSelect(action) => {
                 self.cheat_action(action)
             }
+            SelectAction::ReplayWorld => vec![MenuCommand::PlaySound(3), MenuCommand::ReplayWorld],
             SelectAction::CheatSkipWorld { .. } => vec![
                 MenuCommand::PlaySound(3),
                 MenuCommand::Cheat(crate::cheats::CheatMenuAction::SkipToWorld(
@@ -764,6 +767,25 @@ mod tests {
         }
         let cmds = engine.handle(MenuInput::Select);
         assert!(cmds.contains(&MenuCommand::QuitToFrontend));
+    }
+
+    #[test]
+    fn replay_this_world_yes_replays_from_the_entry_snapshot() {
+        let mut engine = MenuEngine::new(PAUSE_FULL, VIS_INGAME | crate::menu_data::VIS_INGAME_SP);
+        assert!(engine.push(0x4C4E78));
+        let screen = engine.current().unwrap();
+        let yes = screen
+            .items
+            .iter()
+            .position(|item| item.select == SelectAction::ReplayWorld)
+            .expect("FUN_004561A0 row");
+        while engine.selected() != yes {
+            engine.handle(MenuInput::Up);
+        }
+        assert_eq!(
+            engine.handle(MenuInput::Select),
+            [MenuCommand::PlaySound(3), MenuCommand::ReplayWorld]
+        );
     }
 
     #[test]

@@ -221,7 +221,7 @@ fn world_complete_results_present_authored_section_two_rows() {
         virus_percent: 0,
         time_trophy: false,
         hidden_trophy: false,
-        rank_name: "Absolute Beginner",
+        rank_score: 0,
     });
     assert!(runtime
         .presentation(|id| session.cache.global_string(id))
@@ -1341,4 +1341,50 @@ fn authored_tree_records_preserve_intrinsic_aliases_and_front_face_planes() {
             "{name}"
         );
     }
+}
+
+#[v2k_test_support::retail_test]
+fn rank_rows_and_the_map_save_row_read_retail_strings() {
+    use v2k_game::world_complete_results::rank_name_from_strings;
+    let session = session_with_pools();
+    // FUN_00456E50 over strings 286..=299, in retail's own spelling.
+    let rank = |score| rank_name_from_strings(|id| session.cache.global_string(id), score);
+    for (score, name) in [
+        (0, "Absolute Beginner"),
+        (2, "Absolute Beginner"),
+        (3, "Beginner"),
+        (5, "Trainee"),
+        (40, "Competant"),
+        (70, "Ace"),
+        (89, "Genius"),
+        (90, "Elite"),
+        (500, "Elite"),
+    ] {
+        assert_eq!(rank(score), name, "score {score}");
+    }
+
+    // FUN_00450EF0: "label: session +0x14 rank".
+    let config = GameConfig::default();
+    let ctx = MenuCtx {
+        cache: &session.cache,
+        config: &config,
+        saves: None,
+        display_modes: &v2k_render::DisplayModes::default(),
+    };
+    v2k_game::game_state::set_session_save_row(Some(("Alpine".into(), 5)));
+    let shell = MenuShell::new_single_player_menu(
+        &ctx,
+        v2k_game::game_state::SinglePlayerMenuKind::CampaignSave,
+    );
+    v2k_game::game_state::set_session_save_row(None);
+    let labels: Vec<&str> = shell
+        .view()
+        .items
+        .iter()
+        .map(|i| i.label.as_str())
+        .collect();
+    assert!(
+        labels.contains(&"Save Game: Alpine Trainee"),
+        "map save menu rows {labels:?}"
+    );
 }

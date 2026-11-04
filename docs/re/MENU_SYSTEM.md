@@ -1176,9 +1176,19 @@ a `Slot14` file. This corrects both the old three-slot assumption and the later
 interpretation of all 15 rows as game saves.
 
 For playable rows, `FUN_00448E70` classifies missing/unavailable (states 1/2),
-corrupt (3), and header/state probe-valid (4) files. `FUN_0043BB20` renders
-states 0..2 with a blank label, state 3 with the **"Corrupt"** resource string,
-and state 4 with the resolved level label plus the saved 32-byte name. Every one
+corrupt (3), and header/state probe-valid (4) files. `FUN_0043BB20` draws
+each row's number (`%d`, the row plus one), then in the name column (layout
+point 9) nothing for states 0..2, the **"Corrupt"** resource string (79) for
+state 3, and for state 4 the saved 32-byte name (`FUN_00449080`) with the
+slot's rank in the rank column (point 10, `FUN_004490D0`). The probe keeps
+that rank as the score `FUN_00456EF0` computes from the saved state: the
+worlds saved in its 37 control words (`+0x1B4`, bit 0) plus its controller
+byte `+0x126` (state `+0x14A`). `FUN_00456E50` names a score from global
+strings 286..299 ("< 0>Absolute Beginner" .. "<90>Elite", ascending): the
+last row whose number is at most the score, stopping at an equal one, or
+"Error: No ranking" when none is; retail spells rank 40 "Competant". The
+settings row draws string 80 in the name column. In the lab a save of the
+Alpine world reads "3   Alpine   Trainee", as the port's row does. Every one
 of the fourteen playable item records retains its selection callback and normal
 enabled flag; missing and corrupt rows are selectable feedback targets, not
 disabled menu items. Only the settings row lacks a callback.
@@ -1356,7 +1366,8 @@ map's Klaus is ported.
 | `FUN_0043BA50` | the save write that `FUN_0043B9A0` runs once the **Saving game** screen has flown in: `FUN_00449110` always returns 2, so its branches to `0x4C19E0` and `0x4C1660` never run; inside an error scope it writes slot `004CB3F8` (`FUN_00448CF0`) and replaces the screen with **Game Saved** (`0x4C1820`); an error plays menu sound 2 and replaces it with `0x4C1900` for code `0xA404`, else with **Access Failed** (`0x4C1890`) |
 | `FUN_00450D70` | the Cheats world selector's callback: left and right step the world number (`004D04E0`) between 1 and the maximum, skipping 13, 15, 16, 17, 29 and 32, with menu sound 1 (sound 0 at a limit); selecting plays sound 3, sets session `+28C`, clears the fly clocks (`FUN_0043C7D0`) and runs Skip to World (`FUN_004512E0`) |
 | `FUN_00450E80` | the Cheats world selector's draw: string 138 formatted with the world's name, string 152 + the world number (string 127 when absent) |
-| `FUN_00450EF0` | a status row's draw: `%s: %s %s` with its label, the session's text at `+14` (`FUN_00456C10`) and the current level's name (`FUN_00456E20`, over a fresh controller snapshot and the world's control words) |
+| `FUN_00450EF0` | the progress map save menu's Save Game row (`0x4D1090`): `%s: %s %s` with its label, the session's text at `+14` (`FUN_00456C10`) and the rank (`FUN_00456E20`, the name of `FUN_00456EF0`'s score over a fresh controller snapshot and the world's control words); nothing without a session. Session `+14` is the name `FUN_00451FB0` writes at each world load and at the map's exit, there the destination's; in the port it is the map checkpoint's name |
+| `FUN_004561A0` | "Replay this World?" (`0x4C4E78`) Yes: menu sound 3, the menu emptied at once (`FUN_0043C7D0`) and play resumed (`FUN_004512E0`), then the session restored from the entry snapshot (`FUN_00448E50`, `FUN_0042ECC0`, `FUN_00443560`, the cheats again through `FUN_0044F830`), `+292` set and `+290` leaving the world. Klaus closes over it (`4D0A30`), the map's first tick leaves at once for `+292` (`FUN_004555A0`) and the snapshot's world loads with Klaus opening over it; the hint history is kept. The snapshot is the one `FUN_00448E30` copied at the last map exit, the New Game or the loaded save; a New Game's restores the first world as it began, without cheats. The lab measures 56 passes from Yes to the load, the port 55 |
 
 ## Decompilation artifacts & tools
 
