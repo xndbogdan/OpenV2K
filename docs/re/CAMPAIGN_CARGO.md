@@ -343,8 +343,13 @@ The auxiliary phase is implemented for recovered constructors:
   zero-record conventional cargo. Its non-cargo branch manages the auxiliary
   owned list, including Type 64 uniqueness and a 15-object limit, while its
   cargo branch can use `443B50`. The final `451C00` loop does not inspect the
-  operation return before advancing. Recovered Type52/68/92 bodies are
-  admitted; an unrecovered type continues the walk without fabricating success.
+  operation return before advancing. Type52, Type68, Type74, Type83 and the
+  Type92/96/97/100 turrets are constructed at that pose; any other type is a
+  typed `UnsupportedConstructor` stop, and the walk continues without
+  fabricating success. The Cheats rows reach the same operation
+  ([CHEATS](CHEATS.md#port-status)). A cargo-branch body meets `443B50` only
+  when `418410` finds a free slot; with the cargo full it stays where it was
+  born, on the ground under the player for the grounded types.
 
 ## Validation
 

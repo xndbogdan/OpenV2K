@@ -1632,7 +1632,14 @@ terrain cell whose centre lies inside the sphere (`FUN_00433720`), and
 `FUN_00414C50` gives every live body within 500 whose state masked by
 `0xB800` is `0x8800` (clean, Virus) or `0xA800` (infected, Antidote) the
 infect (`FUN_00411250`) or cure (`FUN_00411320`) hit wrapper with no packet.
-Debris follows (`FUN_00441A50`, class 5 or 6, 40000). `FUN_0043F890` then plays
+Debris follows (`FUN_00441A50`, class 5 or 6, 40000). The cell walk steps
+X and Z from −500 by 256 up to 500 and writes a cell when its horizontal
+offset and its height (the cell byte << 5) both fall inside the sphere. Each
+body's `FUN_00411250`/`FUN_00411320` with no packet sets or clears bit
+`0x2000`, plays the type's `+0x82`/`+0x84` cue and runs the type's `+0x18`/`+0x1C`
+hook, but skips `FUN_00411030` and `FUN_00415040`; the port's impact owners
+each implement these entries with their packet, so the no-packet entry has to
+reach every one of them. `FUN_0043F890` then plays
 sound 62. Entity hits (`FUN_0043F6E0`) do not reach `FUN_00441850`. The port
 flies the particles and draws the hit burst, and logs a "Bomb tail held" stop
 for each such hit instead of running the tail and sound 62.
@@ -1663,6 +1670,38 @@ the owner's type and handle, flashes the screen (`FUN_00456750`), restores
 the admission and dies. Retail lab (Level 1, every cheat, F9 then A and `/`
 at tick 1010): three Type65 births that tick and three radials from
 `00407AE6` at tick 1080.
+
+**Defender Ball and Autobot.** Operation `0x38` is ported (see
+[CHEATS](CHEATS.md#port-status)); these two types still have no port
+constructor, so their rows stop there. Neither has capability `0x1000`, so
+both join the controller's `+220` list. What their owners must do:
+
+- Type63 (model 244, health 1, no components, alternate class 2): class 50's
+  initializer `FUN_0040B0F0` clears Tertiary then Secondary and builds the
+  Primary (`FUN_00407070`, tick `FUN_00407150`), then draws one shared random
+  word into the pitch. Each visit puts the ball on its owner (`+60`) with zero
+  velocity, adds the elapsed microseconds >> 7 to the pitch and
+  (>> 5) + (>> 4) to the roll. Its pair hook `FUN_0040C800` gives any touching
+  body but another Type63 a checked channel-1, 40,000 packet attributed to the
+  ball.
+- Type64 (model 248, health 3000, Sub-D and Sub-E, alternate class 11): class
+  53's `FUN_0040B200` clears Tertiary then Secondary and builds `FUN_00407280`.
+  Each visit zeroes the velocity; with a target from `FUN_00422CD0` (the
+  closest admitted body other than itself by the class record's range and
+  capability mask) its goal is the owner's position less 300 times the unit
+  vector from the target, its pitch decays by a quarter, and it steers through
+  Sub-D (`FUN_0041F660`) and fires its emitter (`FUN_00424650`) at the target;
+  without one it eases each Euler word a quarter of the way to the owner's and
+  takes as its goal the owner's position plus 150 and 350 times words of
+  the owner's basis rows (`+0C..+20`). It then
+  closes on the goal by q31(elapsed << 13, goal − position) per axis and damps
+  its roll by (elapsed >> 10) × roll >> 8.
+- The player's damage modifier `FUN_004484A0` walks the `+220` list: a live
+  Type63 takes the whole packet (`FUN_00415040`) and the craft takes none;
+  otherwise every live body in the list takes the packet too (admitted for it
+  with state bit `0x8000`) and the craft takes it as well. The port's player
+  damage paths stop with a logged block while that list is not empty, so these
+  owners and the walk must land together.
 
 **Lightning Shield.** No Section-12 type selects class 52, as a behavior or as
 its alternate, so `FUN_0040B1B0`, `FUN_004076E0` and `FUN_00407770` never run.

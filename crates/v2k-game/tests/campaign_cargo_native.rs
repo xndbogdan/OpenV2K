@@ -1126,3 +1126,73 @@ fn type123_miss_zero_record_constructs_and_attaches() {
         .drain_fresh_level1_type9_attract_attention_receipts(&mut world.entities)
         .unwrap();
 }
+
+/// Retail lab (Level 1, every cheat, Pause -> Cheats -> Cargo, each row once
+/// at tick 791): the player at `(19708, -604, 13935)`, attitude
+/// `0x4000/251/-12`, velocity `(2, 10, -129)`. The weight joins the one free
+/// cargo slot and moves with the player; the radar and the Remote Beamer are
+/// born on the ground under it, owned by it (`+60`), and stay there.
+#[v2k_test_support::retail_test]
+fn cheat_cargo_rows_birth_at_the_player_and_fill_the_free_slot() {
+    let mut world = World::new(13);
+    let player = world.entities.player().unwrap().id;
+    world
+        .entities
+        .entity_mut(player)
+        .unwrap()
+        .set_rotation_heading_pitch_roll_raw([0x4000, 251, -12]);
+    world
+        .entities
+        .entity_mut(player)
+        .unwrap()
+        .set_motion_raw([19708, -604, 13935], [2, 10, -129]);
+    for entity_type in [68, 83, 74] {
+        let extent = |id| {
+            world
+                .session
+                .cache
+                .global_model(id)
+                .map(|model| model.radius)
+        };
+        world
+            .entities
+            .dispatch_controller_operation_0x38(
+                entity_type,
+                &mut CampaignCargoRestoreContext {
+                    level: world.session.cache.level_desc().unwrap(),
+                    resources: EntityConstructionResources {
+                        terrain: world.session.cache.terrain(),
+                        terrain_objects: world.session.cache.terrain_objects(),
+                        model_extent_raw: Some(&extent),
+                    },
+                    retail_tick: 791,
+                    scheduler: &mut world.scheduler,
+                    world_fx: &mut world.fx,
+                    notifications: &mut world.notifications,
+                },
+            )
+            .unwrap();
+    }
+    let born = |entity_type| {
+        world
+            .entities
+            .iter_all()
+            .filter(|entity| entity.entity_type == entity_type)
+            .last()
+            .unwrap()
+    };
+    assert_eq!(world.attached(), [born(68).id]);
+    for entity_type in [83, 74] {
+        let body = born(entity_type);
+        assert_eq!(
+            body.position_raw(),
+            [19708, -883, 13935],
+            "Type{entity_type}"
+        );
+        assert_eq!(
+            body.collision.recent_relation_id_at_0x60,
+            RetailRuntimeValue::Known(Some(player))
+        );
+    }
+    assert!(world.entities.auxiliary_owned_entity_ids().is_empty());
+}

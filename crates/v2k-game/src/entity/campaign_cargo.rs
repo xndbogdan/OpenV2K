@@ -246,7 +246,7 @@ impl EntityManager {
             92 | 96 | 97 | 100 => {
                 self.append_native_zero_record_class29_turret(entity_type, context)
             }
-            83 => self.append_native_zero_record_portable_radar(context),
+            83 => self.append_native_portable_radar([[0; 3]; 3], context),
             123 => self.append_native_zero_record_type123(context),
             _ => Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type }),
         }
@@ -319,8 +319,11 @@ impl EntityManager {
         Ok(id)
     }
 
-    fn append_native_zero_record_portable_radar(
+    /// A Type83 from a zeroed record (`451C00`) or one at the player's pose
+    /// (operation `0x38`): `[position, attitude, velocity]`.
+    fn append_native_portable_radar(
         &mut self,
+        [position_raw, rotation_raw, velocity_raw]: [[i16; 3]; 3],
         context: &mut CampaignCargoRestoreContext<'_>,
     ) -> Result<u32, CampaignCargoRestoreError> {
         let entity_type = crate::portable_radar::ENTITY_TYPE;
@@ -341,7 +344,7 @@ impl EntityManager {
             .terrain
             .ok_or(CampaignCargoRestoreError::TerrainUnavailable)?;
         let constructor_surface_bits = crate::entity_initializer::constructor_surface_bits_at_tick(
-            [0; 3],
+            position_raw,
             terrain,
             context.retail_tick,
             context.level.raw_u32(0x84).expect("descriptor+84") != 0,
@@ -349,15 +352,28 @@ impl EntityManager {
         .ok_or(CampaignCargoRestoreError::TerrainUnavailable)?;
         let id = self.next_entity_id;
         let stamp = self.begin_common_body_attempt();
-        let request = NativeInstanceBodyRequest::zeroed(entity_type);
+        let request = NativeInstanceBodyRequest {
+            position_raw,
+            ..NativeInstanceBodyRequest::zeroed(entity_type)
+        };
         let mut entity = native_instance_body(id, stamp, &metadata, terrain, request);
+        // 104B0 copies the record's attitude and velocity and builds the
+        // basis from that attitude before the family constructor runs.
+        entity.set_rotation_heading_pitch_roll_raw(rotation_raw);
+        let [heading, pitch, roll] = rotation_raw;
+        entity.physical_body_basis_q31 =
+            RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(heading, pitch, roll));
+        entity.set_velocity_raw(velocity_raw);
         let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
         crate::portable_radar::publish_portable_radar(
             crate::portable_radar::PortableRadarConstruction {
                 entity: &mut entity,
                 allocation,
                 metadata: &metadata,
-                record: NativeCreationRecord::zeroed(request),
+                record: NativeCreationRecord {
+                    rotation: rotation_raw.map(|word| word as u16),
+                    ..NativeCreationRecord::zeroed(request)
+                },
                 terrain,
                 constructor_surface_bits,
             },
@@ -527,7 +543,14 @@ impl EntityManager {
         }
     }
 
-    fn dispatch_controller_operation_0x38(
+    /// `FUN_00445A90`'s operation `0x38`: a body of `entity_type` born at the
+    /// player's position, attitude and velocity, owned by it (`+60`). One
+    /// with capability `0x1000` goes to the cargo (`FUN_00443B50`, which
+    /// leaves it where it was born when the cargo is full); any other joins
+    /// the controller's `+220` list, unless it is a second Type64 or the list
+    /// already holds 15, when it is removed (`FUN_00410B70`). The campaign
+    /// restore and the Cargo and Weapons cheats both reach it.
+    pub fn dispatch_controller_operation_0x38(
         &mut self,
         entity_type: u32,
         context: &mut CampaignCargoRestoreContext<'_>,
@@ -583,7 +606,7 @@ impl EntityManager {
         context: &mut CampaignCargoRestoreContext<'_>,
     ) -> Result<u32, CampaignCargoRestoreError> {
         match entity_type {
-            52 | 68 => {
+            52 | 68 | 74 => {
                 let owner = self.append_native_class0_at_pose(
                     entity_type,
                     position_raw,
@@ -605,6 +628,8 @@ impl EntityManager {
                 )?;
                 Ok(id)
             }
+            83 => self
+                .append_native_portable_radar([position_raw, rotation_raw, velocity_raw], context),
             _ => Err(CampaignCargoRestoreError::UnsupportedConstructor { entity_type }),
         }
     }

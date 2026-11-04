@@ -3364,6 +3364,8 @@ fn run_game(
                                         world_fx: &mut world_fx,
                                         targetter: &mut targetter,
                                         main_base_level_abort: &mut main_base_level_abort,
+                                        cache: &session.cache,
+                                        scheduler: &mut specialized_actor_tasks,
                                         retail_tick,
                                     }
                                     .apply(code);
@@ -3380,6 +3382,8 @@ fn run_game(
                                         world_fx: &mut world_fx,
                                         targetter: &mut targetter,
                                         main_base_level_abort: &mut main_base_level_abort,
+                                        cache: &session.cache,
+                                        scheduler: &mut specialized_actor_tasks,
                                         retail_tick,
                                     }
                                     .all_weapons();
@@ -6818,6 +6822,8 @@ fn run_game(
                                     world_fx: &mut world_fx,
                                     targetter: &mut targetter,
                                     main_base_level_abort: &mut main_base_level_abort,
+                                    cache: &session.cache,
+                                    scheduler: &mut specialized_actor_tasks,
                                     retail_tick,
                                 }
                                 .all_weapons();
@@ -6844,6 +6850,8 @@ fn run_game(
                             world_fx: &mut world_fx,
                             targetter: &mut targetter,
                             main_base_level_abort: &mut main_base_level_abort,
+                            cache: &session.cache,
+                            scheduler: &mut specialized_actor_tasks,
                             retail_tick,
                         }
                         .apply(code);
@@ -13730,6 +13738,8 @@ struct CheatOperationContext<'a> {
     world_fx: &'a mut WorldFx,
     targetter: &'a mut TargetterRuntime,
     main_base_level_abort: &'a mut MainBaseAbortBridgeState,
+    cache: &'a v2k_game::resource_cache::ResourceCache,
+    scheduler: &'a mut v2k_game::specialized_actor_task_production::SpecializedActorTaskScheduler,
     retail_tick: u32,
 }
 
@@ -13742,6 +13752,38 @@ impl CheatOperationContext<'_> {
         if let Some(held) = v2k_game::cheats::held_operation(code) {
             eprintln!("Cheat operation {code:#x} held: {held:?} has no port owner");
             return false;
+        }
+        if let Some(entity_type) = v2k_game::cheats::add_to_hold_type(code) {
+            let Some(level) = self.cache.level_desc() else {
+                eprintln!("Cheat operation {code:#x} stopped: no world descriptor");
+                return false;
+            };
+            let model_extent_raw = |id| self.cache.global_model(id).map(|model| model.radius);
+            let result = self.entities.dispatch_controller_operation_0x38(
+                entity_type,
+                &mut v2k_game::entity::CampaignCargoRestoreContext {
+                    level,
+                    resources: v2k_game::entity::EntityConstructionResources {
+                        terrain: self.cache.terrain(),
+                        terrain_objects: self.cache.terrain_objects(),
+                        model_extent_raw: Some(&model_extent_raw),
+                    },
+                    retail_tick: self.retail_tick,
+                    scheduler: self.scheduler,
+                    world_fx: self.world_fx,
+                    notifications: self.notifications,
+                },
+            );
+            return match result {
+                Ok(()) => {
+                    log!("Cheat operation {code:#x}: Type{entity_type} born into the hold");
+                    true
+                }
+                Err(error) => {
+                    eprintln!("Cheat operation {code:#x} held: Type{entity_type}: {error:?}");
+                    false
+                }
+            };
         }
         let outcome = match apply_player_power_up_operation(
             self.entities,

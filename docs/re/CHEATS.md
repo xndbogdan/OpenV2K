@@ -152,12 +152,23 @@ Queen's closing scene.
 ## Port status
 
 Ported: the codes and digit keys, every row, the selector and its skip, the
-in-play keys, and the word's save and load. Held, each with a logged
-stop that also ends All weapons at that row:
+in-play keys, and the word's save and load.
 
-- operation `0x38` (Autobot, Defender Ball, the Cargo rows): a zero-record
-  body of the type born at the player (`FUN_00438080`) and attached to the
-  hold (`FUN_00414930` or `FUN_00443B50`);
+Operation `0x38` (Autobot, Defender Ball, the Cargo rows) runs the
+campaign restore's own owner (`EntityManager::dispatch_controller_operation_0x38`):
+a zero record of the type at the player's position, attitude and velocity
+(`FUN_00438080`), owned by the player (`+60`), then the cargo
+(`FUN_00443B50`, when `FUN_00418410` finds a slot) for a body with
+capability `0x1000`, or the controller's `+220` list. The weight (Type68),
+mini radar (Type83) and remote beam-out (Type74) rows work. A retail lab run
+(Level 1, every row once at tick 791) births the five bodies at the player
+`(19708, -604, 13935)`; the weight takes the one free slot and the radar,
+beamer, native and scientist stay on the ground under the player at Y -883.
+The port's test repeats the weight, radar and beamer. A type with no port
+constructor is a logged stop that also ends All weapons at that row:
+
+- the natives and scientists (Type9, 95, 86, 78; Type8, 91, 90, 79, 116, 7);
+- the Defender Ball (Type63) and the Autobot (Type64);
 - operation `0x39` (Megablast): controller `+195` and a Type65 birth.
 
 LSHIFT+D targets the player; a possessed body in `+2A8` is not modelled.

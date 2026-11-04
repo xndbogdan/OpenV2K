@@ -900,7 +900,7 @@ address,status,note
 0x00450E80,implemented,Cheats world selector draw: string 138 with the world's name (docs/re/CHEATS.md)
 0x004512E0,implemented,pause count resume after the skip or the pause fly-out (docs/re/CHEATS.md)
 0x0043C7D0,implemented,menu stack emptied at once by the skip (docs/re/CHEATS.md)
-0x00455F50,implemented,Cheats row grant with cheat 3: 413600 on the player; operations 0x38/0x39 held (docs/re/CHEATS.md)
+0x00455F50,implemented,Cheats row grant with cheat 3: 413600 on the player; operation 0x38 through the shared hold owner; 0x39 held (docs/re/CHEATS.md)
 0x00455FD0,implemented,Larger Cargo Capacity row on any key (docs/re/CHEATS.md)
 0x00456050,implemented,All weapons row (docs/re/CHEATS.md)
 0x00455E20,implemented,F9 / All weapons: every Weapons row's operation; stops at a held operation (docs/re/CHEATS.md)
