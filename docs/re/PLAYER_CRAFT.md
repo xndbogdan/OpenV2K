@@ -1584,12 +1584,12 @@ The controller is the player's `0x5AC`-byte record (`+68` its body, `+74` the
 
 | Routine | Does |
 | --- | --- |
-| `FUN_00421800` | starts the lock search (mode 1) when idle or more than 1 s into the current mode; reached from the projectile launch `FUN_0044E770` |
-| `FUN_00420C60` | advances the player's mind-control lock (the Primary's record): searching (mode 1) for up to 1.5 s through `FUN_00420E00`, locked (mode 2) while `FUN_00421070` keeps the target in its cone, and after 1 s locked taking control of it through `FUN_004480E0`; it also spins the reticle angle (`+48`) and grows the reticle word `+44` up to `0x600` |
-| `FUN_00420E00` | the lock's search: the closest live, admitted, solid body with capability bit 3 within 4/3 of the range and inside a narrow forward cone (each lateral offset under half the forward distance), scored by distance plus twice the offsets |
-| `FUN_00421070` | keeps a lock while the target lives, lies within four times the range, and stays ahead (forward distance over 0x80 with both lateral offsets no larger) |
-| `FUN_00421230` | draws the lock reticle (draw callback `FUN_00421570`) along the line from the craft to a locked target (mode 2), storing that distance in `+44` |
-| `FUN_004480E0` | the mind-control takeover (from `FUN_00420C60`): gives the target Type46's behavior source (`+D0`) and the controller (`+88`), gives the old body Type88's, points the controller at the target (`+68`, the old body at `+6C`), reinstalls both behaviors (`FUN_0040AC60`), clears the target's fan and record flags (`FUN_0041B9B0`, `FUN_00424F10`), records the body in the session (`FUN_00456770`), and holds controller `+70` at 60000 (500 when the install failed) |
+| `FUN_00421800` | starts the lock search (mode 1), with zero mode time and angle, when idle or more than 1 s into the current mode; reached from the projectile launch `FUN_0044E770`, which drains the craft's queued shots at its draw |
+| `FUN_00420C60` | advances the player's mind-control lock, from `FUN_00420A50` at the end of the mode controller and only outside network play (`004F741C`): adds the frame's microseconds to the mode time and sets the reticle word `+44` to `((time >> 10) * 0x600) / 0x5B8`, at most `0x600`; a dying or dead shooter ends it; searching (mode 1) turns the angle `+48` by `((dt >> 6) * 0x600) / 0x5B8D` and below 1.5 s of mode time runs `FUN_00420E00`, whose find zeroes the locked time and locks (mode 2), and at 1.5 s ends; locked turns the angle by `((dt >> 6) * -0x600) / 0xB71B`, falls back to searching (keeping the mode time) when `FUN_00421070` fails, and otherwise adds the frame to the locked time `+40` and past 1 s ends the lock and takes control of the target through `FUN_004480E0`; the angle is folded into `0..=0x80`, and only an end zeroes the mode time |
+| `FUN_00420E00` | the lock's search over the live list: a body with capability bit 3, not the shooter, neither dying nor dead, without a recent relation with the shooter (`FUN_00411A20`), admitted (`0x8000`) and solid (no `0x8000000`), whose octagonal distance (`FUN_00425370`) is below 4/3 of the reticle word; its offset on the shooter's matrix rows must have a forward part over `0x100` and each lateral part under half of it; the lowest forward plus twice the lateral parts wins (the first in list order on a tie) and is stored in `+3C` |
+| `FUN_00421070` | keeps a lock while the target lives, lies within four reticle words, and stays ahead (forward part over `0x80` with neither lateral part larger) |
+| `FUN_00421230` | draws the lock reticle: instances of global model 76 every `0x80` from the angle `+48`, with the frame callback `FUN_00421570` (selector 0 the world clock, 1 the instance's size word); searching, along the craft's forward row out to the reticle word, size `0x14` and 0 for the instance whose next step passes the end; locked, along the normalized line to the target with a matrix built on it, out to the distance (stored in `+44`) plus the target model's radius (`+08`), size `0x14` up to the sphere and then `sqrt(r^2 - t^2) * 0xFFFF / 1024`, `t` the next step past the distance |
+| `FUN_004480E0` | the mind-control takeover (from `FUN_00420C60`): gives the target Type46's behavior source (`+D0`) and the controller (`+88`), gives the old body Type88's, points the controller at the target (`+68`, the old body at `+6C`), reinstalls both behaviors (`FUN_0040AC60`), clears the old body's Sub-G attitude flag and weapon fire-enable word (`FUN_0041B9B0`, `FUN_00424F10`, by the old body's type description `+20` and `+18`), records the target in the session (`FUN_00456770`), and holds controller `+70` at 60000 (500 when the install failed) |
 
 | `FUN_00446D70` | ends a takeover (controller `+70` reaching zero in `FUN_00446640`, or its old body dying): the old body (`+6C`) gets Type46's behavior source and the controller back, the target loses both, and the two handles swap back; when both behaviors reinstall, a released Type98 only moves the session's view to the craft, any other target leaves a Type98 MindBall at it (`FUN_00409950`) that flies to the craft and hands the view back when it ends (`FUN_00409420`); a failed reinstall swaps the handles back and retries in 500 ms |
 | `FUN_00448760` | a Hive swallowing the possessed body sets controller `+70` to 1, so control returns on the next Player Control frame |
@@ -1601,14 +1601,37 @@ The Possession Ray is weapon selector `0x1B` (Cheats -> Weapons code
 record is the shooter body's component `+0x38`: mode `+34`, mode time `+38`,
 target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
 
-**Port status: held.** The takeover makes the target's own body run Player
-Control (`FUN_00446640`, with the integrator its movement style selects from
+**Port status: the lock is ported; the takeover is held.** Selector `0x1B`
+fires on its 400 ms cadence with no sound (`FUN_00424650` skips a zero sound)
+and the A/B gun phase of any weapon; each launch, drained at the craft's
+draw, starts the lock. The lock's advance, search, hold test and reticle run
+as retail's: the retail lab's Level 1 lock (the craft placed 1200 behind a
+Type17 at 20 ms passes, the ray fired once) is reproduced pass for pass,
+from the 1.04 s search through the 1 s lock to the takeover. The event log's
+`player` line carries the record while it runs (`mind_control_lock`: mode,
+mode time, target id, locked time, reticle, angle).
+
+The takeover makes the target's own body run Player Control
+(`FUN_00446640`, with the integrator its movement style selects from
 `0x4CD8D0`) over that body's type components, and the craft run Passive
-Player. The port's Player Control drives only the player craft, so the lock,
-the takeover, the release and the MindBall stay unported together: a lock
-without its takeover would show a reticle that never ends in one. Holding the trigger with selector `0x1B` selected logs one
-"Possession Ray held" stop per run and fires nothing; the A/B gun phase is
-kept as for any unresolved selector.
+Player. The port's Player Control drives only the player craft, so where
+retail's lock ends in `FUN_004480E0` the port ends the lock and logs one
+"Possession Ray takeover held" stop per run. A lock value the port does not
+hold for a body (its state word, its recent relation, the locked target's
+model) ends the lock with a logged stop.
+
+What the held part does in retail, from the same lab run carried on with
+the controls: the takeover happens in the craft's Player Control visit, and
+the Type17 later in the live list already runs Player Control in that pass,
+with movement style 0 (hover), so the session's followed body (`+2A8`) and
+the camera's focus spring move to it at once. Thrust and steering keys
+drive the Type17 through its own components. Controller `+70` counts the
+60000 ms down by the frame's milliseconds; at zero (pass 3000 after the
+takeover) the Type17 gets its own behavior back, a Type98 MindBall is born
+at its position and becomes the followed body, and the session follows the
+craft again when the MindBall's flight ends, 140 passes (2.8 s) later in
+that run. The craft, meanwhile running Passive Player, settled where it
+was.
 
 ### Special weapons
 
@@ -1619,7 +1642,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 
 | Weapon | Row | Firing | Body and program | Port |
 | --- | --- | --- | --- | --- |
-| Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | held |
+| Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | lock ported; takeover held |
 | Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | ported |
 | Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | ported |
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | ported |
@@ -2144,8 +2167,8 @@ it through the particle path its virus carrier already runs.
 its alternate, so `FUN_0040B1B0`, `FUN_004076E0` and `FUN_00407770` never run.
 
 The port fires nothing for a selector without a firing profile and logs one
-stop per selector and run while its trigger is held: "Possession Ray held"
-for `0x1B`, "Weapon selector ... held" for the others.
+stop per selector and run while its trigger is held: "Weapon selector ...
+held".
 
 ### Wind on trail particles
 

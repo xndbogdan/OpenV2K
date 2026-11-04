@@ -5171,7 +5171,8 @@ impl WorldFx {
 
     /// The batch's one descriptor cue, which `FUN_00424650` plays as it fires.
     pub fn queue_primary_fire_sound(&mut self, events: &[PrimaryFireEvent]) {
-        if let Some(event) = events.last() {
+        // FUN_00424650 skips a descriptor without a sound (the Possession Ray).
+        if let Some(event) = events.last().filter(|event| event.sound.sound_id != 0) {
             // FUN_00424650's descriptor cue goes through FUN_0044F480.
             self.send_network_sound(
                 event.sound.sound_id as u16,

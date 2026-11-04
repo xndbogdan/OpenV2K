@@ -71,6 +71,7 @@ impl GameplayOverlayFrame {
 pub(super) struct PausedGameplayScene {
     world: FrozenWorldPresentationSnapshot,
     targetter: TargetterRuntime,
+    mind_control_lock: PlayerMindControlLock,
     retail_tick: u32,
 }
 
@@ -78,11 +79,13 @@ impl PausedGameplayScene {
     pub fn capture(
         source: FrozenWorldPresentationSource<'_>,
         targetter: TargetterRuntime,
+        mind_control_lock: PlayerMindControlLock,
         retail_tick: u32,
     ) -> Self {
         Self {
             world: FrozenWorldPresentationSnapshot::capture(source),
             targetter,
+            mind_control_lock,
             retail_tick,
         }
     }
@@ -92,6 +95,7 @@ impl PausedGameplayScene {
             let mut targetter = self.targetter;
             let mut lights = v2k_render::TerrainLightWindow::default();
             let mut pending_player_shots = Vec::new();
+            let mut mind_control_lock = self.mind_control_lock.clone();
             let mut entity_weapon_error_reported = false;
             let _ = draw_gameplay_world(
                 renderer,
@@ -113,6 +117,7 @@ impl PausedGameplayScene {
                     abort_frame: draw.abort_frame,
                     specialized_actor_tasks: frozen.specialized_actor_tasks,
                     pending_player_shots: &mut pending_player_shots,
+                    mind_control_lock: &mut mind_control_lock,
                     entity_weapon_error_reported: &mut entity_weapon_error_reported,
                     player_craft: draw.craft,
                     player_hull: draw.hull,

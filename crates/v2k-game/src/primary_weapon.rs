@@ -148,7 +148,12 @@ pub struct PrimaryWeaponProfile {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerProjectileDelivery {
     Particle,
-    NativeEntityWeapon { entity_type: u16 },
+    NativeEntityWeapon {
+        entity_type: u16,
+    },
+    /// Selector `0x1B`: the launch starts the shooter's mind-control lock
+    /// (`FUN_00421800`) and fires nothing.
+    MindControlLock,
 }
 
 pub const DEFAULT_PRIMARY_PROFILE: PrimaryWeaponProfile = PrimaryWeaponProfile {
@@ -178,14 +183,8 @@ pub const UPGRADED_PRIMARY_PROFILE: PrimaryWeaponProfile = PrimaryWeaponProfile 
 /// Resolve the two primary descriptors proven by the Level-1 runtime trace.
 /// The Possession Ray's selector. Its `DAT_004D02C0` row has neither a
 /// particle nor a body: `FUN_0044E770` only starts the mind-control lock
-/// (`FUN_00421800`), so it never resolves a firing profile here.
+/// (`FUN_00421800`).
 pub const POSSESSION_RAY_SELECTOR: u32 = 0x1B;
-
-/// The Possession Ray's stop, logged once when its trigger is first held.
-/// The lock (`FUN_00420C60`) ends in `FUN_004480E0`'s takeover, which runs
-/// Player Control on the target's own body; the port's Player Control drives
-/// only the player craft.
-pub const POSSESSION_RAY_HELD: &str = "Possession Ray held: the mind-control lock (FUN_00421800, FUN_00420C60) and takeover (FUN_004480E0) need Player Control on a body other than the craft, which the port does not run";
 
 pub const fn primary_weapon_profile(selector: u8) -> Option<PrimaryWeaponProfile> {
     match selector {
@@ -216,6 +215,25 @@ pub fn fire_profile_from_descriptor(descriptor: &WeaponDescriptor) -> Option<Pri
         return Some(profile);
     }
     let row = projectile_class_row(selector)?;
+    if selector == POSSESSION_RAY_SELECTOR {
+        return Some(PrimaryWeaponProfile {
+            selector: selector_u8,
+            delivery: PlayerProjectileDelivery::MindControlLock,
+            repeat_interval: Duration::from_micros(descriptor.cadence_micros()),
+            projectile: PrimaryProjectileSpec {
+                projectile_class: 0,
+                sprite_id: 0,
+                speed_raw: row.speed_raw,
+                speed_world_per_second: raw_velocity_to_world_per_second(row.speed_raw),
+                lifetime_ticks: 0,
+            },
+            targetter_trajectory: fun_0044ea60(selector),
+            auxiliary: PRIMARY_AUXILIARY_SPEC,
+            emits_auxiliary: descriptor.emits_auxiliary_command(),
+            sound_id: usize::from(descriptor.firing_sound_id()),
+            joint_decay_rate: descriptor.joint_decay_rate(),
+        });
+    }
     if matches!(selector, 3..=5 | 9 | 0x11) {
         return Some(PrimaryWeaponProfile {
             selector: selector_u8,
@@ -1006,14 +1024,17 @@ mod tests {
     }
 
     #[test]
-    fn possession_ray_resolves_no_firing_profile() {
+    fn possession_ray_fires_the_lock_silently_every_400_ms() {
         // The Cheats -> Weapons row's code: 999 of selector 0x1B.
         let mut inventory = WeaponInventory::new();
         inventory.acquire_weapon(PowerUpPayload::from_runtime_word(0x0003_e71b));
         let descriptor = *inventory.selected_descriptor();
         assert_eq!(descriptor.selector(), POSSESSION_RAY_SELECTOR);
         assert_eq!(descriptor.ammunition(), Ammunition::Infinite);
-        assert!(fire_profile_from_descriptor(&descriptor).is_none());
+        let profile = fire_profile_from_descriptor(&descriptor).unwrap();
+        assert_eq!(profile.delivery, PlayerProjectileDelivery::MindControlLock);
+        assert_eq!(profile.repeat_interval, Duration::from_millis(400));
+        assert_eq!((profile.sound_id, profile.emits_auxiliary), (0, false));
     }
 
     /// World 20's Seedpods power-up (`0x6410`): selector 0x10 fires

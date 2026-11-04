@@ -663,8 +663,8 @@ controller, and leaves the target's capability word alone, so a possessed
 creature collects the people it touches. Every type whose behavior
 choices or alternate name Player Control (24), Dying bounce (25) or
 Passive Player (66), namely types 46, 51 and 88, carries capability
-`0x5`. The port holds the Possession Ray, so no port body reaches this
-branch; it waits for the takeover.
+`0x5`. The port holds the Possession Ray's takeover, so no port body
+reaches this branch; it waits for the takeover.
 
 Pairs still resolved apart from the walk, after it: the player's other pairs
 (the [player adapter](../../crates/v2k-game/src/player_active_contact.rs),
