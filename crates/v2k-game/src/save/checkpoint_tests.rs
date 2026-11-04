@@ -112,7 +112,7 @@ fn checkpoint_roundtrip_replaces_direct_native_and_preserves_parent_copy() {
     assert_eq!(restore.cargo.carried_identities()[1].entity_type(), 0);
     assert_eq!(restore.cargo.auxiliary_owned_types()[0], 49);
     assert_eq!(restore.campaign.control_slot_bits(2), Some(0x208));
-    assert_eq!(restore.controller_195_raw, 0x56);
+    assert_eq!(restore.capabilities.megablasts(), 0x56);
     let _ = fs::remove_dir_all(root);
 }
 

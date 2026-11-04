@@ -21,7 +21,9 @@ pub(super) mod cargo;
 #[cfg(test)]
 mod cargo_tests;
 mod live;
+mod megablast;
 mod zero_record;
+pub use megablast::MegablastBirth;
 pub(crate) use zero_record::NativeType68ZeroRecordConstruction;
 #[cfg(test)]
 mod flare_tests;
@@ -113,6 +115,13 @@ pub(super) fn authenticate_metadata(
                 Err(Class0ActorError::Metadata)
             }
         }
+        65 => {
+            if crate::main_base_type54_abort::megablast_metadata(entity_type, metadata) {
+                Ok(())
+            } else {
+                Err(Class0ActorError::Metadata)
+            }
+        }
         110 => {
             if crate::main_base_type54_abort::queen_metadata(entity_type, metadata) {
                 Ok(())
@@ -192,7 +201,7 @@ fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
 
 /// The class of a row's singleton Always choice: class36 for Type50,
 /// class38 for Type89, class16 for Type36, class59 for Type74, class67 for
-/// Type110, class0 for every other row.
+/// Type110, class55 for Type65, class0 for every other row.
 pub(crate) fn living_class(entity_type: u32) -> u32 {
     crate::main_base_type54_abort::class0_host_living_class(entity_type).unwrap_or(0)
 }
@@ -228,6 +237,19 @@ fn publish_living_graph(entity: &mut Entity, context: BehaviorContextRuntime, li
             }
             if living_class == 67 {
                 publish_queen_tasks(entity);
+            }
+            if living_class == crate::megablast::BEHAVIOR_CLASS {
+                // FUN_0040B140 clears T then S; FUN_00407800's Primary has no
+                // timeout. A zero +88 word (the pickup's) starts empty in mode
+                // 0; the deploy's births replace it with their word.
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::Megablast(
+                        crate::megablast::MegablastTaskState::new(0),
+                    )),
+                );
             }
             if living_class == 59 {
                 // FUN_0040C530 clears T then S and FUN_00405420 stores a Primary with no

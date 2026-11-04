@@ -1263,6 +1263,10 @@ pub struct SpecializedActorTaskProductionPass {
     pub terrain_changed: bool,
     /// The dying Queen's `FUN_00456F20`, when it ran in this pass.
     pub closing_scene: Option<crate::queen::ClosingSceneMove>,
+    /// A Megablast's `FUN_00456740` (session `+293`) in this pass.
+    pub terrain_flash: bool,
+    /// A Megablast's `FUN_00456750` (session `+295`) in this pass.
+    pub full_frame_flash: bool,
 }
 
 /// Receipt scheduler whose storage order is never execution order.
@@ -4606,6 +4610,8 @@ impl SpecializedActorTaskScheduler {
                 progressive_death_presentation_requested: false,
                 terrain_changed: false,
                 closing_scene: None,
+                terrain_flash: false,
+                full_frame_flash: false,
             };
         }
         let actor_resource_block = if resources.level_terrain().is_none() {
@@ -4659,6 +4665,8 @@ impl SpecializedActorTaskScheduler {
         let mut sea_level_changed = false;
         let mut explosion_lights = Vec::new();
         let mut progressive_death_presentation_requested = false;
+        let mut terrain_flash = false;
+        let mut full_frame_flash = false;
         let mut terrain_changed = false;
         let mut closing_scene = None;
 
@@ -6095,7 +6103,13 @@ impl SpecializedActorTaskScheduler {
                         entity.id == owner.entity_id()
                             && entity.entity_type == crate::queen::ENTITY_TYPE
                     });
-                    if queen {
+                    // A Megablast's FUN_004566E0 reaches other bodies too.
+                    let megablast = manager.iter_all().any(|entity| {
+                        entity.id == owner.entity_id()
+                            && entity.entity_type == crate::megablast::ENTITY_TYPE
+                    });
+                    let world_reach = queen || megablast;
+                    if world_reach {
                         debug_assert!(self.owners.is_empty());
                         self.owners.append(&mut pending);
                         self.owners.append(&mut retained);
@@ -6105,7 +6119,7 @@ impl SpecializedActorTaskScheduler {
                         |manager: &mut EntityManager,
                          resources: &mut crate::resource_cache::ResourceCache,
                          world_fx: &mut WorldFx,
-                         victim: u32|
+                         call: crate::queen::Class0WorldCall|
                          -> Result<(), crate::entity::Class0ActorError> {
                             let SpecializedActorTaskWorld::Playing {
                                 player_hull,
@@ -6115,6 +6129,57 @@ impl SpecializedActorTaskScheduler {
                                 return Err(crate::entity::Class0ActorError::Runtime(
                                     "Queen death sweep: no player world",
                                 ));
+                            };
+                            let victim = match call {
+                                crate::queen::Class0WorldCall::Death(victim) => victim,
+                                crate::queen::Class0WorldCall::Radial {
+                                    origin_raw,
+                                    template,
+                                } => {
+                                    let statics = crate::intro2_radial::apply_static_radial_damage(
+                                        resources,
+                                        &mut *static_damage,
+                                        world_fx,
+                                        origin_raw,
+                                        template,
+                                    )
+                                    .map_err(|error| {
+                                        eprintln!(
+                                            "Megablast radial: static cells stopped: {error:?}"
+                                        );
+                                        crate::entity::Class0ActorError::Runtime(
+                                            "Megablast radial: static cells",
+                                        )
+                                    })?;
+                                    sweep_terrain_changed |= statics.iter().any(|outcome| {
+                                        matches!(
+                                            outcome,
+                                            crate::static_damage::StaticDamageOutcome::ImmediateBurn { .. }
+                                                | crate::static_damage::StaticDamageOutcome::BurnedKind10Transition { .. }
+                                        )
+                                    });
+                                    let dynamic =
+                                        self.apply_playing_radial_damage(PlayingRadialFrame {
+                                            resources,
+                                            static_damage: &mut *static_damage,
+                                            active_terminal_calls: Vec::new(),
+                                            entities: manager,
+                                            player_hull,
+                                            extra_lives: *extra_lives,
+                                            world_fx,
+                                            notifications: &mut *notifications,
+                                            retail_tick,
+                                            origin_raw,
+                                            template,
+                                        });
+                                    if let Some(block) = dynamic.blocked {
+                                        eprintln!("Megablast radial: live list stopped: {block:?}");
+                                        return Err(crate::entity::Class0ActorError::Runtime(
+                                            "Megablast radial: live list",
+                                        ));
+                                    }
+                                    return Ok(());
+                                }
                             };
                             let changed = crate::main_base_abort_production::run_generic_death(
                                 victim,
@@ -6149,14 +6214,18 @@ impl SpecializedActorTaskScheduler {
                             world_fx,
                             elapsed_micros,
                             retail_tick,
-                            generic_death: if queen {
+                            generic_death: if world_reach {
                                 Some(&mut generic_death)
                             } else {
                                 None
                             },
+                            terrain_flash: false,
+                            full_frame_flash: false,
                         },
                     );
-                    if queen {
+                    terrain_flash |= tick.terrain_flash;
+                    full_frame_flash |= tick.full_frame_flash;
+                    if world_reach {
                         let live_order: Vec<_> = manager.retail_live_order_ids().collect();
                         let current = live_order.iter().position(|&id| id == owner.entity_id());
                         for scheduled in std::mem::take(&mut self.owners) {
@@ -6880,6 +6949,8 @@ impl SpecializedActorTaskScheduler {
             sea_level_changed,
             explosion_lights,
             progressive_death_presentation_requested,
+            terrain_flash,
+            full_frame_flash,
             terrain_changed,
             closing_scene,
         }
@@ -7920,6 +7991,8 @@ fn blocked_production_pass(
         progressive_death_presentation_requested: false,
         terrain_changed: false,
         closing_scene: None,
+        terrain_flash: false,
+        full_frame_flash: false,
     }
 }
 
@@ -11371,6 +11444,8 @@ mod tests {
                 progressive_death_presentation_requested: false,
                 terrain_changed: false,
                 closing_scene: None,
+                terrain_flash: false,
+                full_frame_flash: false,
             }
         );
         assert_eq!(

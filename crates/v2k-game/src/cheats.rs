@@ -326,26 +326,6 @@ pub fn set_skip_world(world: u32) {
     SKIP_WORLD.store(world, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// A player operation the cheats reach whose `FUN_00445A90` branch has no
-/// port owner. Each stops its cheat with this logged reason.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HeldCheatOperation {
-    /// Operation `0x39`: controller `+195` gains the count (at most 4) and a
-    /// Type65 is born at the player.
-    Megablast { count: i32 },
-}
-
-/// Whether `code`'s operation is one the port holds.
-pub fn held_operation(code: u32) -> Option<HeldCheatOperation> {
-    let payload = crate::weapon_inventory::PowerUpPayload::from_runtime_word(code);
-    match payload.selector {
-        0x39 => Some(HeldCheatOperation::Megablast {
-            count: payload.amount,
-        }),
-        _ => None,
-    }
-}
-
 /// The type operation `0x38` births into the hold, when `code` is one
 /// (`EntityManager::dispatch_controller_operation_0x38`).
 pub fn add_to_hold_type(code: u32) -> Option<u32> {
@@ -616,13 +596,7 @@ mod tests {
         assert_eq!(codes.len(), 25);
         assert_eq!(codes[0], 0x3E712);
         assert_eq!(codes[24], 0x3E71F);
-        // Megablast is the held operation; Autobot and Defender Ball go to
-        // the hold.
-        let held: Vec<_> = codes
-            .iter()
-            .filter_map(|&code| held_operation(code))
-            .collect();
-        assert_eq!(held, vec![HeldCheatOperation::Megablast { count: 5 }]);
+        // Autobot and Defender Ball go to the hold; the Megablast runs.
         let hold: Vec<_> = codes
             .iter()
             .filter_map(|&code| add_to_hold_type(code))

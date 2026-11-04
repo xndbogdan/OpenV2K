@@ -41,8 +41,6 @@ pub struct NativeSaveRestore {
     pub session_flags_raw: u32,
     /// 443560 writes saved-profile +148 to entity +50, the shield buffer.
     pub pre_health_damage_buffer_raw: i32,
-    /// Controller +195, retained separately from lives/cargo/trophy bytes.
-    pub controller_195_raw: u8,
 }
 
 impl NativeSaveRestore {
@@ -107,12 +105,12 @@ impl NativeSaveRestore {
             mode,
             fuel_raw: word(payload, 0x38) as i32,
             inventory,
-            capabilities: PlayerCapabilities::from_native_flags(payload[0x147]),
+            capabilities: PlayerCapabilities::from_native_flags(payload[0x147])
+                .with_megablasts(payload[0x145]),
             cargo,
             campaign,
             session_flags_raw: word(payload, 0x1b0),
             pre_health_damage_buffer_raw: word(payload, 0x16c) as i32,
-            controller_195_raw: payload[0x145],
         })
     }
 

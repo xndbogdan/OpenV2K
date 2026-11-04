@@ -38,6 +38,7 @@ pub const TYPE89_ENTITY_TYPE: u32 = 89;
 pub const TYPE118_ENTITY_TYPE: u32 = 118;
 pub const TYPE36_ENTITY_TYPE: u32 = 36;
 pub const TYPE74_ENTITY_TYPE: u32 = 74;
+pub const TYPE65_ENTITY_TYPE: u32 = crate::megablast::ENTITY_TYPE;
 pub const TYPE110_ENTITY_TYPE: u32 = crate::queen::ENTITY_TYPE;
 
 /// A row on the class0 constructor whose single program is not class0's
@@ -58,8 +59,9 @@ struct Class0HostRow {
     alternate_class: u32,
     death_sound_id: Option<u16>,
     axis: CommonAxisDescriptor,
-    /// Sub-K alone, with this many model words from selector 1.
-    sub_k_words: u8,
+    /// Sub-K alone (`[0, 0]` for none), with this many model words.
+    sub_k: [u8; 2],
+    model_variables: u32,
 }
 
 const NO_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
@@ -78,7 +80,7 @@ const NO_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
 /// 36 carry Sub-K, death cue 62 and their own axis, and explode through
 /// class1. World 47's Type110 Queen lives and dies in class67, with eight
 /// Sub-K words.
-const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
+const CLASS0_HOST_ROWS: [Class0HostRow; 10] = [
     Class0HostRow {
         entity_type: LEVEL_ONE_TYPE54_ENTITY_TYPE,
         model: LEVEL_ONE_TYPE54_MODEL_ID as u16,
@@ -91,7 +93,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 0,
+        sub_k: [0, 0],
+        model_variables: 0,
     },
     Class0HostRow {
         entity_type: TYPE72_ENTITY_TYPE,
@@ -105,7 +108,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 0,
+        sub_k: [0, 0],
+        model_variables: 0,
     },
     Class0HostRow {
         entity_type: TYPE85_ENTITY_TYPE,
@@ -119,7 +123,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 0,
+        sub_k: [0, 0],
+        model_variables: 0,
     },
     Class0HostRow {
         entity_type: TYPE50_ENTITY_TYPE,
@@ -133,7 +138,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 38,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 0,
+        sub_k: [0, 0],
+        model_variables: 0,
     },
     Class0HostRow {
         entity_type: TYPE89_ENTITY_TYPE,
@@ -147,7 +153,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 1,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 0,
+        sub_k: [0, 0],
+        model_variables: 0,
     },
     Class0HostRow {
         entity_type: TYPE118_ENTITY_TYPE,
@@ -161,7 +168,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 65,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 0,
+        sub_k: [0, 0],
+        model_variables: 0,
     },
     Class0HostRow {
         entity_type: TYPE36_ENTITY_TYPE,
@@ -175,7 +183,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 16,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 0,
+        sub_k: [0, 0],
+        model_variables: 0,
     },
     Class0HostRow {
         entity_type: TYPE74_ENTITY_TYPE,
@@ -192,7 +201,8 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
             strict_axis_limit_raw: 512,
             raw_word_at_0x04: 8,
         },
-        sub_k_words: 1,
+        sub_k: [1, 0],
+        model_variables: 1,
     },
     Class0HostRow {
         entity_type: TYPE110_ENTITY_TYPE,
@@ -206,7 +216,28 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 9] = [
         alternate_class: 67,
         death_sound_id: None,
         axis: NO_AXIS,
-        sub_k_words: 8,
+        sub_k: [8, 0],
+        model_variables: 8,
+    },
+    // The Megablast seedpod, born at the player by operation 0x39 and the
+    // deploy FUN_00444400; its Sub-K binds the charge and the mode.
+    Class0HostRow {
+        entity_type: TYPE65_ENTITY_TYPE,
+        model: 243,
+        mass_raw: 1,
+        capability_flags: 0x40,
+        health_raw: 1,
+        initializer_state_flags_raw: 0x0002_1084,
+        behavior_rule_ref: 1,
+        living_class: crate::megablast::BEHAVIOR_CLASS,
+        alternate_class: 2,
+        death_sound_id: Some(62),
+        axis: CommonAxisDescriptor {
+            strict_axis_limit_raw: 512,
+            raw_word_at_0x04: 8,
+        },
+        sub_k: [1, 2],
+        model_variables: 2,
     },
 ];
 
@@ -263,6 +294,12 @@ pub(crate) fn remote_beamer_metadata(
     class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 59)
 }
 
+/// Authenticate Type65's row: class55 Megablast, alternate class2.
+pub(crate) fn megablast_metadata(entity_type: u32, metadata: &EntityTypeRuntimeMetadata) -> bool {
+    class0_host_row_metadata(entity_type, metadata)
+        .is_some_and(|row| row.living_class == crate::megablast::BEHAVIOR_CLASS)
+}
+
 /// Authenticate Type110's row: class67 Queen, living and alternate.
 pub(crate) fn queen_metadata(entity_type: u32, metadata: &EntityTypeRuntimeMetadata) -> bool {
     class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 67)
@@ -303,16 +340,16 @@ fn class0_host_row_metadata(
         && metadata.generic_hit_sound_id == RetailRuntimeValue::Known(None)
         && metadata.common_mover_topology
             == RetailRuntimeValue::Known(CommonMoverComponentTopology {
-                sub_k: row.sub_k_words != 0,
+                sub_k: row.sub_k != [0, 0],
                 ..CommonMoverComponentTopology::default()
             })
-        && (row.sub_k_words == 0
+        && (row.sub_k == [0, 0]
             || (metadata.model_variable_count_raw
-                == RetailRuntimeValue::Known(u32::from(row.sub_k_words))
+                == RetailRuntimeValue::Known(row.model_variables)
                 && metadata.common_mover_gkl_payloads
                     == RetailRuntimeValue::Known(CommonMoverGklPayloads {
                         sub_g: None,
-                        sub_k: Some([row.sub_k_words, 0]),
+                        sub_k: Some(row.sub_k),
                         sub_l: None,
                     })))
         && initializer.common_axis_descriptor == row.axis)

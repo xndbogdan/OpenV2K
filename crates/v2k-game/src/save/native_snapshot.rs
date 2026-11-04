@@ -133,6 +133,7 @@ impl NativeSaveSnapshot<'_> {
         self.inventory.encode_into_native_payload(&mut payload);
         write_word(&mut payload, 0x140, 46);
         payload[0x144] = self.campaign.extra_lives();
+        payload[0x145] = self.capabilities.megablasts();
         payload[0x147] = (payload[0x147] & !3)
             | u8::from(self.capabilities.has_targetter())
             | (u8::from(self.capabilities.has_turbo()) << 1);
@@ -243,7 +244,9 @@ mod tests {
         );
         assert_eq!(restored.cargo.auxiliary_owned_types()[..3], [49, 64, 0]);
         assert_eq!(restored.campaign.control_slot_bits(36), Some(0x8000042f));
-        for offset in [0x37, 0x145, 0x148, 0x14b, 0x1b0, 0x1b1, 0x1b2, 0x1b3] {
+        // Controller +195, the Megablast count, is the live capability's.
+        assert_eq!(native.state_payload[0x145], 0);
+        for offset in [0x37, 0x148, 0x14b, 0x1b0, 0x1b1, 0x1b2, 0x1b3] {
             assert_eq!(
                 native.state_payload[offset], baseline[offset],
                 "unowned byte {offset:x}"

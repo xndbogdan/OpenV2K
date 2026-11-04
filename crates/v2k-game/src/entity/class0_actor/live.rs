@@ -103,6 +103,7 @@ impl Class0ActorOwner {
                     | (16, Some(ActorTaskRuntime::GenerateFlares))
                     | (59, Some(ActorTaskRuntime::RemoteBeamer(_)))
                     | (67, Some(ActorTaskRuntime::Queen))
+                    | (55, Some(ActorTaskRuntime::Megablast(_)))
             )
             // A finished class38 has staged its removal.
             || (living == 38 && bits(entity, DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0)
@@ -158,8 +159,13 @@ pub struct Class0ActorFrame<'a> {
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
-    /// `FUN_00410C10` on other bodies, for the dying Queen's sweep.
+    /// `FUN_00410C10` on other bodies, for the dying Queen's sweep, and
+    /// `FUN_004566E0` for a Megablast's blast.
     pub generic_death: Option<&'a mut crate::queen::GenericDeath<'a>>,
+    /// A Megablast's `FUN_00456740` (session `+293`) and `FUN_00456750`
+    /// (`+295`), set by the visit.
+    pub terrain_flash: bool,
+    pub full_frame_flash: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,6 +215,9 @@ pub struct Class0ActorTick {
     pub spawned_owner: Option<Class0ActorOwner>,
     /// The dying Queen's `FUN_00456F20`.
     pub closing_scene: Option<crate::queen::ClosingSceneMove>,
+    /// A Megablast's terrain flash (`+293`) and screen flash (`+295`).
+    pub terrain_flash: bool,
+    pub full_frame_flash: bool,
 }
 
 pub fn tick_class0_actor_owner(
@@ -229,6 +238,8 @@ pub fn tick_class0_actor_owner(
             geyser_lift: None,
             spawned_owner: None,
             closing_scene: None,
+            terrain_flash: false,
+            full_frame_flash: false,
         };
     }
     if manager.native_class0_has_pending_prefix(id) {
@@ -239,6 +250,8 @@ pub fn tick_class0_actor_owner(
             geyser_lift: None,
             spawned_owner: None,
             closing_scene: None,
+            terrain_flash: false,
+            full_frame_flash: false,
         };
     }
     if Class0ActorOwner::adopt(manager, id) != Ok(owner) {
@@ -249,6 +262,8 @@ pub fn tick_class0_actor_owner(
             geyser_lift: None,
             spawned_owner: None,
             closing_scene: None,
+            terrain_flash: false,
+            full_frame_flash: false,
         };
     }
     let mut sea_level_receipt = None;
@@ -272,6 +287,8 @@ pub fn tick_class0_actor_owner(
                 geyser_lift,
                 spawned_owner: queen.held_owner,
                 closing_scene: queen.closing_scene,
+                terrain_flash: frame.terrain_flash,
+                full_frame_flash: frame.full_frame_flash,
             }
         }
         Err(reason) => Class0ActorTick {
@@ -286,6 +303,8 @@ pub fn tick_class0_actor_owner(
             geyser_lift: None,
             spawned_owner: queen.held_owner,
             closing_scene: queen.closing_scene,
+            terrain_flash: frame.terrain_flash,
+            full_frame_flash: frame.full_frame_flash,
         },
     }
 }
@@ -458,6 +477,81 @@ fn die_when_moved_death(
     match outcome {
         MainBaseType54DeathOutcome::SeaLevelTaskPublished { tick_receipt, .. } => Ok(tick_receipt),
         _ => Err(Class0ActorError::Runtime("Die When Moved class38 task")),
+    }
+}
+
+/// `FUN_004078C0`. Returns whether it ended in tag `0x9C00`, whose style
+/// slot `+04` (`FUN_0040CEF0`) is the pod's `FUN_00410C10`.
+fn megablast_visit(
+    manager: &mut EntityManager,
+    id: u32,
+    visit: ActorTaskVisit,
+    frame: &mut Class0ActorFrame<'_>,
+    dt: u32,
+) -> Result<bool, Class0ActorError> {
+    use crate::megablast::MegablastStep;
+    let entity = manager
+        .iter_all()
+        .find(|entity| entity.id == id)
+        .ok_or(Class0ActorError::Allocation)?;
+    let RetailRuntimeValue::Known(Some(owner)) = entity.collision.recent_relation_id_at_0x60 else {
+        return Err(Class0ActorError::Runtime("Megablast owner +60"));
+    };
+    let owner_body = manager
+        .iter_all()
+        .find(|entity| entity.id == owner)
+        .map(|body| (body.position_raw(), body.entity_type));
+    let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+    if let Some((position, _)) = owner_body {
+        entity.set_position_raw(position);
+        entity.set_velocity_raw([0; 3]);
+    }
+    let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
+    entity.set_rotation_heading_pitch_roll_raw([
+        heading,
+        pitch.wrapping_add((dt >> 6) as i16),
+        roll.wrapping_add((dt >> 5) as i16),
+    ]);
+    entity.collision.state_flags_at_0x08.overwrite(0xA0, 0xA0);
+    let position_raw = entity.position_raw();
+    let step = match entity.actor_tasks.exact_callback_state_mut(visit) {
+        Some(ActorTaskRuntime::Megablast(task)) => task.step(dt, &mut || {
+            u32::from(frame.world_fx.next_shared_retail_random_u16())
+        }),
+        _ => return Err(Class0ActorError::Graph),
+    };
+    match step {
+        MegablastStep::Continue => Ok(false),
+        MegablastStep::TerrainFlash => {
+            frame.terrain_flash = true;
+            Ok(false)
+        }
+        MegablastStep::Charged => Ok(true),
+        MegablastStep::Detonate => {
+            let owner_type =
+                owner_body
+                    .map(|(_, entity_type)| entity_type)
+                    .ok_or(Class0ActorError::Runtime(
+                        "Megablast owner missing at the blast",
+                    ))?;
+            manager.shield_megablast_owner(owner, true)?;
+            let radial = frame
+                .generic_death
+                .as_deref_mut()
+                .ok_or(Class0ActorError::Runtime("Megablast blast outside play"))?;
+            radial(
+                manager,
+                &mut *frame.resources,
+                &mut *frame.world_fx,
+                crate::queen::Class0WorldCall::Radial {
+                    origin_raw: position_raw,
+                    template: crate::megablast::radial_template(owner_type, owner),
+                },
+            )?;
+            frame.full_frame_flash = true;
+            manager.shield_megablast_owner(owner, false)?;
+            Ok(true)
+        }
     }
 }
 
@@ -677,6 +771,22 @@ fn run_callback(
             }
             if !entity.actor_tasks.finish_exact_visit(visit) {
                 return Err(Class0ActorError::Graph);
+            }
+        }
+        Some(ActorTaskRuntime::Megablast(_)) => {
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            let died = megablast_visit(manager, id, visit, frame, dt)?;
+            let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+            // 0CEF0's 10C10 runs inside the callback and clears this Primary;
+            // retiring it first is the same order of every observable effect.
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+            if died {
+                manager.apply_megablast_death(id, frame.world_fx)?;
             }
         }
         Some(ActorTaskRuntime::GenerateFlares) => {

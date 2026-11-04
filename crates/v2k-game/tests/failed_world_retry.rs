@@ -234,7 +234,6 @@ fn progress_map_save_retains_retry_entry_and_exact_controller_state_until_contin
         &restore.cargo.carried_identities()[..fixture.cargo.carried_identities().len()],
         fixture.cargo.carried_identities()
     );
-    assert_eq!(restore.controller_195_raw, 0x5a);
     assert_eq!(restore.session_flags_raw, 0x29);
     assert_eq!(checkpoint.state_payload[0x147], 0xf3);
     assert_eq!(restore.campaign, fixture.campaign);

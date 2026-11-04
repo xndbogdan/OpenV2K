@@ -49,6 +49,8 @@ pub const SHIELD_SELECTOR: u8 = 0x35;
 pub const EXTRA_LIFE_SELECTOR: u8 = 0x36;
 pub const HULL_REPAIR_SELECTOR: u8 = 0x37;
 pub const CARGO_CAPACITY_SELECTOR: u8 = 0x3a;
+/// `FUN_00445A90`'s operation `0x39`, the Megablast.
+pub const MEGABLAST_SELECTOR: u8 = 0x39;
 pub const SHIELD_BUFFER_MAX_RAW: i32 = 100_000;
 pub const HULL_REPAIR_ACCEPT_BELOW_RAW: i32 = 0x9471;
 pub const HULL_REPAIR_MAX_RAW: i32 = 40_000;
@@ -399,6 +401,13 @@ pub enum AcceptedPowerUpContact {
         payload: PowerUpPayload,
         acquisition: TrophyAcquisition,
     },
+    /// Operation `0x39`: controller `+195` raised; the caller builds the
+    /// Type65 ([`crate::megablast::MegablastWorld::pickup`]).
+    Megablast {
+        entity_id: u32,
+        position_raw: [i16; 3],
+        payload: PowerUpPayload,
+    },
 }
 
 impl AcceptedPowerUpContact {
@@ -408,7 +417,8 @@ impl AcceptedPowerUpContact {
             | Self::Targetter { entity_id, .. }
             | Self::Turbo { entity_id, .. }
             | Self::NonSpawning { entity_id, .. }
-            | Self::Trophy { entity_id, .. } => entity_id,
+            | Self::Trophy { entity_id, .. }
+            | Self::Megablast { entity_id, .. } => entity_id,
         }
     }
 }
@@ -842,6 +852,14 @@ fn dispatch_power_up_payload(
                     })
                 }
             }
+        }
+        MEGABLAST_SELECTOR => {
+            capabilities.add_megablasts(payload.amount);
+            PowerUpContactOutcome::Accepted(AcceptedPowerUpContact::Megablast {
+                entity_id,
+                position_raw,
+                payload,
+            })
         }
         selector => PowerUpContactOutcome::Rejected(RejectedPowerUpContact {
             entity_id,

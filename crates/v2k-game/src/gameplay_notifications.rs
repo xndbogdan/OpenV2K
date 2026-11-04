@@ -507,6 +507,11 @@ impl GameplayNotifications {
         );
     }
 
+    /// `FUN_00456900(0xC9, 0)` after a Megablast pickup's or deploy's births.
+    pub fn queue_megablast(&mut self, retail_tick: i32) {
+        self.queue_direct(crate::megablast::TEXT_ID, 0, retail_tick);
+    }
+
     /// Queue the event 6/7 weapon hint. Keeping this separate from the direct
     /// text lets the caller retain retail's event -> sound -> text order.
     pub fn queue_weapon_pickup_hint(&mut self, resource_event_id: u8, retail_tick: i32) {

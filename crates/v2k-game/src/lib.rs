@@ -147,6 +147,7 @@ pub mod main_base_type9_abort;
 pub mod main_base_type9_actor_production;
 pub mod main_base_type9_component;
 pub mod main_base_type9_production;
+pub mod megablast;
 pub mod menu;
 pub mod menu_billboard;
 pub mod menu_data;

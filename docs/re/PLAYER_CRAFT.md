@@ -1604,7 +1604,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | held |
 | Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | held |
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
-| Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | held |
+| Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
 | Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | held |
 | Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | held |
 
@@ -1670,6 +1670,24 @@ the owner's type and handle, flashes the screen (`FUN_00456750`), restores
 the admission and dies. Retail lab (Level 1, every cheat, F9 then A and `/`
 at tick 1010): three Type65 births that tick and three radials from
 `00407AE6` at tick 1080.
+
+The port runs it whole. Type65 is a row of the class0 constructor (model
+243, mass 1, capability `0x40`, health 1, `+C0` `0x21084`, Sub-K `[1, 2]`
+with two model words, alternate class2), so its visits take the shared
+scheduler prefix and its model reads the charge in selector 1 and the mode
+in selector 2. Controller `+195` is saved at state `+145`. A pickup's
+count is raised in the contact pass and its Type65, sound 5 and text follow
+the contact's own feedback; a press of A and `/` (or the pad's chord) runs
+the deploy before the cheat keys, as the craft callbacks do. The blast's
+radial is the playing world's (static cells, then the live list), between
+the shield and its restore; the shield covers the player and its hold
+(`+220`). The pod's death is `FUN_00410C10` into class2 (sound 62, tasks
+cleared, removal staged). The terrain flash adds `0x10` to every cell of
+the next presented frame's light window, after its clear and anchor, as
+`FUN_00453410` does. With a test deploy the three pods blast 70 visits after
+their birth frame, as in the lab. A blast whose owner is not the player
+(retail would read a null record) stops the pod's visit with a logged
+block.
 
 **Defender Ball and Autobot.** Operation `0x38` is ported (see
 [CHEATS](CHEATS.md#port-status)); these two types still have no port
