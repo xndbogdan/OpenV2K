@@ -101,6 +101,9 @@ Type47 runtime keeps each queued command's optional draw origin, validates
 the entire FIFO before stamping, and preserves append/drain epochs: commands
 appended after a draw remain unstamped until a later reached draw. This
 restores the authored origin without a model-specific positional offset.
+An ant that is not drawn but stands in the broader-detail window gets its
+muzzle from `FUN_00413BE0`'s transform-only pass instead
+([GAME_MECHANICS.md](GAME_MECHANICS.md#shot-origins-for-undrawn-actors)).
 
 The external wrapper `40D350` rebases every returned endpoint WORD around
 the native viewport origin before `6ECF0` projects it: signed16(endpoint WORD

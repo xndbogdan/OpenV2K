@@ -215,6 +215,8 @@ pub(crate) fn native_instance_body(
         intro2_type10_aim_runtime: None,
         intro2_type57_runtime: None,
         intro2_type57_aim_runtime: None,
+        emitter_muzzles: [None; 2],
+        broader_detail_when_queued: false,
         intro2_type94_runtime: None,
         intro2_type17_runtime: None,
         native_capture_relation: None,

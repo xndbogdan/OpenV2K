@@ -264,9 +264,12 @@ fn type92_model171_single_muzzle_queues_and_drains_without_alternation_or_joint_
         .resolve_slot_with_context(18, ModelMaterializationContext::intrinsic(&vars, None))
         .expect("the actual Type92 barrel owns muzzle slot18")
         .position_raw;
+    // The barrel's origin and its muzzle are separate Q31 products.
+    let q31 = |raw: f64| ((i64::from(raw as i32) * i64::from(i32::MAX)) >> 31) as i16;
     let expected_muzzle: [i16; 3] = std::array::from_fn(|axis| {
-        let raw = (local_muzzle[axis] + mount.attach_pos.unwrap()[axis]) as i32;
-        origin[axis].wrapping_add(((i64::from(raw) * i64::from(i32::MAX)) >> 31) as i16)
+        origin[axis]
+            .wrapping_add(q31(mount.attach_pos.unwrap()[axis]))
+            .wrapping_add(q31(local_muzzle[axis]))
     });
     assert_eq!(
         fx.next_shared_retail_random_u16(),

@@ -1451,9 +1451,52 @@ logic rather than a decompiler mistake.
    only lower boundary.
 5. When inner/full-detail bit `0x04000000` is set, invoke type vtable slot `+0x20`;
    a null slot falls back to `FUN_004138F0`.
-6. If presentation returned zero, process the entity's attachment list through
-   the `FUN_00413BE0`/fallback attachment path. These are presentation and
-   linkage operations, not targeting or sweep attacks.
+6. If presentation returned zero, launch the entity's queued shots
+   ([shot origins](#shot-origins-for-undrawn-actors)), running
+   `FUN_00413BE0` first when a shot still lacks its muzzle.
+
+### Shot origins for undrawn actors
+
+An emitter (`FUN_00424650`) queues each shot through `FUN_004147A0` in the
+actor's `+38` list, with a mark at `+2A`: 1, or in a network game
+(`DAT_004F741C`) 2 when the shot's method word is zero or the actor held the
+broader-detail bit `0x02000000` as it queued. A muzzle stamp
+(`FUN_00424F20`, reached from the actor's type-14 vertex through
+`FUN_0040A9F0`) writes the emitter slot's world point into every queued shot
+of that selector and clears the mark.
+
+`FUN_00411400` stamps from the draw when it draws the actor in full detail.
+Then, when any queued shot's mark is at least 2, or 1 with `0x02000000` now
+set, it runs `FUN_00413BE0` once: the actor's current model (`+A8..+AE` by
+state bits `0x2000`/`0x4000`) with its position and body basis through the
+transform-only pass (`FUN_00458B10`, `FUN_00458B40`, the table at
+`0x004D44E0`) under an identity view at the world origin. That pass resolves
+every vertex a face, edge or billboard names, culled or not, so every
+type-14 vertex runs the actor's callbacks: Sub-H records advance, Sub-E
+stamps the muzzle and terminal selectors draw the shared random word, as in
+a draw. Last it launches each shot (`FUN_00414870`) from its stamp, or from
+the actor's centre while it is still marked, and frees the list.
+
+So in single play an actor in the broader window but not drawn (behind or
+beside the camera, or up to three cells past the drawn window) fires from
+its muzzle, and one outside both windows fires from its centre. The Queen
+fires her guns directly, never through this list, so the pass never runs
+for her: her guns still aim and fire only while she is drawn
+([TYPE110_QUEEN.md](TYPE110_QUEEN.md)).
+
+The port runs the same pass (`ActorTransformPass`) before every emitter
+family's drain, and every family launches from its selector's stamp. A
+retail lab run of the new game (Intro2, then Level 1 left alone) logged 161
+launches: the undrawn broader-window Level-1 ant's muzzles at ticks 1435
+and 1502 are reproduced exactly from the logged pose
+(`undrawn_actors_shots_leave_from_retails_transform_pass_muzzles`), and every
+shot outside both windows left from its centre with its mark still 1.
+Type57's and Type10's guns sit on children turned by joint words the lab
+did not log, so the comparison covers the ant. The port does not own Sub-E
+in the draw of an actor without Sub-H, so such an actor in full detail takes
+the transform pass's stamp, which leaves out the camera view's rounding. An
+actor whose type has Sub-M or a live joint owner stops the pass with a
+logged `UnportedSelectorOwner`; no firing type has one.
 
 The shared retail path `FUN_0042AF00` dispatches `FUN_00412DA0` before it later
 reaches `FUN_00411400`. The classification written by presentation therefore

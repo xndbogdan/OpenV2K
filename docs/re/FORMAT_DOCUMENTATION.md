@@ -762,7 +762,10 @@ handlers, and queue nothing:
 
 `FUN_00413BE0` runs a model through this pass with `FUN_00458B10` and
 `FUN_00458B40`, which enters the node pass `FUN_00464E60` inside an error
-scope.
+scope. Its view's identity word is zero, which makes `FUN_00464E60` take
+this table for every node with no node rejection. The port's
+`ActorTransformPass` resolves every named vertex the same way, culled or not
+([shot origins](GAME_MECHANICS.md#shot-origins-for-undrawn-actors)).
 
 **Face `mat` operand — DECODED 2026-07-06 (colouring):** the first face-command
 operand (`mat`) is the per-face colour source, and the **opcode's 0x80 bit**

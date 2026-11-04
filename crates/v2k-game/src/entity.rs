@@ -1637,6 +1637,15 @@ pub struct Entity {
     /// Native Intro2 Type57 bat components and queued Aim transactions.
     pub intro2_type57_runtime: Option<crate::intro2_type57::Intro2Type57Runtime>,
     pub intro2_type57_aim_runtime: Option<crate::intro2_type57::aim::Type57AimRuntime>,
+    /// Muzzles stamped this presentation by `FUN_00424F20`, per Sub-E
+    /// selector: from the draw, or from `FUN_00413BE0`'s transform-only pass
+    /// for an actor not drawn in full detail. `FUN_00411400` launches a
+    /// queued shot from its selector's stamp, else from the actor's centre.
+    pub emitter_muzzles: [Option<[i16; 3]>; 2],
+    /// The broader-detail bit (`0x02000000`) as this frame's actor tasks saw
+    /// it, before presentation reclassifies: a network game's `FUN_004147A0`
+    /// marks a shot queued then for the transform-only pass.
+    pub broader_detail_when_queued: bool,
     /// Native Intro2 Working Factory allocation, independent of its current task.
     pub intro2_type66_runtime: Option<crate::intro2_type66::Intro2Type66Runtime>,
     /// Native Intro2 Type94 allocation and independently observed D/E state.
@@ -1825,6 +1834,8 @@ impl Entity {
             intro2_type10_aim_runtime: self.intro2_type10_aim_runtime.clone(),
             intro2_type57_runtime: self.intro2_type57_runtime,
             intro2_type57_aim_runtime: self.intro2_type57_aim_runtime.clone(),
+            emitter_muzzles: self.emitter_muzzles,
+            broader_detail_when_queued: self.broader_detail_when_queued,
             intro2_type94_runtime: self.intro2_type94_runtime,
             intro2_type17_runtime: self.intro2_type17_runtime,
             native_capture_relation: self.native_capture_relation.clone(),
@@ -1949,6 +1960,8 @@ impl Entity {
             intro2_type10_aim_runtime: None,
             intro2_type57_runtime: None,
             intro2_type57_aim_runtime: None,
+            emitter_muzzles: [None; 2],
+            broader_detail_when_queued: false,
             intro2_type94_runtime: None,
             intro2_type17_runtime: None,
             native_capture_relation: None,
@@ -3289,6 +3302,8 @@ fn build_type93_materialiser_entity(
         intro2_type10_aim_runtime: None,
         intro2_type57_runtime: None,
         intro2_type57_aim_runtime: None,
+        emitter_muzzles: [None; 2],
+        broader_detail_when_queued: false,
         intro2_type94_runtime: None,
         intro2_type17_runtime: None,
         native_capture_relation: None,
@@ -5670,6 +5685,8 @@ impl EntityManager {
                 intro2_type10_aim_runtime: None,
                 intro2_type57_runtime: None,
                 intro2_type57_aim_runtime: None,
+                emitter_muzzles: [None; 2],
+                broader_detail_when_queued: false,
                 intro2_type94_runtime: None,
                 intro2_type17_runtime: None,
                 native_capture_relation: None,
@@ -6158,6 +6175,8 @@ impl EntityManager {
             intro2_type10_aim_runtime: None,
             intro2_type57_runtime: None,
             intro2_type57_aim_runtime: None,
+            emitter_muzzles: [None; 2],
+            broader_detail_when_queued: false,
             intro2_type94_runtime: None,
             intro2_type17_runtime: None,
             native_capture_relation: None,
@@ -6980,6 +6999,8 @@ impl EntityManager {
             intro2_type10_aim_runtime: None,
             intro2_type57_runtime: None,
             intro2_type57_aim_runtime: None,
+            emitter_muzzles: [None; 2],
+            broader_detail_when_queued: false,
             intro2_type94_runtime: None,
             intro2_type17_runtime: None,
             native_capture_relation: None,
@@ -8472,6 +8493,8 @@ impl EntityManager {
             intro2_type10_aim_runtime: None,
             intro2_type57_runtime: None,
             intro2_type57_aim_runtime: None,
+            emitter_muzzles: [None; 2],
+            broader_detail_when_queued: false,
             intro2_type94_runtime: None,
             intro2_type17_runtime: None,
             native_capture_relation: None,
