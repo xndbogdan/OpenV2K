@@ -3,8 +3,7 @@ use v2k_formats::anim_sound::SoundPool;
 use v2k_game::{
     primary_weapon::{
         fire_profile_from_descriptor, PlayerProjectileDelivery, PrimaryFireGeometry,
-        PrimaryGunMounts, PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput,
-        PrimaryWeapon,
+        PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
     },
     session::GameSession,
     weapon_inventory::{Ammunition, PowerUpPayload, WeaponInventory},
@@ -42,7 +41,6 @@ fn events(
                 origin_world: origin,
                 direction_unit: [0.0, 0.0, 1.0],
             },
-            gun_mounts: PrimaryGunMounts::Unresolved,
             shooter_origin_world: origin,
             shooter_id: 7,
             shooter_entity_type_at_birth: Some(46),

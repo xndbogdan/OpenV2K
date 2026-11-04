@@ -342,38 +342,6 @@ impl PrimaryGunChannel {
     }
 }
 
-/// The two presentation launch bases recovered from the currently selected
-/// authored `player4` loadout. Their origins are mesh/mount results, not
-/// guessed hull offsets.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PrimaryAuthoredGunMounts {
-    pub gun_a: PrimaryLaunchBasis,
-    pub gun_b: PrimaryLaunchBasis,
-}
-
-/// Resolution state for the visible side-gun mounts.
-///
-/// Simulation never depends on this result: retail's class-1/class-15 dispatch
-/// refreshes both transient records from the entity center. When model data is
-/// unavailable, the typed unresolved state therefore falls back to that proven
-/// center without inventing a symmetric pair.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub enum PrimaryGunMounts {
-    Authored(PrimaryAuthoredGunMounts),
-    #[default]
-    Unresolved,
-}
-
-impl PrimaryGunMounts {
-    pub const fn basis(self, channel: PrimaryGunChannel) -> Option<PrimaryLaunchBasis> {
-        match (self, channel) {
-            (Self::Authored(mounts), PrimaryGunChannel::A) => Some(mounts.gun_a),
-            (Self::Authored(mounts), PrimaryGunChannel::B) => Some(mounts.gun_b),
-            (Self::Unresolved, _) => None,
-        }
-    }
-}
-
 /// Geometry sampled for a firing event.
 ///
 /// Retail starts the bullet, auxiliary command, and sound at the shooter center;
@@ -382,8 +350,6 @@ impl PrimaryGunMounts {
 pub struct PrimaryFireGeometry {
     /// Proven simulation launch basis. Its origin remains the shooter center.
     pub launch_basis: PrimaryLaunchBasis,
-    /// Authored presentation-only bases for the visible alternating streams.
-    pub gun_mounts: PrimaryGunMounts,
     /// Retail refreshes the class-15 record's origin from the shooter before
     /// dispatch, so it is stationary at this point rather than a second muzzle.
     pub shooter_origin_world: [f32; 3],
@@ -408,9 +374,6 @@ pub struct PrimaryProjectileSpawn {
     /// Simulation/collision origin refreshed from the shooter center by retail.
     pub origin_world: [f32; 3],
     pub direction_unit: [f32; 3],
-    /// Visible origin/direction resolved from the selected authored gun model.
-    /// World collision continues to use `origin_world` and `direction_unit`.
-    pub presentation_basis: PrimaryLaunchBasis,
     /// `FUN_0044E770`'s exact velocity words, before the class's `+0x2A` bias.
     pub velocity_raw: [i16; 3],
     /// The row leads with 1: `FUN_0044E770` adds the closing speed, not the
@@ -449,8 +412,6 @@ pub struct PrimaryAuxiliaryCommand {
     pub owner_id: u32,
     /// Center used by retail dispatch and the above-water classification.
     pub origin_world: [f32; 3],
-    /// Authored muzzle used only to place the visible class-32 flash/smoke.
-    pub presentation_origin_world: [f32; 3],
     pub inherited_velocity_world_per_second: [f32; 3],
     pub spec: PrimaryAuxiliarySpec,
 }
@@ -563,17 +524,44 @@ impl PrimaryWeapon {
         profile: PrimaryWeaponProfile,
         mut shot_budget: PrimaryShotBudget,
     ) -> Vec<PrimaryFireEvent> {
-        let held = input.held();
-        let end = self.elapsed.saturating_add(delta);
         let mut events = Vec::new();
+        self.advance(delta, input.held(), profile, |weapon, fired_at| {
+            if shot_budget.consume_one() {
+                events.push(weapon.fire_event_and_pulse(fired_at, geometry, profile));
+            }
+        });
+        events
+    }
+
+    /// Row `0x1F` with the shooter not fully below the surface: `FUN_00424650`
+    /// counts each due shot off the held-fire accumulator with sound `0x1C`
+    /// and fires nothing, so no round, gun alternation, joint pulse or
+    /// descriptor cue. Returns the number of refused shots.
+    pub fn update_refused(
+        &mut self,
+        delta: Duration,
+        input: PrimaryTriggerInput,
+        profile: PrimaryWeaponProfile,
+    ) -> usize {
+        let mut refused = 0;
+        self.advance(delta, input.held(), profile, |_, _| refused += 1);
+        refused
+    }
+
+    fn advance(
+        &mut self,
+        delta: Duration,
+        held: bool,
+        profile: PrimaryWeaponProfile,
+        mut due_shot: impl FnMut(&mut Self, Duration),
+    ) {
+        let end = self.elapsed.saturating_add(delta);
         let mut pulse_cursor = self.elapsed;
 
         if held && !self.trigger_held {
             self.decay_joint_pulses(delta, profile.joint_decay_rate);
             pulse_cursor = end;
-            if shot_budget.consume_one() {
-                events.push(self.fire_event_and_pulse(end, geometry, profile));
-            }
+            due_shot(self, end);
             self.next_repeat = end.checked_add(profile.repeat_interval);
         } else if !held {
             self.decay_joint_pulses(delta, profile.joint_decay_rate);
@@ -591,9 +579,7 @@ impl PrimaryWeapon {
                     profile.joint_decay_rate,
                 );
                 pulse_cursor = next_repeat;
-                if shot_budget.consume_one() {
-                    events.push(self.fire_event_and_pulse(next_repeat, geometry, profile));
-                }
+                due_shot(self, next_repeat);
                 self.next_repeat = next_repeat.checked_add(profile.repeat_interval);
             }
             self.decay_joint_pulses(end.saturating_sub(pulse_cursor), profile.joint_decay_rate);
@@ -601,7 +587,6 @@ impl PrimaryWeapon {
 
         self.elapsed = end;
         self.trigger_held = held;
-        events
     }
 
     fn fire_event(
@@ -663,12 +648,10 @@ impl PrimaryFireEvent {
             shooter_velocity_raw,
         );
         self.projectile.origin_world = origin;
-        self.projectile.presentation_basis.origin_world = origin;
         self.projectile.velocity_raw = velocity_raw;
         self.projectile.velocity_world_per_second =
             velocity_raw.map(|word| raw_velocity_to_world_per_second(word.into()));
         self.auxiliary.origin_world = auxiliary_origin;
-        self.auxiliary.presentation_origin_world = auxiliary_origin;
         self.auxiliary.inherited_velocity_world_per_second =
             shooter_velocity_raw.map(|word| raw_velocity_to_world_per_second(word.into()));
         self
@@ -682,7 +665,6 @@ fn primary_fire_event(
     profile: PrimaryWeaponProfile,
 ) -> PrimaryFireEvent {
     let basis = geometry.launch_basis;
-    let presentation_basis = geometry.gun_mounts.basis(gun_channel).unwrap_or(basis);
     let rocket_shaped =
         projectile_class_row(u32::from(profile.selector)).is_some_and(|row| row.leading_raw != 0);
     let velocity_raw = crate::native_entity_weapons::launch::launch_velocity_raw(
@@ -697,7 +679,6 @@ fn primary_fire_event(
         owner_id: geometry.shooter_id,
         origin_world: basis.origin_world,
         direction_unit: basis.direction_unit,
-        presentation_basis,
         velocity_raw,
         rocket_shaped,
         velocity_world_per_second: projectile_velocity,
@@ -713,7 +694,6 @@ fn primary_fire_event(
         auxiliary: PrimaryAuxiliaryCommand {
             owner_id: geometry.shooter_id,
             origin_world: geometry.shooter_origin_world,
-            presentation_origin_world: presentation_basis.origin_world,
             inherited_velocity_world_per_second: geometry
                 .shooter_velocity_raw
                 .map(|word| raw_velocity_to_world_per_second(word.into())),
@@ -738,16 +718,6 @@ mod tests {
                 origin_world: [1.0, 2.0, 3.0],
                 direction_unit: [1.0, 0.0, 0.0],
             },
-            gun_mounts: PrimaryGunMounts::Authored(PrimaryAuthoredGunMounts {
-                gun_a: PrimaryLaunchBasis {
-                    origin_world: [10.0, 20.0, 30.0],
-                    direction_unit: [1.0, 0.0, 0.0],
-                },
-                gun_b: PrimaryLaunchBasis {
-                    origin_world: [40.0, 50.0, 60.0],
-                    direction_unit: [1.0, 0.0, 0.0],
-                },
-            }),
             shooter_origin_world: [4.0, 5.0, 6.0],
             shooter_id: 46,
             shooter_entity_type_at_birth: Some(46),
@@ -777,6 +747,23 @@ mod tests {
             TargetterTrajectory::Ballistic
         );
         assert!(primary_weapon_profile(3).is_none());
+    }
+
+    #[test]
+    fn refused_row_counts_the_due_shots_without_firing_state() {
+        let mut fired = PrimaryWeapon::new();
+        let mut refused = PrimaryWeapon::new();
+        let mut shots = 0;
+        let mut refusals = 0;
+        for _ in 0..40 {
+            shots += fired.update(RETAIL_TICK_DURATION, HELD_A, geometry()).len();
+            refusals +=
+                refused.update_refused(RETAIL_TICK_DURATION, HELD_A, DEFAULT_PRIMARY_PROFILE);
+        }
+        assert_eq!(refusals, shots);
+        assert!(refusals > 1);
+        assert_eq!(refused.next_gun(), PrimaryWeapon::new().next_gun());
+        assert_eq!(refused.joint_pulse_words(), [0, 0]);
     }
 
     #[test]
@@ -825,10 +812,6 @@ mod tests {
             [19813.0 / 256.0, -555.0 / 256.0, 14808.0 / 256.0]
         );
         assert_eq!(
-            launched.projectile.presentation_basis.origin_world,
-            launched.projectile.origin_world
-        );
-        assert_eq!(
             launched.auxiliary.origin_world,
             launched.projectile.origin_world
         );
@@ -848,13 +831,6 @@ mod tests {
         assert_eq!(event.gun_channel, PrimaryGunChannel::A);
         assert_eq!(event.source_entity_type_at_birth, Some(46));
         assert_eq!(event.projectile.origin_world, [1.0, 2.0, 3.0]);
-        assert_eq!(
-            event.projectile.presentation_basis,
-            PrimaryLaunchBasis {
-                origin_world: [10.0, 20.0, 30.0],
-                direction_unit: [1.0, 0.0, 0.0],
-            }
-        );
         assert_eq!(event.projectile.spec, PRIMARY_PROJECTILE_SPEC);
         assert_eq!(event.projectile.spec.projectile_class, 1);
         assert_eq!(event.projectile.spec.sprite_id, 705);
@@ -864,10 +840,6 @@ mod tests {
         assert_eq!(event.projectile.velocity_raw, [3999 + 64, -128, 192]);
         assert_eq!(event.projectile.owner_id, 46);
         assert_eq!(event.auxiliary.origin_world, [4.0, 5.0, 6.0]);
-        assert_eq!(
-            event.auxiliary.presentation_origin_world,
-            [10.0, 20.0, 30.0]
-        );
         assert_eq!(event.auxiliary.owner_id, 46);
         assert_eq!(
             event.auxiliary.inherited_velocity_world_per_second,
@@ -959,10 +931,6 @@ mod tests {
         assert_eq!(repress.len(), 1);
         assert_eq!(repress[0].fired_at, Duration::from_millis(120));
         assert_eq!(repress[0].gun_channel, PrimaryGunChannel::B);
-        assert_eq!(
-            repress[0].projectile.presentation_basis.origin_world,
-            [40.0, 50.0, 60.0]
-        );
         assert!(weapon
             .update(Duration::from_millis(159), HELD_A, geometry())
             .is_empty());
@@ -997,26 +965,6 @@ mod tests {
         assert_eq!(repeat.len(), 1);
         assert_eq!(repeat[0].fired_at, Duration::from_millis(160));
         assert_eq!(repeat[0].gun_channel, PrimaryGunChannel::B);
-        assert_eq!(
-            repeat[0].projectile.presentation_basis.origin_world,
-            [40.0, 50.0, 60.0]
-        );
-    }
-
-    #[test]
-    fn unresolved_mounts_preserve_proven_center_presentation() {
-        let mut unresolved = geometry();
-        unresolved.gun_mounts = PrimaryGunMounts::Unresolved;
-        let mut weapon = PrimaryWeapon::new();
-
-        let event = weapon.update(Duration::ZERO, HELD_A, unresolved)[0];
-
-        assert_eq!(event.projectile.origin_world, [1.0, 2.0, 3.0]);
-        assert_eq!(event.projectile.presentation_basis, unresolved.launch_basis);
-        assert_eq!(
-            event.auxiliary.presentation_origin_world,
-            unresolved.launch_basis.origin_world
-        );
     }
 
     #[test]
@@ -1284,9 +1232,5 @@ mod tests {
             PrimaryShotBudget::Limited(1),
         );
         assert_eq!(upgraded[0].gun_channel, PrimaryGunChannel::B);
-        assert_eq!(
-            upgraded[0].projectile.presentation_basis.origin_world,
-            [40.0, 50.0, 60.0]
-        );
     }
 }

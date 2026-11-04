@@ -7,8 +7,8 @@ use v2k_game::gameplay_hud::{
     GameplayHudWeaponRoster,
 };
 use v2k_game::primary_weapon::{
-    fire_profile_from_descriptor, PrimaryFireGeometry, PrimaryGunMounts, PrimaryLaunchBasis,
-    PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
+    fire_profile_from_descriptor, PrimaryFireGeometry, PrimaryLaunchBasis, PrimaryShotBudget,
+    PrimaryTriggerInput, PrimaryWeapon,
 };
 use v2k_game::session::GameSession;
 use v2k_game::time_trophy::TimeTrophyRuntime;
@@ -67,7 +67,6 @@ fn final_round_switches_hud_then_manual_cycles_skip_empty_until_same_slot_reacqu
     };
     let geometry = PrimaryFireGeometry {
         launch_basis: basis,
-        gun_mounts: PrimaryGunMounts::Unresolved,
         shooter_origin_world: [0.0; 3],
         shooter_id: 46,
         shooter_entity_type_at_birth: Some(46),

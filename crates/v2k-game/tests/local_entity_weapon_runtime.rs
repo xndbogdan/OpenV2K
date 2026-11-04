@@ -14,8 +14,8 @@ use v2k_game::{
         NativeEntityWeaponOwner,
     },
     primary_weapon::{
-        fire_profile_from_descriptor, PrimaryFireGeometry, PrimaryGunChannel, PrimaryGunMounts,
-        PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
+        fire_profile_from_descriptor, PrimaryFireGeometry, PrimaryGunChannel, PrimaryLaunchBasis,
+        PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
     },
     session::GameSession,
     specialized_actor_task_production::{
@@ -84,7 +84,6 @@ fn geometry(manager: &EntityManager) -> PrimaryFireGeometry {
             origin_world: [0.0, 60.0, 0.0],
             direction_unit: [0.0, 0.0, 1.0],
         },
-        gun_mounts: PrimaryGunMounts::Unresolved,
         shooter_origin_world: [0.0, 60.0, 0.0],
         shooter_id: player.id,
         shooter_entity_type_at_birth: Some(player.entity_type as u8),

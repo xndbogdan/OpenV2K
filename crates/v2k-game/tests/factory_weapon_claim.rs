@@ -14,8 +14,8 @@ use v2k_game::power_up_contact::{
     PlayerPowerUpRecipient,
 };
 use v2k_game::primary_weapon::{
-    fire_profile_from_descriptor, PrimaryFireGeometry, PrimaryGunChannel, PrimaryGunMounts,
-    PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
+    fire_profile_from_descriptor, PrimaryFireGeometry, PrimaryGunChannel, PrimaryLaunchBasis,
+    PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
 };
 use v2k_game::session::GameSession;
 use v2k_game::specialized_actor_task_production::SpecializedActorTaskScheduler;
@@ -213,7 +213,6 @@ fn factory_product_contact_auto_selects_and_fires_the_rapid_machine_gun() {
         },
         // Muzzle presentation is independently tested against the normal-tier
         // gun hierarchy; the recovered physics birth is the player center.
-        gun_mounts: PrimaryGunMounts::Unresolved,
         shooter_origin_world: player.position,
         shooter_id: player.id,
         shooter_entity_type_at_birth: Some(
