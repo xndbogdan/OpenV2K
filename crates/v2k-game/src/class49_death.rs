@@ -319,6 +319,8 @@ impl NativeExplosionSourceProfile {
             Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
                 (10, [16, 16])
             }
+            // Type45 (A/B/D) and Type48 (B/C/K) have none of the F, H, O and
+            // G blocks BAF0 tests, and capability 0x40: 40BB77.
             Self::EntityWeapon(_) => (16, [94, 95]),
             // Type20 has no A/B/N/G, capability8, and is neither type49 nor
             // 112..115: the 40BB9C default keeps ten class16 particles.
@@ -364,7 +366,8 @@ impl NativeExplosionSourceProfile {
             | Self::Class0Host(_)
             | Self::ExplodingFish(19 | 20)
             | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Rocket)
-            | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor) => {
+            | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::Meteor)
+            | Self::EntityWeapon(crate::native_entity_weapons::EntityWeaponKind::GuidedMissile) => {
                 NativeExplosionPolicy::Class1
             }
             Self::ExplodingFish(_)

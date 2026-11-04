@@ -151,6 +151,8 @@ fn corpus_weapon_births_keep_rng_allocation_relation_angles_and_task_custody() {
         (EntityWeaponKind::Grenade, 1, 35),
         (EntityWeaponKind::DepthCharge, 1, 35),
         (EntityWeaponKind::ProximityMine, 1, 34),
+        // The constructor's Sub-A word and the weighted selector's only.
+        (EntityWeaponKind::GuidedMissile, 2, 28),
     ] {
         let RetailRuntimeValue::Known(ordinal) = manager.next_common_body_ordinal() else {
             panic!("native body lineage")
@@ -277,6 +279,21 @@ fn corpus_weapon_births_keep_rng_allocation_relation_angles_and_task_custody() {
                 assert_eq!(
                     entity.sub_a_propulsion_runtime,
                     RetailRuntimeValue::Known(None)
+                );
+            }
+            EntityWeaponKind::GuidedMissile => {
+                let Some(ActorTaskRuntime::GuidedMissile(task)) =
+                    entity.actor_task_state(ActorTaskSlot::Primary)
+                else {
+                    panic!("class28 primary")
+                };
+                // 408610: the length of [-11, 22, 333].
+                assert_eq!(task.speed_raw, 333);
+                assert_eq!(task.target, None);
+                assert!(entity.actor_task_state(ActorTaskSlot::Secondary).is_none());
+                assert_eq!(
+                    entity.actor_task_state(ActorTaskSlot::Tertiary),
+                    Some(&ActorTaskRuntime::RocketTrail)
                 );
             }
             EntityWeaponKind::ProximityMine => {

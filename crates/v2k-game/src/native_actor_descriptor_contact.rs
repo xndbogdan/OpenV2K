@@ -140,6 +140,7 @@ fn admit_slot(
                     | ActorTaskRuntime::RocketFlight(_)
                     | ActorTaskRuntime::RocketTrail
                     | ActorTaskRuntime::ProximityMine(_)
+                    | ActorTaskRuntime::GuidedMissile(_)
                     | ActorTaskRuntime::GuardLocationAcquisition(_)
             )
         {
@@ -698,7 +699,7 @@ pub(crate) fn completed_contact_owner(
         return true;
     }
     match entity.entity_type {
-        42 | 48 | 59 if entity.native_entity_weapon_runtime.is_some() => {
+        42 | 45 | 48 | 59 if entity.native_entity_weapon_runtime.is_some() => {
             native_weapon_contact_owner_authenticates(manager, tasks, id)
         }
         13 => {

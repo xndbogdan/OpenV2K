@@ -1193,7 +1193,7 @@ as retail acceptance.
 
 These implementations and focused corpus-backed tests close the former local
 sweep/fuse/body adapter. Matched audiovisual acceptance remains separate.
-Attached bit1000 bodies, multiplayer dispatch and Guided Missile class28 need
+Attached bit1000 bodies and multiplayer dispatch need
 their own owners. [Alpine insect custody](ALPINE_INSECTS.md) owns the separate
 Type30/40/56 constructors, task graphs and synchronous hit/death paths; the
 weapon's arithmetic controls do not establish their complete retail scene
@@ -1601,7 +1601,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Weapon | Row | Firing | Body and program | Port |
 | --- | --- | --- | --- | --- |
 | Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | held |
-| Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | held |
+| Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | ported |
 | Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | ported |
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
@@ -1650,6 +1650,50 @@ the shot with the same keys, drops its mine at frame 269: it sinks 19, then 1
 a tick, and dies on the player 38 ticks after its birth with a Type60 ring,
 as retail's does (the two players' idle drift differs by a few units a
 tick, so the positions are not identical).
+
+**Guided Missiles.** Row `0x11` is `{1, 1, 0, 45}`, the rocket's shape:
+speed 1 plus the shooter's closing speed along the barrel. Class 28's
+initializer `FUN_0040D160` clears Secondary, publishes the rocket's class-31
+trail in Tertiary (`FUN_004069E0(entity, 2, 0x1F)`) and the lifetime-0
+Primary `FUN_00407F20`, whose record `FUN_00408610` holds the target, the
+flight time and the speed (the `FUN_00457730` length of the birth velocity,
+narrowed to a word); `FUN_004086A0` frees it with the task. Neither draws a
+random word. Style `0x4C81E8`'s `+34` sets `0x4000`, so the common update
+never rebuilds the matrix from the Euler words: the tick steers the matrix
+itself. Its `+10`, `+18` and `+1C` are `FUN_0040CEF0`, the rest null, and the
+alternate is class 1. Each visit of `FUN_00407FB0`:
+
+- once the shooter relation's age (`+68`) passes 15 s, runs `FUN_00410C10`
+  and stops;
+- rolls the matrix by the elapsed microseconds over 8 (`FUN_00457DD0`,
+  lateral and up rows);
+- without a live target clears the flight time and searches
+  (`FUN_004083F0`): among live bodies with capability `0x9`, state
+  `0x8000` without `0x4000`, not itself, under 4,500 by `FUN_00425370`'s
+  distance and with no recent relation either way (`FUN_00411A20`), those
+  more than `0x200` ahead with lateral and vertical offsets each smaller than
+  that; the lowest forward distance plus twice both offsets wins;
+- with one, adds the elapsed time to the flight time, aims 500 above it when
+  it is farther than the speed, and takes the inverse-sine angles of the
+  lateral and vertical offsets over the distance (a target behind gives
+  ±`0x2000` past them), each capped at the elapsed time over 32; the larger
+  turn is whole and the other halved, pitch through `FUN_00457A90` (up and
+  forward rows), yaw through `FUN_00457C30` (lateral and forward);
+- below a quarter of Sub-A's base speed adds q31(Sub-A word 0, elapsed << 11)
+  to the speed, capped there; the velocity is the speed along the forward
+  row, plus an eighth of it along the up row while untargeted or farther than
+  half the speed.
+
+Sub-B and Sub-D are never called. The port runs these as the native weapon
+owner's `GuidedMissile` kind (`native_entity_weapons::guided`). Retail lab
+(Level 1, master code, F9, ten B presses, one missile at tick 929): it
+flies 19, 54, 90, 125, 160, 195 and 226 units along Z in successive
+five-tick spans, then 230, wobbling with the roll, and dies at tick 983
+through `FUN_0040BAC0`. The port from retail's player state with the same
+keys fires at frame 239: 24, 59, 94, 130, 166, 201, 228, then 230. Its
+player had drifted to the opposite pitch (306 against retail's −295), so
+its missile sinks where retail's rises and meets the ground 13 ticks
+sooner.
 
 **Virus Bomb and Antidote Bomb.** A particle-77/78 solid static hit
 (`FUN_0043FF10`) runs `FUN_0043F890`, whose tail is `FUN_00441850`: sound 90, then `FUN_00456710` with

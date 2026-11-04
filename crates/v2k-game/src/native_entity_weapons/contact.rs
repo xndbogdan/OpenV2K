@@ -6,7 +6,10 @@
 //! synchronous410C10 owner. Static/active pair suffixes need their own current
 //! opposite-body/static-cell callback context and are separate from this pass.
 
-use super::{authenticate_weapon_metadata, grenade::*, EntityWeaponBlock, NativeEntityWeaponOwner};
+use super::{
+    authenticate_weapon_metadata, grenade::*, EntityWeaponBlock, EntityWeaponKind,
+    NativeEntityWeaponOwner,
+};
 use crate::{
     class49_terminal::{
         run_class49_standard_death, Class49TerminalBlock, Class49TerminalFrame, Class49WorldContext,
@@ -265,8 +268,11 @@ fn run<E>(
     let solid_contact = hit.is_some();
     let mut collision_damage_raw = 0;
     if let Some(hit) = hit {
-        if entity_type == 42 {
-            // Class22 +10 runs40CEF0 before D7F0 re-resolves and invokes141D0.
+        if matches!(
+            kind,
+            EntityWeaponKind::Rocket | EntityWeaponKind::GuidedMissile
+        ) {
+            // Class22 and class28 +10 run40CEF0 before D7F0 re-resolves and invokes141D0.
             // Mark a begun terminal prefix before it can return a host stop.
             *committed = true;
             terminal(manager, frame.resources, frame.world_fx, id)

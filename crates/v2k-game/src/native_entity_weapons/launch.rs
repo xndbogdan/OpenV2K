@@ -32,7 +32,11 @@ pub fn entity_weapon_launch_velocity_raw(
     direction: [i32; 3],
     inherited: [i16; 3],
 ) -> [i16; 3] {
-    if kind == EntityWeaponKind::Rocket {
+    // Both rows are `{1, 1, 0, type}`: speed 1 plus the closing speed.
+    if matches!(
+        kind,
+        EntityWeaponKind::Rocket | EntityWeaponKind::GuidedMissile
+    ) {
         let projection = direction
             .into_iter()
             .zip(inherited)

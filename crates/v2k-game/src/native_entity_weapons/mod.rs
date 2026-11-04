@@ -1,12 +1,12 @@
-//! Source-owned Type42 rocket, Type59 grenade/depth-charge, Type48 proximity
-//! mine and Type34 meteor programs.
+//! Source-owned Type42 rocket, Type45 guided missile, Type59
+//! grenade/depth-charge, Type48 proximity mine and Type34 meteor programs.
 //!
 //! These share launch and common-body machinery, while retaining distinct
-//! class22/class35/class19 tasks and class1/class49 terminal policies. Guided
-//! missiles (class28) require their own owner.
+//! class22/class35/class19 tasks and class1/class49 terminal policies.
 
 pub mod contact;
 pub mod grenade;
+pub mod guided;
 pub mod impact;
 pub mod launch;
 pub mod meteor;
@@ -33,6 +33,7 @@ pub enum EntityWeaponKind {
     /// A Type35 launcher's method-11 birth; no player selector owns it.
     Meteor,
     ProximityMine,
+    GuidedMissile,
 }
 
 impl EntityWeaponKind {
@@ -42,6 +43,7 @@ impl EntityWeaponKind {
             4 => Some(Self::DepthCharge),
             5 => Some(Self::Rocket),
             9 => Some(Self::ProximityMine),
+            0x11 => Some(Self::GuidedMissile),
             _ => None,
         }
     }
@@ -51,6 +53,7 @@ impl EntityWeaponKind {
             Self::Grenade | Self::DepthCharge => 59,
             Self::Meteor => meteor::METEOR_ENTITY_TYPE as usize,
             Self::ProximityMine => mine::MINE_ENTITY_TYPE as usize,
+            Self::GuidedMissile => guided::GUIDED_MISSILE_ENTITY_TYPE as usize,
         }
     }
     /// The living class22, class35, class19 or class34 style its
@@ -61,6 +64,7 @@ impl EntityWeaponKind {
             Self::Grenade | Self::DepthCharge => grenade::GRENADE_STYLE_ADDRESS,
             Self::Meteor => meteor::METEOR_STYLE_ADDRESS,
             Self::ProximityMine => mine::MINE_FALLING_STYLE_ADDRESS,
+            Self::GuidedMissile => guided::GUIDED_MISSILE_STYLE_ADDRESS,
         }
     }
     /// Whether `style` is one of the kind's living styles: the mine also
@@ -73,7 +77,7 @@ impl EntityWeaponKind {
         match self {
             Self::Grenade => 2000,
             Self::DepthCharge | Self::ProximityMine => 1000,
-            Self::Rocket => 1,
+            Self::Rocket | Self::GuidedMissile => 1,
             Self::Meteor => meteor::METEOR_LAUNCH_SPEED_RAW,
         }
     }
@@ -165,5 +169,6 @@ pub(crate) fn authenticate_weapon_metadata(
         }
         EntityWeaponKind::Meteor => meteor::authenticate_meteor_metadata(metadata),
         EntityWeaponKind::ProximityMine => mine::authenticate_mine_metadata(metadata),
+        EntityWeaponKind::GuidedMissile => guided::authenticate_guided_missile_metadata(metadata),
     }
 }

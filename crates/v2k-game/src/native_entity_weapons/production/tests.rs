@@ -353,3 +353,100 @@ fn mine_falls_arms_its_search_in_the_same_pass_floats_and_dies_on_a_target() {
     }
     assert_eq!(deaths, 1);
 }
+
+#[v2k_test_support::retail_test]
+fn guided_missile_rolls_climbs_takes_a_target_ahead_and_dies_after_15_s() {
+    let (mut session, mut manager, mut fx, owner) = weapon(EntityWeaponKind::GuidedMissile);
+    let id = owner.entity_id();
+    let primary = owner.task_ids[ActorTaskSlot::Primary as usize].unwrap();
+    let tick = |manager: &mut EntityManager,
+                session: &mut GameSession,
+                fx: &mut WorldFx,
+                retail_tick: u32| {
+        tick_entity_weapon(
+            manager,
+            owner,
+            EntityWeaponTickFrame {
+                resources: &mut session.cache,
+                world_fx: fx,
+                elapsed_micros: 20_000,
+                retail_tick,
+            },
+            |manager, _, _, dead| -> Result<(), ()> {
+                let entity = manager.entity_mut(dead).unwrap();
+                for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
+                    entity.actor_tasks.clear_slot(slot);
+                }
+                Ok(())
+            },
+        )
+        .unwrap()
+    };
+    let state = |manager: &mut EntityManager| {
+        let Some(ActorTaskRuntime::GuidedMissile(state)) = manager
+            .entity_mut(id)
+            .unwrap()
+            .actor_task_state(ActorTaskSlot::Primary)
+            .copied()
+        else {
+            panic!("class28 Primary")
+        };
+        state
+    };
+    // 408610: the birth speed is the length of [100, 200, 300].
+    assert_eq!(state(&mut manager).speed_raw, 374);
+    let before = manager.entity_mut(id).unwrap().physical_body_basis_q31();
+    assert!(matches!(
+        tick(&mut manager, &mut session, &mut fx, 1),
+        EntityWeaponTickOutcome::Advanced { .. }
+    ));
+    let entity = manager.entity_mut(id).unwrap();
+    // The matrix rolled (457DD0) and the Euler words stayed: class28's +34
+    // keeps 13F70 from rebuilding it.
+    assert_ne!(entity.physical_body_basis_q31(), before);
+    assert_eq!(entity.rotation_heading_pitch_roll_raw(), [0; 3]);
+    let after = state(&mut manager);
+    assert_eq!(after.target, None);
+    assert_eq!(after.speed_raw, 374 + 76);
+    // A live capability-8 body ahead along the missile's forward axis.
+    let RetailRuntimeValue::Known(basis) =
+        manager.entity_mut(id).unwrap().physical_body_basis_q31()
+    else {
+        panic!("matrix")
+    };
+    let position = manager.entity_mut(id).unwrap().position_raw();
+    let ahead: [i16; 3] = std::array::from_fn(|axis| {
+        position[axis].wrapping_add(((i64::from(basis.forward[axis]) * 2000) >> 31) as i16)
+    });
+    let target = manager
+        .iter_all()
+        .find(|entity| {
+            entity.id != id
+                && entity.capability_flags & 8 != 0
+                && entity.collision.state_flags_at_0x08.masked(0xc000)
+                    == RetailRuntimeValue::Known(0x8000)
+        })
+        .map(|entity| entity.id)
+        .expect("a capability-8 body in world 17");
+    manager.entity_mut(target).unwrap().set_position_raw(ahead);
+    tick(&mut manager, &mut session, &mut fx, 2);
+    assert_eq!(state(&mut manager).target, Some(target));
+    tick(&mut manager, &mut session, &mut fx, 3);
+    assert_eq!(state(&mut manager).flight_us, 20_000);
+    // The shooter relation's age passes 15 s inside this visit's prefix.
+    manager
+        .entity_mut(id)
+        .unwrap()
+        .collision
+        .recent_relation_elapsed_us_at_0x68 = RetailRuntimeValue::Known(15_000_000);
+    assert_eq!(
+        tick(&mut manager, &mut session, &mut fx, 4),
+        EntityWeaponTickOutcome::Terminal
+    );
+    assert!(manager
+        .entity_mut(id)
+        .unwrap()
+        .actor_tasks
+        .wrapper_flags(primary)
+        .is_none());
+}
