@@ -1148,6 +1148,7 @@ mod tests {
             type_metadata: Vec::new(),
             player_cargo_unlock_raw: INITIAL_PLAYER_CARGO_CAPACITY as u8,
             beam_timer_ms: 0,
+            session_phase_4: false,
             factory_converted_output_births: Vec::new(),
             factory_output_materialiser_births: Vec::new(),
             cargo_drop_proxies: Vec::new(),

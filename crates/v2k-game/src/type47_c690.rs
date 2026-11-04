@@ -228,7 +228,8 @@ fn plan_authenticated_type47_c690(
 ) -> Result<Type47ImpactC690Outcome, Type47ImpactC690Error> {
     match choice_list_source {
         RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeDefault) => {}
-        RetailRuntimeValue::Unresolved => {
+        RetailRuntimeValue::Unresolved
+        | RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeRecord(_)) => {
             return Err(Type47ImpactC690Error::ChoiceListSourceUnresolved);
         }
     }

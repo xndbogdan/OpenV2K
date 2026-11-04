@@ -263,7 +263,8 @@ fn type13_bypasses_queries_while_level1_type47_stays_fail_closed() {
     assert_eq!(outcome.position_raw, [0, 0, 0]);
     assert_eq!(outcome.velocity_raw, [10, 0, 0]);
     assert_eq!(outcome.heading_raw, 153);
-    assert_eq!(outcome.pitch_raw, 986);
+    // A690's terrain target is 8 * clearance - 8000 (41A7DC).
+    assert_eq!(outcome.pitch_raw, 520);
     assert_eq!(outcome.roll_raw, 142);
     assert_eq!(outcome.sound, None);
     assert_eq!(outcome.target_private.target_position_raw, [0, 0, 1_000]);

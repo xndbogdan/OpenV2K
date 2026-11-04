@@ -345,7 +345,9 @@ by leverage:
 15. ✅ **Attract mode.** 60 s idle (reset by the bound keys' press or
     release; 10 s after a timeout) → pop one screen per timeout; at the ring:
     prop cmd 5 (bg zoom-out 524 ms) then game start with mode code 4 (or 1,
-    p=1/8). Ported; the demo player of the worlds that have one is held
+    p=1/8). Ported, with the demo player of the worlds that have one: its
+    flight is retail's, its shots are held whenever their muzzle needs the
+    transform-only pass
     ([the attract demo](MENU_SYSTEM.md#the-attract-demo-in-the-port)).
 
 16. ✅ **Backdrop prop screens.** Screens with flag 0x10 draw model 73

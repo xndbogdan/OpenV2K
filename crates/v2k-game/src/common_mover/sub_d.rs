@@ -399,6 +399,20 @@ pub const INTRO2_TYPE94_SUB_D: SubDSteeringDescriptor = INTRO2_TYPE58_SUB_D;
 /// Exact flyer Section-12 Sub-D descriptor (types 13, 15, 87).
 ///
 /// Flags `0` skip the terrain/obstacle classifier entirely (`LAB_0041fc90`).
+/// Type 46's steering (the player's craft): divisor 28, yaw coupled into
+/// roll, no pitch steering, probes or classifier. Under Player Control its
+/// yaw comes from the keys; the attract demo's class 7 takes it through
+/// `FUN_0041F660`'s classifier-free path, as the flyers'.
+pub const TYPE46_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
+    steering_divisor_raw: 28,
+    couple_yaw_into_roll_raw: 1,
+    enable_pitch_steering_raw: 0,
+    forward_probe_raw: 0,
+    lateral_probe_raw: 0,
+    classifier_flags: 0,
+    reserved_at_0x0b: 0,
+};
+
 pub const FLYER_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     steering_divisor_raw: 64,
     couple_yaw_into_roll_raw: 1,
@@ -494,6 +508,7 @@ const fn admits_shared_fun_0041f660_steering(descriptor: SubDSteeringDescriptor)
             | FLYER_SUB_D
             | TYPE14_SUB_D
             | TYPE41_SUB_D
+            | TYPE46_SUB_D
     )
 }
 

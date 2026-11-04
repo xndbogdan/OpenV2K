@@ -171,9 +171,10 @@ pub fn plan_vtol_terrain_derived_attitude_raw(
     let underside_over_coarse_surface = i32::from(request.center_y_raw)
         .wrapping_sub(i32::from(request.active_model_radius_raw))
         .wrapping_sub(i32::from(request.coarse_center_surface_raw));
+    // 41A7DC: `LEA EDX, [ECX + EDX*8 - 8000]`.
     let terrain_target = i32::from(request.saved_target_raw)
-        .wrapping_add(underside_over_coarse_surface.wrapping_mul(2))
-        .wrapping_sub(2_000);
+        .wrapping_add(underside_over_coarse_surface.wrapping_mul(8))
+        .wrapping_sub(8_000);
     let mut target_pitch_raw = terrain_target.min(request.target_limit_raw);
     if request.invert_target {
         target_pitch_raw = target_pitch_raw.wrapping_neg();
@@ -544,10 +545,11 @@ mod tests {
         let outcome = plan_vtol_terrain_derived_attitude_raw(terrain_attitude_request())
             .expect("authored bounds");
 
-        // target = 2 * ((2000 - 100) - 200) - 2000 = 1400.
-        // A690 moves 1/16 toward it before adding the external +50.
-        assert_eq!(outcome.target_pitch_raw, 1_400);
-        assert_eq!(outcome.pitch_raw, 1_075);
+        // 41A7DC: target = 8 * ((2000 - 100) - 200) - 8000 = 5600.
+        // A690 moves 1/16 toward it (an arithmetic shift of -4600) before
+        // adding the external +50.
+        assert_eq!(outcome.target_pitch_raw, 5_600);
+        assert_eq!(outcome.pitch_raw, 1_338);
         // AC40 chooses the higher projected surface: 2000 - 100 - 300.
         assert_eq!(outcome.clearance_raw, 1_600);
         // 650 + trunc((120 - 1600) / 40) = 613.

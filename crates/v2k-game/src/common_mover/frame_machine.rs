@@ -84,7 +84,11 @@ pub struct CommonMoverFrameSnapshot {
     pub sub_g_runtime_angle_raw: i16,
     pub sub_g_state_byte_3c: u8,
     pub sub_k_smoothed_raw: Option<i32>,
+    /// The word Sub-O's runtime `+0x0C` points at, when bound: type 46's
+    /// fan variable (model variable 8), which the first correction advances.
     pub sub_n_accumulator_raw: Option<i16>,
+    /// Sub-E runtime dword `+0x10` (the projectile method, table `+0x2C`),
+    /// which the second correction clears and may restore.
     pub sub_o_link_raw: u32,
 }
 
@@ -658,7 +662,9 @@ impl CommonMoverFrameMachine {
     }
 
     fn enter_after_primary_effect(&mut self) -> Result<(), CommonMoverFrameBlock> {
-        if self.configuration.topology.sub_n {
+        // 0x4016F0: retail tests the word Sub-O's runtime `+0x0C` binds (the
+        // type-46 fan variable), not a Sub-N component.
+        if self.configuration.topology.sub_n || self.snapshot.sub_n_accumulator_raw.is_some() {
             let before_raw = self
                 .snapshot
                 .sub_n_accumulator_raw

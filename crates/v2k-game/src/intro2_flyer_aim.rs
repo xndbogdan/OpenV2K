@@ -25,7 +25,7 @@ use crate::entity_collision_state::{EntityTypeRuntimeMetadata, RetailRuntimeValu
 use crate::generic_projectile_emitter::{
     GenericEmitterAction, GenericEmitterAppendRequest, GenericEmitterEntitySnapshot,
     GenericEmitterResume, GenericEmitterRuntime, GenericEmitterSourceRefreshPoint,
-    GenericEmitterSpeedField, GenericEmitterTransactionId,
+    GenericEmitterSpeedField, GenericEmitterTransactionId, GENERIC_PROJECTILE_AUXILIARY_METHOD,
 };
 use crate::intro2_flyers_live::intro2_flyer_pursuing_graph_authenticates;
 use crate::ordinary_type47_shot_math::{
@@ -47,6 +47,10 @@ enum FlyerEmitterProfile {
     Deathwas,
     Type108,
     Type39,
+    /// The attract craft: type 46's Sub-E, which `FUN_004503C0` arms from
+    /// the attract row on every visit (method, sound, cadence, auxiliary
+    /// command and gate mode 1).
+    Craft,
 }
 
 impl FlyerEmitterProfile {
@@ -63,15 +67,18 @@ impl FlyerEmitterProfile {
             87 => Some(Self::Deathwas),
             108 => Some(Self::Type108),
             39 => Some(Self::Type39),
+            46 => Some(Self::Craft),
             _ => None,
         }
     }
 
+    /// The authored method; the craft's runtime word is the row's.
     fn method(self) -> u32 {
         match self {
             Self::Wasp => 30,
             Self::Deathwas | Self::Type39 => 20,
             Self::Type108 => 24,
+            Self::Craft => 18,
         }
     }
     fn sound(self) -> u16 {
@@ -79,6 +86,7 @@ impl FlyerEmitterProfile {
             Self::Wasp => 70,
             Self::Deathwas => 92,
             Self::Type108 | Self::Type39 => 105,
+            Self::Craft => 88,
         }
     }
     /// Sub-E random interval and target-axis tolerance.
@@ -87,6 +95,7 @@ impl FlyerEmitterProfile {
             Self::Wasp | Self::Deathwas => (600_000, 2_560),
             Self::Type108 => (400_000, 3_072),
             Self::Type39 => (2_000_000, 2_560),
+            Self::Craft => (75_000, 5_120),
         }
     }
     /// Sub-E `+0x0C`; zero takes the method's table speed.
@@ -96,22 +105,19 @@ impl FlyerEmitterProfile {
             _ => 0,
         }
     }
-    fn table_speed(self) -> i16 {
-        projectile_class_row(self.method()).unwrap().speed_raw as i16
-    }
-    fn launch_speed(self) -> i16 {
-        match self.speed_override() {
-            0 => self.table_speed(),
-            speed => speed,
-        }
-    }
     fn particle_class(self) -> u8 {
         projectile_class_row(self.method()).unwrap().particle_class
     }
     fn emitter(self) -> GenericEmitterRuntime {
         GenericEmitterRuntime {
             joint_bindings: [None; 2],
-            projectile_method: self.method(),
+            // FUN_00443560 replaces the craft's method with the session
+            // record's active weapon: the boot record's slot 0 (selector 1).
+            projectile_method: if self == Self::Craft {
+                CRAFT_BOOT_RECORD_SELECTOR
+            } else {
+                self.method()
+            },
             emitter_selector: 0,
             sound_id: u32::from(self.sound()),
             direct_mode: 0,
@@ -123,6 +129,17 @@ impl FlyerEmitterProfile {
         }
     }
     fn accepts(self, descriptor: ProjectileEmitterDescriptor) -> bool {
+        if self == Self::Craft {
+            // Type 46's record; cadence, gate mode and auxiliary command are
+            // the attract row's writes.
+            return descriptor
+                == ProjectileEmitterDescriptor {
+                    random_interval_us: descriptor.random_interval_us,
+                    stochastic_gate_mode: descriptor.stochastic_gate_mode,
+                    auxiliary_command: descriptor.auxiliary_command,
+                    ..CRAFT_SUB_E
+                };
+        }
         descriptor.projectile_method == self.method()
             && descriptor.sound_id == self.sound()
             && (
@@ -139,6 +156,26 @@ impl FlyerEmitterProfile {
             && descriptor.speed_override_raw == self.speed_override()
     }
 }
+
+/// `DAT_004D0B30 + 0x1C`: the boot session record's first weapon, selector
+/// 1 (slot byte `+0x122` is 0).
+const CRAFT_BOOT_RECORD_SELECTOR: u32 = 1;
+
+/// Type 46's authored Sub-E.
+const CRAFT_SUB_E: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    projectile_method: 18,
+    random_interval_us: 75_000,
+    spread_raw: 0,
+    aim_threshold_raw: 5_000,
+    speed_override_raw: 0,
+    target_axis_tolerance_raw: 5_120,
+    sound_id: 88,
+    raw_word_at_0x12: 18,
+    alternate_emitter_raw: 20,
+    stochastic_gate_mode: 0,
+    auxiliary_command: 1,
+    variable_bindings: [1, 2, 3, 4],
+};
 
 pub(crate) fn flyer_projectile_descriptor_authenticates(
     entity_type: u32,
@@ -159,9 +196,70 @@ pub struct Intro2FlyerAimRuntime {
     emitter_runtime: GenericEmitterRuntime,
     transient_shots: Vec<GenericEmitterAppendRequest>,
     next_transaction_id: u64,
+    /// The word Sub-E's `+0x0C` binding points at (model variable 4): the
+    /// weapon record's `+0x08` byte, which selects the gun the craft shows.
+    weapon_var_raw: i16,
+}
+
+/// `FUN_004503C0`'s writes for an attract row: the Sub-E runtime's method
+/// (`+10`) and sound (`+20`), and type 46's shared Sub-E cadence (`+04`),
+/// gate mode (`+16`, 1) and auxiliary command (`+17`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CraftEmitterArming {
+    pub projectile_method: u32,
+    pub sound_id: u32,
+    pub cadence_us: u32,
+    pub auxiliary_command: u8,
+    /// Row `+03`, written through the runtime's `+0x0C` binding.
+    pub weapon_var_raw: i16,
 }
 
 impl Intro2FlyerAimRuntime {
+    pub fn arm_craft(&mut self, arming: CraftEmitterArming) {
+        self.emitter_runtime.projectile_method = arming.projectile_method;
+        self.emitter_runtime.sound_id = arming.sound_id;
+        self.weapon_var_raw = arming.weapon_var_raw;
+        self.restore_craft_record(arming);
+    }
+
+    pub const fn weapon_var_raw(&self) -> i16 {
+        self.weapon_var_raw
+    }
+
+    /// The type record keeps an earlier demo's writes: a later craft starts
+    /// from them until its own first `FUN_004503C0` visit.
+    pub fn restore_craft_record(&mut self, arming: CraftEmitterArming) {
+        self.projectile_descriptor.random_interval_us = arming.cadence_us;
+        self.projectile_descriptor.stochastic_gate_mode = 1;
+        self.projectile_descriptor.auxiliary_command = arming.auxiliary_command;
+    }
+
+    fn method(&self) -> u32 {
+        self.emitter_runtime.projectile_method
+    }
+
+    /// `FUN_00401430`'s second correction clears runtime `+0x10` and may
+    /// restore it.
+    pub(crate) fn set_projectile_method(&mut self, method: u32) {
+        self.emitter_runtime.projectile_method = method;
+    }
+
+    fn sound(&self) -> u16 {
+        self.emitter_runtime.sound_id as u16
+    }
+
+    fn row(&self) -> Option<crate::projectile_emitter::ProjectileClassRow> {
+        projectile_class_row(self.method())
+    }
+
+    /// Sub-E `+0x0C`, else the method's table speed.
+    fn launch_speed(&self) -> Option<i16> {
+        match self.projectile_descriptor.speed_override_raw {
+            0 => self.row().map(|row| row.speed_raw as i16),
+            speed => Some(speed),
+        }
+    }
+
     fn from_descriptor(
         profile: FlyerEmitterProfile,
         descriptor: ProjectileEmitterDescriptor,
@@ -175,6 +273,16 @@ impl Intro2FlyerAimRuntime {
             emitter_runtime: profile.emitter(),
             transient_shots: Vec::new(),
             next_transaction_id: 1,
+            // FUN_00443560: the boot record's slot-0 weapon record `+0x08`.
+            weapon_var_raw: if profile == FlyerEmitterProfile::Craft {
+                i16::from(
+                    crate::weapon_inventory::WeaponInventory::new()
+                        .selected_descriptor()
+                        .callback_selector() as i8,
+                )
+            } else {
+                0
+            },
         })
     }
 
@@ -261,8 +369,10 @@ pub fn ensure_intro2_flyer_aim_runtime(
     let profile =
         FlyerEmitterProfile::from_entity(entity).ok_or(Intro2FlyerAimError::GraphMismatch)?;
     if let Some(runtime) = &entity.intro2_flyer_aim_runtime {
+        // The craft's copy carries the attract row's writes to the record.
         return if runtime.profile == profile
-            && runtime.projectile_descriptor == descriptor
+            && (runtime.projectile_descriptor == descriptor
+                || profile == FlyerEmitterProfile::Craft)
             && is_exact_runtime_shape(runtime)
         {
             Ok(())
@@ -508,18 +618,44 @@ pub fn drain_intro2_flyer_shots(
         };
         let mut solutions = Vec::with_capacity(runtime.transient_shots.len());
         for (index, request) in runtime.transient_shots.iter().copied().enumerate() {
-            if !is_exact_transient_request(profile, source_entity_id, request) {
+            if !is_exact_transient_request(runtime, source_entity_id, request) {
                 return Err(Intro2FlyerShotDrainError::MalformedTransientRequest { index });
             }
-            solutions.push(
-                drain_intro2_flyer_transient_request(
+            let origin = entity.emitter_muzzles[usize::from(request.emitter_selector)]
+                .unwrap_or(entity.position_raw());
+            solutions.push(if request.auxiliary {
+                // 4E770's method-15 row: class 32 at the muzzle with the
+                // source's velocity alone (FUN_004410B0 drops it at or below
+                // the sea).
+                FlyerShot::Auxiliary {
+                    position_raw: origin,
+                    velocity_raw: entity.velocity_raw(),
+                }
+            } else if profile == FlyerEmitterProfile::Craft {
+                let row = projectile_class_row(request.projectile_method)
+                    .ok_or(Intro2FlyerShotDrainError::RuntimeContractMismatch)?;
+                let solution = crate::ordinary_type47_shot_math::drain_transient_with_method_row(
                     request,
-                    entity.emitter_muzzles[usize::from(request.emitter_selector)]
-                        .unwrap_or(entity.position_raw()),
+                    origin,
                     entity.velocity_raw(),
+                    row,
                 )
-                .map_err(Intro2FlyerShotDrainError::ShotMath)?,
-            );
+                .map_err(Intro2FlyerShotDrainError::ShotMath)?;
+                FlyerShot::Primary {
+                    class: row.particle_class,
+                    position_raw: solution.position_raw,
+                    velocity_raw: solution.velocity_raw,
+                }
+            } else {
+                let solution =
+                    drain_intro2_flyer_transient_request(request, origin, entity.velocity_raw())
+                        .map_err(Intro2FlyerShotDrainError::ShotMath)?;
+                FlyerShot::Primary {
+                    class: profile.particle_class(),
+                    position_raw: solution.position_raw,
+                    velocity_raw: solution.velocity_raw,
+                }
+            });
         }
         (solutions, suppression, profile, entity.entity_type as u8)
     };
@@ -536,32 +672,75 @@ pub fn drain_intro2_flyer_shots(
     };
     debug_assert_eq!(queued.len(), solutions.len());
 
+    let _ = profile;
     let mut materialized_particle_classes = Vec::with_capacity(solutions.len());
     for solution in solutions {
-        if world_fx
-            .materialize_descriptor_particle_request(
-                DescriptorParticleRequest {
-                    source_class: profile.particle_class(),
-                    position_raw: solution.position_raw,
-                    velocity_raw: solution.velocity_raw,
-                    owner: Some(ParticleOwnerAtBirth {
-                        entity_id: source_entity_id,
-                        entity_type: owner_entity_type,
-                    }),
-                    suppresses_impact_damage,
-                },
-                environment,
-                retail_tick,
-            )
-            .is_some()
-        {
-            materialized_particle_classes.push(profile.particle_class());
+        let owner = Some(ParticleOwnerAtBirth {
+            entity_id: source_entity_id,
+            entity_type: owner_entity_type,
+        });
+        match solution {
+            FlyerShot::Primary {
+                class,
+                position_raw,
+                velocity_raw,
+            } => {
+                if world_fx
+                    .materialize_descriptor_particle_request(
+                        DescriptorParticleRequest {
+                            source_class: class,
+                            position_raw,
+                            velocity_raw,
+                            owner,
+                            suppresses_impact_damage,
+                        },
+                        environment,
+                        retail_tick,
+                    )
+                    .is_some()
+                {
+                    materialized_particle_classes.push(class);
+                }
+            }
+            FlyerShot::Auxiliary {
+                position_raw,
+                velocity_raw,
+            } => {
+                let class = projectile_class_row(GENERIC_PROJECTILE_AUXILIARY_METHOD)
+                    .expect("method 15 is an authored row")
+                    .particle_class;
+                world_fx.materialize_combat_projectile_410b0(
+                    DescriptorParticleRequest {
+                        source_class: class,
+                        position_raw,
+                        velocity_raw,
+                        owner,
+                        suppresses_impact_damage,
+                    },
+                    environment,
+                    retail_tick,
+                );
+                materialized_particle_classes.push(class);
+            }
         }
     }
     Ok(Intro2FlyerShotDrainOutcome {
         consumed_requests: queued.len(),
         materialized_particle_classes,
     })
+}
+
+/// One drained command, from its row.
+enum FlyerShot {
+    Primary {
+        class: u8,
+        position_raw: [i16; 3],
+        velocity_raw: [i16; 3],
+    },
+    Auxiliary {
+        position_raw: [i16; 3],
+        velocity_raw: [i16; 3],
+    },
 }
 
 fn drive_flyer_aim_machine(
@@ -642,13 +821,12 @@ fn handle_flyer_generic_action(
         .iter_all()
         .find(|entity| entity.id == entity_id)
         .ok_or(Intro2FlyerAimError::EntityUnavailable)?;
-    let profile =
-        FlyerEmitterProfile::from_entity(source).ok_or(Intro2FlyerAimError::GraphMismatch)?;
-    let descriptor = source
+    FlyerEmitterProfile::from_entity(source).ok_or(Intro2FlyerAimError::GraphMismatch)?;
+    let aim_runtime = source
         .intro2_flyer_aim_runtime
-        .as_ref()
-        .ok_or(Intro2FlyerAimError::RuntimeUnavailable)?
-        .projectile_descriptor;
+        .clone()
+        .ok_or(Intro2FlyerAimError::RuntimeUnavailable)?;
+    let descriptor = aim_runtime.projectile_descriptor;
     let target_entity_id = {
         let entity = manager
             .iter_all()
@@ -765,8 +943,8 @@ fn handle_flyer_generic_action(
         GenericEmitterAction::ResolveTargetLaunch { request, .. } => {
             if request.cached_source.handle != entity_id
                 || request.cached_source.allocation_identity != source_allocation_identity
-                || request.projectile_method != profile.method()
-                || request.speed_override_raw != profile.speed_override()
+                || request.projectile_method != aim_runtime.method()
+                || request.speed_override_raw != descriptor.speed_override_raw
                 || request.current_target.is_some_and(|target| {
                     target.handle != target_entity_id
                         || target.allocation_identity != target_allocation_identity
@@ -774,12 +952,16 @@ fn handle_flyer_generic_action(
             {
                 return Err(Intro2FlyerAimError::ActionContractMismatch);
             }
-            let solution = resolve_ballistic_target_launch(request, profile.table_speed())
+            let table_speed = aim_runtime
+                .row()
+                .ok_or(Intro2FlyerAimError::RuntimeContractMismatch)?
+                .speed_raw as i16;
+            let solution = resolve_ballistic_target_launch(request, table_speed)
                 .map_err(Intro2FlyerAimError::ShotMath)?;
             Ok(GenericEmitterResume::TargetLaunchResolved { phase, solution })
         }
         GenericEmitterAction::AppendTransient { request, .. } => {
-            if !is_exact_transient_request(profile, entity_id, request) {
+            if !is_exact_transient_request(&aim_runtime, entity_id, request) {
                 return Err(Intro2FlyerAimError::ActionContractMismatch);
             }
             let entity = manager
@@ -838,14 +1020,34 @@ fn handle_flyer_generic_action(
                 .ok_or(Intro2FlyerAimError::EntityUnavailable)?;
             authenticate_intro2_flyer_aim_owner(source, true)?;
             let expected_position = source.position_raw();
-            if sound_id != u32::from(profile.sound())
+            if sound_id != u32::from(aim_runtime.sound())
                 || source_position_raw != Some(expected_position)
                 || frequency_multiplier_16_16 != 0x0001_0000
                 || volume_multiplier_16_16 != 0x0001_0000
             {
                 return Err(Intro2FlyerAimError::ActionContractMismatch);
             }
-            world_fx.queue_networked_positional_sound_raw(profile.sound(), expected_position);
+            world_fx.queue_networked_positional_sound_raw(aim_runtime.sound(), expected_position);
+            Ok(GenericEmitterResume::Acknowledged { phase })
+        }
+        // A descriptor with `+0x14` alternates the A/B selector after each
+        // shot (the craft's 20; the flyers author none).
+        GenericEmitterAction::CommitAlternateSelector { write, .. }
+            if descriptor.alternate_emitter_raw != 0 =>
+        {
+            let entity = manager
+                .entity_mut(entity_id)
+                .ok_or(Intro2FlyerAimError::EntityUnavailable)?;
+            authenticate_intro2_flyer_aim_owner(entity, true)?;
+            let runtime = &mut entity
+                .intro2_flyer_aim_runtime
+                .as_mut()
+                .ok_or(Intro2FlyerAimError::RuntimeUnavailable)?
+                .emitter_runtime;
+            if runtime.emitter_selector != write.before_raw {
+                return Err(Intro2FlyerAimError::RuntimeContractMismatch);
+            }
+            runtime.emitter_selector = write.after_raw;
             Ok(GenericEmitterResume::Acknowledged { phase })
         }
         GenericEmitterAction::EmitMethod31Rejection { .. }
@@ -965,25 +1167,54 @@ fn retained_aim_basis(entity: &Entity) -> Result<Type9BodyBasis, Intro2FlyerAimE
 }
 
 fn is_exact_runtime_shape(runtime: &Intro2FlyerAimRuntime) -> bool {
+    let craft = runtime.profile == FlyerEmitterProfile::Craft;
+    let base = runtime.profile.emitter();
     runtime.profile.accepts(runtime.projectile_descriptor)
         && runtime.emitter_runtime
             == (GenericEmitterRuntime {
                 cadence_raw: runtime.emitter_runtime.cadence_raw,
-                ..runtime.profile.emitter()
+                // The craft's method and sound are the row's; its selector
+                // alternates.
+                projectile_method: if craft {
+                    runtime.emitter_runtime.projectile_method
+                } else {
+                    base.projectile_method
+                },
+                sound_id: if craft {
+                    runtime.emitter_runtime.sound_id
+                } else {
+                    base.sound_id
+                },
+                emitter_selector: if craft {
+                    runtime.emitter_runtime.emitter_selector
+                } else {
+                    base.emitter_selector
+                },
+                ..base
             })
 }
 
 fn is_exact_transient_request(
-    profile: FlyerEmitterProfile,
+    runtime: &Intro2FlyerAimRuntime,
     source_entity_id: u32,
     request: GenericEmitterAppendRequest,
 ) -> bool {
-    request.source_handle == source_entity_id
+    let shape = request.source_handle == source_entity_id
         && request.owner_handle == source_entity_id
-        && request.projectile_method == profile.method()
-        && request.emitter_selector == 0
-        && request.speed_field == GenericEmitterSpeedField::Explicit(profile.launch_speed())
-        && !request.auxiliary
+        && request.emitter_selector <= 1
+        && (runtime.projectile_descriptor.alternate_emitter_raw != 0
+            || request.emitter_selector == 0);
+    if request.auxiliary {
+        return shape
+            && runtime.projectile_descriptor.auxiliary_command != 0
+            && request.projectile_method == GENERIC_PROJECTILE_AUXILIARY_METHOD
+            && request.speed_field == GenericEmitterSpeedField::IndeterminateAuxiliaryStackWord;
+    }
+    shape
+        && request.projectile_method == runtime.method()
+        && runtime
+            .launch_speed()
+            .is_some_and(|speed| request.speed_field == GenericEmitterSpeedField::Explicit(speed))
 }
 
 fn transaction_scoped_allocation_identity(seed: u64, handle: u32, discriminator: u64) -> u64 {

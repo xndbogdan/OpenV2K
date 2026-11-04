@@ -206,6 +206,7 @@ fn native_type10_direct_zero_mass_keeps_g_animation_prefix_without_output_dispat
                 self_mass_raw: 100,
                 attached_cargo_mass: 0,
                 capability_flags: 8,
+                height_policy: crate::vtol::VtolHeightPolicy::RetailAttenuation,
                 terrain: session.cache.level_terrain().unwrap(),
                 retail_tick: 1,
                 elapsed_micros: 20_000,

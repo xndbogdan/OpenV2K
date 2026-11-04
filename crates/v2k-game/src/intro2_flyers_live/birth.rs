@@ -38,14 +38,14 @@ pub(crate) fn authenticate_native_flyer_metadata(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
 ) -> Result<(), Intro2FlyerPublicationError> {
-    let model =
-        native_flyer_model_id(entity_type).ok_or(Intro2FlyerPublicationError::MetadataMismatch)?;
+    let models =
+        flyer_model_slots(entity_type).ok_or(Intro2FlyerPublicationError::MetadataMismatch)?;
     authenticate_flyer_mover_metadata(entity_type, metadata)
         .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
     authenticate_flyer_choices(entity_type, metadata)?;
-    if metadata.model_slots != [model; 4]
+    if metadata.model_slots != models
         || metadata.mass_raw != flyer_mass(entity_type)
-        || metadata.capability_flags != 8
+        || metadata.capability_flags != flyer_capability(entity_type)
         || metadata.initial_health_raw.is_none()
         || metadata.damage_profile.is_none()
         || metadata.constructor_sound_attachment_id
@@ -92,6 +92,15 @@ pub(crate) fn publish_native_flyer(
             descriptor,
             world_fx.next_shared_retail_random_u16(),
         )));
+    // 09A80 reaches A after G: 20450 draws the craft's forward target.
+    if flyer_topology(entity.entity_type).sub_a {
+        entity.sub_a_propulsion_runtime = RetailRuntimeValue::Known(Some(
+            crate::common_mover::SubAPropulsionRuntime::from_20450_constructor(
+                TYPE46_SUB_A,
+                world_fx.next_shared_retail_random_u16(),
+            ),
+        ));
+    }
     let sub_d = match authored {
         Some((_, sub_d)) => sub_d,
         None => world_fx.construct_entity_sub_d(flyer_sub_d(entity.entity_type)),
@@ -111,6 +120,45 @@ pub(crate) fn publish_native_flyer(
         .map_err(|_| Intro2FlyerPublicationError::TaskSetupMismatch)
 }
 
+/// `FUN_004438A0`'s phase-4 craft: the request's type 46 under type 51's
+/// list. `self_righting` is controller `+0x20C`, which `FUN_0041B9C0` writes
+/// to Sub-G `+0x41`; Sub-J's capacity is `FUN_00418620`'s min(5,
+/// `+0x199`). Sub-O's `+0x10`/`+0x14` (1 for controller `+0x86` zero) are
+/// read only by the fan updates class 7 never runs.
+pub(crate) fn publish_attract_craft(
+    entity: &mut Entity,
+    allocation: crate::main_base_abort::MainBaseAbortActorLease,
+    metadata: &EntityTypeRuntimeMetadata,
+    self_righting: u8,
+    cargo_unlock: u8,
+    world_fx: &mut WorldFx,
+) -> Result<Intro2FlyerSchedulerOwner, Intro2FlyerPublicationError> {
+    if entity.entity_type != TYPE46_ENTITY_TYPE {
+        return Err(Intro2FlyerPublicationError::UnexpectedEntityType);
+    }
+    let RetailRuntimeValue::Known(Some(sub_j)) = &metadata.sub_j_attachment_descriptor else {
+        return Err(Intro2FlyerPublicationError::MetadataMismatch);
+    };
+    let mut attachments = crate::sub_j_attachment::SubJAttachmentRuntime::from_descriptor(sub_j)
+        .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
+    attachments.set_capacity_clamped(usize::from(cargo_unlock));
+    entity.sub_j_attachment_runtime = RetailRuntimeValue::Known(Some(attachments));
+    let owner = publish_native_flyer(
+        NativeFlyerConstructionRequest {
+            entity: &mut *entity,
+            allocation,
+            metadata,
+            authored: None,
+        },
+        world_fx,
+    )?;
+    let RetailRuntimeValue::Known(Some(sub_g)) = &mut entity.sub_g_06070_runtime else {
+        return Err(Intro2FlyerPublicationError::SubGRuntimeUnavailable);
+    };
+    sub_g.set_self_righting_mode(self_righting);
+    Ok(owner)
+}
+
 pub(crate) fn authenticate_native_flyer_body(
     entity: &Entity,
     allocation: crate::main_base_abort::MainBaseAbortActorLease,
@@ -125,7 +173,7 @@ pub(crate) fn authenticate_native_flyer_body(
         }
         RetailRuntimeValue::Known(None) => false,
     };
-    let Some(model) = native_flyer_model_id(entity.entity_type).map(usize::from) else {
+    let Some(models) = flyer_model_slots(entity.entity_type) else {
         return Err(Intro2FlyerPublicationError::EntityIdentityMismatch);
     };
     if !entity.active
@@ -134,8 +182,8 @@ pub(crate) fn authenticate_native_flyer_body(
         || entity.intro2_flyer_frame_owner.is_some()
         || entity.intro2_flyer_aim_runtime.is_some()
         || entity.attached_to.is_some()
-        || entity.model_slots != [Some(model); 4]
-        || entity.model_index != Some(model)
+        || entity.model_slots != models.map(|model| Some(usize::from(model)))
+        || entity.model_index != Some(usize::from(models[0]))
         || entity.mass_raw != metadata.mass_raw
         || entity.capability_flags != metadata.capability_flags
         || entity.collision.health_raw

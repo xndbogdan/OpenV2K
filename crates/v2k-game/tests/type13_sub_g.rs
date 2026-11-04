@@ -46,6 +46,7 @@ fn frame<'a>(
         self_mass_raw: 100,
         attached_cargo_mass: 0,
         capability_flags: 8,
+        height_policy: v2k_game::vtol::VtolHeightPolicy::RetailAttenuation,
         terrain,
         retail_tick: 0,
         elapsed_micros,

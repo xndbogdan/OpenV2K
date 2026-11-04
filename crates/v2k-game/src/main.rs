@@ -2523,6 +2523,11 @@ fn run_game(
     // The idle frontend's countdown (FUN_0042B5D0), the mode it started
     // (004DB224) until the ring's pop ends, and Intro2 in phase 1.
     let mut idle_countdown = v2k_game::attract_demo::IdleCountdown::default();
+    // Type 46's shared Sub-E record keeps FUN_004503C0's last writes.
+    let mut attract_sub_e_record: Option<v2k_game::intro2_flyer_aim::CraftEmitterArming> = None;
+    // The session's player record (+0x38) is the boot record until a world
+    // with a player has been played.
+    let mut session_player_record_played = false;
     let mut pending_attract: Option<v2k_game::attract_demo::AttractMode> = None;
     let mut attract_intro = false;
     // Session +290 in phase 4: the next FUN_0044FFA0 leaves for 4D0A30,
@@ -4889,8 +4894,8 @@ fn run_game(
                             // FUN_00450390: phase 3 builds no player; 451797
                             // still reserves its ordinal.
                             LoadingPurpose::ClosingScene { .. } => None,
-                            // FUN_00450390: world 11 builds no player in
-                            // phase 4. The other rows' demo player is held.
+                            // FUN_00450390: phase 4 builds no ordinary
+                            // player; the row's craft is built below.
                             LoadingPurpose::AttractDemo { .. } => None,
                             _ if lid == 49 => {
                                 // Intro1 is outside the campaign graph. Keep its
@@ -4903,6 +4908,17 @@ fn run_game(
                             }
                             _ => direct_world_arrival,
                         };
+                        let attract_craft_held = matches!(
+                            &purpose,
+                            LoadingPurpose::AttractDemo { row, .. } if row.has_player()
+                        ) && session_player_record_played;
+                        if attract_craft_held {
+                            eprintln!(
+                                "Attract demo craft held: the session's player record holds the last played world's state (pose, health, weapons), which the port does not carry; the world plays without it"
+                            );
+                        }
+                        session_player_record_played |=
+                            player_arrival.is_some() || native_restore.is_some();
                         let construction = v2k_game::entity::AuthoredWorldConstruction {
                             logical_world_index: (lid - WORLD_OVERLAY_CONTROL_SLOT_OFFSET) as i32,
                             level: level_desc,
@@ -4911,8 +4927,30 @@ fn run_game(
                             player_arrival,
                             retail_tick,
                         };
-                        let construction = match native_restore {
-                            Some(restore) => construction.with_native_save(
+                        let exit_marker_bits = world_control_slot(lid)
+                            .and_then(|slot| player_campaign_progress.control_slot_bits(slot))
+                            .unwrap_or(0);
+                        let construction = match (native_restore, &purpose) {
+                            // FUN_00451AF0 in phase 4: the row's craft, at
+                            // its arrival lifted by FUN_00451C00.
+                            (None, LoadingPurpose::AttractDemo { row, .. }) => {
+                                let craft = (row.has_player() && !attract_craft_held).then(|| {
+                                    v2k_game::entity::AttractCraftArrival {
+                                        position_raw: row.player_position_raw(
+                                            gameplay_chase_terrain(&session.cache)
+                                                .expect("attract world terrain")
+                                                .terrain,
+                                        ),
+                                        self_righting: config.self_righting,
+                                        sub_e_record: attract_sub_e_record,
+                                    }
+                                });
+                                construction.with_attract(
+                                    exit_marker_bits,
+                                    v2k_game::entity::AttractWorld { craft },
+                                )
+                            }
+                            (Some(restore), _) => construction.with_native_save(
                                 v2k_game::entity::NativeSaveWorldState {
                                     restore,
                                     terrain: native_terrain.as_mut().expect("native world terrain"),
@@ -4920,13 +4958,7 @@ fn run_game(
                                     static_damage: &mut static_damage,
                                 },
                             ),
-                            None => construction.with_exit_marker_bits(
-                                world_control_slot(lid)
-                                    .and_then(|slot| {
-                                        player_campaign_progress.control_slot_bits(slot)
-                                    })
-                                    .unwrap_or(0),
-                            ),
+                            (None, _) => construction.with_exit_marker_bits(exit_marker_bits),
                         };
                         v2k_game::entity::EntityManager::from_authored_world(
                             construction,
@@ -5560,9 +5592,12 @@ fn run_game(
                             level.world_style,
                         );
                         start_eye_after_load(&mut camera, &mut proxy_camera, config.active_camera);
-                        if row.has_player() {
-                            eprintln!(
-                                "Attract demo player held: logical world {}'s Type46 craft runs Type51's class 7 armed by its row (method {}, sound {}, cadence {} ms), which the port does not own; the world plays without it",
+                        if let Some(id) = entity_manager
+                            .as_ref()
+                            .and_then(|manager| manager.attract_craft_id())
+                        {
+                            log!(
+                                "Attract demo craft {id}: logical world {}, method {}, sound {}, cadence {} ms",
                                 row.logical_world,
                                 row.projectile_method,
                                 row.sound_id,
@@ -5573,8 +5608,10 @@ fn run_game(
                             "Attract demo: overlay {lid} in phase 4, camera proxy at {:?}",
                             proxy_camera.position_raw()
                         );
-                        closing_scene =
-                            Some(v2k_game::closing_scene::ClosingScene::attract(proxy_camera));
+                        closing_scene = Some(v2k_game::closing_scene::ClosingScene::attract(
+                            proxy_camera,
+                            row,
+                        ));
                         attract_exit = false;
                         // 451710's type-0 visit queues Klaus's command 2.
                         shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
@@ -9524,6 +9561,18 @@ fn run_game(
                         SpecializedActorTaskProductionOutcome::Intro2Type26(outcome) => {
                             log!("Intro2 Type26: {outcome:?}");
                         }
+                        // The attract craft parks at its first unowned step.
+                        SpecializedActorTaskProductionOutcome::Intro2FlyerScheduler(
+                            v2k_game::intro2_flyers_live::Intro2FlyerSchedulerProductionOutcome::Blocked {
+                                entity_id,
+                                reason,
+                            },
+                        ) if !specialized_actor_task_error_reported
+                            && em.attract_craft_id() == Some(entity_id) =>
+                        {
+                            eprintln!("Attract demo craft {entity_id} stopped: {reason:?}");
+                            specialized_actor_task_error_reported = true;
+                        }
                         other => log!(
                             "Specialized actor task {:?} entity {}: {other:?}",
                             other.family(),
@@ -11582,7 +11631,13 @@ fn run_game(
                                 .cache
                                 .level_desc()
                                 .map_or(0, |level| level.world_style);
-                            let player = em.player().map(|player| player.id);
+                            // FUN_004503C0 arms the craft from its row on
+                            // every visit while it exists.
+                            let player = em.attract_craft_id();
+                            if let (Some(id), Some(row)) = (player, attract.row()) {
+                                em.arm_attract_craft(id, row.craft_arming());
+                                attract_sub_e_record = Some(row.craft_arming());
+                            }
                             if let Err(stop) = attract.visit(
                                 em,
                                 &session.cache,

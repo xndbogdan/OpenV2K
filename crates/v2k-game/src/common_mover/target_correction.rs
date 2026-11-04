@@ -6,8 +6,10 @@
 //!
 //! - the first call starts with a zero correction, applies half of the result
 //!   to Sub-G runtime word `+0x1E`, then clamps that word to `[-4000, 4000]`;
-//! - the second call clears Sub-O runtime dword `+0x10`, starts with the
-//!   sentinel correction `1000`, and conditionally restores the saved dword.
+//! - the second call clears Sub-E runtime dword `+0x10` (the projectile
+//!   method; component table `+0x2C`), starts with the sentinel correction
+//!   `1000`, and restores it only when the result is below `elapsed / 500`
+//!   and Sub-G `+0x3C` is clear: a craft fires only while lined up.
 //!
 //! This module preserves those policies as pure plans. It does not resolve
 //! handles, mutate component allocations, or activate the phase for live

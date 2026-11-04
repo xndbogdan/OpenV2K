@@ -17,6 +17,7 @@ mod type8_construction;
 use type8_construction::{
     NativeWorkerBodyRequest, NativeWorkerConstructionRequest, Type8BodyConstruction,
 };
+mod attract_craft;
 mod authored_world;
 mod auto_pilot_power_up;
 mod completed_world;
@@ -24,6 +25,7 @@ mod completed_world;
 mod dynamic_body_stamp_tests;
 #[cfg(test)]
 mod hive_wreck_exit_tests;
+pub use attract_craft::{AttractCraftArrival, AttractWorld};
 pub use authored_world::{
     AuthoredPlayerArrival, AuthoredWorldConstruction, AuthoredWorldLoadRequest,
     NativeSaveWorldState,
@@ -2271,6 +2273,13 @@ impl Entity {
         }
         if let Some(flyer) = &self.intro2_flyer_frame_owner {
             vars.dynamic[1] = flyer.wing_var1;
+            if flyer.entity_type == crate::intro2_flyers_live::TYPE46_ENTITY_TYPE {
+                // Sub-O's fan word and Sub-E's weapon word (bindings 8, 4).
+                vars.dynamic[8] = i32::from(flyer.fan_var_raw);
+                if let Some(aim) = &self.intro2_flyer_aim_runtime {
+                    vars.dynamic[4] = i32::from(aim.weapon_var_raw());
+                }
+            }
             if let Some(selectors) = crate::intro2_flyers_live::flyer_sub_k(flyer.entity_type) {
                 for (selector, value) in selectors.into_iter().zip(flyer.sub_k_output_raw) {
                     vars.dynamic[usize::from(selector)] = i32::from(value);
@@ -2797,6 +2806,9 @@ pub struct EntityManager {
     player_cargo_unlock_raw: u8,
     /// Signed millisecond countdown corresponding to entity +0x20E.
     beam_timer_ms: i8,
+    /// The world was built in session phase 4, the attract demo
+    /// (`FUN_00456F10` reads `+0x296` in `FUN_0041B210`).
+    session_phase_4: bool,
     factory_converted_output_births: Vec<FactoryConvertedOutputBirthProvenance>,
     factory_output_materialiser_births: Vec<FactoryOutputMaterialiserBirthProvenance>,
     cargo_drop_proxies: Vec<CargoDropProxy>,
@@ -2814,6 +2826,7 @@ pub enum FreshNewGameEntityConstructionError {
     Type47(FreshType47InitialBehaviorError),
     Type9(FreshLevel1Type9InitialProductionFailure),
     NativeActorConstruction { spawn_index: usize, reason: String },
+    AttractCraft(String),
 }
 
 impl From<FreshType17InitialBehaviorError> for FreshNewGameEntityConstructionError {
@@ -3488,6 +3501,7 @@ enum LevelEntityConstructionProvenance {
         logical_world_index: i32,
         restored_player: Option<NativeSavedPlayerConstruction>,
         exit_marker_bits: u32,
+        attract: Option<AttractWorld>,
     },
 }
 
@@ -3981,6 +3995,7 @@ impl EntityManager {
             type_metadata: self.type_metadata.clone(),
             player_cargo_unlock_raw: self.player_cargo_unlock_raw,
             beam_timer_ms: self.beam_timer_ms,
+            session_phase_4: self.session_phase_4,
             factory_converted_output_births: self.factory_converted_output_births.clone(),
             factory_output_materialiser_births: self.factory_output_materialiser_births.clone(),
             cargo_drop_proxies: self.cargo_drop_proxies.clone(),
@@ -5045,6 +5060,7 @@ impl EntityManager {
             // Sub-J clamps only the separate live runtime capacity.
             player_cargo_unlock_raw: INITIAL_PLAYER_CARGO_CAPACITY as u8,
             beam_timer_ms: 0,
+            session_phase_4: false,
             factory_converted_output_births: Vec::new(),
             factory_output_materialiser_births: Vec::new(),
             cargo_drop_proxies: Vec::new(),
@@ -5124,14 +5140,24 @@ impl EntityManager {
             manager.player_cargo_unlock_raw = restore.cargo_unlock_raw;
         }
         if native_ordinary {
-            // 451710 creates the persistent player or explicitly reserves its
-            // ordinal through451797 before any authored body is attempted.
-            if manager.player_id.is_none() {
-                manager.begin_common_body_attempt();
-            }
             let (_, world_fx) = fresh_initial_runtime
                 .as_mut()
                 .expect("native process construction");
+            let attract = match construction_provenance {
+                LevelEntityConstructionProvenance::NativeOrdinary { attract, .. } => attract,
+                _ => None,
+            };
+            manager.session_phase_4 = attract.is_some();
+            // 451710 creates the persistent player or explicitly reserves its
+            // ordinal through451797 before any authored body is attempted;
+            // in phase 4 the player is the attract row's craft.
+            if let Some(arrival) = attract.and_then(|attract| attract.craft) {
+                manager
+                    .append_attract_craft(arrival, resources, world_fx)
+                    .map_err(FreshNewGameEntityConstructionError::AttractCraft)?;
+            } else if manager.player_id.is_none() {
+                manager.begin_common_body_attempt();
+            }
             if let Some(player) = manager.player() {
                 if let Some(metadata) = type_metadata.get(player.entity_type as usize) {
                     if let RetailRuntimeValue::Known(Some(descriptor)) =
@@ -13220,6 +13246,7 @@ impl EntityManager {
             type_metadata: Vec::new(),
             player_cargo_unlock_raw: 0,
             beam_timer_ms: 0,
+            session_phase_4: false,
             factory_converted_output_births: Vec::new(),
             factory_output_materialiser_births: Vec::new(),
             cargo_drop_proxies: Vec::new(),

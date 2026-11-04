@@ -1154,12 +1154,69 @@ the frontend's init follows one pass later, again with no Klaus leg.
   card's pixels outside Klaus's edges and shading cover the same 35,000
   pixels as retail's; the world beneath is the last frame, unchanged.
 
-**Held:** the demo player of the ten rows that have one. Its type-46 body
-under type 51's class 7, armed by these writes, is not owned by the port, so
-those worlds play without it and stderr says "Attract demo player held". The
-proxy still enters from where that player would stand, and the camera's
-fallback subject is then none. The lab's row-0 run (row 6 overwritten with
-row 0) is the reference for that work.
+**The demo player.** `FUN_00451AF0` builds it before any other body of the
+world (before the gate helpers and the authored records). `FUN_004438A0`'s
+request is the controller's: type 46, the controller's pose (the boot record
+`DAT_004D0B30`: `(0x4D00, -500, 0x3A00)`, heading `0x4000`) and, at `+0x48`,
+type 51's `+0x118` list (class 7 at weight 10, alternate class 25). The
+context keeps that list, so `FUN_0040C690`'s reselection draws from it too.
+The body has type 46's components (A, B, C, D, E, G, J, O) and draws seven
+words: Sub-G's `FUN_0041B8C0`, Sub-A's `FUN_00420450`, the class selector,
+then the Sub-G and Sub-A words of each B6C0 task's `FUN_00406070`. The
+constructor's tail writes Sub-G `+0x41` from controller `+0x20C` (the Self
+Righting word), the Sub-J capacity and Sub-O `+0x10/+0x14`; `FUN_00443560`
+then moves it to the session record's position (the row's arrival) with the
+record's velocity (zero), attitude (`0x4000`, 0, 0), health 40000 and active
+weapon (selector 1, so Sub-E's method word is 1 until the first visit).
+
+It flies as the class-7 flyers do (search, wander, chase, Aim And Fire), with
+type 46's flight: its search range is type 46's zero (unbounded) with
+capability mask 8, and so is its chase range; Sub-G's `FUN_0041B210` takes the
+capability-1 branch (the lowest of five waved-surface probes, the height
+attenuation skipped in phase 4 because `FUN_00456F10` returns the phase, then
+the upward-speed divisor); Sub-G `+0x41` eases the pitch toward
+`(word - 1) * 0x2800 / 15`. With Sub-O, `FUN_00401430` adds two target
+corrections around the component dispatch: the first writes `0x8000` into
+type 46's shared Sub-G `+0x1C` (the target limit) and adjusts Sub-G `+0x1E`,
+then births the class-19 downwash (`FUN_00440E80`, strength 1000) from the
+pose before Sub-G and advances the fan word Sub-O's `+0x0C` binds (model
+variable 8); the second clears Sub-E's method word (runtime `+0x10`) and
+restores it only when its result is below `elapsed / 500` and Sub-G `+0x3C`
+is clear, so the craft fires only while lined up on its target. Both
+corrections act only while the private record tracks a body (Chase, not
+Wander). ADE0's Aim and Chase constructors each end in `FUN_00406070`, which
+draws its Sub-G and Sub-A words before the same-pass Aim. The port runs these
+two suffixes for the craft only: the other Sub-G flyers' ADE0 still skips
+them (a known gap; with them, the wasps' synthetic Intro2 firing scenario no
+longer lines up a shot, so their flight needs re-proving against the lab
+first).
+
+`FUN_004503C0`'s writes arm it on each visit; the first visit follows the
+first world tick, so the first Aim fires the boot weapon. The type record
+keeps the writes (cadence, gate mode 1, auxiliary command), so a later
+demo's craft starts from the previous row's.
+
+**Retail lab, row 0, 20-ms passes** (the row forced and the shared random
+word seeded at the craft's construction, `0x8BBF572E`, and at the first tick,
+where retail's draw pass has spent 129 more words on `FUN_00456AF0` and
+`FUN_00433530`): the craft's position, velocity and attitude match the lab's
+every tick through tick 8, and within one raw unit through tick 175 once its
+view-detail bits are held as retail's (the port's phase-4 camera classifies it
+coarse from the third tick, so its scheduler waits). They part where retail's
+craft kills its target and the port's craft cannot fire (below).
+
+**Held, each with a logged stop:**
+
+- its shots, whenever their muzzle is not stamped: the transform-only pass
+  (`FUN_0040A9F0`) for a body with Sub-G is not ported ("shot drain stopped:
+  TransformPass(UnportedSelectorOwner)");
+- damage to it (`FUN_004484A0`, type 46's modifier) and its death into class
+  25, which park it ("Attract demo craft N stopped");
+- a demo after a played world: the session record then holds that world's
+  player, which the port does not carry ("Attract demo craft held").
+
+Its fans turn only through the first correction's word; `FUN_00420920`'s fan
+loop and Player Control's `FUN_00420A50` never run under class 7.
 
 ## Screen tree highlights (full tree in ../port/crates/v2k-game/data/menu_tree.json)
 

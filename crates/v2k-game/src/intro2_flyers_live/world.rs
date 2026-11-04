@@ -59,6 +59,23 @@ fn world_block(
     blocked(owner, Intro2FlyerRuntimeBlock::World(reason))
 }
 
+/// The flyers have neither Sub-C nor Sub-J. The craft has both: under
+/// effective flags 8 and Sub-G, 01430's C/A/B tail and E100's water spring
+/// never read C, and 12DA0's `FUN_00418640` walks no Sub-J row while it
+/// carries none.
+fn craft_c_and_j_admitted(entity: &Entity, metadata: &EntityTypeRuntimeMetadata) -> bool {
+    if entity.entity_type != super::TYPE46_ENTITY_TYPE {
+        return metadata.sub_c_lift_descriptor == RetailRuntimeValue::Known(None)
+            && metadata.sub_j_attachment_descriptor == RetailRuntimeValue::Known(None)
+            && entity.sub_j_attachment_runtime == RetailRuntimeValue::Known(None);
+    }
+    matches!(
+        metadata.sub_c_lift_descriptor,
+        RetailRuntimeValue::Known(Some(_))
+    ) && matches!(&entity.sub_j_attachment_runtime,
+            RetailRuntimeValue::Known(Some(rows)) if rows.is_empty())
+}
+
 fn effective_flags(entity: &Entity) -> Result<u32, Intro2FlyerWorldBlock> {
     let RetailRuntimeValue::Known(default) = entity.collision.default_state_flags_at_0xc8 else {
         return Err(Intro2FlyerWorldBlock::UnsupportedEffectiveFlags);
@@ -132,11 +149,9 @@ fn preflight_suffix(
             } == CommonWorldEffectProfile::default())
         || metadata.constructor_sound_attachment_id
             != RetailRuntimeValue::Known(flyer_attachment_sound(entity.entity_type))
-        || metadata.sub_c_lift_descriptor != RetailRuntimeValue::Known(None)
+        || !craft_c_and_j_admitted(entity, metadata)
         || metadata.actor_animation_descriptor != RetailRuntimeValue::Known(None)
-        || metadata.sub_j_attachment_descriptor != RetailRuntimeValue::Known(None)
         || entity.actor_animation_runtime != RetailRuntimeValue::Known(None)
-        || entity.sub_j_attachment_runtime != RetailRuntimeValue::Known(None)
     {
         return Err(Intro2FlyerWorldBlock::UnsupportedMetadata);
     }
@@ -216,7 +231,7 @@ pub(super) fn tick_world(
         return world_block(owner, reason);
     }
     let callback_enabled = state & COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT != 0;
-    let metadata = manager.type_runtime_metadata(entity.entity_type).cloned();
+    let metadata = super::flyer_runtime_metadata(manager, entity.entity_type);
     let environment = manager.intro2_type13_environment();
     let physics = manager.common_environment_physics();
     // This latch precedes A800. The environment policy is read again after
@@ -308,6 +323,13 @@ pub(super) fn tick_world(
         elapsed_micros: callback_elapsed_us,
         global_elapsed_micros: frame.global_elapsed_micros,
         retail_tick: frame.retail_tick,
+        // FUN_00456F10 reads the session phase; 4 bypasses B210's height
+        // attenuation for a capability-1 body.
+        height_policy: if manager.session_phase_4() {
+            crate::vtol::VtolHeightPolicy::BypassHeightAttenuation
+        } else {
+            crate::vtol::VtolHeightPolicy::RetailAttenuation
+        },
         dispatch_mode: if state & SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT != 0 {
             CommonMoverDispatchMode::Normal
         } else {
