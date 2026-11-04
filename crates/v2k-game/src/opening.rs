@@ -152,6 +152,16 @@ impl IntroCameraController {
         self.position_raw
     }
 
+    /// A direct write of the proxy's position words, as `FUN_004530D0`'s.
+    pub fn set_position_raw(&mut self, position_raw: [i16; 3]) {
+        self.position_raw = position_raw;
+    }
+
+    /// The eye's springs, for the camera that follows on from the proxy.
+    pub fn into_chase(self) -> ChaseCameraState {
+        self.chase
+    }
+
     pub fn focus_position_raw(&self) -> [i16; 3] {
         self.chase.focus_position_raw()
     }
