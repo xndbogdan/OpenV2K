@@ -221,12 +221,16 @@ fn explicit_rows_abort_change_the_sea_by_their_shifted_word() {
             .radius;
         assert_eq!(extent, expected_extent, "type{entity_type}'s header+08");
         let advance = manager
-            .apply_main_base_abort_type54_death(
+            .apply_class38_death(
                 lease,
                 session.cache.terrain().unwrap(),
                 extent,
                 MainBaseType54NetworkSession::SoloNetworkingDisabled,
                 &mut fx,
+                crate::entity::Class38DeathWorld {
+                    resources: &session.cache,
+                    retail_tick: 0,
+                },
             )
             .unwrap();
         let outcome = match advance {

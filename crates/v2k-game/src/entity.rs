@@ -3867,6 +3867,14 @@ enum PlayerPairCandidateDeath {
     Boulder(crate::rolling_boulder::RollingBoulderProfile),
 }
 
+/// What `40BDC0`'s Type85 branch reads beyond the dying body: the cache for
+/// its meteors' type, models and terrain, and the tick their births sample.
+#[derive(Clone, Copy)]
+pub struct Class38DeathWorld<'a> {
+    pub resources: &'a crate::resource_cache::ResourceCache,
+    pub retail_tick: u32,
+}
+
 impl EntityManager {
     /// Deep-copy the complete manager only for one speculative Main Base abort.
     ///
@@ -11237,7 +11245,84 @@ impl EntityManager {
             network_session,
             world_fx,
             &mut HostMainBaseType54PrimaryTaskAllocator,
+            None,
         )
+    }
+
+    /// The same class38 death with the world Type85's branch reads.
+    pub fn apply_class38_death(
+        &mut self,
+        lease: MainBaseAbortActorLease,
+        terrain: &TerrainGrid,
+        active_model_extent_raw: u16,
+        network_session: MainBaseType54NetworkSession,
+        world_fx: &mut WorldFx,
+        world: Class38DeathWorld<'_>,
+    ) -> Result<MainBaseType54DeathAdvance, MainBaseType54DeathBlock> {
+        self.apply_main_base_abort_type54_death_with_allocator(
+            lease,
+            terrain,
+            active_model_extent_raw,
+            network_session,
+            world_fx,
+            &mut HostMainBaseType54PrimaryTaskAllocator,
+            Some(world),
+        )
+    }
+
+    /// `40BDC0`'s Type85 branch after the ripple and flash: 25 Type34
+    /// meteors from a 5x5 grid of 0x400 around the body, each through
+    /// `44E770`'s method 11 (speed 2000, no shooter, zero Euler words). Each
+    /// shot draws five shared words: its X and Z direction, then X, Y and Z
+    /// offsets. A birth that fails is logged; the rest still launch.
+    fn launch_type85_meteors(
+        &mut self,
+        position_raw: [i16; 3],
+        world: Class38DeathWorld<'_>,
+        world_fx: &mut WorldFx,
+    ) {
+        use crate::native_entity_weapons::{
+            meteor::meteor_launch_raw, EntityWeaponConstructionRequest, EntityWeaponKind,
+        };
+        let [x, y, z] = position_raw;
+        let offset = |word: u16, cell: i32| {
+            ((word >> 4) % 0xff) as i16 + ((cell - 2) as i16).wrapping_mul(0x400)
+        };
+        // 44E770: the Q31 direction times the speed, kept from bit 31 up.
+        let speed = |direction: i32| ((i64::from(direction) * 2000) >> 31) as i16;
+        for row in 0..5 {
+            for column in 0..5 {
+                let direction_x = i32::from(world_fx.next_shared_retail_random_u16()) << 16;
+                let direction_z = i32::from(world_fx.next_shared_retail_random_u16()) << 16;
+                let shot_x =
+                    x.wrapping_add(offset(world_fx.next_shared_retail_random_u16(), column));
+                let shot_y =
+                    y.wrapping_sub((world_fx.next_shared_retail_random_u16() >> 6 & 0x3ff) as i16);
+                let shot_z = z.wrapping_add(offset(world_fx.next_shared_retail_random_u16(), row));
+                let (position_raw, velocity_raw) = meteor_launch_raw(
+                    [shot_x, shot_y, shot_z],
+                    [speed(direction_x), speed(i32::MAX), speed(direction_z)],
+                );
+                match self.construct_entity_weapon(
+                    EntityWeaponConstructionRequest {
+                        kind: EntityWeaponKind::Meteor,
+                        source_actor_id: 0,
+                        position_raw,
+                        velocity_raw,
+                        rotation_raw: [0; 3],
+                    },
+                    world.resources,
+                    world_fx,
+                    world.retail_tick,
+                ) {
+                    Ok(owner) => self.queue_born_native_weapon(owner),
+                    Err(reason) => eprintln!(
+                        "Type85's meteor {} was not born: {reason:?}",
+                        row * 5 + column
+                    ),
+                }
+            }
+        }
     }
 
     fn apply_main_base_abort_type54_death_with_allocator(
@@ -11248,6 +11333,7 @@ impl EntityManager {
         network_session: MainBaseType54NetworkSession,
         world_fx: &mut WorldFx,
         allocator: &mut impl MainBaseType54PrimaryTaskAllocator,
+        world: Option<Class38DeathWorld<'_>>,
     ) -> Result<MainBaseType54DeathAdvance, MainBaseType54DeathBlock> {
         let entity_id = lease.entity_id;
         let Some(entity_index) = self
@@ -11398,6 +11484,10 @@ impl EntityManager {
                 network_session,
             ));
         }
+        let type85 = entity.entity_type == crate::main_base_type54_abort::TYPE85_ENTITY_TYPE;
+        if type85 && world.is_none() {
+            return Err(MainBaseType54DeathBlock::Type85WorldUnavailable);
+        }
         match entity
             .collision
             .state_flags_at_0x08
@@ -11466,12 +11556,24 @@ impl EntityManager {
             .collision
             .state_flags_at_0x08
             .overwrite(0x0000_0800, 0);
-        world_fx.emit_scatter_surface_burst_raw(
-            position_raw,
-            active_model_extent_raw,
-            Some(sea_level_raw),
-            entity_id,
-        );
+        if let (true, Some(world)) = (type85, world) {
+            // 40BDC0's Type85 branch: 437390's 4C89E8 ripple, 456750's
+            // flash and the meteors, instead of 440950's burst.
+            world_fx.queue_terrain_ripple(crate::terrain_ripple::TerrainRipple::new(
+                position_raw,
+                crate::terrain_ripple::TYPE85_DEATH_RIPPLE,
+            ));
+            world_fx.request_full_frame_flash();
+            self.launch_type85_meteors(position_raw, world, world_fx);
+        } else {
+            world_fx.emit_scatter_surface_burst_raw(
+                position_raw,
+                active_model_extent_raw,
+                Some(sea_level_raw),
+                entity_id,
+            );
+        }
+        let entity = &mut self.entities[entity_index];
         let network = MainBaseType54NetworkDisposition::Kind2SuppressedBySoloSession;
 
         // Class 38 clears the auxiliary slots before FUN_00405040 computes
@@ -24821,6 +24923,7 @@ mod tests {
                 MainBaseType54NetworkSession::SoloNetworkingDisabled,
                 &mut world_fx,
                 &mut allocator,
+                None,
             )
             .unwrap()
         else {

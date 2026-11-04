@@ -6545,6 +6545,10 @@ fn run_game(
                     None => {}
                 }
 
+                // A flash requested inside the last frame's simulation.
+                if world_fx.take_full_frame_flash_request() {
+                    main_base_level_abort.outer_frame_sequence.request();
+                }
                 // This legacy Playing adapter still stages 53410 before
                 // simulation. Retail's 493FA0 -> 493F50 order is the reverse;
                 // Intro2 uses that proven boundary. Moving all gameplay
@@ -7147,6 +7151,20 @@ fn run_game(
                             world_fx.next_shared_retail_random_u16()
                         }) {
                             eprintln!("Radar redraw after the sea change stopped: {error}");
+                        }
+                        // Then the queued terrain ripples (FUN_004371B0).
+                        for stop in v2k_game::terrain_ripple::advance_terrain_ripples(
+                            elapsed_micros,
+                            &mut session.cache,
+                            em,
+                            &mut world_fx,
+                            &mut static_damage,
+                            &mut main_base_level_abort.outer_frame_sequence,
+                        ) {
+                            eprintln!(
+                                "Terrain ripple stopped at {} (terrain changed: {})",
+                                stop.phase, stop.terrain_changed
+                            );
                         }
                         if session.cache.take_level_terrain_presentation_dirty() {
                             renderer.invalidate_terrain_cache();

@@ -730,7 +730,8 @@ fn run_actor_phase(
     // Type61). Class1 flowers share the blast prefix but append no ring. A
     // class63 source appends its Type61 behind the cursor, whose own class49
     // death then appends a ring: two visits. A native Type40's, Type31's or
-    // Type27's class18 split appends up to its child count. A repeated/cyclic successor must
+    // Type27's class18 split appends up to its child count; a Type85 its 25
+    // meteors. A repeated/cyclic successor must
     // fail instead of spinning in a speculative world whose eventual rollback
     // would hide the topology bug.
     let actor_visit_limit = entities.iter_all().count().saturating_add(
@@ -754,6 +755,10 @@ fn run_actor_phase(
                     )
                 {
                     return crate::split_and_explode::split_policy(27).1 as usize;
+                }
+                // 40BDC0 appends Type85's 25 meteors.
+                if entity.entity_type == crate::main_base_type54_abort::TYPE85_ENTITY_TYPE {
+                    return 25;
                 }
                 let policy = crate::class49_death::source_profile(entity)
                     .filter(|_| crate::class49_death::allocation_authenticates(entities, entity.id))
@@ -951,6 +956,7 @@ pub fn apply_type54_abort_with_scheduler(
         specialized_tasks,
         publications,
         LEVEL_ONE_TYPE54_MODEL_EXTENT_RAW,
+        None,
     )
     .map(|_| ())
     .map_err(|error| {
@@ -973,18 +979,38 @@ fn dispatch_type54_death(
     specialized_tasks: &mut SpecializedActorTaskScheduler,
     publications: &mut MainBaseAbortPublicationCounts,
     active_model_extent_raw: u16,
+    world: Option<crate::entity::Class38DeathWorld<'_>>,
 ) -> Result<DispatchSuccess, DispatchFailure> {
     let id = actor.lease.entity_id;
     let had_class0 = specialized_tasks.take_class0_actor_external_mutation(entities, id);
-    let advance = entities
-        .apply_main_base_abort_type54_death(
+    let advance = match world {
+        Some(world) => entities.apply_class38_death(
             actor.lease,
             terrain,
             active_model_extent_raw,
             MainBaseType54NetworkSession::SoloNetworkingDisabled,
             world_fx,
-        )
-        .map_err(|error| callback_error(MainBaseAbortActorCallbackBlock::Type54(error)))?;
+            world,
+        ),
+        None => entities.apply_main_base_abort_type54_death(
+            actor.lease,
+            terrain,
+            active_model_extent_raw,
+            MainBaseType54NetworkSession::SoloNetworkingDisabled,
+            world_fx,
+        ),
+    }
+    .map_err(|error| callback_error(MainBaseAbortActorCallbackBlock::Type54(error)))?;
+    // Type85's meteors join the actor list behind it, so the walk reaches
+    // them: their owners register now.
+    for owner in entities.take_born_native_weapons() {
+        if let Err(reason) = specialized_tasks.register_native_weapon(entities, owner) {
+            eprintln!(
+                "Native meteor {} owner registration blocked: {reason:?}",
+                owner.entity_id()
+            );
+        }
+    }
     let (outcome, successor, successor_available) = match advance {
         MainBaseType54DeathAdvance::Advanced {
             outcome,
@@ -1421,6 +1447,10 @@ fn dispatch_ordinary_actor(
                 specialized_tasks,
                 publications,
                 extent,
+                Some(crate::entity::Class38DeathWorld {
+                    resources: effects.cache(),
+                    retail_tick: gameplay.retail_tick,
+                }),
             )
         }
         crate::main_base_type54_abort::TYPE36_ENTITY_TYPE

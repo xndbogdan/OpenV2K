@@ -226,6 +226,39 @@ handle `04B30001`, at pass 1300) reads state `0x0042C005` and health 0 after
 the hit, and the sea word `0xFFFCB100` falls to `0xFFFA2000` (delta `-168192`)
 in 690 paced updates, through pass 1989. The port matches each of these.
 
+**Type85's death.** `FUN_0040BDC0` gives Type85 (`0x55`) its own branch in
+place of `FUN_00440950`'s burst. It queues template `004C89E8` through
+`FUN_00437390` (flags `0x0B`: deferred, flash, crater; a ring 0xA00 across,
+10 height units high, over 1,000,000 us; a 0x1900 crater 10 deep), starts the
+full-frame flash (`FUN_00456750`), and fires 25 shots through `FUN_0044E770`
+from a 5x5 grid of 0x400 steps around the body (Z rows, X columns), each of
+method 11 (a Type34 meteor) at speed 2000 with no shooter and zero Euler
+words. Every shot draws five shared words: its X and Z direction (each word
+shifted to the top half of a Q31 direction, Y up at full scale), then the X
+offset `(word >> 4) % 255`, the Y drop `(word >> 6) & 0x3FF` and the Z offset;
+`FUN_0044E770` then lifts it 300 and floors its climb at 0x960, and the
+meteor's constructor draws one more word. S, T and the sea task follow as for
+the other rows. In the Main Base abort the port's walk reaches the meteors
+behind Type85, as it does other births appended during the walk.
+
+`FUN_004374B0` runs the queued ripples each frame after the static programs
+and the radar's sea redraw. `FUN_004371B0` advances a ripple's clock by the
+frame's microseconds (the period wraps it to zero), takes the ring's radius
+`((t >> 10) * r) / (period >> 10)` and its height (rising over the first
+quarter of the period, full to three quarters, then the last quarter's rise
+again from zero), and for every cell within the radius adds the difference
+between this frame's lift and the last frame's, where a cell's lift is the
+height less `(|d^2 - ring^2| - 0x40000) >> 16`, never below zero. A cell whose
+height fell takes `FUN_00427B20`'s static hit. When the clock wraps, the last
+frame takes the ground back to where it began and the record runs its flash
+and crater (`FUN_00436E00` with the world's crater floor) and is freed;
+`FUN_00437470` drops the queue with the world. A tampered retail run in
+world 43 (a direct 2000-damage `00414E90` hit on Type85, handle `04900001`)
+births the 25 meteors at the positions the port computes from the same
+random state, leaves the stream where the port does, and its row of heights
+through Type85's cell matches the port's after every frame checked, through
+the crater.
+
 ## Rows outside class0: Type50, Type89, Type118, Type36, Type74 and Type110
 
 Six rows share the class0 constructor (`104B0/D4A0`, AC60's singleton
@@ -402,6 +435,6 @@ Remaining eligible cargo constructors other than Type68/92/96/97/100, and matche
 Intro2 acceptance, stay open. Factory-born
 Type61 abort is owned with the factory constructor receipt. Native Type54 abort
 is in [Factory System](FACTORY_SYSTEM.md); Type72 and Type85 take the same class38
-path. `405040` derives the sea delta only from a zero `+0x88`; a nonzero word is
+path, Type85 with its ripple and meteors in place of the burst. `405040` derives the sea delta only from a zero `+0x88`; a nonzero word is
 taken as is, so Type72's delta is `0xB4 << 8` and Type85's `0x1B0 << 8`. Type106
 dies quietly through class2, as Type52 does.
