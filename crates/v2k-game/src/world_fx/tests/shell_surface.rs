@@ -117,7 +117,7 @@ fn a_bomb_launch_takes_its_class_vertical_bias() {
         speed_world_per_second: crate::primary_weapon::raw_velocity_to_world_per_second(2000),
         lifetime_ticks: descriptor.lifetime_ticks(),
     };
-    event.projectile.velocity_world_per_second = raw_velocity_to_world([0, -282, 1762]);
+    event.projectile.velocity_raw = [0, -282, 1762];
     let mut fx = WorldFx::new();
     fx.queue_primary_fire_batch(&[event], None);
     fx.process_pending();

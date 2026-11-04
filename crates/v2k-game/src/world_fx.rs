@@ -5100,12 +5100,10 @@ impl WorldFx {
                     let bullet_frame = first_particle_frame(projectile_class);
                     // FUN_00440A60 adds the class's +0x28 Y and +0x2A
                     // vertical-velocity biases (+50 for classes 4, 54, 77, 78).
-                    let mut velocity = event.projectile.velocity_world_per_second;
-                    velocity[1] += raw_velocity_to_world([
-                        0,
-                        i32::from(descriptor.spawn_velocity_y_bias_raw()),
-                        0,
-                    ])[1];
+                    let mut velocity_raw = event.projectile.velocity_raw;
+                    velocity_raw[1] =
+                        velocity_raw[1].wrapping_add(descriptor.spawn_velocity_y_bias_raw());
+                    let velocity = raw_velocity_to_world(velocity_raw.map(i32::from));
                     self.queue(WorldEvent::ParticleBurst(ParticleBurst {
                         origin: event.projectile.origin_world,
                         particles: vec![ParticleSpawn {
@@ -8490,7 +8488,9 @@ mod tests {
             shooter_origin_world: [4.0, origin_y, 5.0],
             shooter_id: 7,
             shooter_entity_type_at_birth: Some(46),
-            shooter_velocity_world: shooter_velocity,
+            direction_q31: [i32::MAX, 0, 0],
+            shooter_velocity_raw: shooter_velocity
+                .map(|c| world_velocity_component_to_raw(c) as i16),
             sound_origin_world: [4.0, origin_y, 5.0],
         }
     }
@@ -10326,11 +10326,8 @@ mod tests {
         assert_eq!(bullet.source_entity_type_at_birth, Some(46));
         assert_eq!(
             bullet.velocity,
-            [
-                PRIMARY_PROJECTILE_SPEC.speed_world_per_second + 1.0,
-                2.0,
-                3.0,
-            ]
+            // 44E770 floors 4000 along Q31 0x7FFFFFFF to 3999.
+            raw_velocity_to_world([3999 + 268, 537, 805])
         );
 
         let mut muzzle = fx.test_particles_in_virgin_birth_order()[1];
@@ -10400,11 +10397,11 @@ mod tests {
         assert_eq!(projectile.frame_scale_raw, 0x100);
         assert_eq!(
             projectile.velocity,
-            [
-                UPGRADED_PRIMARY_PROJECTILE_SPEC.speed_world_per_second + 1.0,
-                2.0,
-                3.0,
-            ]
+            raw_velocity_to_world([
+                UPGRADED_PRIMARY_PROJECTILE_SPEC.speed_raw - 1 + 268,
+                537,
+                805
+            ])
         );
         assert_eq!(particles[1].source_class, PRIMARY_MUZZLE_PARTICLE_CLASS);
         assert_eq!(
@@ -10623,6 +10620,7 @@ mod tests {
         fx.queue_primary_fire_batch(&[primary_event(-4.0, [1.0, 0.0, 0.0])], None);
         fx.process_pending();
         let muzzle_start = fx.test_particles_in_virgin_birth_order()[1].position;
+        let muzzle_velocity = fx.test_particles_in_virgin_birth_order()[1].velocity[0];
         fx.update(
             ParticleUpdateRequest::dry(20_000, 1).with_callbacks(ParticleCallbackContext {
                 owner_motions: &[ParticleOwnerMotion {
@@ -10633,7 +10631,8 @@ mod tests {
             }),
         );
         assert!(
-            (fx.test_particles_in_virgin_birth_order()[1].position[0] - (muzzle_start[0] + 0.02))
+            (fx.test_particles_in_virgin_birth_order()[1].position[0]
+                - (muzzle_start[0] + muzzle_velocity * 0.02))
                 .abs()
                 < 1.0e-6
         );
@@ -13168,7 +13167,8 @@ mod tests {
             .find(|particle| particle.source_class == UPGRADED_PRIMARY_PARTICLE_CLASS)
             .unwrap();
         assert_eq!(projectile.position[1], 0.0);
-        assert_eq!(projectile.velocity, raw_velocity_to_world([500, 0, 0]));
+        // The launch's 1999 (2000 along Q31 0x7FFFFFFF) quartered.
+        assert_eq!(projectile.velocity, raw_velocity_to_world([499, 0, 0]));
         assert!(fx.take_positional_sounds().is_empty());
         assert_eq!(fx.particle_count(), 2); // projectile plus class-32 muzzle
     }

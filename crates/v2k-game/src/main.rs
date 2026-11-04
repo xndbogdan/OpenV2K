@@ -126,8 +126,8 @@ use v2k_game::model_tree::{
 };
 use v2k_game::native_entity_weapons::{
     launch::{
-        entity_weapon_direction_q31, entity_weapon_drain_position_raw,
-        entity_weapon_launch_velocity_raw,
+        emitter_basis_q31, entity_weapon_drain_position_raw, entity_weapon_launch_velocity_raw,
+        launch_direction_q31,
     },
     EntityWeaponConstructionRequest, EntityWeaponKind,
 };
@@ -8025,6 +8025,7 @@ fn run_game(
                         }
                     };
                 }
+                let mut emitter_angle_words = None;
                 if chase_mode {
                     // FUN_00446640 snapshots entity +0x30 at callback entry;
                     // the later solid-contact pass cannot affect its warning
@@ -8077,6 +8078,12 @@ fn run_game(
                             config.self_righting,
                         )
                     });
+                    // FUN_00444F60 fires at the end of the mode controller, so
+                    // FUN_00424650 reads the heading it turned and the pitch
+                    // and roll the environment phase has not yet changed.
+                    emitter_angle_words = em
+                        .player()
+                        .map(|player| player_emitter_angle_words(&player_craft, player));
                     // 12DA0 zeroes +B2 after the controlled player's callbacks,
                     // as for every scheduled actor; attached particles add their
                     // mass to it later in the frame.
@@ -8762,6 +8769,15 @@ fn run_game(
                     } else {
                         PrimaryGunMounts::Unresolved
                     };
+                    let descriptor = *weapon_inventory.selected_descriptor();
+                    let direction_q31 =
+                        launch_direction_q31(
+                            descriptor.selector(),
+                            emitter_basis_q31(emitter_angle_words.unwrap_or_else(|| {
+                                player_emitter_angle_words(&player_craft, player)
+                            })),
+                            player_craft.gun_barrel as i16,
+                        );
                     let geometry = PrimaryFireGeometry {
                         launch_basis: PrimaryLaunchBasis {
                             origin_world: origin,
@@ -8771,11 +8787,11 @@ fn run_game(
                         shooter_origin_world: origin,
                         shooter_id: player.id,
                         shooter_entity_type_at_birth: u8::try_from(player.entity_type).ok(),
-                        shooter_velocity_world: player.velocity,
+                        direction_q31,
+                        shooter_velocity_raw: player.velocity_raw(),
                         sound_origin_world: origin,
                     };
                     let simulation_delta = Duration::from_micros(u64::from(elapsed_micros));
-                    let descriptor = *weapon_inventory.selected_descriptor();
                     if let Some(profile) = fire_profile_from_descriptor(&descriptor) {
                         let shot_budget = match descriptor.ammunition() {
                             Ammunition::Infinite => PrimaryShotBudget::Unlimited,
@@ -8794,12 +8810,6 @@ fn run_game(
                             if let Some(kind) =
                                 EntityWeaponKind::from_selector(descriptor.selector())
                             {
-                                let body_basis = player_body_basis(&player_craft, player);
-                                let direction_q31 = entity_weapon_direction_q31(
-                                    kind,
-                                    body_basis,
-                                    player_craft.gun_barrel as i16,
-                                );
                                 pending_entity_weapon_fire.extend(fire_events.iter().map(
                                     |event| {
                                         PendingEntityWeaponFire {
@@ -16788,8 +16798,15 @@ fn player_body_basis(craft: &PlayerCraft, player: &Entity) -> Type9BodyBasis {
     }
 }
 
-/// 424650 combines the retained entity up/forward columns with the barrel
-/// joint. EC60's later Euler-word changes do not turn this frame's muzzle.
+/// `FUN_00424650`'s angle words: heading, then the craft's pitch and roll.
+fn player_emitter_angle_words(craft: &PlayerCraft, player: &Entity) -> [i16; 3] {
+    let [pitch, roll] = craft.body_angle_words();
+    [player.rotation_heading_pitch_roll_raw()[0], pitch, roll]
+}
+
+/// The muzzle's float direction for presentation and the Targetter preview:
+/// the retained up/forward columns with the barrel. The shot itself takes
+/// `launch_direction_q31` over `FUN_00413D40`'s matrix.
 fn player_primary_fire_direction(craft: &PlayerCraft, player: &Entity) -> [f32; 3] {
     let body = player_model_orientation(craft, player);
     let (up, forward) = craft.gun_barrel_rad().sin_cos();
@@ -19511,7 +19528,8 @@ mod menu_visual_tests {
             shooter_origin_world: [0.0, 1.0, 0.0],
             shooter_id: 46,
             shooter_entity_type_at_birth: Some(46),
-            shooter_velocity_world: [0.0; 3],
+            direction_q31: [0, 0, i32::MAX],
+            shooter_velocity_raw: [0; 3],
             sound_origin_world: [0.0, 1.0, 0.0],
         };
         let event = PrimaryWeapon::new()

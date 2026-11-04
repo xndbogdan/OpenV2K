@@ -320,6 +320,8 @@ basis through solid/static/actor collision, camera, vector effects, weapon
 submission, and rendering. The following mode callback's force packet also
 reads that retained prior matrix; it must not reconstruct it from EC60's
 newer Euler words. The next F70 boundary publishes those words normally.
+The weapon launch is the exception: `FUN_00424650` builds its own matrix
+from the Euler words (see [free-fire direction](#free-fire-direction)).
 
 Normal-tier authored controls include steady wind in worlds 22
 `[1000,0,0]`, 32 `[-300,0,-300]`, 45 `[0,0,32000]`, and 46
@@ -886,13 +888,29 @@ indexed/shaded yellow-orange luminous dot, scale `0x0300`, lifetime 200 retail
 ticks, update/collision mode 3, flags 5, radius 40. It belongs in the
 lightweight particle/projectile path, never `EntityManager`.
 
+<a id="free-fire-direction"></a>
 Free-fire direction = **body Euler** `+0xA2/+0xA4/+0xA6` via basis
 `FUN_00413D40` (:18393-18396), combined with the live barrel joint `g` as
-`direction = body_up*sin(g) + body_forward*cos(g)`. Thus the hover barrel does
+`direction = body_up*sin(g) + body_forward*cos(g)`. `FUN_00413D40` is not
+`FUN_00413F70`: its sines are the table word in both halves (Q31) and every
+product keeps bits 31 up of the 64-bit result, so its rows can differ from
+the entity's retained matrix in the low bits. The player fires from
+`FUN_00444F60`, the last call of the Hover and VTOL controllers
+(`FUN_00444CF0`, `FUN_00445310`), so the words it reads are the heading the
+controller has just turned and the pitch and roll the environment phase has
+not yet changed. `FUN_0044E770` then multiplies the direction by the row's
+speed, again keeping bits 31 up (Q31 1.0 is `0x7FFFFFFF`, so 4000 straight
+ahead is 3999), and adds the shooter's velocity words for a leading-zero row;
+a row whose leading dword is set (selectors 10, 12, 13, 14, 22) adds the
+positive closing speed to its speed instead and leaves the shooter's
+velocity out. The class-15 record has no direction, so its class-32 effect
+takes the shooter's velocity words alone. Thus the hover barrel does
 deflect the projectile; it is not visual-only, and both visible `pl4gatgun`
 children share that same elevation. Both class-1 and class-15 simulation
 records start at the shooter's exact entity center (`+0x96/+0x98/+0x9A`)—the
-dispatch has no model mount/muzzle-vertex offset. The presentation layer may
+dispatch has no model mount/muzzle-vertex offset. (A 2026-11-04 lab run saw both records
+at the craft's draw-stamped emitter point instead; see the Virus Bomb's
+"not the same yet".) The presentation layer may
 retain the selected authored gun-tip displacement while collision follows the
 center-origin trajectory. Class 1 adds the full shooter velocity to its raw
 4000 forward velocity. Class 15 resolves to particle class 32: nine frames
@@ -1796,9 +1814,24 @@ body none. The port's retail test runs the radial from that origin over
 world 13 and infects the same body alone, changes nine cells and leaves the
 random stream where retail's was.
 
-The port computes the launch direction and velocity from the body basis and
-the barrel in floating point and rounds them to words, where retail floors
-its Q31 products, so a launch word can differ from retail's by one.
+The port computes the launch direction and velocity exactly as above
+([free-fire direction](#free-fire-direction)).
+
+Retail lab (Level 1, master code, F9, each weapon fired for a second while
+turning, aiming the barrel up and down and throttling): 64 `FUN_00413D40`
+matrices equal the port's from their angle words; every launch's direction
+(66 records over selectors 1, 10, 12, 13, 14, 18 and 22, pitch −2174 to 650,
+roll −2079 to 2734, barrel −2048 to 12288) equals the port's from those words
+and the barrel, and every velocity handed to `FUN_004410B0` equals the
+port's, including the plasmas' closing speed (6000 became 6414). The words
+were the next update's heading with this update's entry pitch and roll in
+all 64 launches. The port's retail test checks 25 of these launches and the
+Virus Bomb's.
+
+Not the same yet: the launch record's origin. Retail's record held the
+craft's draw-stamped emitter point, about 200 from the centre (for example
+(19813, −555, 14808) with the craft at (19712, −554, 14634)), where the
+port's particle weapons start at the centre.
 
 **Megablast.** Operation `0x39` adds its amount to controller `+195` (at most
 4) and births one Type65 in mode 0 at the player, owned by it (`+60`).

@@ -263,7 +263,8 @@ fn idle_unfireable_selector_keeps_ab_phase() {
         shooter_origin_world: [0.0; 3],
         shooter_id: 46,
         shooter_entity_type_at_birth: Some(46),
-        shooter_velocity_world: [0.0; 3],
+        direction_q31: [0, 0, i32::MAX],
+        shooter_velocity_raw: [0; 3],
         sound_origin_world: [0.0; 3],
     };
     let mut weapon = PrimaryWeapon::new();
