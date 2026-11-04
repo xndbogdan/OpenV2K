@@ -10,6 +10,7 @@
 
 use crate::model_color::{sprite_blend, sprite_flat_shade_row};
 use crate::resource_cache::ResourceCache;
+use std::sync::Arc;
 use v2k_render::WorldSpriteBlend;
 
 /// Active entries at retail table `0x004D11DC`, excluding its unrelated index
@@ -32,6 +33,11 @@ pub struct DecodedFullFrameSprite {
     pub height: u32,
     pub render_flags: u8,
     pub blend: WorldSpriteBlend,
+    /// The record's texel indices and its display-format palette from the
+    /// record's start, for backends that draw the native material.
+    pub indices: Vec<u8>,
+    pub shade_count: u16,
+    pub palette: Arc<[u16]>,
 }
 
 /// Exact state owner for the recovered subset of session byte `+0x295`.
@@ -90,12 +96,25 @@ pub fn decode_full_frame_sprite(
     let decoded = atlas
         .decode_sprite(entry, usize::from(sprite_flat_shade_row(render_flags)))
         .ok()?;
+    let indices = atlas.decode_indices(entry).ok()?.indices;
+    // A texel index addresses at most row 28's entries past 255 (`+0x380`).
+    let start = entry.pal_offset as usize / 2;
+    let palette: Arc<[u16]> = atlas
+        .display_palette_words()
+        .get(start..)?
+        .iter()
+        .take(0x1C0 + 0x100)
+        .copied()
+        .collect();
     Some(DecodedFullFrameSprite {
         rgba: decoded.rgba,
         width: u32::from(decoded.width),
         height: u32::from(decoded.height),
         render_flags,
         blend: sprite_blend(render_flags),
+        indices,
+        shade_count: entry.shade_count,
+        palette,
     })
 }
 

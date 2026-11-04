@@ -323,12 +323,11 @@ impl SoftwareRenderer {
     }
 
     fn draw_textured_quad(&mut self, corners: [(i32, i32); 4], material: OwnedMaterial) {
-        let mut packet = [0u8; 0x14];
-        for (index, (x, y)) in corners.into_iter().enumerate() {
-            packet[4 * index..4 * index + 2].copy_from_slice(&(x as i16).to_le_bytes());
-            packet[4 * index + 2..4 * index + 4].copy_from_slice(&(y as i16).to_le_bytes());
-        }
-        self.draw_now(FillSlot::TexturedQuad, &packet, Some(material));
+        self.draw_now(
+            FillSlot::TexturedQuad,
+            &quad_packet(corners, 0),
+            Some(material),
+        );
     }
 
     fn surface_rgba(&self) -> Vec<u8> {
@@ -562,6 +561,17 @@ fn full_clip(surface: &Surface565) -> ClipRect {
 fn overlay_material(rgba: &[u8], width: u32, height: u32, flags: u16) -> OwnedMaterial {
     OwnedMaterial::indexed_from_rgba(rgba, width, height, flags)
         .unwrap_or_else(|| OwnedMaterial::raw_from_rgba(rgba, width, height, flags))
+}
+
+/// A textured quad's record: four (x, y) words, then the material id.
+fn quad_packet(corners: [(i32, i32); 4], material: MaterialId) -> [u8; 0x14] {
+    let mut packet = [0u8; 0x14];
+    for (index, (x, y)) in corners.into_iter().enumerate() {
+        packet[4 * index..4 * index + 2].copy_from_slice(&(x as i16).to_le_bytes());
+        packet[4 * index + 2..4 * index + 4].copy_from_slice(&(y as i16).to_le_bytes());
+    }
+    packet[0x10..0x14].copy_from_slice(&material.to_le_bytes());
+    packet
 }
 
 fn rect_corners(x: i32, y: i32, width: i32, height: i32) -> [(i32, i32); 4] {
@@ -1006,6 +1016,10 @@ impl Renderer for SoftwareRenderer {
 
     fn create_native_sprite(&mut self, sprite: crate::renderer::NativeSprite<'_>) -> Option<u32> {
         Some(self.materials.insert(OwnedMaterial::from_native(&sprite)))
+    }
+
+    fn draw_native_sprite_quad(&mut self, id: u32, corners: [(i32, i32); 4]) {
+        self.draw_now(FillSlot::TexturedQuad, &quad_packet(corners, id), None);
     }
 
     fn destroy_texture(&mut self, id: TextureId) {

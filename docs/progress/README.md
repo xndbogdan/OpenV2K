@@ -19,9 +19,9 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 379 |
+| implemented | 380 |
 | approximated | 6 |
-| documented | 30 |
+| documented | 31 |
 | not-needed | 626 |
 
 10 `FUN_` citations don't match a retail function
@@ -45,9 +45,9 @@ Where the code's references are thinnest:
 | [Controls](../re/CONTROLS.md) | 18 | 1 | 52 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 16 | 0 | 100 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 30 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 141 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 139 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 5 | 1 | 52 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 5 | 1 | 56 |
 | [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 152 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 2 | 0 | 44 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 2 | 1 | 54 |

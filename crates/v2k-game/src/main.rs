@@ -236,9 +236,10 @@ use v2k_render::sound::{
 use v2k_render::{
     mat3_mul, orientation_from_ypr, project_particle_center, AudioPlayer, Camera, CapturedFrame,
     ControllerLayout, ExternalFrameMode, FrameCaptureSource, GameConfig, GameEvent, GameWindow,
-    ModelDepthFade, ModelNearClip, ModelOverlayKind, MusicPlayer, PointerMode, ProjectionEffect,
-    RenderScene, Renderer, RendererChoice, SoundListener, SoundManager, SpriteFog, ViewPinMode,
-    WindowMode, WorldSprite, WorldSpriteBlend, HALF_ADDITIVE_ALPHA,
+    ModelDepthFade, ModelNearClip, ModelOverlayKind, MusicPlayer, NativePalette, NativeSprite,
+    NativeTexels, PointerMode, ProjectionEffect, RenderScene, Renderer, RendererChoice,
+    SoundListener, SoundManager, SpriteFog, TextureId, ViewPinMode, WindowMode, WorldSprite,
+    WorldSpriteBlend, HALF_ADDITIVE_ALPHA,
 };
 
 /// Sea-plane tint for the translucent water pass. A flat sea blue stands in
@@ -806,10 +807,11 @@ fn world_projection_effect(
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct PreparedFullFrameSpriteCommand {
     frame: FullFrameSpriteFrame,
-    rgba: Vec<u8>,
+    /// The authored two-by-two material, unscaled.
+    sprite: v2k_game::full_frame_sprite_sequence::DecodedFullFrameSprite,
+    /// The viewport its textured record covers.
     width: u32,
     height: u32,
-    blend: WorldSpriteBlend,
 }
 
 /// Append the current `FUN_00453410` frame against the selected global sprite
@@ -854,13 +856,11 @@ fn full_frame_sprite_command_for_frame(
         return None;
     }
 
-    let rgba = scale_rgba(&sprite.rgba, sprite.width, sprite.height, width, height);
     Some(PreparedFullFrameSpriteCommand {
         frame,
-        rgba,
+        sprite,
         width,
         height,
-        blend: sprite.blend,
     })
 }
 
@@ -869,24 +869,48 @@ fn draw_prepared_full_frame_sprite_command(
     command: &PreparedFullFrameSpriteCommand,
 ) {
     // Retail stretches the authored two-by-two material over the complete
-    // current viewport. Use the material path rather than draw_fullscreen:
-    // id 0x227 is masked, while 0x228..=0x22C are additive.
+    // current viewport as one textured record. Use the material path rather
+    // than draw_fullscreen: id 0x227 is masked, while 0x228..=0x22C are
+    // additive.
+    let sprite = &command.sprite;
     debug_assert_eq!(
-        command.blend,
+        sprite.blend,
         if command.frame.global_sprite_id == 0x227 {
             WorldSpriteBlend::Masked
         } else {
             WorldSpriteBlend::Additive
         }
     );
-    renderer.draw_material_sprite(
-        &command.rgba,
-        command.width,
-        command.height,
-        0,
-        0,
-        command.blend,
-    );
+    let (width, height) = (command.width as i32, command.height as i32);
+    let corners = [(0, 0), (width, 0), (width, height), (0, height)];
+    // The software raster draws the native record: past 640 pixels its span
+    // steps overrun and read texel index 0 outside the record, which row 28
+    // of this palette shows as the flash's colour, as retail's frames do.
+    let native = renderer.create_native_sprite(NativeSprite {
+        flags: u16::from(sprite.render_flags),
+        shade_count: sprite.shade_count,
+        width: sprite.width as u16,
+        height: sprite.height as u16,
+        texels: NativeTexels::Indexed {
+            indices: &sprite.indices,
+            palette: NativePalette {
+                block: sprite.palette.clone(),
+                start: 0,
+            },
+        },
+    });
+    if let Some(id) = native {
+        renderer.draw_native_sprite_quad(id, corners);
+        renderer.destroy_texture(TextureId(id));
+    } else {
+        renderer.draw_material_sprite_quad(
+            &sprite.rgba,
+            sprite.width,
+            sprite.height,
+            corners,
+            sprite.blend,
+        );
+    }
 }
 
 /// One-shot gameplay edges recovered from the retail key reader.
@@ -5042,6 +5066,11 @@ fn run_game(
                 if let Some(mut shell) = replay_world_cover.take() {
                     shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
                     post_intro_world_cover = Some(shell);
+                }
+                if post_intro_world_cover.is_some() {
+                    eprintln!(
+                        "World start blocked in part: FUN_004530D0's camera glide is not ported;                          play, the HUD and the captions start at the load"
+                    );
                 }
                 // Loading is synchronous. Its wall time is neither a retail
                 // simulation tick nor part of Klaus's opening callback, so
@@ -10600,6 +10629,27 @@ fn run_game(
                     network_play::draw_name_tags(&mut *renderer, fonts, &camera, em, net);
                 }
 
+                // Klaus is geometry in the world's sorted queue: the HUD and
+                // captions, submitted later, draw over his opening morph.
+                if let Some(shell) = post_intro_world_cover.as_mut() {
+                    draw_klaus_handoff_overlay(
+                        &mut *renderer,
+                        KlausHandoffFrame {
+                            shell,
+                            cache: &session.cache,
+                            colors: &face_colors,
+                            retail_tick,
+                        },
+                    );
+                    if prepared_full_frame_sprite.is_some() {
+                        // Klaus's queued geometry drains before the flash's key zero.
+                        renderer.begin_scene(RenderScene::Menu);
+                    }
+                    if shell.take_transition_ready() {
+                        post_intro_world_cover = None;
+                    }
+                }
+
                 // The retail queue sorts positive world depth ahead of the
                 // sequence's key zero, then submits radar/HUD later. Preserve
                 // that over-world, under-HUD composition explicitly.
@@ -10811,20 +10861,6 @@ fn run_game(
                     }
                 }
 
-                if let Some(shell) = post_intro_world_cover.as_mut() {
-                    draw_klaus_handoff_overlay(
-                        &mut *renderer,
-                        KlausHandoffFrame {
-                            shell,
-                            cache: &session.cache,
-                            colors: &face_colors,
-                            retail_tick,
-                        },
-                    );
-                    if shell.take_transition_ready() {
-                        post_intro_world_cover = None;
-                    }
-                }
                 if let Some(shell) = network_pause.as_ref() {
                     // FUN_004514A0 draws the menu over this frame's world.
                     let world = renderer.capture_frame(FrameCaptureSource::CurrentScene);
