@@ -31,6 +31,7 @@ use crate::{
     world_fx::{ParticleEnvironment, ParticleOwnerAtBirth, TerrainCollisionContext, WorldFx},
 };
 use grenade::{step_rolling_primary, GrenadePrimaryStepRequest, RollingPrimaryProfile};
+use guided::{search_guided_missile_target, steer_guided_missile, GuidedMissileCandidate};
 use mine::{step_armed_mine_words, step_falling_mine, MinePrimary};
 use rocket::{
     apply_rocket_flight_forces_raw, emit_rocket_trail, RocketFlightRequest, RocketTrailRequest,
@@ -171,6 +172,11 @@ pub fn tick_entity_weapon<E>(
             };
             let mut sub_k = runtime.sub_k_raw;
             let mut mine_arms_after_unwind = false;
+            let missile = (owner.kind == EntityWeaponKind::GuidedMissile)
+                .then(|| guided_missile_inputs(manager, id))
+                .transpose()
+                .map_err(owned_error)?;
+            let mut missile_expired = false;
             let mut search_context = runtime.search_context;
             let mut acquisition = None;
             let mut trail = false;
@@ -269,6 +275,48 @@ pub fn tick_entity_weapon<E>(
                             }
                             ActorTaskRuntime::RocketTrail => {
                                 trail = true;
+                            }
+                            ActorTaskRuntime::GuidedMissile(state) => {
+                                let inputs = missile.as_ref().ok_or(EntityWeaponBlock::Graph)?;
+                                // 410C10 after 15 s; it returns nonzero for
+                                // this admitted local body, so 407FB0 stops.
+                                if inputs.relation_age_us > guided::GUIDED_MISSILE_LIFETIME_US {
+                                    missile_expired = true;
+                                    return Ok(());
+                                }
+                                // 457DD0: the roll.
+                                crate::intro2_gun_turret::task::math::rotate(
+                                    &mut basis.lateral,
+                                    &mut basis.up,
+                                    (dt >> 3) as i32,
+                                );
+                                let target = state.target.and_then(|target| {
+                                    inputs
+                                        .live_positions
+                                        .iter()
+                                        .find(|(live, _)| *live == target)
+                                        .map(|(_, position)| *position)
+                                });
+                                if target.is_none() {
+                                    state.flight_us = 0;
+                                    let found = search_guided_missile_target(
+                                        id,
+                                        position,
+                                        &basis,
+                                        inputs.candidates.iter().copied(),
+                                    );
+                                    if found.is_some() {
+                                        state.target = found;
+                                    }
+                                }
+                                let RetailRuntimeValue::Known(Some(a)) =
+                                    metadata.sub_a_propulsion_descriptor
+                                else {
+                                    return Err(EntityWeaponBlock::Metadata);
+                                };
+                                velocity = steer_guided_missile(
+                                    state, &mut basis, position, target, a, dt,
+                                );
                             }
                             ActorTaskRuntime::ProximityMine(MinePrimary::Falling) => {
                                 let terrain = frame
@@ -406,6 +454,7 @@ pub fn tick_entity_weapon<E>(
                         matches!(selection, GuardLocationCandidateSelection::Selected(_))
                             && flags & 0x1000 == 0;
                 }
+                terminal_in_callback |= missile_expired;
                 if trail && flags & 0x0200_0000 != 0 {
                     let entity = manager.iter_all().find(|entity| entity.id == id).unwrap();
                     let collision =
@@ -419,7 +468,7 @@ pub fn tick_entity_weapon<E>(
                             sea_level_raw: collision.terrain.sea_level_raw(),
                             owner: ParticleOwnerAtBirth {
                                 entity_id: id,
-                                entity_type: 42,
+                                entity_type: owner.kind.entity_type() as u8,
                             },
                             source_remote_bit: flags & 0x8000_0000 != 0,
                             elapsed_micros: dt,
@@ -495,13 +544,20 @@ pub fn tick_entity_weapon<E>(
             .ok_or(owned_error(EntityWeaponBlock::Allocation))?;
         let mut velocity = entity.velocity_raw();
         let mut rotation = entity.rotation_heading_pitch_roll_raw();
+        // The effective word is the type's +C8 with the style's +34 set:
+        // class28's 0x4000 keeps the matrix its tick steered.
         let flags = metadata
             .initializer
             .as_ref()
             .unwrap()
-            .initializer_state_flags_raw;
+            .initializer_state_flags_raw
+            | if owner.kind == EntityWeaponKind::GuidedMissile {
+                guided::GUIDED_MISSILE_STYLE_ENABLE_BITS
+            } else {
+                0
+            };
         // DCA0/E870 rebuild13F70 after tasks and before E100 when the
-        // effective0x4000 mask is clear. Both authored weapon styles allow it.
+        // effective0x4000 mask is clear.
         if flags & 0x4000 == 0 {
             entity.apply_d720_euler_body_basis();
             let RetailRuntimeValue::Known(rebuilt) = entity.physical_body_basis_q31() else {
@@ -567,6 +623,69 @@ pub fn tick_entity_weapon<E>(
             trail_attempts,
             restyled: restyled.then_some(owner),
         }
+    })
+}
+
+/// What `407FB0` and `4083F0` read of the world, gathered before the
+/// missile's task state is lent out.
+struct GuidedMissileInputs {
+    relation_age_us: u32,
+    live_positions: Vec<(u32, [i16; 3])>,
+    /// Bodies passing `4083F0`'s capability, state, self and `411A20` tests,
+    /// in live order; the cone test needs the rolled matrix.
+    candidates: Vec<GuidedMissileCandidate>,
+}
+
+fn guided_missile_inputs(
+    manager: &EntityManager,
+    id: u32,
+) -> Result<GuidedMissileInputs, EntityWeaponBlock> {
+    let missile = manager.iter_all().find(|entity| entity.id == id).unwrap();
+    let RetailRuntimeValue::Known(relation_age_us) =
+        missile.collision.recent_relation_elapsed_us_at_0x68
+    else {
+        return Err(EntityWeaponBlock::Runtime("guided missile relation age"));
+    };
+    let mut live_positions = Vec::new();
+    let mut candidates = Vec::new();
+    for live in manager.retail_live_order_ids() {
+        let entity = manager.iter_all().find(|entity| entity.id == live).unwrap();
+        live_positions.push((live, entity.position_raw()));
+        if entity.capability_flags & 9 == 0 || live == id {
+            continue;
+        }
+        let RetailRuntimeValue::Known(living_state_raw) =
+            entity.collision.state_flags_at_0x08.masked(0xc000)
+        else {
+            return Err(EntityWeaponBlock::Runtime("guided missile candidate state"));
+        };
+        if living_state_raw != 0x8000 {
+            continue;
+        }
+        let RetailRuntimeValue::Known(relation_suppressed) =
+            crate::entity_collision_state::recent_relation_suppresses_pair(
+                live,
+                &entity.collision,
+                id,
+                &missile.collision,
+            )
+        else {
+            return Err(EntityWeaponBlock::Runtime(
+                "guided missile candidate relation",
+            ));
+        };
+        candidates.push(GuidedMissileCandidate {
+            id: live,
+            position_raw: entity.position_raw(),
+            capability_flags: entity.capability_flags,
+            living_state_raw,
+            relation_suppressed,
+        });
+    }
+    Ok(GuidedMissileInputs {
+        relation_age_us,
+        live_positions,
+        candidates,
     })
 }
 

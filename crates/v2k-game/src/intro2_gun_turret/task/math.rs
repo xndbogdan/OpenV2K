@@ -71,7 +71,7 @@ pub(crate) fn asin(fraction: i32) -> i32 {
     }
 }
 
-fn angle(component: i32, length: i32, behind: bool) -> i32 {
+pub(crate) fn angle(component: i32, length: i32, behind: bool) -> i32 {
     let value = asin(ratio(component, length));
     // The nonpositive rear branch replaces the angle; it does not subtract
     // 0x2000 from it (EXE408AA9/408AED).

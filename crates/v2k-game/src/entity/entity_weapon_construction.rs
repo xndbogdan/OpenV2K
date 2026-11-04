@@ -8,6 +8,7 @@ use crate::{
     },
     native_entity_weapons::{
         grenade::{authenticate_grenade_metadata, GRENADE_CLASS35_CLEAR_ORDER},
+        guided::{authenticate_guided_missile_metadata, GuidedMissileTaskState},
         meteor::authenticate_meteor_metadata,
         mine::{authenticate_mine_metadata, MinePrimary},
         rocket::{
@@ -112,6 +113,7 @@ impl EntityManager {
             }
             EntityWeaponKind::Meteor => authenticate_meteor_metadata(&metadata)?,
             EntityWeaponKind::ProximityMine => authenticate_mine_metadata(&metadata)?,
+            EntityWeaponKind::GuidedMissile => authenticate_guided_missile_metadata(&metadata)?,
         }
         if metadata
             .model_slots
@@ -312,6 +314,22 @@ impl EntityManager {
                     ActorTaskSlot::Primary,
                     PreparedActorTask::new(ActorTaskRuntime::BoulderRolling(
                         crate::intro2_meteors::BoulderRollingTaskState::new(request.position_raw),
+                    )),
+                );
+            }
+            EntityWeaponKind::GuidedMissile => {
+                // 40D160: Secondary cleared, the class31 trail in Tertiary,
+                // then 407F20's Primary; 408610's record keeps the birth
+                // speed. Neither publication draws a random word.
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Tertiary,
+                    PreparedActorTask::new(ActorTaskRuntime::RocketTrail),
+                );
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::GuidedMissile(
+                        GuidedMissileTaskState::new(request.velocity_raw),
                     )),
                 );
             }
