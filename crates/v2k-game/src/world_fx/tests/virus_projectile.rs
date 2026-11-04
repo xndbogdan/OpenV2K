@@ -382,6 +382,7 @@ impl ParticleTraversalHost for InfectionHost {
     }
     fn publish_terrain_mutations(
         &mut self,
+        _: &mut WorldFx,
         mutations: &[ParticleTerrainMutation],
     ) -> ParticleTerrainPublication {
         for &write in mutations {
@@ -446,11 +447,15 @@ fn class50_children_infect_live_terrain_in_physical_slot_order() {
                 .terrain_type_mutations
         };
         assert!(!writes.is_empty());
-        assert!(writes.iter().all(|write| *write
-            == ParticleTerrainMutation::Infection {
+        // Each carrier writes at its own raw position inside cell [4, 5].
+        assert!(writes.iter().all(|write| matches!(
+            *write,
+            ParticleTerrainMutation::Infection {
                 cell: [4, 5],
-                infected: true
-            }));
+                infected: true,
+                position_raw: [x, z],
+            } if (x as u16 >> 8, z as u16 >> 8) == (4, 5)
+        )));
         assert_eq!(host.terrain.cells[4 * GRID_SIZE + 5].terrain_type, 0x10);
         assert!(carriers(&fx).is_empty());
         assert_eq!(fx.rng_state, rng);

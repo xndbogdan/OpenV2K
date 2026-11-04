@@ -916,6 +916,7 @@ fn spawn25_tertiary_coarse_visit_and_detailed_basis_fail_closed() {
             InfectionCellWrite {
                 cell: [0xC1, 0x0D],
                 infected: true,
+                position_raw: [-16128, 3328],
             }
         ))
     );

@@ -105,6 +105,7 @@ fn f950_clears_refined_static_tile_only_and_obeys_suppression_and_change_only_wr
                 vec![ParticleTerrainMutation::Infection {
                     cell: [3, 4],
                     infected: false,
+                    position_raw: [895, 1151],
                 }]
             } else {
                 vec![]

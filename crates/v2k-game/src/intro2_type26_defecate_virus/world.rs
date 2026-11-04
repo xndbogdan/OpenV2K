@@ -355,10 +355,11 @@ fn run_frame(
         }
         let mut writes = Vec::new();
         apply_intro2_type26_tertiary_plan(frame.world_fx, &mut writes, &visit);
-        frame
-            .resources
-            .apply_level_infection_writes(&writes)
-            .ok_or(Block::Runtime("infection terrain"))?;
+        // The plan's one coarse write is its callback's last action.
+        for write in writes {
+            crate::infection_listeners::write_infection(frame.resources, frame.world_fx, write)
+                .map_err(Block::Runtime)?;
+        }
     }
     finish_world(
         manager,

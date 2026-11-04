@@ -111,7 +111,7 @@ pub(crate) fn tertiary<P: NativeGroundActorProfile>(
                 Ok(())
             }
             DefecateVirusCallbackPlan::CoarseTerrainMutation(write) => {
-                resources.apply_infection_write(write)
+                resources.apply_infection_write(write, fx)
             }
         }
     }));

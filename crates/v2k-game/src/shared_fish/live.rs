@@ -786,7 +786,7 @@ fn defecate_terrain(
         }
         DefecateVirusCallbackPlan::CoarseTerrainMutation(write) => frame
             .resources
-            .apply_infection_write(write)
+            .apply_infection_write(write, frame.world_fx)
             .map_err(|_| Block::Runtime("class4 infection terrain")),
     });
     let survived = entity.actor_tasks.finish_exact_visit(visit);

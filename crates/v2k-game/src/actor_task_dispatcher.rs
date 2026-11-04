@@ -8577,6 +8577,7 @@ mod tests {
                 crate::infection_evolution::InfectionCellWrite {
                     cell: [0x12, 0x55],
                     infected: true,
+                    position_raw: [4863, 21760],
                 }
             )]
         );

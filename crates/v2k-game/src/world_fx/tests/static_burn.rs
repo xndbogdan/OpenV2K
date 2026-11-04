@@ -103,15 +103,13 @@ fn primary_immediate_burn_changes_later_f800_model_and_target_in_same_traversal(
 fn burn_overlay_composes_with_ordered_infection_and_does_not_touch_sibling_bits() {
     let cell = [3, 4];
     let writes = [
-        ParticleTerrainMutation::Infection {
-            cell,
-            infected: true,
-        },
+        ParticleTerrainMutation::infection(
+            crate::infection_evolution::InfectionCellWrite::at_cell(cell, true),
+        ),
         ParticleTerrainMutation::ImmediateBurn { cell },
-        ParticleTerrainMutation::Infection {
-            cell,
-            infected: false,
-        },
+        ParticleTerrainMutation::infection(
+            crate::infection_evolution::InfectionCellWrite::at_cell(cell, false),
+        ),
     ];
     assert_eq!(effective_terrain_type(0xe5, cell, &writes[..1]), 0xf5);
     assert_eq!(effective_terrain_type(0xe5, cell, &writes[..2]), 0xfd);

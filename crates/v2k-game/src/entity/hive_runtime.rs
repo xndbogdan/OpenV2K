@@ -66,15 +66,16 @@ impl EntityManager {
 }
 
 impl EntityManager {
-    /// One live-list callback prefix, with terrain writes visible to its successor.
+    /// One live-list callback prefix over the caller's terrain view; each
+    /// write reaches `effects` as it happens (`frame.terrain` is unread).
     pub(crate) fn advance_authored_hive_component_prefix(
         &mut self,
         entity_id: u32,
         mut frame: AuthoredHiveComponentFrame<'_>,
+        mut terrain: Option<InfectionTerrainSnapshot>,
         mode: ComponentUpdateMode,
         effects: &mut impl AuthoredHiveComponentEffects,
     ) -> Result<Vec<InfectionCellWrite>, AuthoredHiveInfectionBlock> {
-        let mut terrain = frame.terrain.map(InfectionTerrainSnapshot::from_terrain);
         self.advance_hive_component_state(entity_id, &mut frame, mode, &mut terrain, effects)?;
         terrain
             .map(InfectionTerrainSnapshot::into_writes)

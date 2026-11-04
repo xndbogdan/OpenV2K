@@ -27,10 +27,39 @@ pub const INFECTION_TAIL_STEP_US: i32 = 350_000;
 pub const INFECTION_TAIL_SOUND_ID: u16 = 0x40;
 
 /// One exact set/clear of Section-10 terrain-type bit `0x10`.
+///
+/// `FUN_00433720` takes raw X/Z words and writes the cell of their high
+/// bytes; its listeners read the raw words themselves (`FUN_0044A850`'s
+/// radar redraw rounds them), so every writer keeps the words it passed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InfectionCellWrite {
     pub cell: [u8; 2],
     pub infected: bool,
+    pub position_raw: [i16; 2],
+}
+
+impl InfectionCellWrite {
+    pub const fn at(position_raw: [i16; 2], infected: bool) -> Self {
+        Self {
+            cell: [
+                ((position_raw[0] as u16) >> 8) as u8,
+                ((position_raw[1] as u16) >> 8) as u8,
+            ],
+            infected,
+            position_raw,
+        }
+    }
+
+    /// A writer that passes the cell's corner, `cell << 8`.
+    pub const fn at_cell(cell: [u8; 2], infected: bool) -> Self {
+        Self::at(
+            [
+                ((cell[0] as u16) << 8) as i16,
+                ((cell[1] as u16) << 8) as i16,
+            ],
+            infected,
+        )
+    }
 }
 
 /// One fixed-rate, full-gain positional sound requested immediately before a
@@ -50,14 +79,18 @@ pub struct InfectionTailSound {
 pub trait InfectionEvolutionEffects {
     fn next_shared_random_u16(&mut self) -> u16;
     fn queue_infection_tail_sound(&mut self, sound: InfectionTailSound);
+    /// `FUN_00433720` for a changed cell, at the write: a live host writes
+    /// the terrain and runs its listeners here, before the callback's next
+    /// draw. Headless adapters apply the snapshot's writes afterwards.
+    fn write_infection(&mut self, _write: InfectionCellWrite) {}
 }
 
 /// Per-frame terrain view shared by every authored infection controller.
 ///
 /// Writes immediately change this view, so later crossings/controllers in the
-/// same retail list order observe earlier mutations. The owning cache can
-/// commit [`writes`](Self::writes) after all callbacks release their immutable
-/// terrain borrow.
+/// same retail list order observe earlier mutations. The live Hive writes each
+/// one to the terrain as it happens ([`InfectionEvolutionEffects::write_infection`]);
+/// a headless caller commits [`writes`](Self::writes) afterwards.
 #[derive(Debug, Clone)]
 pub struct InfectionTerrainSnapshot {
     heights: Vec<u8>,
@@ -92,13 +125,21 @@ impl InfectionTerrainSnapshot {
         self.infected[cell_index(cell)]
     }
 
-    fn set_infected(&mut self, cell: [u8; 2], infected: bool) {
+    /// Both callbacks pass the cell's corner (`cell << 8`).
+    fn set_infected(
+        &mut self,
+        cell: [u8; 2],
+        infected: bool,
+        effects: &mut impl InfectionEvolutionEffects,
+    ) {
         let index = cell_index(cell);
         if self.infected[index] == infected {
             return;
         }
         self.infected[index] = infected;
-        self.writes.push(InfectionCellWrite { cell, infected });
+        let write = InfectionCellWrite::at_cell(cell, infected);
+        self.writes.push(write);
+        effects.write_infection(write);
     }
 
     fn height_raw(&self, cell: [u8; 2]) -> i16 {
@@ -231,7 +272,7 @@ fn evolve_natural_cells(
         let neighbors = terrain.infected_neighborhood_count(selected);
         if neighbors < 6 {
             if neighbors < 5 {
-                terrain.set_infected(selected, false);
+                terrain.set_infected(selected, false, effects);
             }
             continue;
         }
@@ -246,7 +287,7 @@ fn evolve_natural_cells(
             let step_word = effects.next_shared_random_u16();
             step_random_walk(&mut cell, direction_word, direction, step_word);
             if !terrain.is_infected(cell) {
-                terrain.set_infected(cell, true);
+                terrain.set_infected(cell, true, effects);
                 let mut tail_steps = if terrain.below_sea_level(cell) {
                     0
                 } else {
@@ -332,7 +373,7 @@ fn advance_tails(
                     i16::from(tail.cell[1]) << 8,
                 ],
             });
-            terrain.set_infected(tail.cell, true);
+            terrain.set_infected(tail.cell, true, effects);
             if terrain.below_sea_level(tail.cell) {
                 tail.remaining_steps = 0;
             } else {
@@ -388,6 +429,8 @@ mod tests {
         words: &'a [u16],
         calls: std::rc::Rc<std::cell::Cell<usize>>,
         sounds: Vec<InfectionTailSound>,
+        /// Each write with the number of words drawn before it.
+        writes: Vec<(usize, InfectionCellWrite)>,
     }
 
     impl InfectionEvolutionEffects for ScriptedEffects<'_> {
@@ -400,6 +443,10 @@ mod tests {
         fn queue_infection_tail_sound(&mut self, sound: InfectionTailSound) {
             self.sounds.push(sound);
         }
+
+        fn write_infection(&mut self, write: InfectionCellWrite) {
+            self.writes.push((self.calls.get(), write));
+        }
     }
 
     fn scripted_effects(
@@ -411,6 +458,7 @@ mod tests {
                 words,
                 calls: calls.clone(),
                 sounds: Vec::new(),
+                writes: Vec::new(),
             },
             calls,
         )
@@ -456,6 +504,30 @@ mod tests {
     }
 
     #[test]
+    fn a_write_reaches_its_host_before_the_next_crossing_draws() {
+        let mut grid = terrain(0, -0x1000);
+        infect(&mut grid, [3, 4]);
+        let mut view = InfectionTerrainSnapshot::from_terrain(&grid);
+        let (mut effects, calls) = scripted_effects(&[3, 4, 50, 50]);
+        HiveInfectionEvolution::default().advance(
+            10_001,
+            true,
+            true,
+            1,
+            WORDS,
+            &mut view,
+            &mut effects,
+        );
+        assert_eq!(calls.get(), 4);
+        assert_eq!(
+            effects.writes,
+            [(2, InfectionCellWrite::at_cell([3, 4], false))],
+            "FUN_00433720 and its listeners run between the crossings' draws"
+        );
+        assert_eq!(effects.writes[0].1.position_raw, [0x300, 0x400]);
+    }
+
+    #[test]
     fn sparse_four_clears_five_holds_and_neighborhood_wraps() {
         let center = [0, 0];
         let mut sparse = terrain(0, -0x1000);
@@ -475,10 +547,7 @@ mod tests {
         );
         assert_eq!(
             sparse_view.writes(),
-            &[InfectionCellWrite {
-                cell: center,
-                infected: false
-            }]
+            &[InfectionCellWrite::at_cell(center, false)]
         );
 
         let mut five = sparse;
@@ -515,10 +584,11 @@ mod tests {
         assert_eq!(calls.get(), words.len());
         assert_eq!(
             view.writes(),
-            &[InfectionCellWrite {
-                cell: [13, 10],
-                infected: true
-            }]
+            &[InfectionCellWrite::at_cell([13, 10], true)]
+        );
+        assert_eq!(
+            effects.writes,
+            [(6, InfectionCellWrite::at_cell([13, 10], true))]
         );
         assert_eq!(runtime.pending_tail_count(), 1);
     }

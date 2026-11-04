@@ -64,9 +64,8 @@ pub(super) fn tick(
                 Ok(())
             }
             DefecateVirusCallbackPlan::CoarseTerrainMutation(write) => {
-                resources
-                    .apply_level_infection_writes(&[write])
-                    .ok_or(Block::Runtime("Cleansing terrain write"))?;
+                crate::infection_listeners::write_infection(resources, world_fx, write)
+                    .map_err(Block::Runtime)?;
                 Ok(())
             }
         }

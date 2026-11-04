@@ -156,10 +156,7 @@ fn native_type16_defecate_coarse_writes_wrapped_cell_z_then_x_without_geometry()
     let cell = [(x as u16 >> 8) as u8, (z as u16 >> 8) as u8];
     session
         .cache
-        .apply_level_infection_writes(&[InfectionCellWrite {
-            cell,
-            infected: false,
-        }])
+        .apply_level_infection_writes(&[InfectionCellWrite::at([x, z], false)])
         .unwrap();
     tick_intro2_type16_defecate(
         &mut manager,
@@ -176,7 +173,12 @@ fn native_type16_defecate_coarse_writes_wrapped_cell_z_then_x_without_geometry()
         0
     );
     assert_eq!(age(&manager, id), 20);
-    assert_eq!(fx.particle_count(), 0);
+    // Only FUN_00427C30's carriers for the cell's object, if its kind has
+    // them; this fixture has no radar to redraw.
+    assert!(fx
+        .test_particles_in_virgin_birth_order()
+        .iter()
+        .all(|particle| particle.source_class == 5));
     assert_eq!(
         fx.next_shared_retail_random_u16(),
         expected.next_shared_retail_random_u16()

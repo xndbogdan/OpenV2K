@@ -178,13 +178,10 @@ struct Intro2ParticleHost<'a> {
 impl ParticleTraversalHost for Intro2ParticleHost<'_> {
     fn publish_terrain_mutations(
         &mut self,
+        world_fx: &mut WorldFx,
         mutations: &[ParticleTerrainMutation],
     ) -> ParticleTerrainPublication {
-        self.cache
-            .apply_particle_terrain_mutations(mutations)
-            .map_or(ParticleTerrainPublication::Deferred, |_| {
-                ParticleTerrainPublication::Committed
-            })
+        crate::infection_listeners::publish_particle_terrain_writes(self.cache, world_fx, mutations)
     }
 
     fn context(&self) -> ParticleTraversalContext<'_> {
