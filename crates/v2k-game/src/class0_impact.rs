@@ -4,7 +4,8 @@
 //! so do Type50's class36 4C7390 and Type89's class38 4C7348. Lethal checked
 //! damage runs 10C10's class38 Change Sea Level for Type54, Type72, Type85
 //! and Type50, exactly as the Main Base abort does, Type89's class1
-//! explosion, Type118's class65 Geyser and Type36's class16 again. Flags,
+//! explosion, Type118's class65 Geyser, Type36's class16 again and Type63's
+//! class2. Flags,
 //! weights, Type106 and gates have zero multipliers, so no shot is lethal to
 //! them. Type110's class67 style is the one with a `+28` hook, `FUN_00421990`,
 //! and its body the one with capability 8; its lethal hit takes class67 again.
@@ -54,6 +55,8 @@ pub enum Class0Death {
     NoTask,
     /// Type89's BAC0 finished: blast, radial, tasks cleared, removal staged.
     Class1,
+    /// Type63's class2: sound 62, tasks cleared, removal staged.
+    Class2,
     /// Type118's class65 Primary; the class0 owner keeps the body.
     Geyser {
         sea_delta_raw: i32,
@@ -282,6 +285,20 @@ fn run(
                     | crate::main_base_type54_abort::TYPE110_ENTITY_TYPE
             ) {
                 return flare_death(manager, scheduler, id);
+            }
+            if entity_type == crate::main_base_type54_abort::TYPE63_ENTITY_TYPE {
+                // The Defender Ball's alternate class2: tasks cleared, removal
+                // staged; its owner retires.
+                if !scheduler.take_class0_actor_external_mutation(manager, id) {
+                    return Err(Class0DeathBlock::Custody);
+                }
+                manager
+                    .apply_megablast_death(id, world_fx)
+                    .map_err(Class0DeathBlock::Class0Alternate)?;
+                return Ok(LiveActorDeathResult {
+                    returned_nonzero: true,
+                    publication: Some(Class0Death::Class2),
+                });
             }
             if !is_change_sea_level_type(entity_type) {
                 return Err(Class0DeathBlock::UnsupportedAlternate { entity_type });

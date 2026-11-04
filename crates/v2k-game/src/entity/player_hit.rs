@@ -89,7 +89,9 @@ impl PlayerDyingContactRuntime {
 pub enum PlayerCheckedDamageBlock {
     Runtime(&'static str),
     Modifier(u32),
-    LinkedAttachments,
+    /// A live body of this type in the controller's `+220` list, which
+    /// `FUN_004484A0` would hit with no port owner for it.
+    HoldBody(u32),
     RemoteOwner,
     HitCallback(u32),
     PlayerFeedback,
@@ -152,10 +154,15 @@ pub(super) enum PlayerDamagePlan {
         filtered_damage_raw: i32,
         buffer_after: i32,
         position_raw: [i16; 3],
+        /// The live Defender Ball 4484A0 hands the packet to; the craft then
+        /// takes none.
+        hold_ball: Option<(u32, DamageDeliveryRecord)>,
     },
     Alive {
         index: usize,
+        /// The filtered amount 4484A0 receives (its feedback reads it).
         filtered_damage_raw: i32,
+        hold_ball: Option<(u32, DamageDeliveryRecord)>,
         transition: GenericEntityDamageTransition,
         generic_hit_sound_id: Option<u16>,
         death_sound_id: Option<u16>,
@@ -284,17 +291,8 @@ impl EntityManager {
         if initializer.behavior_rule_ref != 1 || initializer.alternate_behavior_class_ref != 25 {
             return Err(PlayerCheckedDamageBlock::DeathStyle);
         }
-        match self.player_pair_damage_modifier_context_empty() {
-            RetailRuntimeValue::Known(true) => {}
-            RetailRuntimeValue::Known(false) => {
-                return Err(PlayerCheckedDamageBlock::LinkedAttachments)
-            }
-            RetailRuntimeValue::Unresolved => {
-                return Err(PlayerCheckedDamageBlock::Runtime(
-                    "controller attachment list",
-                ))
-            }
-        }
+        // 447280 never reads the controller's +220 list; only the
+        // controller's own destructor (4478E0) kills its bodies.
         let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
             return Err(PlayerCheckedDamageBlock::DeathStyle);
         };
@@ -493,21 +491,15 @@ impl EntityManager {
         } else {
             collision.pair_callbacks.damage_modifier_address
         };
-        match known(modifier, "damage modifier")? {
-            None => {}
-            Some(0x0044_84A0) => match self.player_pair_damage_modifier_context_empty() {
-                RetailRuntimeValue::Known(true) => {}
-                RetailRuntimeValue::Known(false) => {
-                    return Err(PlayerCheckedDamageBlock::LinkedAttachments)
-                }
-                RetailRuntimeValue::Unresolved => {
-                    return Err(PlayerCheckedDamageBlock::Runtime(
-                        "controller attachment list",
-                    ))
-                }
-            },
+        let hold_ball = match known(modifier, "damage modifier")? {
+            None => None,
+            Some(0x0044_84A0) => self
+                .plan_player_hold_walk()?
+                .map(|ball| (ball, request.delivery)),
             Some(address) => return Err(PlayerCheckedDamageBlock::Modifier(address)),
-        }
+        };
+        // A live ball takes the packet and 4484A0 returns zero.
+        let applied = if hold_ball.is_some() { 0 } else { filtered };
         if known(
             collision.state_flags_at_0x08.masked(REMOTE_OWNED_STATE_BIT),
             "remote ownership",
@@ -528,8 +520,9 @@ impl EntityManager {
             return Ok(PlayerDamagePlan::AlreadyDying {
                 index,
                 filtered_damage_raw: filtered,
-                buffer_after: absorb_pre_health_damage_buffer(buffer, filtered).0,
+                buffer_after: absorb_pre_health_damage_buffer(buffer, applied).0,
                 position_raw,
+                hold_ball,
             });
         }
         let generic_hit_sound_id = known(collision.generic_hit_sound_id, "generic-hit sound")?;
@@ -549,7 +542,7 @@ impl EntityManager {
                 pre_health_buffer_raw: buffer,
                 already_dying: false,
             },
-            filtered,
+            applied,
         );
         let mut death = None;
         let mut player_kill_hint = false;
@@ -589,6 +582,7 @@ impl EntityManager {
         Ok(PlayerDamagePlan::Alive {
             index,
             filtered_damage_raw: filtered,
+            hold_ball,
             transition,
             generic_hit_sound_id,
             death_sound_id,
@@ -622,9 +616,11 @@ impl EntityManager {
                 filtered_damage_raw,
                 buffer_after,
                 position_raw,
+                hold_ball,
             } => {
                 // 4484A0's feedback precedes 14E90's dying test.
                 crate::pad_vibration::submit_player_damage(filtered_damage_raw);
+                self.hit_hold_ball(hold_ball, fx, notifications, retail_tick);
                 self.entities[index].collision.pre_health_damage_buffer_raw =
                     RetailRuntimeValue::Known(buffer_after);
                 hull.pre_health_damage_buffer_raw = buffer_after;
@@ -639,6 +635,7 @@ impl EntityManager {
             PlayerDamagePlan::Alive {
                 index,
                 filtered_damage_raw,
+                hold_ball,
                 transition,
                 generic_hit_sound_id,
                 death_sound_id,
@@ -649,6 +646,7 @@ impl EntityManager {
                 attacker_slot,
             } => {
                 crate::pad_vibration::submit_player_damage(filtered_damage_raw);
+                self.hit_hold_ball(hold_ball, fx, notifications, retail_tick);
                 let dying = transition.stage == GenericEntityDamageStage::DeathDispatchRequired;
                 let entity = &mut self.entities[index];
                 let health = if dying {
@@ -705,9 +703,62 @@ impl EntityManager {
         }
     }
 
+    /// `FUN_004484A0`'s walk of the controller's `+220` list. The first
+    /// live (nonzero state, not dying) Type63 takes the packet and the craft
+    /// none; without one, every live body in the list takes it under a
+    /// temporary `0x8000`, which needs that body's own owner.
+    pub(super) fn plan_player_hold_walk(&self) -> Result<Option<u32>, PlayerCheckedDamageBlock> {
+        let mut live = Vec::new();
+        for &id in &self.auxiliary_owned_ids {
+            let Some(entity) = self.entities.iter().find(|entity| entity.id == id) else {
+                continue;
+            };
+            let state = known(
+                entity.collision.state_flags_at_0x08.masked(u32::MAX),
+                "hold body state",
+            )?;
+            if state == 0 || state & DYING_STATE_BIT != 0 {
+                continue;
+            }
+            if entity.entity_type == super::class0_actor::DEFENDER_BALL_ENTITY_TYPE {
+                if !self.defender_ball_hit_ready(id) {
+                    return Err(PlayerCheckedDamageBlock::Runtime("Defender Ball custody"));
+                }
+                return Ok(Some(id));
+            }
+            live.push(entity.entity_type);
+        }
+        match live.first() {
+            None => Ok(None),
+            Some(&entity_type) => Err(PlayerCheckedDamageBlock::HoldBody(entity_type)),
+        }
+    }
+
+    fn hit_hold_ball(
+        &mut self,
+        hold_ball: Option<(u32, DamageDeliveryRecord)>,
+        fx: &mut WorldFx,
+        notifications: &mut crate::gameplay_notifications::GameplayNotifications,
+        retail_tick: u32,
+    ) {
+        let Some((ball, delivery)) = hold_ball else {
+            return;
+        };
+        let feedback = crate::live_actor_checked_damage::LiveActorDamageFeedback {
+            notifications,
+            retail_tick,
+        };
+        // The plan proved the ball ready; nothing runs between it and here.
+        if let Err(error) =
+            self.apply_defender_ball_checked_damage(ball, delivery, fx, Some(feedback))
+        {
+            eprintln!("Player damage modifier: {error} on Type63 {ball}");
+        }
+    }
+
     /// Direct 15040: complete packet provenance and explicit filter ratio.
     /// No entry here writes +34, dispatches a hit style or adds primary effects.
-    /// Nonempty 484A0 controller links require their own redirection owner.
+    /// 4484A0's hold walk runs through [`Self::plan_player_hold_walk`].
     pub fn apply_player_checked_damage(
         &mut self,
         request: PlayerCheckedDamageRequest,

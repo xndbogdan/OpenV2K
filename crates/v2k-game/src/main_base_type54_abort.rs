@@ -39,6 +39,7 @@ pub const TYPE118_ENTITY_TYPE: u32 = 118;
 pub const TYPE36_ENTITY_TYPE: u32 = 36;
 pub const TYPE74_ENTITY_TYPE: u32 = 74;
 pub const TYPE65_ENTITY_TYPE: u32 = crate::megablast::ENTITY_TYPE;
+pub const TYPE63_ENTITY_TYPE: u32 = 63;
 pub const TYPE110_ENTITY_TYPE: u32 = crate::queen::ENTITY_TYPE;
 
 /// A row on the class0 constructor whose single program is not class0's
@@ -80,7 +81,7 @@ const NO_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
 /// 36 carry Sub-K, death cue 62 and their own axis, and explode through
 /// class1. World 47's Type110 Queen lives and dies in class67, with eight
 /// Sub-K words.
-const CLASS0_HOST_ROWS: [Class0HostRow; 10] = [
+const CLASS0_HOST_ROWS: [Class0HostRow; 11] = [
     Class0HostRow {
         entity_type: LEVEL_ONE_TYPE54_ENTITY_TYPE,
         model: LEVEL_ONE_TYPE54_MODEL_ID as u16,
@@ -239,6 +240,26 @@ const CLASS0_HOST_ROWS: [Class0HostRow; 10] = [
         sub_k: [1, 2],
         model_variables: 2,
     },
+    // The Defender Ball, born at the player by operation 0x38 into the
+    // controller's +220 list; class50 Defender Ball, alternate class2.
+    Class0HostRow {
+        entity_type: TYPE63_ENTITY_TYPE,
+        model: 244,
+        mass_raw: 10,
+        capability_flags: 0x40,
+        health_raw: 1,
+        initializer_state_flags_raw: 0x0000_0404,
+        behavior_rule_ref: 1,
+        living_class: 50,
+        alternate_class: 2,
+        death_sound_id: Some(62),
+        axis: CommonAxisDescriptor {
+            strict_axis_limit_raw: 0,
+            raw_word_at_0x04: 8,
+        },
+        sub_k: [0, 0],
+        model_variables: 0,
+    },
 ];
 
 /// A row whose death enters class38 Change Sea Level.
@@ -298,6 +319,14 @@ pub(crate) fn remote_beamer_metadata(
 pub(crate) fn megablast_metadata(entity_type: u32, metadata: &EntityTypeRuntimeMetadata) -> bool {
     class0_host_row_metadata(entity_type, metadata)
         .is_some_and(|row| row.living_class == crate::megablast::BEHAVIOR_CLASS)
+}
+
+/// Authenticate Type63's row: class50 Defender Ball, alternate class2.
+pub(crate) fn defender_ball_metadata(
+    entity_type: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+) -> bool {
+    class0_host_row_metadata(entity_type, metadata).is_some_and(|row| row.living_class == 50)
 }
 
 /// Authenticate Type110's row: class67 Queen, living and alternate.

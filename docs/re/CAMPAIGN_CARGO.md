@@ -343,7 +343,7 @@ The auxiliary phase is implemented for recovered constructors:
   zero-record conventional cargo. Its non-cargo branch manages the auxiliary
   owned list, including Type 64 uniqueness and a 15-object limit, while its
   cargo branch can use `443B50`. The final `451C00` loop does not inspect the
-  operation return before advancing. Type52, Type68, Type74, Type83 and the
+  operation return before advancing. Type52, Type63, Type68, Type74, Type83 and the
   Type92/96/97/100 turrets are constructed at that pose; any other type is a
   typed `UnsupportedConstructor` stop, and the walk continues without
   fabricating success. The Cheats rows reach the same operation

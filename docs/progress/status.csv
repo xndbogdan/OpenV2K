@@ -1039,3 +1039,6 @@ address,status,note
 0x0044A500,not-needed,replaced: Rust ownership (module open and close, and module or table setup that only clears state, starts lists, adds or drops hooks or frees records; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces)
 0x0044A850,documented,held: infection writers apply after retail's interleaved RNG and births (ENTITY_STATIC_DAMAGE_PROGRAMS.md#cell-change-listeners)
 0x00427C30,documented,held with FUN_0044A850 (ENTITY_STATIC_DAMAGE_PROGRAMS.md#cell-change-listeners)
+0x0040B0F0,implemented,class50 initializer: T and S cleared, 07070's Primary (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x00407070,implemented,Defender Ball Primary and its pitch draw (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x00407150,implemented,Defender Ball visit: on the owner with zero velocity, pitch and roll spin (docs/re/PLAYER_CRAFT.md#special-weapons)
