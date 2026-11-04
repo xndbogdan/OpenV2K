@@ -941,9 +941,9 @@ address,status,note
 0x00418980,implemented,hold rotation: first row to the end (docs/re/CONTROLS.md)
 0x00452770,implemented,Intro2 skip and closing scene leave command 0x40: +290 and the flash; next world 1 in phase 3 (docs/re/LOADING_TRANSITIONS.md)
 0x00455D30,implemented,Space/Return below phase 5: FUN_00452770 skips the closing scene (docs/re/CLOSING_SCENE.md)
-0x00453C20,implemented,phase-3 exit: the class-1 camera proxy on the player at rest and Klaus's closing morph (docs/re/CLOSING_SCENE.md)
-0x00453E00,documented,after a world exit: phase 5 unless the next world is 0x25; the port runs it for phase-3 exits and Replay this World (docs/re/CLOSING_SCENE.md)
-0x00453BA0,documented,world exit entry: 453C20 then the 4D0710 closing leg; the port runs it for phase-3 exits and Replay this World (docs/re/CLOSING_SCENE.md)
+0x00453C20,implemented,world exit and map leave: the class-1 camera proxy on the player at rest and Klaus's closing command 3 (docs/re/CLOSING_SCENE.md; docs/re/MENU_SYSTEM.md#progress-map)
+0x00453E00,implemented,after a world exit: waits for Klaus after his visit; phase 5 unless the next world is 0x25; the progress map for phase-5 exits (docs/re/MENU_SYSTEM.md#progress-map)
+0x00453BA0,implemented,world exit entry: 453C20 then the 4D0710 tick list; every exit closes Klaus over the world (docs/re/MENU_SYSTEM.md#progress-map)
 0x00469630,not-needed,dead: collision register op 0x36 table 0x004D4980; no shipped collision program uses 0x36 (docs/re/FORMAT_DOCUMENTATION.md)
 0x00448790,not-needed,dead: collision register op 0x36 table 0x004D4980; no shipped collision program uses 0x36 (docs/re/FORMAT_DOCUMENTATION.md)
 0x00469640,not-needed,dead: collision register op 0x36 table 0x004D4980; no shipped collision program uses 0x36 (docs/re/FORMAT_DOCUMENTATION.md)
@@ -1077,3 +1077,14 @@ address,status,note
 0x00401DA0,implemented,Trash Furniture callback; a failed first scan steers toward the residue Y and is held with a logged stop (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00437390,implemented,template effects: bit 0x01 queues the deferred terrain ripple; flash and crater run at once; a radial bit is a logged stop (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00414AE0,documented,dynamic radial walk visits every live actor with no type filter; Type57 and the quiet flyers take their own deaths (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
+0x00454EE0,implemented,progress map entry: pause mask 8, the map clock, Klaus's 454FA0; overlay 51 is resident from startup (docs/re/MENU_SYSTEM.md#progress-map)
+0x00454FA0,implemented,map entry: Klaus command 2 with a 1-us visit (campaign_map.rs)
+0x004555A0,implemented,map tick: Space/S close Klaus then switch to the load or the save menu; Klaus visit clamped to 125 ms; its ED10 on the proxy has no effect the load keeps (campaign_map.rs)
+0x004557D0,implemented,save menu entry: Klaus command 4 and model argument 0, 4D1090 pushed (campaign_map.rs)
+0x004558A0,implemented,save menu tick: Continue loads; P or Escape gives Klaus command 1 and returns to the map after 1001 ms (campaign_map.rs)
+0x00455CC0,implemented,map Space: sound 3 and +294
+0x00455CF0,implemented,map S: sound 3, +294 and +28B
+0x00450E60,implemented,save menu root pop: clears +28B
+0x0042D210,implemented,Klaus done: selected, fly-off, hidden, or morph zero (MenuShell::klaus_finished)
+0x0042CEA0,implemented,Klaus command word DAT_004DB210
+0x0042CEB0,implemented,Klaus model argument DAT_004DB218

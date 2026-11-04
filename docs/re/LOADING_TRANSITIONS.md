@@ -746,8 +746,9 @@ respawn `+0x28E` or same-world load `+0x292`; the `+0x28E=1` writers at
 `4502D7/450300` belong to player death, not normal routing. All normal campaign
 routes therefore retain their authored destination/arrival and enter the map,
 including both Cistern directions. Space releases that route once; S retains
-the same checkpoint through Save Game / Continue. The camera/closing-shell
-transition animation remains a separate presentation boundary.
+the same checkpoint through Save Game / Continue. Klaus closes over the
+world before the map, and over the map before the load or the save menu
+([progress map](MENU_SYSTEM.md#progress-map)).
 
 **Direct world entry.** Section13 has no per-world default player spawn.
 `42E270` copies the incoming route's XYZ, so one destination can have several
@@ -782,8 +783,8 @@ Hive death records completion and starts the in-world `0xBD..0xC4` rows;
 it does not open the progress map, hide the HUD, or require Space. On the
 admitted marker contact the port retains the decoded Level-14 arrival, selects
 the destination node, and opens the modal map. Space consumes that route once
-and loads the next world. The existing transition's camera/closing-shell
-animation remains a separate presentation boundary. Map S enters the authored
+and loads the next world once Klaus has closed over the map
+([progress map](MENU_SYSTEM.md#progress-map)). Map S enters the authored
 `PAUSE_SIMPLE` Save Game / Continue / Options menu. Saving writes the full native
 checkpoint to a local `SlotNN`, replacing an existing data-directory or
 parent-directory slot under the [save storage policy](SAVE_AND_SETTINGS.md#native-save-scope-and-restoration-boundary-confirmed).

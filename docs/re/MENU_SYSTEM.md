@@ -1361,8 +1361,7 @@ turns into the whole stack's collapse: the depth goes to 1 and the root
 pops silently with its fly-out, then play resumes. The lab measures 32
 passes from either key to play. The same table serves the progress map's
 save menu (`FUN_004557D0`), where P pops `0x4D1090` into `FUN_00450E60`
-without Continue's Klaus command; the port logs that as blocked until the
-map's Klaus is ported.
+without Continue's `+297`, and Klaus takes the screen back to the map.
 
 ### Progress map
 
@@ -1383,41 +1382,48 @@ The save menu's entry `FUN_004557D0` gives Klaus command 4 and opens
 `+297`, and after P (or Escape at the root, which clears `+28B` through
 `FUN_00450E60`) gives Klaus command 1 and returns to the map after 1000 ms.
 
-The retail lab (Cheats Skip to World, 20-ms passes): the selection at 1548,
-Klaus closed by about 1600, the map from 1606, Space at 1608, Klaus closing
-again over black from 1612, the next world loading at 1662 and Klaus open
-over it by 1710. The port opens the map at the exit and loads at Space,
-without these Klaus legs; P on the save menu stays a logged stop until they
-are ported.
+The map has no world under it: after its entry the live list holds only
+Klaus and the camera proxy, and its list (`4D07E8`) has no terrain or sky
+callback (`FUN_00453570` only sets up the view). The list resets the
+primitive queue (`FUN_0042AA40`), queues the actors (`FUN_00453760`), starts
+the scene (`FUN_0042AA80`), draws the map's links, nodes and labels and then
+the prompt ("Press S to Save, Space to Continue", global string 25)
+straight through the device (`FUN_00454390`), and only then drains the queue
+(`FUN_0042AA90`). Klaus's iris is opaque, so he covers the map and the
+prompt alike: the map shows only while he is open. The save menu's list
+(`4D0810`) drains Klaus, then queues and drains the menu over him. The
+loading card is drawn over him too (`FUN_0042AF00` drains Klaus first).
 
-What each leg runs (descriptors `4D0A30`, `4D0AA0`, `4D0AD8`): the exit leg
-draws through the world's list (`4D07A8`) while `FUN_00453E00` waits. The
-map's tick `FUN_004555A0` ticks Klaus (session `+2AC`) every frame and resets
-the eye's springs before its ED10 on the proxy (`FUN_0040F390`), and its
-draw list (`4D07E8`) draws the world's view and its actors, Klaus among them,
-before the map itself (`FUN_00454390`). The map's entry gives Klaus his
-command 2 with a 1-us actor visit, not the load's 125,000-us one. The save
-menu's tick `FUN_004558A0` runs the clock, the menu transition, Klaus and
-ED10; its list (`4D0810`) draws the world's view and actors before the menu.
-In the lab the map shows at 1609 and 1612 with Klaus out of sight; at 1620,
-twelve passes after Space, only the tip of Klaus's closing shows at the
-bottom; and after the load the map's prompt ("Press S to Save, Space to
-Continue") still shows over the glide (1670) and play's first frames (1680).
+Each switch above selects the next descriptor, whose entry runs on the next
+frame with its first tick. `FUN_00453E00` checks Klaus after the leg's
+visit (`FUN_00450C00`) in the same frame; `FUN_004555A0` checks before its
+own visit. The Cheats selector's `+28C` dispatches event 2 at the end of its
+own `FUN_0044FFA0` visit, a frame before an ordinary route's `+290` would.
 
-Draw order: Klaus is drawn over the map art. In the map's list the world's
-view (`FUN_00453570`) and its actors (`FUN_00453760`) only append records to
-the primitive queue that `FUN_0042AA40` reset. `FUN_00454390` then draws the
-map's links, nodes and labels at once, through the device's sprite and quad
-slots (`+1030` via `FUN_0047A7A0`, `+1098` via `FUN_0047AA20`, the text
-through `FUN_00470A70`), after the scene starts (`FUN_0042AA80`) and before
-`FUN_0042AA90` drains the queue. Klaus and the world's view are therefore
-drawn over the art, and the prompt (`FUN_00453AA0`) over both. The loading
-card is the other way round: `FUN_0042AF00` drains Klaus first and then
-draws the card (`FUN_0042B040`) over him. In the lab (Skip to World, then S
-on the map and P on the save menu) the map art and Klaus's tip share frames
-(1630, 1845) without touching, so the order rests on the code. After
-P, Klaus's command 1 runs over black for about a second before the map
-returns.
+The retail lab (Cheats Skip to World at 1548, 20-ms passes, Klaus's state
+block at `[004DB214]` and the session flags dumped every pass): Klaus's
+command 3 is queued at 1549 and first runs at 1550; his morph reaches zero
+in 1602; the map's entry and first visit run in 1603 (morph 1250 at 1604),
+so Klaus covers the map while he opens. Space or S at 1620 queues command 3,
+whose first callback shows the full open pose: the map and prompt appear at
+1620 and are covered again from 1629 as the iris closes, with Klaus's tip
+rising from the bottom from 1631. His morph is zero after 1672; in 1673 the
+map switches, and the next world loads at 1674 (with Space at 1608 instead:
+the map and prompt at 1608 to 1616, the load at 1662). Nothing of the map
+or its prompt shows during the load, the glide or play. After S: the save
+menu's entry at 1674 (command 4, phase 626 at 1675), P at 1720, the root's
+fly-out ending in 1751 with command 1, the return clock reaching 1001 in
+1801 and the map's entry in 1802 (morph 2500 at 1804); Klaus is hidden
+again from 1856.
+
+The port runs the same legs (`campaign_map.rs`, `ClosingSceneDestination::ProgressMap`):
+the exit leg as for phase 3, Klaus over the map and its save menu, and
+Klaus carried into the next world's opening. With the lab's keys at 20-ms
+steps its Klaus morph and phase match every pass above, and its frames
+match the lab's at 1720, 1740, 1770 and 1810 to 1850. Klaus's twitch
+divisor starts from a fresh shell's, as the existing exit legs do, and the
+map's ED10 on the proxy is not run: nothing is drawn from the eye there,
+and the load restarts it.
 
 | Routine | Does |
 | --- | --- |
