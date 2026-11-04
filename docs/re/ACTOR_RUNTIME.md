@@ -607,7 +607,8 @@ runs first and writes nothing. It admits the pair when:
 
 - both behaviours take a branch that writes nothing for this opposite body:
   no style or a null `+0x18`, `C910` against a body without capability
-  `0xC00` (or dying, or with a zero state word), `425850` against one
+  `0xC00` (or dying, or with a zero state word; or a Type94's, below),
+  `425850` against one
   without `0x400`, `4258A0` against one without `0x800`, the Hive's `259F0`
   against one with neither `0xC00` nor `0x2000` (or consuming a `0xC00`
   body with a native owner, below), a Power-Up's `425AF0`
@@ -683,7 +684,7 @@ world runs more than 8,200 general visits over 67 pair kinds in 32 worlds
 
 | Held pair | Reason | Worlds |
 | --- | --- | --- |
-| Type9 x Type53, Type86 x Type94, Type94 x Type95 | `C910` capture by a Type53 or Type94, which no captor lane owns | 15, 24, 40 |
+| Type9 x Type53 | `C910` capture by a Type53, whose carrying no captor lane owns | 15 |
 | Type57 x Type57, Type57 x Type94 | the Hive-born Type57's owner is pending | 20, 21, 24, 36 |
 | Type125 x Type86 | Type125 has tasks and no native owner | 37 |
 | Type40 x Type30, Type5 x Type5 | the native owner was not complete at that tick | 19, 47 |
@@ -714,6 +715,25 @@ loses the same Type78 to the same Hive at tick 1,434, the other two 50 ticks
 later at the same places; before, all three lived until the world ended. In
 the port's two-minute runs the Hive consumes 2 Type91 (world 27), 6 Type90
 (28), 22 Type79 (29) and 4 Type116 (41).
+
+### Type94's capture kills
+
+Type94's row has no Sub-J descriptor (type `+0x2C` is null), so in Capture
+People's pursuit (`4C8038`) `C910`'s capacity test `418410` reports it full:
+a living, non-dying `0xC00` body it touches takes `10C10` and C910 returns
+null, as for Type40 and the Type12 family. The general visit runs this on a
+native-owned person with Type94's completed owner, then both `A900` chains
+and the response. Retail lab, world 40 from Skip to World: a Type95 dies
+beside the south-western Type94 at `[-21095, -3393, -22581]`, about 1,150
+ticks after arrival; the port's idle world 40 now kills a Type95 there at
+tick 666 (`[-21590, -3393, -23167]`), and one more by the north-eastern
+Type94 at tick 3,122, where retail's lived until the world was lost.
+
+Type53 is the other C910 captor outside the lane. Its row has one Sub-J
+slot, so C910 attaches the person and selects carrying variant 2 or 3; its
+owner runs only acquisition and pursuit, so Type9 x Type53 (world 15) stays
+held until its carrying variants, delivery, Sub-J pose phase and release on
+death are ported, as they were for Types 16 and 128.
 
 ### Mobbing, the Queen and the waiting flowers
 

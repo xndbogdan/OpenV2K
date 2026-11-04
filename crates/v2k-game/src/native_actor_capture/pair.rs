@@ -1003,6 +1003,13 @@ fn general_behavior_hold(
                 || bits(opposite, DYING_STATE_BIT)? != 0
                 || opposite.collision.state_flags_at_0x08.masked(u32::MAX)
                     == RetailRuntimeValue::Known(0)
+                // Type94's row has no Sub-J: 18410 reports it full, so C910
+                // kills a native-owned person ([`behavior`]'s absent-J branch).
+                || (entity.entity_type == 94
+                    && entity.intro2_type94_runtime.is_some()
+                    && context.active_style().style_address() == 0x004c_8038
+                    && entity.sub_j_attachment_runtime == RetailRuntimeValue::Known(None)
+                    && requires_body_custody(opposite))
         }
         PairContactCallbackPolicy::LifterDelivery => opposite.capability_flags & 0x400 == 0,
         PairContactCallbackPolicy::MainBaseConversion => opposite.capability_flags & 0x800 == 0,
@@ -1204,10 +1211,16 @@ fn behavior(
         {
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
-        PairContactCallbackPolicy::CapturePeople if matches!(entity.entity_type, 40 | 12 | 127) => {
+        PairContactCallbackPolicy::CapturePeople
+            if matches!(entity.entity_type, 40 | 12 | 127 | 94) =>
+        {
             let custody = if entity.entity_type == 40 {
                 crate::native_type40::manager_allocation_authenticates(frame.entities, owner)
                     && crate::native_type40::Type40Owner::adopt(frame.entities, owner).is_ok()
+            } else if entity.entity_type == 94 {
+                // Type94's row has no Sub-J descriptor either.
+                crate::intro2_type94::type94_manager_allocation_authenticates(frame.entities, owner)
+                    && crate::intro2_type94::Intro2Type94Owner::adopt(frame.entities, owner).is_ok()
             } else {
                 crate::native_type12::manager_allocation_authenticates(frame.entities, owner)
                     && crate::native_type12::Type12FamilyOwner::adopt(frame.entities, owner).is_ok()
