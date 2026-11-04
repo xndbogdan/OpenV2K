@@ -219,6 +219,7 @@ fn a_type5_killed_in_playing_tumbles_and_explodes_with_the_player_hull() {
             retail_tick: 600,
         },
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 16,
             impact_position_argument_va: 0,
             target_entity_id: id,

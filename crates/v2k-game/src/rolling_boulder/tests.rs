@@ -97,6 +97,7 @@ impl BoulderWorld {
                 retail_tick: self.tick,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: class,
                 impact_position_argument_va: if class == 5 { 0x004d_cf48 } else { 0 },
                 target_entity_id: id,

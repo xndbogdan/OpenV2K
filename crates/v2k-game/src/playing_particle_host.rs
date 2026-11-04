@@ -45,6 +45,8 @@ pub enum PlayingParticleActorEvent {
     AttachedCascadeOwner(crate::world_fx::AttachedParticleCascadeOwnerRequest),
     FlareDamage(crate::world_fx::FlareDamageRequest),
     WorldRadial(crate::world_fx::ParticleWorldRadial),
+    /// Answered with `WorldRadial`'s refresh.
+    InfectionRadial(crate::world_fx::ParticleInfectionRadial),
 }
 
 pub enum PlayingParticleActorResponse {
@@ -183,6 +185,26 @@ where
             PlayingParticleActorEvent::WorldRadial(request),
         ) else {
             panic!("Playing world radial must return its matching response");
+        };
+        if let ParticleCollisionCacheRefresh::Replace(models) = refresh.collision {
+            self.collision_models = models;
+        }
+        self.owner_motions = refresh.owner_motions;
+        self.attachment_owners = refresh.attachment_owners;
+        true
+    }
+    fn infection_radial(
+        &mut self,
+        world_fx: &mut WorldFx,
+        request: crate::world_fx::ParticleInfectionRadial,
+    ) -> bool {
+        let PlayingParticleActorResponse::WorldRadial(refresh) = (self.on_actor_event)(
+            self.cache,
+            self.static_damage,
+            world_fx,
+            PlayingParticleActorEvent::InfectionRadial(request),
+        ) else {
+            panic!("Playing infection radial must return its matching response");
         };
         if let ParticleCollisionCacheRefresh::Replace(models) = refresh.collision {
             self.collision_models = models;

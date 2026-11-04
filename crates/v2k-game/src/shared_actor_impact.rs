@@ -77,6 +77,56 @@ pub enum SharedActorImpactOutcome {
     Class0(crate::class0_impact::Class0ImpactOutcome),
 }
 
+impl SharedActorImpactOutcome {
+    /// Whether the owner completed the hit.
+    pub fn applied(&self) -> bool {
+        // Every owner's outcome names a completed hit `Applied`.
+        macro_rules! applied {
+            ($($variant:ident),*) => {
+                match self {
+                    $(Self::$variant(outcome) => format!("{outcome:?}").starts_with("Applied("),)*
+                    Self::UnsupportedCuredTarget { .. } | Self::UnsupportedStaticRouteTarget { .. } => false,
+                }
+            };
+        }
+        applied!(
+            GunTurret,
+            NativeWeapon,
+            Peasant,
+            MainBase,
+            Worker,
+            Spider,
+            Insect,
+            Type53,
+            Type58,
+            Type122,
+            Type18,
+            Type28,
+            Type76Family,
+            Type30,
+            Type40,
+            Type56,
+            Type31Family,
+            Type123,
+            Type86,
+            Fish,
+            Factory,
+            Type26,
+            Flyer,
+            Type16,
+            Type94,
+            Type13,
+            Type10,
+            Type43,
+            Type38Family,
+            Type12Family,
+            RollingBoulder,
+            PortableRadar,
+            Class0
+        )
+    }
+}
+
 /// Playing's synchronous particle visit also owns terminal blast resources.
 /// Other native families borrow the existing read-only actor impact frame;
 /// class49 turrets need the actual player hull and mutable static world.

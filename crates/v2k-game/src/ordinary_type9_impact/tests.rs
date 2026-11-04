@@ -14,6 +14,7 @@ use crate::{
 
 fn hit(id: u32, infected: bool, amount: i32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: if infected { 5 } else { 16 },
         impact_position_argument_va: if infected { 0x004d_cf48 } else { 0 },
         target_entity_id: id,

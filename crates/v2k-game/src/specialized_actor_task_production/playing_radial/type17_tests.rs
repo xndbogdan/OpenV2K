@@ -291,6 +291,7 @@ fn native_type17_radial_and_particles_reject_missing_foreign_and_pending_custody
                     retail_tick: 77,
                 },
                 crate::world_fx::ParticleEntityImpact {
+                    no_packet: false,
                     source_particle_class,
                     impact_position_argument_va: 0,
                     target_entity_id: f.target,

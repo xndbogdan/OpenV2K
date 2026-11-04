@@ -238,6 +238,7 @@ fn a_playing_primary_hit_reaches_the_ordinary_type13_owner() {
             retail_tick: 600,
         },
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 16,
             impact_position_argument_va: 0,
             target_entity_id: id,

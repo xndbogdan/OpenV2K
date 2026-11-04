@@ -294,6 +294,7 @@ fn ordinary_main_base_particle_hits_keep_fixed_pose_and_publish_real_death_task(
     assert_eq!(scheduler.adopt_main_base(&manager), 1);
     let mut fx = WorldFx::new();
     let impact = |amount| ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

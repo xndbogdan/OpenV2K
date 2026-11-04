@@ -84,6 +84,7 @@ pub mod hover;
 pub mod impact_reaction;
 pub mod infection_evolution;
 pub mod infection_listeners;
+pub mod infection_radial;
 pub mod installation_discovery;
 pub(crate) mod intro2_capture_pursuit;
 pub mod intro2_commands;

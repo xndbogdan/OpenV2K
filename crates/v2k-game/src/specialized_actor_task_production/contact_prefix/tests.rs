@@ -365,6 +365,7 @@ fn corpse_hit(
         world_fx::{BallisticDamageRequest, ParticleEntityImpact},
     };
     let impact = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: if infected { 5 } else { 1 },
         impact_position_argument_va: if infected { 0x004d_cf48 } else { 0 },
         target_entity_id: id,

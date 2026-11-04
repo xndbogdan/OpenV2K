@@ -297,6 +297,7 @@ fn lethal_hit(id: u32) -> ParticleEntityImpact {
 fn lethal_row_hit(id: u32, row: Type38Row) -> ParticleEntityImpact {
     let channel = if row == Type38Row::Type119 { 3 } else { 2 };
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

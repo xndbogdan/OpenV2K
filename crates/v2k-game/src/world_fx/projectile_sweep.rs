@@ -132,6 +132,7 @@ pub(super) fn detect_damage_projectile_sweep(
         // FUN_0043F590 deliberately presents and delivers at the integrated
         // endpoint, even though the exact model test used refined probes.
         return Some(BallisticSweepImpact::Entity(ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: particle.source_class,
             impact_position_argument_va: retail_particle_impact_position_argument_va(physical_slot),
             target_entity_id,

@@ -599,6 +599,7 @@ fn shared_type17_native_lease_rejects_foreign_live_hit_and_class12_entries() {
                 retail_tick: 77,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class,
                 impact_position_argument_va: if source_particle_class == 5 {
                     0x004d_cf48

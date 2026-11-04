@@ -151,6 +151,7 @@ fn all_seven_later_authored_workers_publish_move_and_die_through_the_live_schedu
             &mut fx,
             &mut scheduler,
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 38,
                 impact_position_argument_va: 0,
                 target_entity_id: target,
@@ -320,6 +321,7 @@ fn all_six_ordinary_type116_workers_publish_move_and_die_through_the_live_schedu
             &mut fx,
             &mut scheduler,
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 38,
                 impact_position_argument_va: 0,
                 target_entity_id: target,
@@ -467,6 +469,7 @@ fn ordinary_type90_worker_publishes_moves_hits_and_dies_with_own_sounds() {
         &mut fx,
         &mut scheduler,
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 38,
             impact_position_argument_va: 0,
             target_entity_id: target,
@@ -493,6 +496,7 @@ fn ordinary_type90_worker_publishes_moves_hits_and_dies_with_own_sounds() {
         &mut fx,
         &mut scheduler,
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 38,
             impact_position_argument_va: 0,
             target_entity_id: target,

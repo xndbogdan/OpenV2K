@@ -312,6 +312,7 @@ fn a_type81_guard_takes_the_player_into_chase_and_aim() {
 
 fn lethal_hit(id: u32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

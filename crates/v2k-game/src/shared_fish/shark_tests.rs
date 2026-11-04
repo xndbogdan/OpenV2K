@@ -964,6 +964,7 @@ fn infected_hits_reselect_type19s_run_away_and_primary_hits_do_not() {
                 retail_tick: 1002,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: class,
                 impact_position_argument_va: if class == 5 { 0x004D_CF48 } else { 0 },
                 target_entity_id: id,

@@ -55,6 +55,7 @@ impl Fixture {
                 retail_tick: 5000,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: if infected { 5 } else { 16 },
                 impact_position_argument_va: if infected { 0x004d_cf48 } else { 0 },
                 target_entity_id: self.id,

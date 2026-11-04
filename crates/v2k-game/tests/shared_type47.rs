@@ -299,6 +299,7 @@ fn later_gunners_move_take_primary_hits_and_retire_through_the_shared_scheduler(
                     retail_tick: tick,
                 },
                 ParticleEntityImpact {
+                    no_packet: false,
                     source_particle_class: 1,
                     impact_position_argument_va: 0,
                     target_entity_id: id,

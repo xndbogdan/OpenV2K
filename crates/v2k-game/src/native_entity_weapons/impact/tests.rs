@@ -121,6 +121,7 @@ impl World {
                 retail_tick: 501,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: class,
                 target_entity_id: self.id,
                 impact_position_argument_va: if class == 5 { 0x004d_cf48 } else { 0 },

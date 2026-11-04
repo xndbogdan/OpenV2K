@@ -151,6 +151,11 @@ pub enum PlayerModelSwitchHitOutcome {
         model_slot: usize,
         checked: PlayerCheckedDamageOutcome,
     },
+    /// `FUN_00414C50`'s no-packet infect or cure.
+    NoPacket {
+        entry: EntityHitEntry,
+        model_slot: usize,
+    },
 }
 
 pub(super) enum PlayerDamagePlan {
@@ -877,11 +882,11 @@ impl EntityManager {
         {
             return PlayerModelSwitchHitOutcome::NotApplicable;
         }
-        if impact.damage.is_none() {
+        if impact.damage.is_none() && !impact.no_packet {
             return PlayerModelSwitchHitOutcome::Suppressed;
         }
         let blocked = |block| PlayerModelSwitchHitOutcome::Blocked(block);
-        let Some(delivery) = impact.damage_delivery_record() else {
+        let Ok(delivery) = impact.packet_delivery() else {
             return blocked(PlayerModelSwitchHitBlock::Delivery);
         };
         let Some(index) = self
@@ -926,6 +931,20 @@ impl EntityManager {
         if entity.model_in_slot(model_slot).is_none() {
             return blocked(PlayerModelSwitchHitBlock::Runtime("selected model slot"));
         }
+        // A no-packet infect or cure: the prefix and the (null) style hook,
+        // without 11030 and 15040.
+        let Some(delivery) = delivery else {
+            let prefix = self
+                .apply_model_switch_particle_hit_prefix(impact.target_entity_id, entry)
+                .expect("the cue resolved above");
+            self.entities[index]
+                .select_active_model_slot(model_slot)
+                .expect("the model slot resolved above");
+            if let Some(sound_id) = prefix.sound_id {
+                fx.emit_fixed_positional_sound_raw(sound_id, prefix.position_raw);
+            }
+            return PlayerModelSwitchHitOutcome::NoPacket { entry, model_slot };
+        };
         let reaction_enabled = flags & IMPACT_REACTION_ENABLED_STATE_BIT != 0
             && flags & IMPACT_REACTION_SUPPRESSED_STATE_BIT == 0;
         if reaction_enabled {

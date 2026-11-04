@@ -206,8 +206,8 @@ fn run(
         return Err(Block::Runtime("pending actor/contact prefix"));
     }
     let delivery = impact
-        .damage_delivery_record()
-        .ok_or(Block::Runtime("particle provenance"))?;
+        .packet_delivery()
+        .map_err(|()| Block::Runtime("particle provenance"))?;
     if !crate::shared_fish::allocation_authenticates(manager, id) {
         return Err(Block::Runtime("native allocation"));
     }
@@ -340,6 +340,10 @@ fn run(
         }
         _ => return Err(Block::Runtime("unaudited fish hit style")),
     }
+    // A no-packet infect or cure skips 11030 and 15040.
+    let Some(delivery) = delivery else {
+        return Ok(crate::live_actor_checked_damage::LiveActorDamageOutcome::no_packet());
+    };
     let entity = manager.entity_mut(id).unwrap();
     let RetailRuntimeValue::Known(flags) = entity.collision.state_flags_at_0x08.masked(
         IMPACT_REACTION_ENABLED_STATE_BIT
@@ -618,6 +622,7 @@ mod tests {
                     retail_tick: 701,
                 },
                 ParticleEntityImpact {
+                    no_packet: false,
                     source_particle_class: class,
                     impact_position_argument_va: if class == 5 { 0x004D_CF48 } else { 0 },
                     target_entity_id: self.id,
@@ -1131,6 +1136,7 @@ mod tests {
                             retail_tick: 1011 + hit,
                         },
                         ParticleEntityImpact {
+                            no_packet: false,
                             source_particle_class: class,
                             impact_position_argument_va: 0,
                             target_entity_id: id,

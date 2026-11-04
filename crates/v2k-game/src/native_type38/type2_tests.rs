@@ -380,6 +380,7 @@ fn a_searching_type2_fires_beams_at_the_player() {
                 retail_tick: t,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 16,
                 impact_position_argument_va: 0,
                 target_entity_id: shooter,

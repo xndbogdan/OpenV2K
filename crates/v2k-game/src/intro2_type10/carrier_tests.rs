@@ -226,6 +226,7 @@ fn a_lethal_playing_hit_drops_the_carrier_power_up() {
                     retail_tick: 600,
                 },
                 ParticleEntityImpact {
+                    no_packet: false,
                     source_particle_class: 16,
                     impact_position_argument_va: 0,
                     target_entity_id: id,
@@ -311,6 +312,7 @@ fn the_shared_hit_frame_holds_a_lethal_carrier_hit() {
         &mut fx,
         &mut tasks,
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 16,
             impact_position_argument_va: 0,
             target_entity_id: ids[0],

@@ -8,6 +8,7 @@ use crate::{
 
 fn impact(id: u32, infected: bool, amount: i32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: if infected { 5 } else { 1 },
         impact_position_argument_va: if infected { 0x004D_CF48 } else { 0 },
         target_entity_id: id,
@@ -531,6 +532,7 @@ fn static_route_hit(id: u32, class: u8) -> ParticleEntityImpact {
         _ => unreachable!(),
     };
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: class,
         impact_position_argument_va: 0x004D_EFC8,
         target_entity_id: id,

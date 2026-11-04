@@ -59,6 +59,7 @@ fn ids(manager: &EntityManager) -> Vec<u32> {
 
 fn primary_impact(id: u32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 1,
         impact_position_argument_va: 0,
         target_entity_id: id,

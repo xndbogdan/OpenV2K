@@ -92,6 +92,16 @@ pub trait ParticleTraversalHost {
     fn world_radial(&mut self, _world_fx: &mut WorldFx, _request: ParticleWorldRadial) -> bool {
         false
     }
+    /// `FUN_00441850`'s `FUN_00456710` for a Virus or Antidote Bomb, between
+    /// its sound 90 and its debris. Returns false when the host cannot run
+    /// it; the update then lists it as held.
+    fn infection_radial(
+        &mut self,
+        _world_fx: &mut WorldFx,
+        _request: ParticleInfectionRadial,
+    ) -> bool {
+        false
+    }
     /// `FUN_0043F660 -> FUN_00410D30`, synchronous before the next slot.
     fn flare_damage(
         &mut self,
@@ -277,6 +287,8 @@ impl WorldFx {
         self.reset_weather_falling_count();
         let mut outcome = ParticleUpdateOutcome::default();
         let mut committed_terrain_mutations = Vec::new();
+        // Frees outside a traversal (the bulk reset) run no callback.
+        self.particles.freed_bombs.clear();
         // Do not snapshot active slots: callback allocations in a later slot
         // receive this same traversal, while earlier slots wait until next time.
         for slot in 0..MAX_WORLD_PARTICLES {
@@ -388,6 +400,23 @@ impl WorldFx {
                     // source in the template's last words, then the debris;
                     // F890 ends with sound 62. The shell holds its slot.
                     self.emit_fun_0044f450_hit_sound(90, tail.position);
+                    if matches!(tail.source_class, 77 | 78) {
+                        // F890 runs the +2C callback itself, then sound 62;
+                        // FF10's free (442B40) then runs it again below.
+                        if let Some(particle) = self.particles.slots[slot] {
+                            self.run_bomb_tail(particle, host, &mut outcome, timing);
+                        }
+                        self.emit_fun_0044f450_hit_sound(62, tail.position);
+                        self.particles.free(slot);
+                        self.run_freed_bomb_tails(host, &mut outcome, timing);
+                        publish_terrain_mutations(
+                            self,
+                            host,
+                            &mut outcome,
+                            &mut committed_terrain_mutations,
+                        );
+                        continue;
+                    }
                     let base = if tail.source_class == FUN_0043F6E0_CLASS_4 {
                         FUN_00441850_CLASS_4_RADIAL
                     } else {
@@ -433,6 +462,7 @@ impl WorldFx {
                     self.particles.free(slot);
                 }
             }
+            self.run_freed_bomb_tails(host, &mut outcome, timing);
             publish_terrain_mutations(self, host, &mut outcome, &mut committed_terrain_mutations);
         }
         self.process_pending_with_birth_context(Some(ParticleBirthContext {
@@ -442,6 +472,57 @@ impl WorldFx {
         committed_terrain_mutations.append(&mut outcome.terrain_type_mutations);
         outcome.terrain_type_mutations = committed_terrain_mutations;
         outcome
+    }
+
+    /// `FUN_00442B40`'s `+2C` callback for each bomb freed in this slot.
+    fn run_freed_bomb_tails(
+        &mut self,
+        host: &mut impl ParticleTraversalHost,
+        outcome: &mut ParticleUpdateOutcome,
+        timing: ParticleTraversalTiming,
+    ) {
+        while !self.particles.freed_bombs.is_empty() {
+            let particle = self.particles.freed_bombs.remove(0);
+            self.run_bomb_tail(particle, host, outcome, timing);
+        }
+    }
+
+    /// `FUN_00441850`'s Virus (77) and Antidote (78) Bomb case: sound 90,
+    /// `FUN_00456710` at radius 500, then `FUN_00441A50` with class 5 or 6,
+    /// 40000 and the null owner `DAT_004DCA00`.
+    fn run_bomb_tail(
+        &mut self,
+        particle: WorldParticle,
+        host: &mut impl ParticleTraversalHost,
+        outcome: &mut ParticleUpdateOutcome,
+        timing: ParticleTraversalTiming,
+    ) {
+        let position = particle.position;
+        self.emit_fun_0044f450_hit_sound(90, position);
+        let infected = particle.source_class == 77;
+        let request = ParticleInfectionRadial {
+            origin_raw: world_position_to_raw(position),
+            infected,
+        };
+        if !host.infection_radial(self, request) {
+            outcome.held_bomb_tails.push(HeldBombTail {
+                source_class: particle.source_class,
+                position,
+            });
+        }
+        let birth_context = ParticleBirthContext {
+            environment: host.context().environment,
+            retail_tick: timing.retail_tick,
+        };
+        self.emit_fun_00441a50(
+            position,
+            if infected { 5 } else { 6 },
+            FUN_00441A50_BOMB_COUNT_BASE,
+            None,
+            None,
+            particle.suppresses_impact_damage,
+            birth_context,
+        );
     }
 
     fn advance_particle_slot(
@@ -867,10 +948,10 @@ impl WorldFx {
                     }
                 }
                 // FUN_0043FF10 writes the refined probe, then FUN_0043F890
-                // runs F610. Classes 4 and 54 then run FUN_00441850 (sound 90,
-                // the FUN_004566E0 radial, then FUN_00441A50 or class 0x27
-                // FUN_004410B0) and the F890 tail's sound 62 in the exit,
-                // where the host can run the radial. Class 77/78 skip 41850.
+                // runs F610. Classes 4, 54, 77 and 78 then run FUN_00441850
+                // (sound 90, the FUN_004566E0 or FUN_00456710 radial, then
+                // the debris) and the F890 tail's sound 62 in the exit, where
+                // the host can run the radial.
                 if let Some(context) = terrain_context {
                     if let Some(terrain_objects) = context.terrain_objects {
                         if let Some(static_hit) = retail_swept_static_tile_hit(
@@ -895,20 +976,16 @@ impl WorldFx {
                                 suppressed,
                                 birth_context,
                             );
-                            if matches!(source_class, FUN_0043F6E0_CLASS_4 | FUN_0043F6E0_CLASS_54)
-                            {
+                            if matches!(
+                                source_class,
+                                FUN_0043F6E0_CLASS_4 | FUN_0043F6E0_CLASS_54 | 77 | 78
+                            ) {
                                 return ParticleSlotExit::ShellTail(ShellTail {
                                     position,
                                     source_class,
                                     owner_id,
                                     source_type,
                                     suppressed,
-                                });
-                            }
-                            if matches!(source_class, 77 | 78) {
-                                outcome.held_bomb_tails.push(HeldBombTail {
-                                    source_class,
-                                    position,
                                 });
                             }
                             self.particles.free(slot);
