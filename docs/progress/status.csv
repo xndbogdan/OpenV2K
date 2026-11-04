@@ -1102,3 +1102,4 @@ address,status,note
 0x00442B40,documented,the particle free runs the class's +2C callback: ported for the Virus and Antidote Bombs (FUN_00441850) and the class-41 bolt; the class-4/54 shells' FUN_00441850 at a free is not (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x004571B0,implemented,a world load waits for the card timer's next callback before returning (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
 0x004259F0,implemented,Hive pair contact: consumes a 0xC00 body (operation 0x33, 410B70) or latches an energetic 0x2000 impact (docs/re/ACTOR_RUNTIME.md#the-hive-consuming-people)
+0x0040C910,approximated,Capture People pair contact: attach and carry for Types 17/122/18/28/16/128, the absent-J kill for Types 40/12/127/94; Type53's attach is held (docs/re/ACTOR_RUNTIME.md#type94s-capture-kills)
