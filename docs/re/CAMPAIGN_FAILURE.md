@@ -274,6 +274,58 @@ bounded transition above is still reached by an unported actor born later
 (its regression retypes a world-34 actor to stand in for one).
 
 Thus exact fresh-world actor cleanup is complete for all 21 casualty worlds.
+
+### Mid-play abort
+
+Retail loses worlds 32 and 35 about 1,100 ticks after arrival, when every
+actor has run its own tasks for a minute. The abort takes each native actor's
+death only from a completed owner (the same custody a lethal hit needs). An
+owner its own tick, a hit or a contact parked after a committed prefix stays
+parked, so the abort then refuses it atomically and the bounded body runs.
+That is the right refusal; the faults were the earlier stops, which were also
+silent. Each actor-tick stop now prints once per entity on stderr
+(`Playing entity N stopped in its own tick: <reason>`).
+
+A probe ran the abort on forks of the live world every 25 ticks through the
+first minute of every casualty world (discarding the result) and found these
+parked owners, now closed:
+
+| World | Actor | Earlier stop | Fix |
+|---|---|---|---|
+| 16, 17, 32, 45 | Type40 ice louse | its first chase: Sub-D refused the Type40 descriptor (divisor 128, probes 512/256, flags `0x13`) | the shared `1F660` path, as Type16's |
+| 32 | Type32 | `10C10` refused its Follow Beacons styles `4C7B28`/`4C7B70` | both have a null `+2C` (style bytes) |
+| 22, 25, 27-29, 32, 42-44 | factory-born Type61 | provenance demanded the newborn state word, whose draw-owned detail bits `0x0600_0000` change on screen | those two bits are excluded; the death writes only the dying bit of the live word |
+| 31 | Type107/121 mobile turret | a pair visit refused the class29 task's null contact hook on the ground host, parking both bodies | the ground host's completed owner authenticates that graph |
+| 37, 40 | Type125 factory | the understaffed countdown (`456BD0`) stopped production on the first tick | `456BD0` writes only the session's HUD countdown (`+2C8`/`+2CC`), which nothing in the simulation reads; the port draws no countdown |
+| 40 | Type118 geyser | a particle hit met an unresolved type-hit hook | `410090` installs `4C8A30`, whose `+30` is null, for every row |
+| 21, 24 | Hive-born Type57 bat | the abort had no Type57 death | Type10's class11 Tumble publisher, as a lethal hit takes |
+
+[`casualty_abort_completes_after_a_minute_of_actor_ticks`](../../crates/v2k-game/tests/campaign_abort_coverage.rs)
+runs worlds 32, 37 and 40 for 1,100 ticks of the real scheduler, asserts no
+actor stopped, then runs the abort and requires it to complete.
+
+With an idle player for two minutes from each arrival, six casualty worlds
+are lost: 31, 32, 36, 40 and 46 through the complete abort, and 21 through
+the bounded body (its Hive-born bats, below). The port does not lose world 35
+in that time; retail does, about 1,163 ticks after arrival.
+
+Still held, each behind its logged stop:
+
+- **Trash Furniture's failed first scan** (Type12 in worlds 31/35, Type77 in
+  26/40). `401D30` allocates the task's 0x24-byte record with the CRT
+  `malloc` (`4572B0` -> `4B4480`) and writes X = Z = 0 but not Y. When the
+  first `4230C0` scan fails, `401DA0` still runs `01430` toward `[0, Y, 0]`
+  before reselecting: Y is heap residue, and it reaches the heading through
+  the 3D normalisation in `1E700` and the Sub-L pitch output. A Type12 picks
+  Trash Buildings when a building lies within its axis, then can step a cell
+  away before the first scan, which then misses it.
+- **The Hive-born Type57's first callback** reads `+0xB2`, the transient
+  mass word, before any wait has cleared it (`callback B2`); the bat stops
+  and the abort refuses it.
+- **Type125's understaffed death**: its template sets the deferred bit of
+  `37390`, which the factory death does not run yet.
+- Radial chains of a class1/class49 death that reach a body without an owned
+  death policy (worlds 21, 42) or type-hit hook (24).
 Worlds 26, 31 and 40 complete with their
 [Type107 and Type121 mobile turrets](TYPE107_MOBILE_TURRETS.md), which take
 class49 (`BAF0`, then `BD20`'s ring). In world 26 a Type49 turret's class49

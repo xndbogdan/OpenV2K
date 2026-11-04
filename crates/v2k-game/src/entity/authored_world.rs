@@ -823,6 +823,10 @@ impl EntityManager {
                     &mut || u32::from(world_fx.next_shared_retail_random_u16()),
                 )
                 .map_err(|error| format!("class0: {error:?}"))?;
+                // 410090 installs 4C8A30 for every row; no type copy writes
+                // its null +30 type-hit hook.
+                entity.collision.pair_callbacks.type_hit_callback_address =
+                    RetailRuntimeValue::Known(None);
                 if super::class0_actor::living_class(entity.entity_type) == 38 {
                     // 40BDC0 reads the active model's header+08: model 0 for Type89.
                     let slot = match entity.collision.active_model_slot() {

@@ -1055,6 +1055,43 @@ pub enum SpecializedActorTaskProductionOutcome {
 }
 
 impl SpecializedActorTaskProductionOutcome {
+    /// An actor that stopped in its own tick with its prefix committed. Its
+    /// owner stays parked, so it neither runs again nor lends custody to
+    /// the Main Base abort.
+    pub fn stopped_actor(&self) -> Option<(u32, String)> {
+        use crate::native_ground_actor::NativeGroundActorOutcome as Ground;
+        match self {
+            Self::NativeType76Family(outcome)
+            | Self::NativeType30(outcome)
+            | Self::NativeType40(outcome)
+            | Self::NativeType56(outcome)
+            | Self::NativeType38Family(outcome)
+            | Self::NativeType12Family(outcome)
+            | Self::NativeType31Family(outcome) => match outcome {
+                Ground::Blocked {
+                    entity_id, reason, ..
+                } => Some((*entity_id, format!("{reason:?}"))),
+                _ => None,
+            },
+            Self::Intro2Type66(crate::intro2_type66::Intro2Type66Outcome::Blocked {
+                entity_id,
+                reason,
+                ..
+            }) => Some((*entity_id, format!("{reason:?}"))),
+            Self::PortableRadar(crate::portable_radar::PortableRadarActorOutcome::Blocked {
+                entity_id,
+                reason,
+                ..
+            }) => Some((*entity_id, format!("{reason:?}"))),
+            Self::Intro2Type57(crate::intro2_type57::Intro2Type57Outcome::Blocked {
+                entity_id,
+                reason,
+                ..
+            }) => Some((*entity_id, format!("{reason:?}"))),
+            _ => None,
+        }
+    }
+
     pub const fn family(&self) -> SpecializedActorTaskFamily {
         match self {
             Self::NativeContactPrefixBlocked { family, .. } => *family,

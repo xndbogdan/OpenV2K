@@ -135,7 +135,8 @@ pub enum MainBaseAbortActorDisposition {
     Type27Death,
     /// Type35's dying body republishes its class7 alternate.
     Type35Death,
-    /// Ordinary Type10-family rows: alternate class11 publishes Tumble.
+    /// Ordinary Type10-family rows and the Type57 bat: alternate class11
+    /// publishes Tumble.
     Type10Death,
     Class49Death,
     Type54Death,

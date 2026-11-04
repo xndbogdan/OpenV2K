@@ -252,6 +252,9 @@ impl NativeExplosionSourceProfile {
                 ) || (row == crate::native_type38::Type38Row::Type2 && style == 0x004c_7e88)
                     // The mobile turrets' class29 4C8230: +2C null.
                     || (row.turrets() && style == 0x004c_8230)
+                    // Type32's Follow Beacons33, both styles: +2C null.
+                    || (row == crate::native_type38::Type38Row::Type32
+                        && matches!(style, 0x004c_7b28 | 0x004c_7b70))
             }
             // Follow Beacons, Search, Capture's people pursuit, Trash
             // Buildings and the fallback: +2C null. Without a J the carrying
