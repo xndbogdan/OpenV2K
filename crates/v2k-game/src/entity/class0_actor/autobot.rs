@@ -2,30 +2,39 @@
 //!
 //! Operation `0x38` births it at the player and puts it in the controller's
 //! `+220` list. `FUN_00409A80` builds its two components: Sub-D
-//! (`FUN_004203D0`, one process stagger seed) and Sub-E (`FUN_00424E30`).
-//! Class53's initializer `FUN_0040B200` clears Tertiary then Secondary and
+//! (`FUN_004203D0`, one process stagger seed) and Sub-E (`FUN_00424E30`,
+//! zeroed with method 1 and sound 88; it draws nothing). Class53's
+//! initializer `FUN_0040B200` clears Tertiary then Secondary and
 //! `FUN_004071F0` builds the Primary (tick `FUN_00407280`, no timeout); none
 //! of it draws a random word.
 //!
 //! Each visit, while the owner (`+60`) resolves, zeroes the velocity and
 //! searches (`FUN_00422CD0`, the component table's `+28` copy of the type's
-//! range and capability mask). With no target it eases each Euler word a
+//! range and capability mask). With a target its goal is the owner's position
+//! less 300 along the unit vector from the target to the Autobot; its pitch
+//! eases a quarter toward level, Sub-D (`FUN_0041F660`) steers heading, roll
+//! and pitch on its own matrix, and Sub-E fires (`FUN_00424650`) with the
+//! owner in each shot's command. With no target it eases each Euler word a
 //! quarter of the way to the owner's and aims 350 along the owner's lateral
-//! row and 150 along its up row; it then closes on that goal by
+//! row and 150 along its up row. Either way it then closes on the goal by
 //! q31(elapsed << 13, goal - position) per axis. Every visit damps the roll.
-//! The target branch (Sub-D steering with pitch, the emitter) is held: a
-//! visit that finds a target stops before it begins.
 
 use super::*;
-use crate::common_mover::sub_d::NativeSubDConstruction;
+use crate::common_mover::sub_d::{
+    integrate_yaw_step, target_body_projection_raw, target_pitch_rate, target_steering_rate,
+    NativeSubDConstruction,
+};
 use crate::common_mover::type9_attitude::Type9BodyBasis;
+use crate::generic_projectile_emitter::{GenericEmitterAppendRequest, GenericEmitterRuntime};
 use crate::hover::q31_mul;
+use crate::ordinary_type47_shot_math::normalize_retail_vector_q31;
 use crate::search_attack::{
     select_search_attack_target, SearchAttackAcquisitionRequest, SearchAttackCandidateFilter,
     SearchAttackRadius, SearchAttackTargetSelection,
 };
 use v2k_formats::collision::{ProjectileEmitterDescriptor, SubDSteeringDescriptor};
 
+mod emitter;
 #[cfg(test)]
 mod tests;
 
@@ -58,12 +67,43 @@ const EMITTER: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
     variable_bindings: [0; 4],
 };
 
+/// Sub-D's steering words, which `FUN_004203D0` clears: the yaw and pitch
+/// rates (`+04`, `+08`) and the steps `FUN_00420360` last applied (`+10`,
+/// `+14`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct AutobotSteering {
+    yaw_rate: i32,
+    pitch_rate: i32,
+    yaw_step: i32,
+    pitch_step: i32,
+}
+
 /// The Autobot's component allocations kept beside its class0 runtime.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AutobotComponents {
     pub(crate) sub_d: crate::common_mover::sub_d::Type9SubDFrameOwner,
     pub(crate) sub_d_seed: u8,
+    steering: AutobotSteering,
+    /// Sub-E's cadence and selector words.
+    sub_e: GenericEmitterRuntime,
+    /// The body's `+40` transient list, which `FUN_00411400` drains.
+    shots: Vec<GenericEmitterAppendRequest>,
+    next_transaction: u64,
 }
+
+/// `FUN_00424E30`: the 0x3C bytes zeroed, then the method and sound words.
+const SUB_E_AT_BIRTH: GenericEmitterRuntime = GenericEmitterRuntime {
+    joint_bindings: [None; 2],
+    projectile_method: EMITTER.projectile_method,
+    emitter_selector: 0,
+    sound_id: EMITTER.sound_id as u32,
+    direct_mode: 0,
+    remaining_time_raw: 0,
+    manual_step_raw: 0,
+    remaining_bursts_raw: 0,
+    cadence_raw: 0,
+    basis_adjustment_identity: None,
+};
 
 /// Type64's Section-12 row in every world: model 248, mass 10, capability
 /// `0x40`, health 3000, state `0x84`, range 3072 with mask `0x18`, class53
@@ -161,6 +201,7 @@ struct AutobotPose {
     rotation: [i16; 3],
 }
 
+#[cfg(test)]
 fn formation_step(
     pose: AutobotPose,
     owner_position: [i16; 3],
@@ -183,6 +224,47 @@ fn closed_on(position: [i16; 3], goal: [i16; 3], dt: u32) -> [i16; 3] {
         let gap = goal[axis].wrapping_sub(position[axis]);
         position[axis].wrapping_add(q31_mul(rate, i32::from(gap)) as i16)
     })
+}
+
+/// The target goal: the owner's position less 300 times the unit vector
+/// (`FUN_00457960`) from the target to the Autobot, each product a word.
+fn target_goal(position: [i16; 3], owner_position: [i16; 3], target: [i16; 3]) -> [i16; 3] {
+    let unit = normalize_retail_vector_q31(std::array::from_fn(|axis| {
+        i32::from(position[axis]) - i32::from(target[axis])
+    }));
+    std::array::from_fn(|axis| owner_position[axis].wrapping_sub(q31_mul(unit[axis], 300) as i16))
+}
+
+/// The target branch's turn: the pitch eased a quarter toward level, then
+/// `FUN_0041F660` with no terrain classes: `FUN_0041E700` on the Autobot's
+/// own matrix, the yaw and pitch rates (`FUN_00420260`, `FUN_004202E0`, by
+/// the visit's elapsed time) and their steps (`FUN_00420360`, by the frame's),
+/// the yaw step taken from the heading and, coupled, from the roll.
+fn target_turn(
+    steering: &mut AutobotSteering,
+    pose: AutobotPose,
+    target: [i16; 3],
+    basis: Type9BodyBasis,
+    dt: u32,
+    frame_dt: u32,
+) -> [i16; 3] {
+    let [heading, pitch, roll] = pose.rotation;
+    let pitch = ease_quarter(pitch, 0);
+    let projection = target_body_projection_raw(pose.position, target, basis);
+    let divisor = SUB_D.steering_divisor_raw;
+    steering.yaw_rate =
+        target_steering_rate(steering.yaw_rate, projection.lateral_raw, dt, divisor);
+    steering.pitch_rate =
+        target_pitch_rate(steering.pitch_rate, projection.vertical_raw, dt, divisor);
+    let yaw_step = integrate_yaw_step(steering.yaw_rate, frame_dt);
+    let pitch_step = integrate_yaw_step(steering.pitch_rate, frame_dt);
+    steering.yaw_step = i32::from(yaw_step);
+    steering.pitch_step = i32::from(pitch_step);
+    [
+        heading.wrapping_sub(yaw_step),
+        pitch.wrapping_sub(pitch_step),
+        roll.wrapping_sub(yaw_step),
+    ]
 }
 
 /// The visit's closing roll damping: `roll -= ((dt >> 10) * roll) >> 8`.
@@ -208,6 +290,10 @@ impl EntityManager {
             runtime.autobot = Some(AutobotComponents {
                 sub_d: frame_owner,
                 sub_d_seed: seed,
+                steering: AutobotSteering::default(),
+                sub_e: SUB_E_AT_BIRTH,
+                shots: Vec::new(),
+                next_transaction: 1,
             });
         }
     }
@@ -256,51 +342,94 @@ impl EntityManager {
         })
     }
 
-    /// Whether this visit would take the held target branch. The search reads
-    /// no random word and writes nothing, so it runs ahead of the visit.
-    pub(super) fn autobot_target_held(&self, id: u32) -> Result<(), Class0ActorError> {
-        if self.autobot_owner(id)?.is_none() {
-            return Ok(());
-        }
-        match self.autobot_search(id)? {
-            None => Ok(()),
-            Some(_) => Err(Class0ActorError::Runtime(
-                "Autobot target branch held (Sub-D pitch steering and the emitter)",
-            )),
-        }
+    fn autobot_components_mut(
+        &mut self,
+        id: u32,
+    ) -> Result<&mut AutobotComponents, Class0ActorError> {
+        self.native_class0_actors
+            .get_mut(&id)
+            .and_then(|runtime| runtime.autobot.as_mut())
+            .ok_or(Class0ActorError::Runtime("Autobot components"))
     }
 
-    /// `FUN_00407280` without a target, the only branch the port runs.
-    pub(super) fn autobot_visit(&mut self, id: u32, dt: u32) -> Result<(), Class0ActorError> {
+    /// `FUN_00407280`. `frame_dt` is the frame's elapsed time, which
+    /// `FUN_00420360` reads in place of the visit's.
+    pub(super) fn autobot_visit(
+        &mut self,
+        id: u32,
+        dt: u32,
+        frame_dt: u32,
+        world_fx: &mut WorldFx,
+    ) -> Result<(), Class0ActorError> {
         let owner = self.autobot_owner(id)?.map(|owner| {
             (
+                owner.id,
                 owner.position_raw(),
                 owner.rotation_heading_pitch_roll_raw(),
                 owner.physical_body_basis_q31(),
             )
         });
-        if owner.is_some() && self.autobot_search(id)?.is_some() {
-            return Err(Class0ActorError::Runtime("Autobot target branch held"));
+        if let Some((owner_id, owner_position, owner_rotation, owner_basis)) = owner {
+            self.entity_mut(id)
+                .ok_or(Class0ActorError::Allocation)?
+                .set_velocity_raw([0; 3]);
+            let goal = match self.autobot_search(id)? {
+                Some(target) => {
+                    let target_position = self
+                        .iter_all()
+                        .find(|entity| entity.id == target)
+                        .ok_or(Class0ActorError::Allocation)?
+                        .position_raw();
+                    let entity = self.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+                    let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
+                        return Err(Class0ActorError::Runtime("Autobot matrix"));
+                    };
+                    let pose = AutobotPose {
+                        position: entity.position_raw(),
+                        rotation: entity.rotation_heading_pitch_roll_raw(),
+                    };
+                    let goal = target_goal(pose.position, owner_position, target_position);
+                    let components = self.autobot_components_mut(id)?;
+                    components.sub_d.evidence_for_classifier_free_frame(
+                        SUB_D,
+                        pose.position,
+                        target_position,
+                        basis.lateral,
+                        basis.forward,
+                    );
+                    let rotation = target_turn(
+                        &mut components.steering,
+                        pose,
+                        target_position,
+                        basis,
+                        dt,
+                        frame_dt,
+                    );
+                    self.entity_mut(id)
+                        .ok_or(Class0ActorError::Allocation)?
+                        .set_rotation_heading_pitch_roll_raw(rotation);
+                    self.autobot_fire(id, owner_id, target, dt, world_fx)?;
+                    goal
+                }
+                None => {
+                    let RetailRuntimeValue::Known(basis) = owner_basis else {
+                        return Err(Class0ActorError::Runtime("Autobot owner matrix"));
+                    };
+                    let entity = self.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+                    let rotation: [i16; 3] = std::array::from_fn(|i| {
+                        ease_quarter(
+                            entity.rotation_heading_pitch_roll_raw()[i],
+                            owner_rotation[i],
+                        )
+                    });
+                    entity.set_rotation_heading_pitch_roll_raw(rotation);
+                    formation_goal(owner_position, basis)
+                }
+            };
+            let entity = self.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
+            entity.set_position_raw(closed_on(entity.position_raw(), goal, dt));
         }
         let entity = self.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
-        if let Some((position, rotation, basis)) = owner {
-            let RetailRuntimeValue::Known(basis) = basis else {
-                return Err(Class0ActorError::Runtime("Autobot owner matrix"));
-            };
-            entity.set_velocity_raw([0; 3]);
-            let pose = formation_step(
-                AutobotPose {
-                    position: entity.position_raw(),
-                    rotation: entity.rotation_heading_pitch_roll_raw(),
-                },
-                position,
-                rotation,
-                basis,
-                dt,
-            );
-            entity.set_position_raw(pose.position);
-            entity.set_rotation_heading_pitch_roll_raw(pose.rotation);
-        }
         let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
         entity.set_rotation_heading_pitch_roll_raw([heading, pitch, damped_roll(roll, dt)]);
         Ok(())

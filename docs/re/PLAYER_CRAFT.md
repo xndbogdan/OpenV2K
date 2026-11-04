@@ -1606,7 +1606,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
 | Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | ported; its pair hook held |
-| Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | ported without a target; its target branch, damage and death held |
+| Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | ported; its damage and death held |
 
 **Proximity Mines.** Class 34's first style (`0x4C8548`, initializer
 `FUN_0040B080`: Secondary, then Tertiary cleared, then `FUN_00406B00`'s
@@ -1762,7 +1762,7 @@ block.
 **Defender Ball and Autobot.** Operation `0x38` is ported (see
 [CHEATS](CHEATS.md#port-status)). Neither type has capability `0x1000`, so
 both join the controller's `+220` list. The Defender Ball is ported; the
-Autobot is ported up to its target branch (below). What their owners do:
+Autobot's visit is ported, its damage and death held (below). What their owners do:
 
 - Type63 (model 244, health 1, no components, alternate class 2): class 50's
   initializer `FUN_0040B0F0` clears Tertiary then Secondary and builds the
@@ -1828,17 +1828,52 @@ port's formation step reproduces its position at ticks 812 to 817, 1700,
 1701, 1786 and 1787 exactly from the player's logged position and Euler
 words (the player's matrix is `FUN_00413F70` of them).
 
+The target branch is whole too. The goal is the owner's position less 300
+times `FUN_00457960`'s unit vector from the target to the Autobot (the
+difference of the two position words taken as integers, not wrapped), each
+product truncated to a word. The pitch eases a quarter toward level, then
+Sub-D (`FUN_0041F660`) runs without terrain classes: its stagger byte, then
+`FUN_0041E700` on the Autobot's own matrix (the one the class0 host's
+`FUN_00413F70` built from its Euler words after the previous visit), the
+yaw rate (`FUN_00420260`) from the lateral projection and the pitch rate
+(`FUN_004202E0`: damped as the yaw rate is, then the vertical projection
+over the divisor added, twice when it opposes the rate, clamped to
+±`0x20000` over the divisor) from the vertical one, both by the visit's
+elapsed time. `FUN_00420360` turns them into steps by the frame's elapsed
+time (`DAT_004D04E4`): the yaw step comes off the heading and, coupled,
+the roll, the pitch step off the pitch. Sub-E then fires straight from the
+visit (`FUN_00424650(self, owner, target, null, ...)`, the emitter every
+Aim and Fire task calls): its runtime is `FUN_00424E30`'s zeroed record
+with method 1 and sound 88, built at birth with no random word; one
+cadence draw a visit admits a shot one time in ten (200 ms over the 20-ms
+visit), the axis tolerance 1536 and the aim threshold 3000 gate it, and
+each shot is a method-1 command followed by the method-15 auxiliary. The
+command's `+24` owner word is the owner, so `FUN_00414870` launches each
+shot owned by the player under the Autobot's type byte: class 1 at
+method 1's 4000 plus the Autobot's velocity, and the auxiliary's class 32
+(dropped at or below the sea), from the selector's muzzle stamp (the
+transform-only pass) or the centre. A nonzero return from the append
+would end the visit early in retail; the port's append always succeeds.
+
+Retail lab (world 20 by Skip to World, F9 at tick 955, the actor walk read
+with the Euler words and matrix): the Autobot holds formation until tick
+1079, when the search finds a Type15 about 6,000 away, and leaves
+formation to sit about 300 from the player toward it. From its logged
+pose, matrix and target, the port's turn reproduces the Euler words of all
+17 visits from tick 1079 to 1095 exactly, chaining the Sub-D rates from
+zero, and each logged matrix is `FUN_00413F70` of the visit's Euler words;
+its close reproduces every position from the owner's position (not
+logged at the visit: the Defender Ball's next position, which copies it,
+or the player's next, one of which matches at every tick). Every visit
+makes the cadence draw (`00424711`) and none fires: the target is beyond
+the axis tolerance. A port probe of the same keys (world 20 from retail's
+arrival pose, F9 at frame 162) leaves formation 68 frames after F9 (retail
+124 ticks: the Type15 flyers' paths differ, the port's random words not
+being in lockstep) and then keeps about 300 from the player toward its
+target with no stop.
+
 Held, each a logged stop:
 
-- the target branch: a visit whose search finds a body stops before it
-  begins ("Autobot target branch held"), and the Autobot stays where it
-  was. In world 20 (retail lab: Skip to World, F9) retail's Autobot leaves
-  formation within seconds to sit 300 from the player toward its target;
-  the port's stops there. It needs Sub-D's pitch steering (`FUN_004202E0`, the pitch half of
-  `FUN_00420360`, which no other port actor uses), `FUN_0041E700`'s angles
-  on the Autobot's own matrix, and a direct `FUN_00424650` firing (the port
-  runs every other emitter inside Aim and Fire) whose shots carry the owner
-  (the player) in their transient command;
 - its checked damage, radial, pair and Main Base abort entries, and its
   class11 tumble death;
 - the hold walk's second branch: a live Autobot in the list stops the craft's

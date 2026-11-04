@@ -787,14 +787,11 @@ fn run_callback(
             }
         }
         Some(ActorTaskRuntime::DefenderDrone) => {
-            // The held target branch stops before the visit begins.
-            manager.autobot_target_held(id)?;
-            let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
             entity
                 .actor_tasks
                 .begin_exact_visit_with(visit, |_| ())
                 .ok_or(Class0ActorError::Graph)?;
-            manager.autobot_visit(id, dt)?;
+            manager.autobot_visit(id, dt, frame.elapsed_micros, &mut *frame.world_fx)?;
             let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
             if !entity.actor_tasks.finish_exact_visit(visit) {
                 return Err(Class0ActorError::Graph);

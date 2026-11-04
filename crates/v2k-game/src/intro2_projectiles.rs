@@ -42,6 +42,7 @@ pub enum Intro2ShotDrainError {
     Fish(crate::shared_fish::aim::FishShotDrainError),
     /// `FUN_00413BE0` could not run for this source.
     TransformPass(MuzzlePassError),
+    Autobot(crate::entity::Class0ActorError),
 }
 
 /// Why the transform-only pass for queued shots stopped.
@@ -120,6 +121,17 @@ pub fn drain_intro2_projectile_source(
     retail_tick: u32,
     id: u32,
 ) -> Option<Result<usize, Intro2ShotDrainError>> {
+    if !entities.autobot_queued_shots(id).is_empty() {
+        if let Err(error) = stamp_unstamped_muzzles(entities, world_fx, resources, retail_tick, id)
+        {
+            return Some(Err(Intro2ShotDrainError::TransformPass(error)));
+        }
+        return Some(
+            entities
+                .drain_autobot_shots(id, world_fx, environment, retail_tick)
+                .map_err(Intro2ShotDrainError::Autobot),
+        );
+    }
     let family = entities
         .iter_all()
         .find(|entity| entity.id == id)
@@ -209,7 +221,9 @@ pub fn stamp_unstamped_muzzles(
         RetailRuntimeValue::Known(_) => 1,
         RetailRuntimeValue::Unresolved => return Err(MuzzlePassError::DetailStateUnresolved),
     };
-    let runs = queued_requests(entity).iter().any(|request| {
+    let mut requests = queued_requests(entity);
+    requests.extend_from_slice(entities.autobot_queued_shots(id));
+    let runs = requests.iter().any(|request| {
         let marker =
             if network && (entity.broader_detail_when_queued || request.projectile_method == 0) {
                 2
