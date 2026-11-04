@@ -342,10 +342,11 @@ by leverage:
     spinner change. **Ambient (0–15) is a pure on/off gate for CD music** —
     magnitude never used; in the frontend it does nothing at all.
 
-15. **[deferred] Attract mode.** 60 s idle (reset by any key press OR release; 10 s
-    after the first timeout) → pop one screen per timeout; at the ring:
+15. ✅ **Attract mode.** 60 s idle (reset by the bound keys' press or
+    release; 10 s after a timeout) → pop one screen per timeout; at the ring:
     prop cmd 5 (bg zoom-out 524 ms) then game start with mode code 4 (or 1,
-    p=1/8) — the demo. Port: none.
+    p=1/8). Ported; the demo player of the worlds that have one is held
+    ([the attract demo](MENU_SYSTEM.md#the-attract-demo-in-the-port)).
 
 16. ✅ **Backdrop prop screens.** Screens with flag 0x10 draw model 73
     `optionsh` full-screen behind the rows (fixed angle 0, y=0x1004,

@@ -13,6 +13,7 @@ pub mod aim_and_fire;
 pub mod aim_and_fire_transaction;
 pub mod attached_particle_damage;
 pub mod attract_attention;
+pub mod attract_demo;
 pub mod base_factory_progression;
 pub mod behavior;
 pub mod campaign_failure;

@@ -2469,8 +2469,20 @@ fn run_game(
     let mut replay_map_pass = false;
     // The fire descriptor's shared counter, for FUN_004443B0's press edge.
     let mut fire_descriptor_was_held = false;
-    // Overlay 49 running in phase 3.
+    // Overlay 49 running in phase 3, or an attract world in phase 4.
     let mut closing_scene: Option<v2k_game::closing_scene::ClosingScene> = None;
+    // The idle frontend's countdown (FUN_0042B5D0), the mode it started
+    // (004DB224) until the ring's pop ends, and Intro2 in phase 1.
+    let mut idle_countdown = v2k_game::attract_demo::IdleCountdown::default();
+    let mut pending_attract: Option<v2k_game::attract_demo::AttractMode> = None;
+    let mut attract_intro = false;
+    // Session +290 in phase 4: the next FUN_0044FFA0 leaves for 4D0A30,
+    // whose FUN_00453E00 returns to the frontend at once.
+    let mut attract_exit = false;
+    // The persistent class-1 camera proxy between worlds: the frontend
+    // builds it at the origin once, and the frontend's actor walk
+    // (FUN_0042B5D0) keeps moving it by its velocity.
+    let mut class1_proxy = IntroCameraController::at_rest([0; 3], 0, Default::default());
     // Session +38's pose, which 451710's 443260 saves after a world with a
     // player loads and 451AF0's 443560 restores; the closing scene leaves it
     // for world 13.
@@ -3057,6 +3069,9 @@ fn run_game(
                                 || keys_down.contains(&Keycode::RShift);
                             let alt = keys_down.contains(&Keycode::LAlt)
                                 || keys_down.contains(&Keycode::RAlt);
+                            if !menu_is_paused && frontend_idle_key(*kc, alt) {
+                                idle_countdown.key();
+                            }
 
                             // FUN_0042D240, FUN_0042D250, FUN_0042D260,
                             // FUN_0042D270, FUN_0042D280 and FUN_0042D290:
@@ -3252,6 +3267,9 @@ fn run_game(
                         }
                         GameEvent::KeyUp(kc) => {
                             keys_down.remove(kc);
+                            if !menu_is_paused && frontend_idle_key(*kc, false) {
+                                idle_countdown.key();
+                            }
                         }
                         _ => {}
                     }
@@ -3260,6 +3278,12 @@ fn run_game(
                 // A pad's menu set. Back is Escape's: inert at a root, which
                 // retail cannot pop, and otherwise it saves the settings.
                 for &action in &pad_actions {
+                    // The frontend's joystick tables bind the same handlers.
+                    if !menu_is_paused
+                        && matches!(action, PadAction::Menu(_) | PadAction::PauseResumeOrBack)
+                    {
+                        idle_countdown.key();
+                    }
                     if shell.is_transitioning() || shell.is_suspended() {
                         break;
                     }
@@ -3744,6 +3768,36 @@ fn run_game(
                         sound_manager.as_mut(),
                     ),
                 );
+                if !menu_is_paused {
+                    // FUN_0042B5D0: the actor walk moves the class-1 proxy,
+                    // then the countdown runs after the screen tick.
+                    class1_proxy.advance_proxy(elapsed_micros.min(125_000));
+                    if idle_countdown.tick(elapsed_micros, window_suspended, network_game.is_some())
+                    {
+                        use v2k_game::attract_demo::IdleExpiry;
+                        match IdleExpiry::at_depth(shell.engine.depth(), || {
+                            world_fx.next_shared_retail_random_u16()
+                        }) {
+                            IdleExpiry::Start(mode) => {
+                                log!("Idle frontend: attract demo, {mode:?}");
+                                pending_attract = Some(mode);
+                                shell.start_attract();
+                            }
+                            IdleExpiry::Pop { klaus_command } => {
+                                if let Err(error) = config.try_save(settings_dir) {
+                                    eprintln!("Could not save settings: {error}");
+                                }
+                                let ctx = MenuCtx {
+                                    cache: &session.cache,
+                                    config: &config,
+                                    saves: Some(&save_manager),
+                                    display_modes: &display_modes,
+                                };
+                                shell.idle_pop(klaus_command, &ctx);
+                            }
+                        }
+                    }
+                }
                 let mut save_menu_switched = false;
                 let save_menu_klaus = menu_is_paused
                     && campaign_map
@@ -3915,9 +3969,32 @@ fn run_game(
                     // Carry the live shell instead of restarting its pose,
                     // scene clock, and twitch RNG after Intro2 is resident.
                     let handoff = std::mem::replace(shell, make_menu!(false));
-                    next_state = Some(GameState::Loading {
-                        level_id: INTRO2_LEVEL_ID,
-                        purpose: LoadingPurpose::BeginIntro { shell: handoff },
+                    // FUN_0044F650: mode 4 draws its table row; mode 1 and
+                    // New Game load Intro2, mode 1 in phase 1.
+                    let attract = pending_attract.take();
+                    attract_intro = attract == Some(v2k_game::attract_demo::AttractMode::Intro2);
+                    next_state = Some(match attract {
+                        Some(v2k_game::attract_demo::AttractMode::World) => {
+                            let index = v2k_game::attract_demo::AttractRow::index(
+                                world_fx.next_shared_retail_random_u16(),
+                            );
+                            let row = v2k_game::attract_demo::ATTRACT_ROWS[index];
+                            log!(
+                                "Attract demo: row {index}, logical world {}",
+                                row.logical_world
+                            );
+                            GameState::Loading {
+                                level_id: row.overlay_id(),
+                                purpose: LoadingPurpose::AttractDemo {
+                                    shell: handoff,
+                                    row,
+                                },
+                            }
+                        }
+                        _ => GameState::Loading {
+                            level_id: INTRO2_LEVEL_ID,
+                            purpose: LoadingPurpose::BeginIntro { shell: handoff },
+                        },
                     });
                 }
 
@@ -4033,6 +4110,15 @@ fn run_game(
                     session.cache.set_network_cell_journal(None);
                 }
                 post_intro_world_cover = None;
+                // The class-1 proxy stays where the world left it.
+                if let Some(scene) = closing_scene.take() {
+                    class1_proxy = scene.camera;
+                } else if let Some(glide) = world_start_glide.take() {
+                    class1_proxy = glide.camera;
+                }
+                attract_intro = false;
+                attract_exit = false;
+                pending_attract = None;
                 log!("Returning to menu...");
                 retail_clock.reset();
                 if let Some(ref mut sm) = sound_manager {
@@ -4088,6 +4174,12 @@ fn run_game(
                 // The stopped session's mode routes to the frontend menu
                 // (FUN_0044FDC0 for the results and map modes, then FUN_0042A940).
                 let shell = make_menu!(false);
+                // FUN_0042B230 restarts the idle countdown from its reload,
+                // and this pass's FUN_0042B5D0 already counts (the lab's
+                // second attract expires 499 passes after the init's).
+                idle_countdown.enter_frontend();
+                idle_countdown.tick(elapsed_micros, window_suspended, network_game.is_some());
+                class1_proxy.advance_proxy(elapsed_micros.min(125_000));
                 state = GameState::Menu(shell);
                 // Teardown is synchronous and must not become the first
                 // frontend clock advance.
@@ -4121,7 +4213,8 @@ fn run_game(
                 // FUN_004515E0 (FUN_0042A850) turns the HUD setting on at every
                 // world start, and off past logical world 36 or below phase 5:
                 // Intro2 and the closing scene, both overlays past 48.
-                config.hud = lid < v2k_game::closing_scene::CLOSING_SCENE_LEVEL_ID;
+                config.hud = lid < v2k_game::closing_scene::CLOSING_SCENE_LEVEL_ID
+                    && !matches!(purpose, LoadingPurpose::AttractDemo { .. });
                 // FUN_0044F8B0 clears the typed cheat digits on every entry.
                 cheat_code_entry = v2k_game::cheats::CheatCodeEntry::default();
                 pending_cheat_skip = None;
@@ -4499,7 +4592,14 @@ fn run_game(
                 // Selection occurs even at Ambient=0; that setting only
                 // pauses the selected descriptor at its preserved cursor.
                 // Intro2 owns no CD track, and unproven retail mode overrides
-                // remain intentionally absent.
+                // remain intentionally absent, except phase 4's: outside
+                // world style 6 an even random word selects track 8.
+                let attract_track = matches!(purpose, LoadingPurpose::AttractDemo { .. })
+                    && session
+                        .cache
+                        .level_desc()
+                        .is_some_and(|level| level.world_style != 6)
+                    && world_fx.next_shared_retail_random_u16() & 1 == 0;
                 if let Some(ref mut mp) = music_player {
                     if lid == INTRO2_LEVEL_ID {
                         // Intro2 is an in-engine story level, not an ordinary
@@ -4511,7 +4611,12 @@ fn run_game(
                             .level_desc()
                             .map(|d| d.world_style)
                             .unwrap_or(1);
-                        if let Some(track) = normal_world_music_track(lid, world_style) {
+                        let track = if attract_track {
+                            Some(8)
+                        } else {
+                            normal_world_music_track(lid, world_style)
+                        };
+                        if let Some(track) = track {
                             if let Err(e) = mp.select_cd_track(track) {
                                 eprintln!("Music track switch error: {}", e);
                                 mp.stop();
@@ -4677,6 +4782,9 @@ fn run_game(
                             // FUN_00450390: phase 3 builds no player; 451797
                             // still reserves its ordinal.
                             LoadingPurpose::ClosingScene { .. } => None,
+                            // FUN_00450390: world 11 builds no player in
+                            // phase 4. The other rows' demo player is held.
+                            LoadingPurpose::AttractDemo { .. } => None,
                             _ if lid == 49 => {
                                 // Intro1 is outside the campaign graph. Keep its
                                 // existing direct-debug controller publication.
@@ -4787,7 +4895,10 @@ fn run_game(
                 card_yield!("radar");
                 // 451C00 runs only with a player (FUN_00450390 zero).
                 if purpose.uses_authored_world_publication(lid)
-                    && !matches!(purpose, LoadingPurpose::ClosingScene { .. })
+                    && !matches!(
+                        purpose,
+                        LoadingPurpose::ClosingScene { .. } | LoadingPurpose::AttractDemo { .. }
+                    )
                 {
                     let level_desc = session
                         .cache
@@ -5218,7 +5329,13 @@ fn run_game(
                 card_yield!("task adoption");
                 state = match purpose {
                     LoadingPurpose::BeginIntro { mut shell } => {
-                        intro_camera = IntroCameraController::default();
+                        // FUN_00451710 moves the persistent proxy in.
+                        let level = session.cache.level_desc().expect("Intro2 descriptor");
+                        intro_camera = class1_proxy.arrive_at(
+                            class1_proxy.position_raw(),
+                            level.terrain_draw_depth,
+                            level.world_style,
+                        );
                         intro_commands =
                             v2k_game::intro2_commands::Intro2Commands::from_cache(&session.cache)
                                 .expect("loaded Intro2 Section-2 commands");
@@ -5309,6 +5426,49 @@ fn run_game(
                             &strings,
                             proxy_camera,
                         ));
+                        // 451710's type-0 visit queues Klaus's command 2.
+                        shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
+                        post_intro_world_cover = Some(shell);
+                        GameState::Playing
+                    }
+                    LoadingPurpose::AttractDemo { mut shell, row } => {
+                        let level = session
+                            .cache
+                            .level_desc()
+                            .expect("attract world descriptor");
+                        // FUN_00451710 moves the persistent proxy in from the
+                        // player, when the world has one, else from itself.
+                        let from_raw = if row.has_player() {
+                            row.player_position_raw(
+                                gameplay_chase_terrain(&session.cache)
+                                    .expect("attract world terrain")
+                                    .terrain,
+                            )
+                        } else {
+                            class1_proxy.position_raw()
+                        };
+                        let mut proxy_camera = class1_proxy.arrive_at(
+                            from_raw,
+                            level.terrain_draw_depth,
+                            level.world_style,
+                        );
+                        start_eye_after_load(&mut camera, &mut proxy_camera, config.active_camera);
+                        if row.has_player() {
+                            eprintln!(
+                                "Attract demo player held: logical world {}'s Type46 craft runs Type51's class 7 armed by its row (method {}, sound {}, cadence {} ms), which the port does not own; the world plays without it",
+                                row.logical_world,
+                                row.projectile_method,
+                                row.sound_id,
+                                row.cadence_ms,
+                            );
+                        }
+                        log!(
+                            "Attract demo: overlay {lid} in phase 4, camera proxy at {:?}",
+                            proxy_camera.position_raw()
+                        );
+                        closing_scene =
+                            Some(v2k_game::closing_scene::ClosingScene::attract(proxy_camera));
+                        attract_exit = false;
                         // 451710's type-0 visit queues Klaus's command 2.
                         shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
                         post_intro_world_cover = Some(shell);
@@ -5425,6 +5585,7 @@ fn run_game(
                             world_start_glide = Some(glide);
                         } else {
                             glide_first_play_proxy = Some(glide.camera.position_raw());
+                            class1_proxy = glide.camera.clone();
                             chase_camera = glide.into_chase();
                         }
                     }
@@ -5473,6 +5634,12 @@ fn run_game(
                     main_base_level_abort.outer_frame_sequence.request();
                 }
 
+                if (*exit_pending || skip) && attract_intro {
+                    // Phase 1: FUN_00453E00 returns to the frontend at once.
+                    class1_proxy = intro_camera.clone();
+                    state = GameState::ReturningToFrontend;
+                    continue;
+                }
                 if *exit_pending || skip {
                     if let Some(ref mut sm) = sound_manager {
                         sm.stop_all();
@@ -6499,6 +6666,7 @@ fn run_game(
                         // and the eye's springs carry on from the proxy.
                         if let Some(glide) = world_start_glide.take() {
                             glide_first_play_proxy = Some(glide.camera.position_raw());
+                            class1_proxy = glide.camera.clone();
                             chase_camera = glide.into_chase();
                         }
                         suspend_after_glide = window_suspended;
@@ -6584,6 +6752,12 @@ fn run_game(
                     enter_closing_leg!(destination);
                     continue;
                 }
+                // Phase 4's +290: 4D0A30's FUN_00453E00 calls FUN_0044FEB0
+                // on its first visit, with no Klaus leg.
+                if std::mem::take(&mut attract_exit) {
+                    state = GameState::ReturningToFrontend;
+                    continue;
+                }
                 // Phase 3 installs no craft keys (453330). The in-play table
                 // still runs: Space and Return reach 455D30, Escape and P
                 // 455D60, both FUN_00452770 below phase 5; Shift+Escape
@@ -6628,6 +6802,15 @@ fn run_game(
                         )
                         .play_global_sound(3);
                         return_to_frontend_pending = true;
+                    } else if leave
+                        && closing_scene
+                            .as_ref()
+                            .is_some_and(|scene| scene.attract.is_some())
+                    {
+                        // The key's FUN_00452770 runs before this pass's
+                        // FUN_0044FFA0, which consumes its +290 at once.
+                        state = GameState::ReturningToFrontend;
+                        continue;
                     } else if leave && closing_scene_exit.is_none() {
                         closing_scene_exit = Some(ClosingSceneDestination::FirstWorld);
                         main_base_level_abort.outer_frame_sequence.request();
@@ -11260,10 +11443,38 @@ fn run_game(
                 // Phase 3's 503C0, after the contacts: the class-1 proxy
                 // follows the body the Section-2 commands selected.
                 if let Some(scene) = closing_scene.as_mut() {
-                    let subject = scene.camera_subject(em);
-                    scene
-                        .camera
-                        .follow_subject(subject, gameplay_chase_terrain(&session.cache));
+                    // In phase 4 it ends the world past 0xB22 ticks, and
+                    // otherwise picks the subject itself first.
+                    let ended = scene.attract.is_some()
+                        && retail_tick > v2k_game::attract_demo::ATTRACT_WORLD_TICKS;
+                    if ended {
+                        attract_exit = true;
+                    } else {
+                        if let Some(attract) = scene.attract.as_mut() {
+                            let world_style = session
+                                .cache
+                                .level_desc()
+                                .map_or(0, |level| level.world_style);
+                            let player = em.player().map(|player| player.id);
+                            if let Err(stop) = attract.visit(
+                                em,
+                                &session.cache,
+                                world_style,
+                                elapsed_micros,
+                                player,
+                                &mut || world_fx.next_shared_retail_random_u16(),
+                            ) {
+                                eprintln!(
+                                    "Attract camera stopped: body {} of type {} has no type record",
+                                    stop.entity_id, stop.entity_type
+                                );
+                            }
+                        }
+                        let subject = scene.camera_subject(em);
+                        scene
+                            .camera
+                            .follow_subject(subject, gameplay_chase_terrain(&session.cache));
+                    }
                 }
                 // FUN_00450CC0, after the gameplay frame.
                 if let Some(net) = network_game.as_mut() {
@@ -11484,7 +11695,15 @@ fn run_game(
                         // (its strings up to `#`) unless its control slot is
                         // already completed. Logical 0x25 skips that test and
                         // starts one record in.
-                        let world_records: Vec<&str> = if closing_scene.is_some() {
+                        let world_records: Vec<&str> = if closing_scene
+                            .as_ref()
+                            .is_some_and(|scene| scene.attract.is_some())
+                        {
+                            (v2k_game::attract_demo::ATTRACT_RECORDS_STRING..)
+                                .map_while(|id| session.cache.global_string(id))
+                                .take_while(|record| !record.starts_with('#'))
+                                .collect()
+                        } else if closing_scene.is_some() {
                             session
                                 .cache
                                 .level()
@@ -17494,7 +17713,8 @@ fn loading_klaus<'a>(
     match purpose {
         LoadingPurpose::BeginIntro { shell }
         | LoadingPurpose::ResumePostIntro { shell }
-        | LoadingPurpose::ClosingScene { shell, .. } => Some(shell),
+        | LoadingPurpose::ClosingScene { shell, .. }
+        | LoadingPurpose::AttractDemo { shell, .. } => Some(shell),
         _ => cover.as_mut(),
     }
 }
@@ -18190,6 +18410,20 @@ fn render_loading_card(
     }
 
     renderer.present();
+}
+
+/// The frontend keys whose handlers set the idle countdown to 60 s: Return
+/// (not with Alt) and Space, Escape with or without Shift, and the arrows.
+fn frontend_idle_key(key: Keycode, alt: bool) -> bool {
+    matches!(
+        key,
+        Keycode::Escape
+            | Keycode::Space
+            | Keycode::Up
+            | Keycode::Down
+            | Keycode::Left
+            | Keycode::Right
+    ) || (key == Keycode::Return && !alt)
 }
 
 /// The loading label is submitted during the even 20-tick half-period.

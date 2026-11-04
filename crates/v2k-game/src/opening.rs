@@ -148,6 +148,18 @@ impl IntroCameraController {
         }
     }
 
+    /// `FUN_00451710`: the persistent class-1 proxy enters a world from
+    /// `from_raw` (its own position, or the player's), up 0x200 and along Z by
+    /// `0x700 - far`. Its velocity words are not touched.
+    pub fn arrive_at(&self, from_raw: [i16; 3], far_cells: u32, world_style: u32) -> Self {
+        Self {
+            position_raw: crate::closing_scene::camera_arrival_raw(from_raw, far_cells),
+            velocity_raw: self.velocity_raw,
+            chase: ChaseCameraState::default(),
+            vertical_bias: world_style != 6,
+        }
+    }
+
     pub fn position_raw(&self) -> [i16; 3] {
         self.position_raw
     }
