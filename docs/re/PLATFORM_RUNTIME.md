@@ -200,8 +200,10 @@ timer thread, not the frame.
 `FUN_00457170` starts one such worker, a one-shot 50 ms timer whose callback
 `FUN_00456FB0` measures the real time since its last visit (clamped to 7.8 to
 125 ms), adds it in milliseconds to the session's `+270`, and advances the
-record at `004F71B0` (`FUN_0042AF00`, `FUN_0042B1E0`). `FUN_004571B0` stops
-it, spinning until the callback acknowledges and then freeing the timer.
+record at `004F71B0` (`FUN_0042AF00`, `FUN_0042B1E0`), then re-arms with an
+adapted period. `FUN_004571B0` stops it, spinning until the callback has run
+once more and acknowledges, and then frees the timer
+([the loading card](LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)).
 
 ## Banner movie
 

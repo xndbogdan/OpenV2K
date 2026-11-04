@@ -115,7 +115,7 @@ frames show Klaus alone until play, then the HUD and "Entering Pe".
 The eye starts where the loading card's last redraw leaves it:
 `FUN_004515E0` brackets `FUN_00451710` with the card's timer
 (`FUN_00457170`, `FUN_004571B0`), and `FUN_004571B0` waits for one more
-callback (`FUN_00456FE0` -> `FUN_0042AF00`), which resets the springs and
+callback (`FUN_00456FB0` -> `FUN_0042AF00`), which resets the springs and
 runs ED10 with no terrain context on the class-1 handle it saved before the
 load (`DAT_004F71B8`; it resolves to the new proxy). So after `FUN_00451710`'s
 own ED10 with terrain (eye Y 319 on Level 1), the eye restarts level with
@@ -408,12 +408,48 @@ Renders during OVL load:
    - String index 35 (0x23): **"Retrying"** when `param_4 > 2`
 3. Text centered via `FUN_00470f80` (measure width) → `screen_center_x - width/2`
 
-While a world loads, `FUN_004515E0` starts a one-shot WinMM timer worker
-(`FUN_00457170`, stopped by `FUN_004571B0`; the frontend's are
-`FUN_0042D7F0` and `FUN_0042D830`) that re-arms itself and redraws the
-loading card as its clock advances (in play also session `+270`). The port
-loads in one blocking step, so its card holds still for the load's
-duration. Not ported.
+While a world loads, `FUN_004515E0` reads the time (`004F72E0`), starts a
+one-shot 50-ms WinMM timer (`FUN_00457170`; the frontend's pair is
+`FUN_0042D7F0` and `FUN_0042D830`) and runs `FUN_00451710`; `FUN_004571B0`
+then asks the worker to stop and spins until its callback has run once
+more. The callback `FUN_00456FB0` (guarded against re-entry by `004F7304`)
+measures the real time since its last visit, clamps it to 7,800..125,000 us,
+adds it in milliseconds to session `+270`, and runs `FUN_0042AF00` on the
+card record (`004F71B0`): the world clock (`FUN_00428B00`), one Klaus visit,
+a spring reset (`FUN_0040F390`) and ED10 without terrain on the class-1
+handle, Klaus, the card (`FUN_0042B040`, its text blinking on the clock's
+20-tick parity), and the present (`FUN_0042B1E0`). Unless it is stopping, it
+re-arms itself: when that redraw took under 43,750 us and the period is over
+50 ms the period becomes 7/8 of itself; when it took 43,750 us or more,
+9/8; otherwise it stays.
+
+What a load leaves behind therefore depends on real time:
+
+- `FUN_00451710` reads the overlay (`FUN_00493E40`, `00451722`), clears
+  `+270` (`00451750`), builds the world and only then gives Klaus command 2
+  with its 125,000-us visit (`0045190C`, `00451920`). Every callback before
+  that visits Klaus closed and idle: each draws one word of the process
+  random generator (two when a twitch starts) and advances his phase and
+  twitch clocks. The generator's position after a load, and so every later
+  random choice, depends on how many callbacks the load's duration allowed.
+- Every callback after command 2, the final one included, opens Klaus
+  further: his morph after the load is 7,812 plus the sum of their deltas
+  shifted right by four.
+- Session `+270` is the sum, in milliseconds, of the deltas of the callbacks
+  after `00451750`, the final one included.
+- The world clock's advance is undone: the first visit after the load
+  (`FUN_0044FE20`) resets it through `+274`. The eye ends where the final
+  callback's reset and ED10 leave it, whatever the time.
+
+The lab's stub fires each load's timer once, with the scripted clock
+standing still: only the final callback runs, with the minimum 7,800 us
+(Klaus's morph 8,299 after the load, `+270` 7). The port loads in one
+blocking step and draws the card once before it, holding still; of the
+final callback it runs the spring reset and ED10 (`start_eye_after_load`),
+not the 7,800-us Klaus visit or the `+270` addition. An animated card needs
+the load off the frame thread, with the redraws drawing Klaus and the card
+while the world's resources change; it is not ported. A fixed-step run
+would take the lab's single final callback.
 
 ### Briefing Sequence
 

@@ -189,7 +189,7 @@ impl IntroCameraController {
     }
 
     /// `FUN_004515E0` ends every world load with the loading card's last
-    /// redraw (`FUN_004571B0` waits for `FUN_00456FE0`, which runs
+    /// redraw (`FUN_004571B0` waits for `FUN_00456FB0`, which runs
     /// `FUN_0042AF00`): after `FUN_00451710`'s own ED10 it resets the eye's
     /// springs and starts them on the class-1 proxy (`DAT_004F71B8`) through
     /// ED10 with no terrain context. The world's first ED10 with terrain then
