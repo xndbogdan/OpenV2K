@@ -980,7 +980,8 @@ fn power_up_cancels_response(entity: &Entity, opposite: &Entity) -> bool {
         && opposite.capability_flags & 1 == 0
 }
 
-/// The D780 branches of [`behavior`] that write nothing.
+/// The D780 branches of [`behavior`] the general visit admits: those that
+/// write nothing for this opposite body, and the few it ports.
 fn general_behavior_hold(
     entity: &Entity,
     opposite: &Entity,
@@ -1005,8 +1006,13 @@ fn general_behavior_hold(
         }
         PairContactCallbackPolicy::LifterDelivery => opposite.capability_flags & 0x400 == 0,
         PairContactCallbackPolicy::MainBaseConversion => opposite.capability_flags & 0x800 == 0,
+        // The consuming branch stages a native-owned body's deferred destroy.
         PairContactCallbackPolicy::Hive => {
-            hive_pair_callback_branch(opposite.capability_flags) == HivePairCallbackBranch::NoEffect
+            match hive_pair_callback_branch(opposite.capability_flags) {
+                HivePairCallbackBranch::NoEffect => true,
+                HivePairCallbackBranch::Consume => requires_body_custody(opposite),
+                HivePairCallbackBranch::Impact => false,
+            }
         }
         // 425AF0 returns its A300 for any non-player: a RET, then no 12760.
         PairContactCallbackPolicy::PowerUp => opposite.capability_flags & 1 == 0,
@@ -1360,11 +1366,29 @@ fn behavior(
             let counterpart = actor(frame.entities, opposite)?;
             match hive_pair_callback_branch(counterpart.capability_flags) {
                 HivePairCallbackBranch::NoEffect => Ok(NativeCaptorPairBehaviorResult::Null),
+                // Operation 0x33 and 410B70, then null: the visit goes on.
                 HivePairCallbackBranch::Consume => {
-                    Err(NativeCaptorPairBlock::UnsupportedBehavior {
-                        entity_id: owner,
-                        style,
-                    })
+                    if bits(entity, REMOTE_OWNED_STATE_BIT)? != 0
+                        || !requires_body_custody(counterpart)
+                        || !frame
+                            .actor_tasks
+                            .prepare_native_actor_mutation(frame.entities, opposite)
+                    {
+                        return Err(NativeCaptorPairBlock::UnsupportedBehavior {
+                            entity_id: owner,
+                            style,
+                        });
+                    }
+                    let position_raw = frame
+                        .entities
+                        .consume_live_hive_pair_body(owner, opposite)
+                        .map_err(NativeCaptorPairBlock::HiveImpact)?;
+                    *committed = true;
+                    frame.world_fx.queue_cargo_transfer_particle(
+                        crate::entity::raw_position_world(position_raw),
+                        Some(owner),
+                    );
+                    Ok(NativeCaptorPairBehaviorResult::Null)
                 }
                 HivePairCallbackBranch::Impact => {
                     if !requires_body_custody(counterpart) {
