@@ -1,5 +1,6 @@
-//! Native captor17/122, independent58 and bounded insect/Type66 11AD0 pairs,
-//! after the same subject's static contact.
+//! The 11AD0 pair walk, after the same subject's static contact: native
+//! captor17/122, independent58 and bounded insect/Type66 lanes, and the
+//! general visit for every other pair.
 //!
 //! The intrusive next chain and actual oriented Section-8 query select contacts.
 //! C910's A300 return suppresses only response/damage: the opposite behavior
@@ -10,6 +11,10 @@
 //! adapter. Follow, RunAway and Class12 retain the same contact program as
 //! Capture, with each participant's current callbacks. Each successful phase
 //! commits immediately; a later evidence block retains and parks that prefix.
+//!
+//! Every other touching pair takes the same visit when [`general_pair_hold`]
+//! proves it writes only what the port owns; otherwise it is held unwritten
+//! and reported once a world, and the walk goes on.
 
 use crate::intro2_type17::{Intro2Type17Block, Intro2Type17Owner};
 use crate::native_actor_capture::{self as capture, carry_tasks, NativeCaptorProfile};
@@ -161,7 +166,7 @@ pub enum NativeCaptorPairBehaviorResult {
 
 pub use crate::native_actor_descriptor_contact::NativeDescriptorContactOutcome as NativeCaptorPairComponentResult;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeCaptorPairStage {
     Sound(u16),
     Behavior {
@@ -183,6 +188,41 @@ pub enum NativeCaptorPairStage {
     Physical {
         capped_damage_raw: i32,
     },
+    /// An unlisted pair touched, but the general visit cannot prove it yet:
+    /// nothing was written, and the walk goes on to the next candidate.
+    Held(ActivePairHoldReason),
+}
+
+/// Why the general 11AD0 visit holds a touching pair outside the family lanes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActivePairHoldReason {
+    /// The oriented Section-8 probe could not resolve the pair.
+    Geometry(ActivePairUnresolved),
+    /// A network peer's body: its callbacks run on its owner's machine.
+    RemoteBody {
+        entity_type: u32,
+    },
+    UnresolvedBehavior {
+        entity_type: u32,
+    },
+    /// A style `+0x18` callback whose branch for this opposite body is not ported.
+    UnportedBehavior {
+        entity_type: u32,
+        style: u32,
+    },
+    /// A body with live tasks but no completed native owner to run A900's hooks.
+    NoTaskOwner {
+        entity_type: u32,
+    },
+    /// 12760 would move a body that has no native owner to take the write.
+    NoBodyOwner {
+        entity_type: u32,
+    },
+    /// 14D30's collision damage would reach a body through an unported entry.
+    UnportedDamage {
+        entity_type: u32,
+        style: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,6 +231,43 @@ pub struct NativeCaptorPairVisit {
     pub contact: ActivePairContact,
     pub stages: Vec<NativeCaptorPairStage>,
     pub physical_suppressed: bool,
+    /// The subject's and candidate's types when the general visit, not a
+    /// family lane, admitted this pair.
+    pub general_types: Option<[u32; 2]>,
+}
+
+impl NativeCaptorPairOutcome {
+    /// One line for each general pair held before its visit, and for a walk
+    /// blocked inside a general visit. Ids stay out, so a caller can report
+    /// each line once.
+    pub fn general_stop_lines(&self) -> Vec<String> {
+        let (visits, block) = match self {
+            Self::Ineligible => return Vec::new(),
+            Self::Resolved { visits } => (visits, None),
+            Self::Blocked { reason, visits, .. } => (visits, Some(reason)),
+        };
+        let mut lines = Vec::new();
+        for visit in visits {
+            let Some([subject, candidate]) = visit.general_types else {
+                continue;
+            };
+            for stage in &visit.stages {
+                if let NativeCaptorPairStage::Held(reason) = stage {
+                    lines.push(format!(
+                        "Active pair Type{subject} x Type{candidate} stopped before its visit: {reason:?}"
+                    ));
+                }
+            }
+        }
+        if let (Some(reason), Some(last)) = (block, visits.last()) {
+            if let Some([subject, candidate]) = last.general_types {
+                lines.push(format!(
+                    "Active pair Type{subject} x Type{candidate} stopped during its visit: {reason:?}"
+                ));
+            }
+        }
+        lines
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -520,7 +597,8 @@ fn resolve(
     // versus bound-hive pair, native Type9 peers, or a native Type58 participant in either seat.
     // Player-as-subject visits native weapons here; its other pairs retain
     // the player adapter. Captor-as-subject still visits the player candidate.
-    // Other unordered pairs remain with their existing subsystem. The caller visits every
+    // Every other pair takes the general visit, except those the Main Base
+    // conversion and factory intake passes deliver. The caller visits every
     // subject in the same live order, so each unordered pair is visited
     // exactly once from its earlier participant's pass.
     while let Some(candidate_id) = candidate_cursor {
@@ -549,20 +627,27 @@ fn resolve(
         let pair_type58 = [subject, candidate]
             .into_iter()
             .any(|entity| owns_independent_type58_contact(frame.entities, entity));
-        if pair_captors.is_empty()
-            && !is_native_gunner_hive_pair(frame.entities, subject, candidate)
-            && !pair_type58
-            && !pair_weapon
-            && !pair_shark
-            && !is_native_insect_factory_pair(frame.entities, subject, candidate)
-            && !is_native_type9_peer_pair(subject, candidate)
-            && !is_native_type40_person_pair(subject, candidate)
-            && hive_impact_counterpart(subject, candidate).is_none()
-            && native_remote_beam_pair(frame.entities, subject, candidate).is_none()
+        // The family lanes own callbacks that commit, and fail closed. Every
+        // other pair takes the general visit when its preflight proves it.
+        let listed = !pair_captors.is_empty()
+            || is_native_gunner_hive_pair(frame.entities, subject, candidate)
+            || pair_type58
+            || pair_weapon
+            || pair_shark
+            || is_native_insect_factory_pair(frame.entities, subject, candidate)
+            || is_native_type9_peer_pair(subject, candidate)
+            || is_native_type40_person_pair(subject, candidate)
+            || hive_impact_counterpart(subject, candidate).is_some()
+            || native_remote_beam_pair(frame.entities, subject, candidate).is_some();
+        // The player adapter owns the player's other pairs, and the Main Base
+        // conversion and factory intake passes their deliveries.
+        if !listed
+            && (player == Some(candidate_id) || delivery_pair_owned_elsewhere(subject, candidate))
         {
             continue;
         }
-        let Some(contact) = classify_oriented_active_pair_contact(
+        let (subject_type, candidate_type) = (subject.entity_type, candidate.entity_type);
+        let classified = classify_oriented_active_pair_contact(
             crate::player_active_contact::OrientedActivePairContactRequest {
                 subject,
                 candidate,
@@ -570,11 +655,37 @@ fn resolve(
                 retail_tick: frame.retail_tick,
             },
             frame.resources,
-        )
-        .map_err(NativeCaptorPairBlock::Geometry)?
-        else {
-            continue;
+        );
+        let general_types = (!listed).then_some([subject_type, candidate_type]);
+        let hold = |contact, reason| NativeCaptorPairVisit {
+            candidate_id,
+            contact,
+            stages: vec![NativeCaptorPairStage::Held(reason)],
+            physical_suppressed: true,
+            general_types,
         };
+        let contact = match classified {
+            Ok(Some(contact)) => contact,
+            Ok(None) => continue,
+            Err(error) if !listed => {
+                // No contact resolved: the visit's contact is zero.
+                let none = ActivePairContact {
+                    normal_q12: [0; 3],
+                    penetration_raw: 0,
+                };
+                visits.push(hold(none, ActivePairHoldReason::Geometry(error)));
+                continue;
+            }
+            Err(error) => return Err(NativeCaptorPairBlock::Geometry(error)),
+        };
+        if !listed {
+            if let Some(reason) = general_pair_hold(frame, id, candidate_id, contact)? {
+                visits.push(hold(contact, reason));
+                continue;
+            }
+        }
+        let subject = actor(frame.entities, id)?;
+        let candidate = actor(frame.entities, candidate_id)?;
         if bits(subject, REMOTE_OWNED_STATE_BIT)? != 0
             || bits(candidate, REMOTE_OWNED_STATE_BIT)? != 0
         {
@@ -632,6 +743,7 @@ fn resolve(
             contact,
             stages: Vec::new(),
             physical_suppressed: false,
+            general_types,
         });
         let visit = visits.last_mut().unwrap();
         contact_sounds(frame, id, candidate_id, committed, &mut visit.stages)?;
@@ -724,6 +836,168 @@ fn resolve(
         }
     }
     Ok(true)
+}
+
+/// Preflight of an unlisted pair, before any sound, callback or body write.
+///
+/// The general visit is the listed lanes' own: sounds, both D780 behaviours,
+/// both A900 chains, then 12760 and the collision damage. It runs only when
+/// both behaviours take a branch that writes nothing for this opposite body,
+/// 12760 moves no body without a native owner, and every live task belongs
+/// to a completed native owner. Anything else holds the pair, unwritten.
+fn general_pair_hold(
+    frame: &mut Intro2ContactFrame<'_>,
+    id: u32,
+    candidate_id: u32,
+    contact: ActivePairContact,
+) -> Result<Option<ActivePairHoldReason>, NativeCaptorPairBlock> {
+    for (owner, opposite) in [(id, candidate_id), (candidate_id, id)] {
+        let entity = actor(frame.entities, owner)?;
+        if bits(entity, REMOTE_OWNED_STATE_BIT)? != 0 {
+            return Ok(Some(ActivePairHoldReason::RemoteBody {
+                entity_type: entity.entity_type,
+            }));
+        }
+        if let Some(reason) = general_behavior_hold(entity, actor(frame.entities, opposite)?)? {
+            return Ok(Some(reason));
+        }
+    }
+    // A Power-Up's A300 cancels 12760, so no body moves.
+    let suppressed = [(id, candidate_id), (candidate_id, id)]
+        .into_iter()
+        .map(|(owner, opposite)| {
+            Ok(power_up_cancels_response(
+                actor(frame.entities, owner)?,
+                actor(frame.entities, opposite)?,
+            ))
+        })
+        .collect::<Result<Vec<_>, NativeCaptorPairBlock>>()?
+        .contains(&true);
+    let plan = match plan_active_pair_response_and_damage_cap(
+        active_pair_body_from_entity(actor(frame.entities, id)?, frame.resources),
+        active_pair_body_from_entity(actor(frame.entities, candidate_id)?, frame.resources),
+        contact,
+    ) {
+        Ok(plan) => plan,
+        Err(error) => return Ok(Some(ActivePairHoldReason::Geometry(error))),
+    };
+    // 14D30's damage reaches a turret only through its audited styles.
+    if !suppressed && plan.capped_pair_damage_raw != 0 {
+        for target in [id, candidate_id] {
+            let entity = actor(frame.entities, target)?;
+            if crate::intro2_gun_turret::is_native_ordinary_gun_turret(entity)
+                && turret_pair_damage_block(frame.entities, target)?.is_some()
+            {
+                return Ok(Some(ActivePairHoldReason::UnportedDamage {
+                    entity_type: entity.entity_type,
+                    style: style_address(entity)?,
+                }));
+            }
+        }
+    }
+    for body in [&plan.subject, &plan.candidate] {
+        let current = actor(frame.entities, body.id)?;
+        if !suppressed
+            && (current.position_raw() != body.position_raw
+                || current.velocity_raw() != body.velocity_raw)
+            && !requires_body_custody(current)
+        {
+            return Ok(Some(ActivePairHoldReason::NoBodyOwner {
+                entity_type: current.entity_type,
+            }));
+        }
+    }
+    for owner in [id, candidate_id] {
+        let entity = actor(frame.entities, owner)?;
+        let entity_type = entity.entity_type;
+        // An owned body lends its completed owner; any other body's tasks
+        // must all keep a null contact hook, which A900 skips. The Main Base's
+        // null-hook Primary still needs its completed owner, as in A900.
+        let owned = if requires_body_custody(entity)
+            || crate::main_base_runtime::main_base_manager_allocation_authenticates(
+                frame.entities,
+                owner,
+            ) {
+            crate::native_actor_descriptor_contact::completed_contact_owner(
+                frame.entities,
+                frame.actor_tasks,
+                owner,
+            )
+        } else {
+            ActorTaskSlot::IN_RETAIL_TICK_ORDER.into_iter().all(|slot| {
+                crate::native_actor_descriptor_contact::slot_contact_needs_no_owner(entity, slot)
+            })
+        };
+        if !owned {
+            return Ok(Some(ActivePairHoldReason::NoTaskOwner { entity_type }));
+        }
+    }
+    Ok(None)
+}
+
+/// 4258A0's conversion of a 0x800 body and 425850's delivery of a 0x400 body
+/// belong to the Main Base conversion and factory intake passes.
+fn delivery_pair_owned_elsewhere(first: &Entity, second: &Entity) -> bool {
+    [(first, second), (second, first)]
+        .into_iter()
+        .any(|(owner, opposite)| match owner.current_behavior_context {
+            RetailRuntimeValue::Known(Some(context)) => {
+                match context.active_style().pair_contact_callback_policy() {
+                    PairContactCallbackPolicy::MainBaseConversion => {
+                        opposite.capability_flags & 0x800 != 0
+                    }
+                    PairContactCallbackPolicy::LifterDelivery => {
+                        opposite.capability_flags & 0x400 != 0
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        })
+}
+
+fn power_up_cancels_response(entity: &Entity, opposite: &Entity) -> bool {
+    matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(context))
+        if context.active_style().pair_contact_callback_policy() == PairContactCallbackPolicy::PowerUp)
+        && opposite.capability_flags & 1 == 0
+}
+
+/// The D780 branches of [`behavior`] that write nothing.
+fn general_behavior_hold(
+    entity: &Entity,
+    opposite: &Entity,
+) -> Result<Option<ActivePairHoldReason>, NativeCaptorPairBlock> {
+    use crate::hive_impact::{hive_pair_callback_branch, HivePairCallbackBranch};
+    let context = match entity.current_behavior_context {
+        RetailRuntimeValue::Known(Some(context)) => context,
+        RetailRuntimeValue::Known(None) => return Ok(None),
+        RetailRuntimeValue::Unresolved => {
+            return Ok(Some(ActivePairHoldReason::UnresolvedBehavior {
+                entity_type: entity.entity_type,
+            }))
+        }
+    };
+    let null = match context.active_style().pair_contact_callback_policy() {
+        PairContactCallbackPolicy::None => true,
+        PairContactCallbackPolicy::CapturePeople => {
+            opposite.capability_flags & 0xc00 == 0
+                || bits(opposite, DYING_STATE_BIT)? != 0
+                || opposite.collision.state_flags_at_0x08.masked(u32::MAX)
+                    == RetailRuntimeValue::Known(0)
+        }
+        PairContactCallbackPolicy::LifterDelivery => opposite.capability_flags & 0x400 == 0,
+        PairContactCallbackPolicy::MainBaseConversion => opposite.capability_flags & 0x800 == 0,
+        PairContactCallbackPolicy::Hive => {
+            hive_pair_callback_branch(opposite.capability_flags) == HivePairCallbackBranch::NoEffect
+        }
+        // 425AF0 returns its A300 for any non-player: a RET, then no 12760.
+        PairContactCallbackPolicy::PowerUp => opposite.capability_flags & 1 == 0,
+        _ => false,
+    };
+    Ok((!null).then_some(ActivePairHoldReason::UnportedBehavior {
+        entity_type: entity.entity_type,
+        style: context.active_style().style_address(),
+    }))
 }
 
 pub(crate) fn style_address(entity: &Entity) -> Result<u32, NativeCaptorPairBlock> {
@@ -1741,6 +2015,32 @@ fn apply_pair_checked_damage(
 #[path = "pair_people_tests.rs"]
 mod people_tests;
 
+/// The turret's own gates on 15040 pair damage, before its owner's custody.
+fn turret_pair_damage_block(
+    entities: &EntityManager,
+    target: u32,
+) -> Result<Option<&'static str>, NativeCaptorPairBlock> {
+    let entity = actor(entities, target)?;
+    // Ordinary 104B0 turrets only; Intro2 Type92/102 retain their cinematic
+    // owners and campaign E/L reconstruction is a distinct origin.
+    if !crate::intro2_gun_turret::is_native_ordinary_gun_turret(entity) {
+        return Ok(Some("turret pair origin"));
+    }
+    if !crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(
+        entities, target,
+    ) {
+        return Ok(Some("native turret pair allocation"));
+    }
+    // 4C8230 is the living Class29 style with a null pair slot; 4C71E0 is the
+    // finished Class49 continuation retained for re-hits. Anything else is an
+    // unaudited hit slot, matching the particle-hit style gate.
+    let finished = crate::class49_death::finished_terminal_hit_authenticates(entities, target);
+    if style_address(entity)? != if finished { 0x004c_71e0 } else { 0x004c_8230 } {
+        return Ok(Some("unaudited turret pair style"));
+    }
+    Ok(None)
+}
+
 /// Ordinary Type97 active-pair checked damage through the shared 15040 path.
 ///
 /// The physical cap enters 15040 directly after both participants'
@@ -1761,18 +2061,8 @@ fn apply_native_turret_pair_checked_damage(
     use crate::live_actor_checked_damage::{
         apply_live_actor_checked_damage, LiveActorDamageEntry, LiveActorDamageRequest,
     };
-    // Ordinary 104B0 turrets only; Intro2 Type92/102 retain their cinematic
-    // owners and campaign E/L reconstruction is a distinct origin.
-    if !crate::intro2_gun_turret::is_native_ordinary_gun_turret(actor(frame.entities, target)?) {
-        return Err(NativeCaptorPairBlock::Runtime("turret pair origin"));
-    }
-    if !crate::intro2_gun_turret::intro2_gun_turret_manager_allocation_authenticates(
-        frame.entities,
-        target,
-    ) {
-        return Err(NativeCaptorPairBlock::Runtime(
-            "native turret pair allocation",
-        ));
+    if let Some(reason) = turret_pair_damage_block(frame.entities, target)? {
+        return Err(NativeCaptorPairBlock::Runtime(reason));
     }
     if !frame
         .actor_tasks
@@ -1780,17 +2070,6 @@ fn apply_native_turret_pair_checked_damage(
     {
         return Err(NativeCaptorPairBlock::Runtime(
             "completed turret damage owner",
-        ));
-    }
-    // 4C8230 is the living Class29 style with a null pair slot; 4C71E0 is the
-    // finished Class49 continuation retained for re-hits. Anything else is an
-    // unaudited hit slot, matching the particle-hit style gate.
-    let finished =
-        crate::class49_death::finished_terminal_hit_authenticates(frame.entities, target);
-    let style = style_address(actor(frame.entities, target)?)?;
-    if style != if finished { 0x004c_71e0 } else { 0x004c_8230 } {
-        return Err(NativeCaptorPairBlock::Runtime(
-            "unaudited turret pair style",
         ));
     }
     let had_playing_context = playing_player.is_some();
@@ -1981,3 +2260,7 @@ mod type38_tests;
 #[cfg(test)]
 #[path = "pair_ground_damage_tests.rs"]
 mod ground_damage_tests;
+
+#[cfg(test)]
+#[path = "pair_general_tests.rs"]
+mod general_tests;

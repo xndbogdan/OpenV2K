@@ -2421,6 +2421,8 @@ fn run_game(
     let mut return_to_frontend_pending = false;
     let mut static_contact_error_reported = false;
     let mut active_pair_contact_error_reported = false;
+    // Each general active-pair stop line is reported once a world.
+    let mut active_pair_stops_reported = std::collections::HashSet::<String>::new();
     let mut main_base_conversion_error_reported = false;
     let mut main_base_materialiser_error_reported = false;
     // Type74/person contacts whose 40CAF0 beam the port holds, logged once each.
@@ -4785,6 +4787,7 @@ fn run_game(
                 return_to_frontend_pending = false;
                 static_contact_error_reported = false;
                 active_pair_contact_error_reported = false;
+                active_pair_stops_reported.clear();
                 main_base_conversion_error_reported = false;
                 main_base_materialiser_error_reported = false;
                 factory_pair_error_reported = false;
@@ -5511,6 +5514,9 @@ fn run_game(
                 ) {
                     use v2k_game::intro2_contacts::Intro2ContactReport;
                     use v2k_game::intro2_type58::contact::Intro2Type58ContactOutcome;
+                    if let Intro2ContactReport::Type17Pair { result, .. } = &report {
+                        report_active_pair_stops(result, &mut active_pair_stops_reported);
+                    }
                     match report {
                         Intro2ContactReport::NativeFlyingSurface {
                             result: v2k_game::native_flying_surface_contact::NativeFlyingSurfaceContactOutcome::Ineligible
@@ -9850,6 +9856,7 @@ fn run_game(
                             }
                             if let OrdinaryType9PairSuffix::Visited(pairs) = late.pair_suffix {
                                 use v2k_game::intro2_type17::pair::Type17PairOutcome;
+                                report_active_pair_stops(&pairs, &mut active_pair_stops_reported);
                                 if matches!(&pairs, Type17PairOutcome::Blocked { .. })
                                     || matches!(&pairs, Type17PairOutcome::Resolved { visits } if !visits.is_empty())
                                 {
@@ -9879,6 +9886,7 @@ fn run_game(
                                 ),
                             }),
                         );
+                        report_active_pair_stops(&pairs, &mut active_pair_stops_reported);
                         if matches!(&pairs, Type17PairOutcome::Blocked { .. })
                             || matches!(&pairs, Type17PairOutcome::Resolved { visits } if !visits.is_empty())
                         {
@@ -20570,5 +20578,18 @@ mod craft_fire_key_tests {
         // The chord row takes A and `/` together; neither fire row matches.
         assert!(!keyboard_fire_held(&keys(&[Keycode::A, Keycode::Slash])));
         assert!(!keyboard_fire_held(&keys(&[Keycode::LCtrl])));
+    }
+}
+
+/// Print each general active-pair stop once a world.
+fn report_active_pair_stops(
+    outcome: &v2k_game::intro2_type17::pair::Type17PairOutcome,
+    reported: &mut std::collections::HashSet<String>,
+) {
+    for line in outcome.general_stop_lines() {
+        if !reported.contains(&line) {
+            eprintln!("{line}");
+            reported.insert(line);
+        }
     }
 }

@@ -553,6 +553,172 @@ command-file diagnostic occurs afterward, and the launcher closes only its
 owned debugger. Missing Windows DLL symbols do not invalidate game-memory
 reads or the recorded call boundaries.
 
+## Late active-pair walk
+
+### Retail order
+
+`FUN_00411A80` runs once a gameplay tick, after the particle pass. It first
+burns bodies under a harmful sea (`FUN_00417130`, see
+[GAME_MECHANICS](GAME_MECHANICS.md#harmful-sea-world-style-5)), then walks the
+live list and calls `FUN_00411AD0(0, handle)` for every actor whose handle
+still resolves, buildings included. A non-null return ends the whole walk.
+
+`FUN_00411AD0` admits its subject when state `0x8000` is set, `0x1000` is
+clear, `+0x70` is zero and the active model (state `0x2000`/`0x4000` pick the
+slot) has a nonzero collision radius. It keeps that entry model for the whole
+visit. With state `0x88000000` clear it runs the bare terrain and water phase
+(state `0x10000` set; [flying surface contact](FLYING_SURFACE_CONTACT.md))
+and the static scan (`FUN_00412CF0`). Then it visits the subject's
+**successors** only, so each unordered pair is visited once, from the earlier
+body in the live list. A candidate takes part when its state has `0x8000`
+set and `0x1000` clear, the two bodies are not both network-owned
+(`0x80000000`), neither names the other at `+0x60` within 750,000 us
+(`FUN_00411A20`), and `FUN_00412530` reports an overlap. A touching pair
+then runs, in order:
+
+1. the subject type's `+0x8E` sound if the candidate has capability 4, and
+   its `+0x8C` sound if the candidate has capability 8;
+2. the subject's type-vtable `+0x38` (for most types `FUN_0040D8D0`, the
+   current style's `+0x18` pair callback); if that returned nothing, the
+   candidate's. An `0xA300`-tagged return is dispatched at once and cancels
+   the response; any other return is kept and ends the walk after step 4;
+3. `FUN_0040A900` for the subject, then for the candidate: each body's three
+   task slots, each task's contact hook (`02DA0` for the walking families);
+4. unless cancelled, the `FUN_00412760` mass-weighted response (a body with
+   state `0x8000000` stays put) and the `FUN_00414D30` collision damage
+   through `FUN_00415040` in both directions, each skipped when its source is
+   network-owned.
+
+### The port's walk
+
+[`native_actor_capture/pair.rs`](../../crates/v2k-game/src/native_actor_capture/pair.rs)
+walks each subject's successors in the same order, called for every actor in
+live order after its static phase, in Playing and Intro2. Family lanes own
+the pairs whose callbacks write: native captors (Types 17, 122, 18, 28, 16,
+128) and their people, native gunner versus bound Hive, Type58, native
+weapons, the shark, Type21 and Type29 against the player, native insects
+against a working factory, Type9 peers, Type40 and the Type12 family against
+people, Hive impact, and the Type74 remote beam. These fail closed: a block
+parks the visit's committed prefix and ends the subject's walk.
+
+Every other touching pair takes the **general visit**: the same sounds,
+behaviours, task hooks, response and damage, in the order above. A preflight
+runs first and writes nothing. It admits the pair when:
+
+- both behaviours take a branch that writes nothing for this opposite body:
+  no style or a null `+0x18`, `C910` against a body without capability
+  `0xC00` (or dying, or with a zero state word), `425850` against one
+  without `0x400`, `4258A0` against one without `0x800`, the Hive's `259F0`
+  against one with neither `0xC00` nor `0x2000`, and a Power-Up's `425AF0`
+  against any body without capability 1 (its `0xA300` return is a bare `RET`
+  and cancels the response);
+- every body the response would move has a native owner;
+- every body with a native owner lends its completed owner (the same custody
+  the family lanes check), and every other body's tasks keep a null contact
+  hook. The Main Base's Primary (`25CD0`) keeps `01020`'s null `+0x18`, as the
+  Working Factory's `25BD0` does; its native receipt and completed owner
+  authenticate it.
+
+Otherwise the pair is **held**: nothing is written, the walk goes on to the
+next candidate, and stderr reports it once a world, as `Active pair TypeA x
+TypeB stopped before its visit: <reason>`. The reasons are typed
+(`ActivePairHoldReason`): the oriented probe could not resolve the pair, a
+network body, an unresolved or unported behaviour branch (with the style), a
+body whose tasks have no completed owner, or a response that would move a
+body without one. A general visit that blocks after its preflight reports
+`... stopped during its visit: <block>`.
+
+Pairs still resolved apart from the walk, after it: the player's pairs (the
+[player adapter](../../crates/v2k-game/src/player_active_contact.rs), with
+the player as subject whatever its live position), the Main Base's
+conversion of `0x800` bodies, the factory's intake of `0x400` workers, and
+Power-Up pickups by the player.
+
+### Inventory
+
+Before the general visit, a probe counted the pairs that `FUN_00411AD0` would
+have found touching (every retail gate, the oriented Section-8 probe) but
+that no lane visited. It played every world from its arrival with an idle
+player for 6,000 ticks (two minutes): **132 pair kinds, 475 actor pairs**, in
+33 of the 38 worlds (none in 13, 33, 44, 45 and 50), plus 12 kinds (22 pairs)
+of player pairs that the player adapter skips because the other body's pair
+identity is not closed (Types 5, 10, 15, 39, 49, 61, 82, 87, 96, 107, 119,
+126). Resting contacts repeat every tick, so pairs, not ticks, measure
+frequency. The commonest:
+
+| Pair | Pairs | Worlds |
+| --- | ---: | --- |
+| Type116 x Type116 | 51 | 41, 42, 46, 47 |
+| Type79 x Type79 | 44 | 19, 29 |
+| Type57 x Type57 | 29 | 20, 21, 24, 36 |
+| Type86 x Type86 | 15 | 18, 21, 28, 37 |
+| Type95 x Type95 | 12 | 16, 27, 31, 35, 36 |
+| Type127 x Type127 | 10 | 27 |
+| Hive x Type79 | 10 | 29 |
+| Hive x Type116 | 10 | 41 |
+| Type87 x Type87 | 8 | 31, 48 |
+| Power-Up x Type87 | 7 | 20, 48 |
+| Type15 x Type87, Type116 x Type83, Type5 x Type5 | 7 each | 28-48 |
+| Hive x Type77, Type26 x Type77, Type15 x Power-Up | 6 each | 18-48 |
+
+Most are two bodies of one family, or a family against a building (Hive,
+Main Base, factory, Power-Up). After the change, a 3,000-tick sweep of every
+world runs more than 8,200 general visits over 67 pair kinds in 32 worlds
+(1,300 of them with nonzero collision damage), and holds these:
+
+| Held pair | Reason | Worlds |
+| --- | --- | --- |
+| Hive x Type79, Type90, Type116 | the Hive's `0xC00` consuming branch (operation 33, deferred destroy) is unported | 28, 29, 41 |
+| Type9 x Type53, Type86 x Type94, Type94 x Type95 | `C910` capture by a Type53 or Type94, which no captor lane owns | 15, 24, 40 |
+| Type57 x Type57, Type57 x Type94 | the Hive-born Type57's owner is pending | 20, 21, 24, 36 |
+| Type116 x Type83, Type8 x Type83 | Type83 has tasks and no native owner | 39, 42, 46 |
+| Type125 x Type86 | Type125 has tasks and no native owner | 37 |
+| Type110 x Type33 | Type110 has tasks and no native owner | 47 |
+| Type40 x Type30, Type5 x Type5 | the native owner was not complete at that tick | 19, 47 |
+| Type76 x Type3 | the response would move a Type3, which has no native owner | 31 |
+
+### Retail comparison
+
+The V2000 lab reached worlds 15, 21, 22 and 42 through retail's own Skip to
+World and logged every `FUN_00415040` call whose return address lies in
+`FUN_00411AD0` (`004124AB`, `004124EC`): the pair collision damage, by target
+and source type, for 3,000 ticks after arrival.
+
+- World 15: Type53 x Type26 (50 hits each way), Type53 x Type53 (42),
+  Type26 x Type26 (30), Hive x Type26 (14), Type9 x Type26 (11). Before the
+  change the port visited none of these; now Type53 x Type53, Type53 x
+  Type26, Type9 x Type26, Type26 x Type26 and Hive x Type26 all take the
+  general visit, with collision damage.
+- World 21: Type86 x Type86 (10 hits), Type94 x Type94 (4, the first 314
+  raw), Type57 x Type14 (2), Type18 x Type86 (2). The port's Type94 pair now
+  separates with 204, 55, 141 and 353 raw over four contacts; Type18 x Type86
+  was already the captor lane's; Type57 stays held.
+- World 22: Type7 x Type7 (36), Type68 x Type7 (8), Main Base x Type7 (6,
+  the first 2 raw). The port now visits all three; its Main Base pair took 1
+  raw.
+- World 42: Hive x Type33 (7), Type116 x Type83 (1), Main Base x Type116 (1,
+  2 raw), Type38 x Type108 (1). The port visits Hive x Type33 and Main Base x
+  Type116 (1 to 3 raw); Type116 x Type83 stays held.
+
+The lab's worlds start with the player wherever Level 1 left it, and the two
+games' random streams part early, so the comparison is of the pair kinds and
+the size of their damage, not tick for tick.
+
+### What changes in play
+
+Bodies of one family no longer pass through each other: wandering people,
+insects and flyers bump apart, take collision damage and turn away through
+`02DA0`, which draws the shared random stream, so worlds part from their old
+course. In the sweep against the previous build, world 21's casualty loss
+came at tick 687 instead of about 1,580 (retail's lab run lost it about 1,800
+ticks after arrival), so its abort no longer met a Hive-born Type57; worlds
+28 and 41 shot their idle player dead (at 2,844 and 2,239) while world 34's
+survived; and Type29, Type13 and the Type107 turrets
+fired in worlds 20, 24, 26 and 31, where their existing shot stops
+(`TransformPass(UnportedSelectorOwner)`, the Type107 emitter's unowned slot
+16) now show. The rest of the sweep's differences are those stops moving
+between entity ids.
+
 ## Named Behaviors (CONFIRMED)
 
 Behavior name table starts at **`0x004C8AA0`** (8-byte stride, each entry =

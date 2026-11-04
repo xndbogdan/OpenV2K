@@ -20,7 +20,7 @@ Manual statuses from [`status.csv`](status.csv):
 | Status | Functions |
 |---|---:|
 | implemented | 389 |
-| approximated | 5 |
+| approximated | 7 |
 | documented | 34 |
 | not-needed | 629 |
 
@@ -49,7 +49,7 @@ Where the code's references are thinnest:
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
 | [Loading transitions](../re/LOADING_TRANSITIONS.md) | 5 | 1 | 56 |
 | [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 152 |
-| [Actor](../re/ACTOR_RUNTIME.md) | 2 | 0 | 44 |
+| [Actor](../re/ACTOR_RUNTIME.md) | 2 | 0 | 45 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 2 | 1 | 54 |
 
 ## Omitted
