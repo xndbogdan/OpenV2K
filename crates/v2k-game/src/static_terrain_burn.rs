@@ -217,6 +217,18 @@ pub fn apply_network_terrain_burn(
 ) -> Result<StaticTerrainBurnOutcome, StaticTerrainBurnFailure> {
     if !burned {
         let changed = resources.clear_level_terrain_burn(cell);
+        if changed {
+            radar_cell_listener(cell, resources, world_fx).map_err(|phase| {
+                StaticTerrainBurnFailure {
+                    phase,
+                    outcome: StaticTerrainBurnOutcome {
+                        burn_changed: true,
+                        terrain_changed: true,
+                        ..StaticTerrainBurnOutcome::default()
+                    },
+                }
+            })?;
+        }
         return Ok(StaticTerrainBurnOutcome {
             burn_changed: changed,
             terrain_changed: changed,
@@ -224,6 +236,46 @@ pub fn apply_network_terrain_burn(
         });
     }
     apply_terrain_burn(cell, resources, manager, world_fx, scheduler, !host_record)
+}
+
+/// `FUN_0044AA50`, the radar's listener on the burn bit (`FUN_004337E0`) and
+/// the attribute byte (`FUN_00433860`, `FUN_00433900`), run after the write
+/// and before the list's later listeners: when the cell's current attribute
+/// is a radar (static kind 8), `FUN_0044A8D0(x, z, -1)` takes its coverage
+/// back, redrawing every cell under it with the shared random stream. A
+/// world without a radar has no coverage to take.
+pub fn radar_cell_listener(
+    cell: [u8; 2],
+    resources: &mut ResourceCache,
+    world_fx: &mut WorldFx,
+) -> Result<(), &'static str> {
+    let attribute = resources
+        .level_terrain()
+        .and_then(|terrain| terrain.cell(usize::from(cell[0]), usize::from(cell[1])))
+        .ok_or("radar listener terrain")?
+        .attribute;
+    if attribute == 0 || resources.level_terrain_radar().is_none() {
+        return Ok(());
+    }
+    let kind = resources
+        .terrain_objects()
+        .and_then(|objects| objects.records.get(usize::from(attribute)))
+        .ok_or("radar listener static descriptor")?
+        .kind_index;
+    if kind != 8 {
+        return Ok(());
+    }
+    resources
+        .mutate_level_terrain_radar_coverage(
+            [
+                (u16::from(cell[0]) << 8) as i16,
+                (u16::from(cell[1]) << 8) as i16,
+            ],
+            crate::gameplay_radar::RadarCoverageChange::Remove,
+            &mut || world_fx.next_shared_retail_random_u16(),
+        )
+        .map(|_| ())
+        .map_err(|_| "radar listener coverage")
 }
 
 fn apply_terrain_burn(
@@ -244,10 +296,12 @@ fn apply_terrain_burn(
         return Ok(outcome);
     }
     // 4337E0 commits the bit before invoking any subscriber (FUN_004337A0
-    // calls each listener of the list in turn).
+    // calls each listener of the list in turn): the radar's 44AA50, then
+    // 427760 below.
     resources.or_level_terrain_type_bits(cell, 0x08);
     outcome.burn_changed = true;
     outcome.terrain_changed = true;
+    radar_cell_listener(cell, resources, world_fx).map_err(|phase| failure(phase, outcome))?;
     if current.attribute == 0 {
         return Ok(outcome);
     }

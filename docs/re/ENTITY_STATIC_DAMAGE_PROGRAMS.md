@@ -295,6 +295,42 @@ Its 15-record timeline is:
 | 2,000,000 us | Opcode 6 with inclusive distance `0x1400`; sound 62 |
 | 2,100,000 us | Opcode 6 with inclusive distance `0x1400`; burn; radial; terminate |
 
+#### Cell-change listeners
+
+`FUN_004337A0` calls a list's listeners in the order they were added
+(`FUN_00433980` appends), and every list is filled once, when the game's
+modules open at start-up. Opening the top module `004D0150` opens the radar's
+module (`FUN_0044A500`) before the static objects' (`FUN_00426F90`) and the
+network's (`FUN_00438880`), so a running retail game holds:
+
+| List | Notifier | Listeners, in order |
+|---|---|---|
+| `004DC5F8` | infection bit (`FUN_00433720`) | `FUN_0044A850` (radar redraw), `FUN_00427C30` (the object's effect), `FUN_00438F60` (network) |
+| `004DC628` | burn bit (`FUN_004337E0`) | `FUN_0044AA50` (radar coverage), `FUN_00427760` (burn), `FUN_00438F60` |
+| `004DC608` | attribute byte (`FUN_00433860`, `FUN_00433900`) | `FUN_0044AA50`, `FUN_00438F60` |
+
+A dump of the three lists' nodes in a retail lab run reads exactly this. The
+port runs `FUN_0044AA50` after each burn bit or peer attribute write and
+before `FUN_00427760`'s crater and burst, and journals for the network last.
+
+`FUN_00427C30` emits, for a cell whose static kind has an entry, that kind's
+effect through `FUN_00440DC0` from the per-kind table at `004C9E48` (stride
+0x2C): scale `+00`, class `+08` when infected and `+0C` when cured. Kinds 0,
+1, 3 and 8-11 have one (classes 5 and 6, the infection and cleansing
+carriers). A cured cell's effect starts at the cell centre at ground height;
+an infected cell's 0x80 below the cell's low Z edge (a whole cell lower in Z),
+raised by half its selected model's extent. The request carries the null owner and, on a network client,
+the harmless flag.
+
+Both infection listeners are held in the port, which logs "Infection
+listeners held" once a world. `FUN_0044A850` draws a shared word for a
+covered cell at the moment of each infection write, and `FUN_00427C30`'s
+carriers take pool slots then; the port's infection writers (the Hive's
+evolution, the viruses, the cleansing vehicle, class 5 and 6 contacts) apply
+their writes after the RNG draws and particle births that retail interleaves
+with them, and record cells where `FUN_0044A5C0` reads the write's raw
+position. Running the listeners there would reorder the shared stream.
+
 #### Burn callback and secondary crater
 
 Opcode 10 enters `4337E0`, which commits terrain-type bit `0x08` and dispatches

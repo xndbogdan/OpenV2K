@@ -586,3 +586,76 @@ fn only_kind_10_reaches_427760_on_a_clear_and_it_has_no_crater_or_burst() {
     assert!(kind_10.burn_crater().is_none());
     assert!(kind_10.burn_burst().is_none());
 }
+
+/// `FUN_0044AA50` on a burn: a radar dish (static kind 8) gives its coverage
+/// back, redrawing the covered cells with the shared stream; any other
+/// object leaves the radar alone.
+#[v2k_test_support::retail_test]
+fn a_burned_radar_dish_takes_its_coverage_back() {
+    for level in 13..=48 {
+        let (mut session, _manager, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(level);
+        if burn_a_radar_dish(&mut session, &mut fx) {
+            return;
+        }
+    }
+    panic!("no world has a radar dish");
+}
+
+fn burn_a_radar_dish(session: &mut GameSession, fx: &mut WorldFx) -> bool {
+    session
+        .cache
+        .initialize_level_terrain_radar(&mut || 0)
+        .unwrap();
+    let kind_of = |session: &GameSession, attribute: u8| {
+        session
+            .cache
+            .terrain_objects()
+            .unwrap()
+            .records
+            .get(usize::from(attribute))
+            .map(|record| record.kind_index)
+    };
+    let cells: Vec<([u8; 2], Option<u32>)> = session
+        .cache
+        .level_terrain()
+        .unwrap()
+        .cells
+        .iter()
+        .enumerate()
+        .filter(|(_, cell)| cell.attribute != 0)
+        .map(|(index, cell)| {
+            (
+                [(index / GRID_SIZE) as u8, (index % GRID_SIZE) as u8],
+                kind_of(&session, cell.attribute),
+            )
+        })
+        .collect();
+    let Some(&(dish, _)) = cells.iter().find(|(_, kind)| *kind == Some(8)) else {
+        return false;
+    };
+    let other = cells
+        .iter()
+        .find(|(_, kind)| kind.is_some_and(|kind| kind != 8))
+        .unwrap()
+        .0;
+    let coverage = |session: &GameSession| {
+        session
+            .cache
+            .level_terrain_radar()
+            .unwrap()
+            .packed_coverage()
+            .to_vec()
+    };
+
+    let before = coverage(session);
+    let state = fx.shared_retail_random_state();
+    radar_cell_listener(other, &mut session.cache, fx).unwrap();
+    assert_eq!(coverage(session), before);
+    assert_eq!(fx.shared_retail_random_state(), state);
+
+    radar_cell_listener(dish, &mut session.cache, fx).unwrap();
+    assert_ne!(coverage(session), before);
+    assert_ne!(fx.shared_retail_random_state(), state);
+    true
+}

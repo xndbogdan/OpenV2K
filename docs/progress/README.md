@@ -10,19 +10,19 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,400 | |
-| Marked not needed (excluded below) | 625 | |
-| **Referenced by port code** | **1,662** | **93.6%** |
-| Referenced by code or RE notes | 1,775 | 100.0% |
+| Marked not needed (excluded below) | 626 | |
+| **Referenced by port code** | **1,664** | **93.8%** |
+| Referenced by code or RE notes | 1,774 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 372 |
+| implemented | 373 |
 | approximated | 6 |
-| documented | 27 |
-| not-needed | 625 |
+| documented | 29 |
+| not-needed | 626 |
 
 10 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -45,12 +45,12 @@ Where the code's references are thinnest:
 | [Controls](../re/CONTROLS.md) | 18 | 1 | 52 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 16 | 0 | 101 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 30 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 138 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 7 | 0 | 133 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
 | [Loading transitions](../re/LOADING_TRANSITIONS.md) | 5 | 1 | 52 |
 | [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 152 |
-| [Hud rendering](../re/HUD_RENDERING.md) | 4 | 1 | 46 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 3 | 0 | 45 |
+| [Factory system](../re/FACTORY_SYSTEM.md) | 2 | 1 | 54 |
 
 ## Omitted
 
@@ -66,7 +66,7 @@ denominator, each with its reason: the never-installed
 | glue: an FGDK module's open or close thunk (docs/re/PLATFORM_RUNTIME.md#modules) | 154 |
 | replaced: the port's SDL platform (the DirectDraw screen device, its buffers and texture pages; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 96 |
 | dead: retail's Direct3D fill table, never installed (every display mode selects the software table; docs/re/DIRECT3D_TABLE.md) | 59 |
-| replaced: Rust ownership (module open and close, and module or table setup that only clears state, starts lists, adds or drops hooks or frees records; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 55 |
+| replaced: Rust ownership (module open and close, and module or table setup that only clears state, starts lists, adds or drops hooks or frees records; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 56 |
 | replaced: the port's game states (FGDK applications, modes and mode slots, their chains and binding sets, and the records a mode allocates and frees; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 30 |
 | replaced: the port's SDL platform (FGDK's input binding layer: device input states, binding records, value records and the event ring; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 24 |
 | not a routine: padding, a jump table's alignment or a split-off part of the function before it (docs/re/SMALL_FUNCTIONS.md#census-artifacts) | 23 |

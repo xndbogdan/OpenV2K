@@ -79,6 +79,16 @@ fn skip_to_world_keeps_the_players_pose_into_the_chosen_world() {
         .unwrap();
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
+    // The infection listeners are a documented hold
+    // (ENTITY_STATIC_DAMAGE_PROGRAMS.md#cell-change-listeners).
+    let stderr: String = stderr
+        .lines()
+        .filter(|line| !line.starts_with("Infection listeners held"))
+        .collect::<Vec<_>>()
+        .join(
+            "
+",
+        );
     for stop in [
         "blocked",
         "stopped at unresolved data",
