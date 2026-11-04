@@ -1251,3 +1251,45 @@ fn static_route_hit_cues_strikes_eightfold_and_damages_the_player() {
         [57]
     );
 }
+
+/// `FUN_004484A0` closes with sample `0x2D` when the craft has no shield
+/// buffer and its health less the damage lies in 5,001..=30,000.
+#[v2k_test_support::retail_test]
+fn damage_modifier_closes_with_the_low_hull_cue() {
+    for (shield, cued) in [(0, true), (100, false)] {
+        let (mut manager, mut hull, mut fx, resources) =
+            fixture(20_000, shield, CHECKED_DAMAGE_ENABLED_STATE_BIT);
+        let outcome = manager.apply_player_checked_damage(
+            PlayerCheckedDamageRequest {
+                entry: PlayerDamageEntry::Checked,
+                target_id: 7,
+                delivery: FUN_0043F7C0_DAMAGE_DELIVERY,
+                ratio_numerator: 0,
+                ratio_denominator: 0,
+            },
+            PlayerCheckedDamageFrame {
+                hull: &mut hull,
+                resources: &resources,
+                world_fx: &mut fx,
+                retail_tick: 200,
+                notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
+                extra_lives: 0,
+            },
+        );
+        assert!(matches!(
+            outcome,
+            PlayerCheckedDamageOutcome::Applied { dying: false, .. }
+        ));
+        assert_eq!(
+            fx.take_centered_sounds(),
+            if cued {
+                vec![(
+                    crate::world_fx::HULL_LOW_SOUND_ID,
+                    crate::world_fx::HULL_LOW_SOUND_GAIN,
+                )]
+            } else {
+                vec![]
+            }
+        );
+    }
+}

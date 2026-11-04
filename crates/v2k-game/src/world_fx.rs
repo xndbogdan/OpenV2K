@@ -2299,6 +2299,11 @@ pub struct WorldFx {
     /// A `FUN_00456750` flash requested where the frame's sequence owner is
     /// out of reach; the frame loop starts it before its next presentation.
     full_frame_flash_requested: bool,
+    /// `DAT_004DE85C`, the player damage modifier's low-hull cue latch.
+    damage_modifier_hull_cue: crate::player_hull::DamageModifierHullCue,
+    /// Non-positional global cues (`FUN_004958C0`) submitted from owners
+    /// without the sound device, with their Q16 gain, in submission order.
+    centered_sounds: Vec<(usize, f32)>,
 }
 
 /// What these effects send to the other machines of a network game.
@@ -2416,6 +2421,8 @@ impl WorldFx {
             wind_trail_stop_reported: self.wind_trail_stop_reported,
             terrain_ripples: self.terrain_ripples.clone(),
             full_frame_flash_requested: self.full_frame_flash_requested,
+            damage_modifier_hull_cue: self.damage_modifier_hull_cue,
+            centered_sounds: self.centered_sounds.clone(),
         }
     }
 
@@ -4713,6 +4720,30 @@ impl WorldFx {
     /// `FUN_00456750` from an owner without the frame's sequence.
     pub fn request_full_frame_flash(&mut self) {
         self.full_frame_flash_requested = true;
+    }
+
+    /// `FUN_004484A0`'s closing low-hull cue: sample `0x2D` at half gain.
+    pub(crate) fn poll_damage_modifier_hull_cue(
+        &mut self,
+        health_raw: i32,
+        pre_health_buffer_raw: i32,
+        damage_raw: i32,
+        tick: i32,
+    ) {
+        if self.damage_modifier_hull_cue.poll(
+            health_raw,
+            pre_health_buffer_raw,
+            damage_raw,
+            tick,
+        ) {
+            self.centered_sounds
+                .push((HULL_LOW_SOUND_ID, HULL_LOW_SOUND_GAIN));
+        }
+    }
+
+    /// The non-positional cues submitted since the last call.
+    pub fn take_centered_sounds(&mut self) -> Vec<(usize, f32)> {
+        std::mem::take(&mut self.centered_sounds)
     }
 
     pub fn take_full_frame_flash_request(&mut self) -> bool {
