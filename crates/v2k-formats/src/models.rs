@@ -3012,7 +3012,7 @@ fn collision_root_word(value: i32) -> i32 {
     if value <= 0 {
         0
     } else {
-        i32::from(collision_integer_sqrt(value as u32) as i16)
+        i32::from(crate::fixed_math::retail_integer_sqrt(value) as i16)
     }
 }
 
@@ -3234,7 +3234,7 @@ fn collision_sphere_hit(
     if distance_sq > radius * radius {
         return None;
     }
-    let distance = collision_integer_sqrt(distance_sq as u32) as i32;
+    let distance = crate::fixed_math::retail_integer_sqrt(distance_sq as i32) as i32;
     let normal = if distance > 0 {
         delta.map(|component| {
             // FUN_00469770 stores a signed Q12 normal, with C integer division
@@ -3290,7 +3290,7 @@ fn collision_plane_hit(
     let squared = cross.iter().fold(0u32, |sum, component| {
         sum.wrapping_add(component.wrapping_mul(*component) as u32)
     });
-    let length = i32::from(collision_integer_sqrt(squared) as i16);
+    let length = i32::from(crate::fixed_math::retail_integer_sqrt(squared as i32) as i16);
     let normal_q12 = if length == 0 {
         [0x1000i16, 0, 0]
     } else {
@@ -3308,25 +3308,6 @@ fn collision_plane_hit(
         normal: normal_q12.map(|component| f64::from(component) / 4096.0),
         penetration_raw: f64::from(penetration),
     })
-}
-
-/// Unsigned floor square root used by `FUN_00457730` for collision distances.
-fn collision_integer_sqrt(mut value: u32) -> u32 {
-    let mut result = 0u32;
-    let mut bit = 1u32 << 30;
-    while bit > value {
-        bit >>= 2;
-    }
-    while bit != 0 {
-        if value >= result + bit {
-            value -= result + bit;
-            result = (result >> 1) + bit;
-        } else {
-            result >>= 1;
-        }
-        bit >>= 2;
-    }
-    result
 }
 
 /// A box primitive against a query sphere (`FUN_0046A1C0`). Its radius-zero
@@ -3380,7 +3361,7 @@ fn collision_cylinder_hit(
     if distance_sq >= reach.wrapping_mul(reach) {
         return None;
     }
-    let distance = i32::from(collision_integer_sqrt(distance_sq as u32) as i16);
+    let distance = i32::from(crate::fixed_math::retail_integer_sqrt(distance_sq) as i16);
     if distance == 0 {
         return Some(ModelCollisionHit {
             normal: [1.0, 0.0, 0.0],

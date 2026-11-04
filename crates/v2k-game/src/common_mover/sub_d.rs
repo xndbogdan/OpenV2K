@@ -1912,22 +1912,10 @@ fn terrain_height_raw(terrain: &TerrainGrid, x_raw: i16, z_raw: i16) -> i16 {
     ((((along_x1 - along_x0) * z_fraction) >> 8) + along_x0) as i16
 }
 
-fn integer_sqrt(mut value: u32) -> u32 {
-    let mut root = 0u32;
-    let mut bit = 1u32 << 30;
-    while bit > value {
-        bit >>= 2;
-    }
-    while bit != 0 {
-        if value >= root + bit {
-            value -= root + bit;
-            root = (root >> 1) + bit;
-        } else {
-            root >>= 1;
-        }
-        bit >>= 2;
-    }
-    root
+/// `FUN_00457730` on the sum's 32-bit word: zero when it is negative as a
+/// signed word, `0xFFFF` from `0x4000_0000`.
+fn integer_sqrt(value: u32) -> u32 {
+    v2k_formats::fixed_math::retail_integer_sqrt(value as i32)
 }
 
 fn normalized_component_q31(component: i32, length: i32) -> i32 {
