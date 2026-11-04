@@ -52,7 +52,7 @@ pub use ui_mapping::{UiAnchor, UiMapping, UiMappingRequest, UiSubmissionPolicy};
 pub use water::WaterFrames;
 pub use window::{
     apply_app_window_icon, declare_dpi_awareness, ControllerSample, GameEvent, GameWindow,
-    PadButton, PadSnapshot, PointerMode, WindowPlacement,
+    KeyEventTimes, PadButton, PadSnapshot, PointerMode, WindowPlacement,
 };
 
 pub use gl_backend::{authored_face_plane_visible, GlRenderer};

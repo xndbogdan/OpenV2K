@@ -19,6 +19,8 @@
 use std::collections::HashSet;
 
 use sdl2::keyboard::Keycode;
+
+use crate::key_hold::FrameKeyEvents;
 use v2k_formats::models::AnimVars;
 use v2k_formats::terrain::TerrainGrid;
 use v2k_render::orientation_from_ypr;
@@ -29,8 +31,8 @@ use crate::common_mover::type9_attitude::{
 };
 use crate::entity::Entity;
 use crate::hover::{
-    keyboard_pitch_raw, keyboard_turn_raw, steer_heading_raw, steering_step_raw, HoverBasis,
-    HoverFrameForces, HoverPhysicsConfig, RETAIL_DEFAULT_SENSITIVITY, RETAIL_FRAME_DELTA_MAX_US,
+    keyboard_held_axis_raw, steer_heading_raw, steering_step_raw, HoverBasis, HoverFrameForces,
+    HoverPhysicsConfig, RETAIL_DEFAULT_SENSITIVITY, RETAIL_FRAME_DELTA_MAX_US,
 };
 use crate::retail_input::{
     absolute_steering, joystick_pitch_raw, joystick_turn_raw, mouse_pitch_raw, mouse_turn_raw,
@@ -214,6 +216,9 @@ impl VehicleMode {
 pub struct MotionChannels {
     /// `+0x00` turn: LEFT(−1) / RIGHT(+1).
     pub turn: f32,
+    /// The keyboard's turn term: Right's minus Left's, each weighed by its
+    /// time on within the frame.
+    pub keyboard_turn_raw: i16,
     /// `+0x02` pitch: UP(+0xD80)/DOWN(−0xD80) + S(+0x900)/X(−0x900), plus the
     /// mouse and Relative joystick terms, wrapped to one signed word. One
     /// shared channel — the integrator decides whether it depresses/elevates
@@ -239,6 +244,9 @@ pub struct MotionChannels {
     /// correction, so SPACE+RSHIFT can have zero net lift while retaining the
     /// SPACE-side correction.
     pub positive_thrust_binding_active: bool,
+    /// The powered coupling's limit from that binding's time on in the
+    /// frame: `held * 0x600 / dt`, at most `0x600`.
+    pub positive_thrust_limit: i32,
     /// Turn words added after the keyboard term: mouse X and, in Relative
     /// mode, joystick X.
     pub analog_turn_raw: i16,
@@ -324,36 +332,46 @@ impl MotionChannels {
         elapsed_micros: u32,
         settings: ReaderSettings,
     ) -> Self {
-        let held = |k: Keycode| keys.contains(&k);
+        Self::from_frame(
+            &FrameKeyEvents::held_throughout(keys, elapsed_micros),
+            analog,
+            settings,
+        )
+    }
+
+    /// The reader over one frame's key events: each binding weighs the time
+    /// it was on within the frame (`FUN_00471400`), as retail's does.
+    pub fn from_frame(
+        frame: &FrameKeyEvents,
+        analog: AnalogInput,
+        settings: ReaderSettings,
+    ) -> Self {
+        let keys = &frame.keys_after;
+        let dt = frame.dt_us.min(RETAIL_FRAME_DELTA_MAX_US);
+        let on =
+            |bound: &[Keycode]| frame.on_time_us(|keys| bound.iter().any(|k| keys.contains(k)));
         let sensitivity = settings.sensitivity;
 
-        // Pitch: sensitivity/duty-cycle-scaled arrow term (authored full scale
-        // 0xD80) plus the separately clamped fine S/X term (±0x900).
-        let mut arrow_pitch = 0.0;
-        if held(Keycode::Up) {
-            arrow_pitch += 1.0;
-        }
-        if held(Keycode::Down) {
-            arrow_pitch -= 1.0;
-        }
-        let arrow_pitch_raw =
-            i32::from(keyboard_pitch_raw(arrow_pitch, elapsed_micros, sensitivity));
-        let mut sx = 0.0;
-        if held(Keycode::S) {
-            sx += PITCH_SCALE_SX;
-        }
-        if held(Keycode::X) {
-            sx -= PITCH_SCALE_SX;
-        }
-        let sx_raw = sx.clamp(-PITCH_SX_CLAMP, PITCH_SX_CLAMP) as i32;
+        // Pitch: Up adds and Down subtracts their sensitivity-scaled terms
+        // (full scale 0xD80); S and X add and subtract `held * 0x900 / dt`.
+        let arrow_pitch_raw = keyboard_held_axis_raw(on(&[Keycode::Up]), dt, sensitivity)
+            - keyboard_held_axis_raw(on(&[Keycode::Down]), dt, sensitivity);
+        let fine = |held: u32| -> i32 {
+            match held {
+                0 => 0,
+                held if held < dt => (u64::from(held) * 0x900 / u64::from(dt)) as i32,
+                _ => PITCH_SCALE_SX as i32,
+            }
+        };
+        let (s_held, x_held) = (on(&[Keycode::S]), on(&[Keycode::X]));
+        let sx_raw =
+            (fine(s_held) - fine(x_held)).clamp(-PITCH_SX_CLAMP as i32, PITCH_SX_CLAMP as i32);
 
-        let mut turn = 0.0;
-        if held(Keycode::Left) || held(Keycode::Comma) {
-            turn -= 1.0;
-        }
-        if held(Keycode::Right) || held(Keycode::Period) {
-            turn += 1.0;
-        }
+        let left_held = on(&[Keycode::Left, Keycode::Comma]);
+        let right_held = on(&[Keycode::Right, Keycode::Period]);
+        let keyboard_turn = keyboard_held_axis_raw(right_held, dt, sensitivity)
+            - keyboard_held_axis_raw(left_held, dt, sensitivity);
+        let turn = f32::from(u8::from(right_held > 0)) - f32::from(u8::from(left_held > 0));
 
         let joystick = analog.joystick;
         let joystick_turn = joystick.map_or(0, |j| joystick_turn_raw(j, sensitivity));
@@ -372,36 +390,49 @@ impl MotionChannels {
                 mouse_turn,
                 Some(AbsoluteSteeringRequest {
                     pitch_sum: arrow_pitch_raw + joystick_pitch,
-                    turn_sum: i32::from(keyboard_turn_raw(turn, elapsed_micros, sensitivity))
-                        + joystick_turn,
+                    turn_sum: keyboard_turn + joystick_turn,
                     full: settings.full_absolute,
                 }),
             ),
         };
 
         // Space, mouse button 1 and joystick button 2 share both thrust
-        // descriptors; any of them holds the channel.
-        let thrust = held(Keycode::Space)
-            || analog.mouse_thrust
-            || joystick.is_some_and(JoystickSample::thrust);
-        let mut throttle_q16 = 0i32;
-        if thrust {
-            throttle_q16 += 0x1_0000;
-        }
-        if held(Keycode::RShift) {
-            throttle_q16 -= 0x1_0000;
-        }
+        // descriptors; any of them holds the channel. The mouse and joystick
+        // are sampled once a frame, so they hold it for the whole frame.
+        let analog_thrust = analog.mouse_thrust || joystick.is_some_and(JoystickSample::thrust);
+        let thrust_held = if analog_thrust {
+            dt
+        } else {
+            on(&[Keycode::Space])
+        };
+        // `(held << 14) / (dt >> 2)`, or one in Q16 once held all frame.
+        let throttle = |held: u32| -> i32 {
+            if held >= dt {
+                0x1_0000
+            } else {
+                ((u64::from(held) << 14) / u64::from((dt >> 2).max(1))) as i32
+            }
+        };
+        let throttle_q16 = throttle(thrust_held) - throttle(on(&[Keycode::RShift]));
+        // The powered VTOL coupling's limit: `held * 0x600 / dt`, at most 0x600.
+        let positive_thrust_limit = match thrust_held {
+            0 => 0,
+            held if held < dt => (u64::from(held) * 0x600 / u64::from(dt)) as i32,
+            _ => 0x600,
+        };
 
-        let fire = held(Keycode::Return) || joystick.is_some_and(JoystickSample::fire);
+        let fire = keys.contains(&Keycode::Return) || joystick.is_some_and(JoystickSample::fire);
 
         Self {
             turn,
+            keyboard_turn_raw: keyboard_turn as i16,
             pitch: f32::from(pitch_raw as i16),
             vertical: 0.0,
             throttle_q16,
             fire,
-            fine_pitch_active: held(Keycode::S) || held(Keycode::X),
-            positive_thrust_binding_active: thrust,
+            fine_pitch_active: s_held > 0 || x_held > 0,
+            positive_thrust_binding_active: thrust_held > 0,
+            positive_thrust_limit,
             analog_turn_raw: analog_turn_raw as i16,
             absolute,
         }
@@ -413,8 +444,6 @@ impl MotionChannels {
     /// flying craft.
     fn reader_words(
         &self,
-        elapsed_micros: u32,
-        sensitivity: u8,
         heading_raw: i16,
         body_pitch_raw: i16,
         style: SteeringStyle,
@@ -422,8 +451,7 @@ impl MotionChannels {
         let pitch = self.pitch as i16;
         match self.absolute {
             None => ReaderWords {
-                turn: keyboard_turn_raw(self.turn, elapsed_micros, sensitivity)
-                    .wrapping_add(self.analog_turn_raw),
+                turn: self.keyboard_turn_raw.wrapping_add(self.analog_turn_raw),
                 pitch,
             },
             Some(request) => {
@@ -630,40 +658,29 @@ impl PlayerCraft {
         player: &mut Entity,
         self_righting: u8,
     ) {
-        let _ = self.integrate_configured_micros_with_sensitivity(
-            elapsed_micros,
-            ch,
-            player,
-            self_righting,
-            RETAIL_DEFAULT_SENSITIVITY,
-        );
+        let _ = self.integrate_configured_micros_forces(elapsed_micros, ch, player, self_righting);
     }
 
     /// Retail-microsecond integration with the live 0..15 menu sensitivity.
     /// Returns the retained previous-frame basis and drive inputs so the entity
     /// callback can apply the mode-specific force phase in executable order.
-    pub fn integrate_configured_micros_with_sensitivity(
+    pub fn integrate_configured_micros_forces(
         &mut self,
         elapsed_micros: u32,
         ch: &MotionChannels,
         player: &mut Entity,
         self_righting: u8,
-        sensitivity: u8,
     ) -> VehicleFrameForces {
         let elapsed_micros = elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
         let frame_forces = match self.mode {
-            VehicleMode::Hover => VehicleFrameForces::Hover(self.integrate_hover(
-                elapsed_micros,
-                ch,
-                player,
-                sensitivity,
-            )),
+            VehicleMode::Hover => {
+                VehicleFrameForces::Hover(self.integrate_hover(elapsed_micros, ch, player))
+            }
             VehicleMode::Vtol => VehicleFrameForces::Vtol(self.integrate_fly(
                 elapsed_micros,
                 ch,
                 player,
                 self_righting.min(15),
-                sensitivity,
             )),
         };
 
@@ -745,15 +762,12 @@ impl PlayerCraft {
         elapsed_micros: u32,
         ch: &MotionChannels,
         player: &mut Entity,
-        sensitivity: u8,
     ) -> HoverFrameForces {
         // Retail rebuilds the entity matrix only after FUN_00444CF0 returns.
         // Preserve that one-tick lag by capturing the force basis before yaw.
         let previous_basis = self.previous_force_basis(player);
         let heading_raw = radians_to_angle_word(player.heading);
         let words = ch.reader_words(
-            elapsed_micros,
-            sensitivity,
             heading_raw,
             radians_to_angle_word(self.body_pitch),
             SteeringStyle::Ground,
@@ -847,7 +861,6 @@ impl PlayerCraft {
         ch: &MotionChannels,
         player: &mut Entity,
         self_righting: u8,
-        sensitivity: u8,
     ) -> VtolControlFrame {
         // Retail rebuilds the body matrix only after FUN_00445310 returns.
         // Preserve the force basis and pitch word that entered the callback.
@@ -857,8 +870,6 @@ impl PlayerCraft {
         let pitch_before_raw = radians_to_angle_word(self.body_pitch);
         let roll_before_raw = radians_to_angle_word(self.body_roll);
         let words = ch.reader_words(
-            elapsed_micros,
-            sensitivity,
             radians_to_angle_word(player.heading),
             pitch_before_raw,
             SteeringStyle::Flying,
@@ -912,7 +923,7 @@ impl PlayerCraft {
             let effective_pitch_raw = vtol_effective_pitch_raw(
                 words.pitch,
                 pitch_before_raw,
-                ch.positive_thrust_binding_active,
+                ch.positive_thrust_limit,
                 ch.fine_pitch_active,
                 self_righting,
             );
@@ -1148,16 +1159,16 @@ fn step_mode_joint(current: u16, deployed: bool, elapsed_micros: u32) -> u16 {
 fn vtol_effective_pitch_raw(
     pitch_raw: i16,
     pitch_before_raw: i16,
-    positive_thrust_binding_active: bool,
+    positive_thrust_limit: i32,
     fine_pitch_active: bool,
     self_righting: u8,
 ) -> i16 {
-    let powered_coupling =
-        if positive_thrust_binding_active && !fine_pitch_active && self_righting > 1 {
-            (-i32::from(pitch_before_raw) / 6).clamp(-0x600, 0x600)
-        } else {
-            0
-        };
+    let powered_coupling = if positive_thrust_limit != 0 && !fine_pitch_active && self_righting > 1
+    {
+        (-i32::from(pitch_before_raw) / 6).clamp(-positive_thrust_limit, positive_thrust_limit)
+    } else {
+        0
+    };
     (i32::from(pitch_raw) + powered_coupling) as i16
 }
 
@@ -1227,6 +1238,38 @@ mod tests {
     use super::*;
     use v2k_formats::terrain::{TerrainCell, GRID_SIZE};
 
+    #[test]
+    fn each_binding_weighs_its_time_on_within_the_frame() {
+        let frame = FrameKeyEvents {
+            dt_us: 20_000,
+            keys_after: keys(&[Keycode::Up, Keycode::Space]),
+            events: vec![
+                (Keycode::Up, true, 5_000),
+                (Keycode::S, true, 2_000),
+                (Keycode::S, false, 12_000),
+                (Keycode::Space, true, 15_000),
+            ],
+        };
+        let channels =
+            MotionChannels::from_frame(&frame, AnalogInput::default(), ReaderSettings::DEFAULT);
+        // Up 15 ms: 10 * 15000 / 15 * 0xD80 / 20000 = 1728; S 10 ms: 0x480.
+        assert_eq!(channels.pitch, f32::from(1728i16 + 0x480));
+        assert!(channels.fine_pitch_active);
+        // Space 5 ms: (5000 << 14) / 5000 = 0x4000, and a quarter of 0x600.
+        assert_eq!(channels.throttle_q16, 0x4000);
+        assert_eq!(channels.positive_thrust_limit, 0x180);
+        // A tap that ended before the frame did still counts as on.
+        let tapped = FrameKeyEvents {
+            dt_us: 20_000,
+            keys_after: HashSet::new(),
+            events: vec![(Keycode::Right, true, 0), (Keycode::Right, false, 10_000)],
+        };
+        let channels =
+            MotionChannels::from_frame(&tapped, AnalogInput::default(), ReaderSettings::DEFAULT);
+        assert_eq!(channels.turn, 1.0);
+        assert_eq!(channels.keyboard_turn_raw, 0x47F);
+    }
+
     fn keys(list: &[Keycode]) -> HashSet<Keycode> {
         list.iter().copied().collect()
     }
@@ -1256,12 +1299,11 @@ mod tests {
             let mut player = dummy_entity();
             player.physical_body_basis_q31 =
                 crate::entity_collision_state::RetailRuntimeValue::Known(basis);
-            let frame = craft.integrate_configured_micros_with_sensitivity(
+            let frame = craft.integrate_configured_micros_forces(
                 20_000,
                 &MotionChannels::default(),
                 &mut player,
                 0,
-                RETAIL_DEFAULT_SENSITIVITY,
             );
             let previous = match frame {
                 VehicleFrameForces::Hover(frame) => frame.basis,
@@ -1851,30 +1893,27 @@ mod tests {
     fn vtol_powered_pitch_coupling_uses_space_without_replacing_arrow_input() {
         // A positive pre-frame pitch contributes its opposing sixth while
         // SPACE is held, both alone and on top of the UP arrow channel.
-        assert_eq!(vtol_effective_pitch_raw(0, 0x600, true, false, 15), -0x100);
+        assert_eq!(vtol_effective_pitch_raw(0, 0x600, 0x600, false, 15), -0x100);
         assert_eq!(
-            vtol_effective_pitch_raw(2_303, 0x600, true, false, 15),
+            vtol_effective_pitch_raw(2_303, 0x600, 0x600, false, 15),
             2_303 - 0x100
         );
 
         // Without the dedicated SPACE binding the term is absent. Either S/X
         // fine-pitch key also suppresses it even though its pitch contribution
         // remains in the combined channel supplied as `pitch_raw`.
+        assert_eq!(vtol_effective_pitch_raw(2_303, 0x600, 0, false, 15), 2_303);
         assert_eq!(
-            vtol_effective_pitch_raw(2_303, 0x600, false, false, 15),
-            2_303
-        );
-        assert_eq!(
-            vtol_effective_pitch_raw(2_303, 0x600, true, true, 15),
+            vtol_effective_pitch_raw(2_303, 0x600, 0x600, true, 15),
             2_303
         );
     }
 
     #[test]
     fn vtol_powered_pitch_requires_self_righting_above_one_and_not_net_throttle() {
-        assert_eq!(vtol_effective_pitch_raw(0, 0x600, true, false, 0), 0);
-        assert_eq!(vtol_effective_pitch_raw(0, 0x600, true, false, 1), 0);
-        assert_eq!(vtol_effective_pitch_raw(0, 0x600, true, false, 2), -0x100);
+        assert_eq!(vtol_effective_pitch_raw(0, 0x600, 0x600, false, 0), 0);
+        assert_eq!(vtol_effective_pitch_raw(0, 0x600, 0x600, false, 1), 0);
+        assert_eq!(vtol_effective_pitch_raw(0, 0x600, 0x600, false, 2), -0x100);
 
         let both = MotionChannels::from_keys(&keys(&[Keycode::Space, Keycode::RShift]));
         assert_eq!(both.throttle_q16, 0);
@@ -1883,7 +1922,7 @@ mod tests {
             vtol_effective_pitch_raw(
                 both.pitch as i16,
                 0x600,
-                both.positive_thrust_binding_active,
+                both.positive_thrust_limit,
                 both.fine_pitch_active,
                 15,
             ),
@@ -1939,12 +1978,11 @@ mod tests {
                 "TAB must not clamp the retained VTOL pose"
             );
 
-            let first_frame = craft.integrate_configured_micros_with_sensitivity(
+            let first_frame = craft.integrate_configured_micros_forces(
                 8_000,
                 &MotionChannels::default(),
                 &mut player,
                 10,
-                RETAIL_DEFAULT_SENSITIVITY,
             );
             let VehicleFrameForces::Hover(first_hover) = first_frame else {
                 panic!("the first post-TAB frame must use Hover forces");
@@ -1970,12 +2008,11 @@ mod tests {
                 "the attitude phase must not inject a transition impulse"
             );
 
-            let second_frame = craft.integrate_configured_micros_with_sensitivity(
+            let second_frame = craft.integrate_configured_micros_forces(
                 8_000,
                 &MotionChannels::default(),
                 &mut player,
                 10,
-                RETAIL_DEFAULT_SENSITIVITY,
             );
             let VehicleFrameForces::Hover(second_hover) = second_frame else {
                 panic!("the second post-TAB frame must remain Hover");
@@ -2006,7 +2043,7 @@ mod tests {
     #[test]
     fn captured_mode10_powered_pitch_fixed_points_replay_exactly() {
         fn step(pitch: i16, input: i16) -> i16 {
-            let effective = vtol_effective_pitch_raw(input, pitch, true, false, 10);
+            let effective = vtol_effective_pitch_raw(input, pitch, 0x600, false, 10);
             let manual = fly_manual_pitch_delta_raw(8_000, effective, 28);
             vtol_self_right_pitch_raw(pitch.wrapping_add(manual), 8_000, 10)
         }
@@ -2034,12 +2071,11 @@ mod tests {
                 RETAIL_DEFAULT_SENSITIVITY,
             );
             for _ in 0..375 {
-                craft.integrate_configured_micros_with_sensitivity(
+                craft.integrate_configured_micros_forces(
                     8_000,
                     &channels,
                     &mut player,
                     self_righting,
-                    RETAIL_DEFAULT_SENSITIVITY,
                 );
             }
             radians_to_angle_word(craft.body_pitch)
@@ -2100,13 +2136,7 @@ mod tests {
                 RETAIL_DEFAULT_SENSITIVITY,
             );
 
-            let first = craft.integrate_configured_micros_with_sensitivity(
-                8_000,
-                &channels,
-                &mut player,
-                10,
-                RETAIL_DEFAULT_SENSITIVITY,
-            );
+            let first = craft.integrate_configured_micros_forces(8_000, &channels, &mut player, 10);
             let VehicleFrameForces::Vtol(first) = first else {
                 panic!("VTOL must emit a VTOL force frame");
             };
@@ -2117,13 +2147,8 @@ mod tests {
             );
 
             let pitch_after_first = radians_to_angle_word(craft.body_pitch);
-            let second = craft.integrate_configured_micros_with_sensitivity(
-                8_000,
-                &channels,
-                &mut player,
-                10,
-                RETAIL_DEFAULT_SENSITIVITY,
-            );
+            let second =
+                craft.integrate_configured_micros_forces(8_000, &channels, &mut player, 10);
             let VehicleFrameForces::Vtol(second) = second else {
                 panic!("VTOL must emit a VTOL force frame");
             };
@@ -2160,15 +2185,15 @@ mod tests {
         let mut player = dummy_entity();
         player.heading = angle_word_to_rad(4_250);
 
-        let frame = craft.integrate_configured_micros_with_sensitivity(
+        let frame = craft.integrate_configured_micros_forces(
             8_000,
             &MotionChannels {
                 turn: -1.0,
+                keyboard_turn_raw: -2303,
                 ..Default::default()
             },
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         let VehicleFrameForces::Vtol(frame) = frame else {
             panic!("VTOL mode must return a VTOL force frame");
@@ -2187,27 +2212,26 @@ mod tests {
         // The opposite sustained window fixes the signs independently.
         craft.body_roll = angle_word_to_rad(-285);
         player.heading = angle_word_to_rad(5_889);
-        craft.integrate_configured_micros_with_sensitivity(
+        craft.integrate_configured_micros_forces(
             8_000,
             &MotionChannels {
                 turn: 1.0,
+                keyboard_turn_raw: 2303,
                 ..Default::default()
             },
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         assert_eq!(radians_to_angle_word(player.heading), 5_628);
         assert_eq!(radians_to_angle_word(craft.body_roll), -531);
 
         // With no steering, only the one A690 damping copy remains.
         craft.body_roll = angle_word_to_rad(1_983);
-        craft.integrate_configured_micros_with_sensitivity(
+        craft.integrate_configured_micros_forces(
             8_000,
             &MotionChannels::default(),
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         assert_eq!(radians_to_angle_word(craft.body_roll), 1_929);
     }
@@ -2222,17 +2246,17 @@ mod tests {
         let mut player = dummy_entity();
         player.heading = angle_word_to_rad(4_250);
 
-        let frame = craft.integrate_configured_micros_with_sensitivity(
+        let frame = craft.integrate_configured_micros_forces(
             8_000,
             &MotionChannels {
                 pitch: 2_303.0,
                 turn: -1.0,
+                keyboard_turn_raw: -2303,
                 positive_thrust_binding_active: true,
                 ..Default::default()
             },
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         let VehicleFrameForces::Vtol(frame) = frame else {
             panic!("VTOL mode must return a VTOL force frame");
@@ -2256,12 +2280,11 @@ mod tests {
         craft.body_roll = angle_word_to_rad(1_983);
 
         let mut player = dummy_entity();
-        let fueled_frame = craft.integrate_configured_micros_with_sensitivity(
+        let fueled_frame = craft.integrate_configured_micros_forces(
             20_000,
             &MotionChannels::default(),
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         assert!(!fueled_frame.vtol_started_without_fuel());
         assert_eq!(
@@ -2282,12 +2305,11 @@ mod tests {
         let pitch_after_last_fueled_callback = radians_to_angle_word(craft.body_pitch);
         let roll_after_last_fueled_callback = radians_to_angle_word(craft.body_roll);
 
-        let empty_frame = craft.integrate_configured_micros_with_sensitivity(
+        let empty_frame = craft.integrate_configured_micros_forces(
             20_000,
             &MotionChannels::default(),
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         assert!(empty_frame.vtol_started_without_fuel());
         assert_eq!(
@@ -2320,12 +2342,11 @@ mod tests {
         craft.fuel_raw = FUEL_LOW_WARNING_BELOW_RAW - 1;
         craft.toggle_mode();
         let mut player = dummy_entity();
-        let powered_frame = craft.integrate_configured_micros_with_sensitivity(
+        let powered_frame = craft.integrate_configured_micros_forces(
             20_000,
             &MotionChannels::default(),
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         assert!(powered_frame.vtol_started_with_fuel());
 
@@ -2341,12 +2362,11 @@ mod tests {
         // takes the separate automatic-return branch instead of warning.
         assert!(!cadence.poll(powered_frame, FUEL_LOW_WARNING_BELOW_RAW, 1_000));
         craft.fuel_raw = 0;
-        let empty_frame = craft.integrate_configured_micros_with_sensitivity(
+        let empty_frame = craft.integrate_configured_micros_forces(
             20_000,
             &MotionChannels::default(),
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         assert!(empty_frame.vtol_started_without_fuel());
         assert!(!cadence.poll(empty_frame, 0, 1_000));
@@ -2359,12 +2379,11 @@ mod tests {
         // craft can begin a later VTOL callback with its tank empty.
         craft.mode = VehicleMode::Vtol;
         let mut player = dummy_entity();
-        let empty_frame = craft.integrate_configured_micros_with_sensitivity(
+        let empty_frame = craft.integrate_configured_micros_forces(
             20_000,
             &MotionChannels::default(),
             &mut player,
             0,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         craft.collect_fuel_pickup_raw(10_000);
 
@@ -2562,13 +2581,7 @@ mod tests {
             pitch: 2_303.0,
             ..Default::default()
         };
-        let frame = craft.integrate_configured_micros_with_sensitivity(
-            20_000,
-            &up,
-            &mut player,
-            0,
-            RETAIL_DEFAULT_SENSITIVITY,
-        );
+        let frame = craft.integrate_configured_micros_forces(20_000, &up, &mut player, 0);
         let VehicleFrameForces::Vtol(frame) = frame else {
             panic!("VTOL mode must return a VTOL force frame");
         };
@@ -2590,7 +2603,7 @@ mod tests {
             VehicleModeToggleOutcome::Changed(VehicleMode::Vtol)
         );
         let mut player = dummy_entity();
-        let frame = craft.integrate_configured_micros_with_sensitivity(
+        let frame = craft.integrate_configured_micros_forces(
             8_000,
             &MotionChannels {
                 throttle_q16: 0x4000,
@@ -2598,7 +2611,6 @@ mod tests {
             },
             &mut player,
             10,
-            RETAIL_DEFAULT_SENSITIVITY,
         );
         let VehicleFrameForces::Vtol(frame) = frame else {
             panic!("VTOL mode must return a VTOL force frame");

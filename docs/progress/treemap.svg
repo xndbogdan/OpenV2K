@@ -73,11 +73,11 @@
 <rect x="1003.5" y="383.6" width="71.8" height="6" fill="#8c959f"/>
 <text x="955.4" y="259.4" fill="#1f2328">Loading transition…</text>
 </g>
-<g><title>Controls (CONTROLS.md): 52 code, 18 notes, 20 omitted</title>
-<rect x="1077.2" y="247.4" width="121.8" height="98.4" fill="#2da44e"/>
-<rect x="1077.2" y="345.7" width="35.2" height="43.9" fill="#d4a72c"/>
-<rect x="1112.5" y="345.7" width="86.5" height="43.9" fill="#8c959f"/>
-<text x="1079.2" y="259.4" fill="#1f2328">Controls 74.3%</text>
+<g><title>Controls (CONTROLS.md): 53 code, 17 notes, 20 omitted</title>
+<rect x="1077.2" y="247.4" width="121.8" height="99.1" fill="#2da44e"/>
+<rect x="1077.2" y="346.5" width="33.7" height="43.1" fill="#d4a72c"/>
+<rect x="1110.9" y="346.5" width="88.1" height="43.1" fill="#8c959f"/>
+<text x="1079.2" y="259.4" fill="#1f2328">Controls 75.7%</text>
 </g>
 <g><title>Vtol flight (VTOL_FLIGHT.md): 24 code</title>
 <rect x="782.4" y="391.6" width="110.3" height="124.3" fill="#2da44e"/>

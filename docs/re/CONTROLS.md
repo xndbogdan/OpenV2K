@@ -146,9 +146,23 @@ Retail weighs each of the reader's ten held keys by its time held within
 the frame (`FUN_00471400`: the value record's on-time since the frame
 pump's stamp), clamped to the frame's duration `dt`: the arrows give
 `(sensitivity × held / 15) × 0xD80 / dt`, S and X `held × 0x900 / dt`.
-The port counts a key down at the frame's end as held for the whole frame
-and one released within it as not held; matching retail needs each key
-event's time within the frame. Not ported.
+Space and Right Shift give `(held << 14) / (dt >> 2)` in Q16 (one once
+held all frame), the powered VTOL coupling's limit is `held × 0x600 / dt`
+(at most `0x600`), and fire is on for any on-time.
+
+The on-time (`FUN_004715F0`, `FUN_00471400`): each frame's drain restamps
+the records that are on with the previous drain's time and zeroes their
+on-time, then applies the queued key events in order, a record turning off
+adding the time since its stamp and one turning on taking the event's time
+as its stamp; the read adds the time from the stamp to this drain. Event
+times are `timeGetTime` milliseconds (`FUN_00495FF0`), taken when the
+input is queued (`FUN_004717C0`). A record with exclusions (fire's `/`
+with A up) turns on and off as its keys match. The port does the same over
+each frame's key events with SDL's millisecond event timestamps, placed
+between the previous poll and this one; the mouse and joystick, sampled
+once a frame, hold their records all frame, as do scripted
+(`--input-replay`) and fixed-step frames' events, which count from the
+frame's start.
 
 The pitch-channel signs are statically conclusive: binding records `0x4C2CC8`
 (UP) and `0x4C2CF0` (DOWN) map through slots `+0x50/+0x54`; the reader adds UP

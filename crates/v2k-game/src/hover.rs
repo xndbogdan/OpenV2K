@@ -272,25 +272,37 @@ impl Default for HoverFrameForces {
     }
 }
 
-/// Exact default Relative-mode keyboard channel for a fully held left/right
-/// binding during this input interval (`FUN_004445E0`).
-fn keyboard_relative_axis_raw(axis: f32, dt_us: u32, sensitivity: u8) -> i16 {
+/// One arrow binding's keyboard term in `FUN_004445E0`: its on-time within
+/// the frame (`FUN_00471400`), clamped to `dt`, scaled by the Sensitivity
+/// setting over 15 and then by `0xD80 / dt`, in the reader's integer order
+/// (a signed division by 15, then an unsigned one by `dt`).
+pub(crate) fn keyboard_held_axis_raw(held_us: u32, dt_us: u32, sensitivity: u8) -> i32 {
     let dt_us = dt_us.min(RETAIL_FRAME_DELTA_MAX_US);
-    if dt_us == 0 || axis == 0.0 {
+    if dt_us == 0 || held_us == 0 {
         return 0;
     }
-    let held_us = i64::from(dt_us);
-    let sensitivity = i64::from(sensitivity.min(KEYBOARD_SENSITIVITY_MAX as u8));
-    let quantized = sensitivity * held_us / i64::from(KEYBOARD_SENSITIVITY_MAX);
-    let amplitude = quantized * i64::from(KEYBOARD_FULL_SCALE_RAW) / held_us;
+    let held = held_us.min(dt_us) as i32;
+    let sensitivity = i32::from(sensitivity.min(KEYBOARD_SENSITIVITY_MAX as u8));
+    let scaled = sensitivity * held / KEYBOARD_SENSITIVITY_MAX;
+    ((scaled as u32 * KEYBOARD_FULL_SCALE_RAW as u32) / dt_us) as i32
+}
+
+/// A binding held for the whole frame, signed by `axis`.
+#[cfg(test)]
+fn keyboard_relative_axis_raw(axis: f32, dt_us: u32, sensitivity: u8) -> i16 {
+    if axis == 0.0 {
+        return 0;
+    }
+    let amplitude = keyboard_held_axis_raw(dt_us, dt_us, sensitivity) as i16;
     if axis.is_sign_negative() {
-        -(amplitude as i16)
+        -amplitude
     } else {
-        amplitude as i16
+        amplitude
     }
 }
 
 /// Default Relative-mode keyboard channel used by LEFT/RIGHT.
+#[cfg(test)]
 pub(crate) fn keyboard_turn_raw(turn: f32, dt_us: u32, sensitivity: u8) -> i16 {
     keyboard_relative_axis_raw(turn, dt_us, sensitivity)
 }
@@ -298,9 +310,8 @@ pub(crate) fn keyboard_turn_raw(turn: f32, dt_us: u32, sensitivity: u8) -> i16 {
 /// Default Relative-mode keyboard channel used by UP/DOWN.
 ///
 /// The 2026-07-16 retail trace measured stable values of +2303/-2303 at the
-/// default sensitivity 10 and a 20 ms tick. The pitch and turn bindings pass
-/// through the same duty-cycle quantization before their mode-specific
-/// integrators consume them.
+/// default sensitivity 10 and a 20 ms tick.
+#[cfg(test)]
 pub(crate) fn keyboard_pitch_raw(pitch: f32, dt_us: u32, sensitivity: u8) -> i16 {
     keyboard_relative_axis_raw(pitch, dt_us, sensitivity)
 }
@@ -449,6 +460,16 @@ mod tests {
         assert_eq!(keyboard_turn_raw(1.0, 20_000, 15), 0x0d80);
         assert_eq!(steer_heading_raw(0, 0x08ff, 20_000, 28), -652);
         assert_eq!(steer_heading_raw(0, -0x08ff, 20_000, 28), 653);
+    }
+
+    #[test]
+    fn a_partly_held_arrow_weighs_its_time_in_the_frame() {
+        assert_eq!(keyboard_held_axis_raw(20_000, 20_000, 10), 0x08ff);
+        // Held 5 ms of 20: 10 * 5000 / 15 = 3333, * 0xD80 / 20000 = 575.
+        assert_eq!(keyboard_held_axis_raw(5_000, 20_000, 10), 575);
+        // On-time past the frame is clamped to it.
+        assert_eq!(keyboard_held_axis_raw(25_000, 20_000, 15), 0x0d80);
+        assert_eq!(keyboard_held_axis_raw(0, 20_000, 15), 0);
     }
 
     #[test]
