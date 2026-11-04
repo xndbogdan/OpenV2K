@@ -154,6 +154,21 @@ unwinds to the innermost frame and runs the cleanups registered above it.
   Deactivation calls `FUN_0044E6A0`, which sets the suspended flag
   `004FE60C`, raises pause reason 4 (`FUN_0044F3E0`) and calls the game's
   deactivate hook; activation calls `FUN_0044E6E0`, which reverses them.
+- The window procedure `FUN_00495A00` passes `WM_ACTIVATEAPP` (1 or -1 by
+  its flag) and the menu loop's entry and exit (`WM_ENTERMENULOOP` -1,
+  `WM_EXITMENULOOP` 1) to `FUN_00495940`.
+- The game installs the hooks with `FUN_0044E720` (deactivate, `004F718C`)
+  and `FUN_0044E730` (activate, `004F7190`). Only three modes set them, and
+  [their behaviour](MENU_SYSTEM.md#suspended-game) is the suspended game:
+  play (`FUN_00453330`), the pause menu (`FUN_00451420`) and the suspended
+  screen (`FUN_00451390`). The frontend, the map, the briefing and the
+  progress map leave them clear, so there an inactive window only raises the
+  flag and pause reason 4, which silences the world's positional sounds.
+  The frame loop never waits: the frontend keeps animating.
+- The port applies the last focus change SDL reports in a frame, the same
+  one-change-a-frame rule. `--input-replay` scripts it as the key
+  `Window Focus` (pressed gains focus, released loses it), so a test run
+  suspends without touching the desktop.
 - `FUN_0044E460` runs the current game mode's frame and then the frame pump;
   a failure from either goes to `FUN_0044E4A0`.
 - `FUN_00495EE0` is the device-change callback: an arrival (`0x8000`) or a
@@ -488,8 +503,7 @@ own platform:
   (`FUN_0042E8B0`). The PRELOAD read that `FUN_004937C0`
   starts (`FUN_00493860`) stays counted.
 
-Activation (`FUN_00495940`, `FUN_0044E6A0`, `FUN_0044E6E0`), which suspends
-the game while its window is inactive, the display-mode routine that sets the
+The display-mode routine that sets the
 full-screen flag the pointer reads (`FUN_004A8D90`), the
 loading workers that animate the loading screen from a timer, and the module
 opens that set defaults other than zero (`FUN_0042A890`, `FUN_0042F4F0`,

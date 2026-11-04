@@ -16,8 +16,8 @@ use v2k_render::GameConfig;
 use crate::menu::generate_placeholder_icon;
 use crate::menu_data::{
     DrawKind, ScreenDef, SelectAction, SettingId, MEMCARD_ACCESS, PAUSE_FULL, PAUSE_SIMPLE,
-    SAVE_ACCESS_FAILED, SAVE_OVERWRITE_CONFIRM, SAVE_PROGRESS, SAVE_SUCCEEDED, VIS_FRONTEND,
-    VIS_INGAME, VIS_INGAME_SP,
+    SAVE_ACCESS_FAILED, SAVE_OVERWRITE_CONFIRM, SAVE_PROGRESS, SAVE_SUCCEEDED, SUSPENDED,
+    VIS_FRONTEND, VIS_INGAME, VIS_INGAME_SP,
 };
 use crate::menu_engine::{MenuCommand, MenuEngine, MenuInput, SOUND_WHOOSH};
 use crate::resource_cache::ResourceCache;
@@ -781,6 +781,80 @@ impl MenuShell {
             },
             true,
         )
+    }
+
+    /// The suspended mode `0x4D09C0` (`FUN_00451390`) entered from play: the
+    /// "Suspended" screen alone, flying in as a root does. `vis_mask` is the
+    /// in-game mask (`FUN_0043CBA0`).
+    pub fn new_suspended(ctx: &MenuCtx, vis_mask: u32) -> Self {
+        let engine = MenuEngine::new(SUSPENDED, vis_mask);
+        Self::new_with_engine(
+            ctx,
+            engine,
+            MenuPhase::FlyIn {
+                remaining: FLY_LEG_SECS,
+            },
+            true,
+        )
+    }
+
+    /// `FUN_00451390` over an open pause menu: the suspended screen goes on
+    /// top at once (no fly above depth 1). `FUN_0043A960` ignores the push
+    /// while the root's closing fly-out is pending; returns false then.
+    pub fn suspend(&mut self, ctx: &MenuCtx) -> bool {
+        if self.pause_switch_away != PauseSwitchAway::Inactive {
+            return false;
+        }
+        if !self.is_suspended() {
+            self.open_screen(SUSPENDED, ctx);
+        }
+        true
+    }
+
+    /// The suspended screen is on top; it takes no keys (`FUN_00451390`
+    /// installs no binding set).
+    pub fn is_suspended(&self) -> bool {
+        self.engine.current_va() == Some(SUSPENDED)
+    }
+
+    /// `FUN_00451400`, the window active again, pops the suspended screen.
+    /// As the root it flies out first (`FUN_0043A8E0`) and its switch-away
+    /// (`FUN_00450E40`) then resumes play; above the pause menu the pop is
+    /// immediate and the resume only drops the pause count, so that menu
+    /// shows again.
+    pub fn end_suspension(&mut self, ctx: &MenuCtx) {
+        if !self.is_suspended() {
+            return;
+        }
+        if self.engine.pop() {
+            self.ms_open = 0.0;
+            self.refresh(ctx);
+        } else {
+            self.fly_out_to_switch_away();
+        }
+    }
+
+    /// P on the pause menu (`FUN_004564A0` -> `FUN_0043A9F0`): the stack
+    /// drops to its root at once and the root pops with its 0x7000 fly-out,
+    /// silently; its switch-away resumes play. Returns false when the root
+    /// is not the in-play pause menu.
+    pub fn close_to_play(&mut self, ctx: &MenuCtx) -> bool {
+        if self.engine.root_va() != Some(PAUSE_FULL) {
+            return false;
+        }
+        self.overlay = None;
+        self.engine.pop_to_root();
+        self.refresh(ctx);
+        self.fly_out_to_switch_away();
+        true
+    }
+
+    fn fly_out_to_switch_away(&mut self) {
+        self.prev_view = Some(self.view.clone());
+        self.phase = MenuPhase::FlyOut {
+            remaining: FLY_LEG_SECS,
+        };
+        self.pause_switch_away = PauseSwitchAway::ResumeAfterFlyOut;
     }
 
     fn new_with_engine(
@@ -1692,7 +1766,9 @@ impl MenuShell {
 
     fn rebuild_view(&mut self, ctx: &MenuCtx) {
         let (scroll, spin) = (self.view.scroll, self.view.spin);
-        let mut view = if let Some(overlay) = &self.overlay {
+        // The suspended screen goes over the save flow's slot pages too.
+        let overlay = self.overlay.as_ref().filter(|_| !self.is_suspended());
+        let mut view = if let Some(overlay) = overlay {
             build_overlay_view(overlay, &self.engine, ctx)
         } else if let Some(screen) = self.engine.current() {
             let (v, map) = build_screen_view(screen, &self.engine, ctx);
@@ -2378,6 +2454,93 @@ mod tests {
             shell.engine.current_va(),
             Some(crate::menu_data::PAUSE_SIMPLE)
         );
+    }
+
+    fn empty_ctx_parts() -> (ResourceCache, GameConfig, v2k_render::DisplayModes) {
+        (
+            ResourceCache::new(Vec::new()),
+            GameConfig::default(),
+            v2k_render::DisplayModes::default(),
+        )
+    }
+
+    #[test]
+    fn suspension_from_play_flies_in_and_resumes_after_its_fly_out() {
+        let (cache, config, modes) = empty_ctx_parts();
+        let ctx = MenuCtx {
+            cache: &cache,
+            config: &config,
+            saves: None,
+            display_modes: &modes,
+        };
+        let mut shell = MenuShell::new_suspended(&ctx, VIS_INGAME | VIS_INGAME_SP);
+        assert!(shell.is_suspended());
+        let labels: Vec<_> = shell
+            .view()
+            .items
+            .iter()
+            .map(|item| item.label.as_str())
+            .collect();
+        assert_eq!(labels, ["Suspended"]);
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        assert_eq!(shell.phase, MenuPhase::Idle);
+        shell.end_suspension(&ctx);
+        assert_eq!(shell.take_switch_away_event(), None);
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        assert_eq!(shell.take_switch_away_event(), Some(ShellEvent::ResumeGame));
+    }
+
+    #[test]
+    fn suspension_over_the_pause_menu_pops_back_to_it_at_once() {
+        let (cache, config, modes) = empty_ctx_parts();
+        let ctx = MenuCtx {
+            cache: &cache,
+            config: &config,
+            saves: None,
+            display_modes: &modes,
+        };
+        let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        shell.input(MenuInput::Down, &ctx);
+        assert!(shell.suspend(&ctx));
+        assert!(shell.is_suspended());
+        assert_eq!(shell.engine.depth(), 2);
+        shell.end_suspension(&ctx);
+        assert_eq!(shell.engine.current_va(), Some(PAUSE_FULL));
+        assert_eq!(shell.phase, MenuPhase::Idle);
+        assert_eq!(shell.view().selected, 1, "the pause menu keeps its row");
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        assert_eq!(shell.take_switch_away_event(), None);
+    }
+
+    #[test]
+    fn p_closes_the_pause_stack_through_the_root_fly_out() {
+        let (cache, config, modes) = empty_ctx_parts();
+        let ctx = MenuCtx {
+            cache: &cache,
+            config: &config,
+            saves: None,
+            display_modes: &modes,
+        };
+        let mut shell = MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::Pause);
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        assert!(shell.engine.push(crate::menu_data::OPTIONS_INGAME));
+        assert!(shell.close_to_play(&ctx));
+        assert_eq!(shell.engine.depth(), 1);
+        assert_eq!(
+            shell.phase,
+            MenuPhase::FlyOut {
+                remaining: FLY_LEG_SECS
+            }
+        );
+        // A deactivation now is ignored, as FUN_0043A960 ignores it.
+        assert!(!shell.suspend(&ctx));
+        update_shell_for(&mut shell, FLY_LEG_SECS);
+        assert_eq!(shell.take_switch_away_event(), Some(ShellEvent::ResumeGame));
+
+        let mut save_menu =
+            MenuShell::new_single_player_menu(&ctx, super::SinglePlayerMenuKind::CampaignSave);
+        assert!(!save_menu.close_to_play(&ctx));
     }
 
     #[test]

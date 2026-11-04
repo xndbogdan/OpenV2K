@@ -73,7 +73,11 @@ primary through `44CC90` when Sub-M is released.
 
 Normal map initialization `454EE0` calls `44F3E0(8)` before loading overlay 51;
 map exit `4556A0` clears bit 8 through `44F400`. The gameplay pause entry
-`4513E0` likewise sets mask bit 8, and `4512E0` clears it. `44CE70` changes
+`4513E0` likewise sets mask bit 8, and `4512E0` clears it. The M map's
+entry `453F70` sets bit 2 and its exit `454330` clears it; an inactive
+window sets bit 4 (`44E6A0`) until it is active again (`44E6E0`), wherever
+the game is, so loops stay silent in play after the map closes if the window
+is still inactive. Bit 1 follows the Sound setting at zero (`4512E0`). `44CE70` changes
 `DAT_004F716C` and, on the zero-to-nonzero edge, calls `44C810` for every
 logical positional row. This releases its retained physical buffer (`+1C`)
 while retaining the logical row, sample controls and optional warble state.

@@ -190,6 +190,16 @@ impl MenuEngine {
         self.stack.last().map(|s| s.screen)
     }
 
+    /// The screen at depth 1, the one whose pop ends the menu.
+    pub fn root_va(&self) -> Option<u32> {
+        self.stack.first().map(|s| s.screen)
+    }
+
+    /// `FUN_0043A9F0` sets the depth to 1 before its pop.
+    pub fn pop_to_root(&mut self) {
+        self.stack.truncate(1);
+    }
+
     /// Selected item index (into the screen's full item array).
     pub fn selected(&self) -> usize {
         self.stack.last().map(|s| s.sel).unwrap_or(0)
