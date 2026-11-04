@@ -1871,6 +1871,16 @@ port computes the same words (`targetter_preview_velocity_raw`). Retail lab
 while turning, aiming the barrel and throttling): all 1,068 previews over 23
 selectors, the refused ones included, equal it in direction and velocity.
 
+Row `0x1F` fires only with the craft fully below the surface (state bit
+`0x200000`). Otherwise `FUN_00424650`, on a held-fire visit with time
+accumulated, counts each due shot off the accumulator with sound `0x1C` at the
+craft (`FUN_0044F480`) and returns: no round is spent, the guns do not
+alternate, no joint pulses and the descriptor's cue does not play. The port
+counts the due shots on its fire clock the same way (`update_refused`). Retail
+lab (Level 1, master code, F9, every weapon held 1.2 s): the five held visits
+of row `0x1F` above water launch nothing, where every other row launches on
+each.
+
 **Megablast.** Operation `0x39` adds its amount to controller `+195` (at most
 4) and births one Type65 in mode 0 at the player, owned by it (`+60`).
 `FUN_004443B0`, the held-fire descriptor's callback, runs `FUN_00444400`

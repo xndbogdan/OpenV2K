@@ -74,6 +74,7 @@ use v2k_game::entity::{
 use v2k_game::entity::{PlayerSurfaceContactDispatch, PlayerSurfaceContactPhase};
 use v2k_game::entity_collision_state::{
     terrain_collision_subject_eligible, EntityTypeRuntimeMetadata, RetailRuntimeValue,
+    FULLY_BELOW_SURFACE_STATE_BIT,
 };
 use v2k_game::entity_positional_audio::{EntityPositionalAudio, EntityPositionalAudioFrame};
 use v2k_game::entity_view_detail::{RetailViewDetail, RetailViewDetailContext};
@@ -120,9 +121,8 @@ use v2k_game::menu_billboard::{MenuBillboardLayout, MenuBillboardPose, MenuBillb
 use v2k_game::menu_data::{self, SettingId};
 use v2k_game::menu_engine::MenuInput;
 use v2k_game::model_tree::{
-    linked_model_named_tips, model_is_camera_facing_actor, ModelSceneLight as MenuSceneLight,
-    ModelTreeChildTransform, ModelTreeNamedTipRequest, ModelTreePainterComposition,
-    ModelTreeRenderer, ModelTreeRootLinkPolicy, ModelTreeView,
+    model_is_camera_facing_actor, ModelSceneLight as MenuSceneLight, ModelTreeChildTransform,
+    ModelTreePainterComposition, ModelTreeRenderer, ModelTreeRootLinkPolicy, ModelTreeView,
 };
 use v2k_game::native_entity_weapons::{
     launch::{
@@ -164,9 +164,9 @@ use v2k_game::power_up_contact::{
 #[cfg(test)]
 use v2k_game::primary_weapon::UPGRADED_PRIMARY_PROFILE;
 use v2k_game::primary_weapon::{
-    fire_profile_from_descriptor, PrimaryAuthoredGunMounts, PrimaryFireEvent, PrimaryFireGeometry,
-    PrimaryGunChannel, PrimaryGunMounts, PrimaryLaunchBasis, PrimaryShotBudget,
-    PrimaryTriggerInput, PrimaryWeapon, POSSESSION_RAY_HELD, POSSESSION_RAY_SELECTOR,
+    fire_profile_from_descriptor, PrimaryFireEvent, PrimaryFireGeometry, PrimaryGunChannel,
+    PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon, POSSESSION_RAY_HELD,
+    POSSESSION_RAY_SELECTOR,
 };
 use v2k_game::radial_damage::radial_distance_raw;
 use v2k_game::retail_clock::{RetailFramePump, RetailTickClock};
@@ -9030,21 +9030,6 @@ fn run_game(
                 };
                 if let Some(player) = em.player() {
                     let origin = player.position;
-                    let gun_mounts = if primary_trigger.held() {
-                        player_model_id
-                            .map(|model_id| {
-                                resolve_player_primary_gun_mounts(
-                                    &session.cache,
-                                    model_id,
-                                    &player_craft,
-                                    origin,
-                                    player.heading,
-                                )
-                            })
-                            .unwrap_or_default()
-                    } else {
-                        PrimaryGunMounts::Unresolved
-                    };
                     let descriptor = *weapon_inventory.selected_descriptor();
                     let direction_q31 =
                         launch_direction_q31(
@@ -9059,7 +9044,6 @@ fn run_game(
                             origin_world: origin,
                             direction_unit: player_primary_fire_direction(&player_craft, player),
                         },
-                        gun_mounts,
                         shooter_origin_world: origin,
                         shooter_id: player.id,
                         shooter_entity_type_at_birth: u8::try_from(player.entity_type).ok(),
@@ -9068,7 +9052,25 @@ fn run_game(
                         sound_origin_world: origin,
                     };
                     let simulation_delta = Duration::from_micros(u64::from(elapsed_micros));
-                    if let Some(profile) = fire_profile_from_descriptor(&descriptor) {
+                    // FUN_00424650 refuses row 0x1F unless the craft is fully
+                    // below the surface (state bit 0x200000).
+                    let refused_above_water = descriptor.selector() == 0x1f
+                        && player
+                            .collision
+                            .state_flags_at_0x08
+                            .masked(FULLY_BELOW_SURFACE_STATE_BIT)
+                            == RetailRuntimeValue::Known(0);
+                    let profile = fire_profile_from_descriptor(&descriptor);
+                    if let Some(profile) = profile.filter(|_| refused_above_water) {
+                        let position_raw = player.position_raw();
+                        for _ in 0..primary_weapon.update_refused(
+                            simulation_delta,
+                            primary_trigger,
+                            profile,
+                        ) {
+                            world_fx.queue_networked_positional_sound_raw(0x1c, position_raw);
+                        }
+                    } else if let Some(profile) = profile {
                         let shot_budget = match descriptor.ammunition() {
                             Ammunition::Infinite => PrimaryShotBudget::Unlimited,
                             Ammunition::Finite(rounds) => PrimaryShotBudget::Limited(rounds),
@@ -13987,10 +13989,13 @@ fn draw_world_fx(
             .sprite_render_flags(cache, frame.sprite_id)
             .unwrap_or(0);
         let (blend, color) = particle_sprite_material(flags);
-        let position = camera_relative(camera, particle.presentation_position());
+        let world = {
+            let [x, y, z] = particle.position;
+            [v2k_core::world::wrap(x), y, v2k_core::world::wrap(z)]
+        };
+        let position = camera_relative(camera, world);
         let native = descriptor.map(|descriptor| {
             let raw = |value: f32| (value * 256.0).round() as i32 as i16;
-            let world = particle.presentation_position();
             let position_raw = [raw(world[0]), raw(world[1]), raw(world[2])];
             v2k_render::NativeParticle {
                 position_raw,
@@ -17478,104 +17483,6 @@ fn gameplay_fog_planes(far_cells: u32, width_cells: u32) -> (f32, f32) {
 /// Uniform draw scale for the player craft in the gameplay coordinate domain.
 const PLAYER_DRAW_SCALE: f32 = GAMEPLAY_MODEL_SCALE;
 
-/// The two selector-1 child instances used by `player4` for its side-mounted
-/// chain guns.
-const DEFAULT_PRIMARY_GUN_MODEL_NAME: &str = "pl4gatgun";
-/// PLAYER4 callback word 4 value 4 replaces the chain-gun pair with these two
-/// authored selector-2 tube/flare-gun children.
-const UPGRADED_PRIMARY_GUN_MODEL_NAME: &str = "pl4tubegun";
-/// Factory selector 0x12 chooses callback word 4 value 15 and the larger pair.
-const RAPID_PRIMARY_GUN_MODEL_NAME: &str = "pl4biggatgun";
-/// Inventory selectors 0x0E/0x0D/0x0C write callback word 4 values 6/7/8.
-const PLASMA_RED_GUN_MODEL_NAME: &str = "pl4plasmared";
-const PLASMA_GREEN_GUN_MODEL_NAME: &str = "pl4plasmagreen";
-const PLASMA_BLUE_GUN_MODEL_NAME: &str = "pl4plasmablue";
-
-/// Resolve PLAYER4 loadouts whose descriptors and A/B firing phase are proven.
-/// `FUN_00424650` only dual-emits selectors 10/22/26; plasma and the recovered
-/// machine-gun family all toggle on a nonzero descriptor `+0x14`, so they share
-/// the alternating mount walk. Other callback-word-4 branches stay fail-closed.
-fn primary_gun_model_name(callback_selector: i32) -> Option<&'static str> {
-    match callback_selector {
-        0 => Some(DEFAULT_PRIMARY_GUN_MODEL_NAME),
-        4 => Some(UPGRADED_PRIMARY_GUN_MODEL_NAME),
-        6 => Some(PLASMA_RED_GUN_MODEL_NAME),
-        7 => Some(PLASMA_GREEN_GUN_MODEL_NAME),
-        8 => Some(PLASMA_BLUE_GUN_MODEL_NAME),
-        15 => Some(RAPID_PRIMARY_GUN_MODEL_NAME),
-        _ => None,
-    }
-}
-
-/// The proven primary mount meshes point along model-local +Z and elevate
-/// about body-local +X.
-const GUN_TIP_AXIS: [f32; 3] = [0.0, 0.0, 1.0];
-
-/// Resolve the two visible launch bases from the live `player4` hierarchy.
-///
-/// Channel A/B follows authored instance order. If the expected pair cannot be
-/// proven from the loaded data, retain an explicit unresolved state; the
-/// weapon scheduler then presents at the already-proven center rather than
-/// manufacturing a symmetric hull offset.
-fn resolve_player_primary_gun_mounts(
-    cache: &v2k_game::resource_cache::ResourceCache,
-    model_id: usize,
-    craft: &PlayerCraft,
-    position: [f32; 3],
-    heading: f32,
-) -> PrimaryGunMounts {
-    let Some(gun_model_name) = primary_gun_model_name(craft.weapon_selector()) else {
-        return PrimaryGunMounts::Unresolved;
-    };
-    let vars = craft.anim_vars();
-    let body = craft.model_orientation(heading);
-    let child_transform = PlayerCraftChildTransform { craft };
-    let tips = linked_model_named_tips(
-        cache,
-        ModelTreeNamedTipRequest {
-            model_id,
-            orientation: body,
-            position,
-            scale: PLAYER_DRAW_SCALE,
-            depth: PLAYER_DRAW_DEPTH,
-            linked: None,
-            vars: &vars,
-            child_transform: Some(&child_transform),
-            model_name: gun_model_name,
-            local_tip_axis: GUN_TIP_AXIS,
-        },
-    );
-    let [gun_a, gun_b] = tips.as_slice() else {
-        return PrimaryGunMounts::Unresolved;
-    };
-    let separation_squared = gun_a
-        .origin_world
-        .iter()
-        .zip(gun_b.origin_world)
-        .map(|(a, b)| (a - b) * (a - b))
-        .sum::<f32>();
-    let direction_delta_squared = gun_a
-        .direction_unit
-        .iter()
-        .zip(gun_b.direction_unit)
-        .map(|(a, b)| (a - b) * (a - b))
-        .sum::<f32>();
-    if separation_squared <= 1.0e-8 || direction_delta_squared > 1.0e-8 {
-        return PrimaryGunMounts::Unresolved;
-    }
-
-    PrimaryGunMounts::Authored(PrimaryAuthoredGunMounts {
-        gun_a: PrimaryLaunchBasis {
-            origin_world: gun_a.origin_world,
-            direction_unit: gun_a.direction_unit,
-        },
-        gun_b: PrimaryLaunchBasis {
-            origin_world: gun_b.origin_world,
-            direction_unit: gun_b.direction_unit,
-        },
-    })
-}
-
 /// Draw the player craft through the shared live linked hierarchy. The hull and
 /// every op-0x0E descendant retain authored materials, UVs, billboards, linked
 /// slots, and per-frame animation while the player-only fan transform is
@@ -19874,16 +19781,6 @@ mod menu_visual_tests {
                 origin_world: [0.0, 1.0, 0.0],
                 direction_unit: [0.0, 0.0, 1.0],
             },
-            gun_mounts: PrimaryGunMounts::Authored(PrimaryAuthoredGunMounts {
-                gun_a: PrimaryLaunchBasis {
-                    origin_world: [-1.0, 1.0, 0.0],
-                    direction_unit: [0.0, 0.0, 1.0],
-                },
-                gun_b: PrimaryLaunchBasis {
-                    origin_world: [1.0, 1.0, 0.0],
-                    direction_unit: [0.0, 0.0, 1.0],
-                },
-            }),
             shooter_origin_world: [0.0, 1.0, 0.0],
             shooter_id: 46,
             shooter_entity_type_at_birth: Some(46),
@@ -20726,60 +20623,6 @@ mod menu_visual_tests {
         assert!((blade_forward[0] - 1.0).abs() < 1.0e-6);
         assert!(blade_forward[1].abs() < 1.0e-6);
         assert!(blade_forward[2].abs() < 1.0e-6);
-    }
-
-    #[v2k_test_support::retail_test]
-    fn authored_player_mounts_use_the_raw_barrel_without_a_second_child_rotation() {
-        let root = v2k_test_support::retail_dir();
-        let mut session =
-            v2k_game::session::GameSession::init(&root).expect("retail corpus required");
-        session.load_auxiliary_ovl(3, 1).unwrap();
-        let model_id = session.cache.global_model_by_name("player4").unwrap().0;
-        let mut craft = PlayerCraft::new();
-        craft.gun_barrel = 0x3000 as f32;
-        for callback_selector in [0, 4, 6, 7, 8, 15] {
-            craft.select_weapon_callback(callback_selector as u8);
-            let mounts = resolve_player_primary_gun_mounts(
-                &session.cache,
-                model_id,
-                &craft,
-                [0.0; 3],
-                std::f32::consts::FRAC_PI_2,
-            );
-            let PrimaryGunMounts::Authored(mounts) = mounts else {
-                panic!("missing authored pair {callback_selector}")
-            };
-            let expected = craft.primary_fire_direction(std::f32::consts::FRAC_PI_2);
-            for mount in [mounts.gun_a, mounts.gun_b] {
-                for axis in 0..3 {
-                    assert!(
-                        (mount.direction_unit[axis] - expected[axis]).abs() < 0.0001,
-                        "selector{callback_selector} axis{axis}"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn level_one_primary_callbacks_select_their_authored_mount_pairs() {
-        assert_eq!(
-            primary_gun_model_name(0),
-            Some(DEFAULT_PRIMARY_GUN_MODEL_NAME)
-        );
-        assert_eq!(
-            primary_gun_model_name(4),
-            Some(UPGRADED_PRIMARY_GUN_MODEL_NAME)
-        );
-        assert_eq!(primary_gun_model_name(6), Some(PLASMA_RED_GUN_MODEL_NAME));
-        assert_eq!(primary_gun_model_name(7), Some(PLASMA_GREEN_GUN_MODEL_NAME));
-        assert_eq!(primary_gun_model_name(8), Some(PLASMA_BLUE_GUN_MODEL_NAME));
-        assert_eq!(primary_gun_model_name(1), None);
-        assert_eq!(
-            primary_gun_model_name(15),
-            Some(RAPID_PRIMARY_GUN_MODEL_NAME)
-        );
-        assert_eq!(primary_gun_model_name(12), None);
     }
 
     #[test]

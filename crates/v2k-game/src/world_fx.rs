@@ -684,9 +684,6 @@ pub struct ParticleSpawn {
     pub source_class: u8,
     /// Offset from the burst origin, in port world units.
     pub offset: [f32; 3],
-    /// Constant presentation-only displacement from the simulated position.
-    /// Collision, water classification, and callbacks never consume it.
-    pub presentation_offset: [f32; 3],
     /// World-space velocity in port units per second.
     pub velocity: [f32; 3],
     /// Source entity retained for owner exclusion/damage attribution by
@@ -1418,9 +1415,6 @@ pub struct WorldParticle {
     pub sprite_id: u16,
     pub source_class: u8,
     pub position: [f32; 3],
-    /// Constant visual displacement retained while the simulated particle
-    /// follows its retail center-origin trajectory.
-    pub presentation_offset: [f32; 3],
     /// Position at the beginning of the most recent generic integration step.
     /// Class-1 uses this to reproduce the retail swept collision query instead
     /// of tunnelling through a target between render frames.
@@ -1514,14 +1508,6 @@ pub struct TerrainExplosionLight {
 }
 
 impl WorldParticle {
-    pub fn presentation_position(&self) -> [f32; 3] {
-        [
-            v2k_core::world::wrap(self.position[0] + self.presentation_offset[0]),
-            self.position[1] + self.presentation_offset[1],
-            v2k_core::world::wrap(self.position[2] + self.presentation_offset[2]),
-        ]
-    }
-
     fn retail_age_byte(&self) -> u8 {
         // Retail stores age at particle +0x1B. Narrow only after restoring the
         // integral tick so a hypothetical age 256 wraps to zero instead of
@@ -2680,7 +2666,6 @@ impl WorldFx {
             sprite_id: frame.sprite_id,
             source_class: birth.source_class,
             offset: [0.0; 3],
-            presentation_offset: [0.0; 3],
             velocity: raw_velocity_to_world(velocity_words.map(i32::from)),
             owner_id: birth.owner_id,
             attached_owner_handle: None,
@@ -3315,7 +3300,6 @@ impl WorldFx {
             sprite_id: frame.sprite_id,
             source_class: request.source_class,
             offset: [0.0; 3],
-            presentation_offset: [0.0; 3],
             velocity: raw_velocity_to_world(velocity_raw),
             owner_id,
             attached_owner_handle: None,
@@ -3399,7 +3383,6 @@ impl WorldFx {
             sprite_id: frame.sprite_id,
             source_class: PRIMARY_UNDERWATER_IMPACT_CLASS,
             offset: [0.0; 3],
-            presentation_offset: [0.0; 3],
             velocity: raw_velocity_to_world(velocity_raw),
             owner_id: Some(request.owner_entity_id),
             attached_owner_handle: None,
@@ -5023,7 +5006,6 @@ impl WorldFx {
                 sprite_id: frame.sprite_id,
                 source_class: CARGO_TRANSFER_PARTICLE_CLASS,
                 offset: [0.0; 3],
-                presentation_offset: [0.0; 3],
                 velocity: [0.0; 3],
                 owner_id,
                 attached_owner_handle: None,
@@ -5141,10 +5123,6 @@ impl WorldFx {
                                 f32::from(descriptor.spawn_position_y_bias_raw()) / 256.0,
                                 0.0,
                             ],
-                            presentation_offset: presentation_delta(
-                                event.projectile.presentation_basis.origin_world,
-                                event.projectile.origin_world,
-                            ),
                             velocity,
                             owner_id: Some(event.projectile.owner_id),
                             attached_owner_handle: None,
@@ -5172,10 +5150,6 @@ impl WorldFx {
                         sprite_id: muzzle_frame.sprite_id,
                         source_class: PRIMARY_MUZZLE_PARTICLE_CLASS,
                         offset: [0.0, f32::from(PRIMARY_MUZZLE_Y_OFFSET_RAW) / 256.0, 0.0],
-                        presentation_offset: presentation_delta(
-                            event.auxiliary.presentation_origin_world,
-                            event.auxiliary.origin_world,
-                        ),
                         velocity: event.auxiliary.inherited_velocity_world_per_second,
                         owner_id: Some(event.auxiliary.owner_id),
                         attached_owner_handle: None,
@@ -5303,7 +5277,6 @@ fn meteor_impact_burst_with_scatter_count(
         sprite_id: surface_frame.sprite_id,
         source_class: METEOR_SURFACE_CLASS,
         offset: [0.0; 3],
-        presentation_offset: [0.0; 3],
         velocity: raw_velocity_to_world([0, 500, 0]),
         owner_id: None,
         attached_owner_handle: None,
@@ -5363,7 +5336,6 @@ fn meteor_scatter_particle(
         sprite_id: frame.sprite_id,
         source_class: METEOR_SCATTER_CLASS,
         offset: offset_raw.map(|component| component as f32 / 256.0),
-        presentation_offset: [0.0; 3],
         velocity: raw_velocity_to_world(raw_velocity),
         owner_id,
         attached_owner_handle: None,
@@ -5390,7 +5362,6 @@ fn world_particle(origin: [f32; 3], spawn: ParticleSpawn) -> WorldParticle {
         sprite_id: spawn.sprite_id,
         source_class: spawn.source_class,
         position,
-        presentation_offset: spawn.presentation_offset,
         step_start_position: position,
         step_start_water_state: 2,
         water_state: 2,
@@ -5461,14 +5432,6 @@ fn world_velocity_component_to_raw(component: f32) -> i32 {
 /// 64-bit product is the exact `imul`/`shl`/`rcl` result in `FUN_00446640`.
 fn q31_mul_raw(component_q31: i32, distance_raw: i32) -> i32 {
     ((i64::from(component_q31) * i64::from(distance_raw)) >> 31) as i32
-}
-
-fn presentation_delta(presentation: [f32; 3], simulation: [f32; 3]) -> [f32; 3] {
-    [
-        v2k_core::world::delta(presentation[0], simulation[0]),
-        presentation[1] - simulation[1],
-        v2k_core::world::delta(presentation[2], simulation[2]),
-    ]
 }
 
 /// Exact signed-8.8 bilinear terrain lookup used by FUN_0043E8A0 and the
@@ -6242,7 +6205,6 @@ fn primary_entity_impact_burst(position: [f32; 3], sea_level: Option<f32>) -> Pa
             sprite_id: frame.sprite_id,
             source_class,
             offset: [0.0; 3],
-            presentation_offset: [0.0; 3],
             velocity,
             owner_id: None,
             attached_owner_handle: None,
@@ -6290,7 +6252,6 @@ fn single_descriptor_particle_burst(
             sprite_id: frame.sprite_id,
             source_class,
             offset: [0.0; 3],
-            presentation_offset: [0.0; 3],
             velocity: raw_velocity_to_world(raw_velocity),
             owner_id,
             attached_owner_handle: None,
@@ -6322,7 +6283,6 @@ fn invisible_descriptor_particle_spawn(
         sprite_id: 0,
         source_class,
         offset: [0.0; 3],
-        presentation_offset: [0.0; 3],
         velocity: raw_velocity_to_world(raw_velocity),
         owner_id,
         attached_owner_handle: None,
@@ -6355,7 +6315,6 @@ fn surface_response_particle(source_class: u8, raw_velocity: [i32; 3]) -> Partic
         sprite_id: frame.sprite_id,
         source_class,
         offset: [0.0; 3],
-        presentation_offset: [0.0; 3],
         velocity: raw_velocity_to_world(raw_velocity),
         owner_id: None,
         attached_owner_handle: None,
@@ -6951,7 +6910,6 @@ fn ballistic_trail_spawn(source_class: u8) -> ParticleSpawn {
         sprite_id: frame.sprite_id,
         source_class,
         offset: [0.0; 3],
-        presentation_offset: [0.0; 3],
         velocity: raw_velocity_to_world([0, i32::from(descriptor.spawn_velocity_y_bias_raw()), 0]),
         owner_id: None,
         attached_owner_handle: None,
@@ -7035,9 +6993,9 @@ mod tests {
     use crate::defecate_virus::DEFECATE_VIRUS_PARTICLE_CLASS;
     use crate::level::LevelState;
     use crate::primary_weapon::{
-        PrimaryAuthoredGunMounts, PrimaryFireGeometry, PrimaryGunMounts, PrimaryLaunchBasis,
-        PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon, PRIMARY_SOUND_ID,
-        UPGRADED_PRIMARY_PROFILE, UPGRADED_PRIMARY_PROJECTILE_SPEC, UPGRADED_PRIMARY_SOUND_ID,
+        PrimaryFireGeometry, PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput,
+        PrimaryWeapon, PRIMARY_SOUND_ID, UPGRADED_PRIMARY_PROFILE,
+        UPGRADED_PRIMARY_PROJECTILE_SPEC, UPGRADED_PRIMARY_SOUND_ID,
     };
     use crate::static_damage::{StaticDamageOutcome, StaticDamageScheduler, KIND_9_STATIC_OBJECT};
     use std::time::Duration;
@@ -8505,16 +8463,6 @@ mod tests {
                 origin_world: [4.0, origin_y, 5.0],
                 direction_unit: [1.0, 0.0, 0.0],
             },
-            gun_mounts: PrimaryGunMounts::Authored(PrimaryAuthoredGunMounts {
-                gun_a: PrimaryLaunchBasis {
-                    origin_world: [4.5, origin_y + 0.25, 5.75],
-                    direction_unit: [1.0, 0.0, 0.0],
-                },
-                gun_b: PrimaryLaunchBasis {
-                    origin_world: [3.5, origin_y + 0.25, 5.75],
-                    direction_unit: [1.0, 0.0, 0.0],
-                },
-            }),
             shooter_origin_world: [4.0, origin_y, 5.0],
             shooter_id: 7,
             shooter_entity_type_at_birth: Some(46),
@@ -10352,7 +10300,6 @@ mod tests {
         assert_eq!(bullet.lifetime_ticks, PRIMARY_BULLET_LIFETIME_TICKS);
         assert_eq!(bullet.collision_radius_raw, PRIMARY_BULLET_RADIUS_RAW);
         assert_eq!(bullet.position, [4.0, -4.0, 5.0]);
-        assert_eq!(bullet.presentation_position(), [4.5, -3.75, 5.75]);
         assert_eq!(bullet.source_entity_type_at_birth, Some(46));
         assert_eq!(
             bullet.velocity,
@@ -10364,10 +10311,6 @@ mod tests {
         assert_eq!(muzzle.source_class, PRIMARY_MUZZLE_PARTICLE_CLASS);
         assert_eq!(muzzle.current_sprite_id(), 843);
         assert_eq!(muzzle.position, [4.0, -4.0 + 35.0 / 256.0, 5.0]);
-        assert_eq!(
-            muzzle.presentation_position(),
-            [4.5, -3.75 + 35.0 / 256.0, 5.75]
-        );
         assert_eq!(muzzle.owner_id, Some(7));
         assert_eq!(muzzle.source_entity_type_at_birth, Some(46));
         muzzle.age_ticks = 2.0;
@@ -14436,8 +14379,7 @@ mod tests {
         let mut fx = full_rate_world_fx();
         fx.queue_meteor_impact([255.75, 2.5, 0.25], 0, None);
         fx.process_pending();
-        let mut surface = fx.test_particles_in_virgin_birth_order()[METEOR_IMPACT_SCATTER_COUNT];
-        surface.presentation_offset = [20.0, 100.0, 30.0];
+        let surface = fx.test_particles_in_virgin_birth_order()[METEOR_IMPACT_SCATTER_COUNT];
 
         let light = surface.terrain_light_emission(&terrain).unwrap();
         assert_eq!(light.x_raw, -0x40);
@@ -14745,7 +14687,6 @@ mod tests {
                 sprite_id: 699,
                 source_class: 0x55,
                 offset: [0.0; 3],
-                presentation_offset: [0.0; 3],
                 velocity: [2.0, -1.0, -2.0],
                 owner_id: None,
                 attached_owner_handle: None,

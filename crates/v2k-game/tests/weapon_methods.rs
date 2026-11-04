@@ -250,8 +250,8 @@ fn default_and_factory_bullets_share_the_packet_and_callbacks_with_distinct_draw
 #[test]
 fn idle_unfireable_selector_keeps_ab_phase() {
     use v2k_game::primary_weapon::{
-        PrimaryFireGeometry, PrimaryGunChannel, PrimaryGunMounts, PrimaryLaunchBasis,
-        PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon, DEFAULT_PRIMARY_PROFILE,
+        PrimaryFireGeometry, PrimaryGunChannel, PrimaryLaunchBasis, PrimaryShotBudget,
+        PrimaryTriggerInput, PrimaryWeapon, DEFAULT_PRIMARY_PROFILE,
     };
 
     let geometry = PrimaryFireGeometry {
@@ -259,7 +259,6 @@ fn idle_unfireable_selector_keeps_ab_phase() {
             origin_world: [0.0; 3],
             direction_unit: [0.0, 0.0, 1.0],
         },
-        gun_mounts: PrimaryGunMounts::Unresolved,
         shooter_origin_world: [0.0; 3],
         shooter_id: 46,
         shooter_entity_type_at_birth: Some(46),

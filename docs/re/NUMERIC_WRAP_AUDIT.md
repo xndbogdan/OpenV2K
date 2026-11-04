@@ -63,8 +63,9 @@ documents the interval `[-128,128)`.
 
 The six production calls have three owners: HUD camera distance squares X/Z
 (tie sign does not change that distance); `camera_relative` supplies actor,
-static, particle and ring presentation images; `presentation_delta` carries
-muzzle/projectile presentation offsets before horizontal position wrapping.
+static, particle and ring presentation images. (`presentation_delta`, which
+carried float gun-mount offsets for player shots, is gone: every player shot
+now launches from the draw's muzzle stamp.)
 No caller requires an intentional positive antipodal tie. Y remains outside
 this helper. Unquantized float inputs retain the interval policy rather than
 being silently quantized to native 8.8.

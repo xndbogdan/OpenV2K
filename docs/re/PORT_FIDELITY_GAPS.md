@@ -821,16 +821,10 @@ Last observation pass: 2026-09-07 (first-world lighting/lens and peasant animati
   160-ms event.
   - Status: implemented 2026-07-15; in-game visual acceptance still required.
   - The weapon phase now survives release/re-press and Enter/right-mouse
-    handoff, matching the trace. Simulation/collision retains the proven entity
-    center origin; only presentation retains the selected muzzle displacement.
-  - Visible origins resolve the active authored pair through the live `player4`
-    hierarchy: callback value 0 uses two `pl4gatgun` instances, selector-2
-    callback value 4 uses two `pl4tubegun` instances, factory callback 15 uses
-    two `pl4biggatgun` instances, and plasma callbacks 6/7/8 use the matching
-    `pl4plasma*` pair. Each pair keeps its authored attachment transform and
-    +Z extreme-centroid; no symmetric body-space offset is hard-coded. Unknown
-    weapon branches remain fail-closed because their discharge policy is not
-    proven by mesh shape.
+    handoff, matching the trace. Since 2026-11-04 every player shot launches
+    from the muzzle the craft's draw stamps (`FUN_00424F20`, `FUN_00411400`),
+    so the float gun-mount presentation offsets that once displaced the
+    visible shot from the centre are removed.
   - Implemented 2026-07-31: the retained runtime joint words now follow the
     exact pointer map and decay recurrence. Variant A pulses PLAYER4 callback
     word 3, variant B pulses word 2, and both proven descriptor rate-5 paths
