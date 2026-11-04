@@ -32,11 +32,11 @@
 <rect x="764.1" y="53" width="37" height="192.3" fill="#8c959f"/>
 <text x="570.7" y="43" fill="#1f2328">Format documentation 95.9%</text>
 </g>
-<g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 101 code, 27 notes, 1 omitted</title>
+<g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 101 code, 25 notes, 3 omitted</title>
 <rect x="803.1" y="31" width="172.2" height="214.4" fill="#2da44e"/>
-<rect x="975.4" y="31" width="43.5" height="214.3" fill="#d4a72c"/>
-<rect x="975.4" y="245.3" width="43.5" height="0.1" fill="#8c959f"/>
-<text x="805.1" y="43" fill="#1f2328">Actor task programs 78.9%</text>
+<rect x="975.4" y="31" width="43.5" height="206.7" fill="#d4a72c"/>
+<rect x="975.4" y="237.7" width="43.5" height="7.6" fill="#8c959f"/>
+<text x="805.1" y="43" fill="#1f2328">Actor task programs 80.2%</text>
 </g>
 <g><title>Menu system (MENU_SYSTEM.md): 152 code, 5 notes, 27 omitted</title>
 <rect x="1020.9" y="31" width="178.1" height="180.6" fill="#2da44e"/>
@@ -44,11 +44,11 @@
 <rect x="1046.1" y="211.6" width="152.9" height="33.8" fill="#8c959f"/>
 <text x="1022.9" y="43" fill="#1f2328">Menu system 96.8%</text>
 </g>
-<g><title>Player craft (PLAYER_CRAFT.md): 104 code, 16 notes, 5 omitted</title>
+<g><title>Player craft (PLAYER_CRAFT.md): 104 code, 15 notes, 6 omitted</title>
 <rect x="568.7" y="247.4" width="185.5" height="179.6" fill="#2da44e"/>
-<rect x="754.2" y="247.4" width="26.1" height="166.9" fill="#d4a72c"/>
-<rect x="754.2" y="414.3" width="26.1" height="12.7" fill="#8c959f"/>
-<text x="570.7" y="259.4" fill="#1f2328">Player craft 86.7%</text>
+<rect x="754.2" y="247.4" width="26.1" height="163.3" fill="#d4a72c"/>
+<rect x="754.2" y="410.6" width="26.1" height="16.4" fill="#8c959f"/>
+<text x="570.7" y="259.4" fill="#1f2328">Player craft 87.4%</text>
 </g>
 <g><title>Multiplayer (MULTIPLAYER.md): 139 code, 8 notes, 25 omitted</title>
 <rect x="568.7" y="429" width="188.8" height="146.7" fill="#2da44e"/>
