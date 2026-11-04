@@ -1114,3 +1114,4 @@ address,status,note
 0x00455D60,implemented,Escape and P: FUN_00452770 below phase 5, else the pause menu (docs/re/CONTROLS.md)
 0x00414870,implemented,a queued shot's launch record: the player's shots leave from the draw's stamp (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x00424480,implemented,the Targetter's launch preview: exact direction and velocity words over every selector in the lab (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x00447D70,documented,the player's pair behaviour: with its local controller a body without capability 0xC00 takes the relative-speed feedback and a 0xC00 body nothing (the late walk); the capability-bit0-clear branch's 443B50 pickup is not ported (docs/re/ACTOR_RUNTIME.md#the-players-unadmitted-pairs)

@@ -594,3 +594,76 @@ fn a_type71_lends_its_owner_again_after_a_contact_write() {
     }
     assert!(applied, "a contact hook wrote a Type71's task state");
 }
+
+/// A native body's player pair, which the player adapter does not visit (its
+/// pair identity is not closed: a world 22 fish), takes this walk in live
+/// order: 447D70's feedback, the body's behaviour and A900, then 12760 and
+/// the damage with the player's hull.
+#[v2k_test_support::retail_test]
+fn a_native_fish_touching_the_player_takes_the_walk() {
+    use crate::player_hull::{HullDamageProfile, PlayerHull};
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(22);
+    let mut tasks = adopt_authored(&mut entities);
+    let fish = entities
+        .iter_all()
+        .find(|e| e.entity_type == 25 && e.shared_fish_runtime.is_some())
+        .expect("world 22 authors a native Type25")
+        .id;
+    let player = entities.player().unwrap().id;
+    assert!(crate::player_active_contact::player_pair_left_to_walk(
+        &entities,
+        actor(&entities, fish).unwrap()
+    ));
+    let pair = in_live_order(&entities, player, fish);
+    entities.entity_mut(player).unwrap().physical_body_basis_q31 = RetailRuntimeValue::Known(
+        crate::common_mover::type9_attitude::Type9BodyBasis::from_angle_words(0, 0, 0),
+    );
+    overlap(&mut entities, &session, pair);
+    let mut hull = PlayerHull::new(HullDamageProfile::from_type_record(
+        session.cache.global_entity_type(46).unwrap(),
+    ));
+    hull.readback_entity_damage_state(&entities.player().unwrap().collision);
+    let before = pair.map(|id| actor(&entities, id).unwrap().position_raw());
+    let outcome = resolve_native_captor_active_contacts_with_playing(
+        &mut Intro2ContactFrame {
+            entities: &mut entities,
+            resources: &mut session.cache,
+            world_fx: &mut fx,
+            static_damage: &mut StaticDamageScheduler::new(),
+            notifications: &mut GameplayNotifications::new(),
+            retail_tick: 4794,
+            actor_tasks: &mut tasks,
+        },
+        pair[0],
+        CaptureFeedbackPolicy::Gameplay,
+        Some(PlayingPlayerContact {
+            hull: &mut hull,
+            extra_lives: RetailRuntimeValue::Known(3),
+        }),
+    );
+    let NativeCaptorPairOutcome::Resolved { visits } = &outcome else {
+        panic!("{outcome:?}");
+    };
+    let visit = visits
+        .iter()
+        .find(|visit| visit.candidate_id == pair[1])
+        .expect("the player pair is visited");
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Behavior { owner, result: NativeCaptorPairBehaviorResult::Null, .. }
+            if *owner == player
+    )));
+    assert!(
+        matches!(
+            visit.stages.last(),
+            Some(NativeCaptorPairStage::Physical { .. })
+        ),
+        "{visit:?}"
+    );
+    assert_ne!(
+        pair.map(|id| actor(&entities, id).unwrap().position_raw()),
+        before,
+        "12760 separates the pair"
+    );
+}
