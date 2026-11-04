@@ -210,6 +210,66 @@ mod tests {
         assert_eq!(harmful, [41, 42, 43, 46, 47]);
     }
 
+    /// Every body of a native style-5 load is decidable; in world 41 the
+    /// working factory (Type66) and the Hive (Type67) start in the sea, as
+    /// retail's two burning bodies there do.
+    #[v2k_test_support::retail_test]
+    fn native_loads_decide_every_body_of_a_harmful_sea_world() {
+        use crate::{
+            entity::{AuthoredWorldConstruction, EntityConstructionResources, EntityManager},
+            entity_collision_state::EntityTypeRuntimeMetadata,
+            session::GameSession,
+            world_fx::WorldFx,
+        };
+        for world in [41, 42, 43, 46, 47] {
+            let mut session = GameSession::init(&v2k_test_support::retail_dir()).unwrap();
+            session.load_auxiliary_ovl(3, 1).unwrap();
+            session.load_level_by_id(world, 1).unwrap();
+            let metadata: Vec<_> = (0..session.cache.global_entity_model_table().len())
+                .map(|id| {
+                    EntityTypeRuntimeMetadata::from_section12(
+                        session.cache.global_entity_type(id).unwrap(),
+                    )
+                })
+                .collect();
+            let manager = EntityManager::from_authored_world(
+                AuthoredWorldConstruction {
+                    level: session.cache.level_desc().unwrap(),
+                    logical_world_index: world as i32 - 12,
+                    type_metadata: &metadata,
+                    player_arrival: None,
+                    retail_tick: 0,
+                    resources: EntityConstructionResources {
+                        terrain: session.cache.terrain(),
+                        terrain_objects: session.cache.terrain_objects(),
+                        model_extent_raw: Some(&|id| {
+                            session.cache.global_model(id).map(|m| m.radius)
+                        }),
+                    },
+                },
+                &mut WorldFx::new(),
+            )
+            .unwrap();
+            let sea = harmful_sea_level_raw(
+                session.cache.level_desc().unwrap(),
+                session.cache.terrain().unwrap(),
+            )
+            .unwrap();
+            let mut burning = Vec::new();
+            for entity in manager.iter_all() {
+                match body_in_harmful_sea(entity, &session.cache, sea) {
+                    Ok(true) => burning.push(entity.entity_type),
+                    Ok(false) => {}
+                    Err(block) => panic!("world {world} Type{}: {block:?}", entity.entity_type),
+                }
+            }
+            burning.sort();
+            if world == 41 {
+                assert_eq!(burning, [66, 67]);
+            }
+        }
+    }
+
     #[test]
     fn a_body_burns_once_its_lower_half_reaches_below_the_sea() {
         let radius = |slot: usize| (slot == 0).then_some(0x100);

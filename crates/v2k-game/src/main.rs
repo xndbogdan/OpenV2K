@@ -10276,7 +10276,11 @@ fn run_game(
                     log!("Harmful sea: body {id} takes {amount}");
                 }
                 for (id, block) in sea_blocked {
-                    eprintln!("Harmful sea stopped at unresolved data for body {id} (each later body of its type is skipped too): {block:?}");
+                    let entity_type = em
+                        .iter_all()
+                        .find(|entity| entity.id == id)
+                        .map_or(0, |entity| entity.entity_type);
+                    eprintln!("Harmful sea stopped at unresolved data for body {id}, Type{entity_type} (each later body of its type is skipped too): {block:?}");
                 }
 
                 // Native surface and static phases precede

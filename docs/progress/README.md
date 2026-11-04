@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,399 | |
 | Marked not needed (excluded below) | 628 | |
-| **Referenced by port code** | **1,679** | **94.8%** |
+| **Referenced by port code** | **1,682** | **95.0%** |
 | Referenced by code or RE notes | 1,771 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 444 |
+| implemented | 448 |
 | approximated | 8 |
 | documented | 30 |
 | not-needed | 628 |
@@ -48,9 +48,9 @@ Where the code's references are thinnest:
 | [Platform](../re/PLATFORM_RUNTIME.md) | 7 | 0 | 27 |
 | [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 157 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 4 | 0 | 140 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 56 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 43 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 47 |
+| [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
 
 ## Omitted
 
