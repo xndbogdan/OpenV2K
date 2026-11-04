@@ -682,8 +682,9 @@ does not create another event. Every event resolves global sound 88 to physical
 blob 7 (`sec11_3XX_000`, 48,944 PCM bytes) at fixed multiplier `0x19999`
 (1.6× / 35,279 Hz). The descriptor's auxiliary-command flag causes one normal
 class-1 record followed by a distinct class-15 record with zero direction/time
-fields; its origin is refreshed from the shooter before dispatch, so it is not
-a second muzzle shot. The sound is played once for the whole event. Projectile
+fields; it carries the shot's emitter index, so the draw stamps the same muzzle
+into it and it leaves from the shot's own point (from the centre while
+unstamped), with no speed of its own. The sound is played once for the whole event. Projectile
 class 15 uses raw speed 1 and particle class 32, not the bullet's class-1
 particle.
 
@@ -1828,10 +1829,47 @@ were the next update's heading with this update's entry pitch and roll in
 all 64 launches. The port's retail test checks 25 of these launches and the
 Virus Bomb's.
 
-Not the same yet: the launch record's origin. Retail's record held the
-craft's draw-stamped emitter point, about 200 from the centre (for example
-(19813, −555, 14808) with the craft at (19712, −554, 14634)), where the
-port's particle weapons start at the centre.
+The launch origin is the draw's, as for every queued shot
+([shot origins](GAME_MECHANICS.md#shot-origins-for-undrawn-actors)).
+`FUN_00424650` puts each shot and its class-15 record on the craft's list
+with the emitter index; the craft's draw stamps the gun's world point into
+both (`FUN_00424F20`); `FUN_00411400` then launches them through
+`FUN_00414870` and `FUN_0044E770` from the stamp, the shot caught up along its
+direction by the record's time at the record's speed (`+0x28`, else the
+row's), each with the craft's velocity words at that moment. So the particle
+is born in presentation, drawn that frame, and first moved by the next tick's
+particle pass. The port defers every player shot to the craft's draw
+(particles, class-15 records and modeled bodies alike) and plays the
+descriptor's cue as the shot is fired, where `FUN_00424650` plays it. A shot
+whose stamp the port cannot own (the free-fly camera) is suppressed with a
+logged line.
+
+Retail lab (the same run; a lab hook logged the craft's position and Euler
+words at its draw): each launch record held the stamped muzzle, about 200
+from the centre (for example (19813, −555, 14808) with the craft at
+(19712, −554, 14634)): 130 to 150 to either side, −11 to 145 up and 50 to 165
+forward in the craft's frame, by gun, barrel and recoil. The port, started
+from retail's state 180 ticks before the first shot with the same keys,
+launched from its own draw's stamps; paired by weapon and order, 60 of 72
+shots (selectors 1, 2, 12, 13, 14, 18 and 22) agree with retail's in the
+craft's frame within 3.4 units, the two runs' drift in pitch, roll and
+recoil; the other 12 were fired at different barrel words.
+
+The Targetter's ray is `FUN_00424480`'s preview of a shot, run through
+`FUN_0044E770` with the preview word set, so nothing is launched: it starts
+at the craft's centre; its direction is the craft's own matrix (`+0C`, not
+`FUN_00413D40`'s) with the barrel turned out of the up and forward rows
+(`FUN_00457A90` by minus the barrel word, except for selector 5), the forward
+row; its speed is the emitter's `+0C` override, else the row's (a speed-1
+rocket previews at 1024); and `FUN_0044E770` returns the floored velocity
+words as for a shot, with the craft's velocity or closing speed. A row with
+neither particle nor body, selectors `0x11`, 4 and 9, and row `0x1F` at or
+above the sea return no words, and `FUN_0044D0F0` then ends with the result
+bits cleared, keeping the target and the terrain search as they were. The
+port computes the same words (`targetter_preview_velocity_raw`). Retail lab
+(Level 1, master code, Cheats -> Repairs -> Targetter, every weapon cycled
+while turning, aiming the barrel and throttling): all 1,068 previews over 23
+selectors, the refused ones included, equal it in direction and velocity.
 
 **Megablast.** Operation `0x39` adds its amount to controller `+195` (at most
 4) and births one Type65 in mode 0 at the player, owned by it (`+60`).

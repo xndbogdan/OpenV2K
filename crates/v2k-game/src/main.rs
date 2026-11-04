@@ -126,8 +126,8 @@ use v2k_game::model_tree::{
 };
 use v2k_game::native_entity_weapons::{
     launch::{
-        emitter_basis_q31, entity_weapon_drain_position_raw, entity_weapon_launch_velocity_raw,
-        launch_direction_q31,
+        emitter_basis_q31, entity_weapon_launch_velocity_raw, launch_direction_q31,
+        queued_shot_drain_position_raw, targetter_preview_velocity_raw,
     },
     EntityWeaponConstructionRequest, EntityWeaponKind,
 };
@@ -164,11 +164,10 @@ use v2k_game::power_up_contact::{
 #[cfg(test)]
 use v2k_game::primary_weapon::UPGRADED_PRIMARY_PROFILE;
 use v2k_game::primary_weapon::{
-    fire_profile_from_descriptor, PrimaryAuthoredGunMounts, PrimaryFireGeometry, PrimaryGunChannel,
-    PrimaryGunMounts, PrimaryLaunchBasis, PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon,
-    POSSESSION_RAY_HELD, POSSESSION_RAY_SELECTOR,
+    fire_profile_from_descriptor, PrimaryAuthoredGunMounts, PrimaryFireEvent, PrimaryFireGeometry,
+    PrimaryGunChannel, PrimaryGunMounts, PrimaryLaunchBasis, PrimaryShotBudget,
+    PrimaryTriggerInput, PrimaryWeapon, POSSESSION_RAY_HELD, POSSESSION_RAY_SELECTOR,
 };
-use v2k_game::projectile_emitter::projectile_class_row;
 use v2k_game::radial_damage::radial_distance_raw;
 use v2k_game::retail_clock::{RetailFramePump, RetailTickClock};
 use v2k_game::save::{SaveManager, SavePathContext, SaveSource, SavedPlayerState};
@@ -506,13 +505,16 @@ fn apply_ordinary_hive_death_burst_and_radial(
     log!("Hive death dynamic radial: {result:?}");
 }
 
-///424650 retains the direction and source while11400/14870 consume the
-/// transient after simulation/contact. A body gets its first13500 visit on
-/// the following frame, with current source velocity and Euler words.
+/// `FUN_00424650` queues each shot and its class-15 record on the shooter's
+/// list with the direction; `FUN_00411400` launches them after the draw has
+/// stamped the muzzle (`FUN_00414870`, `FUN_0044E770`), with the source's
+/// velocity then. A body gets its first `FUN_00413500` visit on the following
+/// frame, with current source velocity and Euler words.
 #[derive(Debug, Clone, Copy)]
-struct PendingEntityWeaponFire {
-    kind: EntityWeaponKind,
-    source_actor_id: u32,
+struct PendingPlayerShot {
+    event: PrimaryFireEvent,
+    /// The modeled body the shot births; `None` launches a particle.
+    kind: Option<EntityWeaponKind>,
     direction_q31: [i32; 3],
     emitter_index: u16,
     time_offset_us: u32,
@@ -534,73 +536,108 @@ struct EntityWeaponPresentationFrame<'a> {
     error_reported: &'a mut bool,
 }
 
-fn publish_entity_weapon_bodies(
+fn publish_player_shots(
     frame: EntityWeaponPresentationFrame<'_>,
-    pending: &mut Vec<PendingEntityWeaponFire>,
+    pending: &mut Vec<PendingPlayerShot>,
     origins: &EntityWeaponDrawOrigins,
 ) {
+    let sea_level = frame
+        .cache
+        .terrain()
+        .and_then(|terrain| terrain.water_enabled().then(|| terrain.sea_level_world_y()));
     for shot in std::mem::take(pending) {
         if !origins.admitted || origins.blocked {
             if !*frame.error_reported {
                 eprintln!(
-                    "Native {:?} birth suppressed: unowned player draw/emitter origin",
+                    "Player shot {:?} launch suppressed: unowned player draw/emitter origin",
                     shot.kind
                 );
                 *frame.error_reported = true;
             }
             continue;
         }
-        let request = frame
+        let source_actor_id = shot.event.projectile.owner_id;
+        let Some((source_position, source_velocity, source_rotation)) = frame
             .entities
             .iter_all()
-            .find(|actor| actor.id == shot.source_actor_id)
-            .map(|source| EntityWeaponConstructionRequest {
-                kind: shot.kind,
-                source_actor_id: shot.source_actor_id,
-                position_raw: entity_weapon_drain_position_raw(
-                    shot.kind,
-                    origins.points[usize::from(shot.emitter_index != 0)]
-                        .unwrap_or_else(|| source.position_raw()),
-                    shot.direction_q31,
+            .find(|actor| actor.id == source_actor_id)
+            .map(|source| {
+                (
+                    source.position_raw(),
                     source.velocity_raw(),
-                    shot.time_offset_us,
-                ),
-                velocity_raw: entity_weapon_launch_velocity_raw(
-                    shot.kind,
-                    shot.direction_q31,
-                    source.velocity_raw(),
-                ),
-                rotation_raw: source.rotation_heading_pitch_roll_raw(),
-            });
-        let result = request
-            .ok_or(v2k_game::native_entity_weapons::EntityWeaponBlock::SourceAllocation)
-            .and_then(|request| {
-                frame.entities.construct_entity_weapon(
-                    request,
-                    frame.cache,
-                    frame.world_fx,
-                    frame.retail_tick,
+                    source.rotation_heading_pitch_roll_raw(),
                 )
-            });
-        match result {
-            Ok(owner) => {
-                if let Err(reason) = frame
-                    .actor_tasks
-                    .register_native_weapon(frame.entities, owner)
-                {
-                    eprintln!(
-                        "Native {:?} body {} task publication blocked: {reason:?}",
-                        shot.kind,
-                        owner.entity_id()
-                    );
-                }
-            }
-            Err(reason) if !*frame.error_reported => {
-                eprintln!("Native {:?} birth suppressed: {reason:?}", shot.kind);
+            })
+        else {
+            if !*frame.error_reported {
+                eprintln!("Player shot {:?} launch suppressed: no source", shot.kind);
                 *frame.error_reported = true;
             }
-            Err(_) => {}
+            continue;
+        };
+        // 411400: a record the draw left unstamped leaves from the centre.
+        let stamp = origins.points[usize::from(shot.emitter_index != 0)].unwrap_or(source_position);
+        let speed_raw = shot.kind.map_or(
+            shot.event.projectile.spec.speed_raw,
+            EntityWeaponKind::launch_speed_raw,
+        );
+        let origin_raw = queued_shot_drain_position_raw(
+            speed_raw,
+            stamp,
+            shot.direction_q31,
+            source_velocity,
+            shot.time_offset_us,
+        );
+        log!(
+            "Player shot class {} emitter {}: origin {origin_raw:?} stamp {:?} source {source_position:?} rotation {source_rotation:?} direction {:?}",
+            shot.event.projectile.spec.projectile_class,
+            shot.emitter_index,
+            origins.points[usize::from(shot.emitter_index != 0)],
+            shot.direction_q31,
+        );
+        // The class-15 record has no time, so no catch-up.
+        let event =
+            shot.event
+                .launched_from(origin_raw, stamp, shot.direction_q31, source_velocity);
+        if let Some(kind) = shot.kind {
+            let request = EntityWeaponConstructionRequest {
+                kind,
+                source_actor_id,
+                position_raw: origin_raw,
+                velocity_raw: entity_weapon_launch_velocity_raw(
+                    kind,
+                    shot.direction_q31,
+                    source_velocity,
+                ),
+                rotation_raw: source_rotation,
+            };
+            match frame.entities.construct_entity_weapon(
+                request,
+                frame.cache,
+                frame.world_fx,
+                frame.retail_tick,
+            ) {
+                Ok(owner) => {
+                    if let Err(reason) = frame
+                        .actor_tasks
+                        .register_native_weapon(frame.entities, owner)
+                    {
+                        eprintln!(
+                            "Native {kind:?} body {} task publication blocked: {reason:?}",
+                            owner.entity_id()
+                        );
+                    }
+                }
+                Err(reason) if !*frame.error_reported => {
+                    eprintln!("Native {kind:?} birth suppressed: {reason:?}");
+                    *frame.error_reported = true;
+                }
+                Err(_) => {}
+            }
         }
+        frame
+            .world_fx
+            .materialize_primary_fire_particles(&[event], sea_level);
     }
 }
 
@@ -2438,7 +2475,7 @@ fn run_game(
     let mut factory_pair_error_reported = false;
     let mut power_up_contact_error_reported = false;
     let mut primary_weapon = PrimaryWeapon::new();
-    let mut pending_entity_weapon_fire = Vec::new();
+    let mut pending_player_shots = Vec::new();
     let mut native_entity_weapon_error_reported = false;
     let mut held_weapon_selectors_reported = HashSet::new();
     let mut targetter = TargetterRuntime::new(0);
@@ -4139,7 +4176,7 @@ fn run_game(
                 return_to_frontend_pending = false;
                 gameplay_radar = None;
                 world_fx.clear();
-                pending_entity_weapon_fire.clear();
+                pending_player_shots.clear();
                 native_entity_weapon_error_reported = false;
                 // The world's teardown drops its pending terrain programs
                 // (FUN_00437470, FUN_004288C0).
@@ -4319,7 +4356,7 @@ fn run_game(
                 pending_failed_world_interior_request = false;
                 gameplay_radar = None;
                 world_fx.clear();
-                pending_entity_weapon_fire.clear();
+                pending_player_shots.clear();
                 native_entity_weapon_error_reported = false;
                 // 44F7E1 resets hint history for frontend/session selection.
                 // A456D10 campaign warp retains that history across worlds.
@@ -6692,7 +6729,7 @@ fn run_game(
                             static_explosion_lights: &[],
                             abort_frame: None,
                             specialized_actor_tasks: &mut specialized_actor_tasks,
-                            pending_entity_weapon_fire: &mut pending_entity_weapon_fire,
+                            pending_player_shots: &mut pending_player_shots,
                             entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                             player_craft: &player_craft,
                             player_hull: &player_hull,
@@ -8920,9 +8957,6 @@ fn run_game(
                     camera.position[2] = v2k_core::world::wrap(camera.position[2]);
                 }
 
-                let sea_level = session.cache.terrain().and_then(|terrain| {
-                    terrain.water_enabled().then(|| terrain.sea_level_world_y())
-                });
                 // Enter, joystick button 1 and a pad's fire share the fire
                 // descriptor. The reader's fire word stays zero while the
                 // resume's lockout runs (FUN_00456C90).
@@ -8989,31 +9023,24 @@ fn run_game(
                         );
                         // Retain the selected descriptor and launch words before
                         // a final round can automatically select another weapon.
-                        if !fire_events.is_empty() {
-                            if let Some(kind) =
-                                EntityWeaponKind::from_selector(descriptor.selector())
-                            {
-                                pending_entity_weapon_fire.extend(fire_events.iter().map(
-                                    |event| {
-                                        PendingEntityWeaponFire {
-                                            kind,
-                                            source_actor_id: event.projectile.owner_id,
-                                            direction_q31,
-                                            emitter_index: match event.gun_channel {
-                                                PrimaryGunChannel::A => 1,
-                                                PrimaryGunChannel::B => 0,
-                                            },
-                                            time_offset_us: primary_weapon
-                                                .elapsed()
-                                                .saturating_sub(event.fired_at)
-                                                .as_micros()
-                                                .min(u128::from(u32::MAX))
-                                                as u32,
-                                        }
-                                    },
-                                ));
+                        let kind = EntityWeaponKind::from_selector(descriptor.selector());
+                        pending_player_shots.extend(fire_events.iter().map(|event| {
+                            PendingPlayerShot {
+                                event: *event,
+                                kind,
+                                direction_q31,
+                                emitter_index: match event.gun_channel {
+                                    PrimaryGunChannel::A => 1,
+                                    PrimaryGunChannel::B => 0,
+                                },
+                                time_offset_us: primary_weapon
+                                    .elapsed()
+                                    .saturating_sub(event.fired_at)
+                                    .as_micros()
+                                    .min(u128::from(u32::MAX))
+                                    as u32,
                             }
-                        }
+                        }));
                         for _ in &fire_events {
                             let commit = weapon_inventory.commit_selected_round();
                             debug_assert!(matches!(commit, AmmoCommit::Fired { .. }));
@@ -9023,7 +9050,8 @@ fn run_game(
                                 &weapon_inventory,
                             );
                         }
-                        world_fx.queue_primary_fire_batch(&fire_events, sea_level);
+                        // The shots wait for the player's draw (publish_player_shots).
+                        world_fx.queue_primary_fire_sound(&fire_events);
                     } else {
                         let selector = descriptor.selector();
                         if primary_trigger.held() && held_weapon_selectors_reported.insert(selector)
@@ -9059,10 +9087,6 @@ fn run_game(
                     retail_tick,
                 );
 
-                // Fire events are produced before the retail particle pass.
-                // Materialize them now so the selected class-1/2/3
-                // primary receives one integration step before its descriptor
-                // collision callback examines it.
                 world_fx.process_pending();
                 // Controlled-player movement precedes the Hive's no-RNG wreck
                 // contact phase; its component clock already ran in13500.
@@ -11546,7 +11570,7 @@ fn run_game(
                         static_explosion_lights: &static_damage_explosion_lights,
                         abort_frame: main_base_level_abort.submitted_frame_request(),
                         specialized_actor_tasks: &mut specialized_actor_tasks,
-                        pending_entity_weapon_fire: &mut pending_entity_weapon_fire,
+                        pending_player_shots: &mut pending_player_shots,
                         entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                         player_craft: &player_craft,
                         player_hull: &player_hull,
@@ -12247,7 +12271,7 @@ struct GameplayWorldFrame<'a> {
     static_explosion_lights: &'a [TerrainExplosionLight],
     abort_frame: Option<MainBaseAbortFrameRequest>,
     specialized_actor_tasks: &'a mut SpecializedActorTaskScheduler,
-    pending_entity_weapon_fire: &'a mut Vec<PendingEntityWeaponFire>,
+    pending_player_shots: &'a mut Vec<PendingPlayerShot>,
     entity_weapon_error_reported: &'a mut bool,
     player_craft: &'a PlayerCraft,
     player_hull: &'a PlayerHull,
@@ -12343,7 +12367,7 @@ fn draw_gameplay_world(
         static_explosion_lights,
         abort_frame,
         specialized_actor_tasks,
-        pending_entity_weapon_fire,
+        pending_player_shots,
         entity_weapon_error_reported,
         player_craft,
         player_hull,
@@ -12503,7 +12527,7 @@ fn draw_gameplay_world(
                                 submissions: &mut model_submissions,
                             },
                         );
-                        publish_entity_weapon_bodies(
+                        publish_player_shots(
                             EntityWeaponPresentationFrame {
                                 entities: em,
                                 cache,
@@ -12512,7 +12536,7 @@ fn draw_gameplay_world(
                                 retail_tick,
                                 error_reported: entity_weapon_error_reported,
                             },
-                            pending_entity_weapon_fire,
+                            pending_player_shots,
                             &origins,
                         );
                     }
@@ -12847,8 +12871,8 @@ fn draw_gameplay_world(
             .skip_while(|id| *id != entity_id)
             .nth(1);
     }
-    if !pending_entity_weapon_fire.is_empty() {
-        publish_entity_weapon_bodies(
+    if !pending_player_shots.is_empty() {
+        publish_player_shots(
             EntityWeaponPresentationFrame {
                 entities: em,
                 cache,
@@ -12857,7 +12881,7 @@ fn draw_gameplay_world(
                 retail_tick,
                 error_reported: entity_weapon_error_reported,
             },
-            pending_entity_weapon_fire,
+            pending_player_shots,
             &EntityWeaponDrawOrigins::default(),
         );
     }
@@ -16919,13 +16943,29 @@ fn update_targetter_runtime(
     };
     let selector = weapon_inventory.selected_descriptor().selector();
     let trajectory = fun_0044ea60(selector);
-    let projectile_speed_raw = projectile_class_row(selector)
-        .map(|row| row.speed_raw)
-        .unwrap_or(0);
-    // Retail builds this launch preview from the player's emitter (FUN_00424480).
-    let direction = player_primary_fire_direction(&player_craft, player);
-    let velocity_raw =
-        direction.map(|component| (component * projectile_speed_raw as f32).round() as i32);
+    let Some(terrain) = cache.terrain() else {
+        return;
+    };
+    // FUN_00424480: the launch preview from the player's emitter; its error
+    // ends FUN_0044D0F0 with the result bits cleared.
+    let Some(velocity_raw) = cache
+        .global_entity_type(46)
+        .and_then(|record| record.projectile_emitter_descriptor())
+        .and_then(|emitter| {
+            targetter_preview_velocity_raw(
+                selector,
+                emitter.speed_override_raw as u16,
+                player_body_basis(player_craft, player),
+                Some(player_craft.gun_barrel as i16 as u16),
+                player.position_raw()[1],
+                terrain.sea_level_raw(),
+                player.velocity_raw(),
+            )
+        })
+    else {
+        targetter.preview_unavailable();
+        return;
+    };
     // Retail appends each candidate handle to the program's list (FUN_00414930).
     let candidates = entities
         .iter()
@@ -16938,9 +16978,6 @@ fn update_targetter_runtime(
             capability_flags: entity.capability_flags,
         })
         .collect::<Vec<_>>();
-    let Some(terrain) = cache.terrain() else {
-        return;
-    };
 
     let _ = targetter.update(
         TargetterUpdateRequest {
@@ -17023,7 +17060,7 @@ fn player_emitter_angle_words(craft: &PlayerCraft, player: &Entity) -> [i16; 3] 
     [player.rotation_heading_pitch_roll_raw()[0], pitch, roll]
 }
 
-/// The muzzle's float direction for presentation and the Targetter preview:
+/// The muzzle's float direction for presentation:
 /// the retained up/forward columns with the barrel. The shot itself takes
 /// `launch_direction_q31` over `FUN_00413D40`'s matrix.
 fn player_primary_fire_direction(craft: &PlayerCraft, player: &Entity) -> [f32; 3] {

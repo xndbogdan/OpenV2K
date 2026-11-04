@@ -14592,7 +14592,7 @@ pub fn world_position_raw(position: [f32; 3]) -> [i16; 3] {
     position.map(world_raw_word)
 }
 
-pub(crate) fn raw_position_world(position_raw: [i16; 3]) -> [f32; 3] {
+pub fn raw_position_world(position_raw: [i16; 3]) -> [f32; 3] {
     position_raw.map(|word| f32::from(word) / FIXED_SCALE)
 }
 

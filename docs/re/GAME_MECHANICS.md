@@ -829,8 +829,9 @@ infected selector-`0x1A` regeneration branch remain separate port boundaries
 in [the player firing contract](PLAYER_CRAFT.md#fire-both-modes).
 `FUN_0044EA60` classifies the selected descriptor dword
 copied to weapon-component `+0x10`: selectors `5/0xC/0xD/0xE/0xF/0x11/0x15/0x1F`
-are straight-ray and every other selector is ballistic. Targetter uses that
-family plus `DAT_004D02C0` speed. Firing emits recovered `FUN_0043F590`,
+are straight-ray and every other selector is ballistic. The Targetter's ray
+is that family with `FUN_00424480`'s launch preview
+([PLAYER_CRAFT](PLAYER_CRAFT.md#special-weapons)). Firing emits recovered `FUN_0043F590`,
 `FUN_0043F6E0`, and `FUN_0043F780` rows; class-5 static `FUN_0043F920` is
 `FUN_00427DE0`. `FUN_00411250` plays type `+0x82` (type 17 sound 92) when
 dying bit `0x4000` was clear, then type-46 `FUN_00415040` through empty-link

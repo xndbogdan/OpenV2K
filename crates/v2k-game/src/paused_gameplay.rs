@@ -91,7 +91,7 @@ impl PausedGameplayScene {
         self.world.redraw(|frozen| {
             let mut targetter = self.targetter;
             let mut lights = v2k_render::TerrainLightWindow::default();
-            let mut pending_entity_weapon_fire = Vec::new();
+            let mut pending_player_shots = Vec::new();
             let mut entity_weapon_error_reported = false;
             let _ = draw_gameplay_world(
                 renderer,
@@ -112,7 +112,7 @@ impl PausedGameplayScene {
                     static_explosion_lights: &draw.overlay.static_explosion_lights,
                     abort_frame: draw.abort_frame,
                     specialized_actor_tasks: frozen.specialized_actor_tasks,
-                    pending_entity_weapon_fire: &mut pending_entity_weapon_fire,
+                    pending_player_shots: &mut pending_player_shots,
                     entity_weapon_error_reported: &mut entity_weapon_error_reported,
                     player_craft: draw.craft,
                     player_hull: draw.hull,

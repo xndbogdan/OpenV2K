@@ -413,6 +413,9 @@ pub struct PrimaryProjectileSpawn {
     pub presentation_basis: PrimaryLaunchBasis,
     /// `FUN_0044E770`'s exact velocity words, before the class's `+0x2A` bias.
     pub velocity_raw: [i16; 3],
+    /// The row leads with 1: `FUN_0044E770` adds the closing speed, not the
+    /// shooter's velocity.
+    pub rocket_shaped: bool,
     pub velocity_world_per_second: [f32; 3],
     pub spec: PrimaryProjectileSpec,
 }
@@ -437,9 +440,10 @@ pub const PRIMARY_AUXILIARY_SPEC: PrimaryAuxiliarySpec = PrimaryAuxiliarySpec {
 
 /// One class-15 auxiliary-effect request emitted after the normal bullet.
 ///
-/// Retail zeroes its direction/time fields on creation and refreshes its origin
-/// from the shooter before dispatch. The dispatcher resolves it to the
-/// above-water class-32 flash/smoke particle.
+/// Retail zeroes its direction/time fields on creation. It is queued with the
+/// shot's emitter index, so the draw stamps the same muzzle into it; an
+/// unstamped record leaves from the shooter's centre. The dispatcher resolves
+/// it to the above-water class-32 flash/smoke particle.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PrimaryAuxiliaryCommand {
     pub owner_id: u32,
@@ -638,6 +642,39 @@ impl PrimaryWeapon {
     }
 }
 
+impl PrimaryFireEvent {
+    /// `FUN_00411400` launches the queued records after the shooter's draw
+    /// (`FUN_00414870`, `FUN_0044E770`): the shot from `origin_raw`, the
+    /// class-15 record from `auxiliary_origin_raw`, both with the shooter's
+    /// velocity words at that moment.
+    pub fn launched_from(
+        mut self,
+        origin_raw: [i16; 3],
+        auxiliary_origin_raw: [i16; 3],
+        direction_q31: [i32; 3],
+        shooter_velocity_raw: [i16; 3],
+    ) -> Self {
+        let origin = crate::entity::raw_position_world(origin_raw);
+        let auxiliary_origin = crate::entity::raw_position_world(auxiliary_origin_raw);
+        let velocity_raw = crate::native_entity_weapons::launch::launch_velocity_raw(
+            self.projectile.rocket_shaped,
+            self.projectile.spec.speed_raw,
+            direction_q31,
+            shooter_velocity_raw,
+        );
+        self.projectile.origin_world = origin;
+        self.projectile.presentation_basis.origin_world = origin;
+        self.projectile.velocity_raw = velocity_raw;
+        self.projectile.velocity_world_per_second =
+            velocity_raw.map(|word| raw_velocity_to_world_per_second(word.into()));
+        self.auxiliary.origin_world = auxiliary_origin;
+        self.auxiliary.presentation_origin_world = auxiliary_origin;
+        self.auxiliary.inherited_velocity_world_per_second =
+            shooter_velocity_raw.map(|word| raw_velocity_to_world_per_second(word.into()));
+        self
+    }
+}
+
 fn primary_fire_event(
     fired_at: Duration,
     gun_channel: PrimaryGunChannel,
@@ -662,6 +699,7 @@ fn primary_fire_event(
         direction_unit: basis.direction_unit,
         presentation_basis,
         velocity_raw,
+        rocket_shaped,
         velocity_world_per_second: projectile_velocity,
         spec: profile.projectile,
     };
@@ -769,6 +807,37 @@ mod tests {
         let repeat = weapon.update(RETAIL_TICK_DURATION, HELD_A, geometry());
         assert_eq!(repeat.len(), 1);
         assert_eq!(repeat[0].fired_at, PRIMARY_REPEAT_INTERVAL);
+    }
+
+    #[test]
+    fn a_launch_at_the_draw_leaves_from_the_stamp_with_the_velocity_then() {
+        let event = PrimaryWeapon::new().update(Duration::ZERO, HELD_A, geometry())[0];
+        // Retail lab, Level 1 tick 579: the craft at (19712, -554, 14634)
+        // fired from its stamped muzzle, about 200 from the centre.
+        let launched = event.launched_from(
+            [19813, -555, 14808],
+            [19813, -555, 14808],
+            [i32::MAX, 0, 0],
+            [9, -22, -129],
+        );
+        assert_eq!(
+            launched.projectile.origin_world,
+            [19813.0 / 256.0, -555.0 / 256.0, 14808.0 / 256.0]
+        );
+        assert_eq!(
+            launched.projectile.presentation_basis.origin_world,
+            launched.projectile.origin_world
+        );
+        assert_eq!(
+            launched.auxiliary.origin_world,
+            launched.projectile.origin_world
+        );
+        // A leading-zero row adds the shooter's velocity words at the launch.
+        assert_eq!(launched.projectile.velocity_raw, [3999 + 9, -22, -129]);
+        assert_eq!(
+            launched.auxiliary.inherited_velocity_world_per_second,
+            [9, -22, -129].map(raw_velocity_to_world_per_second)
+        );
     }
 
     #[test]

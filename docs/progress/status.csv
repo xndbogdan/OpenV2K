@@ -1112,3 +1112,5 @@ address,status,note
 0x004503C0,implemented,the cinematic camera: Intro2's and the attract world's ends, the proxy's follow and phase 4's subject roaming; its attract-row writes into the demo player are held with that player (docs/re/MENU_SYSTEM.md#the-attract-demo-in-the-port)
 0x0044FEB0,implemented,leaving a game for the frontend: the network session closes, the CD stops, the frontend follows (docs/re/MENU_SYSTEM.md#the-attract-demo-in-the-port)
 0x00455D60,implemented,Escape and P: FUN_00452770 below phase 5, else the pause menu (docs/re/CONTROLS.md)
+0x00414870,implemented,a queued shot's launch record: the player's shots leave from the draw's stamp (docs/re/PLAYER_CRAFT.md#special-weapons)
+0x00424480,implemented,the Targetter's launch preview: exact direction and velocity words over every selector in the lab (docs/re/PLAYER_CRAFT.md#special-weapons)
