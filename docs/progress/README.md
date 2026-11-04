@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,400 | |
-| Marked not needed (excluded below) | 626 | |
-| **Referenced by port code** | **1,666** | **93.9%** |
-| Referenced by code or RE notes | 1,774 | 100.0% |
+| Marked not needed (excluded below) | 629 | |
+| **Referenced by port code** | **1,666** | **94.1%** |
+| Referenced by code or RE notes | 1,771 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -21,8 +21,8 @@ Manual statuses from [`status.csv`](status.csv):
 |---|---:|
 | implemented | 387 |
 | approximated | 6 |
-| documented | 31 |
-| not-needed | 626 |
+| documented | 34 |
+| not-needed | 629 |
 
 10 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,9 +41,9 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 27 | 3 | 101 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 25 | 3 | 101 |
 | [Controls](../re/CONTROLS.md) | 18 | 1 | 52 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 16 | 0 | 104 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 15 | 0 | 104 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 28 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 139 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
@@ -81,6 +81,7 @@ denominator, each with its reason: the never-installed
 | dead: installed at Graph2D +0x1068..+0x107C by FUN_00480D10, but no queue thunk or call site reads those slots (docs/re/SOFTWARE_RASTER.md) | 6 |
 | dead: only in the default game-channel descriptor 004D4A00, which FUN_0046BED0 uses when its caller passes none; both callers (FUN_0046CAC0, FUN_0046CB50) pass the game's 004CAFA8 (docs/re/MULTIPLAYER.md#player-slots) | 4 |
 | dead: stored in software fill slots +0x10B0..+0x10BC, which no thunk or call site calls (docs/re/SOFTWARE_RASTER.md) | 4 |
+| dead: no Section-12 type selects class 52 (Lightning Shield) as a behavior or alternate (docs/re/PLAYER_CRAFT.md#special-weapons) | 3 |
 | dead: no shipped model vertex has type 10 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: no shipped model vertex has type 4 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: only in the value-op table 0x004CDF08, which no code or data references (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
