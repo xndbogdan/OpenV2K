@@ -992,6 +992,13 @@ impl EntityManager {
             }
             _ => unreachable!("shared authored family dispatch"),
         }
+        fill_constructor_surface_bits(
+            &mut entity,
+            spawn.position_raw(),
+            terrain,
+            retail_tick,
+            waves_enabled,
+        );
         self.append_live_entity(entity);
         Ok(())
     }

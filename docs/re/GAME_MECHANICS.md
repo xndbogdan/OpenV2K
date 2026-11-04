@@ -1747,7 +1747,24 @@ sea word is above its Y less half its active model's header `+0x0A` word. The
 damage therefore grows with the time spent in the world. In the retail lab's
 Alien2 run (Skip to World) the wandering Type119 dips under the sea at world
 clock 1308 and takes 74 a tick; the port's `harmful_sea` applies the same
-packet and ratio (its Type119 wanders elsewhere and sinks earlier). Bodies
-whose state word the port does not yet hold (Alien2's Type67 and Type6) stop
-with one logged line per type and take no sea damage.
+packet and ratio (its Type119 wanders elsewhere and sinks earlier).
+
+The surface bits the test reads (`0x200000` below, `0x400000` above) are
+`FUN_004104B0`'s for every body: it compares the authored, pre-grounding Y
+with the sea (and wave, when Section 13 `+84` is set) at the construction
+tick, and `FUN_004129B0` later rewrites them only for terrain-contact
+movers over wet cells. A native world load fills them after each body's
+publisher, leaving any bit the type's state policy wrote. Fixed bodies such
+as the Main Base (Type6), the working factories (Type66) and Hives (Type67)
+keep their construction bits for life. In world 41 (reached in the lab by
+Skip to World with the spinner's word set to 29) retail burns two bodies
+from the first world tick (clock 20); the port burns its Type66 and Type67
+there with the same amount every tick (6 at first, growing with the clock).
+Retail's factory stops burning at clock 974, the port's at 970 (its
+progressive death; retail's factory also takes a stream of channel-1
+contacts from clock 819 that the port's arrival does not reproduce); the
+Hive burns until the world ends with the idle player's death. Worlds 42, 43,
+46 and 47 burn only Alien2's Type119 in both within a minute. A body whose
+state still lacks a bit stops with one logged line per type and takes no
+sea damage.
 

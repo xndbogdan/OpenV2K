@@ -3125,6 +3125,29 @@ fn type93_attachment_runtime(child_entity_id: u32) -> SubJAttachmentRuntime {
     runtime
 }
 
+/// `FUN_004104B0` classifies every body's authored (pre-grounding) Y against
+/// the sea and wave at its construction tick. Fill the surface bits that the
+/// publisher's state policy left to that comparison; known bits stay.
+pub(crate) fn fill_constructor_surface_bits(
+    entity: &mut Entity,
+    authored_position_raw: [i16; 3],
+    terrain: &TerrainGrid,
+    retail_tick: u32,
+    waves_enabled: bool,
+) {
+    let Some(bits) = crate::entity_initializer::constructor_surface_bits_at_tick(
+        authored_position_raw,
+        terrain,
+        retail_tick,
+        waves_enabled,
+    ) else {
+        return;
+    };
+    let state = &mut entity.collision.state_flags_at_0x08;
+    let unknown = SURFACE_STATE_MASK & !state.known_mask();
+    state.overwrite(unknown, bits & unknown);
+}
+
 /// Publish the two host-side projections of retail relation attachment in
 /// `FUN_00416700` order: state bit first, then the parent handle.
 fn project_relation_attach(entity: &mut Entity, relation_owner_id: u32) {
@@ -5907,6 +5930,17 @@ impl EntityManager {
                 )?;
             }
 
+            if let (true, Some(terrain), Some((retail_tick, _))) =
+                (native_ordinary, terrain, fresh_initial_runtime.as_ref())
+            {
+                fill_constructor_surface_bits(
+                    &mut entity,
+                    authored_position_raw,
+                    terrain,
+                    *retail_tick,
+                    level_desc.raw_u32(0x84).unwrap_or(0) != 0,
+                );
+            }
             // Retail publishes only after the complete selected initializer
             // (or its unnamed fallback) has returned success.
             manager.append_live_entity(entity);
