@@ -2,7 +2,8 @@
 //! averaged Q12 plane per cell, followed by the four perimeter edges. It is
 //! independent of the renderer's two triangles and the bilinear ride surface.
 
-use super::{collision_integer_sqrt, ModelCollisionHit};
+use super::ModelCollisionHit;
+use crate::fixed_math::retail_integer_sqrt;
 use crate::terrain::{TerrainGrid, GRID_SIZE};
 
 pub(super) fn terrain_sphere_hit(
@@ -126,7 +127,7 @@ fn cell_hit(
     // 457730 returns zero for a nonpositive signed argument before its
     // otherwise unsigned square-root loop (45773D/457752).
     let distance = if (distance_squared as i32) > 0 {
-        i32::from(collision_integer_sqrt(distance_squared) as i16)
+        i32::from(retail_integer_sqrt(distance_squared as i32) as i16)
     } else {
         0
     };
@@ -135,7 +136,7 @@ fn cell_hit(
 
 fn closest_on_edge(center: [i32; 3], a: [i32; 3], b: [i32; 3]) -> [i32; 3] {
     let edge = std::array::from_fn(|i| b[i] - a[i]);
-    let length = i32::from(collision_integer_sqrt(squared_length(edge)) as i16);
+    let length = i32::from(retail_integer_sqrt(squared_length(edge) as i32) as i16);
     // 46ABA0 receives the already-computed length for these 256-wide edges.
     let direction = edge.map(|v| (v.wrapping_shl(12) / length) as i16);
     let along = dot(direction, std::array::from_fn(|i| center[i] - a[i]));
@@ -176,7 +177,7 @@ fn normalize_scaled(vector: [i32; 3]) -> [i16; 3] {
 }
 
 fn normalize(vector: [i32; 3]) -> [i16; 3] {
-    let length = i32::from(collision_integer_sqrt(squared_length(vector)) as i16);
+    let length = i32::from(retail_integer_sqrt(squared_length(vector) as i32) as i16);
     if length == 0 {
         [4096, 0, 0]
     } else {

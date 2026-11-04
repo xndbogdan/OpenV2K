@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 414 |
+| implemented | 415 |
 | approximated | 7 |
 | documented | 33 |
 | not-needed | 629 |

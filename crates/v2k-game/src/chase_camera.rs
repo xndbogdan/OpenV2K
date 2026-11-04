@@ -416,26 +416,9 @@ fn terrain_clearance_height_raw(context: ChaseTerrainContext<'_>, x_raw: i16, z_
     maximum
 }
 
+/// `FUN_00457730`, saturating at `0xFFFF` from `0x4000_0000`.
 fn integer_sqrt(value: i32) -> i32 {
-    if value <= 0 {
-        return 0;
-    }
-    let mut remainder = value as u32;
-    let mut root = 0u32;
-    let mut bit = 1u32 << 30;
-    while bit > remainder {
-        bit >>= 2;
-    }
-    while bit != 0 {
-        if remainder >= root + bit {
-            remainder -= root + bit;
-            root = (root >> 1) + bit;
-        } else {
-            root >>= 1;
-        }
-        bit >>= 2;
-    }
-    root as i32
+    v2k_formats::fixed_math::retail_integer_sqrt(value) as i32
 }
 
 fn normalized_component_q31(component: i32, length: i32) -> i32 {

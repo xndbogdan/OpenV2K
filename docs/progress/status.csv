@@ -1088,3 +1088,4 @@ address,status,note
 0x0042D210,implemented,Klaus done: selected, fly-off, hidden, or morph zero (MenuShell::klaus_finished)
 0x0042CEA0,implemented,Klaus command word DAT_004DB210
 0x0042CEB0,implemented,Klaus model argument DAT_004DB218
+0x00457730,implemented,32-bit integer square root: zero below one, 0xFFFF from 0x40000000 (v2k_formats::fixed_math::retail_integer_sqrt)

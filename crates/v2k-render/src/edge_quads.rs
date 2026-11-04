@@ -434,28 +434,9 @@ fn corner_outcode(x: i16, y: i16, width: i32, height: i32) -> u8 {
     x_code | y_code
 }
 
-/// Bit-by-bit integer square root (`FUN_00457730`); zero for inputs `< 1`.
+/// `FUN_00457730`: zero for inputs `< 1`, `0xFFFF` from `0x4000_0000`.
 pub fn integer_sqrt(value: i32) -> i32 {
-    if value < 1 {
-        return 0;
-    }
-    let mut remainder = value as u32;
-    let mut bit = 1u32 << 30;
-    while bit > remainder {
-        bit >>= 2;
-    }
-    let mut result = 0u32;
-    while bit != 0 {
-        let attempt = result + bit;
-        if remainder >= attempt {
-            remainder -= attempt;
-            result = (result >> 1) + bit;
-        } else {
-            result >>= 1;
-        }
-        bit >>= 2;
-    }
-    result as i32
+    v2k_formats::fixed_math::retail_integer_sqrt(value) as i32
 }
 
 fn dot3(a: [f32; 3], b: [f32; 3]) -> f32 {
@@ -1061,6 +1042,9 @@ mod tests {
         assert_eq!(integer_sqrt(9), 3);
         assert_eq!(integer_sqrt(1_000_000), 1000);
         assert_eq!(integer_sqrt(0x3FFF_FFFF), 32_767);
+        // Retail saturates once the operand reaches 2^30 (lab call receipts).
+        assert_eq!(integer_sqrt(0x4000_0000), 0xFFFF);
+        assert_eq!(integer_sqrt(0x7FFF_FFFF), 0xFFFF);
     }
 
     #[test]
