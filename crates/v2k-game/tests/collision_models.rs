@@ -390,3 +390,47 @@ fn canonical_spider_pen_keeps_intrinsic_collision_slots_and_authored_damage() {
         assert_eq!(profile.filter(PRIMARY_PROJECTILE_DAMAGE_PACKET), 2000);
     }
 }
+
+/// Every shipped collision program walks without an unported opcode, as the
+/// moving side of a sphere query and as a staged effect walk: the nukesub
+/// (180) and the Queen and her parts carry opcode 0x30, and the Queen's
+/// code-6 children copy the mount it writes.
+#[v2k_test_support::retail_test]
+fn every_shipped_collision_program_walks_including_mount_ops() {
+    use v2k_formats::models::{ModelCollisionError, StagedEffectError, StagedEffectRequest};
+    let dir = v2k_test_support::retail_dir();
+    let vars = AnimVars::default();
+    let mut with_mount_op = std::collections::BTreeSet::new();
+    for biome in 5..=11u32 {
+        let mut session = GameSession::init(&dir).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        session.load_auxiliary_ovl(biome, 1).unwrap();
+        let cache = &session.cache;
+        for id in 0..4096 {
+            let Some(model) = cache.global_model(id) else {
+                continue;
+            };
+            if model.collision_program.is_empty() {
+                continue;
+            }
+            if model.collision_program.contains(&0x30) {
+                with_mount_op.insert(id);
+            }
+            match model.collide_sphere_raw([0.0; 3], 50, &vars, cache) {
+                Err(ModelCollisionError::UnsupportedOpcode { pc, opcode }) => {
+                    panic!("model {id}: opcode {opcode:#x} at {pc} unported")
+                }
+                _ => {}
+            }
+            match model.staged_effect_points_raw(StagedEffectRequest::default(), &vars, cache) {
+                Err(StagedEffectError::UnsupportedOpcode { pc, opcode }) => {
+                    panic!("model {id}: staged opcode {opcode:#x} at {pc} unported")
+                }
+                _ => {}
+            }
+        }
+    }
+    for id in [180, 1113] {
+        assert!(with_mount_op.contains(&id), "{with_mount_op:?}");
+    }
+}
