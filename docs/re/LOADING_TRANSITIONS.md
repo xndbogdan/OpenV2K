@@ -444,12 +444,23 @@ What a load leaves behind therefore depends on real time:
 The lab's stub fires each load's timer once, with the scripted clock
 standing still: only the final callback runs, with the minimum 7,800 us
 (Klaus's morph 8,299 after the load, `+270` 7). The port loads in one
-blocking step and draws the card once before it, holding still; of the
-final callback it runs the spring reset and ED10 (`start_eye_after_load`),
-not the 7,800-us Klaus visit or the `+270` addition. An animated card needs
+blocking step and draws the card once before it, holding still. Of the
+final callback it runs the spring reset and ED10 (`start_eye_after_load`)
+and the Klaus visit (`MenuShell::visit_after_load`): with
+`--fixed-step-micros` the lab's 7,800 us, so the morph after the load is
+8,299 as in the lab; otherwise the real time since the load began, clamped
+as the callback clamps it, which is retail's delta when no earlier callback
+ran (a load under one 50-ms period). The `+270` addition has no port
+state to change: the first visit after the load (`FUN_0044FE20`, through
+`+274`) zeroes it before anything reads it. With the lab's keys at 20-ms
+steps the port's frames of Klaus's opening over Mediaeval after the Cheats
+skip moved closer to the lab's on every pass compared.
+
+Held: the callbacks during a load longer than one period. Each draws the
+card and visits Klaus closed (one or two random words), so a long load
+changes the random stream and the final callback's delta. Porting them needs
 the load off the frame thread, with the redraws drawing Klaus and the card
-while the world's resources change; it is not ported. A fixed-step run
-would take the lab's single final callback.
+while the world's resources change; it is not ported.
 
 ### Briefing Sequence
 
