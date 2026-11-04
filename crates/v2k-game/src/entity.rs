@@ -7929,14 +7929,26 @@ impl EntityManager {
         &self.pending_power_up_destroy_ids
     }
 
-    /// Whether the controller's `+220` owned list, which the player's
-    /// `FUN_004484A0` damage modifier walks, is currently empty. Sub-J cargo,
-    /// such as an arrival's Type68 ballast, is a separate list it never reads.
+    /// Whether the player's `FUN_004484A0` damage modifier is the identity:
+    /// the controller's `+220` owned list holds no live body (nonzero state,
+    /// not dying), so its walk hits nothing. Sub-J cargo, such as an
+    /// arrival's Type68 ballast, is a separate list it never reads.
     pub(crate) fn player_pair_damage_modifier_context_empty(&self) -> RetailRuntimeValue<bool> {
         if self.player().is_none() {
             return RetailRuntimeValue::Unresolved;
         }
-        RetailRuntimeValue::Known(self.auxiliary_owned_ids.is_empty())
+        let mut empty = true;
+        for &id in &self.auxiliary_owned_ids {
+            let Some(entity) = self.iter_all().find(|entity| entity.id == id) else {
+                continue;
+            };
+            match entity.collision.state_flags_at_0x08.masked(u32::MAX) {
+                RetailRuntimeValue::Known(state) if state == 0 || state & DYING_STATE_BIT != 0 => {}
+                RetailRuntimeValue::Known(_) => empty = false,
+                RetailRuntimeValue::Unresolved => return RetailRuntimeValue::Unresolved,
+            }
+        }
+        RetailRuntimeValue::Known(empty)
     }
 
     /// Run retail's deferred type-61 splice explicitly.

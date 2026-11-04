@@ -834,6 +834,8 @@ pub(crate) fn task_has_null_contact(task: &ActorTaskRuntime) -> bool {
             | ActorTaskRuntime::RemoteBeamer(_)
             // 07800's 01020 template leaves +18 zero.
             | ActorTaskRuntime::Megablast(_)
+            // 07070's 01020 template leaves +18 zero too.
+            | ActorTaskRuntime::DefenderBall
     )
 }
 

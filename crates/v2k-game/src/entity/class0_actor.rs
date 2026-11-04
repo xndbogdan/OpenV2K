@@ -20,7 +20,9 @@ use v2k_formats::levels::EntitySpawn;
 pub(super) mod cargo;
 #[cfg(test)]
 mod cargo_tests;
+mod defender_ball;
 mod live;
+pub(crate) use defender_ball::ENTITY_TYPE as DEFENDER_BALL_ENTITY_TYPE;
 mod megablast;
 mod zero_record;
 pub use megablast::MegablastBirth;
@@ -115,6 +117,13 @@ pub(super) fn authenticate_metadata(
                 Err(Class0ActorError::Metadata)
             }
         }
+        63 => {
+            if crate::main_base_type54_abort::defender_ball_metadata(entity_type, metadata) {
+                Ok(())
+            } else {
+                Err(Class0ActorError::Metadata)
+            }
+        }
         65 => {
             if crate::main_base_type54_abort::megablast_metadata(entity_type, metadata) {
                 Ok(())
@@ -201,7 +210,8 @@ fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
 
 /// The class of a row's singleton Always choice: class36 for Type50,
 /// class38 for Type89, class16 for Type36, class59 for Type74, class67 for
-/// Type110, class55 for Type65, class0 for every other row.
+/// Type110, class55 for Type65, class50 for Type63, class0 for every other
+/// row.
 pub(crate) fn living_class(entity_type: u32) -> u32 {
     crate::main_base_type54_abort::class0_host_living_class(entity_type).unwrap_or(0)
 }
@@ -209,7 +219,12 @@ pub(crate) fn living_class(entity_type: u32) -> u32 {
 /// AC60's initializer for the row's living program. Class38's 40BDC0 needs
 /// the world for its burst and Primary; [`initialize_living_change_sea_level`]
 /// completes it after its state edit here.
-fn publish_living_graph(entity: &mut Entity, context: BehaviorContextRuntime, living_class: u32) {
+fn publish_living_graph(
+    entity: &mut Entity,
+    context: BehaviorContextRuntime,
+    living_class: u32,
+    next_random: &mut dyn FnMut() -> u32,
+) {
     match living_class {
         0 => publish_class0_graph(entity, context),
         _ => {
@@ -250,6 +265,18 @@ fn publish_living_graph(entity: &mut Entity, context: BehaviorContextRuntime, li
                         crate::megablast::MegablastTaskState::new(0),
                     )),
                 );
+            }
+            if living_class == 50 {
+                // FUN_0040B0F0 clears T then S; FUN_00407070's Primary has no
+                // timeout, then one shared random word becomes the pitch.
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::DefenderBall),
+                );
+                let [heading, _, roll] = entity.rotation_heading_pitch_roll_raw();
+                entity.set_rotation_heading_pitch_roll_raw([heading, next_random() as i16, roll]);
             }
             if living_class == 59 {
                 // FUN_0040C530 clears T then S and FUN_00405420 stores a Primary with no
@@ -604,14 +631,14 @@ pub(super) fn reselect_class0_actor(
     let selected = select_initial_behavior(
         choices,
         |rule| i32::from(rule == BehaviorWeightRule::Always),
-        next_random,
+        &mut *next_random,
     )
     .map_err(|_| Class0ActorError::Metadata)?;
     debug_assert_eq!(
         selected.map(|selection| u32::from(selection.program.class_id)),
         Some(living)
     );
-    publish_living_graph(entity, context, living);
+    publish_living_graph(entity, context, living, next_random);
     Ok(())
 }
 
@@ -776,7 +803,7 @@ pub(super) fn construct_class0_actor(
     let selected = select_initial_behavior(
         &initializer.behavior_choices,
         |rule| i32::from(rule == BehaviorWeightRule::Always),
-        next_random,
+        &mut *next_random,
     )
     .map_err(|_| Class0ActorError::Metadata)?;
     debug_assert_eq!(selected, Some(initial_selection));
@@ -787,7 +814,7 @@ pub(super) fn construct_class0_actor(
     // D720/13F70 retains the spawn Euler-derived basis, including 0x38's
     // player +0xA2/+0xA4/+0xA6 copy.
     entity.apply_d720_euler_body_basis();
-    publish_living_graph(entity, context, living_class);
+    publish_living_graph(entity, context, living_class, next_random);
     if matches!(entity.entity_type, 50 | 54 | 72 | 85 | 89 | 118) {
         if let Class0SpawnInput::Authored(spawn) = spawn {
             let word = i32::from_le_bytes(

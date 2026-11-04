@@ -97,7 +97,7 @@ impl EntityManager {
         Class0ActorOwner::adopt(self, id)
     }
 
-    /// `FUN_00410C10` on a living seedpod: health 0 and dying, the type's
+    /// `FUN_00410C10` on a living seedpod (or Defender Ball): health 0 and dying, the type's
     /// sound 62 (sent in network play), no `+8C` attachment, the style's
     /// null death callback, then class2's `FUN_0040C470`, which clears the
     /// three task slots and stages the removal.
@@ -111,7 +111,11 @@ impl EntityManager {
             .iter_mut()
             .find(|entity| entity.id == id)
             .ok_or(Class0ActorError::Allocation)?;
-        if entity.entity_type != ENTITY_TYPE {
+        // Type63's Defender Ball shares the alternate class2 and sound 62.
+        if !matches!(
+            entity.entity_type,
+            ENTITY_TYPE | super::defender_ball::ENTITY_TYPE
+        ) {
             return Err(Class0ActorError::Metadata);
         }
         match entity
@@ -154,6 +158,30 @@ impl EntityManager {
         entity.mark_actor_deferred_destroy_pending();
         self.queue_actor_deferred_destroy(id);
         Ok(())
+    }
+
+    /// The tail of [`Self::apply_megablast_death`] for a body whose health,
+    /// dying bit and death cue a radial plan already wrote: class2's style,
+    /// the cleared tasks and the staged removal.
+    pub(crate) fn finish_class2_death(&mut self, id: u32) {
+        let Some(entity) = self.entities.iter_mut().find(|entity| entity.id == id) else {
+            return;
+        };
+        let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+            return;
+        };
+        if let Some(selected) = context.reselect_audited_type_default(
+            &QUIET_DEATH_BEHAVIOR_PROGRAM,
+            QUIET_DEATH_BEHAVIOR_PROGRAM.initial_style_table_index_raw,
+            QUIET_DEATH_STYLE,
+        ) {
+            entity.current_behavior_context = RetailRuntimeValue::Known(Some(selected));
+        }
+        for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
+            entity.actor_tasks.clear_slot(slot);
+        }
+        entity.mark_actor_deferred_destroy_pending();
+        self.queue_actor_deferred_destroy(id);
     }
 
     /// `FUN_00444330` (the player) or `FUN_0040EAB0` on the blast's owner:

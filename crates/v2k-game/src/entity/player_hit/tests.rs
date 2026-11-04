@@ -770,8 +770,14 @@ fn unresolved_style_or_controller_links_block_before_prefix_sound_and_rng() {
                 | ACTIVE_MODEL_SLOT_HIGH_STATE_BIT
                 | IMPACT_REACTION_ENABLED_STATE_BIT,
         );
+        let hold_type = 64;
         if links {
-            // 4484A0 walks the controller's +220 owned list.
+            // 4484A0 walks the controller's +220 owned list; a live body
+            // other than a Defender Ball (here an Autobot) has no port owner.
+            let mut body =
+                Entity::unresolved_port_entity(8, EntityKind::from_type(hold_type), hold_type);
+            body.collision.state_flags_at_0x08 = RetailStateWord::exact(0x84);
+            manager.entities.push(body);
             manager.auxiliary_owned_ids.push(8);
         } else {
             manager.player_mut().unwrap().current_behavior_context = RetailRuntimeValue::Unresolved;
@@ -791,7 +797,7 @@ fn unresolved_style_or_controller_links_block_before_prefix_sound_and_rng() {
         assert_eq!(
             outcome,
             PlayerModelSwitchHitOutcome::Blocked(if links {
-                PlayerModelSwitchHitBlock::Checked(PlayerCheckedDamageBlock::LinkedAttachments)
+                PlayerModelSwitchHitBlock::Checked(PlayerCheckedDamageBlock::HoldBody(hold_type))
             } else {
                 PlayerModelSwitchHitBlock::Style
             })

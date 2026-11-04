@@ -606,7 +606,7 @@ impl EntityManager {
         context: &mut CampaignCargoRestoreContext<'_>,
     ) -> Result<u32, CampaignCargoRestoreError> {
         match entity_type {
-            52 | 68 | 74 => {
+            52 | 63 | 68 | 74 => {
                 let owner = self.append_native_class0_at_pose(
                     entity_type,
                     position_raw,
@@ -696,6 +696,9 @@ impl EntityManager {
             entity_type,
             reason,
         })?;
+        // 410090 installs 4C8A30 for every row; no type copy writes its null
+        // +30 type-hit hook.
+        entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
         assert_eq!(self.allocate_live_entity_id(), id);
         self.append_live_entity(entity);
         self.native_class0_actors.insert(id, runtime);

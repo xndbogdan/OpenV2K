@@ -136,6 +136,8 @@ struct PlannedEntityMutation {
     collision: EntityCollisionRuntimeState,
     base_factory_runtime: RetailRuntimeValue<Option<BaseFactoryRuntimeState>>,
     hive_dying: bool,
+    /// A Defender Ball's 10C10 into class2 after the dying write.
+    class2_death: bool,
 }
 
 /// Complete read-only result of one dynamic radial walk.
@@ -348,6 +350,7 @@ impl EntityManager {
         // The planner performs no callbacks or topology changes, so these
         // identities must still match when the atomic commit begins.
         let mut hive_dying_bursts = Vec::new();
+        let mut class2_deaths = Vec::new();
         for mutation in mutations {
             let entity = self
                 .entities
@@ -357,6 +360,9 @@ impl EntityManager {
             entity.velocity = super::raw_position_world(mutation.velocity_raw);
             entity.collision = mutation.collision;
             entity.base_factory_runtime = mutation.base_factory_runtime;
+            if mutation.class2_death {
+                class2_deaths.push(mutation.target_id);
+            }
             if mutation.hive_dying {
                 if let Some(dying_model) = entity.apply_hive_dying_initializer() {
                     hive_dying_bursts.push(HiveDyingBurst {
@@ -366,6 +372,9 @@ impl EntityManager {
                     });
                 }
             }
+        }
+        for id in class2_deaths {
+            self.finish_class2_death(id);
         }
         match (player_hull, player_hull_after) {
             (Some(hull), Some(after)) => *hull = after,
@@ -466,6 +475,7 @@ fn plan_dynamic_radial_damage<'a>(
         let mut base_factory_runtime = target.base_factory_runtime;
         let mut mutated = false;
         let mut hive_dying = false;
+        let mut class2_death = false;
 
         let remote = || {
             required(
@@ -515,6 +525,7 @@ fn plan_dynamic_radial_damage<'a>(
                     collision,
                     base_factory_runtime,
                     hive_dying: false,
+                    class2_death: false,
                 });
             }
             continue;
@@ -544,6 +555,7 @@ fn plan_dynamic_radial_damage<'a>(
                     collision,
                     base_factory_runtime,
                     hive_dying: false,
+                    class2_death: false,
                 });
             }
             continue;
@@ -646,7 +658,26 @@ fn plan_dynamic_radial_damage<'a>(
                             )
                         })
                     });
-                    if hive_ready {
+                    // Type63's class50 style has a null death slot and its
+                    // alternate class2 only clears the tasks and stages the
+                    // removal (the death cue is staged above).
+                    let class2 = target.entity_type
+                        == crate::main_base_type54_abort::TYPE63_ENTITY_TYPE
+                        && death_policy == DeathCallbackPolicy::None
+                        && style.is_some_and(|context| {
+                            Some(context.active_style().style_address())
+                                == crate::entity_behavior::behavior_program(50)
+                                    .map(|program| program.initial_style.frame_address)
+                        });
+                    if class2 {
+                        collision.health_raw = RetailRuntimeValue::Known(0);
+                        collision.pre_health_damage_buffer_raw =
+                            RetailRuntimeValue::Known(transition.pre_health_buffer_after_raw);
+                        collision
+                            .state_flags_at_0x08
+                            .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
+                        class2_death = true;
+                    } else if hive_ready {
                         collision.health_raw = RetailRuntimeValue::Known(0);
                         collision.pre_health_damage_buffer_raw =
                             RetailRuntimeValue::Known(transition.pre_health_buffer_after_raw);
@@ -702,6 +733,7 @@ fn plan_dynamic_radial_damage<'a>(
                 collision,
                 base_factory_runtime,
                 hive_dying,
+                class2_death,
             });
         }
     }
@@ -1722,7 +1754,8 @@ mod tests {
         player.collision.pair_callbacks = EntityPairCallbackRuntimeState::audited_player();
         // 4484A0 never reads Sub-J cargo; only the controller's +220 list.
         player.sub_j_attachment_runtime = RetailRuntimeValue::Unresolved;
-        let mut manager = manager(vec![player]);
+        // A live hold body (out of the blast) makes the modifier non-identity.
+        let mut manager = manager(vec![player, entity(9, [i16::MAX, 0, 0], 1_000)]);
         manager.player_id = Some(0);
         manager.auxiliary_owned_ids.push(9);
         let velocity_before = manager.entities[0].velocity_raw();

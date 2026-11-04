@@ -1605,7 +1605,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | ported |
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
-| Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | held |
+| Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | ported; its pair hook held |
 | Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | held |
 
 **Proximity Mines.** Class 34's first style (`0x4C8548`, initializer
@@ -1716,9 +1716,10 @@ their birth frame, as in the lab. A blast whose owner is not the player
 block.
 
 **Defender Ball and Autobot.** Operation `0x38` is ported (see
-[CHEATS](CHEATS.md#port-status)); these two types still have no port
-constructor, so their rows stop there. Neither has capability `0x1000`, so
-both join the controller's `+220` list. What their owners must do:
+[CHEATS](CHEATS.md#port-status)). Neither type has capability `0x1000`, so
+both join the controller's `+220` list. The Defender Ball is ported; the
+Autobot has no port constructor yet, so its row stops there. What their
+owners do:
 
 - Type63 (model 244, health 1, no components, alternate class 2): class 50's
   initializer `FUN_0040B0F0` clears Tertiary then Secondary and builds the
@@ -1740,12 +1741,33 @@ both join the controller's `+220` list. What their owners must do:
   the owner's basis rows (`+0C..+20`). It then
   closes on the goal by q31(elapsed << 13, goal − position) per axis and damps
   its roll by (elapsed >> 10) × roll >> 8.
-- The player's damage modifier `FUN_004484A0` walks the `+220` list: a live
-  Type63 takes the whole packet (`FUN_00415040`) and the craft takes none;
-  otherwise every live body in the list takes the packet too (admitted for it
-  with state bit `0x8000`) and the craft takes it as well. The port's player
-  damage paths stop with a logged block while that list is not empty, so these
-  owners and the walk must land together.
+- The player's damage modifier `FUN_004484A0` walks the `+220` list after its
+  feedback: the first live (nonzero state, not dying) Type63 takes the whole
+  packet (`FUN_00415040` with no ratio) and the craft takes none (its
+  `FUN_00414E90` runs with 0); otherwise every live body in the list takes the
+  packet too, with state bit `0x8000` set for the call and cleared after it
+  when it was clear before and the body still lives, and the craft takes it as
+  well. A dead or dying body is skipped. Player death (`FUN_00447280`) never
+  reads the list; only the controller's destructor `FUN_004478E0` kills its
+  bodies. Retail lab (Level 1, F9, firing every weapon): at tick 1668 the
+  player's own blast reaches the craft first in the live list; the ball takes
+  19,516 and dies, the craft takes 0, and the dying ball's own radial visit
+  then only meets its buffer. At tick 1787 the Autobot takes the walk's packet
+  through its own filter before the craft takes its own.
+
+The port runs the Defender Ball whole on the class0 constructor (model 244,
+mass 10, capability `0x40`, health 1, initializer state `0x404`, axis
+`{0, 8}`, alternate class2, death cue 62): class50's Primary, the pitch draw,
+the visit, and the class2 death (`FUN_00410C10`: health 0, dying, cue 62,
+tasks cleared, removal staged) from the hold walk, a particle hit or a radial.
+The walk runs in every player hit that goes through the checked-damage owner
+(shots, particles, radials). A live hold body other than a ball (the Autobot)
+stops the craft's hit with a logged block naming its type. Two pieces stay
+held: the ball's pair hook `FUN_0040C800` (a body touching the ball stops that
+pair pass), and a pair contact on the craft while a live ball is in the hold
+(its modifier stays unresolved there). `FUN_004484A0`'s closing cue (sample
+`0x2D` when the craft has no shield and its health less the damage lies in
+5,001..30,000, at most once per 120 ticks) is not ported for any hit.
 
 **Lightning Shield.** No Section-12 type selects class 52, as a behavior or as
 its alternate, so `FUN_0040B1B0`, `FUN_004076E0` and `FUN_00407770` never run.

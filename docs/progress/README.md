@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,400 | |
 | Marked not needed (excluded below) | 626 | |
-| **Referenced by port code** | **1,664** | **93.8%** |
+| **Referenced by port code** | **1,666** | **93.9%** |
 | Referenced by code or RE notes | 1,774 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 373 |
+| implemented | 376 |
 | approximated | 6 |
 | documented | 29 |
 | not-needed | 626 |
@@ -41,7 +41,7 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 29 | 3 | 100 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 27 | 3 | 102 |
 | [Controls](../re/CONTROLS.md) | 18 | 1 | 52 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 16 | 0 | 101 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 10 | 0 | 30 |

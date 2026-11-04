@@ -104,6 +104,7 @@ impl Class0ActorOwner {
                     | (59, Some(ActorTaskRuntime::RemoteBeamer(_)))
                     | (67, Some(ActorTaskRuntime::Queen))
                     | (55, Some(ActorTaskRuntime::Megablast(_)))
+                    | (50, Some(ActorTaskRuntime::DefenderBall))
             )
             // A finished class38 has staged its removal.
             || (living == 38 && bits(entity, DEFERRED_DESTROY_PENDING_STATE_BIT)? != 0)
@@ -769,6 +770,17 @@ fn run_callback(
                 }
                 _ => return Err(Class0ActorError::Graph),
             }
+            if !entity.actor_tasks.finish_exact_visit(visit) {
+                return Err(Class0ActorError::Graph);
+            }
+        }
+        Some(ActorTaskRuntime::DefenderBall) => {
+            entity
+                .actor_tasks
+                .begin_exact_visit_with(visit, |_| ())
+                .ok_or(Class0ActorError::Graph)?;
+            manager.defender_ball_visit(id, dt)?;
+            let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
             if !entity.actor_tasks.finish_exact_visit(visit) {
                 return Err(Class0ActorError::Graph);
             }
