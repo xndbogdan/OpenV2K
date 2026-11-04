@@ -81,8 +81,9 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
   the closing scene (overlay 49 in phase 3) with its camera proxy carried in
   from that raw position, as the Queen's death does from the player's.
 - `--input-replay` takes `[{"frame": 10, "key": "Space", "pressed": true}]`
-  with SDL key names. Frames count from 1, as `--frames` and
-  `--snapshot-at FRAME:PATH` do.
+  with SDL key names; the key `Window Focus` gains (pressed) or loses the
+  window's focus, which suspends play without touching the desktop. Frames
+  count from 1, as `--frames` and `--snapshot-at FRAME:PATH` do.
 - With `--fixed-step-micros` (whole milliseconds, at least 8000) frames run
   as fast as they draw, and the same arguments give the same frames and logs.
   Take pixel evidence with `--renderer software`.

@@ -1018,11 +1018,20 @@ fn request_vehicle_mode_toggle(
     }
 }
 
+/// A deactivation during the pause menu's closing fly-out. Retail ignores the
+/// suspended screen's push then (`FUN_0043A960`), and once the fly-out ends it
+/// stays in the suspended mode with no screen and no keys. The port resumes
+/// play instead of reproducing that lock.
+const SUSPEND_DURING_FLY_OUT: &str = "Pause: the window went inactive during the pause      menu's closing fly-out; retail's stall with no screen is blocked and play resumes";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GameplayInterruption {
     QuitApplication,
     ReturnToFrontend,
     Pause,
+    /// The window went inactive: the in-play mode's deactivate hook
+    /// (`FUN_004513E0`, installed by `FUN_00453330`) suspends the game.
+    Suspend,
 }
 
 /// Decide the only three transitions that may pre-empt a live gameplay tick.
@@ -1056,7 +1065,8 @@ fn gameplay_interruption(
         Some(GameplayInterruption::ReturnToFrontend)
     } else if events
         .iter()
-        .any(|event| matches!(event, GameEvent::KeyDown(Keycode::Escape)))
+        // FUN_00455D60 is both Escape's and P's in the in-play table.
+        .any(|event| matches!(event, GameEvent::KeyDown(Keycode::Escape | Keycode::P)))
         || pad_actions.contains(&PadAction::Pause)
     {
         Some(GameplayInterruption::Pause)
@@ -2047,6 +2057,16 @@ fn run_game(
     // and Shift as its key table last saw it.
     let mut network_pause: Option<MenuShell> = None;
     let mut network_pause_shift = false;
+    // FUN_00495940: the window is inactive (`004FE60C`, the suspended flag).
+    let mut window_suspended = false;
+    // The CD track is paused by a mode (the pause, suspended and M map
+    // modes' entries, `FUN_00456AC0`) until its exit runs `FUN_00456A00`; an
+    // Ambient change meanwhile waits for that exit.
+    let mut music_held = false;
+    // Session `+264`: set to 500 ms by the resume `FUN_004512E0`, counted down
+    // by each frame's delta (`FUN_0044FE20`); while nonzero the craft reader
+    // reads no fire (`FUN_00456C90`).
+    let mut pause_fire_lockout_micros: u32 = 0;
     if let Some(network) = probe
         .start
         .as_ref()
@@ -2409,6 +2429,20 @@ fn run_game(
     let mut frames_done = 0u64;
     let mut last_frame_delta_micros = 0u32;
 
+    // The resume FUN_004512E0 back to play, then the pause or suspended
+    // mode's exit (FUN_00451580, FUN_00451550): the music poll FUN_00456A00
+    // plays the track again when Ambient is on, and the craft reader reads
+    // no fire for half a second (session +264).
+    macro_rules! resume_play_after_pause {
+        () => {{
+            music_held = false;
+            if let Some(ref mp) = music_player {
+                apply_session_music_gate(&config, mp, false);
+            }
+            pause_fire_lockout_micros = 500_000;
+        }};
+    }
+
     // A setting a menu changed: the config, live audio and display, then the
     // menu's rows again. Both the menu states and the network pause use it.
     macro_rules! apply_menu_setting {
@@ -2421,7 +2455,7 @@ fn run_game(
                     &config,
                     &mut sound_manager,
                     &mut music_player,
-                    world_complete_results.is_progress_map_active(),
+                    world_complete_results.is_progress_map_active() || music_held,
                 );
                 // FUN_0043CC40 -> FUN_0044E0E0 rebuilds the display. One
                 // that cannot start leaves the previous display and its
@@ -2681,6 +2715,29 @@ fn run_game(
                     .is_some_and(GameplayRadar::is_fullscreen_open),
             )
         });
+        // FUN_00495940 applies the window's activity (WM_ACTIVATEAPP) once a
+        // frame: deactivating raises the suspended flag and pause reason 4
+        // and runs the mode's deactivate hook, reactivating the reverse.
+        let mut suspend_now = false;
+        let mut unsuspend_now = false;
+        if let Some(active) = events.iter().rev().find_map(|event| match event {
+            GameEvent::FocusLost => Some(false),
+            GameEvent::FocusGained => Some(true),
+            _ => None,
+        }) {
+            suspend_now = !active && !window_suspended;
+            unsuspend_now = active && window_suspended;
+            window_suspended = !active;
+        }
+        if suspend_now {
+            // FUN_0044CE70 at the mask's zero-to-nonzero edge.
+            suspend_world_audio(
+                &mut world_fx,
+                &mut sound_manager,
+                &mut entity_positional_audio,
+                &mut player_fan_audio,
+            );
+        }
         let mut pad_actions = Vec::new();
         for event in &events {
             if let GameEvent::PadButton { button, pressed } = event {
@@ -2788,11 +2845,40 @@ fn run_game(
                     });
                 }
 
+                // The pause and suspended modes' hooks (FUN_00451420 and
+                // FUN_00451390 install FUN_004513E0 and FUN_00451400): the
+                // window going inactive puts the suspended screen over the
+                // menu, and active again pops it. The map's save menu has
+                // no hooks.
+                if menu_is_paused
+                    && matches!(
+                        shell.engine.root_va(),
+                        Some(menu_data::PAUSE_FULL | menu_data::SUSPENDED)
+                    )
+                    && (suspend_now || unsuspend_now)
+                {
+                    let ctx = MenuCtx {
+                        cache: &session.cache,
+                        config: &config,
+                        saves: Some(&save_manager),
+                        display_modes: &display_modes,
+                    };
+                    if suspend_now {
+                        if !shell.suspend(&ctx) {
+                            eprintln!("{SUSPEND_DURING_FLY_OUT}");
+                        }
+                    } else {
+                        shell.end_suspension(&ctx);
+                    }
+                }
+
                 // Translate key events into engine inputs; collect side effects.
                 let mut shell_events: Vec<ShellEvent> = Vec::new();
                 for event in &events {
                     match event {
                         GameEvent::Quit => break 'main_loop,
+                        // The suspended mode installs no binding set.
+                        GameEvent::KeyDown(_) if shell.is_suspended() => {}
                         GameEvent::Resize(w, h) => {
                             renderer.resize(*w, *h);
                             world_projection.apply_to(&mut camera, renderer.viewport_size());
@@ -2853,6 +2939,37 @@ fn run_game(
                             // from quitting the whole game.
                             if shell.is_transitioning() {
                                 continue;
+                            }
+
+                            // The pause menu's table (0x4C4360): P
+                            // (FUN_004564A0 -> FUN_0043A9F0) drops the stack
+                            // to its root and pops that silently; Escape at
+                            // the root (FUN_004564B0) pops it with cue 3.
+                            // Either way the root flies out and FUN_00450E40
+                            // resumes play.
+                            if menu_is_paused
+                                && (*kc == Keycode::P
+                                    || (*kc == Keycode::Escape && shell.back_is_inert()))
+                            {
+                                let ctx = MenuCtx {
+                                    cache: &session.cache,
+                                    config: &config,
+                                    saves: Some(&save_manager),
+                                    display_modes: &display_modes,
+                                };
+                                if shell.close_to_play(&ctx) {
+                                    if *kc == Keycode::Escape {
+                                        shell_events.push(ShellEvent::Sound(3));
+                                    }
+                                    continue;
+                                }
+                                if *kc == Keycode::P
+                                    && shell.engine.root_va() == Some(menu_data::PAUSE_SIMPLE)
+                                {
+                                    eprintln!(
+                                        "Pause: P on the progress map's save menu is blocked:                                          FUN_0043A9F0 pops 0x4D1090 into FUN_00450E60 without                                          Continue's +297, and the map's Klaus is not ported"
+                                    );
+                                }
                             }
 
                             // The address prompt standing in for DirectPlay's
@@ -2983,7 +3100,7 @@ fn run_game(
                 // A pad's menu set. Back is Escape's: inert at a root, which
                 // retail cannot pop, and otherwise it saves the settings.
                 for &action in &pad_actions {
-                    if shell.is_transitioning() {
+                    if shell.is_transitioning() || shell.is_suspended() {
                         break;
                     }
                     let input = match action {
@@ -3165,6 +3282,9 @@ fn run_game(
                                     },
                                     None => GameState::Playing,
                                 });
+                            if matches!(next_state, Some(GameState::Playing)) {
+                                resume_play_after_pause!();
+                            }
                             map_save_checkpoint = None;
                         }
                         ShellEvent::QuitToFrontend if menu_is_paused => {
@@ -3439,6 +3559,9 @@ fn run_game(
                             },
                             None => GameState::Playing,
                         });
+                        if matches!(next_state, Some(GameState::Playing)) {
+                            resume_play_after_pause!();
+                        }
                         // PAUSE_SIMPLE's switch-away callback ends the map's
                         // save branch (FUN_00450E60).
                         map_save_checkpoint = None;
@@ -3718,6 +3841,8 @@ fn run_game(
                 if let Some(ref mut mp) = music_player {
                     mp.stop();
                 }
+                music_held = false;
+                pause_fire_lockout_micros = 0;
                 // The stopped session's mode routes to the frontend menu
                 // (FUN_0044FDC0 for the results and map modes, then FUN_0042A940).
                 let shell = make_menu!(false);
@@ -5424,7 +5549,7 @@ fn run_game(
                         entities: em,
                         camera: &camera,
                         elapsed_micros,
-                        positional_masked: intro2_final_card,
+                        positional_masked: intro2_final_card || window_suspended,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -5522,7 +5647,7 @@ fn run_game(
                             .expect("retained Intro2 entity manager"),
                         camera: &camera,
                         elapsed_micros,
-                        positional_masked: intro2_final_card,
+                        positional_masked: intro2_final_card || window_suspended,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -5665,7 +5790,7 @@ fn run_game(
                         entities: em,
                         camera: &camera,
                         elapsed_micros,
-                        positional_masked: false,
+                        positional_masked: window_suspended,
                     },
                     &mut world_fx,
                     &mut sound_manager,
@@ -6006,6 +6131,13 @@ fn run_game(
                     close_map |= pad_actions.contains(&PadAction::CloseMap);
                     let radar = gameplay_radar.as_mut().expect("checked above");
                     if close_map {
+                        // The map's exit FUN_00454330: the music poll
+                        // (FUN_00456A00) and pause reason 2 cleared; the next
+                        // world update brings the loops back.
+                        music_held = false;
+                        if let Some(ref mp) = music_player {
+                            apply_session_music_gate(&config, mp, false);
+                        }
                         radar.leave_fullscreen();
                         mouse_buttons_down.clear();
                         continue 'main_loop;
@@ -6023,6 +6155,7 @@ fn run_game(
                                 fonts: menu_fonts.as_ref(),
                                 status: fullscreen_map_status.as_ref(),
                                 progress: &player_campaign_progress,
+                                cache: &session.cache,
                             },
                             &mut || world_fx.next_shared_retail_random_u16(),
                         );
@@ -6054,6 +6187,19 @@ fn run_game(
                             keys_down.insert(Keycode::M);
                         }
                         mouse_buttons_down.clear();
+                        // The map's entry FUN_00453F70: pause reason 2
+                        // silences the world's loops and the CD track pauses
+                        // (FUN_00456AC0).
+                        suspend_world_audio(
+                            &mut world_fx,
+                            &mut sound_manager,
+                            &mut entity_positional_audio,
+                            &mut player_fan_audio,
+                        );
+                        music_held = true;
+                        if let Some(ref mp) = music_player {
+                            mp.pause();
+                        }
                         radar.enter_fullscreen();
                         radar.advance_fullscreen(elapsed_micros);
                         draw_fullscreen_map(
@@ -6065,6 +6211,7 @@ fn run_game(
                                 fonts: menu_fonts.as_ref(),
                                 status: fullscreen_map_status.as_ref(),
                                 progress: &player_campaign_progress,
+                                cache: &session.cache,
                             },
                             &mut || world_fx.next_shared_retail_random_u16(),
                         );
@@ -6084,6 +6231,55 @@ fn run_game(
                 let pause_key = events
                     .iter()
                     .any(|event| matches!(event, GameEvent::KeyDown(Keycode::P)));
+                if suspend_now
+                    && !matches!(
+                        interruption,
+                        Some(
+                            GameplayInterruption::QuitApplication
+                                | GameplayInterruption::ReturnToFrontend
+                        )
+                    )
+                {
+                    interruption = Some(GameplayInterruption::Suspend);
+                }
+                if network_game.is_some()
+                    && (interruption == Some(GameplayInterruption::Suspend)
+                        || (unsuspend_now && network_pause.is_some()))
+                {
+                    // The network game's suspended mode 0x4D09C0 over the
+                    // running world (FUN_00451390), or FUN_00451400 popping
+                    // it when the window is active again.
+                    let ctx = MenuCtx {
+                        cache: &session.cache,
+                        config: &config,
+                        saves: Some(&save_manager),
+                        display_modes: &display_modes,
+                    };
+                    if interruption == Some(GameplayInterruption::Suspend) {
+                        interruption = None;
+                        match network_pause.as_mut() {
+                            Some(shell) => {
+                                if !shell.suspend(&ctx) {
+                                    eprintln!("{SUSPEND_DURING_FLY_OUT}");
+                                }
+                            }
+                            None => {
+                                network_pause =
+                                    Some(MenuShell::new_suspended(&ctx, menu_data::VIS_INGAME));
+                                network_pause_shift = false;
+                            }
+                        }
+                        keys_down.clear();
+                        mouse_buttons_down.clear();
+                        music_held = true;
+                        if let Some(ref mp) = music_player {
+                            mp.pause();
+                        }
+                        log!("Network: the game is suspended while the window is inactive");
+                    } else if let Some(shell) = network_pause.as_mut() {
+                        shell.end_suspension(&ctx);
+                    }
+                }
                 if network_pause.is_some() {
                     // The open menu owns Escape and the pad's pause.
                     if interruption == Some(GameplayInterruption::Pause) {
@@ -6148,7 +6344,15 @@ fn run_game(
                 if let Some(shell) = network_pause.as_mut() {
                     let mut shell_events: Vec<ShellEvent> = Vec::new();
                     for event in &events {
+                        let ctx = MenuCtx {
+                            cache: &session.cache,
+                            config: &config,
+                            saves: Some(&save_manager),
+                            display_modes: &display_modes,
+                        };
                         let input = match event {
+                            // The suspended mode installs no binding set.
+                            _ if shell.is_suspended() => None,
                             GameEvent::KeyDown(Keycode::LShift | Keycode::RShift) => {
                                 network_pause_shift = true;
                                 None
@@ -6164,8 +6368,21 @@ fn run_game(
                                 None
                             }
                             _ if shell.is_transitioning() => None,
-                            GameEvent::KeyDown(Keycode::Escape) if shell.back_is_inert() => None,
+                            // P (FUN_004564A0) closes the menu to play.
+                            GameEvent::KeyDown(Keycode::P) => {
+                                shell.close_to_play(&ctx);
+                                None
+                            }
+                            // FUN_004564B0 pops the root too: cue 3 and the
+                            // root's fly-out, then play.
+                            GameEvent::KeyDown(Keycode::Escape) if shell.back_is_inert() => {
+                                if shell.close_to_play(&ctx) {
+                                    shell_events.push(ShellEvent::Sound(3));
+                                }
+                                None
+                            }
                             GameEvent::KeyDown(Keycode::Escape) => {
+                                drop(ctx);
                                 if let Err(error) = config.try_save(settings_dir) {
                                     eprintln!("Could not save settings: {error}");
                                 }
@@ -6193,7 +6410,7 @@ fn run_game(
                         }
                     }
                     for &action in &pad_actions {
-                        if shell.is_transitioning() {
+                        if shell.is_transitioning() || shell.is_suspended() {
                             break;
                         }
                         let ctx = MenuCtx {
@@ -6252,6 +6469,7 @@ fn run_game(
                         // FUN_004512E0: the pause count falls to zero and
                         // event 5 restores the in-play keys.
                         network_pause = None;
+                        resume_play_after_pause!();
                         keys_down.clear();
                         mouse_buttons_down.clear();
                         log!("Network: the pause menu closes");
@@ -6267,7 +6485,14 @@ fn run_game(
                         state = GameState::ReturningToFrontend;
                         continue;
                     }
-                    Some(GameplayInterruption::Pause) => {
+                    Some(kind @ (GameplayInterruption::Pause | GameplayInterruption::Suspend)) => {
+                        // The pause mode's entry (FUN_00451420) and the
+                        // suspended mode's (FUN_00451390) pause the CD track
+                        // (FUN_00456AC0).
+                        music_held = true;
+                        if let Some(ref mp) = music_player {
+                            mp.pause();
+                        }
                         suspend_world_audio(
                             &mut world_fx,
                             &mut sound_manager,
@@ -6293,10 +6518,17 @@ fn run_game(
                                 targetter, retail_tick,
                             )
                         });
-                        let mut shell = MenuShell::new_single_player_menu(
-                            &ctx,
-                            v2k_game::game_state::SinglePlayerMenuKind::Pause,
-                        );
+                        let mut shell = if kind == GameplayInterruption::Suspend {
+                            MenuShell::new_suspended(
+                                &ctx,
+                                menu_data::VIS_INGAME | menu_data::VIS_INGAME_SP,
+                            )
+                        } else {
+                            MenuShell::new_single_player_menu(
+                                &ctx,
+                                v2k_game::game_state::SinglePlayerMenuKind::Pause,
+                            )
+                        };
                         shell.engine.apply_cheat_enables(session_cheats);
                         state = GameState::Paused { shell };
                         continue;
@@ -6315,6 +6547,9 @@ fn run_game(
                 );
 
                 retail_tick = retail_clock.advance(u64::from(elapsed_micros));
+                // FUN_0044FE20 counts the fire lockout down by the frame.
+                pause_fire_lockout_micros =
+                    pause_fire_lockout_micros.saturating_sub(elapsed_micros);
                 world_complete_results.advance(elapsed_micros);
                 if let Some(shell) = post_intro_world_cover.as_mut() {
                     // The persistent Klaus task precedes loaded world actors.
@@ -6943,7 +7178,11 @@ fn run_game(
                     // layers inside the controlled-player callback, before
                     // entity force/contact integration moves the emitter.
                     if let (Some(sound_manager), Some(player)) = (
-                        sound_manager.as_mut().filter(|_| !player_hull.dying),
+                        // Pause reason 4 (an inactive window) masks the
+                        // fan's positional rows too.
+                        sound_manager
+                            .as_mut()
+                            .filter(|_| !player_hull.dying && !window_suspended),
                         em.player(),
                     ) {
                         player_fan_audio.update(
@@ -7577,13 +7816,14 @@ fn run_game(
                     terrain.water_enabled().then(|| terrain.sea_level_world_y())
                 });
                 // Enter, joystick button 1 and a pad's fire share the fire
-                // descriptor.
+                // descriptor. The reader's fire word stays zero while the
+                // resume's lockout runs (FUN_00456C90).
+                let fire_allowed = !player_hull.dying && pause_fire_lockout_micros == 0;
                 let primary_trigger = PrimaryTriggerInput {
-                    source_a: !player_hull.dying
+                    source_a: fire_allowed
                         && (craft_keys.contains(&Keycode::Return)
                             || joystick.is_some_and(JoystickSample::fire)),
-                    source_b: !player_hull.dying
-                        && mouse_buttons_down.contains(&MouseButton::Right),
+                    source_b: fire_allowed && mouse_buttons_down.contains(&MouseButton::Right),
                 };
                 if let Some(player) = em.player() {
                     let origin = player.position;
@@ -10104,7 +10344,7 @@ fn run_game(
                             entities: em,
                             camera: &camera,
                             elapsed_micros,
-                            positional_masked: false,
+                            positional_masked: window_suspended,
                         },
                         &mut world_fx,
                         &mut sound_manager,
@@ -12400,6 +12640,35 @@ fn particle_ground_raw(terrain: &v2k_formats::terrain::TerrainGrid, x_raw: i16, 
     (near + (((far - near) * fz) >> 8)) as i16
 }
 
+/// Clear to the master colour-table entry `index`: the frontend mode's tick
+/// clears to entry 32 (`FUN_0042AA60` copies it to the clear word `0x4CA790`
+/// hands `FUN_00428D00`), the M map's first two frames to entry 85
+/// (`FUN_004542E0`). Without the system palette the clear is black.
+fn clear_to_palette_colour(
+    renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
+    index: usize,
+) {
+    match cache
+        .master_color_palette()
+        .and_then(|palette| palette.get(index))
+    {
+        Some(entry) => renderer.clear(
+            f32::from(entry.r) / 255.0,
+            f32::from(entry.g) / 255.0,
+            f32::from(entry.b) / 255.0,
+        ),
+        None => renderer.clear(0.0, 0.0, 0.0),
+    }
+}
+
+fn clear_to_frontend_colour(
+    renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
+) {
+    clear_to_palette_colour(renderer, cache, 32);
+}
+
 /// System-2 palette entry 32, the particle shadow colour, as a display word.
 fn particle_shadow_colour(cache: &v2k_game::resource_cache::ResourceCache) -> u32 {
     cache
@@ -12990,6 +13259,7 @@ struct FullscreenMapDrawRequest<'a> {
     fonts: Option<&'a v2k_game::menu_text::MenuFonts>,
     status: Option<&'a FullscreenMapStatusResources>,
     progress: &'a PlayerCampaignProgress,
+    cache: &'a v2k_game::resource_cache::ResourceCache,
 }
 
 fn draw_fullscreen_map(
@@ -13011,9 +13281,11 @@ fn draw_fullscreen_map(
     });
 
     renderer.begin_scene(RenderScene::Menu);
-    // The map mode's tick (FUN_004542E0) clears its first two frames; the port
-    // clears every frame.
-    renderer.clear(0.0, 0.0, 0.0);
+    // The map mode's tick (FUN_004542E0) clears only its first two frames, to
+    // colour 85; later frames draw the same opaque map, icons over it and the
+    // same panel text over that clear. The port redraws onto a fresh buffer
+    // each frame, so it repeats the clear: the frames shown are the same.
+    clear_to_palette_colour(renderer, request.cache, 85);
     renderer.set_sprite_clip(None);
 
     if let Some(image) = radar.fullscreen_image(request.terrain) {
@@ -14097,7 +14369,7 @@ fn render_menu_scene(
         // suppress it, matching the retail New Game capture.
         let billboard = billboard.expect("frontend scene requires its render snapshot");
         let (vw, vh) = renderer.viewport_size();
-        renderer.clear(0.01, 0.01, 0.03);
+        clear_to_frontend_colour(renderer, cache);
         renderer.set_camera(&menu_camera(vw as f32 / vh as f32));
         if renderer.supports_models() {
             let backdrop_depth = shell
@@ -16187,7 +16459,7 @@ fn render_ring_3d(
     billboard: &BillboardRenderFrame,
     retail_tick: u32,
 ) {
-    renderer.clear(0.01, 0.01, 0.03);
+    clear_to_frontend_colour(renderer, cache);
     let (vw, vh) = renderer.viewport_size();
     let ui_request = UiMappingRequest {
         viewport: [vw, vh],
@@ -16707,7 +16979,7 @@ fn render_list(
         None
     };
     if frontend {
-        renderer.clear(0.01, 0.01, 0.03);
+        clear_to_frontend_colour(renderer, cache);
     }
     let (vw, vh) = renderer.viewport_size();
     let ui_request = UiMappingRequest {
@@ -18412,8 +18684,8 @@ mod menu_visual_tests {
         assert_eq!(gameplay_interruption(false, &[], &[]), None);
         assert_eq!(
             gameplay_interruption(false, &[GameEvent::KeyDown(Keycode::P)], &[]),
-            None,
-            "P belongs to the separate retail results-screen table"
+            Some(GameplayInterruption::Pause),
+            "the in-play table 0x4C25E0 binds P to FUN_00455D60, as Escape"
         );
         assert_eq!(
             gameplay_interruption(false, &[], &[PadAction::Pause]),

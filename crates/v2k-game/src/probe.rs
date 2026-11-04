@@ -17,14 +17,20 @@ use v2k_render::GameEvent;
 struct ScriptedKey {
     frame: u64,
     /// SDL key name: `Up`, `Space`, `Return`, `Tab`, `Right Shift`, `A`...
+    /// or `Window Focus`, the window gaining (pressed) or losing focus.
     key: String,
     pressed: bool,
 }
 
+/// The replay's name for the window's focus, so a probe can suspend the game
+/// without taking focus from the desktop.
+const WINDOW_FOCUS: &str = "Window Focus";
+
 /// `--input-replay`: key changes by frame, in file order within a frame.
 #[derive(Debug, Default)]
 pub struct InputReplay {
-    keys: Vec<(u64, Keycode, bool)>,
+    /// `None` is the window's focus.
+    keys: Vec<(u64, Option<Keycode>, bool)>,
     next: usize,
 }
 
@@ -48,8 +54,12 @@ impl InputReplay {
                     ));
                 }
                 previous = key.frame;
-                let code = Keycode::from_name(&key.key)
-                    .ok_or_else(|| format!("input replay: {:?} is not an SDL key name", key.key))?;
+                let code = match key.key.as_str() {
+                    WINDOW_FOCUS => None,
+                    name => Some(Keycode::from_name(name).ok_or_else(|| {
+                        format!("input replay: {:?} is not an SDL key name", key.key)
+                    })?),
+                };
                 Ok((key.frame, code, key.pressed))
             })
             .collect::<Result<_, _>>()?;
@@ -64,10 +74,11 @@ impl InputReplay {
                 break;
             }
             self.next += 1;
-            events.push(if pressed {
-                GameEvent::KeyDown(key)
-            } else {
-                GameEvent::KeyUp(key)
+            events.push(match (key, pressed) {
+                (Some(key), true) => GameEvent::KeyDown(key),
+                (Some(key), false) => GameEvent::KeyUp(key),
+                (None, true) => GameEvent::FocusGained,
+                (None, false) => GameEvent::FocusLost,
             });
         }
         events
@@ -372,6 +383,23 @@ mod tests {
             key: key.into(),
             pressed,
         }
+    }
+
+    #[test]
+    fn window_focus_is_scripted_as_focus_events() {
+        let mut replay = InputReplay::from_keys(vec![
+            key(3, "Window Focus", false),
+            key(9, "Window Focus", true),
+        ])
+        .unwrap();
+        assert!(matches!(
+            replay.events(3).as_slice(),
+            [GameEvent::FocusLost]
+        ));
+        assert!(matches!(
+            replay.events(9).as_slice(),
+            [GameEvent::FocusGained]
+        ));
     }
 
     #[test]

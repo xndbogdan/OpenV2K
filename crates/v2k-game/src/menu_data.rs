@@ -65,6 +65,12 @@ pub const OPTIONS_INGAME: u32 = 0x4C1260;
 pub const PAUSE_SIMPLE: u32 = 0x4D1090;
 /// Pause menu, full variant (Continue/Options/Briefing/Status/Replay/Cheats/Quit).
 pub const PAUSE_FULL: u32 = 0x4D1190;
+/// The suspended screen: one "Suspended" line (global string 122), opened
+/// by the suspended mode's entry `FUN_00451390` while the window is inactive
+/// (or, from the in-play step `FUN_00453AD0`, while no input device is open).
+/// Popping it runs its switch-away callback `FUN_00450E40`, the resume
+/// `FUN_004512E0`.
+pub const SUSPENDED: u32 = 0x4C5008;
 /// Quit confirmation dialog (Yes/No).
 pub const QUIT_CONFIRM: u32 = 0x4C4DD0;
 /// Cheats menu.

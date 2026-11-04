@@ -324,6 +324,15 @@ press. The cheat actions test bits of the session's cheat word `+1C4`
 | `FUN_004562B0` | clears all six cheat enables (`FUN_00450FC0`) and pops a screen |
 | `FUN_004564E0` | an in-play debug action: on a press, steps the controller's craft type (`+190`, `FUN_00447C60`) to the next of the 18 entries at `0x4D13B8` whose world mask has the current world, rebuilds the player as that type (`FUN_00447C20`, keeping it in phase 4), and stores its body handle at `+2A8` |
 
+After any pause, the resume `FUN_004512E0` sets session `+264` to 500,000
+µs. The simulation chain's head `FUN_0044FE20` lowers it by each frame's
+delta, and while it is above zero the craft reader `FUN_004445E0` returns
+before its fire word (`+0x0C` of the motion vector), which stays zero
+(`FUN_00456C90`). So for half a second after Continue, P, Escape or the
+window's return, holding Return, the joystick's fire button or the right
+mouse button fires nothing. The port gates the primary trigger the same
+way, counting its frame deltas.
+
 ### Original console controller layouts
 
 Five more craft sets (`0x004C4180`, `0x004C41E0`, `0x004C4240`, `0x004C42A0`,

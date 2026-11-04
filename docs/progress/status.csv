@@ -974,3 +974,26 @@ address,status,note
 0x0044F0C0,implemented,particle wind and drag (common_mover/environment.rs apply_particle_wind_drag_raw)
 0x0043F290,implemented,class-31 trail update with wind (world_fx traversal)
 0x00437550,implemented,radar redraw after a sea-level change (ResourceCache::advance_radar_sea_refresh)
+# Manual per-function status overrides for scripts/progress.ps1.
+# status: implemented | approximated | documented | not-needed
+# not-needed removes a game function from the progress denominator.
+address,status,note
+0x00495940,implemented,window activity, one change a frame; the port applies the frame's last SDL focus change (docs/re/PLATFORM_RUNTIME.md)
+0x0044E6A0,implemented,deactivation: suspended flag, pause reason 4, the mode's deactivate hook (docs/re/MENU_SYSTEM.md#suspended-game)
+0x0044E6E0,implemented,activation: clears the flag and pause reason 4, runs the activate hook (docs/re/MENU_SYSTEM.md#suspended-game)
+0x0044E720,implemented,installs the deactivate hook; the port's play, pause and suspended states own it (docs/re/MENU_SYSTEM.md#suspended-game)
+0x0044E730,implemented,installs the activate hook; the port's play, pause and suspended states own it (docs/re/MENU_SYSTEM.md#suspended-game)
+0x00451390,implemented,suspended mode entry: CD paused, the Suspended screen 0x4C5008 (docs/re/MENU_SYSTEM.md#suspended-game)
+0x00451400,implemented,activate hook: pops the suspended screen, fly-out at the root (docs/re/MENU_SYSTEM.md#suspended-game)
+0x00451550,implemented,suspended mode exit: hooks cleared, music poll (docs/re/MENU_SYSTEM.md#suspended-game)
+0x00451420,implemented,pause mode entry: CD paused and the menu keys (docs/re/MENU_SYSTEM.md#suspended-game)
+0x00451580,implemented,pause mode exit: music poll resumes the track when Ambient is on (docs/re/MENU_SYSTEM.md#suspended-game)
+0x00453F70,implemented,M map entry: pause reason 2 silences world loops, CD paused (docs/re/FACTORY_AUDIO.md)
+0x00454330,implemented,M map exit: music poll, pause reason 2 cleared (docs/re/FACTORY_AUDIO.md)
+0x00456AC0,implemented,pauses the CD track at its position (docs/re/MENU_SYSTEM.md)
+0x00453FD0,implemented,M map frame count for the first two frames' clear (docs/re/MENU_SYSTEM.md)
+0x004542E0,implemented,M map tick: first two frames clear to colour 85; the port clears every frame, the same picture (docs/re/MENU_SYSTEM.md)
+0x0042AA60,implemented,frontend clear colour: colour-table entry 32 (docs/re/SMALL_FUNCTIONS.md)
+0x004564A0,implemented,P on the pause menu closes the stack (docs/re/MENU_SYSTEM.md#suspended-game)
+0x0043A9F0,implemented,collapses the menu stack to its root and pops it (docs/re/MENU_SYSTEM.md#suspended-game)
+0x00456C90,implemented,fire lockout read: no fire while session +264 is above zero (docs/re/CONTROLS.md#in-play-callbacks)

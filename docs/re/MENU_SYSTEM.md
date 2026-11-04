@@ -917,7 +917,9 @@ In-game track selection: world = Section13[level]+0x48 → **track = world+1**
 world!=6 && rand-even → track 8; mode ≤ 2 → track 9. Loop: MCI play
 from position to track end; a 1.5 s poll (FUN_00456A00, countdown at
 session+0x29C, counted down by `FUN_00456A80`) restarts the track when
-`status cdaudio mode` ≠ "playing". `FUN_00456AC0` resumes the track and
+`status cdaudio mode` ≠ "playing". `FUN_00456AC0` pauses the track (its
+position kept, `FUN_00496890`), `FUN_00456A00` plays it on from there when
+Ambient is on and pauses it otherwise, and
 `FUN_00456BA0` stops and frees it.
 Ambient==0 pauses (position saved), results screens pause/resume.
 Overlay-51 occupancy (`004D0AA0`) uses that same cursor so Ambient cannot
@@ -1283,9 +1285,51 @@ is the full-screen map and `0x4D0A30` the predecessor descriptor.
 | `FUN_0044FD60` | an in-game event handler (from the dispatcher `FUN_0044FCD0`): for the event the session names at `+4`, clears `+289` and returns to the menu (`FUN_0042A940`); for any other, switches to the results mode from the table `0x4D0DA0`, indexed by the session's `+268`, whether `+260` is positive, and the network flag `004FE60C` |
 | `FUN_004514A0` | a presentation step of the results chains `0x4D0768` and `0x4D080C`: draws the screen (`FUN_0043AA40`) and, when `FUN_00428C10` counts no device, string 132 as one line at the layout's lower left |
 | `FUN_00451580` | the exit handler of mode descriptor `0x4D09F8`: frees the mode's input set (`FUN_00471C10`, `+4`) and scene object (`FUN_00429160`, `+8`), clears `004F718C` and `004F7190`, hands the Self Righting setting to the controller (`FUN_00448450`), and runs the music poll (`FUN_00456A00`) |
-| `FUN_00453F70` | the init handler of the map descriptor `0x4D0A68`: clears the map's frame count (`004F72EC`), sets mask bit 2 (`FUN_0044F3E0`), resumes the music (`FUN_00456AC0`), sets the application word (`FUN_00494050`, the mode's `+C`) and, when that succeeds, installs the map's binding set `0x4C4730` (`FUN_004559E0`) |
+| `FUN_00453F70` | the init handler of the map descriptor `0x4D0A68`: clears the map's frame count (`004F72EC`), sets mask bit 2 (`FUN_0044F3E0`), pauses the music (`FUN_00456AC0`), sets the application word (`FUN_00494050`, the mode's `+C`) and, when that succeeds, installs the map's binding set `0x4C4730` (`FUN_004559E0`) |
 | `FUN_004542E0` | the map descriptor's tick: the display-surface upkeep (`FUN_00428D00`), forcing a clear to colour entry 85 during the map's first two frames (`004F72EC` 1 and 2) |
 | `FUN_00454330` | the exit handler of the map descriptor: frees the mode's input set and scene object, restores the application word (`FUN_00494050`, the mode's `+8`), runs the music poll (`FUN_00456A00`) and clears mask bit 2 (`FUN_0044F400`) |
+
+### Suspended game
+
+A window that goes inactive in play suspends the game. The in-play mode's
+deactivate hook `FUN_004513E0` raises the pause count (`FUN_0044F600`), and
+event 5 picks from the table `0x4D0DA0` the suspended mode `0x4D09C0`, whose
+entry `FUN_00451390` pauses the CD track (`FUN_00456AC0`) and opens the
+suspended screen `0x4C5008`: the pause menu's frame with the single row
+"Suspended" (global string 122), over the frozen world and HUD. It installs
+no keys. The same hooks stay in place (`FUN_004513E0`, `FUN_00451400`); its
+exit `FUN_00451550` clears them and runs the music poll (`FUN_00456A00`).
+Mode `0x4D0988`, with the same handlers, is the table's pick for an
+inactive window with no pause count.
+
+`FUN_00451400`, the activate hook, flushes the menu's pending step
+(`FUN_0043C7F0`) and pops the top screen (`FUN_0043A9A0`). As the root, the
+suspended screen flies out over `0x7000` first (`FUN_0043A8E0`); then its
+callback `FUN_00450E40` runs the resume `FUN_004512E0`, which ends the pause,
+returns the in-play mode and sets the half-second fire lockout
+([controls](CONTROLS.md#in-play-callbacks)). Deactivating over the pause
+menu stacks the suspended screen on it at once; activating pops it at once,
+the resume only lowers the count, and the pause menu shows again with its
+typewriter restarted. The retail lab shows all of it: play stops on the
+deactivating pass, the screen flies in, and play resumes 32 passes (640 ms)
+after the activation; over the pause menu play stays stopped and the menu
+returns on the next frame.
+
+One retail lock is not reproduced: a deactivation during the pause menu's
+closing fly-out is ignored by the screen stack (`FUN_0043A960` takes no push
+while a pop waits), and once the fly-out ends retail sits in the suspended
+mode with no screen and no keys. The port logs it and resumes play.
+
+The pause menu's keys (`0x4C4360`, set `0x4C45B0`): arrows, Return and
+Shift+Escape as in [controls](CONTROLS.md#every-binding-set), Escape
+`FUN_004564B0` (cue 3 and a pop; at the root that pop flies out and
+resumes, as Continue does) and P `FUN_004564A0`, which `FUN_0043A9F0`
+turns into the whole stack's collapse: the depth goes to 1 and the root
+pops silently with its fly-out, then play resumes. The lab measures 32
+passes from either key to play. The same table serves the progress map's
+save menu (`FUN_004557D0`), where P pops `0x4D1090` into `FUN_00450E60`
+without Continue's Klaus command; the port logs that as blocked until the
+map's Klaus is ported.
 
 ### Progress map
 
