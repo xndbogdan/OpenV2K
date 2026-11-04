@@ -1016,6 +1016,10 @@ fn general_behavior_hold(
         }
         // 425AF0 returns its A300 for any non-player: a RET, then no 12760.
         PairContactCallbackPolicy::PowerUp => opposite.capability_flags & 1 == 0,
+        // 40CF00 (both Mobbing styles) hits only a capability-bit0 body.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_cf00) => {
+            crate::intro2_type10::mobbing::is_type29(entity) && opposite.capability_flags & 1 == 0
+        }
         // 40C800: another ball takes the A300; any other body its checked
         // hit, which needs that body's native owner.
         PairContactCallbackPolicy::UnknownAddress(0x0040_c800) => {
@@ -1779,9 +1783,19 @@ fn is_native_autobot(entity: &Entity) -> bool {
         )
 }
 
+/// The Queen on her class67 Primary, on the class0 host.
+fn is_native_queen(entity: &Entity) -> bool {
+    entity.entity_type == 110
+        && matches!(
+            entity.actor_task_state(ActorTaskSlot::Primary),
+            Some(ActorTaskRuntime::Queen)
+        )
+}
+
 fn requires_body_custody(entity: &Entity) -> bool {
     is_native_defender_ball(entity)
         || is_native_autobot(entity)
+        || is_native_queen(entity)
         || entity.native_entity_weapon_runtime.is_some()
         || entity.intro2_type66_runtime.is_some()
         || entity.intro2_type26_sub_d_runtime.is_some()
@@ -2203,11 +2217,21 @@ fn turret_pair_damage_block(
     ) {
         return Ok(Some("native turret pair allocation"));
     }
-    // 4C8230 is the living Class29 style with a null pair slot; 4C71E0 is the
-    // finished Class49 continuation retained for re-hits. Anything else is an
-    // unaudited hit slot, matching the particle-hit style gate.
+    // 4C8230 is the living Class29 style with a null pair slot; a flower's
+    // class0 wait (4C7468) has a null one too; 4C71E0 is the finished Class49
+    // continuation retained for re-hits. Anything else is an unaudited hit
+    // slot, matching the particle-hit style gate.
     let finished = crate::class49_death::finished_terminal_hit_authenticates(entities, target);
-    if style_address(entity)? != if finished { 0x004c_71e0 } else { 0x004c_8230 } {
+    let style = style_address(entity)?;
+    let flower = entity
+        .intro2_gun_turret_runtime
+        .is_some_and(|runtime| runtime.profile.is_flower());
+    let living = style == 0x004c_8230 || (flower && style == 0x004c_7468);
+    if if finished {
+        style != 0x004c_71e0
+    } else {
+        !living
+    } {
         return Ok(Some("unaudited turret pair style"));
     }
     Ok(None)

@@ -114,19 +114,26 @@ fn walk_pairs(
         {
             continue;
         }
-        let pairs = crate::native_actor_capture::pair::resolve_native_captor_active_contacts(
-            &mut Intro2ContactFrame {
-                entities: manager,
-                resources: &mut session.cache,
-                world_fx: fx,
-                static_damage,
-                notifications,
-                retail_tick: t,
-                actor_tasks: tasks,
-            },
-            id,
-            crate::native_actor_capture::pair::CaptureFeedbackPolicy::Gameplay,
-        );
+        // Playing's context: a lethal pair on a turret runs its class49 radial.
+        let mut hull = crate::player_hull::PlayerHull::default();
+        let pairs =
+            crate::native_actor_capture::pair::resolve_native_captor_active_contacts_with_playing(
+                &mut Intro2ContactFrame {
+                    entities: manager,
+                    resources: &mut session.cache,
+                    world_fx: fx,
+                    static_damage,
+                    notifications,
+                    retail_tick: t,
+                    actor_tasks: tasks,
+                },
+                id,
+                crate::native_actor_capture::pair::CaptureFeedbackPolicy::Gameplay,
+                Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                    hull: &mut hull,
+                    extra_lives: RetailRuntimeValue::Known(0),
+                }),
+            );
         if let crate::native_actor_capture::pair::NativeCaptorPairOutcome::Blocked {
             reason, ..
         } = &pairs
