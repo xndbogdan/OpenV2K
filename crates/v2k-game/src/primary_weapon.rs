@@ -40,6 +40,9 @@ const FUN_0043F6E0_HIT_VA: u32 = 0x0043_F6E0;
 const FUN_0043F780_HIT_VA: u32 = 0x0043_F780;
 /// Class6 Antidote: 11320 cure entry and F950 terrain infection clear.
 const FUN_0043F7C0_HIT_VA: u32 = 0x0043_F7C0;
+/// Class50 Seedpods (selector `0x10`): the carrier's 441EA0/441FA0/442070
+/// contacts burst into class5 virus particles (`WorldFx`'s virus projectile).
+const FUN_00441FA0_HIT_VA: u32 = 0x0044_1FA0;
 
 /// Retail simulation tick length (`1 / 50 s`).
 pub const RETAIL_TICK_DURATION: Duration = Duration::from_micros(20_000);
@@ -201,8 +204,8 @@ pub const fn primary_weapon_profile(selector: u8) -> Option<PrimaryWeaponProfile
 /// Selectors3/4/5 explicitly deliver modeled Type59/59/42 bodies to the native
 /// entity-weapon constructor. Other rows whose particle class is zero, or
 /// whose entity-hit slot is none of
-/// `FUN_0043F590` / `FUN_0043F6E0` / `FUN_0043F780` / `FUN_0043F7C0`,
-/// remain unsupported. Antidote retains its separate cure/static-clear owners.
+/// `FUN_0043F590` / `FUN_0043F6E0` / `FUN_0043F780` / `FUN_0043F7C0` /
+/// `FUN_00441FA0` (the Seedpods' class50 carrier), remain unsupported. Antidote retains its separate cure/static-clear owners.
 pub fn fire_profile_from_descriptor(descriptor: &WeaponDescriptor) -> Option<PrimaryWeaponProfile> {
     let selector = descriptor.selector();
     if selector == 0 {
@@ -240,7 +243,11 @@ pub fn fire_profile_from_descriptor(descriptor: &WeaponDescriptor) -> Option<Pri
     let particle = particle_descriptor(row.particle_class)?;
     if !matches!(
         particle.raw_u32(0x1c),
-        FUN_0043F590_HIT_VA | FUN_0043F6E0_HIT_VA | FUN_0043F780_HIT_VA | FUN_0043F7C0_HIT_VA
+        FUN_0043F590_HIT_VA
+            | FUN_0043F6E0_HIT_VA
+            | FUN_0043F780_HIT_VA
+            | FUN_0043F7C0_HIT_VA
+            | FUN_00441FA0_HIT_VA
     ) {
         return None;
     }
@@ -982,6 +989,26 @@ mod tests {
         assert_eq!(descriptor.selector(), POSSESSION_RAY_SELECTOR);
         assert_eq!(descriptor.ammunition(), Ammunition::Infinite);
         assert!(fire_profile_from_descriptor(&descriptor).is_none());
+    }
+
+    /// World 20's Seedpods power-up (`0x6410`): selector 0x10 fires
+    /// `DAT_004D02C0` row 0x10, the class50 carrier at speed 2000, with the
+    /// master descriptor's cadence and sound 88.
+    #[test]
+    fn seedpods_fire_the_class50_carrier() {
+        let mut inventory = WeaponInventory::new();
+        inventory.acquire_weapon(PowerUpPayload::from_runtime_word(0x6410));
+        let descriptor = *inventory.selected_descriptor();
+        assert_eq!(descriptor.selector(), 0x10);
+        let profile = fire_profile_from_descriptor(&descriptor).unwrap();
+        assert_eq!(profile.delivery, PlayerProjectileDelivery::Particle);
+        assert_eq!(profile.projectile.projectile_class, 50);
+        assert_eq!(profile.projectile.speed_raw, 2_000);
+        assert_eq!(profile.sound_id, 88);
+        assert_eq!(
+            profile.repeat_interval,
+            Duration::from_micros(descriptor.cadence_micros())
+        );
     }
 
     #[test]

@@ -1824,6 +1824,14 @@ in contact order, the refused ones too. A type with no port constructor at
 the player (the Autobot), or one with capability `0x1000` (the cargo branch,
 which no power-up carries), leaves the power-up with a logged stop.
 
+**Seedpods.** Selector `0x10` (world 20's power-up `0x6410`, or the master
+descriptor's callback 11, as the bombs) fires `DAT_004D02C0` row
+`{0, 2000, 50, 0}`: the class50 carrier at speed 2000, cadence and sound 88
+from its master descriptor. Its contacts (`FUN_00441EA0` surface,
+`FUN_00441FA0` entity, `FUN_00442070` static) burst into class5 virus
+particles; no body is built (Type65 is the Megablast's pod). The port fires
+it through the particle path its virus carrier already runs.
+
 **Lightning Shield.** No Section-12 type selects class 52, as a behavior or as
 its alternate, so `FUN_0040B1B0`, `FUN_004076E0` and `FUN_00407770` never run.
 
