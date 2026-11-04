@@ -2370,6 +2370,13 @@ fn run_game(
     // world's entry clears the mask, so it outlives Intro2 into PostIntro.
     let mut intro2_final_card = false;
     let mut post_intro_world_cover: Option<MenuShell> = None;
+    // FUN_004530D0's camera glide between a world's load and its play.
+    let mut world_start_glide: Option<v2k_game::world_start_glide::WorldStartGlide> = None;
+    // FUN_004530D0 runs FUN_004513E0 at arrival when the window went
+    // inactive during the glide.
+    let mut suspend_after_glide = false;
+    // Play's first ED10 still sees the proxy in session +2A8.
+    let mut glide_first_play_proxy: Option<[i16; 3]> = None;
     let mut intro_commands = v2k_game::intro2_commands::Intro2Commands::default();
     // DAT_004F72E8 belongs to the common authored-text renderer. Intro2 and
     // gameplay notifications share this one process-lifetime owner, including
@@ -5108,10 +5115,44 @@ fn run_game(
                     shell.begin_post_intro_leg(PostIntroStage::AfterWorldLoad);
                     post_intro_world_cover = Some(shell);
                 }
-                if post_intro_world_cover.is_some() {
-                    eprintln!(
-                        "World start blocked in part: FUN_004530D0's camera glide is not ported;                          play, the HUD and the captions start at the load"
-                    );
+                // FUN_00451710 stands the class-1 proxy above and behind
+                // the player and starts the eye on it; the load's own frame
+                // already runs FUN_004530D0's first visit. Network play and
+                // worlds without a player (FUN_00450390) start at once.
+                world_start_glide = None;
+                glide_first_play_proxy = None;
+                if matches!(state, GameState::Playing)
+                    && network_game.is_none()
+                    && closing_scene.is_none()
+                {
+                    let player_raw = entity_manager
+                        .as_ref()
+                        .and_then(|manager| manager.player())
+                        .map(|player| player.position_raw());
+                    if let (Some(player_raw), Some(level)) =
+                        (player_raw, session.cache.level_desc())
+                    {
+                        let mut glide = v2k_game::world_start_glide::WorldStartGlide::new(
+                            player_raw,
+                            level.terrain_draw_depth,
+                            level.world_style,
+                        );
+                        advance_opening_camera_eye(
+                            &session.cache,
+                            &mut camera,
+                            &mut glide.camera,
+                            0,
+                            config.active_camera,
+                        );
+                        if glide.visit(player_raw, elapsed_micros)
+                            == v2k_game::world_start_glide::GlideVisit::Stepped
+                        {
+                            world_start_glide = Some(glide);
+                        } else {
+                            glide_first_play_proxy = Some(glide.camera.position_raw());
+                            chase_camera = glide.into_chase();
+                        }
+                    }
                 }
                 // Loading is synchronous. Its wall time is neither a retail
                 // simulation tick nor part of Klaus's opening callback, so
@@ -6078,6 +6119,166 @@ fn run_game(
                         resized_before_pause = true;
                     }
                 }
+
+                // FUN_004530D0's glide: the world opens under the class-1
+                // proxy with the clock, Klaus, the eye and the physical
+                // particles running, and no actors, HUD, captions or keys.
+                if let Some(glide) = world_start_glide.as_mut() {
+                    for event in &events {
+                        match event {
+                            GameEvent::Quit => break 'main_loop,
+                            GameEvent::KeyDown(key) => {
+                                keys_down.insert(*key);
+                            }
+                            GameEvent::KeyUp(key) => {
+                                keys_down.remove(key);
+                            }
+                            GameEvent::FocusLost => {
+                                keys_down.clear();
+                                mouse_buttons_down.clear();
+                            }
+                            _ => {}
+                        }
+                    }
+                    let player_raw = entity_manager
+                        .as_ref()
+                        .and_then(|manager| manager.player())
+                        .map(|player| player.position_raw());
+                    let prepared_full_frame_sprite = prepare_full_frame_sprite_command(
+                        &*renderer,
+                        &session.cache,
+                        &mut main_base_level_abort.outer_frame_sequence,
+                    );
+                    retail_tick = retail_clock.advance(u64::from(elapsed_micros));
+                    if let Some(shell) = post_intro_world_cover.as_mut() {
+                        shell.update(
+                            elapsed_micros,
+                            &mut GlobalSoundRuntime::new(
+                                &session.cache,
+                                &mut world_fx,
+                                sound_manager.as_mut(),
+                            ),
+                        );
+                    }
+                    advance_opening_camera_eye(
+                        &session.cache,
+                        &mut camera,
+                        &mut glide.camera,
+                        elapsed_micros,
+                        config.active_camera,
+                    );
+                    let em = entity_manager.as_mut().expect("glide world entity manager");
+                    let effects = v2k_game::intro2_effects::update_intro2_effects(
+                        v2k_game::intro2_effects::Intro2EffectsFrame {
+                            cache: &mut session.cache,
+                            entities: em,
+                            world_fx: &mut world_fx,
+                            static_damage: &mut static_damage,
+                            scheduler: &mut specialized_actor_tasks,
+                            notifications: &mut gameplay_notifications,
+                            elapsed_micros,
+                            retail_tick,
+                        },
+                    );
+                    for &entity_id in &effects.unresolved_collision_entity_ids {
+                        report_unresolved_particle_collision(
+                            entity_id,
+                            &mut particle_collision_error_reported,
+                        );
+                    }
+                    if session.cache.take_level_terrain_presentation_dirty() {
+                        renderer.invalidate_terrain_cache();
+                    }
+                    world_fx.process_pending();
+                    // The visit follows 450C00: the eye saw the proxy before
+                    // this frame's step.
+                    let visit = match player_raw {
+                        Some(player_raw) => glide.visit(player_raw, elapsed_micros),
+                        None => v2k_game::world_start_glide::GlideVisit::Arrived,
+                    };
+                    if visit == v2k_game::world_start_glide::GlideVisit::Arrived {
+                        // 44FD60 queues play's mode, so this frame presents
+                        // nothing; FUN_004532E0 hands +2A8 to the player
+                        // and the eye's springs carry on from the proxy.
+                        if let Some(glide) = world_start_glide.take() {
+                            glide_first_play_proxy = Some(glide.camera.position_raw());
+                            chase_camera = glide.into_chase();
+                        }
+                        suspend_after_glide = window_suspended;
+                        continue;
+                    }
+                    let native_viewport = glide.camera.native_viewport();
+                    draw_gameplay_world(
+                        &mut *renderer,
+                        GameplayWorldFrame {
+                            cache: &session.cache,
+                            face_colors: &face_colors,
+                            em,
+                            camera: &camera,
+                            camera_mode: GameplayWorldCameraMode::RetailChase,
+                            native_viewport,
+                            world_projection: Some(world_projection),
+                            sky: sky_background.as_ref(),
+                            terrain_frames: terrain_frames.as_ref(),
+                            water_frames: water_frames.as_ref(),
+                            terrain_lights: &mut terrain_lights,
+                            world_fx: &mut world_fx,
+                            explosion_lights: &[],
+                            static_explosion_lights: &[],
+                            abort_frame: None,
+                            specialized_actor_tasks: &mut specialized_actor_tasks,
+                            pending_entity_weapon_fire: &mut pending_entity_weapon_fire,
+                            entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
+                            player_craft: &player_craft,
+                            player_hull: &player_hull,
+                            player_shield: GameplayWorldShield::Live(&mut player_shield),
+                            particles: GameplayWorldParticles::Live,
+                            player_death: &player_death,
+                            player_model_id,
+                            retail_tick,
+                            elapsed_micros,
+                            targetter: GameplayWorldTargetter {
+                                runtime: &mut targetter,
+                                enabled: config.targetter,
+                            },
+                        },
+                    );
+                    if let Some(shell) = post_intro_world_cover.as_mut() {
+                        draw_klaus_handoff_overlay(
+                            &mut *renderer,
+                            KlausHandoffFrame {
+                                shell,
+                                cache: &session.cache,
+                                colors: &face_colors,
+                                retail_tick,
+                            },
+                        );
+                        if prepared_full_frame_sprite.is_some() {
+                            renderer.begin_scene(RenderScene::Menu);
+                        }
+                        if shell.take_transition_ready() {
+                            post_intro_world_cover = None;
+                        }
+                    }
+                    if let Some(command) = prepared_full_frame_sprite.as_ref() {
+                        draw_prepared_full_frame_sprite_command(&mut *renderer, command);
+                    }
+                    play_world_audio(
+                        WorldAudioFrame {
+                            cache: &session.cache,
+                            entities: em,
+                            camera: &camera,
+                            elapsed_micros,
+                            positional_masked: window_suspended,
+                        },
+                        &mut world_fx,
+                        &mut sound_manager,
+                        &mut entity_positional_audio,
+                    );
+                    renderer.present();
+                    continue;
+                }
+                let suspend_now = suspend_now || std::mem::take(&mut suspend_after_glide);
 
                 // FUN_0044FFA0 consumes a phase-3 exit's +290 before anything
                 // else; event 2 leaves for 4D0A30, where 453BA0/453C20 close
@@ -8080,15 +8281,24 @@ fn run_game(
                         // reproduce FUN_0040F3A0, including shortest-path torus
                         // motion.
                         let basis = player_body_basis(&player_craft, player);
+                        let (position_raw, body_basis) = match glide_first_play_proxy.take() {
+                            // FUN_004532E0 gives +2A8 the player only after
+                            // play's first frame: its ED10 sees the proxy.
+                            Some(proxy_raw) => (proxy_raw, ChaseBodyBasis::RETAIL_IDENTITY),
+                            None => (
+                                player.position_raw(),
+                                ChaseBodyBasis::from_vectors([
+                                    basis.lateral,
+                                    basis.up,
+                                    basis.forward,
+                                ]),
+                            ),
+                        };
                         chase_camera
                             .update(
                                 ChaseCameraTarget {
-                                    position_raw: player.position_raw(),
-                                    body_basis: ChaseBodyBasis::from_vectors([
-                                        basis.lateral,
-                                        basis.up,
-                                        basis.forward,
-                                    ]),
+                                    position_raw,
+                                    body_basis,
                                     active_camera: config.active_camera,
                                     // The console's in-play set gives the
                                     // right stick to these parameters.

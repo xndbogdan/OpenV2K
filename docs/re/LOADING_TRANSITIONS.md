@@ -85,20 +85,36 @@ world actors, and its model is submitted after the world and before the
 flash, the HUD and the captions, which retail draws over his opening.
 
 After the load, `004D0918`'s tick `FUN_004530D0` glides the camera proxy
-(`+2A8`) toward the player's body: each frame it adds
-`q31(distance, dt << 14)` on X and on Z, and only once both distances are
-under `0x12D` does it start play (`FUN_00494050`, `FUN_0044FD60`). Until
-then the frame runs the clock (`FUN_0044FE20`, which restarted it) and
-`FUN_00450C00` (Klaus, the eye and physical particles), with no gameplay
-visit, HUD or captions. In the lab's Replay this World the load is at pass
-1696, the clock counts from 0 at 1697, the HUD and caption first show and
-the actors first tick at 1713 (clock 16); the first world after Intro2
-also starts play 17 passes after its load. Klaus's opening, the clock and
-the caption's typing match the port's frame for frame from 1713 (a
-twin-checked run; single runs snapshotted during the load can show frames
-from later passes). The port starts play at the load, so its HUD and
-caption show, and its actors move, 16 frames early. Not ported: the
-proxy's position before the glide is not traced. Closing
+(`+2A8`) toward the player's body. `FUN_00451710` copies the player's
+position words to the class-1 proxy and moves it up `0x200` and along Z by
+`0x700 - far` (Section 13 `+88` shifted left eight), then starts the eye on
+it (`FUN_0040F390`, `FUN_0040ED10`). Each visit measures the player's Y and
+Z words against the proxy's (X is equal from the copy); while either
+distance is `0x12D` or more it adds `(distance * (dt << 14)) >> 31` to that
+word, about 15% a 20-ms frame. The visit in the load's own pass already
+takes the first step. The pass whose visit finds both distances under
+`0x12D` queues play (`FUN_00494050`, `FUN_0044FD60`) and presents nothing;
+play's first frame is the next. Until then each pass runs the clock
+(`FUN_0044FE20` restarts it) and `FUN_00450C00` (Klaus, ED10 on the proxy
+with the terrain context, physical particles) before the visit, with no
+gameplay visit, HUD, captions or Section-2 records. In play's first frame
+ED10 still sees the proxy in `+2A8`; `FUN_004532E0` hands it the player's
+body after that frame, and the eye's springs carry on. In network play
+(`DAT_004F741C`) and in worlds without a player (`FUN_00450390`) the first
+visit starts play. Arriving with the window inactive runs the deactivate
+hook (`FUN_004513E0`), so play's first frame suspends.
+
+The lab (Replay this World on Level 1, dumps of the proxy and the springs at
+`004DAF18` each pass): the load at pass 1696, sixteen steps (1696 to 1711)
+from Y `0x100` and Z `0x2C00` to Y -223 and Z `0x3900` beside the player at
+Y -256 and Z `0x3A00`, arrival at 1712 (no frame presented), and the HUD,
+the caption and the actors from 1713. The first world after Intro2 does the
+same. The port's proxy steps and its focus spring (position and velocity)
+match the lab's every pass from the load to play's second frame, and its
+frames show Klaus alone until play, then the HUD and "Entering Pe".
+The eye spring's Z matches; its height differs from the lab's by up to 16
+raw units, from the terrain-context eye target's anchor (shared with play's
+chase camera, not traced further). Closing
 before the load remains a separate `GameState::PostIntro` over the completed
 black card. The first-world load resets the retail clock, starts sound 50
 after setup, and restores live gameplay immediately; visible morph completion
