@@ -644,9 +644,18 @@ body whose tasks have no completed owner, or a response that would move a
 body without one. A general visit that blocks after its preflight reports
 `... stopped during its visit: <block>`.
 
-Pairs still resolved apart from the walk, after it: the player's pairs (the
-[player adapter](../../crates/v2k-game/src/player_active_contact.rs), with
-the player as subject whatever its live position), the Main Base's
+The walk also visits, in live order, the player's pairs with native
+weapons, sharks, Type29 and every other native-owned body whose pair
+identity the player adapter cannot close (below). The player's `+38`,
+`447D70`, with its local controller (capability bit 0) gives a body
+without capability `0xC00` the two bodies' relative-speed feedback and a
+`0xC00` body nothing; both return null. The response moves the player, and
+the collision damage reaches its hull through `15040`. A stop in such a
+pair is reported like a general visit's.
+
+Pairs still resolved apart from the walk, after it: the player's other pairs
+(the [player adapter](../../crates/v2k-game/src/player_active_contact.rs),
+with the player as subject whatever its live position), the Main Base's
 conversion of `0x800` bodies, the factory's intake of `0x400` workers, and
 Power-Up pickups by the player.
 
@@ -702,9 +711,22 @@ may borrow it; only Type47's descriptor contact did, so a Type71 whose
 takes the write, and its lethal pair damage runs its class63 terminal
 (`BC90`, then its Type61), as its static contact does. The port's idle world
 28 visits 30 Type71 x Type71 pairs in two minutes, with collision damage;
-retail's Skip to World cannot reach world 28. The twelve player pair kinds
-above still stay outside the player adapter, whose pass runs apart from the
-walk.
+retail's Skip to World cannot reach world 28.
+
+### The player's unadmitted pairs
+
+The player adapter visits only bodies whose pair identity (component,
+damage modifier, type hit and orientation) is closed. Since the fixes
+above, a probe of the same two minutes per world counted 21 touching
+player pairs of 8 kinds it skipped: Type5 (world 43), Type15 (48), Type21
+(34), Type25 (22, 23, 34), Type57 (21, 36), Type82 (32), Type87 (28, 31,
+35, 48) and Type96 (36), every one with a native owner. The walk now visits
+the player's pair with any native-owned body the adapter and the dedicated
+lanes leave, in live order. The same probe afterwards: 16 such pairs met,
+none skipped, and no stop; the walk visited them 1,065 times (817 with
+collision damage). A body without a native owner (a Type61 outside its
+Power-Up style, say) still stays out of both, and the adapter's own pairs
+still run in its pass after the walk.
 
 ### The Hive consuming people
 

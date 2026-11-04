@@ -461,6 +461,20 @@ fn is_native_type29_player_pair(manager: &EntityManager, first: &Entity, second:
         })
 }
 
+/// The player and a native-owned body the player adapter does not visit
+/// (its pair identity is not closed: Types 5, 10, 15, 39, 87 and more): this
+/// lane visits the pair in live order, from whichever body comes first.
+fn is_native_player_walk_pair(manager: &EntityManager, first: &Entity, second: &Entity) -> bool {
+    let player = manager.player().map(|player| player.id);
+    [(first, second), (second, first)]
+        .into_iter()
+        .any(|(body, other)| {
+            Some(other.id) == player
+                && requires_body_custody(body)
+                && crate::player_active_contact::player_pair_left_to_walk(manager, body)
+        })
+}
+
 /// Native gunner side of the gunner/hive separation pair.
 ///
 /// Bounded to native Type47 construction (ordinary worlds share this receipt
@@ -627,8 +641,10 @@ fn resolve(
         let pair_weapon = [subject, candidate]
             .into_iter()
             .any(owns_native_weapon_contact);
+        let player_walk = is_native_player_walk_pair(frame.entities, subject, candidate);
         let pair_shark = is_native_shark_player_pair(frame.entities, subject, candidate)
-            || is_native_type29_player_pair(frame.entities, subject, candidate);
+            || is_native_type29_player_pair(frame.entities, subject, candidate)
+            || player_walk;
         if player == Some(id) && !pair_weapon && !pair_shark {
             continue;
         }
@@ -669,7 +685,8 @@ fn resolve(
             },
             frame.resources,
         );
-        let general_types = (!listed).then_some([subject_type, candidate_type]);
+        // A player pair the adapter leaves to this walk reports its stops too.
+        let general_types = (!listed || player_walk).then_some([subject_type, candidate_type]);
         let hold = |contact, reason| NativeCaptorPairVisit {
             candidate_id,
             contact,
@@ -1103,30 +1120,26 @@ fn behavior(
                 frame.entities,
                 entity,
                 actor(frame.entities, opposite)?,
-            ))
+            )
+            || is_native_player_walk_pair(frame.entities, entity, actor(frame.entities, opposite)?))
     {
         //447D70: the actual local controller bound to this player satisfies
-        //43AF0. A weapon's capability40 and a shark's or Type29's 8 exclude the c00
-        //consumable branch, leaving the two bodies' relative-speed feedback.
-        //It neither changes body/task state nor returns an A300 suppression.
+        //43AF0. A body without capability c00 leaves the two bodies'
+        //relative-speed feedback; a c00 body returns null with none. It neither
+        //changes body/task state nor returns an A300 suppression.
         let body = actor(frame.entities, opposite)?;
-        let capability = if owns_native_weapon_contact(body) {
-            0x40
-        } else {
-            8
-        };
-        if playing_player.is_none()
-            || entity.capability_flags & 1 == 0
-            || body.capability_flags != capability
-        {
+        if playing_player.is_none() || entity.capability_flags & 1 == 0 {
             return Err(NativeCaptorPairBlock::Runtime(
                 "local player weapon pair controller",
             ));
         }
-        if let Some(strength_raw) =
-            crate::pad_vibration::pair_contact_strength(entity.velocity_raw(), body.velocity_raw())
-        {
-            crate::pad_vibration::submit(strength_raw);
+        if body.capability_flags & 0xc00 == 0 {
+            if let Some(strength_raw) = crate::pad_vibration::pair_contact_strength(
+                entity.velocity_raw(),
+                body.velocity_raw(),
+            ) {
+                crate::pad_vibration::submit(strength_raw);
+            }
         }
         return Ok(NativeCaptorPairBehaviorResult::Null);
     }
@@ -1596,6 +1609,10 @@ fn physical(
         actor(frame.entities, id)?,
         actor(frame.entities, candidate)?,
     ) || is_native_type29_player_pair(
+        frame.entities,
+        actor(frame.entities, id)?,
+        actor(frame.entities, candidate)?,
+    ) || is_native_player_walk_pair(
         frame.entities,
         actor(frame.entities, id)?,
         actor(frame.entities, candidate)?,

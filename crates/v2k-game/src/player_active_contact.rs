@@ -939,18 +939,13 @@ fn resolve_player_active_segment(
         // same allocation through this detached planning pass.
         .filter(|candidate| !native_weapon_owns_pair_lane(entities, candidate))
         // Native Type29's Mobbing pair hook runs in the native pair lane.
-        .filter(|candidate| {
-            !(candidate.entity_type == 29 && candidate.intro2_type10_runtime.is_some())
-        })
+        .filter(|candidate| !is_native_type29(candidate))
         // Unresolved pair identity used to abort the whole pass, which made
         // every non-Level-1 world skip solids including Main Base. This
         // adapter only visits candidates whose constructor/census pair fields
-        // are closed. Retail still walks everyone; unknown actors stay out.
-        .filter(|candidate| {
-            candidate_pair_identity_is_closed(candidate)
-                || type17_player_pair_admitted(candidate)
-                || rolling_boulder_player_pair_admitted(candidate)
-        })
+        // are closed; the late walk visits the player's pairs with any other
+        // native-owned body, in live order.
+        .filter(|candidate| player_adapter_admits(candidate))
     {
         candidates.push(active_pair_body_from_entity(candidate, model_pool));
         let metadata = entities.type_runtime_metadata(candidate.entity_type);
@@ -1134,6 +1129,27 @@ fn resolve_player_active_segment(
         sounds,
         descriptor_contacts,
     })
+}
+
+fn is_native_type29(entity: &Entity) -> bool {
+    entity.entity_type == 29 && entity.intro2_type10_runtime.is_some()
+}
+
+/// The player pairs neither this adapter nor a dedicated lane (Power-Up
+/// pickups, native weapons, Type29's Mobbing hook) visits; the late walk
+/// visits them in live order.
+pub(crate) fn player_pair_left_to_walk(manager: &EntityManager, entity: &Entity) -> bool {
+    !(uses_dedicated_power_up_transaction(entity)
+        || native_weapon_owns_pair_lane(manager, entity)
+        || is_native_type29(entity)
+        || player_adapter_admits(entity))
+}
+
+/// The bodies whose player pairs this adapter visits.
+fn player_adapter_admits(entity: &Entity) -> bool {
+    candidate_pair_identity_is_closed(entity)
+        || type17_player_pair_admitted(entity)
+        || rolling_boulder_player_pair_admitted(entity)
 }
 
 fn uses_dedicated_power_up_transaction(entity: &Entity) -> bool {
