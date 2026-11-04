@@ -530,14 +530,19 @@ fn bounded_fallback_keeps_terrain_and_factory_prefix_when_handoff_lease_is_stale
 /// The loss arrives mid-play: retail loses worlds 32 and 35 about 1,100
 /// ticks after arrival. Every actor has run its own tasks by then, and an
 /// owner its tick parked would refuse the abort's custody. Type40's chase
-/// (Sub-D), Type32's Follow Beacons death styles and the Type125 factories'
-/// understaffed countdown each did.
+/// (Sub-D), Type32's Follow Beacons death styles, the Type125 factories'
+/// understaffed countdown and the Hive-born Type57's first callback each did.
+/// World 35 is held: its Type12's first Trash Furniture scan steers toward
+/// allocator residue.
 #[v2k_test_support::retail_test]
 fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
+    use v2k_game::entity_view_detail::RetailViewDetailContext;
     use v2k_game::gameplay_notifications::GameplayNotificationPhase;
     use v2k_game::specialized_actor_task_production::{
-        SpecializedActorTaskProductionFrame, SpecializedActorTaskWorld,
+        HiveComponentProductionContext, SpecializedActorTaskProductionFrame,
+        SpecializedActorTaskWorld,
     };
+    use v2k_game::world_complete_results::WorldCompleteTally;
     let data = v2k_test_support::retail_dir();
     let mut session = GameSession::init(&data).unwrap();
     session.load_auxiliary_ovl(3, 1).unwrap();
@@ -558,7 +563,9 @@ fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
                 })
         })
         .collect();
-    for world in [32, 37, 40] {
+    for world in [
+        13, 14, 15, 16, 17, 18, 19, 21, 24, 26, 31, 32, 34, 36, 37, 39, 40, 42, 43, 46,
+    ] {
         session.load_level_by_id(world, 1).unwrap();
         let mut fx = WorldFx::new();
         let mut manager = construct_world(&session, &metadata, world, &mut fx);
@@ -571,6 +578,8 @@ fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
         let mut hull = PlayerHull::default();
         let mut static_damage = StaticDamageScheduler::new();
         let mut notifications = GameplayNotifications::new();
+        let mut tally = WorldCompleteTally::default();
+        let view = manager.player().unwrap().position_raw().map(i32::from);
         for tick in 1..=1_100u32 {
             let pass = tasks.tick(
                 &mut manager,
@@ -579,7 +588,11 @@ fn casualty_abort_completes_after_a_minute_of_actor_ticks() {
                         player_hull: &mut hull,
                         extra_lives: RetailRuntimeValue::Known(0),
                     },
-                    hive_components: None,
+                    // The Hive gives birth through its own components.
+                    hive_components: Some(HiveComponentProductionContext {
+                        world_complete_tally: &mut tally,
+                        view_detail: RetailViewDetailContext::from_raw(view, 0, (52, 30)),
+                    }),
                     notification_phase: GameplayNotificationPhase::Playing,
                     resources: &mut session.cache,
                     world_fx: &mut fx,

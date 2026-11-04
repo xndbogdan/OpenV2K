@@ -1920,10 +1920,11 @@ fn apply_pair_checked_damage(
                         static_damage: frame.static_damage,
                         notifications: frame.notifications,
                         retail_tick: frame.retail_tick,
-                        world: crate::class49_terminal::Class49WorldContext::Cinematic {
-                            actor_tasks: frame.actor_tasks,
-                            active_terminal_calls: Vec::new(),
-                        },
+                        // A death's class1/49 radial reaches Playing's player.
+                        world: crate::class49_terminal::Class49WorldContext::for_contact(
+                            frame.actor_tasks,
+                            playing_player,
+                        ),
                     },
                     target,
                 )

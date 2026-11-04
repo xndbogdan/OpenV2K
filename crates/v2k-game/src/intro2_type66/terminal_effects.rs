@@ -13,8 +13,9 @@ use crate::{
     world_fx::WorldFx,
 };
 
-/// Retail FUN_00437390 for the authored factory templates, which never set the
-/// deferred (0x01) or radial (0x04) bits; those stay blocked.
+/// Retail FUN_00437390 for the authored factory templates. A deferred (0x01)
+/// template only queues its terrain ripple, which `4374B0` advances and
+/// finishes on later frames; the radial (0x04) bit without it stays blocked.
 pub(super) fn apply_intro2_type66_terminal_effects(
     manager: &mut EntityManager,
     resources: &mut ResourceCache,
@@ -34,7 +35,20 @@ pub(super) fn apply_intro2_type66_terminal_effects(
         terrain_changed: outcome.terrain_changed,
     };
     if flags & 1 != 0 {
-        return Err(block("deferred destruction template", outcome));
+        let w = request.template_words;
+        world_fx.queue_terrain_ripple(crate::terrain_ripple::TerrainRipple::new(
+            request.position_raw,
+            crate::terrain_ripple::TerrainRippleTemplate {
+                flags,
+                radius_raw: w[1] as i32,
+                height: w[2] as i32,
+                period_us: w[3] as i32,
+                radial_words: w[4..12].try_into().expect("eight radial words"),
+                crater_radius_raw: w[12] as i32,
+                crater_depth: w[13] as i32,
+            },
+        ));
+        return Ok(outcome);
     }
     outcome.presentation_requested = flags & 2 != 0;
     if flags & 4 != 0 {

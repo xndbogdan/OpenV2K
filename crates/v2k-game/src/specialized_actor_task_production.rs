@@ -7125,6 +7125,7 @@ impl crate::intro2_radial::Intro2RadialTaskCustody for SpecializedActorTaskSched
             if block.target_prefix_committed {
                 self.park_intro2_type8_external_prefix(block.target_id);
                 self.park_intro2_type10_external_prefix(block.target_id);
+                self.park_intro2_type57_external_prefix(block.target_id);
                 self.park_intro2_gun_turret_external_prefix(block.target_id);
                 self.park_cleansing_vehicle_external_prefix(block.target_id);
                 self.park_intro2_type17_external_prefix(block.target_id);
@@ -7503,11 +7504,18 @@ fn prepare_intro2_radial_actor_mutation(
                 if owner.entity_id() == entity_id && owner.completed_contact_boundary(manager))
             });
     }
-    if crate::intro2_flyers_live::flyer_explodes(entity.entity_type)
+    if (crate::intro2_flyers_live::flyer_explodes(entity.entity_type)
+        || matches!(entity.entity_type, 15 | 87 | 108 | 41))
         && entity.intro2_flyer_frame_owner.is_some()
     {
         // A completed class1 corpse keeps only its Finished receipt until the sweep.
         if crate::class49_death::finished_terminal_hit_authenticates(manager, entity_id) {
+            return true;
+        }
+        // A completed quiet death keeps its deferred allocation until 14990.
+        if crate::native_flying_surface_contact::native_flyer_quiet_death_authenticates(
+            manager, entity_id,
+        ) {
             return true;
         }
         return owners.iter().any(|owner| {
@@ -7520,6 +7528,32 @@ fn prepare_intro2_radial_actor_mutation(
             matches!(owner, SpecializedActorTaskOwner::Intro2Type16(owner)
                 if owner.entity_id() == entity_id && owner.completed_mutation_boundary(manager))
         });
+    }
+    // 14AE0 reaches a living or tumbling bat between its completed visits.
+    if entity.intro2_type57_runtime.is_some() {
+        return crate::actor_task_owner::ActorTaskSlot::IN_RETAIL_TICK_ORDER
+            .into_iter()
+            .filter_map(|slot| entity.actor_tasks.task_in_slot(slot))
+            .all(|task| {
+                entity
+                    .actor_tasks
+                    .wrapper_flags(task)
+                    .is_some_and(|flags| flags.alive && !flags.in_callback)
+            })
+            && owners.iter().any(|owner| match owner {
+                SpecializedActorTaskOwner::Intro2Type57(owner) => {
+                    !owner.has_pending_prefix()
+                        && crate::intro2_type57::Intro2Type57Owner::adopt(manager, entity_id)
+                            == Ok(*owner)
+                }
+                SpecializedActorTaskOwner::Intro2Type57Tumble(owner) => {
+                    !owner.has_pending_prefix()
+                        && crate::intro2_type57::death::Intro2Type57TumbleOwner::adopt(
+                            manager, entity_id,
+                        ) == Ok(*owner)
+                }
+                _ => false,
+            });
     }
     if entity.intro2_type53_runtime.is_some() {
         return owners.iter().any(|owner| {

@@ -1075,3 +1075,5 @@ address,status,note
 0x00456BD0,documented,session HUD countdown words +2C8/+2CC; nothing in the simulation reads them and the port draws no countdown (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00401D30,documented,Trash Furniture's 0x24-byte record from CRT malloc; X and Z zeroed and Y left as heap residue (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
 0x00401DA0,implemented,Trash Furniture callback; a failed first scan steers toward the residue Y and is held with a logged stop (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
+0x00437390,implemented,template effects: bit 0x01 queues the deferred terrain ripple; flash and crater run at once; a radial bit is a logged stop (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)
+0x00414AE0,documented,dynamic radial walk visits every live actor with no type filter; Type57 and the quiet flyers take their own deaths (docs/re/CAMPAIGN_FAILURE.md#mid-play-abort)

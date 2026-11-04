@@ -126,6 +126,11 @@ pub(crate) fn publish_native_type57(
         metadata,
     } = request;
     authenticate_native_type57_body(entity, allocation, metadata)?;
+    // 104B0 never writes +0xB2 and a Hive child's first visit reads it as
+    // callback mass. Retail reads allocator residue there (0, 0x20, 0x4F00,
+    // 0x5509, 0xFFFF seen); with zeroed allocations it reads zero, the port's
+    // fresh-heap rule, as for the other native Hive children.
+    entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     let word = world_fx.next_shared_retail_random_u16();
     let sub_d = world_fx.construct_entity_sub_d(SUB_D);
     let mut words = std::iter::once(u32::from(word));
@@ -231,6 +236,9 @@ fn publish_type57_constructor(
     });
     // D4A0 bit20 is clear: retain authored Y and the zero-Euler constructor
     // basis. Do not invent constructor-zero B2; 12DA0's dormant exit owns it.
+    // 410090's common type vtable 4C8A30 has a null +30 type-hit hook, and
+    // 438080 patches only types 46, 51 and 67.
+    entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
     let (selection, selector_word) = select(next_random)?;
     let context = BehaviorContextRuntime::from_fresh_weighted_selection(selection)
         .ok_or(Intro2Type57Error::Selection)?;
