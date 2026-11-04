@@ -188,6 +188,21 @@ impl IntroCameraController {
         )
     }
 
+    /// `FUN_004515E0` ends every world load with the loading card's last
+    /// redraw (`FUN_004571B0` waits for `FUN_00456FE0`, which runs
+    /// `FUN_0042AF00`): after `FUN_00451710`'s own ED10 it resets the eye's
+    /// springs and starts them on the class-1 proxy (`DAT_004F71B8`) through
+    /// ED10 with no terrain context. The world's first ED10 with terrain then
+    /// steps from an eye level with the proxy, the chase distance behind it.
+    pub fn start_eye_after_load(&mut self, active_camera: u8) -> ChaseCameraPose {
+        self.chase.reset();
+        self.advance_eye(IntroCameraEyeUpdate {
+            elapsed_micros: 0,
+            active_camera,
+            terrain: None,
+        })
+    }
+
     /// 503C0 reads the surviving subject after the contact pass. A missing
     /// handle suppresses follow control, without undoing the earlier eye step.
     /// This changes next-frame proxy motion; it does not recompute this eye.
@@ -927,7 +942,9 @@ mod tests {
         // the first snap. Retail inherits a prior menu spring for this hidden
         // call; the isolated controller initializes to the same raw target.
         assert_eq!(INTRO_CAMERA_INITIAL_POSITION_RAW, [0, 0x200, -0x1100]);
-        assert_eq!(pose.eye, [0.0, 2.0, 230.996_1]);
+        // The lab's New Game (Active Camera 6): the loading card's ED10 on
+        // this proxy leaves the eye at Z -0x1900, one raw unit inside 2049.
+        assert_eq!(pose.eye, [0.0, 2.0, 231.0]);
         assert_eq!(pose.distance, 2049.0 / 256.0);
         assert_eq!(pose.focus, [0.0, 2.0, 61433.0 / 256.0]);
         assert_eq!(camera.position_raw, [-29184, 8, -32768]);

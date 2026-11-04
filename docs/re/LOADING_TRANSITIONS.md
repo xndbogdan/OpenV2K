@@ -112,9 +112,20 @@ the caption and the actors from 1713. The first world after Intro2 does the
 same. The port's proxy steps and its focus spring (position and velocity)
 match the lab's every pass from the load to play's second frame, and its
 frames show Klaus alone until play, then the HUD and "Entering Pe".
-The eye spring's Z matches; its height differs from the lab's by up to 16
-raw units, from the terrain-context eye target's anchor (shared with play's
-chase camera, not traced further). Closing
+The eye starts where the loading card's last redraw leaves it:
+`FUN_004515E0` brackets `FUN_00451710` with the card's timer
+(`FUN_00457170`, `FUN_004571B0`), and `FUN_004571B0` waits for one more
+callback (`FUN_00456FE0` -> `FUN_0042AF00`), which resets the springs and
+runs ED10 with no terrain context on the class-1 handle it saved before the
+load (`DAT_004F71B8`; it resolves to the new proxy). So after `FUN_00451710`'s
+own ED10 with terrain (eye Y 319 on Level 1), the eye restarts level with
+the unstepped proxy (Y 256, Z `0x2C00 - 0x800`); a watchpoint on the terrain
+header and the springs in the load's pass shows both inits in that order.
+The glide's first ED10 with terrain steps from there. The lab's springs
+after the load and after each glide frame (Replay this World and New Game
+give the same) match the port's exactly; play keeps the springs. The
+closing scene's load starts its eye the same way. Intro2 resets the springs
+again on its first frames. Closing
 before the load remains a separate `GameState::PostIntro` over the completed
 black card. The first-world load resets the retail clock, starts sound 50
 after setup, and restores live gameplay immediately; visible morph completion
