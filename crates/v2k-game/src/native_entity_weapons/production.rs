@@ -10,8 +10,9 @@ use crate::{
     actor_task_dispatcher::ActorTaskRuntime,
     actor_task_owner::{ActorTaskSlot, ActorTaskVisit},
     common_mover::{
+        apply_sub_b_lateral_raw,
         environment::{apply_common_wind_drag_raw, CommonWindDrag, CommonWindDragFrame},
-        sub_c::sample_sub_c_world_surface,
+        sub_c::{apply_sub_c_lift_raw, sample_sub_c_world_surface, SubCWaveClock},
         type9_tail::{plan_common_master_motion, COMMON_MASTER_MOTION_REQUIRED_STATE_MASK},
     },
     entity::{
@@ -30,6 +31,7 @@ use crate::{
     world_fx::{ParticleEnvironment, ParticleOwnerAtBirth, TerrainCollisionContext, WorldFx},
 };
 use grenade::{step_rolling_primary, GrenadePrimaryStepRequest, RollingPrimaryProfile};
+use mine::{step_armed_mine_words, step_falling_mine, MinePrimary};
 use rocket::{
     apply_rocket_flight_forces_raw, emit_rocket_trail, RocketFlightRequest, RocketTrailRequest,
     WorldFxRocketTrailHost,
@@ -49,6 +51,8 @@ pub enum EntityWeaponTickOutcome {
     Advanced {
         callback_elapsed_micros: u32,
         trail_attempts: u32,
+        /// The mine's armed style replaced its tasks: the owner's new custody.
+        restyled: Option<NativeEntityWeaponOwner>,
     },
     ///410C10 completed synchronously; the source's common suffix also ran.
     Terminal,
@@ -71,6 +75,9 @@ pub fn tick_entity_weapon<E>(
         return Err(owned_error(EntityWeaponBlock::Allocation));
     }
     let id = owner.entity_id();
+    let mut owner = owner;
+    let mut restyled = false;
+    let waves_enabled = manager.common_environment_physics().waves_enabled;
     let metadata = manager
         .type_runtime_metadata(owner.kind.entity_type() as u32)
         .ok_or(owned_error(EntityWeaponBlock::Metadata))?
@@ -152,15 +159,18 @@ pub fn tick_entity_weapon<E>(
                 return Err(owned_error(EntityWeaponBlock::TaskChanged));
             }
             let visit = ActorTaskVisit { slot, task_id };
-            let (position, mut velocity, runtime, propulsion) = {
+            let (position, mut velocity, runtime, propulsion, mut rotation) = {
                 let entity = manager.entity_mut(id).unwrap();
                 (
                     entity.position_raw(),
                     entity.velocity_raw(),
                     entity.native_entity_weapon_runtime.unwrap(),
                     entity.sub_a_propulsion_runtime,
+                    entity.rotation_heading_pitch_roll_raw(),
                 )
             };
+            let mut sub_k = runtime.sub_k_raw;
+            let mut mine_arms_after_unwind = false;
             let mut search_context = runtime.search_context;
             let mut acquisition = None;
             let mut trail = false;
@@ -260,6 +270,66 @@ pub fn tick_entity_weapon<E>(
                             ActorTaskRuntime::RocketTrail => {
                                 trail = true;
                             }
+                            ActorTaskRuntime::ProximityMine(MinePrimary::Falling) => {
+                                let terrain = frame
+                                    .resources
+                                    .level_terrain()
+                                    .ok_or(EntityWeaponBlock::Terrain)?;
+                                let cell = terrain
+                                    .cell(
+                                        usize::from((position[0] as u16) >> 8),
+                                        usize::from((position[2] as u16) >> 8),
+                                    )
+                                    .ok_or(EntityWeaponBlock::Terrain)?;
+                                let tagged = step_falling_mine(
+                                    &mut rotation,
+                                    &mut sub_k,
+                                    position,
+                                    i16::from(cell.height as i8) * 32,
+                                    terrain.sea_level_raw(),
+                                    dt,
+                                );
+                                // 401120: tag 9C00 reaches style +04 (40C750)
+                                // unless 416410 sees state 0x1000.
+                                mine_arms_after_unwind = tagged && flags & 0x1000 == 0;
+                            }
+                            ActorTaskRuntime::ProximityMine(MinePrimary::Armed) => {
+                                step_armed_mine_words(&mut rotation, &mut sub_k, dt);
+                                let (
+                                    RetailRuntimeValue::Known(Some(b)),
+                                    RetailRuntimeValue::Known(Some(c)),
+                                ) = (
+                                    metadata.sub_b_lateral_descriptor,
+                                    metadata.sub_c_lift_descriptor,
+                                )
+                                else {
+                                    return Err(EntityWeaponBlock::Metadata);
+                                };
+                                // 41F1C0(entity, C, attached mass 0, dt): a
+                                // nonzero surface mode samples the waved sea.
+                                let surface = sample_sub_c_world_surface(
+                                    frame
+                                        .resources
+                                        .level_terrain()
+                                        .ok_or(EntityWeaponBlock::Terrain)?,
+                                    [position[0], position[2]],
+                                    (c.surface_mode_raw != 0).then_some(SubCWaveClock {
+                                        wave_tick_50hz: frame.retail_tick as i32,
+                                        waves_enabled,
+                                    }),
+                                );
+                                let mut lifted = position;
+                                apply_sub_c_lift_raw(
+                                    c.into(),
+                                    &mut lifted,
+                                    &mut velocity,
+                                    dt,
+                                    surface,
+                                    basis.up,
+                                );
+                                apply_sub_b_lateral_raw(b, basis.lateral, &mut velocity, dt);
+                                acquisition = Some(NativeTaskEffect::Position(lifted));
+                            }
                             // 06A70 sees Primary's damped velocity and the
                             // pre-environment pose.
                             ActorTaskRuntime::TrailingFire(state)
@@ -281,6 +351,12 @@ pub fn tick_entity_weapon<E>(
                     .ok_or(owned_error(EntityWeaponBlock::TaskChanged))?;
                 task_result.map_err(owned_error)?;
                 entity.set_velocity_raw(velocity);
+                entity.set_rotation_heading_pitch_roll_raw(rotation);
+                entity
+                    .native_entity_weapon_runtime
+                    .as_mut()
+                    .unwrap()
+                    .sub_k_raw = sub_k;
                 entity.physical_body_basis_q31 = RetailRuntimeValue::Known(basis);
                 entity
                     .native_entity_weapon_runtime
@@ -401,6 +477,15 @@ pub fn tick_entity_weapon<E>(
                     .map_err(EntityWeaponTickError::Terminal)?;
                 ended = true;
             }
+            if mine_arms_after_unwind && survived {
+                let entity = manager.entity_mut(id).unwrap();
+                arm_mine(entity).map_err(owned_error)?;
+                // The loop rereads each later slot: the new Secondary search
+                // runs in this same pass.
+                owner.task_ids = ActorTaskSlot::IN_RETAIL_TICK_ORDER
+                    .map(|slot| entity.actor_tasks.task_in_slot(slot));
+                restyled = true;
+            }
             if ended {
                 break;
             }
@@ -480,8 +565,51 @@ pub fn tick_entity_weapon<E>(
         EntityWeaponTickOutcome::Advanced {
             callback_elapsed_micros: dt,
             trail_attempts,
+            restyled: restyled.then_some(owner),
         }
     })
+}
+
+/// `40C750 -> 40C6B0(entity, context, 1)`: class34's armed style replaces
+/// the falling one in the same context (40EA10's `+34`/`+38` are both zero),
+/// then `40B0B0` clears Secondary, publishes `401F80(entity, 1, 0, 0)`'s
+/// search there and `406E90`'s floating Primary in slot 0.
+fn arm_mine(entity: &mut Entity) -> Result<(), EntityWeaponBlock> {
+    use crate::entity_behavior::{audited_behavior_program, audited_behavior_style};
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return Err(EntityWeaponBlock::Graph);
+    };
+    if context.active_style().style_address() != mine::MINE_FALLING_STYLE_ADDRESS {
+        return Err(EntityWeaponBlock::Graph);
+    }
+    let program = audited_behavior_program(34).ok_or(EntityWeaponBlock::Graph)?;
+    let armed = *audited_behavior_style(34, 1).ok_or(EntityWeaponBlock::Graph)?;
+    let replaced = crate::entity_behavior::BehaviorContextRuntime::named_audited(
+        program,
+        1,
+        context.choice_list_source(),
+        context.target_handle_at_0x08(),
+        context.auxiliary_word_at_0x0c(),
+        armed,
+    )
+    .ok_or(EntityWeaponBlock::Graph)?;
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(replaced));
+    entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+    entity.actor_tasks.replace_prepared(
+        ActorTaskSlot::Secondary,
+        crate::actor_task_owner::PreparedActorTask::new(
+            ActorTaskRuntime::GuardLocationAcquisition(
+                crate::guard_location_owner::acquisition::GuardLocationAcquisitionTaskState::new(0),
+            ),
+        ),
+    );
+    entity.actor_tasks.replace_prepared(
+        ActorTaskSlot::Primary,
+        crate::actor_task_owner::PreparedActorTask::new(ActorTaskRuntime::ProximityMine(
+            MinePrimary::Armed,
+        )),
+    );
+    Ok(())
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

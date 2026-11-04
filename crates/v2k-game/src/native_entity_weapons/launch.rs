@@ -68,7 +68,11 @@ pub fn entity_weapon_direction_q31(
     let sine = lookup(angle);
     let cosine = lookup(angle.wrapping_add(0x4000) & 0xffff);
     std::array::from_fn(|axis| {
-        if kind == EntityWeaponKind::DepthCharge {
+        // 424650 aims selectors 4 and 9 alike.
+        if matches!(
+            kind,
+            EntityWeaponKind::DepthCharge | EntityWeaponKind::ProximityMine
+        ) {
             q31_mul(basis.forward[axis], sine).wrapping_sub(q31_mul(basis.up[axis], cosine))
         } else {
             q31_mul(basis.up[axis], sine).wrapping_add(q31_mul(basis.forward[axis], cosine))

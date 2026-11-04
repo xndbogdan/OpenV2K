@@ -173,6 +173,7 @@ pub enum ActorTaskRuntimeFamily {
     TrailingFire,
     RocketFlight,
     RocketTrail,
+    ProximityMine,
     PortableRadar,
     TractorBeam,
 }
@@ -249,6 +250,8 @@ pub enum ActorTaskRuntime {
     RocketFlight(crate::native_entity_weapons::rocket::RocketFlightTaskState),
     /// 4069E0's class31 private payload; no timer or component reset.
     RocketTrail,
+    /// Class34's lifetime-0 Primary; the Sub-K words are the body's.
+    ProximityMine(crate::native_entity_weapons::mine::MinePrimary),
     /// 405540's lifetime-0 405610 callback. Sub-K word 1 is the entity's,
     /// so the wrapper keeps no private state.
     PortableRadar,
@@ -320,6 +323,7 @@ impl ActorTaskRuntime {
             Self::TrailingFire(_) => ActorTaskRuntimeFamily::TrailingFire,
             Self::RocketFlight(_) => ActorTaskRuntimeFamily::RocketFlight,
             Self::RocketTrail => ActorTaskRuntimeFamily::RocketTrail,
+            Self::ProximityMine(_) => ActorTaskRuntimeFamily::ProximityMine,
             Self::PortableRadar => ActorTaskRuntimeFamily::PortableRadar,
             Self::TractorBeam(_) => ActorTaskRuntimeFamily::TractorBeam,
         }
@@ -1920,6 +1924,7 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             Some(ActorTaskRuntime::TrailingFire(_)) => Some(ActorTaskRuntimeFamily::TrailingFire),
             Some(ActorTaskRuntime::RocketFlight(_)) => Some(ActorTaskRuntimeFamily::RocketFlight),
             Some(ActorTaskRuntime::RocketTrail) => Some(ActorTaskRuntimeFamily::RocketTrail),
+            Some(ActorTaskRuntime::ProximityMine(_)) => Some(ActorTaskRuntimeFamily::ProximityMine),
             Some(ActorTaskRuntime::PortableRadar) => Some(ActorTaskRuntimeFamily::PortableRadar),
             Some(ActorTaskRuntime::TractorBeam(_)) => Some(ActorTaskRuntimeFamily::TractorBeam),
             Some(ActorTaskRuntime::TrashFurniture(_)) => {
@@ -2049,7 +2054,9 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntime::BoulderResting(_) => {
                 unreachable!("Resting boulders require their native class20 visit")
             }
-            ActorTaskRuntime::RocketFlight(_) | ActorTaskRuntime::RocketTrail => {
+            ActorTaskRuntime::RocketFlight(_)
+            | ActorTaskRuntime::RocketTrail
+            | ActorTaskRuntime::ProximityMine(_) => {
                 unreachable!("Entity weapons require their native body visit")
             }
             ActorTaskRuntime::TrashFurniture(_) => unreachable!("Furniture requires its exact native visit"),
@@ -2326,7 +2333,9 @@ pub fn tick_actor_task_dispatcher_from_slot<Adapter: ActorTaskDispatcherAdapter>
             ActorTaskRuntimeFamily::BoulderResting => {
                 unreachable!("Resting boulders require their native class20 visit")
             }
-            ActorTaskRuntimeFamily::RocketFlight | ActorTaskRuntimeFamily::RocketTrail => {
+            ActorTaskRuntimeFamily::RocketFlight
+            | ActorTaskRuntimeFamily::RocketTrail
+            | ActorTaskRuntimeFamily::ProximityMine => {
                 unreachable!("Entity weapons require their native body visit")
             }
             ActorTaskRuntimeFamily::TrashFurniture => unreachable!("Furniture requires its exact native visit"),

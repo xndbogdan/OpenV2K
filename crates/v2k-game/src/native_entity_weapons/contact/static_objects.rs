@@ -142,15 +142,18 @@ fn run(
         .ok_or(Block::Owner(EntityWeaponBlock::Metadata))?;
     authenticate_weapon_metadata(owner.kind(), metadata).map_err(Block::Owner)?;
     let capability = metadata.capability_flags;
-    let expected_style = if finished {
-        crate::class49_death::NativeExplosionSourceProfile::EntityWeapon(owner.kind())
-            .policy()
-            .style_address()
-    } else {
-        owner.kind().living_style()
+    let expected_style = |style: u32| {
+        if finished {
+            style
+                == crate::class49_death::NativeExplosionSourceProfile::EntityWeapon(owner.kind())
+                    .policy()
+                    .style_address()
+        } else {
+            owner.kind().is_living_style(style)
+        }
     };
     if !matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(style))
-        if style.active_style().style_address() == expected_style)
+        if expected_style(style.active_style().style_address()))
         || ActorTaskSlot::IN_RETAIL_TICK_ORDER
             .into_iter()
             .filter_map(|slot| entity.actor_tasks.task_in_slot(slot))

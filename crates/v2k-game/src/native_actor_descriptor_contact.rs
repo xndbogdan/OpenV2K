@@ -129,7 +129,8 @@ fn admit_slot(
         .task_state(task_id)
         .ok_or(Error::Runtime("component task"))?;
     if entity.native_entity_weapon_runtime.is_some() {
-        //404580,403840,4069E0 and401F80 all retain05FF0's null+18.
+        //404580,403840,4069E0 and401F80 all retain05FF0's null+18;
+        //the mine's 406B00/406E90 templates write it null too.
         //Only the constructor lease and completed current owner establish
         //this program; a coincidental task enum cannot authorize it.
         if !native_weapon_contact_owner_authenticates(entities, tasks, id)
@@ -138,6 +139,7 @@ fn admit_slot(
                 ActorTaskRuntime::BoulderRolling(_)
                     | ActorTaskRuntime::RocketFlight(_)
                     | ActorTaskRuntime::RocketTrail
+                    | ActorTaskRuntime::ProximityMine(_)
                     | ActorTaskRuntime::GuardLocationAcquisition(_)
             )
         {
@@ -696,7 +698,7 @@ pub(crate) fn completed_contact_owner(
         return true;
     }
     match entity.entity_type {
-        42 | 59 if entity.native_entity_weapon_runtime.is_some() => {
+        42 | 48 | 59 if entity.native_entity_weapon_runtime.is_some() => {
             native_weapon_contact_owner_authenticates(manager, tasks, id)
         }
         13 => {

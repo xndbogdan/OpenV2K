@@ -150,6 +150,7 @@ fn corpus_weapon_births_keep_rng_allocation_relation_angles_and_task_custody() {
         (EntityWeaponKind::Rocket, 4, 22),
         (EntityWeaponKind::Grenade, 1, 35),
         (EntityWeaponKind::DepthCharge, 1, 35),
+        (EntityWeaponKind::ProximityMine, 1, 34),
     ] {
         let RetailRuntimeValue::Known(ordinal) = manager.next_common_body_ordinal() else {
             panic!("native body lineage")
@@ -276,6 +277,23 @@ fn corpus_weapon_births_keep_rng_allocation_relation_angles_and_task_custody() {
                 assert_eq!(
                     entity.sub_a_propulsion_runtime,
                     RetailRuntimeValue::Known(None)
+                );
+            }
+            EntityWeaponKind::ProximityMine => {
+                assert_eq!(
+                    entity.actor_task_state(ActorTaskSlot::Primary),
+                    Some(&ActorTaskRuntime::ProximityMine(MinePrimary::Falling))
+                );
+                assert!(entity.actor_task_state(ActorTaskSlot::Secondary).is_none());
+                assert!(entity.actor_task_state(ActorTaskSlot::Tertiary).is_none());
+                let runtime = entity.native_entity_weapon_runtime.unwrap();
+                assert_eq!(runtime.sub_k_raw, [0, 0]);
+                // The type's own +C8 search: 0x300 and capability mask 8.
+                let search = runtime.search_context.unwrap();
+                assert_eq!(search.range().raw(), 0x300);
+                assert_eq!(
+                    context.active_style().style_address(),
+                    crate::native_entity_weapons::mine::MINE_FALLING_STYLE_ADDRESS
                 );
             }
             EntityWeaponKind::Meteor => {

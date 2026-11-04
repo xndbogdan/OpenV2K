@@ -9,6 +9,7 @@ use crate::{
     native_entity_weapons::{
         grenade::{authenticate_grenade_metadata, GRENADE_CLASS35_CLEAR_ORDER},
         meteor::authenticate_meteor_metadata,
+        mine::{authenticate_mine_metadata, MinePrimary},
         rocket::{
             authenticate_rocket_metadata, initialize_rocket_class22, RocketClass22InitHost,
             RocketClass22InitRequest, RocketFlightTaskState, RocketTaskPublication,
@@ -110,6 +111,7 @@ impl EntityManager {
                     .map_err(|_| EntityWeaponBlock::Metadata)?;
             }
             EntityWeaponKind::Meteor => authenticate_meteor_metadata(&metadata)?,
+            EntityWeaponKind::ProximityMine => authenticate_mine_metadata(&metadata)?,
         }
         if metadata
             .model_slots
@@ -258,7 +260,12 @@ impl EntityManager {
         entity.native_entity_weapon_runtime = Some(NativeEntityWeaponRuntime {
             allocation,
             kind: request.kind,
-            search_context: (request.kind == EntityWeaponKind::Rocket).then(|| {
+            // 409A80's context +28 copies the type's +C8 range and mask.
+            search_context: matches!(
+                request.kind,
+                EntityWeaponKind::Rocket | EntityWeaponKind::ProximityMine
+            )
+            .then(|| {
                 GuardLocationSearchContext::new(
                     WrappedAxisRange::from_raw(
                         initializer.common_axis_descriptor.strict_axis_limit_raw,
@@ -269,6 +276,7 @@ impl EntityManager {
                 )
             }),
             model_effect_bits_at_0x84: 0,
+            sub_k_raw: [0; 2],
         });
         match request.kind {
             EntityWeaponKind::Rocket => {
@@ -305,6 +313,16 @@ impl EntityManager {
                     PreparedActorTask::new(ActorTaskRuntime::BoulderRolling(
                         crate::intro2_meteors::BoulderRollingTaskState::new(request.position_raw),
                     )),
+                );
+            }
+            EntityWeaponKind::ProximityMine => {
+                // 40B080: Secondary then Tertiary cleared, then 406B00's
+                // falling Primary, which also zeroes Sub-K variable 2.
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
+                entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
+                entity.actor_tasks.replace_prepared(
+                    ActorTaskSlot::Primary,
+                    PreparedActorTask::new(ActorTaskRuntime::ProximityMine(MinePrimary::Falling)),
                 );
             }
             EntityWeaponKind::Meteor => {
