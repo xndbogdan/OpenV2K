@@ -354,3 +354,68 @@ fn a_collision_on_the_craft_hands_its_packet_to_the_held_ball() {
     }
     panic!("no collision reached the craft");
 }
+
+/// 4259F0's consuming branch: the live Hive emits operation 0x33 at a
+/// touching native worker and stages its 410B70 deferred destroy; the
+/// visit goes on to both A900 chains and 12760.
+#[v2k_test_support::retail_test]
+fn the_hive_consumes_a_touching_native_worker() {
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(19);
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    assert!(tasks.adopt_intro2_type8(&mut entities) > 0);
+    let hive = entities
+        .iter_all()
+        .find(|e| e.entity_type == crate::hive_controller::HIVE_ENTITY_TYPE)
+        .unwrap()
+        .id;
+    let worker = entities
+        .iter_all()
+        .find(|e| e.entity_type == 79)
+        .unwrap()
+        .id;
+    let pair = in_live_order(&entities, hive, worker);
+    overlap(&mut entities, &session, pair);
+    let before_pending = entities.pending_actor_deferred_destroy_ids().to_vec();
+    let outcome = walk(&mut session, &mut entities, &mut fx, &mut tasks, pair[0]);
+    assert!(
+        outcome.general_stop_lines().is_empty(),
+        "{:?}",
+        outcome.general_stop_lines()
+    );
+    let NativeCaptorPairOutcome::Resolved { visits } = &outcome else {
+        panic!("the Hive's visit resolves: {outcome:?}");
+    };
+    let visit = visits
+        .iter()
+        .find(|visit| visit.candidate_id == pair[1])
+        .expect("the touching pair is visited");
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Behavior { owner, result: NativeCaptorPairBehaviorResult::Null, .. }
+            if *owner == hive
+    )));
+    assert!(matches!(
+        visit.stages.last(),
+        Some(NativeCaptorPairStage::Physical { .. })
+    ));
+    assert_eq!(
+        actor(&entities, worker)
+            .unwrap()
+            .collision
+            .state_flags_at_0x08
+            .masked(crate::entity_collision_state::DEFERRED_DESTROY_STATE_WRITE_MASK),
+        RetailRuntimeValue::Known(
+            crate::entity_collision_state::DEFERRED_DESTROY_PENDING_STATE_BIT
+        )
+    );
+    assert!(!before_pending.contains(&worker));
+    assert_eq!(
+        entities.pending_actor_deferred_destroy_ids(),
+        [before_pending, vec![worker]].concat()
+    );
+    assert!(entities
+        .cleanup_pending_actor_deferred_destroys()
+        .contains(&worker));
+    assert!(actor(&entities, worker).is_err());
+}

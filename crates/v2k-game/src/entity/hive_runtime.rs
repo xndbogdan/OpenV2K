@@ -63,6 +63,47 @@ impl EntityManager {
         }
         Ok(Some(outcome))
     }
+
+    /// `425A27..425AA5`: the live Hive consumes a `0xC00` body. It emits
+    /// operation 0x33 at the body's position (its remote byte the Hive's
+    /// state bit 31), then `410B70` stages the body's deferred destroy (a
+    /// no-op when already pending), and returns null. The position goes to
+    /// the caller, which owns operation 0x33's local particle.
+    pub(crate) fn consume_live_hive_pair_body(
+        &mut self,
+        hive_id: u32,
+        opposite_id: u32,
+    ) -> Result<[i16; 3], HiveImpactBlock> {
+        let hive = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == hive_id)
+            .ok_or(HiveImpactBlock::MissingHive { entity_id: hive_id })?;
+        if !crate::hive_controller::live_component_authenticates(
+            hive,
+            self.type_metadata.get(hive.entity_type as usize),
+        ) {
+            return Err(HiveImpactBlock::UnauthenticatedLiveHive { entity_id: hive_id });
+        }
+        let opposite = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == opposite_id && entity.capability_flags & 0x0C00 != 0)
+            .ok_or(HiveImpactBlock::MissingOpposite {
+                entity_id: opposite_id,
+            })?;
+        let position_raw = opposite.position_raw();
+        if opposite
+            .collision
+            .state_flags_at_0x08
+            .masked(DEFERRED_DESTROY_PENDING_STATE_BIT)
+            != RetailRuntimeValue::Known(DEFERRED_DESTROY_PENDING_STATE_BIT)
+        {
+            opposite.mark_actor_deferred_destroy_pending();
+            self.queue_actor_deferred_destroy(opposite_id);
+        }
+        Ok(position_raw)
+    }
 }
 
 impl EntityManager {
