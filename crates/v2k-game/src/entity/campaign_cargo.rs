@@ -600,7 +600,10 @@ impl EntityManager {
     /// Whether [`Self::dispatch_controller_operation_0x38`] can build this
     /// type at the player.
     pub fn controller_0x38_constructor_ported(entity_type: u32) -> bool {
-        matches!(entity_type, 52 | 63 | 68 | 74 | 83 | 92 | 96 | 97 | 100)
+        matches!(
+            entity_type,
+            52 | 63 | 64 | 68 | 74 | 83 | 92 | 96 | 97 | 100
+        )
     }
 
     /// The `+220` list as operation `0x38` walks it: live (nonzero state, not
@@ -632,7 +635,7 @@ impl EntityManager {
         context: &mut CampaignCargoRestoreContext<'_>,
     ) -> Result<u32, CampaignCargoRestoreError> {
         match entity_type {
-            52 | 63 | 68 | 74 => {
+            52 | 63 | 64 | 68 | 74 => {
                 let owner = self.append_native_class0_at_pose(
                     entity_type,
                     position_raw,
@@ -728,6 +731,9 @@ impl EntityManager {
         assert_eq!(self.allocate_live_entity_id(), id);
         self.append_live_entity(entity);
         self.native_class0_actors.insert(id, runtime);
+        if entity_type == super::class0_actor::AUTOBOT_ENTITY_TYPE {
+            self.construct_autobot_components(id, &metadata, context.world_fx);
+        }
         Class0ActorOwner::adopt(self, id).map_err(|reason| {
             CampaignCargoRestoreError::Construction {
                 entity_type,
