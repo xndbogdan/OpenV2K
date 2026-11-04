@@ -1886,7 +1886,10 @@ The ball's pair hook `FUN_0040C800` runs in the late pair walk (see
 [ACTOR_RUNTIME](ACTOR_RUNTIME.md#the-ports-walk)): another Type63 returns
 `0x004BE320`'s A300, which cancels the response; any other touching body
 takes a checked `{1, 40000}` attributed to the ball (its type and handle),
-then the visit goes on. The ball never meets the craft it sits on: retail's
+then the visit goes on. A Main Base (Type6) takes it through its own
+`FUN_00415040` entry, whose lethal hit is its `FUN_00410C10` revival; a
+Level 1 run had logged that pair as held ("Active pair Type6 x Type63
+stopped before its visit"), and a test now walks it with no stop. The ball never meets the craft it sits on: retail's
 pair probe finds no overlap at their shared centre, and a retail lab run
 (Level 1, F9: the ball lived ticks 811 to 1669 on the player) logs no
 `FUN_00415040` from the hook; the port's probe agrees. A collision on the
