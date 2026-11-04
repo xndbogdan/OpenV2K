@@ -5060,6 +5060,33 @@ impl WorldFx {
         events: &[PrimaryFireEvent],
         sea_level: Option<f32>,
     ) {
+        self.queue_primary_fire_particles(events, sea_level);
+        self.queue_primary_fire_sound(events);
+    }
+
+    /// The shots and class-15 records of a firing batch, born at once:
+    /// `FUN_00411400` launches them in presentation, after the shooter's draw
+    /// stamped the muzzle and before the particle draw.
+    pub fn materialize_primary_fire_particles(
+        &mut self,
+        events: &[PrimaryFireEvent],
+        sea_level: Option<f32>,
+    ) {
+        let queued = self.pending.len();
+        self.queue_primary_fire_particles(events, sea_level);
+        for event in self.pending.split_off(queued) {
+            let WorldEvent::ParticleBurst(burst) = event else {
+                unreachable!("a firing batch queues particle bursts only")
+            };
+            self.materialize_particle_burst(burst);
+        }
+    }
+
+    fn queue_primary_fire_particles(
+        &mut self,
+        events: &[PrimaryFireEvent],
+        sea_level: Option<f32>,
+    ) {
         for event in events {
             if event.delivery == crate::primary_weapon::PlayerProjectileDelivery::Particle {
                 let projectile_class = event.projectile.spec.projectile_class;
@@ -5076,7 +5103,7 @@ impl WorldFx {
                     descriptor.lifetime_ticks()
                 );
                 let above_water = sea_level
-                    .map(|water_y| water_y < event.auxiliary.origin_world[1])
+                    .map(|water_y| water_y < event.projectile.origin_world[1])
                     .unwrap_or(true);
                 let visible_projectile =
                     projectile_class != UPGRADED_PRIMARY_PARTICLE_CLASS || above_water;
@@ -5166,6 +5193,10 @@ impl WorldFx {
                 }));
             }
         }
+    }
+
+    /// The batch's one descriptor cue, which `FUN_00424650` plays as it fires.
+    pub fn queue_primary_fire_sound(&mut self, events: &[PrimaryFireEvent]) {
         if let Some(event) = events.last() {
             // FUN_00424650's descriptor cue goes through FUN_0044F480.
             self.send_network_sound(
@@ -7005,9 +7036,8 @@ mod tests {
     use crate::level::LevelState;
     use crate::primary_weapon::{
         PrimaryAuthoredGunMounts, PrimaryFireGeometry, PrimaryGunMounts, PrimaryLaunchBasis,
-        PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon, PRIMARY_PROJECTILE_SPEC,
-        PRIMARY_SOUND_ID, UPGRADED_PRIMARY_PROFILE, UPGRADED_PRIMARY_PROJECTILE_SPEC,
-        UPGRADED_PRIMARY_SOUND_ID,
+        PrimaryShotBudget, PrimaryTriggerInput, PrimaryWeapon, PRIMARY_SOUND_ID,
+        UPGRADED_PRIMARY_PROFILE, UPGRADED_PRIMARY_PROJECTILE_SPEC, UPGRADED_PRIMARY_SOUND_ID,
     };
     use crate::static_damage::{StaticDamageOutcome, StaticDamageScheduler, KIND_9_STATIC_OBJECT};
     use std::time::Duration;

@@ -230,6 +230,15 @@ impl TargetterRuntime {
         }
     }
 
+    /// `FUN_0044D0F0` when the launch preview (`FUN_00424480`) fails with
+    /// `0xA200`: the result bits are cleared, the target and the terrain
+    /// search keep their state.
+    pub fn preview_unavailable(&mut self) {
+        if self.active {
+            self.result_bits = 0;
+        }
+    }
+
     /// Retail `FUN_0044CF70`: the program's per-frame step, candidate selection
     /// (`+08`) then terrain convergence (`+0C`).
     pub fn update<ModelProbe, TerrainHeight>(

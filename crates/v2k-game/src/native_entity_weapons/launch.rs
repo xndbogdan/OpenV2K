@@ -14,11 +14,29 @@ pub fn entity_weapon_drain_position_raw(
     source_velocity_raw: [i16; 3],
     time_offset_us: u32,
 ) -> [i16; 3] {
+    queued_shot_drain_position_raw(
+        kind.launch_speed_raw(),
+        origin_raw,
+        direction_q31,
+        source_velocity_raw,
+        time_offset_us,
+    )
+}
+
+/// `FUN_00411400`'s catch-up of any queued shot with a time (`+0x20`), at
+/// the record's speed (`+0x28`, else the row's).
+pub fn queued_shot_drain_position_raw(
+    speed_raw: i32,
+    origin_raw: [i16; 3],
+    direction_q31: [i32; 3],
+    source_velocity_raw: [i16; 3],
+    time_offset_us: u32,
+) -> [i16; 3] {
     if time_offset_us == 0 {
         return origin_raw;
     }
     let offset = (time_offset_us as i32) >> 5;
-    let distance = (offset.wrapping_mul(kind.launch_speed_raw()) >> 15) as i16;
+    let distance = (offset.wrapping_mul(speed_raw) >> 15) as i16;
     std::array::from_fn(|axis| {
         origin_raw[axis]
             .wrapping_sub((i32::from(source_velocity_raw[axis]).wrapping_mul(offset) >> 15) as i16)
@@ -64,6 +82,51 @@ pub fn launch_velocity_raw(
             (q31_mul(direction[axis], speed_raw).wrapping_add(i32::from(inherited[axis]))) as i16
         })
     }
+}
+
+/// `FUN_00424480`, the Targetter's launch preview, through `FUN_0044E770`:
+/// the shooter's own matrix with the barrel taken out of its up and forward
+/// rows (`FUN_00457A90` by −barrel, unless there is no barrel or the
+/// selector is 5), its forward row as the direction, the emitter's speed
+/// override (`+0xC`, else the row's; a speed-1 rocket previews at 1024) and
+/// the shooter's velocity words. `None` is the preview's error `0xA200`: a
+/// row with neither particle nor body, selectors 0x11, 4 and 9, and row 0x1F
+/// at or above the sea.
+pub fn targetter_preview_velocity_raw(
+    selector: u32,
+    speed_override_raw: u16,
+    mut basis: Type9BodyBasis,
+    barrel_raw: Option<u16>,
+    origin_y_raw: i16,
+    sea_level_raw: i16,
+    shooter_velocity_raw: [i16; 3],
+) -> Option<[i32; 3]> {
+    let row = crate::projectile_emitter::projectile_class_row(selector)?;
+    if selector == 0x1f && sea_level_raw <= origin_y_raw {
+        return None;
+    }
+    if row.particle_class == 0 && (row.trailing_raw == 0 || matches!(selector, 0x11 | 4 | 9)) {
+        return None;
+    }
+    if let Some(barrel) = barrel_raw.filter(|_| selector != 5) {
+        crate::intro2_gun_turret::task::math::rotate(
+            &mut basis.up,
+            &mut basis.forward,
+            i32::from(barrel).wrapping_neg(),
+        );
+    }
+    let speed_raw = match i32::from(speed_override_raw) {
+        0 if selector == 5 && row.speed_raw == 1 => 0x400,
+        0 => row.speed_raw,
+        speed => speed,
+    };
+    let velocity = launch_velocity_raw(
+        row.leading_raw != 0,
+        speed_raw,
+        basis.forward,
+        shooter_velocity_raw,
+    );
+    Some(velocity.map(i32::from))
 }
 
 /// `FUN_00424650`'s table sine: the quarter-wave word in both halves.
@@ -128,6 +191,43 @@ pub fn launch_direction_q31(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn targetter_previews_match_retails_fun_00424480_outputs() {
+        // Retail lab, Level 1 under the Targetter, every weapon cycled while
+        // turning, aiming the barrel and throttling: the shooter's matrix,
+        // barrel, height and velocity words, and FUN_0044E770's output.
+        // All 1,068 previews over 23 selectors matched; these are a sample.
+        #[rustfmt::skip]
+        let samples: [(u32, u16, [i32; 9], u16, i16, [i16; 3], Option<[i32; 3]>); 7] = [
+            (1, 0, [2147352576, -1638400, -65536, 1638400, 2146762752, 50987008, 0, -51052544, 2146762752], 63488, -604, [2, 40, -129], Some([1, -834, 3773])),
+            (31, 0, [2145583104, 87097344, 3735552, -87162880, 2143617024, 92078080, 0, -92209152, 2145386496], 63488, -610, [2, 31, -51], None),
+            (18, 0, [-646774784, 97058816, 2045116416, 72482816, 2144665600, -78970880, -2046230528, 45285376, -649199616], 63488, -579, [16, 64, 5], Some([-3749, -633, -1153])),
+            (13, 0, [2147221504, 20512768, 5963776, -20643840, 2147090432, 30277632, -5701632, -30408704, 2147155968], 63488, -579, [8, 1, 3], Some([-5, -1150, 5377])),
+            (22, 0, [-654966784, -75694080, 2043478016, -30146560, 2146041856, 69730304, -2044657664, -7405568, -655556608], 11585, -630, [-661, 21, -212], Some([-795, 1633, -195])),
+            // A speed-1 rocket previews at 1024, with its barrel untouched.
+            (5, 0, [2142633984, -140378112, 22020096, 141492224, 2137587712, -146997248, -12320768, 148111360, 2142240768], 12288, -638, [15, 169, 106], Some([-7, 78, 1136])),
+            (9, 0, [-660668416, -115867648, 2039676928, -142278656, 2141257728, 75497472, -2038038528, -111935488, -666435584], 12104, -593, [-106, -26, 575], None),
+        ];
+        for (selector, speed, m, barrel, y, velocity, expected) in samples {
+            let basis = Type9BodyBasis {
+                lateral: [m[0], m[1], m[2]],
+                up: [m[3], m[4], m[5]],
+                forward: [m[6], m[7], m[8]],
+            };
+            // A sea below the craft: row 0x1F still refuses above it.
+            let preview = targetter_preview_velocity_raw(
+                selector,
+                speed,
+                basis,
+                Some(barrel),
+                y,
+                -768,
+                velocity,
+            );
+            assert_eq!(preview, expected, "selector {selector}");
+        }
+    }
+
     #[test]
     fn catch_up_preserves_zero_offset_draw_words_and_wraps_before_velocity_suffix() {
         let origin = [32760, -32760, 17];
