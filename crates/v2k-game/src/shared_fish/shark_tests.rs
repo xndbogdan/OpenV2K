@@ -258,6 +258,7 @@ fn touching_the_prey_ahead_bites_through_the_checked_hull_path() {
             player,
             ActorTaskSlot::Primary,
             Some(PlayingPlayerContact {
+                craft: None,
                 hull,
                 extra_lives: RetailRuntimeValue::Known(3),
             }),
@@ -338,6 +339,7 @@ fn the_player_pass_lane_runs_the_bite_on_an_overlapping_shark() {
         player,
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

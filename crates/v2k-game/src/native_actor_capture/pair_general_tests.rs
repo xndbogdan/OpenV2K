@@ -638,6 +638,7 @@ fn a_native_fish_touching_the_player_takes_the_walk() {
         pair[0],
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

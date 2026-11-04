@@ -140,6 +140,7 @@ pub(crate) fn apply_playing_type10_family_particle_hit(
             static_damage: frame.static_damage,
             notifications: frame.notifications,
             player: Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                craft: None,
                 hull: frame.player_hull,
                 extra_lives: frame.extra_lives,
             }),

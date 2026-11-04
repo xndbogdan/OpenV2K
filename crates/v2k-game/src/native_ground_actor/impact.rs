@@ -106,6 +106,7 @@ pub(crate) fn apply_playing_native_ground_particle_hit<P: NativeGroundActorProfi
                 resources: frame.resources,
                 static_damage: frame.static_damage,
                 player: crate::native_actor_capture::pair::PlayingPlayerContact {
+                    craft: None,
                     hull: frame.player_hull,
                     extra_lives: frame.extra_lives,
                 },

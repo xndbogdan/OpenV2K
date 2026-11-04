@@ -480,6 +480,7 @@ fn real_weapon_pair_keeps_opposite_callbacks_components_and_physical_after_termi
         f.owner.entity_id(),
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),
@@ -830,6 +831,7 @@ fn player_first_weapon_pair_uses_strict_source_grace_and_real_playing_hull() {
         player_id,
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),
@@ -860,6 +862,7 @@ fn player_first_weapon_pair_uses_strict_source_grace_and_real_playing_hull() {
         player_id,
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

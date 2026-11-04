@@ -398,6 +398,7 @@ fn lethal_playing_hits_run_class1_and_class63() {
             },
             id,
             Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                craft: None,
                 hull: &mut hull,
                 extra_lives: RetailRuntimeValue::Known(3),
             }),

@@ -332,6 +332,7 @@ fn touch_with_player_threshold(threshold: i32) {
         player,
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

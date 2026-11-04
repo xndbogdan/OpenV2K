@@ -666,9 +666,24 @@ Passive Player (66), namely types 46, 51 and 88, carries capability
 `0x5`. The port holds the Possession Ray's takeover, so no port body
 reaches this branch; it waits for the takeover.
 
-Pairs still resolved apart from the walk, after it: the player's other pairs
-(the [player adapter](../../crates/v2k-game/src/player_active_contact.rs),
-with the player as subject whatever its live position), the Main Base's
+`FUN_00411A80` is one loop over the whole live list calling `11AD0` for
+each node, so the player's pairs run at the player's own place in it (the
+persistent player is the first node: its pairs come before any later
+subject's static phase or pairs). The walk now runs every player pair
+there. A pair whose other body's identity the
+[player adapter](../../crates/v2k-game/src/player_active_contact.rs)
+closes (the Main Base, factories, Hives, rolling boulders, Level 1's
+spiders, natives, weight and Grock, and others) goes through the adapter
+for that one pair, in the walk's order: its held ball, Type17 contact
+plans, rolling-boulder wake, descriptor contacts and deaths commit with the
+pair, and the walk goes on from the successor it read before the pair. A
+pair the adapter stops is reported as a general visit's stop
+(`PlayerPair(...)`); so is a pair touching the craft's wreck, whose pairs
+the port does not model, and a touching pair with a body no lane owns
+(`NoBodyOwner`, a Type61 outside its Power-Up style, say), which retail's
+walk visits too.
+
+Pairs still resolved apart from the walk, after it: the Main Base's
 conversion of `0x800` bodies, the factory's intake of `0x400` workers, and
 Power-Up pickups by the player.
 
@@ -737,9 +752,13 @@ player pairs of 8 kinds it skipped: Type5 (world 43), Type15 (48), Type21
 the player's pair with any native-owned body the adapter and the dedicated
 lanes leave, in live order. The same probe afterwards: 16 such pairs met,
 none skipped, and no stop; the walk visited them 1,065 times (817 with
-collision damage). A body without a native owner (a Type61 outside its
-Power-Up style, say) still stays out of both, and the adapter's own pairs
-still run in its pass after the walk.
+collision damage). The adapter's own pairs then still ran in a pass after
+the walk; they now run in it (above). A sweep of every world from its
+arrival (3,000 ticks, an idle player) against the build before: 37 of 38
+worlds give byte-identical event logs; in world 22 the player resting on
+a Type7 pairs with it before the Type7's own static phase of that tick
+instead of after, so from tick 177 the player's velocity words differ by a
+few units. No world logs a new or lost stop line.
 
 ### The Hive consuming people
 

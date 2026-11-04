@@ -390,6 +390,7 @@ fn a_lethal_playing_crash_runs_class63_and_the_corpse_stays_contactable() {
             },
             id,
             Some(PlayingPlayerContact {
+                craft: None,
                 hull: &mut hull,
                 extra_lives: RetailRuntimeValue::Known(3),
             }),

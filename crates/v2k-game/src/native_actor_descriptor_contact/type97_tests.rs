@@ -295,6 +295,7 @@ fn pair_with_playing(f: &mut Fixture, hull: Option<&mut PlayerHull>) -> NativeCa
         CaptureFeedbackPolicy::Gameplay,
         hull.map(
             |hull| crate::native_actor_capture::pair::PlayingPlayerContact {
+                craft: None,
                 hull,
                 extra_lives: RetailRuntimeValue::Unresolved,
             },

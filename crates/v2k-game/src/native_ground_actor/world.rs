@@ -279,6 +279,7 @@ fn run_lent_terminal_surface<P: NativeGroundActorProfile>(
                     player_hull,
                     extra_lives,
                 } => Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                    craft: None,
                     hull: player_hull,
                     extra_lives: *extra_lives,
                 }),

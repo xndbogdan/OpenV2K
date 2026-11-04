@@ -129,8 +129,8 @@ pub enum PlayerActivePairError {
     RollingBoulderPair {
         entity_id: u32,
     },
-    /// A candidate died after the craft's own death in the same walk: the
-    /// resumed walk would pair the wreck model. Earlier segments committed.
+    /// A pair reached after the craft's own death: the port does not pair
+    /// the wreck model. Earlier pairs committed.
     ResumeAfterPlayerDeath {
         entity_id: u32,
     },
@@ -727,7 +727,7 @@ fn damage_modifier_outcome(runtime: Option<&RuntimePairSnapshot>) -> PairDamageM
 }
 
 impl EntityManager {
-    /// Run and commit one local player active-pair walk, segment by segment.
+    /// Every adapter pair of the player, one at a time in live order.
     pub fn resolve_player_active_contacts(
         &mut self,
         frame: PlayerActivePairFrame<'_>,
@@ -762,6 +762,10 @@ pub struct PlayerActivePairFrame<'a> {
     pub extra_lives: u8,
 }
 
+/// Every pair of the player with a body this adapter visits, one pair at a
+/// time in live order, as the late walk reaches them (production runs them
+/// from the walk; see [`resolve_player_active_pair`]). The successor is read
+/// before each pair, so a split's tail-appended children are visited too.
 pub fn resolve_player_active_contacts(
     entities: &mut EntityManager,
     frame: PlayerActivePairFrame<'_>,
@@ -777,10 +781,29 @@ pub fn resolve_player_active_contacts(
         notifications,
         extra_lives,
     } = frame;
-    let mut resume_after = None;
+    let player_id = entities
+        .player()
+        .ok_or(PlayerActivePairError::PlayerMissing)?
+        .id;
     let mut combined: Option<PlayerActivePairPass> = None;
-    loop {
-        let segment = resolve_player_active_segment(
+    let mut cursor = entities.retail_live_order_ids().next();
+    while let Some(id) = cursor {
+        cursor = entities
+            .retail_live_successor_id(id)
+            .map_err(|_| PlayerActivePairError::TopologyChangedBeforeCommit)?;
+        let admitted = id != player_id
+            && entities
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .is_some_and(|entity| player_adapter_visits(entities, entity));
+        if !admitted {
+            continue;
+        }
+        // The wreck's pairs are not modelled; the walk reports each as a stop.
+        if player_hull.dying {
+            break;
+        }
+        let pass = resolve_player_active_pair(
             entities,
             PlayerActivePairFrame {
                 resources: &mut *resources,
@@ -793,37 +816,32 @@ pub fn resolve_player_active_contacts(
                 notifications: &mut *notifications,
                 extra_lives,
             },
-            resume_after,
+            id,
         )?;
-        let dead_candidate = match segment.core.termination {
-            ActivePairPassTermination::CandidateDeathDispatched { candidate_id } => {
-                Some(candidate_id)
-            }
-            _ => None,
-        };
-        let pass = match combined.take() {
-            None => segment,
-            Some(mut pass) => {
-                pass.extend(segment);
-                pass
-            }
-        };
-        match dead_candidate {
-            None => return Ok(pass),
-            // The craft's own death switched its model; a walk resumed past a
-            // candidate's death would pair the wreck.
-            Some(candidate_id) if player_hull.dying => {
-                return Err(PlayerActivePairError::ResumeAfterPlayerDeath {
-                    entity_id: candidate_id,
-                });
-            }
-            // 11AD0 continues at the dead candidate's successor in the live
-            // list, which now holds a split's tail-appended children.
-            Some(candidate_id) => {
-                resume_after = Some(candidate_id);
-                combined = Some(pass);
-            }
+        match combined.as_mut() {
+            None => combined = Some(pass),
+            Some(combined) => combined.extend(pass),
         }
+    }
+    match combined {
+        Some(pass) => Ok(pass),
+        // No admitted body: a walk with no candidates (the player is never
+        // its own candidate).
+        None => resolve_player_active_segment(
+            entities,
+            PlayerActivePairFrame {
+                resources,
+                static_damage,
+                retail_tick,
+                player_craft,
+                player_hull,
+                scheduler,
+                world_fx,
+                notifications,
+                extra_lives,
+            },
+            player_id,
+        ),
     }
 }
 
@@ -840,12 +858,12 @@ impl PlayerActivePairPass {
     }
 }
 
-/// One walk segment: candidates after `resume_after` in the live list, ending
-/// at the walk's end or at a candidate's death, which commits with it.
+/// One planned and committed pair of the player with `only` if the adapter
+/// admits it (none for the player itself), deaths included.
 fn resolve_player_active_segment(
     entities: &mut EntityManager,
     frame: PlayerActivePairFrame<'_>,
-    resume_after: Option<u32>,
+    only: u32,
 ) -> Result<PlayerActivePairPass, PlayerActivePairError> {
     let PlayerActivePairFrame {
         resources,
@@ -896,18 +914,6 @@ fn resolve_player_active_segment(
 
     let player_id = player.id;
     let expected_live_order = entities.retail_live_order_ids().collect::<Vec<_>>();
-    let walked = match resume_after {
-        None => 0,
-        Some(id) => {
-            expected_live_order
-                .iter()
-                .position(|&live| live == id)
-                .ok_or(PlayerActivePairError::TopologyChangedBeforeCommit)?
-                + 1
-        }
-    };
-    let walked: std::collections::HashSet<u32> =
-        expected_live_order[..walked].iter().copied().collect();
     let subject = active_pair_body_from_entity(player, model_pool);
     let original_subject = subject.clone();
     let mut player_runtime = RuntimePairSnapshot::from_entity(
@@ -926,7 +932,8 @@ fn resolve_player_active_segment(
     let mut candidates = Vec::new();
     for candidate in entities
         .iter_collidable()
-        .filter(|candidate| candidate.id != player_id && !walked.contains(&candidate.id))
+        .filter(|candidate| candidate.id != player_id)
+        .filter(|candidate| candidate.id == only)
         // The proven PowerUp behavior owns a separate bounded inventory
         // transaction. Level-1 authors those allocations after every audited
         // solid (indices 32..=34), so this pass retains the captured ordering
@@ -1129,6 +1136,74 @@ fn resolve_player_active_segment(
         sounds,
         descriptor_contacts,
     })
+}
+
+/// The player's pair with one body this adapter admits, visited where the
+/// late walk reaches it, in `FUN_00411A80`'s live order from whichever body
+/// comes first. It commits as a segment does, deaths included; its
+/// feedback and sounds are submitted here.
+pub(crate) fn resolve_player_active_pair(
+    entities: &mut EntityManager,
+    frame: PlayerActivePairFrame<'_>,
+    candidate_id: u32,
+) -> Result<PlayerActivePairPass, PlayerActivePairError> {
+    let PlayerActivePairFrame {
+        resources,
+        static_damage,
+        retail_tick,
+        player_craft,
+        player_hull,
+        scheduler,
+        world_fx,
+        notifications,
+        extra_lives,
+    } = frame;
+    let pass = resolve_player_active_segment(
+        entities,
+        PlayerActivePairFrame {
+            resources,
+            static_damage,
+            retail_tick,
+            player_craft,
+            player_hull,
+            scheduler,
+            world_fx: &mut *world_fx,
+            notifications,
+            extra_lives,
+        },
+        candidate_id,
+    )?;
+    for &strength_raw in &pass.feedback {
+        crate::pad_vibration::submit(strength_raw);
+    }
+    for sound in &pass.sounds {
+        world_fx.queue_networked_positional_sound_raw(sound.sound_id, sound.position_raw);
+    }
+    Ok(pass)
+}
+
+/// A body whose pair with the player no lane visits: no Power-Up, weapon,
+/// Type29 or adapter lane, and (the caller checks) no native owner.
+pub(crate) fn player_pair_unvisited(manager: &EntityManager, entity: &Entity) -> bool {
+    !uses_dedicated_power_up_transaction(entity)
+        && !native_weapon_owns_pair_lane(manager, entity)
+        && !is_native_type29(entity)
+        && !player_adapter_admits(entity)
+        && manager
+            .iter_collidable()
+            .any(|collidable| collidable.id == entity.id)
+}
+
+/// The bodies whose pair with the player this adapter visits (see
+/// [`resolve_player_active_pair`]).
+pub(crate) fn player_adapter_visits(manager: &EntityManager, entity: &Entity) -> bool {
+    !uses_dedicated_power_up_transaction(entity)
+        && !native_weapon_owns_pair_lane(manager, entity)
+        && !is_native_type29(entity)
+        && player_adapter_admits(entity)
+        && manager
+            .iter_collidable()
+            .any(|collidable| collidable.id == entity.id)
 }
 
 fn is_native_type29(entity: &Entity) -> bool {

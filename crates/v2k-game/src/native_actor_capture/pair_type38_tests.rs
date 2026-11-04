@@ -54,6 +54,7 @@ fn type38_family_lethal_pair_runs_the_row_terminal() {
                 owner_handle: 0,
             },
             Some(PlayingPlayerContact {
+                craft: None,
                 hull: &mut hull,
                 extra_lives: RetailRuntimeValue::Known(3),
             }),

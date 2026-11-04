@@ -144,7 +144,7 @@ use v2k_game::player::{
     AnalogInput, FuelWarningCadence, MotionChannels, PlayerCraft, PlayerHoverAttitudeRequest,
     ReaderSettings, VehicleModeToggleOutcome,
 };
-use v2k_game::player_active_contact::{entity_pair_to_world, PlayerActivePairPass};
+use v2k_game::player_active_contact::entity_pair_to_world;
 use v2k_game::retail_input::{wheel_weapon_step, JoystickMode, JoystickSample};
 
 use v2k_game::player_contact_style::PlayerContactStyleRequest;
@@ -2476,7 +2476,6 @@ fn run_game(
     let mut return_to_frontend_pending = false;
     let mut frontend_entry_card: Option<FrontendEntryCard> = None;
     let mut static_contact_error_reported = false;
-    let mut active_pair_contact_error_reported = false;
     // Each general active-pair stop line is reported once a world.
     let mut active_pair_stops_reported = std::collections::HashSet::<String>::new();
     let mut main_base_conversion_error_reported = false;
@@ -5283,7 +5282,6 @@ fn run_game(
                 }
                 return_to_frontend_pending = false;
                 static_contact_error_reported = false;
-                active_pair_contact_error_reported = false;
                 active_pair_stops_reported.clear();
                 main_base_conversion_error_reported = false;
                 main_base_materialiser_error_reported = false;
@@ -10488,6 +10486,7 @@ fn run_game(
                             &mut contact_frame,
                             id,
                             Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
                                 hull: &mut player_hull,
                                 extra_lives: RetailRuntimeValue::Known(
                                     player_campaign_progress.extra_lives(),
@@ -10529,6 +10528,7 @@ fn run_game(
                             &mut contact_frame,
                             id,
                             Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
                                 hull: &mut player_hull,
                                 extra_lives: RetailRuntimeValue::Known(
                                     player_campaign_progress.extra_lives(),
@@ -10578,6 +10578,7 @@ fn run_game(
                             &mut contact_frame,
                             id,
                             Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
                                 hull: &mut player_hull,
                                 extra_lives: RetailRuntimeValue::Known(
                                     player_campaign_progress.extra_lives(),
@@ -10610,6 +10611,7 @@ fn run_game(
                                 &mut contact_frame,
                                 id,
                                 Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                    craft: Some(&player_craft),
                                     hull: &mut player_hull,
                                     extra_lives: RetailRuntimeValue::Known(
                                         player_campaign_progress.extra_lives(),
@@ -10773,6 +10775,7 @@ fn run_game(
                             &mut contact_frame,
                             id,
                             Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
                                 hull: &mut player_hull,
                                 extra_lives: RetailRuntimeValue::Known(
                                     player_campaign_progress.extra_lives(),
@@ -10798,6 +10801,7 @@ fn run_game(
                             &mut contact_frame,
                             id,
                             Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
                                 hull: &mut player_hull,
                                 extra_lives: RetailRuntimeValue::Known(
                                     player_campaign_progress.extra_lives(),
@@ -10863,6 +10867,7 @@ fn run_game(
                                 id,
                                 metadata,
                                 Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                    craft: Some(&player_craft),
                                     hull: &mut player_hull,
                                     extra_lives: RetailRuntimeValue::Known(
                                         player_campaign_progress.extra_lives(),
@@ -10905,6 +10910,7 @@ fn run_game(
                             id,
                             CaptureFeedbackPolicy::Gameplay,
                             Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
                                 hull: &mut player_hull,
                                 extra_lives: RetailRuntimeValue::Known(
                                     player_campaign_progress.extra_lives(),
@@ -10941,6 +10947,7 @@ fn run_game(
                             notifications: &mut gameplay_notifications,
                             player: Some(
                                 v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                    craft: Some(&player_craft),
                                     hull: &mut player_hull,
                                     extra_lives: RetailRuntimeValue::Known(
                                         player_campaign_progress.extra_lives(),
@@ -11071,73 +11078,14 @@ fn run_game(
                     }
                 }
 
-                // The currently closed general active-pair subset uses the
-                // persistent player entity as subject.
-                // The production adapter snapshots the complete local live
-                // order and commits the active-solid response/damage pass
-                // only after every reached callback and model program
-                // resolves. Stateful or remote paths remain a fail-closed
-                // boundary for that solid subsystem.
+                // The player's pairs ran in the walk above, in live order (the
+                // player adapter per pair where its body's identity is closed).
+                // Power-Up pickups follow while the craft lives; Intro2 and a
+                // world without a player keep them available.
                 let active_pair_pass_succeeded =
-                    if !player_active_solid_pass_required(current_level_id) || !has_player {
-                        // Intro2 / no-world: keep the Power-Up path available
-                        // without a recovered solid census. Without a player
-                        // (phase 3) this subset has no subject.
-                        true
-                    } else if !player_hull.dying {
-                        match em.resolve_player_active_contacts(
-                            v2k_game::player_active_contact::PlayerActivePairFrame {
-                                resources: &mut session.cache,
-                                static_damage: &mut static_damage,
-                                retail_tick: retail_tick,
-                                player_craft: &player_craft,
-                                player_hull: &mut player_hull,
-                                scheduler: &mut specialized_actor_tasks,
-                                world_fx: &mut world_fx,
-                                notifications: &mut gameplay_notifications,
-                                extra_lives: player_campaign_progress.extra_lives(),
-                            },
-                        ) {
-                            Ok(PlayerActivePairPass {
-                                core,
-                                feedback,
-                                sounds,
-                                descriptor_contacts,
-                            }) => {
-                                for strength_raw in feedback {
-                                    v2k_game::pad_vibration::submit(strength_raw);
-                                }
-                                for sound in sounds {
-                                    world_fx.queue_networked_positional_sound_raw(
-                                        sound.sound_id,
-                                        sound.position_raw,
-                                    );
-                                }
-                                if !descriptor_contacts.is_empty() {
-                                    log!("Player descriptor contacts: {descriptor_contacts:?}");
-                                }
-                                if core.dispositions.iter().any(|disposition| {
-                                matches!(
-                                    disposition,
-                                    v2k_game::active_pair::PairCandidateDisposition::Resolved { .. }
-                                )
-                            }) {
-                                log!("Player active contacts: {:?}", core.dispositions);
-                            }
-                                true
-                            }
-                            Err(error) if !active_pair_contact_error_reported => {
-                                eprintln!(
-                                    "Player active contact stopped at unresolved data: {error:?}"
-                                );
-                                active_pair_contact_error_reported = true;
-                                false
-                            }
-                            Err(_) => false,
-                        }
-                    } else {
-                        false
-                    };
+                    !player_active_solid_pass_required(current_level_id)
+                        || !has_player
+                        || !player_hull.dying;
 
                 // 10C10 can run in the early physical or late particle/pair
                 // phase. Its constructor is synchronous; this idempotent

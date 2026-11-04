@@ -167,6 +167,7 @@ fn type21_rams_the_player_through_the_pair_lane() {
         player,
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

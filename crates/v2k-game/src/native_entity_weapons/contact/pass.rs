@@ -192,6 +192,7 @@ pub fn resolve_entity_weapon_contacts(
         } => (
             CaptureFeedbackPolicy::Gameplay,
             Some(PlayingPlayerContact {
+                craft: None,
                 hull: player_hull,
                 extra_lives: *extra_lives,
             }),
