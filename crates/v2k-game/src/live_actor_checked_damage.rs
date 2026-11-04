@@ -84,6 +84,17 @@ pub struct LiveActorDamageOutcome<D> {
     pub death_publication: Option<D>,
 }
 
+impl<D> LiveActorDamageOutcome<D> {
+    /// A no-packet infect or cure: `FUN_00415040` never ran.
+    pub fn no_packet() -> Self {
+        Self {
+            filtered_damage_raw: 0,
+            damage_after_buffer_raw: 0,
+            death_publication: None,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct LiveActorDeathResult<D> {
     /// Original 10C10 return, independent of whether a task remains to adopt.

@@ -380,6 +380,7 @@ fn native_type10_late_radial_buffer_failure_parks_impulse_for_scheduler_hit_and_
             &mut fx,
             &mut scheduler,
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 16,
                 impact_position_argument_va: 0,
                 target_entity_id: id,

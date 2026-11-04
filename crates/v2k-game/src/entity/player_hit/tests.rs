@@ -438,6 +438,7 @@ fn impact(entry: EntityHitEntry) -> ParticleEntityImpact {
         FUN_0043F7C0_DAMAGE_DELIVERY
     };
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: if entry == EntityHitEntry::Infected {
             5
         } else {
@@ -1184,6 +1185,7 @@ fn static_route_hit_cues_strikes_eightfold_and_damages_the_player() {
         .accepted_hit_presentation_sound_id = RetailRuntimeValue::Known(Some(57));
     let packet = crate::damage::CLASS68_STATIC_ROUTE_DAMAGE_PACKET;
     let hit = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 68,
         impact_position_argument_va: 0x1234,
         target_entity_id: 7,
@@ -1293,4 +1295,43 @@ fn damage_modifier_closes_with_the_low_hull_cue() {
             }
         );
     }
+}
+
+/// `FUN_00414C50`'s no-packet infect: the bit, the model and the cue, but no
+/// 11030 jolt and no 15040 damage.
+#[v2k_test_support::retail_test]
+fn a_no_packet_infect_switches_the_model_without_damage() {
+    let (mut manager, mut hull, mut fx, resources) =
+        fixture(500, 0, CHECKED_DAMAGE_ENABLED_STATE_BIT);
+    let velocity = manager.player().unwrap().velocity_raw();
+    let mut notifications = GameplayNotifications::new();
+    let result = manager.apply_player_model_switch_particle_hit(
+        ParticleEntityImpact::no_packet_hit(7, true, [0; 3], velocity),
+        PlayerCheckedDamageFrame {
+            hull: &mut hull,
+            resources: &resources,
+            world_fx: &mut fx,
+            retail_tick: 100,
+            notifications: &mut notifications,
+            extra_lives: 1,
+        },
+    );
+    assert!(matches!(
+        result,
+        PlayerModelSwitchHitOutcome::NoPacket {
+            entry: EntityHitEntry::Infected,
+            model_slot: 2
+        }
+    ));
+    let player = manager.player().unwrap();
+    assert_eq!(
+        player
+            .collision
+            .state_flags_at_0x08
+            .masked(ACTIVE_MODEL_SLOT_HIGH_STATE_BIT),
+        RetailRuntimeValue::Known(ACTIVE_MODEL_SLOT_HIGH_STATE_BIT)
+    );
+    assert_eq!(player.velocity_raw(), velocity);
+    assert_eq!(hull.health_raw, 500);
+    assert_eq!(notifications, GameplayNotifications::new());
 }

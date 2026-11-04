@@ -231,6 +231,7 @@ fn type12_family_cohorts_run_ten_seconds_with_late_static_contact() {
 
 fn lethal_hit(id: u32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

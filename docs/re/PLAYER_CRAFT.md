@@ -1603,7 +1603,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | held |
 | Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | ported |
 | Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | ported |
-| Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
+| Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | ported; launch differs |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
 | Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | ported; its pair hook held |
 | Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone, death class 11 | ported |
@@ -1695,24 +1695,71 @@ player had drifted to the opposite pitch (306 against retail's −295), so
 its missile sinks where retail's rises and meets the ground 13 ticks
 sooner.
 
-**Virus Bomb and Antidote Bomb.** A particle-77/78 solid static hit
-(`FUN_0043FF10`) runs `FUN_0043F890`, whose tail is `FUN_00441850`: sound 90, then `FUN_00456710` with
-radius 500, infecting (77) or curing (78). Its `FUN_00437630` writes every
-terrain cell whose centre lies inside the sphere (`FUN_00433720`), and
-`FUN_00414C50` gives every live body within 500 whose state masked by
-`0xB800` is `0x8800` (clean, Virus) or `0xA800` (infected, Antidote) the
-infect (`FUN_00411250`) or cure (`FUN_00411320`) hit wrapper with no packet.
-Debris follows (`FUN_00441A50`, class 5 or 6, 40000). The cell walk steps
-X and Z from −500 by 256 up to 500 and writes a cell when its horizontal
-offset and its height (the cell byte << 5) both fall inside the sphere. Each
-body's `FUN_00411250`/`FUN_00411320` with no packet sets or clears bit
-`0x2000`, plays the type's `+0x82`/`+0x84` cue and runs the type's `+0x18`/`+0x1C`
-hook, but skips `FUN_00411030` and `FUN_00415040`; the port's impact owners
-each implement these entries with their packet, so the no-packet entry has to
-reach every one of them. `FUN_0043F890` then plays
-sound 62. Entity hits (`FUN_0043F6E0`) do not reach `FUN_00441850`. The port
-flies the particles and draws the hit burst, and logs a "Bomb tail held" stop
-for each such hit instead of running the tail and sound 62.
+**Virus Bomb and Antidote Bomb.** Classes 77 and 78 hold `FUN_00441850` in
+their descriptor's `+2C`, which the particle free `FUN_00442B40` calls for
+every record it frees: at the end of the bomb's 50-tick life, and after a
+ground, entity or static hit. A solid static hit (`FUN_0043FF10`) runs it
+twice: its `+24` callback `FUN_0043F890` calls `+2C` itself after the F610
+burst, then plays sound 62, and the free that follows calls it again. The
+bulk reset `FUN_00441B10` calls no callback. The bombs' case of
+`FUN_00441850` plays sound 90 (one random word for its rate), runs
+`FUN_00456710` at the particle with radius 500, infecting (77) or curing
+(78), then the debris (`FUN_00441A50`, class 5 or 6, 40000, the null owner
+`DAT_004DCA00` and the particle's `+1D` bit 0).
+
+`FUN_00456710` is `FUN_00437630` then `FUN_00414C50`:
+
+- `FUN_00437630` (nothing without a terrain table) steps X outer and Z inner
+  from −500 by 256 up to 500 (offsets −500, −244, 12 and 268, so −500 never
+  fits), wrapping the words, and calls `FUN_00433720` at a sample point when
+  its horizontal offset squared is below 500² and that plus the square of
+  the height above the cell's ground (the signed height byte << 5) is too.
+  Each write runs the infection listeners at that moment (the radar's
+  redraw, the static object's carriers), as every infection write does.
+- `FUN_00414C50` walks the live list and, for each body whose state masked
+  by `0xB800` is `0x8800` (clean, Virus) or `0xA800` (infected, Antidote)
+  and whose position is within 500 by the wrapped word differences, calls
+  the infect (`FUN_00411250`) or cure (`FUN_00411320`) wrapper with no
+  packet, the body's position `+96` and velocity `+9C`; it reads the next
+  body after the call. With no packet the wrapper sets or clears bit
+  `0x2000`, plays the type's `+0x82`/`+0x84` cue (infect only while not
+  dying) and runs the type's `+0x18`/`+0x1C` hook (the current style's
+  `+20`/`+24`) with a zero packet sum, but skips `FUN_00411030` and
+  `FUN_00415040`.
+
+Retail lab (Level 1, master code, F9, 21 weapon presses, the Virus Bomb
+held for 60 ticks from tick 663): three bombs ran the tail from the free,
+two at the end of their life (ticks 715 and 735) and one at tick 739. Each
+drew its sound word, then wrote 7, 8 and 9 cells (the radar drew once for
+each changed cell: 7, 3 and 9; the second bomb's other five were the
+first's), then left its class-5 debris; no body was in range. The port's
+retail test computes the same 24 writes in the same order from the three
+origins over world 13 and changes the same cells.
+
+The port runs it whole. The particle pool keeps each bomb record it frees
+during a traversal slot, and the slot's end runs the tail for each (the
+static hit runs it first itself, then sound 62, then the free's). The
+Playing host runs `FUN_00456710`: the cells through the infection write and
+its listeners, then the live list, each eligible body as a no-packet hit
+(`ParticleEntityImpact::no_packet_hit`, the body's own position and
+velocity) through the owner a class-5 or class-6 hit takes: the cleansing
+vehicle, the player's model switch (Player Control's style hooks are null),
+or the shared actor owners. Each owner sets or clears the bit, plays the
+cue and runs its style hook as its packet hit does, then returns before
+the impact reaction and the checked damage. A body in range whose state is
+unresolved, a peer's body, a body without a port owner or an owner's
+logged stop ends the walk with a "Bomb infection radial blocked" line; the
+cells and bodies before it stay done and the debris follows. A host
+without the radial (Intro2) logs "Bomb tail held" and still plays the
+sounds and the debris.
+
+Not the same yet: the port's bomb leaves the craft at the right speed
+along Z but not with retail's Y and X components (a retail bomb ended its
+life with its Y word about 290 more than at its launch and X 138 more; the
+port's Y word was about 920 less and its X unchanged), so its explosions land elsewhere and no lab run
+has compared a body walk yet. The class-4 and class-54 shells hold the
+same `+2C` callback: the port runs their `FUN_00441850` once at a static
+hit, where retail runs it twice and again at every other free.
 
 **Megablast.** Operation `0x39` adds its amount to controller `+195` (at most
 4) and births one Type65 in mode 0 at the player, owned by it (`+60`).

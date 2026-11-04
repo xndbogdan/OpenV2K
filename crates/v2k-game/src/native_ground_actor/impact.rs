@@ -163,8 +163,8 @@ fn run<P: NativeGroundActorProfile>(
         return Err(Block::Runtime("pending actor/contact prefix"));
     }
     let delivery = impact
-        .damage_delivery_record()
-        .ok_or(Block::Runtime("particle provenance"))?;
+        .packet_delivery()
+        .map_err(|()| Block::Runtime("particle provenance"))?;
     let metadata = manager
         .type_runtime_metadata(P::ENTITY_TYPE)
         .cloned()
@@ -315,6 +315,10 @@ fn run<P: NativeGroundActorProfile>(
         }
         other => return Err(Block::Callback(other)),
     }
+    // A no-packet infect or cure skips 11030 and 15040.
+    let Some(delivery) = delivery else {
+        return Ok(crate::live_actor_checked_damage::LiveActorDamageOutcome::no_packet());
+    };
     let entity = manager.entity_mut(id).unwrap();
     let flags = super::live::bits(
         entity,

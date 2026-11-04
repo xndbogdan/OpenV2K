@@ -241,6 +241,7 @@ fn external_c690_class45_publication_survives_nonzero_reaction_and_next_callback
     let old_angles = before.rotation_heading_pitch_roll_raw();
     let old_health = before.collision.health_raw;
     let impact = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

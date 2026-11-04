@@ -134,6 +134,7 @@ fn infected_then_primary_hits_preserve_every_authored_fish_death_policy() {
                             retail_tick: 1011,
                         },
                         ParticleEntityImpact {
+                            no_packet: false,
                             source_particle_class: hit_class,
                             impact_position_argument_va: if hit_class == 5 {
                                 0x004D_CF48

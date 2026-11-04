@@ -242,6 +242,7 @@ fn type86_lifecycle_runs_move_hit_death_and_class14_removal() {
         &mut scheduler,
         &mut crate::gameplay_notifications::GameplayNotifications::new(),
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 38,
             impact_position_argument_va: 0,
             target_entity_id: target,

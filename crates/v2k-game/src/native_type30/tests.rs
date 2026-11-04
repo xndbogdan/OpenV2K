@@ -661,6 +661,7 @@ fn native_type30_particle_hit_reselects_each_living_style_with_exact_rng_and_rec
                 tasks::select(Type30Row::Type30, false, &mut || selector).unwrap();
             control.next_shared_retail_random_u16();
             let impact = ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: particle_class,
                 impact_position_argument_va: 0,
                 target_entity_id: id,

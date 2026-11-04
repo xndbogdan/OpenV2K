@@ -66,6 +66,7 @@ fn type57_lethal_hit_transitions_to_alternate11_tumble() {
 
     let mut fx = WorldFx::new();
     let impact = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 38, // Intro2 tick 2201 lethal fireball
         impact_position_argument_va: 0,
         target_entity_id: id,

@@ -17,6 +17,7 @@ fn id(manager: &EntityManager, spawn: usize) -> u32 {
 }
 fn hit(id: u32, infected: bool, lethal: bool) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: if infected { 5 } else { 38 },
         impact_position_argument_va: if infected { 0x004d_cf48 } else { 0 },
         target_entity_id: id,

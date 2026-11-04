@@ -9145,6 +9145,36 @@ fn run_game(
                                     },
                                 );
                             }
+                            PlayingParticleActorEvent::InfectionRadial(request) => {
+                                let outcome = v2k_game::infection_radial::apply_playing_infection_radial(
+                                    v2k_game::shared_actor_impact::PlayingActorImpactFrame {
+                                        resources: cache, entities: em, world_fx,
+                                        scheduler: &mut specialized_actor_tasks,
+                                        notifications: &mut gameplay_notifications,
+                                        static_damage, player_hull: &mut player_hull,
+                                        extra_lives: RetailRuntimeValue::Known(player_campaign_progress.extra_lives()),
+                                        retail_tick,
+                                    },
+                                    request,
+                                );
+                                if let Some(block) = &outcome.blocked {
+                                    eprintln!("Bomb infection radial blocked at {:?} (infect {}): {block:?}", request.origin_raw, request.infected);
+                                }
+                                log!("Bomb infection radial: {outcome:?}");
+                                player_model_id = em.player().and_then(|player| player.model_index);
+                                return PlayingParticleActorResponse::WorldRadial(
+                                    v2k_game::playing_particle_host::PlayingParticleRefresh {
+                                        collision: ParticleCollisionCacheRefresh::Replace(build_particle_collision_models(
+                                            cache, em, player_model_id, &player_craft,
+                                            &mut particle_collision_error_reported,
+                                        )),
+                                        attachment_owners: em.iter_all().map(v2k_game::world_fx::ParticleAttachmentOwner::from_entity).collect(),
+                                        owner_motions: em.iter_all().map(|entity| ParticleOwnerMotion {
+                                            owner_id: entity.id, velocity: entity.velocity,
+                                        }).collect(),
+                                    },
+                                );
+                            }
                             PlayingParticleActorEvent::FlareDamage(request) => {
                                 let result = v2k_game::flare_damage::apply_flare_particle_damage(
                                     v2k_game::attached_particle_damage::AttachedParticleDamageFrame {
@@ -9848,7 +9878,7 @@ fn run_game(
                 }
                 for tail in outcome.held_bomb_tails {
                     eprintln!(
-                        "Bomb tail held: particle class {} hit a static at {:?}; FUN_00441850's FUN_00456710 infect/cure radial, debris and F890's sound 62 are not ported",
+                        "Bomb tail held: particle class {} hit a static at {:?}; no host ran FUN_00441850's FUN_00456710 infect/cure radial",
                         tail.source_class, tail.position
                     );
                 }

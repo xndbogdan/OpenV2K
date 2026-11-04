@@ -30,6 +30,7 @@ fn entity(manager: &EntityManager, id: u32) -> &Entity {
 
 fn hit(id: u32, channel: i32, amount_raw: i32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

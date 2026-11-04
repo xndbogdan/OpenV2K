@@ -343,6 +343,7 @@ fn later_factory_public_primary_hits_reach_progressive_death() {
                         retail_tick: hit,
                     },
                     ParticleEntityImpact {
+                        no_packet: false,
                         source_particle_class: 16,
                         impact_position_argument_va: 0,
                         target_entity_id: id,

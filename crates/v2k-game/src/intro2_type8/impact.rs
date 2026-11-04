@@ -194,8 +194,8 @@ fn run_hit(
     let runtime = |field| Intro2Type8ImpactBlock::Owner(Intro2Type8Block::Runtime(field));
     let id = impact.target_entity_id;
     let delivery = impact
-        .damage_delivery_record()
-        .ok_or_else(|| runtime("particle provenance"))?;
+        .packet_delivery()
+        .map_err(|()| runtime("particle provenance"))?;
     if !scheduler.begin_intro2_type8_external_mutation(manager, id) {
         return Err(runtime("native task custody"));
     }
@@ -236,6 +236,10 @@ fn run_hit(
         _ => return Err(runtime("unaudited hit style")),
     }
     let entity = manager.entity_mut(id).unwrap();
+    // A no-packet infect or cure skips 11030 and 15040.
+    let Some(delivery) = delivery else {
+        return Ok(crate::live_actor_checked_damage::LiveActorDamageOutcome::no_packet());
+    };
     let flags = bits(
         entity,
         IMPACT_REACTION_ENABLED_STATE_BIT

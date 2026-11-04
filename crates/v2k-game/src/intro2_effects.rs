@@ -1126,6 +1126,7 @@ mod tests {
 
     fn impact(target_entity_id: u32) -> ParticleEntityImpact {
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 1,
             impact_position_argument_va: 0x004D_CF48,
             target_entity_id,
@@ -1208,6 +1209,7 @@ mod tests {
             &mut scheduler,
             &mut GameplayNotifications::new(),
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 68,
                 impact_position_argument_va: 0,
                 target_entity_id: id,
@@ -1267,6 +1269,7 @@ mod tests {
                         retail_tick: 25,
                     },
                     ParticleEntityImpact {
+                        no_packet: false,
                         source_particle_class: 68,
                         impact_position_argument_va: 0,
                         target_entity_id: id,

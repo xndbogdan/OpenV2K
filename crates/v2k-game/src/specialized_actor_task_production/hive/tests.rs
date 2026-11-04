@@ -465,6 +465,7 @@ fn failed_level1_native_wasp_restores_pairs_then_uses_full_hit_and_quiet_death_o
     assert!(f.scheduler.intro2_flyer_completed_owner(&f.manager, id));
     let source_owner_id = f.manager.player().map(|entity| entity.id);
     let impact = |amount| ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

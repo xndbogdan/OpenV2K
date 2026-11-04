@@ -314,6 +314,7 @@ fn type43_acquires_the_player_and_fires_method10() {
 
 fn lethal_hit(id: u32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

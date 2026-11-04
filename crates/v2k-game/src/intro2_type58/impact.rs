@@ -125,8 +125,8 @@ fn run(
     } = frame;
     let id = impact.target_entity_id;
     let delivery = impact
-        .damage_delivery_record()
-        .ok_or(Block::Runtime("particle provenance"))?;
+        .packet_delivery()
+        .map_err(|()| Block::Runtime("particle provenance"))?;
     let metadata = manager
         .type_runtime_metadata(58)
         .cloned()
@@ -196,6 +196,10 @@ fn run(
     }
 
     let entity = manager.entity_mut(id).unwrap();
+    // A no-packet infect or cure skips 11030 and 15040.
+    let Some(delivery) = delivery else {
+        return Ok(crate::live_actor_checked_damage::LiveActorDamageOutcome::no_packet());
+    };
     let flags = state_bits(
         entity,
         IMPACT_REACTION_ENABLED_STATE_BIT

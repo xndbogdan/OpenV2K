@@ -122,8 +122,8 @@ fn run(
         return Err(Block::Runtime("unsupported411180 boulder target"));
     }
     let delivery = impact
-        .damage_delivery_record()
-        .ok_or(Block::Runtime("particle provenance"))?;
+        .packet_delivery()
+        .map_err(|()| Block::Runtime("particle provenance"))?;
     if !rolling_boulder_manager_allocation_authenticates(manager, id) {
         return Err(Block::Runtime("native allocation"));
     }
@@ -174,6 +174,10 @@ fn run(
         }
     }
     let entity = manager.entity_mut(id).unwrap();
+    // A no-packet infect or cure skips 11030 and 15040.
+    let Some(delivery) = delivery else {
+        return Ok(crate::live_actor_checked_damage::LiveActorDamageOutcome::no_packet());
+    };
     let mut flags = state_bits(entity, IMPACT_REACTION_ENABLED_STATE_BIT)?;
     if flags != 0 {
         flags |= state_bits(entity, IMPACT_REACTION_SUPPRESSED_STATE_BIT)?;

@@ -405,6 +405,7 @@ fn type7_native_factory_ejection_materialiser_release_and_staffing_keep_one_allo
                 retail_tick: 300 + attempt,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 38,
                 impact_position_argument_va: 0,
                 target_entity_id: id,
@@ -733,6 +734,7 @@ fn type7_c690_reselection_drains_event16_at_the_hit_tick() {
             retail_tick: HIT_TICK,
         },
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 38,
             impact_position_argument_va: 0,
             target_entity_id: id,

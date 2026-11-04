@@ -385,6 +385,7 @@ fn a_dead_mobile_turret_takes_the_class49_terminal() {
                 retail_tick: t,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 16,
                 impact_position_argument_va: 0,
                 target_entity_id: turret,

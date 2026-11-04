@@ -45,6 +45,7 @@ fn activate(manager: &mut EntityManager, ids: &[u32]) {
 
 fn lethal_hit(id: u32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 16,
         impact_position_argument_va: 0,
         target_entity_id: id,

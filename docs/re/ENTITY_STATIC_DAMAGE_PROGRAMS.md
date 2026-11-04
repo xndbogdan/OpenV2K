@@ -340,7 +340,7 @@ retail calls `FUN_00433720`, with the raw words retail passes:
 | `FUN_0043E1C0` (classes 5 and 6 on the ground, from `FUN_0043E180` and `FUN_0043E1A0`) | the particle's | the particle traversal, published before `FUN_00440120` frees the carrier |
 | `FUN_00427DE0`, `FUN_00427E00` (classes 5 and 6 on a static, from `FUN_0043F920` and `FUN_0043F950`) | the static hit's tile centre, `cell << 8 \| 0x7F` | the same |
 | `FUN_004379C0`, `FUN_00437B60`, `FUN_00437CB0` (a peer's terrain and cell records) | the cell's corner | `network_play`'s cell writes |
-| `FUN_00437630` (the Virus and Antidote bombs' radial, from `FUN_00456710`) | the centre plus whole-cell offsets | held with the bomb tail |
+| `FUN_00437630` (the Virus and Antidote bombs' radial, from `FUN_00456710`) | the centre plus offsets of −244, 12 and 268 per axis | `infection_radial`, from the free of a bomb ([PLAYER_CRAFT](PLAYER_CRAFT.md#special-weapons)) |
 
 A class-5 or class-6 contact returns one, and `FUN_00440120` frees the
 carrier only after `FUN_00433720` returns: the listeners' births find the

@@ -568,6 +568,7 @@ fn dying_type53_uses_null_hook_without_task_writes() {
             retail_tick: 4793,
         },
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 16,
             impact_position_argument_va: 0,
             target_entity_id: id,

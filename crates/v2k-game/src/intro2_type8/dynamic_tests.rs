@@ -275,6 +275,7 @@ fn real_factory_worker_runs_carrying_callbacks_and_reselects_at_the_released_anc
                 &mut fx,
                 &mut scheduler,
                 crate::world_fx::ParticleEntityImpact {
+                    no_packet: false,
                     source_particle_class: 38,
                     impact_position_argument_va: 0,
                     target_entity_id: id,

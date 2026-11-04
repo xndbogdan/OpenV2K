@@ -470,6 +470,8 @@ const FUN_00441850_CLASS_54_DEBRIS_CLASS: u8 = 0x27;
 const FUN_004410B0_CLASS_54_UNDERWATER_CLASS: u8 = 0x2e;
 /// `0x13880 >> 10` count base for class-4 `FUN_00441A50`.
 const FUN_00441A50_CLASS_4_COUNT_BASE: i32 = 0x13_880 >> 10;
+/// `40000 >> 10` count base for the bombs' class-5/6 `FUN_00441A50`.
+const FUN_00441A50_BOMB_COUNT_BASE: i32 = 40_000 >> 10;
 
 /// The class-1/2/3 primary projectile family. `FUN_00440120`'s mode dispatch
 /// routes on the full descriptor signature: class 87 shares only the
@@ -1088,7 +1090,15 @@ const FUN_00441850_CLASS_54_RADIAL: crate::radial_damage::RadialDamageTemplate =
         trailing_raw: [0, 0],
     };
 
-/// A bomb particle's static hit whose tail the port holds.
+/// `FUN_00441850`'s `FUN_00456710(origin, 500, infected)` at a Virus (77)
+/// or Antidote (78) Bomb's static hit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ParticleInfectionRadial {
+    pub origin_raw: [i16; 3],
+    pub infected: bool,
+}
+
+/// A bomb particle's static hit whose infect/cure radial no host ran.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct HeldBombTail {
     pub source_class: u8,
@@ -1102,9 +1112,8 @@ pub struct ParticleUpdateOutcome {
     pub flare_damage_blocks: Vec<FlareDamageBlocked>,
     /// `FUN_00441850` radials no host ran; the shells' other effects did.
     pub unrun_world_radials: Vec<ParticleWorldRadial>,
-    /// Virus/Antidote Bomb (classes 77/78) static hits whose `FUN_0043F890`
-    /// tail is held: `FUN_00441850`'s infect/cure radial and debris, and the
-    /// closing sound 62. The F610 burst ran and the particle is gone.
+    /// Virus/Antidote Bomb (classes 77/78) static hits whose `FUN_00456710`
+    /// radial no host ran; the sounds and the debris did.
     pub held_bomb_tails: Vec<HeldBombTail>,
     /// Completed 425D0 callbacks whose checked-damage admission bit was clear.
     /// These are retrospective observations, never requests to replay.
@@ -1189,9 +1198,51 @@ pub struct ParticleEntityImpact {
     /// `None` means live particle byte `+0x1D` bit zero suppressed only the
     /// damage delivery; the F610 visual and parent deletion still occurred.
     pub damage: Option<BallisticDamageRequest>,
+    /// `FUN_00414C50`'s call of `FUN_00411250`/`FUN_00411320` with a null
+    /// packet: the bit, the cue and the type's `+18`/`+1C` hook (with the
+    /// body's own position and velocity) run; `FUN_00411030` and
+    /// `FUN_00415040` do not. `damage` is then `None`.
+    pub no_packet: bool,
 }
 
+/// Class 5 (`FUN_0043F780`, infect) and class 6 (`FUN_0043F7C0`, cure): the
+/// entries a no-packet hit names.
+const NO_PACKET_INFECTED_CLASS: u8 = 5;
+const NO_PACKET_CURED_CLASS: u8 = 6;
+
 impl ParticleEntityImpact {
+    /// `FUN_00414C50`'s no-packet infect or cure of one body, whose hook
+    /// takes the body's own position (`+96`) and velocity (`+9C`).
+    pub fn no_packet_hit(
+        target_entity_id: u32,
+        infected: bool,
+        position_raw: [i16; 3],
+        velocity_raw: [i16; 3],
+    ) -> Self {
+        Self {
+            source_particle_class: if infected {
+                NO_PACKET_INFECTED_CLASS
+            } else {
+                NO_PACKET_CURED_CLASS
+            },
+            impact_position_argument_va: 0,
+            target_entity_id,
+            position_world: position_raw.map(|word| f32::from(word) / 256.0),
+            velocity_raw,
+            damage: None,
+            no_packet: true,
+        }
+    }
+
+    /// The delivery an owner's packet hit needs: `Ok(None)` for a no-packet
+    /// hit, `Err` when a packet hit lacks its provenance.
+    pub fn packet_delivery(self) -> Result<Option<DamageDeliveryRecord>, ()> {
+        if self.no_packet {
+            return Ok(None);
+        }
+        self.damage_delivery_record().map(Some).ok_or(())
+    }
+
     pub fn entity_hit_entry(self) -> crate::damage::EntityHitEntry {
         if particle_uses_fun_0043f7c0_entity_hit(self.source_particle_class) {
             crate::damage::EntityHitEntry::Cured
@@ -1868,6 +1919,9 @@ struct ParticlePool {
     links: [ParticleLinks; MAX_WORLD_PARTICLES],
     lists: [ParticleList; PARTICLE_LIST_COUNT],
     live_count: usize,
+    /// Virus and Antidote Bomb records freed during the current traversal
+    /// slot: `FUN_00442B40` runs their `+2C` callback, `FUN_00441850`.
+    freed_bombs: Vec<WorldParticle>,
 }
 
 impl Default for ParticlePool {
@@ -1877,6 +1931,7 @@ impl Default for ParticlePool {
             links: [ParticleLinks::EMPTY; MAX_WORLD_PARTICLES],
             lists: [ParticleList::default(); PARTICLE_LIST_COUNT],
             live_count: 0,
+            freed_bombs: Vec::new(),
         };
 
         // FUN_0043D290 appends physical slots 0..199 to the free-list tail.
@@ -1896,6 +1951,7 @@ impl ParticlePool {
             links: self.links,
             lists: self.lists,
             live_count: self.live_count,
+            freed_bombs: self.freed_bombs.clone(),
         }
     }
 
@@ -2032,8 +2088,11 @@ impl ParticlePool {
     }
 
     fn free(&mut self, slot: usize) -> bool {
-        if self.slots[slot].is_none() {
+        let Some(particle) = self.slots[slot] else {
             return false;
+        };
+        if matches!(particle.source_class, 77 | 78) {
+            self.freed_bombs.push(particle);
         }
         self.remove(slot);
         self.slots[slot] = None;
@@ -5757,6 +5816,7 @@ fn detect_primary_collision(
             .velocity
             .map(|component| world_velocity_component_to_raw(component) as i16);
         dispatch.entity_impact = Some(ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: particle.source_class,
             impact_position_argument_va: retail_particle_impact_position_argument_va(physical_slot),
             target_entity_id,
@@ -5939,6 +5999,7 @@ fn detect_model_switch_particle_entity_hit(
         .velocity
         .map(|component| world_velocity_component_to_raw(component) as i16);
     Some(ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: particle.source_class,
         impact_position_argument_va: retail_particle_impact_position_argument_va(physical_slot),
         target_entity_id,
@@ -5968,6 +6029,7 @@ fn detect_f6e0_entity_hit(
         .velocity
         .map(|component| world_velocity_component_to_raw(component) as i16);
     Some(ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: particle.source_class,
         impact_position_argument_va: retail_particle_impact_position_argument_va(physical_slot),
         target_entity_id,
@@ -6005,6 +6067,7 @@ fn detect_class_87_sweep(
         collision.model_pool,
     ) {
         return Some(Class87SweepImpact::Entity(ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: particle.source_class,
             impact_position_argument_va: retail_particle_impact_position_argument_va(physical_slot),
             target_entity_id,
@@ -7758,6 +7821,7 @@ mod tests {
         assert_eq!(
             outcome.entity_impacts,
             vec![ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: FIRST_WORLD_SHOOTER_PARTICLE_CLASS,
                 impact_position_argument_va: retail_particle_impact_position_argument_va(
                     parent_slot,
@@ -10670,6 +10734,7 @@ mod tests {
         assert_eq!(
             impacts,
             vec![ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: PRIMARY_BULLET_PARTICLE_CLASS,
                 impact_position_argument_va: retail_particle_impact_position_argument_va(
                     bullet_slot,
@@ -11314,6 +11379,7 @@ mod tests {
         assert_eq!(
             impacts,
             vec![ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: UPGRADED_PRIMARY_PARTICLE_CLASS,
                 impact_position_argument_va: retail_particle_impact_position_argument_va(
                     projectile_slot,
@@ -15055,6 +15121,7 @@ mod tests {
         assert_eq!(
             outcome.entity_impacts,
             vec![ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: METEOR_SCATTER_CLASS,
                 impact_position_argument_va: retail_particle_impact_position_argument_va(
                     parent_slot,

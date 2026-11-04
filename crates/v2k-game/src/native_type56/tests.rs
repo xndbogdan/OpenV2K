@@ -440,6 +440,7 @@ fn completed_class2_accepts_primary_infected_and_cured_without_reselecting() {
                 retail_tick: 5000,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: class,
                 impact_position_argument_va: 0x004d_cf48,
                 target_entity_id: id,

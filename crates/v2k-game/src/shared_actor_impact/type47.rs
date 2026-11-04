@@ -160,8 +160,8 @@ fn run(
         .and_then(|entity| crate::shared_type47::GunnerRow::from_entity_type(entity.entity_type))
         .ok_or(Block::Runtime("gunner row"))?;
     let delivery = impact
-        .damage_delivery_record()
-        .ok_or(Block::Runtime("particle provenance"))?;
+        .packet_delivery()
+        .map_err(|()| Block::Runtime("particle provenance"))?;
     let metadata = crate::shared_type47::gunner_type_metadata(manager, id)
         .ok_or(Block::Runtime("metadata"))?;
     if !type47_manager_allocation_authenticates(manager, id) {
@@ -220,6 +220,10 @@ fn run(
     }
 
     let entity = manager.entity_mut(id).unwrap();
+    // A no-packet infect or cure skips 11030 and 15040.
+    let Some(delivery) = delivery else {
+        return Ok(crate::live_actor_checked_damage::LiveActorDamageOutcome::no_packet());
+    };
     let flags = state_bits(
         entity,
         IMPACT_REACTION_ENABLED_STATE_BIT

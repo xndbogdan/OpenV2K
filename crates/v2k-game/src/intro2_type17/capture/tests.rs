@@ -282,6 +282,7 @@ fn primary_hit_cleans_up_while_living_before_checked_damage() {
         .task_in_slot(ActorTaskSlot::Primary);
     let packet = crate::damage::PRIMARY_PROJECTILE_DAMAGE_PACKET;
     let impact = crate::world_fx::ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 1,
         impact_position_argument_va: 0,
         target_entity_id: f.parent,

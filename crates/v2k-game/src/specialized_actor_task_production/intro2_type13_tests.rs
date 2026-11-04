@@ -30,6 +30,7 @@ fn class68_impact(target_entity_id: u32, amount_scale: i32) -> ParticleEntityImp
         ],
     };
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 68,
         impact_position_argument_va: 0,
         target_entity_id,
@@ -67,6 +68,7 @@ fn type13_tick1473_incoming_hit_applies_c690_impulse_and_checked_damage() {
     let mut fx = WorldFx::new();
     // Fragment at tick 1473: class 30, channel 1, amount 2500, raw velocity [254, -471, 508]
     let impact = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 30,
         impact_position_argument_va: 0,
         target_entity_id: id,
@@ -142,6 +144,7 @@ fn type13_above_threshold_hit_reduces_health() {
     let mut fx = WorldFx::new();
     // Hit with 15,000 on channel 1 (threshold is 10,000, Q8 multiplier is 256 -> 5,000 filtered damage)
     let impact = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 30,
         impact_position_argument_va: 0,
         target_entity_id: id,
@@ -198,6 +201,7 @@ fn type13_hit_not_applicable_for_other_entities() {
 
     let mut fx = WorldFx::new();
     let impact = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 30,
         impact_position_argument_va: 0,
         target_entity_id: id_other,
@@ -270,6 +274,7 @@ fn type13_lethal_hit_finishes_authored_class1_synchronously() {
     }
     // Fatal damage (e.g. 100,000)
     let impact = ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 30,
         impact_position_argument_va: 0,
         target_entity_id: id,

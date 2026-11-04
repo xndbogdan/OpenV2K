@@ -52,6 +52,7 @@ fn fixture() -> Option<(
 
 fn hit(id: u32) -> ParticleEntityImpact {
     ParticleEntityImpact {
+        no_packet: false,
         source_particle_class: 5,
         target_entity_id: id,
         impact_position_argument_va: 0,

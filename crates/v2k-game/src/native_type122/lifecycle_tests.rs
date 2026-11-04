@@ -41,6 +41,7 @@ fn static_route_hits_run_11180_on_native_type122() {
                 retail_tick: 500,
             },
             ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: class,
                 impact_position_argument_va: 0,
                 target_entity_id: f.id,
@@ -115,6 +116,7 @@ fn native_primary_hits_use_type122_health_threshold_and_completed_replacement_cu
             let allocation = entity.native_type122_runtime;
             let primary = entity.actor_tasks.task_in_slot(ActorTaskSlot::Primary);
             let impact = ParticleEntityImpact {
+                no_packet: false,
                 source_particle_class: 16,
                 impact_position_argument_va: 0,
                 target_entity_id: f.id,

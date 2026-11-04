@@ -430,6 +430,7 @@ fn a_lethal_hit_mid_dive_tumbles() {
             retail_tick: 600,
         },
         ParticleEntityImpact {
+            no_packet: false,
             source_particle_class: 16,
             impact_position_argument_va: 0,
             target_entity_id: id,
