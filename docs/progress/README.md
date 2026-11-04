@@ -47,8 +47,8 @@ Where the code's references are thinnest:
 | [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 144 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 8 | 0 | 26 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 6 | 0 | 140 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 57 |
-| [Menu system](../re/MENU_SYSTEM.md) | 3 | 1 | 153 |
+| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 56 |
+| [Menu system](../re/MENU_SYSTEM.md) | 3 | 1 | 154 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 44 |
 | [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 47 |
 

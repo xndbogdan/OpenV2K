@@ -1051,6 +1051,30 @@ countdown restarts at 4000 plus the shifted word (4.0 to about 6.0 s).
 Not ported yet: the idle countdown, the table's world, phase 4 and these
 choices.
 
+More from the code, for the port to come:
+
+- The countdown (`004DB21C`) runs whenever it is nonzero and `004FE60C`
+  and `004F741C` are clear; Klaus's state (`FUN_0042D210`) only steers the
+  frontend craft's drift in the same routine. The pop's new depth decides:
+  below 2 the attract start, 2 Klaus's command 1, deeper nothing.
+- Mode 1 takes `FUN_0044F650`'s default branch, as New Game does: campaign
+  slot `0x26` (Intro2) and `+34` 1. `FUN_0044F8B0` stores the mode as the
+  phase, so Intro2 plays in phase 1, ends at `0x10CC` like New Game's
+  phase 2, and `FUN_00453E00` then returns to the frontend at once
+  (`FUN_0044FEB0`, no Klaus leg) where phase 2 closes Klaus and loads the
+  first world.
+- While a player exists below phase 5, every `FUN_004503C0` visit writes
+  the attract row (`004F72C4`) into the player: the body's component
+  (`+4C`, then `+0C`, then `+2C`) takes the row's `+1` byte at `+10`, its
+  `+8` word at `+20` and its `+3` byte into the word at `[+0C]`; the
+  block at the type record's `+C8`, then `+18`, takes the row's `+2` byte
+  at `+17`, 1 at `+16`
+  and the row's `+4` dword times 1000 at `+4`. These drive the demo
+  player; their meaning is not decoded.
+- The lab's idle frontend (deterministic RNG) picks logical world 11,
+  which builds no player. Its card and its frames show the V2000 branding
+  at the bottom left, and the world shows a "Demo" caption at the top.
+
 ## Screen tree highlights (full tree in ../port/crates/v2k-game/data/menu_tree.json)
 
 - **0x4C0CF8 = MAIN MENU RING** (flags 0xC4, 7 prop items): `player4`(start),

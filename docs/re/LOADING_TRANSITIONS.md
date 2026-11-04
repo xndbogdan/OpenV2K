@@ -477,13 +477,26 @@ the lab and fixed-step runs stay byte-identical. With the lab's keys at
 20-ms steps the port's frames of Klaus's opening over Mediaeval after the
 Cheats skip moved closer to the lab's on every pass compared.
 
-Held: the callbacks while the world is built. The port builds it on the
-frame thread, so retail's callbacks during the construction (one a period)
-cannot run: a callback that fell due runs once, late, before Klaus's
-command 2, and the port says so on stderr ("Loading card: world N's
-construction ran ... past the card's timer"). A release build constructs a
-world in 20 to 30 ms on a current PC, under one period; a debug build takes
-about 600 ms.
+While the world is built, retail's timer thread interrupts the
+construction wherever it is. The port builds on the frame thread, so it
+runs a callback that fell due at the next of eight points between the
+construction's steps (after the level checks and music, the terrain upload,
+the sky and water frames, the actors, the radar, the cargo and HUD
+resources, the player and camera, and the task adoption), and it decodes
+the terrain atlases, the longest step, on a worker while the frame thread
+runs the timer as it does during the overlay read. A release build here
+spends 15 to 17 ms of its 20 to 30 ms construction in that decode, so the
+other steps are short; a debug build takes about 600 ms, with callbacks
+every period during the decode.
+
+Held: exact timing inside the other steps. A callback that falls due in
+one runs when the step ends, and the port says so on stderr when that is a
+millisecond or more after it fell due ("Loading card: a callback ran N us
+late, after world W's STEP"). The actors, the radar and Klaus's closed
+visits all draw the process random word, which retail shares between the
+two threads; running those steps beside the card needs that word shared
+too. In release the longest such steps measured here are the radar (up to
+3.4 ms, world 22) and the music's selection (up to 5 ms).
 
 ### Briefing Sequence
 

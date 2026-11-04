@@ -1088,7 +1088,7 @@ address,status,note
 0x0042CEA0,implemented,Klaus command word DAT_004DB210
 0x0042CEB0,implemented,Klaus model argument DAT_004DB218
 0x00457730,implemented,32-bit integer square root: zero below one, 0xFFFF from 0x40000000 (v2k_formats::fixed_math::retail_integer_sqrt)
-0x00456FB0,approximated,the loading card's timer callback: real-time deltas, Klaus, the eye, the card and the 9/8 re-arm; the port runs it during the overlay read and after the load, but a callback due while the world is built runs once late (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
+0x00456FB0,approximated,the loading card's timer callback: real-time deltas, Klaus, the eye, the card and the 9/8 re-arm; runs during the overlay read and the terrain decode, between the world's construction steps (late within a step, said on stderr) and after the load (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
 0x0043A8E0,implemented,fly clock armed from the top screen's flags before a switch: 0x40 in the frontend; 0x08 in play; with 0x20 only on a pop from the base depth (fly_transition_armed; docs/re/MENU_SYSTEM.md#runtime-state-bss)
 0x00454390,implemented,progress map prompt: global string 25 centred in the green font 0 of 004FE630 (docs/re/MENU_SYSTEM.md#progress-map)
 0x00456680,implemented,in-game descriptor switch; its pass draws nothing (docs/re/MENU_SYSTEM.md#progress-map)

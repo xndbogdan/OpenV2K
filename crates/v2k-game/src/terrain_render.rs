@@ -36,6 +36,31 @@ pub fn build_terrain_frames(
     cache: &ResourceCache,
     renderer: &mut dyn Renderer,
 ) -> Option<TerrainFrames> {
+    upload_terrain_frames(prepare_terrain_frames(cache)?, cache, renderer)
+}
+
+/// The decoded atlases of [`build_terrain_frames`], before any renderer
+/// call: built from the cache alone, so a load can build them on a worker.
+pub struct PreparedTerrainFrames {
+    base: u32,
+    rgba: Vec<u8>,
+    indices_rgba: Vec<u8>,
+    atlas_w: u32,
+    atlas_h: u32,
+    palettes: Vec<Vec<u8>>,
+    infection_rgba: Vec<u8>,
+    infection_width: u32,
+    infection_height: u32,
+    infection_frame_uvs: [[f32; 4]; INFECTION_FRAME_COUNT],
+    frame_uvs: Vec<[f32; 4]>,
+    shade_scales: Vec<[f32; 8]>,
+    shade_rows: [u8; 8],
+    scan_columns: u32,
+    scan_rows: u32,
+}
+
+/// The CPU half of [`build_terrain_frames`].
+pub fn prepare_terrain_frames(cache: &ResourceCache) -> Option<PreparedTerrainFrames> {
     let descriptor = cache.level_desc()?;
     let shade_rows = primary_shade_rows(cache)?;
     let base = descriptor.terrain_sprite_base;
@@ -129,6 +154,48 @@ pub fn build_terrain_frames(
         ];
     }
 
+    Some(PreparedTerrainFrames {
+        base,
+        rgba,
+        indices_rgba,
+        atlas_w,
+        atlas_h,
+        palettes,
+        infection_rgba,
+        infection_width,
+        infection_height,
+        infection_frame_uvs,
+        frame_uvs,
+        shade_scales,
+        shade_rows,
+        scan_columns,
+        scan_rows,
+    })
+}
+
+/// The renderer half of [`build_terrain_frames`].
+pub fn upload_terrain_frames(
+    prepared: PreparedTerrainFrames,
+    cache: &ResourceCache,
+    renderer: &mut dyn Renderer,
+) -> Option<TerrainFrames> {
+    let PreparedTerrainFrames {
+        base,
+        rgba,
+        indices_rgba,
+        atlas_w,
+        atlas_h,
+        palettes,
+        infection_rgba,
+        infection_width,
+        infection_height,
+        infection_frame_uvs,
+        frame_uvs,
+        shade_scales,
+        shade_rows,
+        scan_columns,
+        scan_rows,
+    } = prepared;
     let texture = renderer.create_texture(&rgba, atlas_w, atlas_h)?;
     let Some(index_texture) = renderer.create_texture_nearest(&indices_rgba, atlas_w, atlas_h)
     else {
