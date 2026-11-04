@@ -47,6 +47,16 @@ pub struct NetworkBody {
     pub position_raw: [i16; 3],
 }
 
+/// What `FUN_00417680`'s relation tail asks of the network layer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NetworkRelationRepair {
+    /// Kind 15 to the owner: this machine's parent does not list the body.
+    /// The parent's raw X and Z.
+    Dropped { x_raw: i16, z_raw: i16 },
+    /// This machine's parent's Sub-J is unresolved.
+    Unknown,
+}
+
 /// One damage the local player took in a network game.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PlayerHitReport {
@@ -113,15 +123,52 @@ impl EntityManager {
         Some(id)
     }
 
+    /// Whether a body this machine owns lists `child` in its Sub-J
+    /// (`FUN_00418A00`, false without a Sub-J); `None` for a peer's or an
+    /// unknown body.
+    fn local_sub_j_holds(&self, parent: u32, child: u32) -> Option<RetailRuntimeValue<bool>> {
+        let parent = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == parent && entity.network_body.is_none())?;
+        Some(match &parent.sub_j_attachment_runtime {
+            RetailRuntimeValue::Known(Some(runtime)) => {
+                RetailRuntimeValue::Known(runtime.contains(child))
+            }
+            RetailRuntimeValue::Known(None) => RetailRuntimeValue::Known(false),
+            RetailRuntimeValue::Unresolved => RetailRuntimeValue::Unresolved,
+        })
+    }
+
     /// `FUN_00417680`'s writes to a peer's body from one sync record.
-    /// `parent` is the parent's local id when the record names one.
-    pub fn apply_network_sync(&mut self, id: u32, sync: &BodySync, parent: Option<u32>) {
-        let Some(entity) = self.entities.iter_mut().find(|entity| entity.id == id) else {
-            return;
-        };
-        let Some(body) = entity.network_body.as_deref_mut() else {
-            return;
-        };
+    /// `parent` is the parent's local id when the record names one. Returns
+    /// what its relation tail asks of the network layer.
+    pub fn apply_network_sync(
+        &mut self,
+        id: u32,
+        sync: &BodySync,
+        parent: Option<u32>,
+    ) -> Option<NetworkRelationRepair> {
+        let attached = sync.flags & 0x1000 != 0;
+        let old_parent = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == id)?
+            .attached_to;
+        // The tail reads the relation the body had before this record.
+        let old_holds = (!attached)
+            .then(|| old_parent.and_then(|old| self.local_sub_j_holds(old, id)))
+            .flatten();
+        let parent_state = parent.filter(|_| attached).and_then(|parent_id| {
+            let parent = self.entities.iter().find(|entity| entity.id == parent_id)?;
+            Some((
+                parent.position_raw(),
+                parent.velocity_raw(),
+                self.local_sub_j_holds(parent_id, id),
+            ))
+        });
+        let entity = self.entities.iter_mut().find(|entity| entity.id == id)?;
+        let body = entity.network_body.as_deref_mut()?;
         let f = sync.flags;
         let previous_state = entity.collision.state_flags_at_0x08.known_value_bits();
         let state = (previous_state & !SYNCED_STATE_BITS) | u32::from(f) | REMOTE_STATE_BIT;
@@ -159,7 +206,46 @@ impl EntityManager {
         if f & 0x80 != 0 {
             body.model_variables = sync.model_variables.clone();
         }
-        entity.attached_to = if f & 0x1000 != 0 { parent } else { None };
+        let mut repair = None;
+        if attached {
+            entity.attached_to = parent;
+            if let Some((position, velocity, holds)) = parent_state {
+                // Without its own fields the body takes the parent's.
+                if f & 0x20 == 0 {
+                    body.position_raw = position;
+                    entity.position = raw_position_world(position);
+                }
+                if f & 0x10 == 0 {
+                    body.velocity_raw = velocity;
+                    entity.velocity = raw_position_world(velocity);
+                }
+                // This machine's parent does not hold it: kind 15 tells the
+                // owner to drop it at the parent's X and Z.
+                repair = match holds {
+                    Some(RetailRuntimeValue::Known(false)) => {
+                        Some(NetworkRelationRepair::Dropped {
+                            x_raw: position[0],
+                            z_raw: position[2],
+                        })
+                    }
+                    Some(RetailRuntimeValue::Unresolved) => Some(NetworkRelationRepair::Unknown),
+                    _ => None,
+                };
+            }
+        } else {
+            // Released by its owner while this machine's body still lists it:
+            // it is no longer drawn here.
+            match old_holds {
+                Some(RetailRuntimeValue::Known(true)) => {
+                    entity.collision.state_flags_at_0x08.overwrite(0x800, 0)
+                }
+                Some(RetailRuntimeValue::Unresolved) => {
+                    repair = Some(NetworkRelationRepair::Unknown)
+                }
+                _ => {}
+            }
+            entity.attached_to = None;
+        }
         body.sync_timeout_us = if previous_state & 0x0800_0000 == 0 && previous_state & 0x800 != 0 {
             REMOTE_TIMEOUT_US
         } else {
@@ -169,6 +255,72 @@ impl EntityManager {
             entity.set_rotation_heading_pitch_roll_raw(sync.euler);
             entity.apply_d720_euler_body_basis();
         }
+        repair
+    }
+
+    /// `FUN_00418640`'s network branch over the player's Sub-J, for the rows
+    /// that name peers' bodies: a body its owner has not attached (no
+    /// relation) is asked for with kind 13, and loses its drawn bit `0x800`
+    /// when its slot's first byte is zero; a body attached elsewhere, gone,
+    /// dying or with a zero state word loses its row, the rows after it
+    /// taking its slot. Returns each kind 13's body and flags (1 for the
+    /// Sub-J's `+0C`, 2 for a slot drawn in place). Rows of this machine's
+    /// bodies are left as they are.
+    pub fn network_player_cargo_rows(&mut self) -> Vec<(u32, u32)> {
+        let Some(player_id) = self.player_id else {
+            return Vec::new();
+        };
+        let Some(player_type) = self.player().map(|player| player.entity_type) else {
+            return Vec::new();
+        };
+        let Some(runtime) = self.player_sub_j_runtime() else {
+            return Vec::new();
+        };
+        let rows = runtime.ordered_entity_ids().to_vec();
+        let outer_policy = u32::from(runtime.policy_raw_at_0x0c() != 0);
+        let slot_bytes: Vec<u8> = match self
+            .type_metadata
+            .get(player_type as usize)
+            .map(|metadata| &metadata.sub_j_attachment_descriptor)
+        {
+            Some(RetailRuntimeValue::Known(Some(descriptor))) => descriptor
+                .slots
+                .iter()
+                .map(|slot| slot.policy_word_raw as u8)
+                .collect(),
+            _ => return Vec::new(),
+        };
+        let mut kept = Vec::with_capacity(rows.len());
+        let mut requests = Vec::new();
+        for child in rows {
+            let Some(entity) = self.entities.iter_mut().find(|entity| entity.id == child) else {
+                continue;
+            };
+            if entity.network_body.is_none() {
+                kept.push(child);
+                continue;
+            }
+            match entity.attached_to {
+                Some(parent) if parent == player_id => {}
+                None => {
+                    let drawn = slot_bytes.get(kept.len()).copied().unwrap_or(0) != 0;
+                    requests.push((child, outer_policy | if drawn { 2 } else { 0 }));
+                    if !drawn {
+                        entity.collision.state_flags_at_0x08.overwrite(0x800, 0);
+                    }
+                }
+                Some(_) => continue,
+            }
+            let state = entity.collision.state_flags_at_0x08.known_value_bits();
+            if state & 0x4000 != 0 || state == 0 {
+                continue;
+            }
+            kept.push(child);
+        }
+        if let Some(runtime) = self.player_sub_j_runtime_mut() {
+            runtime.commit_stable_compaction(kept);
+        }
+        requests
     }
 
     /// `FUN_00412DA0`'s branch for a peer's body: no callbacks; its sync

@@ -18,7 +18,9 @@ use super::protocol::{BodySync, GameRecord, Stamp, KINDS, PERIOD_US};
 use super::scoring::{LineTables, Scoring, ScoringEffect};
 use super::slots::{SlotRecord, SlotTable, SLOTS};
 use super::transport::{NetSession, NetSessionError, Received, SessionInfo, SystemMessage};
-use crate::entity::network_body::{basis_rows, PLAYER_CRAFT_TYPE, REMOTE_CRAFT_TYPE};
+use crate::entity::network_body::{
+    basis_rows, NetworkRelationRepair, PLAYER_CRAFT_TYPE, REMOTE_CRAFT_TYPE,
+};
 use crate::entity::EntityManager;
 use crate::entity_collision_state::{RetailRuntimeValue, BODY_BASIS_REBUILT_STATE_BIT};
 
@@ -68,6 +70,9 @@ pub enum NetworkEvent {
     /// `FUN_00438CB0` could not tell whether a body rests: its state word's
     /// bits `0x08000080` are unknown, so it resends on the moving period.
     UnknownRestState,
+    /// `FUN_00417680` could not tell whether this machine's body lists a
+    /// peer's body: its Sub-J is unresolved.
+    UnknownAttachmentList,
     /// `FUN_00456750`: a winner was named.
     WinnerFlash,
     /// `FUN_00450CC0`: the session was lost, or this machine became the host
@@ -894,7 +899,20 @@ impl NetworkGame {
         let parent = (sync.flags & 0x1000 != 0)
             .then(|| self.handles.lookup(sync.parent))
             .flatten();
-        frame.entities.apply_network_sync(id, &sync, parent);
+        match frame.entities.apply_network_sync(id, &sync, parent) {
+            // The tail's kind 15: the parent, the body, the parent's X and Z.
+            Some(NetworkRelationRepair::Dropped { x_raw, z_raw }) => {
+                self.send(GameRecord::Dropped([
+                    sync.parent,
+                    sync.handle,
+                    u32::from(x_raw as u16) | u32::from(z_raw as u16) << 16,
+                ]))
+            }
+            Some(NetworkRelationRepair::Unknown) => {
+                self.events.push(NetworkEvent::UnknownAttachmentList)
+            }
+            None => {}
+        }
     }
 
     fn run_effects(&mut self, effects: Vec<ScoringEffect>) {

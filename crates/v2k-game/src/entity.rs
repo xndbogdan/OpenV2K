@@ -996,6 +996,15 @@ pub enum CargoProxyEvent {
         cargo_id: u32,
         position: [f32; 3],
     },
+    /// `FUN_00443D30` on a peer's body: no materialiser here; its owner gets
+    /// kind 15 and every machine hears the cue at the drop point.
+    PeerDropped {
+        parent_id: u32,
+        cargo_id: u32,
+        target_raw: [i16; 3],
+        target: [f32; 3],
+        sound_id: usize,
+    },
 }
 
 /// Entity type classification derived from Section 13's entity_type field.
@@ -13847,10 +13856,12 @@ impl EntityManager {
             .player_sub_j_runtime()
             .and_then(SubJAttachmentRuntime::last)
         {
-            let valid = self
-                .entities
-                .iter()
-                .any(|entity| entity.id == cargo_id && entity.attached_to == Some(player_id));
+            // A peer's body keeps its owner's relation; FUN_00418500 runs
+            // its row's callback whatever that says.
+            let valid = self.entities.iter().any(|entity| {
+                entity.id == cargo_id
+                    && (entity.attached_to == Some(player_id) || entity.is_network_remote())
+            });
             if valid {
                 break;
             }
@@ -13894,6 +13905,23 @@ impl EntityManager {
             drop_context.carrier_orientation,
             drop_context.terrain,
         );
+        if self.entities[cargo_index].is_network_remote() {
+            // FUN_00443D30's branch for a peer's body (state bit 31): kind 15
+            // to its owner in place of the Type93 and the release.
+            self.player_sub_j_runtime_mut()
+                .expect("player attachment runtime was authenticated above")
+                .pop_last();
+            self.cargo_proxy_events.push(CargoProxyEvent::PeerDropped {
+                parent_id: player_id,
+                cargo_id,
+                target_raw,
+                target: raw_position_world(target_raw),
+                sound_id: CARGO_DROP_SOUND_ID,
+            });
+            return BeamOutcome::Dropped {
+                entity_id: cargo_id,
+            };
+        }
         // FUN_00446D30 -> FUN_00418500 dispatches the FUN_00443D30 drop
         // callback without FUN_00446C80's collection-only distance limits.
         if matches!(

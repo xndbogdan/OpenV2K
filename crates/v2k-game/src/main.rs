@@ -2014,6 +2014,12 @@ fn run_game(
         retail_save_directory.as_deref(),
     )?;
     log!("Save directory: {}", save_paths.save_directory().display());
+    // FUN_004393C0 reads the network line files from FUN_004493D0's Save
+    // Path, else the data path; a --settings run reads no registry.
+    let network_line_folder = match (&probe.settings, &retail_save_directory) {
+        (None, Some(folder)) => folder.clone(),
+        _ => data_dir.to_path_buf(),
+    };
     let mut save_manager = SaveManager::load_paths(save_paths);
     // 448E30 owns a retained controller checkpoint, not a live-world dump.
     let mut save_baseline = [0u8; v2k_formats::saves::STATE_PAYLOAD_SIZE];
@@ -2094,7 +2100,8 @@ fn run_game(
                     heading_raw: network.heading.unwrap_or(0x4000),
                 });
         let (session_name, player_name) = v2k_game::network::arena::local_names();
-        let tables = v2k_game::network::arena::line_tables_for(&session.cache, data_dir);
+        let tables =
+            v2k_game::network::arena::line_tables_for(&session.cache, &network_line_folder);
         let port = network
             .port
             .unwrap_or(v2k_game::network::transport::DEFAULT_PORT);
@@ -3519,7 +3526,7 @@ fn run_game(
                                     v2k_game::network::transport::DEFAULT_PORT,
                                     v2k_game::network::arena::line_tables_for(
                                         &session.cache,
-                                        data_dir,
+                                        &network_line_folder,
                                     ),
                                 )
                                 .map_err(|error| error.to_string()),
@@ -3560,7 +3567,7 @@ fn run_game(
                                     &player_name,
                                     v2k_game::network::arena::line_tables_for(
                                         &session.cache,
-                                        data_dir,
+                                        &network_line_folder,
                                     ),
                                 )
                                 .map_err(|error| error.to_string()),
@@ -10476,6 +10483,18 @@ fn run_game(
                             world_fx.queue_cargo_transfer_particle(position, Some(proxy_id));
                         }
                         CargoProxyEvent::Released { .. } => {}
+                        CargoProxyEvent::PeerDropped {
+                            parent_id,
+                            cargo_id,
+                            target_raw,
+                            target,
+                            sound_id,
+                        } => {
+                            // FUN_00443D30: kind 15, then its FUN_0044F480 cue.
+                            world_fx.send_network_cargo_drop(parent_id, cargo_id, target_raw);
+                            world_fx.send_network_sound(sound_id as u16, target_raw, 0x1_0000);
+                            world_fx.queue_cargo_transfer_sound(target);
+                        }
                     }
                 }
                 // Cargo entity callbacks happen after the retail particle

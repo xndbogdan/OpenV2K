@@ -59,7 +59,7 @@ death and self-kill lines, default names, and host lines.
 | Routine | Does |
 | --- | --- |
 | `FUN_00439290` | resets the multiplayer state: names to "Player %d", and loads the five tables |
-| `FUN_004393C0` | loads one table, `kill.txt`, `Die.txt`, `selfkill.txt`, `Names.txt` or `Host.txt`, from the game folder (`FUN_004394F0`), falling back to the language's built-in lines |
+| `FUN_004393C0` | loads one table, `kill.txt`, `Die.txt`, `selfkill.txt`, `Names.txt` or `Host.txt`, from the save folder (`FUN_004394F0`: `FUN_004493D0`'s registry Save Path, else the data path, then `\` and the name), skipping leading blanks, empty lines and lines starting with `#`, and falling back to the language's built-in lines |
 | `FUN_004394F0` | reads a text file's lines into a string table |
 | `FUN_00439010` | each frame, records the local name and initials (the profile's, or `Names.txt`'s first two lines when present); on the host, takes the frag limit from `Host.txt`'s first line, clamped to 50..5000; and on any slot whose DirectPlay id changed, clears its score and name and stages a departed player's entities for deferred destruction (`FUN_00410B70`) |
 | `FUN_00439720` | sends the local name (message `0x14`) once it is known |
@@ -138,8 +138,12 @@ send kind 10 for network-owned bodies, and the session tick sends kinds 3, 7,
 | `FUN_00417EB0` | adds a message's velocity and attitude deltas to a local body |
 | `FUN_00417FC0` | lists the handles of every body in state `0x82000000` |
 | `FUN_00417F60` | gives each listed body a 750-ms wait (`+78`) and the detail bits `0x06000000` |
-| `FUN_00418030` | attaches a local body to its parent through `FUN_00416700`, setting `0x20000000` for flag 1 and clearing render bit `0x800` without flag 2 |
-| `FUN_004180A0` | releases a local body from the named parent through `FUN_00416750` |
+| `FUN_00418030` | kind 13 (parent, body, flags): a body this machine owns that is attached to nothing (state `0x80001000` clear) is attached to the parent through `FUN_00416700` with `&DAT_004DB0A8` as its slot, setting `0x20000000` for flag 1 and clearing render bit `0x800` without flag 2. Nothing else is written: master motion (`0x40000`) stays |
+| `FUN_004180A0` | kind 14: releases a local body attached to the named parent through `FUN_00416750`. Nothing sends kind 14: its pack routine `FUN_004182F0` has no caller but the message table |
+| `FUN_00418640` | the Sub-J pose step of `FUN_00412DA0` for a parent this machine owns. In network play (`DAT_004F741C`) a row whose body's relation (`+80`) is not the parent is looked at first: with no relation (`DAT_004DCA00`), a body of this machine's is attached again (`FUN_00416700`) and a peer's is asked for with kind 13 (the parent, the body, flags 1 for the Sub-J's `+0C` and 2 for a slot whose first byte is set), losing render bit `0x800` when that byte is zero; a body attached to anything else loses its row. A row whose body is gone, dying (`0x4000`) or has a zero state word loses its row too, the following rows taking its slot; the rest are posed on the parent |
+| `FUN_00418290` | kind 15 (parent, body, X and Z words): `FUN_004180F0` on the body with the parent and the point |
+| `FUN_004180F0` | for a body this machine owns that is attached to nothing or to the named parent: a Type93 (`FUN_00438080`) at the point's X and Z on the terrain's bilinear height; when it is built, the body is released (`FUN_00416750`) and attached to it (`FUN_00408F00`). `FUN_00412DA0` runs it too when a local body's parent is gone |
+| `FUN_00443D30` | the player's cargo drop (a Sub-J row callback, `FUN_00418500`): for a peer's body no Type93 is built and nothing is released; kind 15 goes to its owner with the player, the body and the drop point's X and Z, then cue 8 there (`FUN_0044F480`) as for a local drop |
 | `FUN_00438BE0` | keeps a stamp in `004DC780`; when it matches the slot's expected id (`004DC758`) and the session agrees (`FUN_00450C90`), marks the slot ready (`004DC7B8`), and a newer counter is recorded |
 
 ## Terrain and cells
@@ -246,7 +250,28 @@ owner's block (`FUN_0043A6E0(9, 0x100)` makes a block of 256 per slot, grown by
 doubling to 0x400). `FUN_00417680` applies a sync record (kind 7): a known
 handle updates its body; an unknown one is born (`FUN_00438080`) when the
 record carries the type, a player's craft (type 46) arriving as type 51;
-otherwise the owner is asked for a whole record (kind 11).
+otherwise the owner is asked for a whole record (kind 11). The birth is the
+full constructor (`FUN_0040D720`): the peer's copy has its type's components
+and a behavior class chosen here, with the shared random draws those take,
+though it never runs them.
+
+The record ends with the body's relation. With state bit `0x1000` it names
+the parent (`+80`): a record without its own position or velocity gives the
+body the parent's, and when the parent is this machine's and its Sub-J
+(`FUN_00418A00`) does not list the body, kind 15 goes back with the parent,
+the body and the parent's X and Z, so the owner drops it there. Without the
+bit, a body that a parent of this machine's still lists loses render bit
+`0x800` (it rides hidden in that parent), and the relation is cleared. A
+record that newly sets the dying bit `0x4000` runs `FUN_00417D30`, which
+zeroes the word at `+8` of the Sub-H component its type has (`+EC`).
+
+So a player carries a peer's body like its own: the beam (`FUN_00446C80`)
+takes any body with capability `0x1000`, and `FUN_00443B50` appends it to the
+player's Sub-J and runs `FUN_00416700` on the copy here, its style `+08`
+callback included. The owner's next record clears the relation, and the
+player's `FUN_00418640` then sends kind 13 each frame until the owner has
+attached its body to the player's craft. Dropping it sends kind 15 from
+`FUN_00443D30`, and the owner builds the Type93 that sets it down.
 
 A peer's body carries state bit `0x80000000`. `FUN_00412DA0` runs none of its
 callbacks: it moves the body on by its last velocity, `((elapsed >> 5) * v)
@@ -257,7 +282,7 @@ without `0x08000000`) or 3.5 s otherwise.
 | --- | --- |
 | `FUN_00414E90` | damage to a peer's body goes to its owner (kind 9: handle, amount, `(attacker type + 6) \| slot << 8`), whatever dealt it: a particle through `FUN_00415040`, a blast through `FUN_00414E10`, an attached particle through `FUN_004425D0`. On the local player, a lethal hit runs `FUN_00439C90` (the killer is the attacker's slot when a player's craft, type 46, dealt it) and a player's nonlethal hit `FUN_00439DB0` |
 | `FUN_004104B0` | the body constructor: the instance damage modifier `+44` is `FUN_004484A0` for type 46, `FUN_00416820` for types 73 and 109, `FUN_00421910` for type 110 and none otherwise; a body whose handle names another slot gets state bit `0x80000000` |
-| `FUN_00414AE0` | a blast moves a peer's body here too and sends its owner the impulse (kind 10), but that record's handle comes from a stack slot the loop writes only after the send: the previous target's handle, or an older value for the first, and its three attitude words are never written. The damage then reaches the owner as kind 9 |
+| `FUN_00414AE0` | a blast moves a peer's body here too and sends its owner the impulse (kind 10), but that record's handle comes from a stack slot the loop writes only after the send (`[ESP+14]`, set at `00414C06` from the target's `+5C`): the previous target's handle, or for the first whatever an earlier call left there, and its three attitude words (`[ESP+2E..33]`) are written nowhere in the routine, so they too are earlier calls' leftovers. The owner adds the record (`FUN_00417EB0`) to its own body of that handle, if it has one. The damage then reaches the owner as kind 9 |
 | `FUN_00417E10` | kind 9 for a body this machine owns: `FUN_00414E90` with the amount, the attacker's type (the byte less 6) and slot, past `FUN_00415040`'s admission, filter and modifier. So the owner runs the buffer `+50`, the hit cue, the type's hit callback, health and the death `FUN_00410C10`; a craft's kill (type 46) of a body with state `0x1000000` raises the owner's own kill notification (`FUN_004568B0(4)`) |
 | `FUN_00440A60` | a local birth of a class whose descriptor flags hold 2 is sent (kind 1); a peer's arrives with byte 17 = 2, which sets `+1D` bit 0 (no damage) and is not sent on |
 | `FUN_00442950` | classes 52, 68 and 85 hitting an entity deal their damage without testing `+1D` bit 0, so a peer's copy of such a creature shot also hits on every machine that shows it |
@@ -346,17 +371,46 @@ player: the count `+195` rises (at most 4) and a Type65 is born at the
 player, and a dying player drops one for its count. Its pods are bodies like
 any other, so peers see them through kind 7 and hear the deploy's cue.
 
+The line files are read from retail's Save Path in the registry when it is
+set, else from the data folder; a `--settings` run reads no registry and so
+uses the data folder.
+
+A player beams up a peer's body when every behavior class its type can be
+born with has a null style `+08` (classes 0, 29 and 59: Type68, Type74 and
+the gun-turret types), so that `FUN_00416700` runs no callback on the copy
+whichever class it holds; any other peer's body stops the beam ("a peer's
+cargo attach callback"). Its row then sends kind 13 (`FUN_00418640`'s
+network branch, run on the player's Sub-J in the network step), dropping it
+sends kind 15 and the cue, and a peer's record that names this machine's
+body as a parent which does not list it sends kind 15 (`FUN_00417680`).
+The port runs the rest of the player's `FUN_00418640` (the pose, and the
+rows of its own bodies) as it does in single player.
+
+`FUN_00414AE0`'s kind 10 is not sent. Its handle and attitude words are
+other calls' stack contents (above), which no port can reproduce, and the
+owner would add them to whichever of its bodies the stale handle names.
+
 Held, each with a logged stop ("Network: ... is held"):
 
-- sending kinds 13 to 15 (attachments), and kind 10: `FUN_00414AE0`'s, whose handle is stale (above), and
-  `FUN_00411030`'s, since the port runs no particle hit wrapper
-  (`FUN_00411180`, `FUN_00411250`) on a peer's body, only its damage;
-- receiving kinds 13 to 15, and a peer's kind 6 for a kind whose program
-  the port does not run ("a peer's kind 6 for a static of kind N");
+- kind 10 from `FUN_00411030`, since the port runs no particle hit wrapper
+  (`FUN_00410EB0`, `FUN_00411180`, `FUN_00411250`) on a peer's body, only its
+  damage. On a peer's copy the wrapper runs its type's hit callback first,
+  and a peer craft's (Type51, class 7) is `FUN_0040C690`, which chooses a
+  behavior again with shared random draws: the port's peer bodies are
+  hollow (no components, no behavior chosen at birth, no birth draws);
+- receiving kinds 13 and 15 (`FUN_00418030`, `FUN_004180F0`), whose owner
+  side attaches its body to a peer's craft, keeps it on the craft through
+  `FUN_00412DA0` and releases it into a Type93 with a peer as the parent;
+  kind 14, which retail never sends; and a peer's kind 6 for a kind whose
+  program the port does not run ("a peer's kind 6 for a static of kind N");
 - a particle's damage to a peer's body of type 73, 109 or 110, whose modifier
-  `FUN_00415040` would run first;
+  `FUN_00415040` would run first. On a peer's copy `FUN_00416820` (73, 109)
+  compares the hit with the copy's own `+50` and `+30`, then births a
+  particle and kills the copy (`FUN_00410C10`) without telling the owner,
+  and `FUN_00421910` (110) reads the Queen's component;
 - a peer's damage to an owned creature whose type's hit callback or death the
   port's shared damage phase has not ported (the same types its blasts stop
   at), reported per type ("a peer's damage to an owned TypeN");
 - the components (Sub-H frames) of a peer's body, which `FUN_0041D0A0` and
-  `FUN_00420920` draw on the owner's side.
+  `FUN_00420920` draw on the owner's side, and the dying record's
+  `FUN_00417D30`.
