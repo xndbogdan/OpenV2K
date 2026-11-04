@@ -1086,7 +1086,7 @@ below 4 clear them), the emblem drawn below phase 5 (`FUN_004537F0`), and
 `\t<    *, *,16,30,   15>Demo`, the caption. Its CD track
 (`FUN_00456AF0`) is 8 when the world's style is not 6 and a random word is
 even, and the world's own (style + 1) otherwise; phases below 3 select
-track 9, which the port's Intro2 does not play. `FUN_00451710` moves the
+track 9, which Intro2 (loaded in phases 1 and 2 only) plays. `FUN_00451710` moves the
 persistent class-1 proxy up 0x200 and along Z by `0x700 - far`, from the
 player when the world has one (its arrival lifted by `FUN_00451C00` to 0x200
 above the ground) and otherwise from wherever it stood, keeping its velocity.
