@@ -9,7 +9,8 @@ to the captor and is distinct from player cargo.
 
 Implementation ownership is shared with the independently authenticated
 [Type122 profile](TYPE122_RUNTIME.md), the Type18/28 ground-host rows and the
-[Type16/128 rows](INTRO2_TYPE16.md#capture-transport), through
+[Type16/128 rows](INTRO2_TYPE16.md#capture-transport) and the
+[Type53 row](INTRO2_TYPE53.md#capture-transport), through
 [pair contact](../../crates/v2k-game/src/native_actor_capture/pair.rs),
 [carrying tasks](../../crates/v2k-game/src/native_actor_capture/carry_tasks.rs),
 [capture lifecycle](../../crates/v2k-game/src/native_actor_capture.rs) and

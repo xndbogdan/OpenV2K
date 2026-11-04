@@ -11,12 +11,14 @@ mod aim;
 #[cfg(test)]
 mod behavior;
 mod capture_pursuit;
+#[cfg(test)]
+mod capture_tests;
 mod construction;
 pub mod contact;
 pub(crate) mod impact;
 mod live;
 mod mover;
-mod profile;
+pub(crate) mod profile;
 mod search;
 pub(crate) use construction::{publish_authored_type53, Type53AuthoredConstructionRequest};
 pub use live::{
@@ -209,7 +211,9 @@ fn nearby(
     .map_err(|_| Intro2Type53Error::NearbyEvidence)
 }
 
-fn authenticate_metadata(metadata: &EntityTypeRuntimeMetadata) -> Result<(), Intro2Type53Error> {
+pub(crate) fn authenticate_metadata(
+    metadata: &EntityTypeRuntimeMetadata,
+) -> Result<(), Intro2Type53Error> {
     let Some(initializer) = &metadata.initializer else {
         return Err(Intro2Type53Error::Metadata);
     };

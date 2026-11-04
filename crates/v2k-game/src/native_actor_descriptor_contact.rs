@@ -392,7 +392,8 @@ fn commit_plan(
     ]);
     // 401A20's Sub-I branch changes heading and propagates direction through
     // 019C0. It does not call 208C0, advance animation or rebuild the basis.
-    if kind == 47 && !tasks.finish_native_type47_external_mutation(entities, id) {
+    // Type71 shares the Type47 owner: its completed graph takes the write too.
+    if matches!(kind, 47 | 71) && !tasks.finish_native_type47_external_mutation(entities, id) {
         tasks.park_native_type47_external_prefix(id);
         return Err(NativeDescriptorContactBlock {
             reason: NativeDescriptorContactError::Runtime("completed Type47 descriptor suffix"),

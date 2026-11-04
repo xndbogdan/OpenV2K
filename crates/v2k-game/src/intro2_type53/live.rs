@@ -11,6 +11,8 @@ pub struct Intro2Type53Frame<'a> {
     pub world_fx: &'a mut WorldFx,
     pub elapsed_micros: u32,
     pub retail_tick: u32,
+    pub capture_tasks: &'a mut dyn crate::intro2_type17::capture::CaptureTaskCustody,
+    pub notifications: &'a mut crate::gameplay_notifications::GameplayNotifications,
 }
 pub fn tick_intro2_type53(
     manager: &mut EntityManager,
@@ -26,7 +28,10 @@ pub fn tick_intro2_type53(
             world_fx: frame.world_fx,
             elapsed_micros: frame.elapsed_micros,
             retail_tick: frame.retail_tick,
-            capture: shared::NativeCaptureDispatch::PursuitOnly,
+            capture: shared::NativeCaptureDispatch::Transport {
+                tasks: frame.capture_tasks,
+                notifications: frame.notifications,
+            },
         },
     )
 }

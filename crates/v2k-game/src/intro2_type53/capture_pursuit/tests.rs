@@ -189,6 +189,8 @@ fn pursuit_runs_next_frame_and_timeout_reselects_then_visits_new_secondary() {
                     world_fx: &mut fx,
                     elapsed_micros: 20_000,
                     retail_tick: 300 + pass,
+                    capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+                    notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                 },
             );
             assert!(
@@ -245,6 +247,8 @@ fn pursuit_runs_next_frame_and_timeout_reselects_then_visits_new_secondary() {
                 world_fx: &mut fx,
                 elapsed_micros: 20_000,
                 retail_tick: 304,
+                capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+                notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
             },
         );
         assert!(
@@ -274,6 +278,8 @@ fn pursuit_runs_next_frame_and_timeout_reselects_then_visits_new_secondary() {
                 world_fx: &mut fx,
                 elapsed_micros: 20_000,
                 retail_tick: 305,
+                capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+                notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
             },
         );
         assert!(
@@ -489,6 +495,8 @@ fn unresolved_warning_parks_the_committed_context_without_replaying_handoff() {
             world_fx: &mut fx,
             elapsed_micros: 20_000,
             retail_tick: 321,
+            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
     assert_eq!(
@@ -519,6 +527,8 @@ fn unresolved_warning_parks_the_committed_context_without_replaying_handoff() {
             world_fx: &mut fx,
             elapsed_micros: 125_000,
             retail_tick: 322,
+            capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+            notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
         },
     );
     assert_eq!(

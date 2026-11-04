@@ -226,8 +226,9 @@ fn dispatch_standard_death(
                 })
                 .map_err(DynamicRadialLiveBlockReason::Intro2Class12)
         }
-        17 | 122 | 18 | 28 | 16
+        17 | 122 | 18 | 28 | 16 | 53
             if crate::intro2_type17::type17_manager_allocation_authenticates(manager, id)
+                || crate::intro2_type53::type53_manager_allocation_authenticates(manager, id)
                 || crate::native_type122::type122_manager_allocation_authenticates(manager, id)
                 || crate::native_type18::manager_allocation_authenticates(manager, id)
                 || crate::native_type28::manager_allocation_authenticates(manager, id)

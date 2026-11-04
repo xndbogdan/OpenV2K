@@ -58,7 +58,6 @@ pub enum NativeCaptureDispatch<'a> {
         tasks: &'a mut dyn NativeGroundTaskCustody,
         notifications: &'a mut GameplayNotifications,
     },
-    PursuitOnly,
     Transport {
         tasks: &'a mut dyn crate::intro2_type17::capture::CaptureTaskCustody,
         notifications: &'a mut GameplayNotifications,
@@ -84,7 +83,6 @@ pub struct NativeGroundTerminalWorld<'a> {
 pub enum NativeCapturePolicy {
     NoCapture,
     AbsentJ,
-    PursuitOnly,
     Transport,
     Turret,
 }

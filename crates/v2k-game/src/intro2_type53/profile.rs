@@ -17,7 +17,7 @@ impl NativeGroundActorProfile for Type53Profile {}
 impl crate::native_ground_actor::sealed::Sealed for Type53Profile {
     const ENTITY_TYPE: u32 = 53;
     const CAPTURE_POLICY: crate::native_ground_actor::NativeCapturePolicy =
-        crate::native_ground_actor::NativeCapturePolicy::PursuitOnly;
+        crate::native_ground_actor::NativeCapturePolicy::Transport;
     const DEFAULT_FLAGS: u32 = 0x39;
     const TOPOLOGY: CommonMoverComponentTopology = super::TOPOLOGY;
     const AXIS: CommonAxisDescriptor = super::AXIS;
@@ -40,29 +40,18 @@ impl crate::native_ground_actor::sealed::Sealed for Type53Profile {
         >,
         crate::intro2_common_dying::Intro2CommonDyingBlock,
     > {
-        crate::intro2_common_dying::publish_intro2_common_standard_death(
-            manager,
-            id,
-            context.world_fx(),
-        )
-        .map(common_terminal)
-    }
-    fn publish_direct_surface_death(
-        manager: &mut EntityManager,
-        id: u32,
-        context: &mut crate::native_ground_actor::NativeGroundDeathContext<'_>,
-    ) -> Result<
-        crate::live_actor_checked_damage::LiveActorDeathResult<
-            crate::native_ground_actor::NativeGroundTerminalPublication,
-        >,
-        crate::intro2_common_dying::Intro2CommonDyingBlock,
-    > {
-        crate::intro2_common_dying::publish_intro2_common_standard_death(
-            manager,
-            id,
-            context.world_fx(),
-        )
-        .map(common_terminal)
+        // DB80: a carrying style's D040 releases the child before class12.
+        let crate::native_ground_actor::NativeGroundDeathContext::Capture { context, .. } = context
+        else {
+            return Err(crate::intro2_common_dying::Intro2CommonDyingBlock::Runtime(
+                "Type53 Capture terminal custody",
+            ));
+        };
+        crate::native_actor_capture::publish_native_captor_standard_death(manager, id, context)
+            .map(common_terminal)
+            .map_err(|error| {
+                crate::intro2_common_dying::Intro2CommonDyingBlock::Runtime(error.reason)
+            })
     }
     fn allocation_authenticates(entity: &Entity) -> bool {
         intro2_type53_allocation_authenticates(entity)
@@ -128,16 +117,8 @@ impl crate::native_ground_actor::sealed::Sealed for Type53Profile {
         manager: &mut EntityManager,
         id: u32,
     ) -> Result<(), NativeGroundActorBlock> {
-        let entity = manager
-            .iter_all()
-            .find(|entity| entity.id == id)
-            .ok_or(NativeGroundActorBlock::Allocation)?;
-        match &entity.sub_j_attachment_runtime {
-            RetailRuntimeValue::Known(Some(rows)) if rows.is_empty() => Ok(()),
-            _ => Err(NativeGroundActorBlock::Runtime(
-                "Type53 empty Sub-J admission",
-            )),
-        }
+        crate::native_actor_capture::update_carried_pose(manager, id)
+            .map_err(NativeGroundActorBlock::Capture)
     }
 }
 

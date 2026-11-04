@@ -137,6 +137,8 @@ fn native_search_handoff_runs_newborn_aim_once_and_chase_on_the_next_pass() {
                         world_fx: &mut fx,
                         elapsed_micros: 20_000,
                         retail_tick: 300 + pass,
+                        capture_tasks: &mut crate::specialized_actor_task_production::SpecializedActorTaskScheduler::default(),
+                        notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
                     },
                 );
                 let callback_dt = match tick.outcome {

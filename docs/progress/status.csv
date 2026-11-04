@@ -1101,7 +1101,7 @@ address,status,note
 0x00454460,implemented,progress map nodes: the current slot blinks on odd +270 / 100; the map clock reads 0 on the map's first frame (docs/re/MENU_SYSTEM.md#progress-map)
 0x004571B0,implemented,a world load waits for the card timer's next callback before returning (docs/re/LOADING_TRANSITIONS.md#loading-screen-display-fun_0042b040)
 0x004259F0,implemented,Hive pair contact: consumes a 0xC00 body (operation 0x33, 410B70) or latches an energetic 0x2000 impact (docs/re/ACTOR_RUNTIME.md#the-hive-consuming-people)
-0x0040C910,approximated,Capture People pair contact: attach and carry for Types 17/122/18/28/16/128, the absent-J kill for Types 40/12/127/94; Type53's attach is held (docs/re/ACTOR_RUNTIME.md#type94s-capture-kills)
+0x0040C910,implemented,Capture People pair contact: attach and carry for Types 17/122/18/28/16/128/53, the absent-J kill for Types 40/12/127/94 (docs/re/INTRO2_TYPE53.md#capture-transport)
 0x00442B40,implemented,the particle free runs the class's +2C callback: FUN_00441850 for the class-4/54 shells and the Virus and Antidote Bombs at every free (a static hit runs it twice), FUN_00442140 for the submerged bolts (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x0043E300,implemented,mode-3 surface response of the class-4/54 shells and the Virus/Antidote Bombs: the FUN_00440DC0 burst by selector (DAT_004CD788) and sound 90; at rest (both horizontal words under 0x4B1) the record is freed, else it bounces on the surface with its vertical word halved and reversed (docs/re/PLAYER_CRAFT.md#special-weapons)
 0x0042EDA0,implemented,campaign word bit 4 test: the progress map shows a world once its install (FUN_0042E570) set the bit (docs/re/MENU_SYSTEM.md#progress-map)

@@ -595,7 +595,7 @@ then runs, in order:
 walks each subject's successors in the same order, called for every actor in
 live order after its static phase, in Playing and Intro2. Family lanes own
 the pairs whose callbacks write: native captors (Types 17, 122, 18, 28, 16,
-128) and their people, native gunner versus bound Hive, Type58, native
+128, 53) and their people, native gunner versus bound Hive, Type58, native
 weapons, the shark, Type21 and Type29 against the player, native insects
 against a working factory, Type9 peers, Type40 and the Type12 family against
 people, Hive impact, and the Type74 remote beam. These fail closed: a block
@@ -693,10 +693,18 @@ world runs more than 8,200 general visits over 67 pair kinds in 32 worlds
 Since then the Hive's consumption, Type94's capture kill, Mobbing's null
 branch, the Queen and the waiting flower turrets take the visit (below), and
 the later abort fixes changed the other rows' worlds. A 6,000-tick sweep of
-every world from its arrival now logs two held kinds: Type9 x Type53 (worlds
-14 and 15, Type53's carrying) and Type71 x Type71 (world 28, a Type71 with
-tasks and no native owner). The twelve player pair kinds above still stay
-outside the player adapter, whose pass runs apart from the walk.
+every world from its arrival logged two held kinds, both since resolved:
+Type9 x Type53 (worlds 14 and 15; Type53 now carries on the captor lane)
+and Type71 x Type71 (world 28). Type71 shares the Type47 owner, whose
+completed graph a contact hook's write must refresh before the next pair
+may borrow it; only Type47's descriptor contact did, so a Type71 whose
+`02DA0` had run in one pair was held as ownerless in its next. Its owner now
+takes the write, and its lethal pair damage runs its class63 terminal
+(`BC90`, then its Type61), as its static contact does. The port's idle world
+28 visits 30 Type71 x Type71 pairs in two minutes, with collision damage;
+retail's Skip to World cannot reach world 28. The twelve player pair kinds
+above still stay outside the player adapter, whose pass runs apart from the
+walk.
 
 ### The Hive consuming people
 
@@ -737,11 +745,9 @@ ticks after arrival; the port's idle world 40 now kills a Type95 there at
 tick 666 (`[-21590, -3393, -23167]`), and one more by the north-eastern
 Type94 at tick 3,122, where retail's lived until the world was lost.
 
-Type53 is the other C910 captor outside the lane. Its row has one Sub-J
-slot, so C910 attaches the person and selects carrying variant 2 or 3; its
-owner runs only acquisition and pursuit, so Type9 x Type53 (world 15) stays
-held until its carrying variants, delivery, Sub-J pose phase and release on
-death are ported, as they were for Types 16 and 128.
+Type53, the other C910 captor, has one Sub-J slot, so C910 attaches the
+person and carries it: Type53 is on the captor lane
+([capture transport](INTRO2_TYPE53.md#capture-transport)).
 
 ### Mobbing, the Queen and the waiting flowers
 

@@ -330,9 +330,7 @@ fn run_surface<P: NativeGroundActorProfile>(
 ) -> Result<(), NativeGroundActorBlock> {
     if matches!(
         capture,
-        NativeCaptureDispatch::NoCapture
-            | NativeCaptureDispatch::PursuitOnly
-            | NativeCaptureDispatch::Turret { .. }
+        NativeCaptureDispatch::NoCapture | NativeCaptureDispatch::Turret { .. }
     ) {
         if !P::manager_authenticates(manager, id) {
             return Err(NativeGroundActorBlock::Allocation);
