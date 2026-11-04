@@ -310,6 +310,7 @@ fn a_lethal_playing_crash_finishes_class1_with_the_player_hull() {
             },
             id,
             lend.then_some(PlayingPlayerContact {
+                craft: None,
                 hull: &mut hull,
                 extra_lives: RetailRuntimeValue::Known(3),
             }),
@@ -344,6 +345,7 @@ fn a_lethal_playing_crash_finishes_class1_with_the_player_hull() {
                 },
                 id,
                 Some(PlayingPlayerContact {
+                    craft: None,
                     hull: &mut hull,
                     extra_lives: RetailRuntimeValue::Known(3),
                 }),

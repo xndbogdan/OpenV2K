@@ -1051,6 +1051,7 @@ fn a_lethal_landing_explodes_a_small_boulder_in_playing() {
         let mut hull = PlayerHull::default();
         let mut frame = world.contact_frame();
         let player = playing.then(|| crate::native_actor_capture::pair::PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         });

@@ -130,6 +130,7 @@ fn walk_pairs(
                 id,
                 crate::native_actor_capture::pair::CaptureFeedbackPolicy::Gameplay,
                 Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+                    craft: None,
                     hull: &mut hull,
                     extra_lives: RetailRuntimeValue::Known(0),
                 }),

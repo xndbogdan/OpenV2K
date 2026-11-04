@@ -49,7 +49,7 @@ Where the code's references are thinnest:
 | [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 159 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 4 | 0 | 140 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 43 |
-| [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 47 |
+| [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 48 |
 | [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
 
 ## Omitted

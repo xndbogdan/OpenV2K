@@ -54,6 +54,9 @@ pub enum CaptureFeedbackPolicy {
 pub struct PlayingPlayerContact<'a> {
     pub hull: &'a mut crate::player_hull::PlayerHull,
     pub extra_lives: RetailRuntimeValue<u8>,
+    /// The craft whose pose and model variables the player adapter's pairs
+    /// read; without one (a cinematic) the walk leaves those pairs out.
+    pub craft: Option<&'a crate::player::PlayerCraft>,
 }
 
 impl PlayingPlayerContact<'_> {
@@ -61,6 +64,7 @@ impl PlayingPlayerContact<'_> {
         PlayingPlayerContact {
             hull: self.hull,
             extra_lives: self.extra_lives,
+            craft: self.craft,
         }
     }
 }
@@ -235,6 +239,9 @@ pub enum ActivePairHoldReason {
         entity_type: u32,
         style: u32,
     },
+    /// The player adapter's pair stopped before its commit (or came after
+    /// the craft's death, whose wreck's pairs the port does not model).
+    PlayerPair(crate::player_active_contact::PlayerActivePairError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -475,6 +482,76 @@ fn is_native_player_walk_pair(manager: &EntityManager, first: &Entity, second: &
         })
 }
 
+/// The player and a body the player adapter visits: the other body's id.
+fn player_adapter_pair(
+    manager: &EntityManager,
+    subject: &Entity,
+    candidate: &Entity,
+    player: Option<u32>,
+) -> Option<u32> {
+    let player = player?;
+    let other = match (subject.id == player, candidate.id == player) {
+        (true, false) => candidate,
+        (false, true) => subject,
+        _ => return None,
+    };
+    crate::player_active_contact::player_adapter_visits(manager, other).then_some(other.id)
+}
+
+/// The player and a body with no native owner that no lane visits.
+fn ownerless_player_pair(
+    manager: &EntityManager,
+    subject: &Entity,
+    candidate: &Entity,
+    player: Option<u32>,
+) -> Option<u32> {
+    let player = player?;
+    let other = match (subject.id == player, candidate.id == player) {
+        (true, false) => candidate,
+        (false, true) => subject,
+        _ => return None,
+    };
+    (!requires_body_custody(other)
+        && crate::player_active_contact::player_pair_unvisited(manager, other))
+    .then_some(other.id)
+}
+
+/// Run the player adapter on its pair with `other` where the walk reaches it.
+/// A cinematic (no craft) has no such pairs.
+fn visit_player_adapter_pair(
+    frame: &mut Intro2ContactFrame<'_>,
+    playing_player: Option<&mut PlayingPlayerContact<'_>>,
+    other: u32,
+) -> Option<ActivePairHoldReason> {
+    use crate::player_active_contact::{
+        resolve_player_active_pair, PlayerActivePairError, PlayerActivePairFrame,
+    };
+    let playing = playing_player?;
+    let craft = playing.craft?;
+    let RetailRuntimeValue::Known(extra_lives) = playing.extra_lives else {
+        return Some(ActivePairHoldReason::PlayerPair(
+            PlayerActivePairError::PlayerHullStateMismatch,
+        ));
+    };
+    resolve_player_active_pair(
+        frame.entities,
+        PlayerActivePairFrame {
+            resources: frame.resources,
+            static_damage: frame.static_damage,
+            retail_tick: frame.retail_tick,
+            player_craft: craft,
+            player_hull: playing.hull,
+            scheduler: frame.actor_tasks,
+            world_fx: frame.world_fx,
+            notifications: frame.notifications,
+            extra_lives,
+        },
+        other,
+    )
+    .err()
+    .map(ActivePairHoldReason::PlayerPair)
+}
+
 /// Native gunner side of the gunner/hive separation pair.
 ///
 /// Bounded to native Type47 construction (ordinary worlds share this receipt
@@ -641,6 +718,73 @@ fn resolve(
         let pair_weapon = [subject, candidate]
             .into_iter()
             .any(owns_native_weapon_contact);
+        if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player) {
+            let types = [subject.entity_type, candidate.entity_type];
+            let dying = playing_player
+                .as_ref()
+                .is_some_and(|playing| playing.hull.dying);
+            let reason = if dying {
+                // The port does not pair the craft's wreck: a stop where it touches.
+                matches!(
+                    classify_oriented_active_pair_contact(
+                        crate::player_active_contact::OrientedActivePairContactRequest {
+                            subject,
+                            candidate,
+                            subject_entry,
+                            retail_tick: frame.retail_tick,
+                        },
+                        frame.resources,
+                    ),
+                    Ok(Some(_))
+                )
+                .then_some(ActivePairHoldReason::PlayerPair(
+                    crate::player_active_contact::PlayerActivePairError::ResumeAfterPlayerDeath {
+                        entity_id: other,
+                    },
+                ))
+            } else {
+                visit_player_adapter_pair(frame, playing_player.as_mut(), other)
+            };
+            if let Some(reason) = reason {
+                visits.push(NativeCaptorPairVisit {
+                    candidate_id,
+                    contact: ActivePairContact {
+                        normal_q12: [0; 3],
+                        penetration_raw: 0,
+                    },
+                    stages: vec![NativeCaptorPairStage::Held(reason)],
+                    physical_suppressed: true,
+                    general_types: Some(types),
+                });
+            }
+            continue;
+        }
+        if let Some(other) = ownerless_player_pair(frame.entities, subject, candidate, player) {
+            // Retail visits it too; the port has no owner for the body's
+            // callbacks, so a touching pair is a stop.
+            let types = [subject.entity_type, candidate.entity_type];
+            let entity_type = actor(frame.entities, other)?.entity_type;
+            if let Ok(Some(contact)) = classify_oriented_active_pair_contact(
+                crate::player_active_contact::OrientedActivePairContactRequest {
+                    subject,
+                    candidate,
+                    subject_entry,
+                    retail_tick: frame.retail_tick,
+                },
+                frame.resources,
+            ) {
+                visits.push(NativeCaptorPairVisit {
+                    candidate_id,
+                    contact,
+                    stages: vec![NativeCaptorPairStage::Held(
+                        ActivePairHoldReason::NoBodyOwner { entity_type },
+                    )],
+                    physical_suppressed: true,
+                    general_types: Some(types),
+                });
+            }
+            continue;
+        }
         let player_walk = is_native_player_walk_pair(frame.entities, subject, candidate);
         let pair_shark = is_native_shark_player_pair(frame.entities, subject, candidate)
             || is_native_type29_player_pair(frame.entities, subject, candidate)

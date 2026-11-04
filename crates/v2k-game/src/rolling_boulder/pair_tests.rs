@@ -124,6 +124,49 @@ fn the_player_pass_pushes_a_rolling_boulder() {
     assert!(RollingBoulderOwner::adopt(&world.manager, world.id).is_ok());
 }
 
+/// The late walk runs the player's adapter pair where it reaches it: the
+/// player's own pass, as subject, pushes the boulder as the pass above does.
+#[v2k_test_support::retail_test]
+fn the_walk_runs_the_players_adapter_pair_in_live_order() {
+    use crate::intro2_contacts::Intro2ContactFrame;
+    use crate::native_actor_capture::pair::{
+        resolve_native_captor_active_contacts_with_playing, CaptureFeedbackPolicy,
+        NativeCaptorPairOutcome, PlayingPlayerContact,
+    };
+    let mut world = PairWorld::new(RollingBoulderStyle::Rolling);
+    let velocity = world.boulder().velocity_raw();
+    let player = world.manager.player().unwrap().id;
+    let craft = PlayerCraft::new();
+    let mut notifications = GameplayNotifications::new();
+    let outcome = resolve_native_captor_active_contacts_with_playing(
+        &mut Intro2ContactFrame {
+            entities: &mut world.manager,
+            resources: &mut world.session.cache,
+            world_fx: &mut world.fx,
+            static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
+            notifications: &mut notifications,
+            retail_tick: 5000,
+            actor_tasks: &mut world.tasks,
+        },
+        player,
+        CaptureFeedbackPolicy::Gameplay,
+        Some(PlayingPlayerContact {
+            hull: &mut world.hull,
+            extra_lives: RetailRuntimeValue::Known(3),
+            craft: Some(&craft),
+        }),
+    );
+    assert!(
+        matches!(&outcome, NativeCaptorPairOutcome::Resolved { visits } if visits.is_empty()),
+        "{outcome:?}"
+    );
+    assert_ne!(
+        world.boulder().velocity_raw(),
+        velocity,
+        "12760 moves the boulder"
+    );
+}
+
 #[v2k_test_support::retail_test]
 fn the_player_wakes_a_resting_boulder_through_style1_plus18() {
     let mut world = PairWorld::new(RollingBoulderStyle::Resting);

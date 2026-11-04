@@ -88,6 +88,7 @@ pub(crate) fn apply_playing_native_type47_particle_hit(
             resources: frame.resources,
             static_damage: frame.static_damage,
             player: crate::native_actor_capture::pair::PlayingPlayerContact {
+                craft: None,
                 hull: frame.player_hull,
                 extra_lives: frame.extra_lives,
             },

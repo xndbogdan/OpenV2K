@@ -412,6 +412,7 @@ fn the_tumble_falls_and_spins_as_retail_and_ends_in_the_sea() {
         },
         f.id,
         Some(crate::native_actor_capture::pair::PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

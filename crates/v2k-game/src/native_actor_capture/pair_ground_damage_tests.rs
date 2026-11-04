@@ -150,6 +150,7 @@ fn lethal_physical_pair(kind: u32, playing: bool) {
         pair[1],
         contact,
         playing.then_some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

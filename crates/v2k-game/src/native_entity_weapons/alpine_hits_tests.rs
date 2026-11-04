@@ -430,6 +430,7 @@ fn real_grenade_active_pair_kills_type30_and_publishes_class49_ring_and_class12(
         target_id,
         CaptureFeedbackPolicy::Gameplay,
         Some(PlayingPlayerContact {
+            craft: None,
             hull: &mut hull,
             extra_lives: RetailRuntimeValue::Known(3),
         }),

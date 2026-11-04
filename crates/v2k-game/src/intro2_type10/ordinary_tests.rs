@@ -267,6 +267,7 @@ fn a_type5_killed_in_playing_tumbles_and_explodes_with_the_player_hull() {
             },
             id,
             Some(PlayingPlayerContact {
+                craft: None,
                 hull: &mut hull,
                 extra_lives: RetailRuntimeValue::Known(3),
             }),
