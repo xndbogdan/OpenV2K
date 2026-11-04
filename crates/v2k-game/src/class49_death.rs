@@ -205,7 +205,7 @@ impl NativeExplosionSourceProfile {
                 style,
                 0x004c_7a50 | 0x004c_7a98 | 0x004c_7ae0 | 0x004c_7930 | 0x004c_7978 | 0x004c_74f8
             ),
-            Self::EntityWeapon(kind) => style == 0x004c_74f8 || style == kind.living_style(),
+            Self::EntityWeapon(kind) => style == 0x004c_74f8 || kind.is_living_style(style),
             // Aimless, Wander and Defecate Virus: +2C null.
             Self::ExplodingFish(20) => matches!(style, 0x004c_7930 | 0x004c_79c0 | 0x004c_7e88),
             // Aimless, Wander and both Run Away variants: +2C null.

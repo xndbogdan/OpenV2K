@@ -2161,6 +2161,13 @@ impl Entity {
                 vars.dynamic[selector + 1] = i32::from(*word);
             }
         }
+        if let Some(runtime) = self.native_entity_weapon_runtime {
+            if runtime.kind == crate::native_entity_weapons::EntityWeaponKind::ProximityMine {
+                // Selectors 1 and 2 are the mine's two bank words (40A950).
+                vars.dynamic[1] = i32::from(runtime.sub_k_raw[0]);
+                vars.dynamic[2] = i32::from(runtime.sub_k_raw[1]);
+            }
+        }
         if let Some(ActorTaskRuntime::RemoteBeamer(k1)) =
             self.actor_task_state(ActorTaskSlot::Primary)
         {

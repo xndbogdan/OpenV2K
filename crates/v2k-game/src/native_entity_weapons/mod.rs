@@ -1,5 +1,5 @@
-//! Source-owned Type42 rocket, Type59 grenade/depth-charge and Type34 meteor
-//! programs.
+//! Source-owned Type42 rocket, Type59 grenade/depth-charge, Type48 proximity
+//! mine and Type34 meteor programs.
 //!
 //! These share launch and common-body machinery, while retaining distinct
 //! class22/class35/class19 tasks and class1/class49 terminal policies. Guided
@@ -10,6 +10,7 @@ pub mod grenade;
 pub mod impact;
 pub mod launch;
 pub mod meteor;
+pub mod mine;
 pub mod production;
 pub mod rocket;
 
@@ -31,6 +32,7 @@ pub enum EntityWeaponKind {
     Rocket,
     /// A Type35 launcher's method-11 birth; no player selector owns it.
     Meteor,
+    ProximityMine,
 }
 
 impl EntityWeaponKind {
@@ -39,6 +41,7 @@ impl EntityWeaponKind {
             3 => Some(Self::Grenade),
             4 => Some(Self::DepthCharge),
             5 => Some(Self::Rocket),
+            9 => Some(Self::ProximityMine),
             _ => None,
         }
     }
@@ -47,20 +50,29 @@ impl EntityWeaponKind {
             Self::Rocket => 42,
             Self::Grenade | Self::DepthCharge => 59,
             Self::Meteor => meteor::METEOR_ENTITY_TYPE as usize,
+            Self::ProximityMine => mine::MINE_ENTITY_TYPE as usize,
         }
     }
-    /// The living class22, class35 or class19 style its initializer installs.
+    /// The living class22, class35, class19 or class34 style its
+    /// initializer installs first.
     pub const fn living_style(self) -> u32 {
         match self {
             Self::Rocket => 0x004c_81a0,
             Self::Grenade | Self::DepthCharge => grenade::GRENADE_STYLE_ADDRESS,
             Self::Meteor => meteor::METEOR_STYLE_ADDRESS,
+            Self::ProximityMine => mine::MINE_FALLING_STYLE_ADDRESS,
         }
+    }
+    /// Whether `style` is one of the kind's living styles: the mine also
+    /// lives in its armed style.
+    pub const fn is_living_style(self, style: u32) -> bool {
+        style == self.living_style()
+            || matches!(self, Self::ProximityMine) && style == mine::MINE_ARMED_STYLE_ADDRESS
     }
     pub const fn launch_speed_raw(self) -> i32 {
         match self {
             Self::Grenade => 2000,
-            Self::DepthCharge => 1000,
+            Self::DepthCharge | Self::ProximityMine => 1000,
             Self::Rocket => 1,
             Self::Meteor => meteor::METEOR_LAUNCH_SPEED_RAW,
         }
@@ -97,6 +109,8 @@ pub(crate) struct NativeEntityWeaponRuntime {
     pub(crate) kind: EntityWeaponKind,
     pub(crate) search_context: Option<GuardLocationSearchContext>,
     pub(crate) model_effect_bits_at_0x84: u16,
+    /// The mine's model variables 1 and 2 (`40A950`); zero for the others.
+    pub(crate) sub_k_raw: [u16; 2],
 }
 
 /// Exact live allocation and published task wrappers, retained by13500.
@@ -150,5 +164,6 @@ pub(crate) fn authenticate_weapon_metadata(
                 .map_err(|_| EntityWeaponBlock::Metadata)
         }
         EntityWeaponKind::Meteor => meteor::authenticate_meteor_metadata(metadata),
+        EntityWeaponKind::ProximityMine => mine::authenticate_mine_metadata(metadata),
     }
 }

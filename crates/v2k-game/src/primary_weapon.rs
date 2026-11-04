@@ -213,7 +213,7 @@ pub fn fire_profile_from_descriptor(descriptor: &WeaponDescriptor) -> Option<Pri
         return Some(profile);
     }
     let row = projectile_class_row(selector)?;
-    if matches!(selector, 3..=5) {
+    if matches!(selector, 3..=5 | 9) {
         return Some(PrimaryWeaponProfile {
             selector: selector_u8,
             delivery: PlayerProjectileDelivery::NativeEntityWeapon {

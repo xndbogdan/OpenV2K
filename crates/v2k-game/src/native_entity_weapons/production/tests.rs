@@ -212,3 +212,144 @@ fn callback_validation_failure_unwinds_the_exact_rocket_wrapper() {
             .in_callback
     );
 }
+
+#[v2k_test_support::retail_test]
+fn mine_falls_arms_its_search_in_the_same_pass_floats_and_dies_on_a_target() {
+    let (mut session, mut manager, mut fx, mut owner) = weapon(EntityWeaponKind::ProximityMine);
+    let id = owner.entity_id();
+    let terrain = session.cache.level_terrain().unwrap().clone();
+    let floor = |position: [i16; 3]| {
+        let cell = terrain
+            .cell(
+                usize::from((position[0] as u16) >> 8),
+                usize::from((position[2] as u16) >> 8),
+            )
+            .unwrap();
+        (i16::from(cell.height as i8) * 32).max(terrain.sea_level_raw())
+    };
+    let mut tick = 0;
+    let armed_at = loop {
+        tick += 1;
+        assert!(tick < 3_000, "the mine never armed");
+        let entry = manager.entity_mut(id).unwrap().position_raw();
+        let result = tick_entity_weapon(
+            &mut manager,
+            owner,
+            EntityWeaponTickFrame {
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                elapsed_micros: 20_000,
+                retail_tick: tick,
+            },
+            |_, _, _, _| -> Result<(), ()> { panic!("a falling mine has no death") },
+        )
+        .unwrap();
+        let EntityWeaponTickOutcome::Advanced { restyled, .. } = result else {
+            panic!("{result:?}")
+        };
+        if let Some(armed) = restyled {
+            // 406BA0 tags once within 300 of the higher of ground and sea.
+            assert!(i32::from(entry[1]) - i32::from(floor(entry)) <= 299);
+            owner = armed;
+            break tick;
+        }
+        assert!(i32::from(entry[1]) - i32::from(floor(entry)) > 299);
+    };
+    assert!(owner.authenticates(&manager));
+    let entity = manager.entity_mut(id).unwrap();
+    assert_eq!(
+        entity.actor_task_state(ActorTaskSlot::Primary),
+        Some(&ActorTaskRuntime::ProximityMine(MinePrimary::Armed))
+    );
+    assert!(matches!(
+        entity.actor_task_state(ActorTaskSlot::Secondary),
+        Some(ActorTaskRuntime::GuardLocationAcquisition(_))
+    ));
+    assert!(entity.actor_task_state(ActorTaskSlot::Tertiary).is_none());
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        panic!("context")
+    };
+    assert_eq!(
+        context.active_style().style_address(),
+        mine::MINE_ARMED_STYLE_ADDRESS
+    );
+    // Falling keeps variable 2 at zero; variable 1 ran at dt/4 a visit.
+    let runtime = entity.native_entity_weapon_runtime.unwrap();
+    assert_eq!(runtime.sub_k_raw[1], 0);
+    assert_eq!(runtime.sub_k_raw[0], (armed_at * 5_000) as u16);
+    // Nothing with capability 8 is near: it floats on the lift.
+    for _ in 0..500 {
+        tick += 1;
+        let result = tick_entity_weapon(
+            &mut manager,
+            owner,
+            EntityWeaponTickFrame {
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                elapsed_micros: 20_000,
+                retail_tick: tick,
+            },
+            |_, _, _, _| -> Result<(), ()> { panic!("no target in reach") },
+        )
+        .unwrap();
+        assert!(matches!(
+            result,
+            EntityWeaponTickOutcome::Advanced { restyled: None, .. }
+        ));
+    }
+    let entity = manager.entity_mut(id).unwrap();
+    let rest = entity.position_raw();
+    let ground = terrain.bilinear_height_raw(rest[0], rest[2]);
+    assert!(
+        rest[1] > ground.max(terrain.sea_level_raw() - 200) && rest[1] < floor(rest) + 300,
+        "floats near the surface: {rest:?}"
+    );
+    assert_eq!(entity.rotation_heading_pitch_roll_raw()[1].abs() < 4, true);
+    // Variable 2 has eased up to 0x4000.
+    assert!(entity.native_entity_weapon_runtime.unwrap().sub_k_raw[1] > 0x3f00);
+    // A live capability-8 body beside it: the one-in-four search finds it
+    // and the armed style's +04 (40CEF0) dies inside the Secondary visit.
+    let target = manager
+        .iter_all()
+        .find(|entity| {
+            entity.id != id
+                && entity.capability_flags & 8 != 0
+                && entity.collision.state_flags_at_0x08.masked(0xd000)
+                    == RetailRuntimeValue::Known(0x8000)
+        })
+        .map(|entity| entity.id)
+        .expect("a capability-8 body in world 17");
+    manager.entity_mut(target).unwrap().set_position_raw([
+        rest[0].wrapping_add(100),
+        rest[1],
+        rest[2],
+    ]);
+    let mut deaths = 0;
+    for _ in 0..64 {
+        tick += 1;
+        let result = tick_entity_weapon(
+            &mut manager,
+            owner,
+            EntityWeaponTickFrame {
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                elapsed_micros: 20_000,
+                retail_tick: tick,
+            },
+            |manager, _, _, dead| -> Result<(), ()> {
+                assert_eq!(dead, id);
+                deaths += 1;
+                let entity = manager.entity_mut(dead).unwrap();
+                for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
+                    entity.actor_tasks.clear_slot(slot);
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+        if result == EntityWeaponTickOutcome::Terminal {
+            break;
+        }
+    }
+    assert_eq!(deaths, 1);
+}

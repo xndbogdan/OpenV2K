@@ -212,7 +212,7 @@ fn run<E>(
         return Ok(EntityWeaponSurfaceOutcome::Ineligible);
     }
     let entity_type = owner.kind().entity_type() as u32;
-    let living_style = owner.kind().living_style();
+    let kind = owner.kind();
     if entity.entity_type != entity_type || !owner.authenticates(manager) {
         return Err(Owned(EntityWeaponBlock::Allocation));
     }
@@ -224,7 +224,7 @@ fn run<E>(
     )
     .map_err(|_| Owned(EntityWeaponBlock::Metadata))?;
     if !matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(context))
-        if context.active_style().style_address() == living_style)
+        if kind.is_living_style(context.active_style().style_address()))
         || owner.task_ids.into_iter().flatten().any(|task| {
             entity
                 .actor_tasks
@@ -406,7 +406,7 @@ fn run<E>(
     }
     // Solid damage may have installed class49; its style+14 is also null.
     if !matches!(entity.current_behavior_context, RetailRuntimeValue::Known(Some(style))
-        if style.active_style().style_address() == living_style
+        if kind.is_living_style(style.active_style().style_address())
             || matches!(style.active_style().style_address(), 0x004c7150 | 0x004c71e0))
     {
         return Err(Owned(EntityWeaponBlock::Runtime("water style callback")));

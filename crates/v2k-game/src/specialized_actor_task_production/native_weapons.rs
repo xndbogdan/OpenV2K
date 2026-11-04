@@ -277,6 +277,19 @@ impl SpecializedActorTaskScheduler {
             // never reruns trail RNG or terminal dispatch on the next pass.
             self.park_native_contact_prefix(manager, entity_id);
         }
+        if let Ok(EntityWeaponTickOutcome::Advanced {
+            restyled: Some(restyled),
+            ..
+        }) = result
+        {
+            // The armed mine's new tasks are the owner's custody from now on.
+            for lent in &mut self.owners {
+                if matches!(lent, SpecializedActorTaskOwner::NativeWeapon(o) if o.entity_id() == entity_id)
+                {
+                    *lent = SpecializedActorTaskOwner::NativeWeapon(restyled);
+                }
+            }
+        }
         self.return_lent_owners(manager, entity_id, pending, retained);
         match result {
             Ok(EntityWeaponTickOutcome::Waiting) => {
@@ -285,6 +298,7 @@ impl SpecializedActorTaskScheduler {
             Ok(EntityWeaponTickOutcome::Advanced {
                 callback_elapsed_micros,
                 trail_attempts,
+                ..
             }) => NativeWeaponProductionOutcome::Advanced {
                 entity_id,
                 kind,

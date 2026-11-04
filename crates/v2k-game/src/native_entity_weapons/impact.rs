@@ -112,15 +112,17 @@ fn run(
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Runtime("current style"));
     };
+    let style = context.active_style().style_address();
     let expected_style = if finished {
-        crate::class49_death::source_profile(entity)
-            .ok_or(Block::Runtime("terminal source"))?
-            .policy()
-            .style_address()
+        style
+            == crate::class49_death::source_profile(entity)
+                .ok_or(Block::Runtime("terminal source"))?
+                .policy()
+                .style_address()
     } else {
-        kind.living_style()
+        kind.is_living_style(style)
     };
-    if context.active_style().style_address() != expected_style {
+    if !expected_style {
         return Err(Block::Runtime("unaudited style hit hook"));
     }
     let static_route = particle_uses_static_route_entity_hit(impact.source_particle_class);

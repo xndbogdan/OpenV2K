@@ -1602,28 +1602,54 @@ A row's code is the power-up word: operation in the low byte, amount above.
 | --- | --- | --- | --- | --- |
 | Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | held |
 | Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | held |
-| Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | held |
+| Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | ported |
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | held |
 | Megablast | `0x539` | operation `0x39`; deployed by A and `/` held together | Type65 (model 243), class 55 | ported |
 | Defender Ball | `0x3F38` | operation `0x38`: a Type63 born at the player into the hold | Type63 (model 244), class 50 | held |
 | Autobot | `0x4038` | operation `0x38` with Type64 | Type64 (model 248), class 53 Defender Drone | held |
 
-**Proximity Mines.** Class 34's first style (`0x4C8548`) runs the falling
+**Proximity Mines.** Class 34's first style (`0x4C8548`, initializer
+`FUN_0040B080`: Secondary, then Tertiary cleared, then `FUN_00406B00`'s
+lifetime-0 Primary, which also zeroes Sub-K variable 2) runs the falling
 Primary (`FUN_00406BA0`): the heading turns by the elapsed microseconds over
 16, the pitch becomes (3 × pitch + q31(elapsed << 11, `0x1000` − pitch)) / 4,
 Sub-K variable 1 grows by the elapsed time over 4 and variable 2 is cleared;
 once the mine is
-within 300 of the higher of its cell's ground and the sea it returns tag
+within 300 of the higher of its cell's ground and the sea (the clearance at
+most 299) it returns tag
 `0x9C00`, whose style slot `+04` (`FUN_0040C750`) switches to the second
 style (`0x4C8590`). Its initializer `FUN_0040B0B0` arms the mine: Secondary
-becomes the shared target search (`FUN_00401F80`, one visit in four, the
-type's 0x300 range and capability mask 8, never the mine's shooter) and
+becomes the shared target search (`FUN_00401F80(entity, 1, 0, 0)`, one visit
+in four, the type's 0x300 range and capability mask 8 from its `+C8`, never
+the mine's shooter) and
 Primary the landed program (`FUN_00406F20`: the same pitch step toward 0,
-variable 1 by the elapsed time over 16, variable 2 plus
-q31(elapsed << 11, `0x4000` − variable 2), then the type's Sub-C lift and
-Sub-B drag). A
+variable 1 by the elapsed time over 16, variable 2 (read unsigned) plus
+q31(elapsed << 11, `0x4000` − variable 2), then the type's Sub-C lift with
+no attached mass, on the waved sea since its surface byte is 1, and Sub-B
+drag). The task loop rereads each slot, so the new search runs in the same
+pass as the arming. Neither initializer draws a random word: Type48 has no
+Sub-A for `FUN_00406070` to reset. A
 found target runs the style's slot `+04`, `FUN_0040CEF0`, the mine's death,
-as any pair contact (`+18`) does.
+as any pair contact (`+18`) or static contact (`+1C`) does in either style;
+`+10`, `+14`, `+28` and `+2C` are null in both, so ground and water take
+the shared response a grenade's do. The class-49 death scatters sixteen
+particles of classes 94 and 95: `FUN_0040BAF0` tests the F, H, O and G
+blocks (component block words 0, 1, `+34` and `+18`, from type `+E4`,
+`+EC`, `+108` and `+E8`), Type48 has only B, C and K, and its capability
+word has bit `0x40`. Model variables 1 and 2 are the two Sub-K words.
+
+The port runs these as the native weapon owner's `ProximityMine` kind
+(`native_entity_weapons::mine`): the falling and armed Primaries, the arming
+style switch, the search, the class-49 death and the two model variables.
+Retail lab (Level 1, master code, F9, fifteen B presses, one mine at tick
+959 over the sea): the mine sinks 20 units in its first tick, then 1 a
+tick on the lift, and its pair contact with the player kills it at tick 997,
+the first tick past the 750-ms shooter grace, through `FUN_0040BD20` with a
+Type60 ring. The port, started from retail's player state 270 ticks before
+the shot with the same keys, drops its mine at frame 269: it sinks 19, then 1
+a tick, and dies on the player 38 ticks after its birth with a Type60 ring,
+as retail's does (the two players' idle drift differs by a few units a
+tick, so the positions are not identical).
 
 **Virus Bomb and Antidote Bomb.** A particle-77/78 solid static hit
 (`FUN_0043FF10`) runs `FUN_0043F890`, whose tail is `FUN_00441850`: sound 90, then `FUN_00456710` with

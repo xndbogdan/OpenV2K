@@ -1287,6 +1287,16 @@ pub static AUDITED_NON_INITIAL_BEHAVIOR_STYLES: &[BehaviorStyle] = &[
         impact_callback_address: Some(0x0040_C690),
         death_callback_address: None,
     },
+    // Class34's armed style: `+04`, `+18` and `+1C` are 40CEF0, the others null.
+    BehaviorStyle {
+        class_id: 34,
+        variant: 1,
+        frame_address: 0x004C_8590,
+        release_callback_address: None,
+        pair_contact_callback_address: Some(0x0040_CEF0),
+        impact_callback_address: None,
+        death_callback_address: None,
+    },
     BehaviorStyle {
         class_id: 39,
         variant: 4,

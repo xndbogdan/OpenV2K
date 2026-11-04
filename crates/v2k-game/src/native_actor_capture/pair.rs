@@ -869,12 +869,9 @@ fn behavior(
         PairContactCallbackPolicy::UnknownAddress(0x0040_cef0)
             if owns_native_weapon_contact(entity) =>
         {
-            let expected_style = if entity.entity_type == 42 {
-                0x4c81a0
-            } else {
-                0x4c8350
-            };
-            if style != expected_style
+            if !entity
+                .native_entity_weapon_runtime
+                .is_some_and(|runtime| runtime.kind.is_living_style(style))
                     || !crate::native_actor_descriptor_contact::native_weapon_contact_owner_authenticates(
                         frame.entities, frame.actor_tasks, owner)
                 {
