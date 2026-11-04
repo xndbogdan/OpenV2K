@@ -50,7 +50,7 @@ Where the code's references are thinnest:
 | [Loading transitions](../re/LOADING_TRANSITIONS.md) | 4 | 1 | 58 |
 | [Menu system](../re/MENU_SYSTEM.md) | 3 | 1 | 153 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 44 |
-| [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 46 |
+| [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 47 |
 
 ## Omitted
 

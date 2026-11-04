@@ -610,9 +610,12 @@ runs first and writes nothing. It admits the pair when:
   `0xC00` (or dying, or with a zero state word), `425850` against one
   without `0x400`, `4258A0` against one without `0x800`, the Hive's `259F0`
   against one with neither `0xC00` nor `0x2000` (or consuming a `0xC00`
-  body with a native owner, below), and a Power-Up's `425AF0`
+  body with a native owner, below), a Power-Up's `425AF0`
   against any body without capability 1 (its `0xA300` return is a bare `RET`
-  and cancels the response); the one writing hook it admits is the Defender
+  and cancels the response), and Mobbing's `40CF00` (the `+0x18` of both
+  Type29 styles, `4C7C90` and `4C7CD8`), which hits only a body with
+  capability bit 0 (the player, whose pairs are the player adapter's) and
+  otherwise returns null; the one writing hook it admits is the Defender
   Ball's `40C800`, against another Type63 (`0x004BE320`'s A300, which
   cancels the response) or against a body with a native owner, which takes
   its checked `{1, 40000}` attributed to the ball before the visit goes on;
@@ -621,7 +624,15 @@ runs first and writes nothing. It admits the pair when:
   the family lanes check), and every other body's tasks keep a null contact
   hook. The Main Base's Primary (`25CD0`) keeps `01020`'s null `+0x18`, as the
   Working Factory's `25BD0` does; its native receipt and completed owner
-  authenticate it.
+  authenticate it. So does the Queen's class67 Primary (`40D210` builds it
+  through `01020` with a zeroed template `+0x18`); she lends her class0 host
+  owner, so the response may move her and the collision damage reaches her
+  through `15040`, whose profile passes only channel 2 (a collision is
+  channel 1);
+- collision damage reaches a turret only through its audited styles: the
+  living class29 `4C8230`, a flower's (Types 112, 113, 115) class0 wait
+  `4C7468`, both with a null pair slot and the class49 death the particle
+  hit takes, or the finished class49 continuation `4C71E0`.
 
 Otherwise the pair is **held**: nothing is written, the walk goes on to the
 next candidate, and stderr reports it once a world, as `Active pair TypeA x
@@ -675,7 +686,6 @@ world runs more than 8,200 general visits over 67 pair kinds in 32 worlds
 | Type9 x Type53, Type86 x Type94, Type94 x Type95 | `C910` capture by a Type53 or Type94, which no captor lane owns | 15, 24, 40 |
 | Type57 x Type57, Type57 x Type94 | the Hive-born Type57's owner is pending | 20, 21, 24, 36 |
 | Type125 x Type86 | Type125 has tasks and no native owner | 37 |
-| Type110 x Type33 | Type110 has tasks and no native owner | 47 |
 | Type40 x Type30, Type5 x Type5 | the native owner was not complete at that tick | 19, 47 |
 | Type76 x Type3 | the response would move a Type3, which has no native owner | 31 |
 
@@ -704,6 +714,17 @@ loses the same Type78 to the same Hive at tick 1,434, the other two 50 ticks
 later at the same places; before, all three lived until the world ended. In
 the port's two-minute runs the Hive consumes 2 Type91 (world 27), 6 Type90
 (28), 22 Type79 (29) and 4 Type116 (41).
+
+### Mobbing, the Queen and the waiting flowers
+
+Retail lab, 6,000 ticks from Skip to World, `FUN_00415040` calls from
+`FUN_00411AD0`: in world 47 the Queen and a Type33 hit each other 20 times
+(the first 29 raw), in world 48 a Type29 and a Type87 twice (5,004 raw). The
+port's idle two minutes, which held these pairs before, now visit them: the
+Queen x Type33 with damage 55 times (the first 4 raw), Type29 against Type10,
+Type13, Type15 and Type87 in world 48 (Type29 x Type87 three times, the
+first 3,728 raw), and in world 39 a Type80 against a waiting Type115 once
+(338 raw). Retail's world 39 run met no Type80 x Type115 pair.
 
 The Portable Radar's Primary (`405540`) writes only its `4055C0` destructor
 (`+0x14`) after `405FF0`, so its contact hook is null and Type83's pairs

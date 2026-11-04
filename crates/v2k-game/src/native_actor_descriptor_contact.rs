@@ -187,6 +187,14 @@ fn admit_slot(
         }
         return Ok(SlotAdmission::Null);
     }
+    if matches!(task, ActorTaskRuntime::Queen) {
+        //40D210 builds the Queen's class67 Primary through 01020 with a zeroed
+        //template+18. Only her completed class0 host owner lends custody.
+        if entity.entity_type != 110 || !entities.defender_ball_owner_completed(id) {
+            return Err(Error::Runtime("completed Queen contact owner"));
+        }
+        return Ok(SlotAdmission::Null);
+    }
     if matches!(task, ActorTaskRuntime::WorkingFactory(_)) {
         //25BD0 retains01020's template+18 null. Only the native Factory
         //receipt and its completed owner authenticate that task layout.
@@ -743,8 +751,8 @@ pub(crate) fn completed_contact_owner(
                 && (tasks.intro2_type10_completed_owner(manager, id)
                     || tasks.intro2_type10_tumble_completed_owner(manager, id))
         }
-        // The Autobot's class0 owner, living or tumbling.
-        63 | 64 => manager.defender_ball_owner_completed(id),
+        // The Autobot's class0 owner, living or tumbling, and the Queen's.
+        63 | 64 | 110 => manager.defender_ball_owner_completed(id),
         57 => {
             !tasks.intro2_type57_has_pending_prefix(id)
                 && (tasks.intro2_type57_completed_owner(manager, id)

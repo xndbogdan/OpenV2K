@@ -419,3 +419,132 @@ fn the_hive_consumes_a_touching_native_worker() {
         .contains(&worker));
     assert!(actor(&entities, worker).is_err());
 }
+
+/// Every authored owner a campaign world adopts at arrival.
+fn adopt_authored(entities: &mut EntityManager) -> SpecializedActorTaskScheduler {
+    let mut tasks = SpecializedActorTaskScheduler::new();
+    tasks.adopt_fresh_level1_type9_selected(entities).unwrap();
+    tasks.adopt_fresh_level1_type17_follow_beacons(entities);
+    tasks.adopt_fresh_level1_type47_scheduler(entities).unwrap();
+    tasks.adopt_intro2_type13_search_attack(entities);
+    tasks.adopt_intro2_type26(entities);
+    tasks.adopt_intro2_type47_guards(entities);
+    tasks.adopt_intro2_flyers(entities);
+    tasks.adopt_intro2_type53(entities);
+    tasks.adopt_type122(entities);
+    tasks.adopt_type18(entities);
+    tasks.adopt_type28(entities);
+    tasks.adopt_type76_family(entities);
+    tasks.adopt_type30(entities);
+    tasks.adopt_rolling_boulders(entities);
+    tasks.adopt_type40(entities);
+    tasks.adopt_type56(entities);
+    tasks.adopt_type43(entities);
+    tasks.adopt_type38_family(entities);
+    tasks.adopt_type12_family(entities);
+    tasks.adopt_type31_family(entities);
+    tasks.adopt_shared_fish(entities);
+    tasks.adopt_cleansing_vehicle(entities);
+    tasks.adopt_intro2_type16(entities);
+    tasks.adopt_intro2_type58(entities);
+    tasks.adopt_intro2_type94(entities);
+    tasks.adopt_intro2_type66(entities);
+    tasks.adopt_class0_actors(entities);
+    tasks.adopt_portable_radars(entities);
+    tasks.adopt_main_base(entities);
+    tasks.adopt_intro2_type10(entities);
+    tasks.adopt_intro2_type57(entities);
+    tasks.adopt_intro2_gun_turret(entities);
+    tasks.adopt_intro2_type17(entities);
+    tasks.adopt_intro2_type8(entities);
+    tasks.adopt_intro2_type9(entities);
+    tasks.adopt_native_type123(entities);
+    tasks.adopt_native_type86(entities);
+    tasks
+}
+
+/// Overlap the first authored bodies of two types in `level`, send the second
+/// type's at the first's at `speed`, and walk from the earlier: the visit must
+/// take the general path without a stop.
+fn general_pair(
+    level: u32,
+    types: [u32; 2],
+    speed: i32,
+) -> (EntityManager, [u32; 2], NativeCaptorPairVisit) {
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(level);
+    let mut tasks = adopt_authored(&mut entities);
+    let ids = types.map(|kind| {
+        entities
+            .iter_all()
+            .find(|e| e.entity_type == kind)
+            .unwrap_or_else(|| panic!("world {level} authors a Type{kind}"))
+            .id
+    });
+    let pair = in_live_order(&entities, ids[0], ids[1]);
+    overlap(&mut entities, &session, pair);
+    let from = actor(&entities, ids[0]).unwrap().position_raw();
+    let at = actor(&entities, ids[1]).unwrap().position_raw();
+    let toward =
+        std::array::from_fn::<i32, 3, _>(|axis| i32::from(from[axis]) - i32::from(at[axis]));
+    let length = toward.iter().map(|v| v * v).sum::<i32>().max(1).isqrt();
+    let velocity = toward.map(|v| (v * speed / length) as i16);
+    entities
+        .entity_mut(ids[1])
+        .unwrap()
+        .set_motion_raw(at, velocity);
+    let outcome = walk(&mut session, &mut entities, &mut fx, &mut tasks, pair[0]);
+    assert!(
+        outcome.general_stop_lines().is_empty(),
+        "{:?}",
+        outcome.general_stop_lines()
+    );
+    let NativeCaptorPairOutcome::Resolved { visits } = &outcome else {
+        panic!("the pair resolves: {outcome:?}");
+    };
+    let visit = visits
+        .iter()
+        .find(|visit| visit.candidate_id == pair[1])
+        .expect("the touching pair is visited")
+        .clone();
+    assert!(visit.general_types.is_some());
+    assert!(matches!(
+        visit.stages.last(),
+        Some(NativeCaptorPairStage::Physical { .. })
+    ));
+    (entities, ids, visit)
+}
+
+/// 40CF00, both Mobbing styles' +18, hits only a capability-bit0 body: a
+/// Type29 against any other body takes the general visit.
+#[v2k_test_support::retail_test]
+fn mobbing_type29_meets_a_non_player_with_a_null_callback() {
+    let (_, ids, visit) = general_pair(24, [29, 86], 0);
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Behavior { owner, result: NativeCaptorPairBehaviorResult::Null, .. }
+            if *owner == ids[0]
+    )));
+}
+
+/// 40D210's class67 Primary keeps 01020's null +18; the Queen lends her
+/// class0 host owner to the visit.
+#[v2k_test_support::retail_test]
+fn the_queen_takes_the_general_visit() {
+    general_pair(47, [110, 33], 0);
+}
+
+/// A flower turret waiting in class0 (4C7468, null pair slot) takes 14D30's
+/// collision damage like a living class29 one.
+#[v2k_test_support::retail_test]
+fn a_waiting_flower_turret_takes_pair_collision_damage() {
+    let (entities, ids, visit) = general_pair(39, [115, 80], 6000);
+    assert_eq!(
+        crate::native_actor_capture::pair::style_address(actor(&entities, ids[0]).unwrap()),
+        Ok(0x004c_7468)
+    );
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Physical { capped_damage_raw } if *capped_damage_raw != 0
+    )));
+}
