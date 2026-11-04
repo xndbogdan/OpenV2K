@@ -454,6 +454,31 @@ its own timer callback `FUN_0042D620` while it reads overlays 12, 5 and 3).
 Nothing is drawn before the first callback: a load shorter than one period
 shows only the final callback's card, after the load.
 
+### The frontend's card
+
+Every frontend entry (`FUN_0042B230`, after any return from a world, a
+pause-quit included) reads overlays 12 and 5, arms its own one-shot timer
+(`FUN_0042D7F0`), reads overlay 3 and builds the menus, then
+`FUN_0042D830` raises the stop flag and spins until a callback has run.
+Each callback (`FUN_0042D620`) clamps its real-time delta to 7.8..125 ms,
+pumps one window message and runs `FUN_0042AF00` on the record `004DB1D8`:
+the 50-Hz clock, a Klaus visit, then Klaus, the branding sprites (its `+0C`
+is 1) and the blinking "Loading", presented. Nothing clears the frame, so
+the card covers whatever was presented last: the world's last frame with
+its emblem, or the pause screen after a pause-quit. The first frontend
+frame follows. The lab's stub counts the callback's message pump as a pass,
+so its snapshots number the card one pass after the init: after Space at
+pass 3300 in an attract world, nothing at 3300 and 3301, the card at 3302
+and the frontend from 3303.
+
+The port keeps the last presented frame when it returns to the frontend
+and, on the first frontend frame, runs that callback before the frame: the
+clock advance, `MenuShell::visit_klaus` (its random word) and the card,
+which that frame presents in place of the menu (whose update still runs).
+Real time waits for the timer's callback as the world loads do; a fixed
+step takes the lab's single 7,800-us callback. The port's frontend entry
+reads no overlays, so it never draws an earlier callback's card.
+
 The lab's stub fires each load's timer once, with the scripted clock
 standing still: only the final callback runs, with the minimum 7,800 us
 (Klaus's morph 8,299 after the load, `+270` 7). After Intro2 the lab shows

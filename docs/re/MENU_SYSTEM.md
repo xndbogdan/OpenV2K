@@ -1135,8 +1135,12 @@ the frontend's init follows one pass later, again with no Klaus leg.
 - Space at pass 3300 in world 11: no frame at 3300 or 3301 in either, and
   the frontend from 3303 in both.
 - On the first pass after the frontend's init retail draws its load card
-  (Klaus, "Loading", the branding and the emblem over the last world frame);
-  the port draws the frontend there, as on every return to the frontend.
+  (Klaus, "Loading" and the branding over the last presented frame, the
+  world's emblem included); the port draws the same card there, on every
+  return to the frontend (see
+  [the frontend's card](LOADING_TRANSITIONS.md#the-frontends-card)). The
+  card's pixels outside Klaus's edges and shading cover the same 35,000
+  pixels as retail's; the world beneath is the last frame, unchanged.
 
 **Held:** the demo player of the ten rows that have one. Its type-46 body
 under type 51's class 7, armed by these writes, is not owned by the port, so
