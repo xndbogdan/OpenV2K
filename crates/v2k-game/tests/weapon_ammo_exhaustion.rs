@@ -71,7 +71,8 @@ fn final_round_switches_hud_then_manual_cycles_skip_empty_until_same_slot_reacqu
         shooter_origin_world: [0.0; 3],
         shooter_id: 46,
         shooter_entity_type_at_birth: Some(46),
-        shooter_velocity_world: [0.0; 3],
+        direction_q31: [0, 0, i32::MAX],
+        shooter_velocity_raw: [0; 3],
         sound_origin_world: [0.0; 3],
     };
     let events = PrimaryWeapon::new().update_with_profile(

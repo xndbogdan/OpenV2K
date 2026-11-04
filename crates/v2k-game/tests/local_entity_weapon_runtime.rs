@@ -2,7 +2,6 @@
 
 use std::{collections::BTreeMap, time::Duration};
 use v2k_game::{
-    common_mover::type9_attitude::Type9BodyBasis,
     entity::{
         AuthoredPlayerArrival, AuthoredWorldConstruction, EntityConstructionResources,
         EntityManager,
@@ -10,7 +9,7 @@ use v2k_game::{
     entity_collision_state::{EntityTypeRuntimeMetadata, RetailRuntimeValue, RetailStateWord},
     gameplay_notifications::{GameplayNotificationPhase, GameplayNotifications},
     native_entity_weapons::{
-        launch::{entity_weapon_direction_q31, entity_weapon_launch_velocity_raw},
+        launch::{emitter_basis_q31, entity_weapon_launch_velocity_raw, launch_direction_q31},
         EntityWeaponBlock, EntityWeaponConstructionRequest, EntityWeaponKind,
         NativeEntityWeaponOwner,
     },
@@ -89,7 +88,8 @@ fn geometry(manager: &EntityManager) -> PrimaryFireGeometry {
         shooter_origin_world: [0.0, 60.0, 0.0],
         shooter_id: player.id,
         shooter_entity_type_at_birth: Some(player.entity_type as u8),
-        shooter_velocity_world: [0.0; 3],
+        direction_q31: [0, 0, i32::MAX],
+        shooter_velocity_raw: [0; 3],
         sound_origin_world: [0.0, 60.0, 0.0],
     }
 }
@@ -101,8 +101,15 @@ fn request(
 ) -> EntityWeaponConstructionRequest {
     let source = manager.player().unwrap();
     let rotation_raw = source.rotation_heading_pitch_roll_raw();
-    let basis = Type9BodyBasis::from_angle_words(rotation_raw[0], rotation_raw[1], rotation_raw[2]);
-    let direction = entity_weapon_direction_q31(kind, basis, 0);
+    let selector = match kind {
+        EntityWeaponKind::Grenade => 3,
+        EntityWeaponKind::DepthCharge => 4,
+        EntityWeaponKind::Rocket => 5,
+        EntityWeaponKind::ProximityMine => 9,
+        EntityWeaponKind::GuidedMissile => 0x11,
+        EntityWeaponKind::Meteor => unreachable!("not a player weapon"),
+    };
+    let direction = launch_direction_q31(selector, emitter_basis_q31(rotation_raw), 0);
     EntityWeaponConstructionRequest {
         kind,
         source_actor_id: source.id,

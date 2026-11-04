@@ -393,9 +393,11 @@ pub struct PrimaryFireGeometry {
     /// Immutable retail entity type copied into projectile byte `+0x1C` at
     /// birth. Callers without a proven entity-backed shooter retain `None`.
     pub shooter_entity_type_at_birth: Option<u8>,
-    /// Retail adds the complete shooter velocity to the bullet and initializes
-    /// the class-32 effect with it as well.
-    pub shooter_velocity_world: [f32; 3],
+    /// `FUN_00424650`'s Q31 launch direction (`FUN_00413D40` and the barrel).
+    pub direction_q31: [i32; 3],
+    /// The shooter's velocity words, which `FUN_0044E770` adds to a
+    /// leading-zero row's shot and gives the class-15 effect.
+    pub shooter_velocity_raw: [i16; 3],
     pub sound_origin_world: [f32; 3],
 }
 
@@ -409,6 +411,8 @@ pub struct PrimaryProjectileSpawn {
     /// Visible origin/direction resolved from the selected authored gun model.
     /// World collision continues to use `origin_world` and `direction_unit`.
     pub presentation_basis: PrimaryLaunchBasis,
+    /// `FUN_0044E770`'s exact velocity words, before the class's `+0x2A` bias.
+    pub velocity_raw: [i16; 3],
     pub velocity_world_per_second: [f32; 3],
     pub spec: PrimaryProjectileSpec,
 }
@@ -642,15 +646,22 @@ fn primary_fire_event(
 ) -> PrimaryFireEvent {
     let basis = geometry.launch_basis;
     let presentation_basis = geometry.gun_mounts.basis(gun_channel).unwrap_or(basis);
-    let speed = profile.projectile.speed_world_per_second;
-    let projectile_velocity = std::array::from_fn(|axis| {
-        basis.direction_unit[axis] * speed + geometry.shooter_velocity_world[axis]
-    });
+    let rocket_shaped =
+        projectile_class_row(u32::from(profile.selector)).is_some_and(|row| row.leading_raw != 0);
+    let velocity_raw = crate::native_entity_weapons::launch::launch_velocity_raw(
+        rocket_shaped,
+        profile.projectile.speed_raw,
+        geometry.direction_q31,
+        geometry.shooter_velocity_raw,
+    );
+    let projectile_velocity =
+        velocity_raw.map(|word| raw_velocity_to_world_per_second(word.into()));
     let projectile = PrimaryProjectileSpawn {
         owner_id: geometry.shooter_id,
         origin_world: basis.origin_world,
         direction_unit: basis.direction_unit,
         presentation_basis,
+        velocity_raw,
         velocity_world_per_second: projectile_velocity,
         spec: profile.projectile,
     };
@@ -665,7 +676,9 @@ fn primary_fire_event(
             owner_id: geometry.shooter_id,
             origin_world: geometry.shooter_origin_world,
             presentation_origin_world: presentation_basis.origin_world,
-            inherited_velocity_world_per_second: geometry.shooter_velocity_world,
+            inherited_velocity_world_per_second: geometry
+                .shooter_velocity_raw
+                .map(|word| raw_velocity_to_world_per_second(word.into())),
             spec: profile.auxiliary,
         },
         emits_auxiliary: profile.emits_auxiliary,
@@ -700,7 +713,8 @@ mod tests {
             shooter_origin_world: [4.0, 5.0, 6.0],
             shooter_id: 46,
             shooter_entity_type_at_birth: Some(46),
-            shooter_velocity_world: [0.25, -0.5, 0.75],
+            direction_q31: [i32::MAX, 0, 0],
+            shooter_velocity_raw: [64, -128, 192],
             sound_origin_world: [7.0, 8.0, 9.0],
         }
     }
@@ -777,14 +791,8 @@ mod tests {
         assert_eq!(event.projectile.spec.sprite_id, 705);
         assert_eq!(event.projectile.spec.speed_raw, 4_000);
         assert_eq!(event.projectile.spec.lifetime_ticks, 200);
-        assert_eq!(
-            event.projectile.velocity_world_per_second,
-            [
-                PRIMARY_PROJECTILE_SPEC.speed_world_per_second + 0.25,
-                -0.5,
-                0.75,
-            ]
-        );
+        // 44E770: Q31 1.0 is 0x7FFFFFFF, so 4000 along it floors to 3999.
+        assert_eq!(event.projectile.velocity_raw, [3999 + 64, -128, 192]);
         assert_eq!(event.projectile.owner_id, 46);
         assert_eq!(event.auxiliary.origin_world, [4.0, 5.0, 6.0]);
         assert_eq!(
@@ -794,7 +802,7 @@ mod tests {
         assert_eq!(event.auxiliary.owner_id, 46);
         assert_eq!(
             event.auxiliary.inherited_velocity_world_per_second,
-            [0.25, -0.5, 0.75]
+            [64, -128, 192].map(raw_velocity_to_world_per_second)
         );
         assert_eq!(event.auxiliary.spec, PRIMARY_AUXILIARY_SPEC);
         assert_eq!(event.auxiliary.spec.projectile_class, 15);
@@ -1129,14 +1137,7 @@ mod tests {
                 event.projectile.direction_unit,
                 geometry().launch_basis.direction_unit
             );
-            assert_eq!(
-                event.projectile.velocity_world_per_second,
-                [
-                    PRIMARY_PROJECTILE_SPEC.speed_world_per_second + 0.25,
-                    -0.5,
-                    0.75
-                ]
-            );
+            assert_eq!(event.projectile.velocity_raw, [3999 + 64, -128, 192]);
             assert!(event.emits_auxiliary);
             assert_eq!(event.auxiliary.spec.direction_raw, [0; 3]);
             assert_eq!(event.sound.sound_id, 88);

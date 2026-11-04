@@ -219,7 +219,8 @@ fn factory_product_contact_auto_selects_and_fires_the_rapid_machine_gun() {
         shooter_entity_type_at_birth: Some(
             u8::try_from(player.entity_type).expect("player type byte"),
         ),
-        shooter_velocity_world: player.velocity,
+        direction_q31: [0, 0, i32::MAX],
+        shooter_velocity_raw: player.velocity_raw(),
         sound_origin_world: player.position,
     };
     let profile = fire_profile_from_descriptor(inventory.selected_descriptor())
