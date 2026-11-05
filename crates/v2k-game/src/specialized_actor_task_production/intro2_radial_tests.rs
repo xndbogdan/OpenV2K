@@ -69,6 +69,7 @@ fn transaction(
         terminal_abort_origins: Vec::new(),
         possession: None,
         possession_released: None,
+        possession_pair_pass_ended: false,
         owners: scheduler
             .owners
             .iter()

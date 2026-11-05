@@ -997,14 +997,22 @@ fn resolve(
         // D780 resolves the current behavior context for each directional call.
         for (owner, opposite) in [(id, candidate_id), (candidate_id, id)] {
             let style = style_address(actor(frame.entities, owner)?)?;
-            let result = behavior(
-                frame,
-                owner,
-                opposite,
-                feedback,
-                playing_player.as_mut().map(PlayingPlayerContact::reborrow),
-                committed,
-            )?;
+            // The craft's 0x4C20C0 as subject skips the candidate's hook.
+            let result = if craft_pair
+                && possession.is_some_and(|state| state.craft == id)
+                && owner == candidate_id
+            {
+                NativeCaptorPairBehaviorResult::Null
+            } else {
+                behavior(
+                    frame,
+                    owner,
+                    opposite,
+                    feedback,
+                    playing_player.as_mut().map(PlayingPlayerContact::reborrow),
+                    committed,
+                )?
+            };
             visit.stages.push(NativeCaptorPairStage::Behavior {
                 owner,
                 style,
@@ -1066,7 +1074,8 @@ fn resolve(
                 });
             }
         }
-        if !visit.physical_suppressed {
+        let physical_suppressed = visit.physical_suppressed;
+        if !physical_suppressed {
             physical(
                 frame,
                 id,
@@ -1087,8 +1096,16 @@ fn resolve(
                 adopt_captor(frame, captor)?;
             }
         }
-        // Passive Player's `0x4C20C0` ends the walk after the response.
+        // Passive Player's `0x4C20C0` ends 11AD0 after the response, and
+        // 11A80's whole pass with it (the lab's pass ran 3 walks, not ~40).
         if craft_pair {
+            if physical_suppressed {
+                // 11AD0 keeps the 0x4C20C0 and walks on; not ported.
+                return Err(NativeCaptorPairBlock::Runtime(
+                    "possessed craft pair after an A300",
+                ));
+            }
+            frame.actor_tasks.possession_pair_pass_ended = true;
             break;
         }
     }
@@ -1167,7 +1184,9 @@ fn general_pair_hold(
                 }
                 continue;
             }
-            if opposite.id == craft {
+            // Only a subject craft's 0x4C20C0 skips the other hook; a
+            // candidate craft's comes after the subject's own.
+            if opposite.id == craft && craft == id {
                 continue;
             }
         }
@@ -1398,6 +1417,18 @@ fn behavior(
     committed: &mut bool,
 ) -> Result<NativeCaptorPairBehaviorResult, NativeCaptorPairBlock> {
     let entity = actor(frame.entities, owner)?;
+    // Passive Player's `447D70` while a body is possessed: `443AF0` fails
+    // (the controller's `+68` is the body), so it returns `0x4C20C0`
+    // without feedback against a body without `0xC00`. The general
+    // preflight holds the `0xC00` branch; the caller skips the candidate's
+    // hook after a subject craft's.
+    if frame
+        .actor_tasks
+        .possession
+        .is_some_and(|custody| custody.state.craft == owner)
+    {
+        return Ok(NativeCaptorPairBehaviorResult::Null);
+    }
     if frame
         .entities
         .player()
@@ -1448,19 +1479,6 @@ fn behavior(
                 style: style_address(entity)?,
             })
         };
-    }
-    // Passive Player's `447D70` while a body is possessed: `443AF0` fails
-    // (the controller's `+68` is the body), so it returns `0x4C20C0`
-    // without feedback against a body without `0xC00`; the other body's
-    // hook is skipped. The general preflight holds the `0xC00` branch.
-    if let Some(craft) = frame
-        .actor_tasks
-        .possession
-        .map(|custody| custody.state.craft)
-    {
-        if owner == craft || opposite == craft {
-            return Ok(NativeCaptorPairBehaviorResult::Null);
-        }
     }
     let context = match entity.current_behavior_context {
         RetailRuntimeValue::Known(Some(context)) => context,

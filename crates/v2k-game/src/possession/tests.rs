@@ -769,7 +769,7 @@ fn a_possessed_bodys_pairs_take_player_controls_pair_hook() {
 /// The craft's pairs while a body is possessed take Passive Player's
 /// `FUN_00447D70`: it fails `443AF0` and returns `0x4C20C0` against a body
 /// without `0xC00`, so the other hook is skipped, the response and collision
-/// damage run, and the walk ends after the pair. A body with `0xC00` keeps
+/// damage run, and the pass (`11A80`) ends after the pair. A body with `0xC00` keeps
 /// the held stop.
 #[v2k_test_support::retail_test]
 fn a_possessed_crafts_pairs_take_passive_players_pair_hook() {
@@ -996,4 +996,7 @@ fn a_possessed_crafts_pairs_take_passive_players_pair_hook() {
         .unwrap()
         .position_raw();
     assert_ne!(after, before[&spider], "12760 separates the pair");
+    // 11A80 stops at the first non-null 11AD0: the lab's pass ran 3 walks
+    // on those ticks, not ~40.
+    assert!(scheduler.possession_pair_pass_ended, "the whole pass ends");
 }

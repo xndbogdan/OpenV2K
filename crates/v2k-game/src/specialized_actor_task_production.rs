@@ -1317,6 +1317,9 @@ pub struct SpecializedActorTaskScheduler {
     /// A release the possessed body's death ran inside a damage call, for
     /// the session's MindBall and view.
     pub possession_released: Option<crate::possession::live::Released>,
+    /// The possessed craft's pair hook returned `0x4C20C0` this tick, which
+    /// ends `FUN_00411A80`'s whole pair pass.
+    pub possession_pair_pass_ended: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1555,6 +1558,7 @@ impl SpecializedActorTaskScheduler {
             hive_diagnostics: Vec::new(),
             possession: None,
             possession_released: None,
+            possession_pair_pass_ended: false,
         }
     }
 
@@ -1577,6 +1581,7 @@ impl SpecializedActorTaskScheduler {
                 .collect(),
             possession: self.possession,
             possession_released: self.possession_released.clone(),
+            possession_pair_pass_ended: self.possession_pair_pass_ended,
         }
     }
 

@@ -11110,7 +11110,13 @@ fn run_game(
                     .cache
                     .global_entity_type(9)
                     .map(EntityTypeRuntimeMetadata::from_section12);
+                specialized_actor_tasks.possession_pair_pass_ended = false;
                 for id in contact_ids {
+                    // A non-null 11AD0 (the possessed craft's 0x4C20C0) ends
+                    // FUN_00411A80's pass: no later body's phases or pairs.
+                    if specialized_actor_tasks.possession_pair_pass_ended {
+                        break;
+                    }
                     use v2k_game::intro2_type17::contact::{
                         resolve_type17_static_contact, Type17ContactOutcome,
                     };

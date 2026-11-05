@@ -1781,16 +1781,26 @@ Held, each with one logged stop a run:
 - The craft's pairs while a body is possessed. Passive Player's
   `FUN_00447D70` (capability bit 0) fails `FUN_00443AF0`, the controller's
   `+68` being the body, and returns `0x4C20C0` (code `0x8802`, not `0xA300`)
-  against a body without `0xC00`: the other body's hook is skipped, the
-  response and collision damage run, and the walk that met the pair ends
-  there. In the lab three of those pairs (1800 each, source type 46) killed
-  the possessed body. The port runs this visit for ordinary pairs: both
-  behavior hooks take the null branch (the other body's is skipped), both
-  A900 chains run, the mass-weighted response moves both bodies (the craft
-  through the general visit, exempt from the body-custody gate as the
-  possessed body is), the collision damage runs in both directions (to the
-  craft through the player path, to the possessed body through its release
-  path), and the subject's walk ends after the pair. A retail-backed test
+  against a body without `0xC00`. `FUN_00411AD0` keeps that return: with
+  the craft as subject the other body's hook is skipped (as candidate, the
+  subject's hook has already run), the A900 chains, response and collision
+  damage run, and the walk returns it, which ends `FUN_00411A80`'s whole
+  pair pass for the tick. The lab (Level 1, the craft against the possessed
+  Type17 at passes 2020 and 2174) shows it: the hook returns `0x4C20C0`, the
+  collision damage (469, then 141, callers `004124AB`/`004124EC`) reaches
+  both bodies, and those ticks run 3 pair walks (the two bodies born after
+  the craft, then the craft's) instead of about 40. The three 1800 hits that
+  later killed that body were particle hits (caller `00410F3D`), not pairs.
+  The port runs this visit for ordinary pairs: the craft's hook takes the
+  null branch, the candidate's is skipped after a subject craft's while a
+  subject's own runs before a candidate craft's (through the general
+  preflight), both A900 chains run, the mass-weighted response moves both
+  bodies (the craft through the general visit, exempt from the body-custody
+  gate as the possessed body is), the collision damage runs in both
+  directions (to the craft through the player path, to the possessed body
+  through its release path), and the pass ends after the pair. The port's
+  split-off pair passes after its walk (the Main Base conversion, factory
+  arrivals and the craft's Power-Up pickups) still run on such a tick. A retail-backed test
   runs this on world 14's craft against a second spider, with a person
   holding the `0xC00` stop in the same walk. Held: the craft's pairs with
   weapons and sharks, whose lanes assume the craft's own controller, and

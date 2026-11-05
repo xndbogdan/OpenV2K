@@ -603,7 +603,9 @@ parks the visit's committed prefix and ends the subject's walk.
 
 A possessed body (the Possession Ray's) takes the general visit through
 Player Control's `447D70`, whose null branch the preflight admits; its
-pickup and every pair of the craft while it is possessed are held
+pickup is held. The craft's pairs while a body is possessed return
+`0x4C20C0`, which ends the whole pass after the pair; those with weapons,
+sharks and `0xC00` bodies are held
 ([mind control](PLAYER_CRAFT.md#mind-control)).
 
 Every other touching pair takes the **general visit**: the same sounds,
