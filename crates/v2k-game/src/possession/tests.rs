@@ -347,7 +347,7 @@ fn a_possessed_type17_that_dies_is_released_into_its_own_death() {
 /// Retail's lab, world 13: once the Hive dies, a body moved `0x80` below its
 /// mouth (the marker cell's centre at the Hive's height) is swallowed on its
 /// next visit: the possessed Type17 through `FUN_00448760`, any other body
-/// staged for the sweep (`FUN_00410B70`). A live Hive's mouth is held.
+/// staged for the sweep (`FUN_00410B70`).
 #[v2k_test_support::retail_test]
 fn a_dying_hives_mouth_swallows_every_body_and_releases_the_possessed_one() {
     use crate::entity::{EntityManager, HiveMouthSwallow};
@@ -409,11 +409,8 @@ fn a_dying_hives_mouth_swallows_every_body_and_releases_the_possessed_one() {
             [0; 3],
         );
     }
-    // Alive, the mouth's fall-ins are the held FUN_0041C830 branch.
-    assert_eq!(
-        manager.apply_hive_mouth_swallows(Some(spiders[0])),
-        (Vec::new(), 2)
-    );
+    // Alive, the Hive's mouth is crate::hive_mouth's.
+    assert_eq!(manager.apply_hive_mouth_swallows(Some(spiders[0])), []);
     manager
         .entity_mut(hive)
         .unwrap()
@@ -422,13 +419,10 @@ fn a_dying_hives_mouth_swallows_every_body_and_releases_the_possessed_one() {
         .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
     assert_eq!(
         manager.apply_hive_mouth_swallows(Some(spiders[0])),
-        (
-            vec![
-                HiveMouthSwallow::Controlled(spiders[0]),
-                HiveMouthSwallow::Staged(spiders[1])
-            ],
-            0
-        )
+        [
+            HiveMouthSwallow::Controlled(spiders[0]),
+            HiveMouthSwallow::Staged(spiders[1])
+        ]
     );
     let staged = |manager: &EntityManager, id: u32| {
         manager

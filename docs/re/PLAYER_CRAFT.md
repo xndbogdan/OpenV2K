@@ -1724,9 +1724,6 @@ Held, each with one logged stop a run:
   (`FUN_004141D0`) and the style's `+10` hook `FUN_00448280` (force feedback,
   and the 15000 packet on a lava cell); the port keeps the type's own state
   word, under which a living Type17 has no terrain contact.
-- A live Hive's mouth, which kills (`FUN_00410C10`) the bodies falling into
-  it that lack capability bit 3 (the craft among them) and draws every one
-  in (`FUN_0041C830`).
 
 The port runs the possessed body in the craft's phase of the frame, after
 the actor pass, as it runs the craft; retail visits it at its own place in

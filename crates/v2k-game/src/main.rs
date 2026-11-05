@@ -2837,6 +2837,7 @@ fn run_game(
     let mut mind_ball_spin = MindBallSpin::default();
     let mut followed_body: Option<u32> = None;
     let mut possession_stops_reported: HashSet<&'static str> = HashSet::new();
+    let mut hive_mouth_stops_reported: HashSet<String> = HashSet::new();
     // TAB reached the reader while a body was possessed.
     let mut possession_tab_pressed = false;
     let mut native_entity_weapon_error_reported = false;
@@ -9751,8 +9752,7 @@ fn run_game(
                 world_fx.process_pending();
                 // FUN_0041BEB0's mouth walk: a dying Hive swallows the bodies
                 // that fall into its mouth; the possessed body is released.
-                let (swallows, held_fall_ins) =
-                    em.apply_hive_mouth_swallows(possession.map(|state| state.body));
+                let swallows = em.apply_hive_mouth_swallows(possession.map(|state| state.body));
                 for swallow in swallows {
                     match swallow {
                         v2k_game::entity::HiveMouthSwallow::Controlled(id) => {
@@ -9767,8 +9767,36 @@ fn run_game(
                         }
                     }
                 }
-                if held_fall_ins != 0 && possession_stops_reported.insert("live hive mouth") {
-                    eprintln!("Hive mouth held: a body fell into a live Hive's mouth, whose kill and draw-in (FUN_00410C10, FUN_0041C830) are not ported");
+                // A live Hive kills (FUN_00410C10) and throws out (FUN_0041C830)
+                // the bodies in its mouth.
+                let live_mouths = v2k_game::hive_mouth::apply_live_hive_mouths(
+                    v2k_game::hive_mouth::LiveHiveMouthFrame {
+                        entities: em,
+                        resources: &mut session.cache,
+                        static_damage: &mut static_damage,
+                        player_hull: &mut player_hull,
+                        world_fx: &mut world_fx,
+                        scheduler: &mut specialized_actor_tasks,
+                        notifications: &mut gameplay_notifications,
+                        retail_tick,
+                        elapsed_us: elapsed_micros,
+                        extra_lives: player_campaign_progress.extra_lives(),
+                    },
+                );
+                if live_mouths.terrain_changed {
+                    renderer.invalidate_terrain_cache();
+                }
+                for event in live_mouths.events {
+                    match event {
+                        v2k_game::hive_mouth::LiveHiveMouthEvent::Blocked { hive, body, block } => {
+                            if hive_mouth_stops_reported.insert(format!("{block:?}")) {
+                                eprintln!(
+                                    "Hive mouth blocked: Hive {hive}, body {body}: {block:?}"
+                                );
+                            }
+                        }
+                        event => log!("Hive mouth: {event:?}"),
+                    }
                 }
                 // Controlled-player movement precedes the Hive's no-RNG wreck
                 // contact phase; its component clock already ran in 13500.

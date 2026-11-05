@@ -80,6 +80,7 @@ pub mod hive_birth;
 pub mod hive_controller;
 pub mod hive_death;
 pub mod hive_impact;
+pub mod hive_mouth;
 pub mod hive_wreck_presentation;
 pub mod hover;
 pub mod impact_reaction;

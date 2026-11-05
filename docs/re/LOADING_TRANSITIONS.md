@@ -1039,9 +1039,9 @@ subtype-1 Level-14 arrival when the player enters the wreck. The later map
 Map S enters `004D0AD8` and `PAUSE_SIMPLE` / `004D1090`; its Continue
 uses `FUN_00456170` / `+0x297` through `FUN_004558A0`. Ring appearance
 and interactive pull/exit remain explicit comparison conditions; in-world
-result statistics and the later map have separate owners. Live fall-in yank
-`FUN_0041c830` / pair-restore
-`FUN_0041ca90` stay fail-closed.
+result statistics and the later map have separate owners. A live Hive's
+mouth throws its bodies out (`FUN_0041C830`, restored by `FUN_0041CA90`;
+[the mouth walk](HIVE_WRECK.md#the-mouth-walk)).
 
 The ordinary route is not safe to enable from a counter alone.
 `FUN_00410EB0` always calls type-vtable `+0x14` before

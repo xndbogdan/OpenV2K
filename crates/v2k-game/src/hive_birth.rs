@@ -216,6 +216,10 @@ pub enum HiveEjectionOutcome {
 pub struct HiveBirthRuntime {
     rows: Vec<HiveBirthRowRuntime>,
     ejection_slots: [HiveEjectionSlot; 2],
+    /// The bodies this visit's `1CA90` restored, per slot. Retail's mouth walk
+    /// runs before that `1CA90`; the port's runs after it, so the walk still
+    /// sees these bodies held (without `0x8000`, their slots occupied).
+    restored_this_visit: [Option<u32>; 2],
 }
 
 impl HiveBirthRuntime {
@@ -242,7 +246,13 @@ impl HiveBirthRuntime {
                 })
                 .collect(),
             ejection_slots: [HiveEjectionSlot::default(); 2],
+            restored_this_visit: [None; 2],
         })
+    }
+
+    /// The bodies the last `1CA90` restored; the mouth walk takes them once.
+    pub fn take_restored_this_visit(&mut self) -> [Option<u32>; 2] {
+        std::mem::take(&mut self.restored_this_visit)
     }
 
     pub fn rows(&self) -> &[HiveBirthRowRuntime] {
@@ -363,16 +373,46 @@ impl HiveBirthRuntime {
         request: HiveEjectionRequest,
         host: &mut H,
     ) -> Result<HiveEjectionOutcome, HiveEjectionBlock<H::Block>> {
-        if self
-            .ejection_slots
-            .iter()
-            .any(|slot| slot.child_handle == Some(request.child_handle))
-        {
+        self.eject(request, [None; 2], host)
+    }
+
+    /// The mouth walk's `1C830` on a body that fell into a live Hive's mouth,
+    /// then the trailing `1CA90`'s aging of a new launch. `restored` is this
+    /// visit's [`Self::take_restored_this_visit`]: those slots still hold
+    /// their body when retail's walk runs.
+    pub fn eject_mouth_body<H: HiveBirthHost>(
+        &mut self,
+        request: HiveEjectionRequest,
+        elapsed_us: u32,
+        restored: [Option<u32>; 2],
+        host: &mut H,
+    ) -> Result<HiveEjectionOutcome, HiveEjectionBlock<H::Block>> {
+        let outcome = self.eject(request, restored, host)?;
+        if let HiveEjectionOutcome::Launched { slot_index } = outcome {
+            let slot = &mut self.ejection_slots[slot_index];
+            if (elapsed_us as i32) < slot.timer_us {
+                slot.timer_us = slot.timer_us.wrapping_sub(elapsed_us as i32);
+            } else {
+                host.restore_hive_child_pairs(request.child_handle);
+                *slot = HiveEjectionSlot::default();
+            }
+        }
+        Ok(outcome)
+    }
+
+    fn eject<H: HiveBirthHost>(
+        &mut self,
+        request: HiveEjectionRequest,
+        restored: [Option<u32>; 2],
+        host: &mut H,
+    ) -> Result<HiveEjectionOutcome, HiveEjectionBlock<H::Block>> {
+        let held = |index: usize| self.ejection_slots[index].child_handle.or(restored[index]);
+        if (0..2).any(|index| held(index) == Some(request.child_handle)) {
             return Ok(HiveEjectionOutcome::AlreadyRecorded);
         }
         let mut free_slot = None;
-        for (index, slot) in self.ejection_slots.iter().enumerate() {
-            let present = match slot.child_handle {
+        for index in 0..2 {
+            let present = match held(index) {
                 Some(handle) => host
                     .child_state_flags(handle)
                     .map_err(HiveEjectionBlock::Host)?
@@ -433,6 +473,7 @@ impl HiveBirthRuntime {
     ) -> Vec<HiveBirthBlock<H::Block>> {
         let elapsed_us = elapsed_us as i32;
         let mut blocks = Vec::new();
+        self.restored_this_visit = [None; 2];
         for (slot_index, slot) in self.ejection_slots.iter_mut().enumerate() {
             if slot.timer_us == 0 {
                 continue;
@@ -446,6 +487,7 @@ impl HiveBirthRuntime {
                 Ok(Some(_)) => {
                     host.restore_hive_child_pairs(child);
                     *slot = HiveEjectionSlot::default();
+                    self.restored_this_visit[slot_index] = Some(child);
                 }
                 Err(block) => {
                     blocks.push(HiveBirthBlock::EjectionTimer { slot_index, block });

@@ -281,6 +281,10 @@ impl AuthoredRadialEmitterController {
         self.birth_runtime.as_ref()
     }
 
+    pub fn birth_runtime_mut(&mut self) -> Option<&mut HiveBirthRuntime> {
+        self.birth_runtime.as_mut()
+    }
+
     pub const fn birth_decode_error(&self) -> Option<HiveBirthDecodeError> {
         self.birth_decode_error
     }

@@ -367,49 +367,31 @@ const HIVE_MOUTH_RADIUS_SQUARED: i32 = 0x24000;
 const HIVE_MOUTH_REACH_RAW: i32 = 8_000;
 
 impl EntityManager {
-    /// `FUN_0041BEB0`'s mouth walk, on each Hive whose Sub-N `+4C` marker
-    /// gate is set: an admitted (`0x8000`) body within the outer bound whose
-    /// offset from the mouth (Sub-N `+54`) lies more than `0x20` below it and
-    /// within `0x24000` squared horizontally. On a dying Hive a body without
-    /// capability bit 0 and without the carried bit `0x1000` is swallowed:
-    /// the controller's body (`FUN_00443AF0`) other than a Type98 is released
-    /// (`FUN_00448760`), any other is staged for the sweep (`FUN_00410B70`),
-    /// which this commits. A live Hive's mouth instead kills (`FUN_00410C10`)
-    /// and draws in (`FUN_0041C830`) its bodies, which the port does not run:
-    /// those are returned as the count of held fall-ins.
+    /// `FUN_0041BEB0`'s mouth walk on each dying Hive whose Sub-N `+4C`
+    /// marker gate is set: a body in its mouth ([`Self::body_in_hive_mouth`])
+    /// without capability bit 0 and without the carried bit `0x1000` is
+    /// swallowed: the controller's body (`FUN_00443AF0`) other than a Type98
+    /// is released (`FUN_00448760`), any other is staged for the sweep
+    /// (`FUN_00410B70`), which this commits. A live Hive's mouth is
+    /// [`crate::hive_mouth::apply_live_hive_mouths`].
     pub fn apply_hive_mouth_swallows(
         &mut self,
         controlled_body: Option<u32>,
-    ) -> (Vec<HiveMouthSwallow>, usize) {
+    ) -> Vec<HiveMouthSwallow> {
         let mut swallows = Vec::new();
-        let mut held_fall_ins = 0;
-        for hive in &self.entities {
+        for index in 0..self.entities.len() {
+            let hive = &self.entities[index];
+            if hive.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)
+                != RetailRuntimeValue::Known(DYING_STATE_BIT)
+            {
+                continue;
+            }
             let Some(mouth) = hive_wreck_contact_origin(hive) else {
                 continue;
             };
-            let hive_dying = hive.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)
-                == RetailRuntimeValue::Known(DYING_STATE_BIT);
+            let restored = self.take_hive_restored_this_visit(index);
             for body in &self.entities {
-                if body.collision.state_flags_at_0x08.masked(0x8000)
-                    != RetailRuntimeValue::Known(0x8000)
-                {
-                    continue;
-                }
-                let at = body.position_raw();
-                if crate::radial_damage::radial_distance_raw(mouth, at) >= HIVE_MOUTH_REACH_RAW {
-                    continue;
-                }
-                let [dx, dy, dz] = std::array::from_fn::<i32, 3, _>(|axis| {
-                    i32::from(at[axis].wrapping_sub(mouth[axis]))
-                });
-                if dy >= HIVE_MOUTH_DEPTH_RAW
-                    || dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz))
-                        >= HIVE_MOUTH_RADIUS_SQUARED
-                {
-                    continue;
-                }
-                if !hive_dying {
-                    held_fall_ins += 1;
+                if !in_hive_mouth(mouth, body) || restored.contains(&Some(body.id)) {
                     continue;
                 }
                 if body.capability_flags & 1 != 0
@@ -443,8 +425,50 @@ impl EntityManager {
                 self.queue_actor_deferred_destroy(id);
             }
         }
-        (swallows, held_fall_ins)
+        swallows
     }
+
+    /// The mouth of a live Hive: Sub-N `+4C` set and the dying bit clear.
+    pub(crate) fn live_hive_mouth(&self, hive_id: u32) -> Option<[i16; 3]> {
+        let hive = self.entities.iter().find(|entity| entity.id == hive_id)?;
+        (hive.collision.state_flags_at_0x08.masked(DYING_STATE_BIT) == RetailRuntimeValue::Known(0))
+            .then(|| hive_wreck_contact_origin(hive))
+            .flatten()
+    }
+
+    /// Whether `body_id` lies in `mouth` as the walk tests it.
+    pub(crate) fn body_in_hive_mouth(&self, mouth: [i16; 3], body_id: u32) -> bool {
+        self.entities
+            .iter()
+            .find(|entity| entity.id == body_id)
+            .is_some_and(|body| in_hive_mouth(mouth, body))
+    }
+
+    /// The Hive's [`crate::hive_birth::HiveBirthRuntime::take_restored_this_visit`].
+    pub(crate) fn take_hive_restored_this_visit(&mut self, index: usize) -> [Option<u32>; 2] {
+        self.entities[index]
+            .authored_radial_emitter
+            .as_mut()
+            .and_then(|emitter| emitter.birth_runtime_mut())
+            .map_or([None; 2], |runtime| runtime.take_restored_this_visit())
+    }
+}
+
+/// `FUN_0041BEB0`'s mouth test: an admitted (`0x8000`) body within the outer
+/// bound whose offset from the mouth (Sub-N `+54`) lies more than `0x20`
+/// below it and within `0x24000` squared horizontally.
+fn in_hive_mouth(mouth: [i16; 3], body: &Entity) -> bool {
+    if body.collision.state_flags_at_0x08.masked(0x8000) != RetailRuntimeValue::Known(0x8000) {
+        return false;
+    }
+    let at = body.position_raw();
+    if crate::radial_damage::radial_distance_raw(mouth, at) >= HIVE_MOUTH_REACH_RAW {
+        return false;
+    }
+    let [dx, dy, dz] =
+        std::array::from_fn::<i32, 3, _>(|axis| i32::from(at[axis].wrapping_sub(mouth[axis])));
+    dy < HIVE_MOUTH_DEPTH_RAW
+        && dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz)) < HIVE_MOUTH_RADIUS_SQUARED
 }
 
 /// Why `FUN_00410C10` could not run on a Hive.

@@ -719,3 +719,52 @@ fn actual_level_one_animation_runs_abort_row_and_retains_three_success_cap() {
         "death does not refund lifetime production or prune after total cap"
     );
 }
+
+#[test]
+fn a_mouth_body_sees_the_slots_this_visit_restored_and_ages_its_launch() {
+    let mut runtime = runtime(&[]);
+    let mut host = Host {
+        random: (1..=12).collect(),
+        ..Host::default()
+    };
+    for handle in [100, 101, 7] {
+        host.states.insert(handle, 0x8000);
+    }
+    runtime.eject_child(request(100), &mut host).unwrap();
+    runtime.eject_child(request(101), &mut host).unwrap();
+    // The visit's 1CA90 restores both; retail's walk ran before it.
+    assert!(runtime.advance_ejections(500_000, &mut host).is_empty());
+    assert_eq!(runtime.ejection_slots(), &[HiveEjectionSlot::default(); 2]);
+    let restored = runtime.take_restored_this_visit();
+    assert_eq!(restored, [Some(100), Some(101)]);
+    assert_eq!(runtime.take_restored_this_visit(), [None; 2]);
+    assert_eq!(
+        runtime.eject_mouth_body(request(100), 20_000, restored, &mut host),
+        Ok(HiveEjectionOutcome::AlreadyRecorded)
+    );
+    assert_eq!(
+        runtime.eject_mouth_body(request(7), 20_000, restored, &mut host),
+        Ok(HiveEjectionOutcome::SlotsOccupied)
+    );
+    // A held body gone frees its slot, as 3A580's miss does.
+    host.states.remove(&100);
+    assert_eq!(
+        runtime.eject_mouth_body(request(7), 20_000, restored, &mut host),
+        Ok(HiveEjectionOutcome::Launched { slot_index: 0 })
+    );
+    // The trailing 1CA90 ages the launch in the same visit.
+    assert_eq!(
+        runtime.ejection_slots()[0],
+        HiveEjectionSlot {
+            child_handle: Some(7),
+            timer_us: 480_000
+        }
+    );
+    // A visit as long as the delay restores it at once.
+    assert_eq!(
+        runtime.eject_mouth_body(request(101), 500_000, [None; 2], &mut host),
+        Ok(HiveEjectionOutcome::Launched { slot_index: 1 })
+    );
+    assert_eq!(runtime.ejection_slots()[1], HiveEjectionSlot::default());
+    assert_eq!(host.events().last(), Some(&Event::Restore(101)));
+}
