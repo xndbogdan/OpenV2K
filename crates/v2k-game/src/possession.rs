@@ -74,6 +74,20 @@ impl Possession {
     }
 }
 
+/// The possessed body's owner in the port while Player Control runs on it:
+/// the controller words and whether the body's own owner was the native one
+/// (any world) or the fresh Level 1 one, and its context before the takeover
+/// (Player Control's replaces it). The task scheduler holds it, so a
+/// shot, blast or pair reaching the body finds its owner there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PossessionCustody {
+    pub state: Possession,
+    pub native_owner: bool,
+    /// The body's own behavior context before the takeover, which the
+    /// release's reinstall starts from.
+    pub previous_context: crate::entity_behavior::BehaviorContextRuntime,
+}
+
 /// Passive Player (`FUN_00446FC0`) smokes a craft below this health.
 const PASSIVE_SMOKE_BELOW_HEALTH: i32 = 20_000;
 

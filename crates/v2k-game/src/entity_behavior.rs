@@ -386,6 +386,22 @@ impl BehaviorContextRuntime {
         }
     }
 
+    /// `FUN_004480E0`'s install on the possessed body: `FUN_0040ABB0` reuses
+    /// its context for Player Control's Hovering style from Type46's list
+    /// (`+D0`), keeping the target and auxiliary words.
+    pub fn possessed_by_player_control(self) -> Option<Self> {
+        let program = behavior_program(24)?;
+        let next = self.reselect_named_type_default(
+            program,
+            program.initial_style_table_index_raw,
+            program.initial_style,
+        )?;
+        Some(Self {
+            choice_list_source: RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeRecord(46)),
+            ..next
+        })
+    }
+
     /// `FUN_0040ABE0` with a request's list: as
     /// [`Self::from_fresh_weighted_selection`], with that list as the source.
     pub(crate) fn from_fresh_weighted_selection_from(

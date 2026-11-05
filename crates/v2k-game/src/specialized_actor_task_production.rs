@@ -1312,6 +1312,11 @@ pub struct SpecializedActorTaskScheduler {
     owners: Vec<SpecializedActorTaskOwner>,
     terminal_abort_origins: Vec<crate::main_base_abort::MainBaseTerminalAbortOrigin>,
     hive_diagnostics: Vec<String>,
+    /// The possessed body's owner (`FUN_004480E0` to `FUN_00446D70`).
+    pub possession: Option<crate::possession::PossessionCustody>,
+    /// A release the possessed body's death ran inside a damage call, for
+    /// the session's MindBall and view.
+    pub possession_released: Option<crate::possession::live::Released>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1548,6 +1553,8 @@ impl SpecializedActorTaskScheduler {
             owners: Vec::new(),
             terminal_abort_origins: Vec::new(),
             hive_diagnostics: Vec::new(),
+            possession: None,
+            possession_released: None,
         }
     }
 
@@ -1568,6 +1575,8 @@ impl SpecializedActorTaskScheduler {
             terminal_abort_origins: self.terminal_abort_origins.iter()
                 .map(crate::main_base_abort::MainBaseTerminalAbortOrigin::fork_for_main_base_abort_transaction)
                 .collect(),
+            possession: self.possession,
+            possession_released: self.possession_released.clone(),
         }
     }
 
@@ -4391,6 +4400,8 @@ impl SpecializedActorTaskScheduler {
     /// clear.
     pub fn clear_after_manager_reset(&mut self) {
         self.owners.clear();
+        self.possession = None;
+        self.possession_released = None;
     }
 
     pub fn is_empty(&self) -> bool {

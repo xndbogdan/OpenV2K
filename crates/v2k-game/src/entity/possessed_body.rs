@@ -553,13 +553,28 @@ pub enum PossessionReleaseBlock {
 }
 
 impl EntityManager {
-    /// The Hovering style's initializer (`FUN_004464F0`) on the target:
+    /// The Player Control context `FUN_004480E0` installs on the body, or
+    /// `None` when its context is not known.
+    pub fn player_control_context(&self, id: u32) -> Option<BehaviorContextRuntime> {
+        match self
+            .iter_all()
+            .find(|entity| entity.id == id)?
+            .current_behavior_context
+        {
+            RetailRuntimeValue::Known(Some(context)) => context.possessed_by_player_control(),
+            _ => None,
+        }
+    }
+
+    /// The install of `context` (from [`Self::player_control_context`]) and
+    /// the Hovering style's initializer (`FUN_004464F0`) on the target:
     /// Tertiary, then Secondary cleared, then Player Control in Primary,
     /// which the possession state holds.
-    pub fn possess_body_tasks(&mut self, id: u32) -> bool {
+    pub fn possess_body_tasks(&mut self, id: u32, context: BehaviorContextRuntime) -> bool {
         let Some(entity) = self.entity_mut(id) else {
             return false;
         };
+        entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
         for slot in [
             crate::actor_task_owner::ActorTaskSlot::Tertiary,
             crate::actor_task_owner::ActorTaskSlot::Secondary,

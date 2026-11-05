@@ -1611,9 +1611,9 @@ record is the shooter body's component `+0x38`: mode `+34`, mode time `+38`,
 target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
 
 **Port status: the takeover, control, release, MindBall, the body's loss,
-TAB, the cargo keys, Passive Player's smoke and the Hive's swallow are ported
-for an empty-handed Type17; other targets and the possessed body's pairs are
-held.** Selector `0x1B` fires on its 400 ms cadence with no sound
+TAB, the cargo keys, Passive Player's smoke, the Hive's swallow and the shots
+and blasts that reach the possessed body are ported for an empty-handed
+Type17; other targets and the possessed body's pairs are held.** Selector `0x1B` fires on its 400 ms cadence with no sound
 (`FUN_00424650` skips a zero sound) and the A/B gun phase of any weapon; each
 launch, drained at the craft's draw, starts the lock. The lock's advance,
 search, hold test and reticle run as retail's: the retail lab's Level 1 lock
@@ -1630,9 +1630,14 @@ behavior before the target's own visit, so on the takeover frame the target's
 only visit is its first Player Control one.
 
 The takeover (`FUN_004480E0`) draws one word for each behavior source it
-installs (`FUN_00425680`: the target's, then the craft's), clears the
-target's three task slots in the Hovering style initializer's order
-(`FUN_004464F0`) and holds the 60000 ms countdown. A possessed Type17 runs
+installs (`FUN_00425680`: the target's, then the craft's), installs Player
+Control's context on the target (`FUN_0040ABB0` reuses it for the Hovering
+style from Type46's list, keeping its target and auxiliary words), clears
+the target's three task slots in the Hovering style initializer's order
+(`FUN_004464F0`) and holds the 60000 ms countdown. The task scheduler then
+owns the possessed body: the controller words, whether its own owner was the
+native one, and its own context, which the release puts back before its
+reinstall (retail clears the body's `+D0` to its type's list there). A possessed Type17 runs
 Player Control in the craft's phase of the frame: the Hovering style's turn
 word turns it by `turn * 0x34 / 64` (Sub-D, `FUN_00420360`, writing its rate
 and step), the `FUN_0040E640` attitude runs from its previous matrix, then
@@ -1664,6 +1669,19 @@ set the `+20E` countdown, which then runs on the body's Player Control visit
 body's hold, `FUN_00446D30`), E turns the body's hold (`FUN_004442E0`), the
 weapon keys need its Sub-E (a Type17 has none), and TAB releases the body on
 the following visit (`FUN_004442B0`).
+
+Shots and blasts reach the possessed body through that owner, and none
+runs a behavior hook: every Player Control style has null `+20`, `+24` and
+`+28` words, so the common vtable's `FUN_0040DAC0`, `FUN_0040DA00` and
+`FUN_0040DA60` only pass on. A particle takes `FUN_00410EB0` (the last-hit
+tick `+34`) or `FUN_00411250`/`FUN_00411320` (the infect or cure model
+switch and cue), then `FUN_00411030`'s impulse and `FUN_00415040`'s checked
+damage, then the primary hit's suffix (the accepted-hit sound unless dying,
+and capability bit 3's class 5 particle at the model's front). A blast
+(`FUN_00414AE0`) admits it, adds its impulse and delivers through
+`FUN_00415040` or `FUN_00414E10` as for any body. A lethal one runs the
+body's death inside the damage call, which releases it as below; the
+session's MindBall flight then starts at the next possession visit.
 
 The body's loss takes retail's two paths, both seen in the retail lab (the
 Level 1 possession above):
@@ -1698,10 +1716,10 @@ A dying Hive's mouth releases a possessed body that falls into it
 Held, each with one logged stop a run:
 
 - A target other than an empty-handed Type17 in custody; the lock ends there
-  as before. Every lockable type (capability bit 3) is a target in retail:
-  types 2, 5, 10-21, 25, 26, 28-33, 37-41, 43, 44, 47, 53, 55-58, 67 (the
-  Hive, in every world), 71, 73, 76, 77, 80, 81, 87, 94, 105, 108-110, 117,
-  119, 122 and 126-129. Each needs Player Control on its own components
+  as before. Every lockable type (capability bit 3) whose body can lose state
+  bit `0x8000000` is a target in retail: types 2, 5, 10-21, 25, 26, 28-33,
+  37-41, 43, 44, 47, 53, 55-58, 71, 73, 76, 77, 80, 81, 87, 94, 105, 108,
+  109, 117, 119, 122 and 126-129. Each needs Player Control on its own components
   (`FUN_00446640`'s Sub-E fire through `FUN_00424E70`, `FUN_00444CF0`'s Sub-E
   elevation, Sub-F/I/K/L steps, and the TAB style's switch to the VTOL styles
   for a body with neither Sub-C nor Sub-I, `+20D`) and its own behavior's
@@ -1713,17 +1731,45 @@ Held, each with one logged stop a run:
   (`FUN_004185C0`) and the drop key pops it; the port's custody of a carried
   body stays with its captor's owner, which the takeover removes.
 - The possessed body's pairs, which take the player's pair behavior
-  (`FUN_00447D70`, including its `FUN_00443B50` pickup of a person), and so
-  the drop key on a held person (`FUN_00446D30`) and the death's cargo drop
-  (`FUN_00447590`); and damage reaching the possessed body from outside its
-  own visit (shots, blasts, pairs), whose routes need the body's owner, which
-  the takeover removed.
-- The possessed body's terrain and water contact: the Hovering style's
-  install (`FUN_0040EA10`) writes its environment masks into the body's state
-  word (`0x10010`), admitting the later contact walk's terrain response
-  (`FUN_004141D0`) and the style's `+10` hook `FUN_00448280` (force feedback,
-  and the 15000 packet on a lava cell); the port keeps the type's own state
-  word, under which a living Type17 has no terrain contact.
+  (`FUN_00447D70`, including its `FUN_00443B50` pickup of a person, and the
+  pair's damage), and so the drop key on a held person (`FUN_00446D30`) and
+  the death's cargo drop (`FUN_00447590`). The port skips the body's pair
+  walk; another subject's walk meets Player Control's context, whose pair
+  hook it does not own, and stops there. The retail lab shows what they
+  need (Level 1, a person moved onto the possessed Type17 at pass 2100):
+  `FUN_00447D70` picks the person up through `FUN_00443B50` (the player's row
+  callbacks `FUN_00443D30`/`FUN_00443D10`, then `FUN_00416700`) and returns
+  the `0xA300` tag `0x4C20D0`, so the pair has no physical response; the
+  craft's own pair hook, Passive Player's `FUN_00447D70`, fails
+  `FUN_00443AF0` (the controller's `+68` is the body) and returns `0x4C20C0`,
+  which skips the other body's hook and ends the craft's walk after that
+  pair's response and damage; three of those craft pairs (1800 each, source
+  type 46) killed the body, whose death popped its hold (`FUN_00418500` ->
+  `FUN_00443D30`: a Type93 at the drop point and `FUN_00416750`) before the
+  release and its MindBall. At 20 ms steps the drop key never drops: its
+  `+20E` countdown of -80 reaches exactly zero, which `FUN_00446640` takes
+  as no expiry. Porting them means a carrier other than the craft for the
+  port's Sub-J append, Type93 drop and lift mass, and a possessed lane in
+  the pair walk.
+
+Two things retail does not allow, so nothing is held for them:
+
+- The Hive (type 67) and the Queen (type 110) are never locked. Their type
+  `+C0` carries bit `0x20000`, which `FUN_0040D3C0` turns into state bit
+  `0x8000000` at construction; no style of theirs clears it (only classes 6
+  and 7 carry `+38` bit `0x20000`), and the search (`FUN_00420E00`) skips a
+  body with it. The retail lab's Level 1 Hive held it in all 4,700 samples.
+  Type43 is lockable: its class 7 style clears the bit.
+- A possessed Type17 has no terrain or water contact. The Hovering style's
+  install (`FUN_0040EA10`) decodes its `+34` (`0x10010`) and `+38` (0)
+  through `FUN_0040D440`, which maps neither bit 0x10 nor 0x10000, so the
+  state word keeps the type's bits; the terrain response and the style's
+  `+10` hook `FUN_00448280` (force feedback, and the 15000 packet on a lava
+  cell) need state bit `0x10000` (`FUN_00411AD0`), which a Type17's type
+  `+C0` bit 1 clears at construction. In the retail lab the possessed Type17
+  kept its state word through its 3000 passes and `FUN_00448280` never ran.
+  The port matches: it keeps the body's own state word. Those hooks reach
+  only a possessed body whose own state word holds `0x10000`.
 
 The port runs the possessed body in the craft's phase of the frame, after
 the actor pass, as it runs the craft; retail visits it at its own place in

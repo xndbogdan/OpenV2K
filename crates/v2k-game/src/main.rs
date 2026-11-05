@@ -1122,8 +1122,6 @@ struct PossessionFrame<'a> {
     static_damage: &'a mut StaticDamageScheduler,
     notifications: &'a mut GameplayNotifications,
     world_fx: &'a mut WorldFx,
-    possession: &'a mut Option<Possession>,
-    native_owner: &'a bool,
     mind_ball: &'a mut Option<(u32, MindBallFlight)>,
     followed_body: &'a mut Option<u32>,
     chase_camera: &'a mut ChaseCameraState,
@@ -1153,15 +1151,14 @@ enum TakeoverHeld {
 /// `FUN_004480E0` on the lock's target: one selector word for each behavior
 /// source it installs (`FUN_00425680`: the target's, then the craft's), the
 /// target's task slots cleared in the Hovering style's order (`FUN_004464F0`)
-/// and the 60000 ms countdown. Returns the controller words and whether the
-/// target's owner was the native one.
+/// and the 60000 ms countdown: the possessed body's owner.
 fn take_over_possession_target(
     em: &mut EntityManager,
     tasks: &mut SpecializedActorTaskScheduler,
     world_fx: &mut WorldFx,
     craft: u32,
     target: u32,
-) -> Result<(Possession, bool), TakeoverHeld> {
+) -> Result<v2k_game::possession::PossessionCustody, TakeoverHeld> {
     let entity = em
         .iter_all()
         .find(|entity| entity.id == target)
@@ -1176,13 +1173,24 @@ fn take_over_possession_target(
     }
     let native_owner =
         v2k_game::intro2_type17::intro2_type17_allocation_authenticates_public(entity);
+    let previous_context = match entity.current_behavior_context {
+        RetailRuntimeValue::Known(Some(context)) => context,
+        _ => return Err(TakeoverHeld::Custody),
+    };
+    let context = em
+        .player_control_context(target)
+        .ok_or(TakeoverHeld::Custody)?;
     if !tasks.release_type17_for_possession(target) {
         return Err(TakeoverHeld::Custody);
     }
     world_fx.next_shared_retail_random_u16();
     world_fx.next_shared_retail_random_u16();
-    em.possess_body_tasks(target);
-    Ok((Possession::take_over(craft, target), native_owner))
+    em.possess_body_tasks(target, context);
+    Ok(v2k_game::possession::PossessionCustody {
+        state: Possession::take_over(craft, target),
+        native_owner,
+        previous_context,
+    })
 }
 
 /// The possessed body's Player Control visit (`FUN_00446640`): the `+70`
@@ -1200,8 +1208,6 @@ fn advance_possession(frame: PossessionFrame<'_>) {
         static_damage,
         notifications,
         world_fx,
-        possession,
-        native_owner,
         mind_ball,
         followed_body,
         chase_camera,
@@ -1213,8 +1219,10 @@ fn advance_possession(frame: PossessionFrame<'_>) {
         elapsed_micros,
         retail_tick,
     } = frame;
-    let mut released = None;
-    if let Some(state) = possession.as_mut() {
+    // A death inside a damage call since the last visit released the body.
+    let mut released = tasks.possession_released.take();
+    if let Some(custody) = tasks.possession {
+        let mut state = custody.state;
         let body_live = em
             .iter_all()
             .any(|entity| entity.id == state.body && entity.active);
@@ -1235,7 +1243,7 @@ fn advance_possession(frame: PossessionFrame<'_>) {
         if !body_live {
             // FUN_00446640 never runs; the frame's end kills the player.
         } else if state.advance(craft_live, elapsed_micros) {
-            let state = possession.take().expect("possessed");
+            tasks.possession = None;
             released = Some(v2k_game::possession::live::release(
                 &mut v2k_game::possession::live::PossessionWorld {
                     entities: em,
@@ -1244,14 +1252,15 @@ fn advance_possession(frame: PossessionFrame<'_>) {
                     retail_tick,
                 },
                 cache,
-                state,
-                *native_owner,
+                v2k_game::possession::PossessionCustody { state, ..custody },
             ));
         } else {
             if tab_pressed {
                 state.end_on_next_visit();
             }
-            let state = *state;
+            if let Some(custody) = tasks.possession.as_mut() {
+                custody.state = state;
+            }
             let water_enabled = cache
                 .level_desc()
                 .and_then(|level| level.raw_u32(0x84))
@@ -1294,12 +1303,11 @@ fn advance_possession(frame: PossessionFrame<'_>) {
                         static_damage,
                         notifications,
                         contact,
-                        state,
-                        *native_owner,
+                        v2k_game::possession::PossessionCustody { state, ..custody },
                     ) {
                         Ok(None) => {}
                         Ok(Some(release)) => {
-                            *possession = None;
+                            tasks.possession = None;
                             released = Some(release);
                         }
                         Err(block) => {
@@ -1350,9 +1358,12 @@ fn advance_possession(frame: PossessionFrame<'_>) {
             *followed_body = None;
         }
     }
-    POSSESSED.store(possession.is_some(), std::sync::atomic::Ordering::Relaxed);
+    POSSESSED.store(
+        tasks.possession.is_some(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     POSSESSED_BODY.store(
-        possession.map_or(0, |state| state.body),
+        tasks.possession.map_or(0, |custody| custody.state.body),
         std::sync::atomic::Ordering::Relaxed,
     );
 }
@@ -2829,13 +2840,10 @@ fn run_game(
     let mut pending_player_shots = Vec::new();
     let mut mind_control_lock = PlayerMindControlLock::default();
     let mut mind_control_takeover_reported = false;
-    // FUN_004480E0's controller words, the MindBall a release leaves, the
-    // session's followed body (+2A8) when it is not the craft, and the
-    // possession's typed stops, each reported once a run.
-    let mut possession: Option<Possession> = None;
-    // Whether the possessed Type17's owner was the native one (any world) or
-    // the fresh Level-1 Follow Beacons one.
-    let mut possessed_native_owner = false;
+    // The MindBall a release leaves, the session's followed body (+2A8) when
+    // it is not the craft, and the possession's typed stops, each reported
+    // once a run. The task scheduler owns the possessed body (FUN_004480E0's
+    // controller words).
     let mut mind_ball: Option<(u32, MindBallFlight)> = None;
     let mut mind_ball_spin = MindBallSpin::default();
     let mut followed_body: Option<u32> = None;
@@ -5623,7 +5631,7 @@ fn run_game(
                 camera = Camera::new(render_w as f32 / render_h.max(1) as f32);
                 world_projection.apply_to(&mut camera, (render_w, render_h));
                 chase_camera.reset();
-                possession = None;
+                specialized_actor_tasks.possession = None;
                 mind_ball = None;
                 followed_body = None;
                 if let Some(player) = em.player() {
@@ -8173,7 +8181,10 @@ fn run_game(
                             // TAB = hovercraft <-> VTOL mode toggle (V2000).
                             // SDL repeat events are filtered by GameWindow, so
                             // this is one request per physical key-down edge.
-                            if *kc == Keycode::Tab && has_player && possession.is_some() {
+                            if *kc == Keycode::Tab
+                                && has_player
+                                && specialized_actor_tasks.possession.is_some()
+                            {
                                 // FUN_004442B0, from the reader inside the
                                 // possessed body's visit.
                                 possession_tab_pressed = true;
@@ -8467,7 +8478,7 @@ fn run_game(
                 // while the drop context reads terrain: lend the radar apart.
                 // While a body is possessed the controller's +20E countdown
                 // runs on that body's Player Control visit instead.
-                let cargo_frame = if possession.is_some() {
+                let cargo_frame = if specialized_actor_tasks.possession.is_some() {
                     v2k_game::entity::PlayerCargoFrameOutcome {
                         beam: None,
                         blocked: Vec::new(),
@@ -8538,7 +8549,7 @@ fn run_game(
                 }
 
                 // The craft ran Player Control this frame, or Passive Player.
-                let possessed_at_entry = possession.is_some();
+                let possessed_at_entry = specialized_actor_tasks.possession.is_some();
                 // FUN_00444F60 -> FUN_00420A50 ends the craft's mode controller
                 // with the lock's advance outside network play. The craft
                 // leads the live list, so the lock reads the other bodies
@@ -8580,10 +8591,9 @@ fn run_game(
                             craft,
                             target,
                         ) {
-                            Ok((state, native_owner)) => {
-                                possession = Some(state);
+                            Ok(custody) => {
+                                specialized_actor_tasks.possession = Some(custody);
                                 possession_tab_pressed = false;
-                                possessed_native_owner = native_owner;
                                 followed_body = Some(target);
                                 log!("Possession Ray: body {target} taken over");
                             }
@@ -8678,9 +8688,9 @@ fn run_game(
                 // possessed body gone without its death (which would have
                 // released it) leaves the controller bodiless, and
                 // FUN_00450980 kills the player as the craft's own end does.
-                if possession.is_some_and(|state| {
+                if specialized_actor_tasks.possession.is_some_and(|custody| {
                     !em.iter_all()
-                        .any(|entity| entity.id == state.body && entity.active)
+                        .any(|entity| entity.id == custody.state.body && entity.active)
                 }) && network_game.is_none()
                 {
                     log!("Possession: the possessed body is gone; the player dies");
@@ -9245,7 +9255,10 @@ fn run_game(
                     }
                     // The possessed body's Player Control, then the MindBall,
                     // at the tail of the live list.
-                    if possession.is_some() || mind_ball.is_some() {
+                    if specialized_actor_tasks.possession.is_some()
+                        || specialized_actor_tasks.possession_released.is_some()
+                        || mind_ball.is_some()
+                    {
                         advance_possession(PossessionFrame {
                             em,
                             tasks: &mut specialized_actor_tasks,
@@ -9253,8 +9266,6 @@ fn run_game(
                             static_damage: &mut static_damage,
                             notifications: &mut gameplay_notifications,
                             world_fx: &mut world_fx,
-                            possession: &mut possession,
-                            native_owner: &possessed_native_owner,
                             mind_ball: &mut mind_ball,
                             followed_body: &mut followed_body,
                             chase_camera: &mut chase_camera,
@@ -9787,12 +9798,16 @@ fn run_game(
                 world_fx.process_pending();
                 // FUN_0041BEB0's mouth walk: a dying Hive swallows the bodies
                 // that fall into its mouth; the possessed body is released.
-                let swallows = em.apply_hive_mouth_swallows(possession.map(|state| state.body));
+                let swallows = em.apply_hive_mouth_swallows(
+                    specialized_actor_tasks
+                        .possession
+                        .map(|custody| custody.state.body),
+                );
                 for swallow in swallows {
                     match swallow {
                         v2k_game::entity::HiveMouthSwallow::Controlled(id) => {
-                            if let Some(state) = possession.as_mut() {
-                                state.swallowed();
+                            if let Some(custody) = specialized_actor_tasks.possession.as_mut() {
+                                custody.state.swallowed();
                             }
                             log!("Hive mouth: the possessed body {id} is released");
                         }
@@ -11270,7 +11285,11 @@ fn run_game(
                             }
                         }
                     }
-                    if possession.is_some_and(|state| state.body == id) {
+                    if contact_frame
+                        .actor_tasks
+                        .possession
+                        .is_some_and(|custody| custody.state.body == id)
+                    {
                         // Its static response ran in its Player Control visit;
                         // its pairs take FUN_00447D70, held.
                         possession_stop(&mut possession_stops_reported, POSSESSION_PAIRS_HELD);

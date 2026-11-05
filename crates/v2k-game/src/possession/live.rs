@@ -2,7 +2,7 @@
 //! contact's style hook (`FUN_00447C90`) and `FUN_00411760` deliveries, and
 //! its death, whose `FUN_00447280` initializer releases it.
 
-use super::Possession;
+use super::{Possession, PossessionCustody};
 use crate::damage::{DamageDeliveryRecord, DamagePacket};
 use crate::entity::{EntityManager, PossessedStaticContact};
 use crate::entity_collision_state::{RetailRuntimeValue, DYING_STATE_BIT};
@@ -50,10 +50,20 @@ pub struct Released {
 pub fn release(
     world: &mut PossessionWorld<'_>,
     resources: &ResourceCache,
-    state: Possession,
-    native_owner: bool,
+    custody: PossessionCustody,
 ) -> Released {
-    let Possession { body, craft, .. } = state;
+    let PossessionCustody {
+        state: Possession { body, craft, .. },
+        native_owner,
+        previous_context,
+    } = custody;
+    // Player Control's context leaves before the reinstall reads it (retail
+    // clears the body's `+D0` to its type's list): the body's own context
+    // from before the takeover returns, whose target and auxiliary words the
+    // port's Player Control never writes.
+    if let Some(entity) = world.entities.entity_mut(body) {
+        entity.current_behavior_context = RetailRuntimeValue::Known(Some(previous_context));
+    }
     world.world_fx.next_shared_retail_random_u16();
     let dying = world
         .entities
@@ -165,8 +175,7 @@ pub fn deliver_static_contact(
     static_damage: &mut StaticDamageScheduler,
     notifications: &mut GameplayNotifications,
     contact: PossessedStaticContact,
-    state: Possession,
-    native_owner: bool,
+    custody: PossessionCustody,
 ) -> Result<Option<Released>, PossessedContactBlock> {
     if let Some((sound, position)) = contact.contact_sound {
         world
@@ -192,7 +201,7 @@ pub fn deliver_static_contact(
     if contact.impact_raw == 0 {
         return Ok(None);
     }
-    let body = state.body;
+    let body = custody.state.body;
     let entity_type = world
         .entities
         .iter_all()
@@ -229,40 +238,7 @@ pub fn deliver_static_contact(
             _ => {}
         }
     }
-    let mut released = None;
-    let tasks = &mut *world.tasks;
-    let retail_tick = world.retail_tick;
-    let resources = &*resources;
-    let result = apply_live_actor_checked_damage(
-        world.entities,
-        world.world_fx,
-        LiveActorDamageRequest {
-            entity_id: body,
-            delivery,
-            entry: LiveActorDamageEntry::Checked,
-            ratio_numerator: 0,
-            ratio_denominator: 0,
-            feedback: Some(LiveActorDamageFeedback {
-                notifications,
-                retail_tick,
-            }),
-        },
-        |entities, world_fx, _feedback| {
-            let mut world = PossessionWorld {
-                entities,
-                tasks,
-                world_fx,
-                retail_tick,
-            };
-            released = Some(die(&mut world, resources, state, native_owner)?);
-            Ok::<_, PossessedContactBlock>(LiveActorDeathResult {
-                returned_nonzero: true,
-                publication: None::<()>,
-            })
-        },
-    );
-    result.map_err(|error| PossessedContactBlock::Damage(format!("{error:?}")))?;
-    Ok(released)
+    checked_damage(world, resources, notifications, delivery, custody).map(|(released, _)| released)
 }
 
 /// `FUN_00410C10` on the possessed body: health 0, the dying bit and the
@@ -273,10 +249,9 @@ pub fn deliver_static_contact(
 pub fn die(
     world: &mut PossessionWorld<'_>,
     resources: &ResourceCache,
-    state: Possession,
-    native_owner: bool,
+    custody: PossessionCustody,
 ) -> Result<Released, PossessedContactBlock> {
-    let body = state.body;
+    let body = custody.state.body;
     let entity = world
         .entities
         .iter_all()
@@ -327,5 +302,275 @@ pub fn die(
     world
         .world_fx
         .emit_player_wreck_burst_raw(position, extent, sea_level, body);
-    Ok(release(world, resources, state, native_owner))
+    Ok(release(world, resources, custody))
+}
+
+/// A particle reaching the possessed body: `FUN_00410EB0` (a primary hit
+/// stamps the last-hit tick `+34`), or `FUN_00411250`/`FUN_00411320` (the
+/// infect or cure model switch), then the common vtable `0x4C8A30`'s
+/// `FUN_0040DAC0`/`FUN_0040DA00`/`FUN_0040DA60`, whose style hooks (`+28`,
+/// `+20`, `+24`) are null in every Player Control style; then
+/// `FUN_00411030`'s impulse and `FUN_00415040`'s checked damage, whose lethal
+/// hit runs the body's death and so its release; and the primary hit's
+/// suffix (the accepted-hit sound unless dying, and capability bit 3's class
+/// 5 particle).
+pub fn hit_by_particle(
+    world: &mut PossessionWorld<'_>,
+    resources: &ResourceCache,
+    notifications: &mut GameplayNotifications,
+    impact: crate::world_fx::ParticleEntityImpact,
+    custody: PossessionCustody,
+) -> Result<Option<Released>, PossessedContactBlock> {
+    use crate::damage::EntityHitEntry;
+    use crate::entity_collision_state::active_model_slot_from_state_flags;
+    use crate::impact_reaction::{
+        apply_impact_reaction, ImpactReactionBody, IMPACT_REACTION_ENABLED_STATE_BIT,
+        IMPACT_REACTION_NETWORKED_STATE_BIT, IMPACT_REACTION_SUPPRESSED_STATE_BIT,
+    };
+    let id = custody.state.body;
+    let delivery = impact
+        .packet_delivery()
+        .map_err(|()| PossessedContactBlock::Damage("particle provenance".to_owned()))?;
+    let entry = impact.entity_hit_entry();
+    let primary = !matches!(entry, EntityHitEntry::Infected | EntityHitEntry::Cured);
+    if primary {
+        world
+            .entities
+            .entity_mut(id)
+            .ok_or(PossessedContactBlock::Death("allocation"))?
+            .collision
+            .last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(world.retail_tick);
+    } else {
+        let applied = world
+            .entities
+            .apply_model_switch_particle_hit_prefix(id, entry)
+            .ok_or(PossessedContactBlock::Damage(
+                "model-switch prefix".to_owned(),
+            ))?;
+        if let Some(sound) = applied.sound_id {
+            world
+                .world_fx
+                .queue_fixed_positional_sound_raw(sound, applied.position_raw);
+        }
+    }
+    let Some(delivery) = delivery else {
+        return Ok(None);
+    };
+    let entity = world.entities.entity_mut(id).expect("found above");
+    let RetailRuntimeValue::Known(flags) = entity.collision.state_flags_at_0x08.masked(
+        IMPACT_REACTION_ENABLED_STATE_BIT
+            | IMPACT_REACTION_SUPPRESSED_STATE_BIT
+            | IMPACT_REACTION_NETWORKED_STATE_BIT,
+    ) else {
+        return Err(PossessedContactBlock::Death("state"));
+    };
+    if flags & IMPACT_REACTION_NETWORKED_STATE_BIT != 0 {
+        return Err(PossessedContactBlock::Damage("network impact".to_owned()));
+    }
+    let mut body = ImpactReactionBody {
+        state_flags_at_0x08: flags,
+        mass_raw_at_0xb0: entity.mass_raw,
+        linear_velocity_xyz_raw: entity.velocity_raw(),
+        angular_heading_pitch_roll_raw: entity.rotation_heading_pitch_roll_raw(),
+    };
+    let fx = &mut *world.world_fx;
+    apply_impact_reaction(
+        &mut body,
+        id,
+        delivery.packet.impact_sum_raw(),
+        impact.velocity_raw,
+        || u32::from(fx.next_shared_retail_random_u16()),
+    )
+    .map_err(|_| PossessedContactBlock::Damage("zero impact mass".to_owned()))?;
+    entity.set_velocity_raw(body.linear_velocity_xyz_raw);
+    entity.set_rotation_heading_pitch_roll_raw(body.angular_heading_pitch_roll_raw);
+    let entity_type = entity.entity_type;
+    let (released, filtered) = checked_damage(world, resources, notifications, delivery, custody)?;
+    if primary && filtered != 0 {
+        let metadata = world
+            .entities
+            .type_runtime_metadata(entity_type)
+            .ok_or(PossessedContactBlock::Death("metadata"))?;
+        let RetailRuntimeValue::Known(sound) = metadata.accepted_hit_presentation_sound_id else {
+            return Err(PossessedContactBlock::Damage(
+                "accepted-hit sound".to_owned(),
+            ));
+        };
+        let entity = world.entities.entity_mut(id).expect("found above");
+        let RetailRuntimeValue::Known(flags) = entity
+            .collision
+            .state_flags_at_0x08
+            .masked(DYING_STATE_BIT | 0x2000 | 0x4000 | 0x8000_0000)
+        else {
+            return Err(PossessedContactBlock::Death("state"));
+        };
+        if flags & DYING_STATE_BIT == 0 {
+            if let Some(sound) = sound {
+                world
+                    .world_fx
+                    .queue_fixed_positional_sound_raw(sound, entity.position_raw());
+            }
+        }
+        if entity.capability_flags & 8 != 0 {
+            let slot = active_model_slot_from_state_flags(flags);
+            let model = entity.model_slots[slot].ok_or(PossessedContactBlock::Death("model"))?;
+            let extent = resources
+                .global_model(model)
+                .ok_or(PossessedContactBlock::Death("model"))?
+                .radius;
+            let mut position = entity.position_raw();
+            position[2] = position[2].wrapping_sub(extent as i16);
+            world.world_fx.emit_primary_hit_capability_follow_up_raw(
+                crate::primary_hit::PrimaryHitCapabilityEmission {
+                    target_handle: id,
+                    target_allocation_identity: u64::from(id),
+                    selected_model_slot: slot,
+                    selected_global_model_id: model as u16,
+                    position_raw: position,
+                    particle_class: 5,
+                    particle_scale_raw: 0x800,
+                    owner_sign: flags >> 31,
+                },
+            );
+        }
+    }
+    Ok(released)
+}
+
+/// `FUN_00415040` on the possessed body with `delivery`: a lethal hit runs
+/// its death, which releases it. Returns the release and the filtered damage.
+fn checked_damage(
+    world: &mut PossessionWorld<'_>,
+    resources: &ResourceCache,
+    notifications: &mut GameplayNotifications,
+    delivery: DamageDeliveryRecord,
+    custody: PossessionCustody,
+) -> Result<(Option<Released>, i32), PossessedContactBlock> {
+    let mut released = None;
+    let tasks = &mut *world.tasks;
+    let retail_tick = world.retail_tick;
+    let result = apply_live_actor_checked_damage(
+        world.entities,
+        world.world_fx,
+        LiveActorDamageRequest {
+            entity_id: custody.state.body,
+            delivery,
+            entry: LiveActorDamageEntry::Checked,
+            ratio_numerator: 0,
+            ratio_denominator: 0,
+            feedback: Some(LiveActorDamageFeedback {
+                notifications,
+                retail_tick,
+            }),
+        },
+        |entities, world_fx, _feedback| {
+            let mut world = PossessionWorld {
+                entities,
+                tasks,
+                world_fx,
+                retail_tick,
+            };
+            released = Some(die(&mut world, resources, custody)?);
+            Ok::<_, PossessedContactBlock>(LiveActorDeathResult {
+                returned_nonzero: true,
+                publication: None::<()>,
+            })
+        },
+    )
+    .map_err(|error| PossessedContactBlock::Damage(format!("{error:?}")))?;
+    Ok((released, result.filtered_damage_raw))
+}
+
+/// What a shot did to the possessed body.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PossessedHitOutcome {
+    /// True when the hit killed and so released the body.
+    Applied(bool),
+    Blocked(PossessedContactBlock),
+}
+
+/// [`hit_by_particle`] from the Playing particle visit; a release goes to
+/// the scheduler for the session's MindBall.
+pub(crate) fn possessed_particle_hit(
+    frame: crate::shared_actor_impact::PlayingActorImpactFrame<'_>,
+    impact: crate::world_fx::ParticleEntityImpact,
+    custody: super::PossessionCustody,
+) -> PossessedHitOutcome {
+    let result = hit_by_particle(
+        &mut PossessionWorld {
+            entities: frame.entities,
+            tasks: frame.scheduler,
+            world_fx: frame.world_fx,
+            retail_tick: frame.retail_tick,
+        },
+        frame.resources,
+        frame.notifications,
+        impact,
+        custody,
+    );
+    match result {
+        Ok(released) => {
+            let died = released.is_some();
+            if released.is_some() {
+                frame.scheduler.possession = None;
+                frame.scheduler.possession_released = released;
+            }
+            PossessedHitOutcome::Applied(died)
+        }
+        Err(block) => PossessedHitOutcome::Blocked(block),
+    }
+}
+
+/// `FUN_00414AE0`'s visit of the possessed body: the blast's admission,
+/// impulse and checked damage are the common ones (no behavior hook), and a
+/// lethal hit runs its death, which releases it inside the damage call.
+pub(crate) struct PossessedRadialCallbacks<'a> {
+    pub scheduler: &'a mut SpecializedActorTaskScheduler,
+    pub resources: &'a ResourceCache,
+    pub custody: super::PossessionCustody,
+    pub released: Option<Released>,
+}
+
+impl crate::entity::DynamicRadialLiveCallbacks for PossessedRadialCallbacks<'_> {
+    fn before_native_actor_mutation(&mut self, _: &EntityManager, _: u32) -> bool {
+        true
+    }
+
+    fn standard_death(
+        &mut self,
+        manager: &mut EntityManager,
+        _id: u32,
+        _kind: u32,
+        world_fx: &mut WorldFx,
+        retail_tick: u32,
+        _notifications: &mut GameplayNotifications,
+    ) -> Option<
+        Result<
+            LiveActorDeathResult<crate::entity::DynamicRadialDeathPublication>,
+            crate::entity::DynamicRadialLiveBlockReason,
+        >,
+    > {
+        let result = die(
+            &mut PossessionWorld {
+                entities: manager,
+                tasks: self.scheduler,
+                world_fx,
+                retail_tick,
+            },
+            self.resources,
+            self.custody,
+        );
+        Some(match result {
+            Ok(released) => {
+                self.released = Some(released);
+                Ok(LiveActorDeathResult {
+                    returned_nonzero: true,
+                    publication: None,
+                })
+            }
+            Err(block) => Err(crate::entity::DynamicRadialLiveBlockReason::Possessed(
+                block,
+            )),
+        })
+    }
 }

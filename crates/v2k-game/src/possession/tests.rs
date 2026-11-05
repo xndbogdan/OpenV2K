@@ -305,7 +305,17 @@ fn a_possessed_type17_that_dies_is_released_into_its_own_death() {
         .expect("a Type17")
         .id;
     let mut tasks = SpecializedActorTaskScheduler::new();
-    manager.possess_body_tasks(body);
+    let previous_context = match manager
+        .iter_all()
+        .find(|entity| entity.id == body)
+        .unwrap()
+        .current_behavior_context
+    {
+        RetailRuntimeValue::Known(Some(context)) => context,
+        _ => panic!("a context"),
+    };
+    let context = manager.player_control_context(body).expect("a context");
+    manager.possess_body_tasks(body, context);
     let at = manager
         .iter_all()
         .find(|entity| entity.id == body)
@@ -319,8 +329,11 @@ fn a_possessed_type17_that_dies_is_released_into_its_own_death() {
             retail_tick: 1597,
         },
         &session.cache,
-        Possession::take_over(craft, body),
-        false,
+        PossessionCustody {
+            state: Possession::take_over(craft, body),
+            native_owner: false,
+            previous_context,
+        },
     )
     .expect("the death runs");
     assert_eq!((released.body, released.craft), (body, craft));
