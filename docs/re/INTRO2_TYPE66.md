@@ -281,7 +281,14 @@ template publishes `u16::MAX` into that word, so the ribbons submit; they
 are horizontal roof segments. `FUN_00459000` feeds the raw size short 45
 into `FUN_004594C0`. Packed `FUN_00470840` decode of that 45 became 2048 and
 extruded the ribbons as sky-spanning white verticals; the raw-size contract
-keeps them factory-scale. Matched-retail factory hierarchy appearance,
+keeps them factory-scale. The four type-3 slots each draw three process
+words a draw ([type 3](FORMAT_DOCUMENTATION.md#per-vertex-type_flag-transform-table--decoded-2026-06-10)).
+Held: in the New Game lab retail reaches them on 533 passes (2834 to 3915),
+twelve words each; the port reaches them on every frame from 1584 to 4037,
+so it draws more of those words than retail. Which of the factory's
+admission or its `0x2C` word differs is not proven, and Intro2's stream is
+not in lockstep anyway (about 125 words a frame in the port against about
+200 in the lab). Matched-retail factory hierarchy appearance,
 Gouraud `factory2pillar` lighting, and wreck model 225 remain renderer
 comparisons.
 

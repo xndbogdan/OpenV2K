@@ -1123,24 +1123,44 @@ the frontend's init follows one pass later, again with no Klaus leg.
   the row word `0x8BBF` picks row 6 (world 11) and the world loads at 3033;
   `+290` is consumed at 5885 after 2852 ticks, the frontend's init is at
   5886, and the second demo loads at 6418 (row 3, world 3). The port, with
-  row 6 forced (its frontend's random words are not in lockstep with
-  retail's, whose model draws there call `FUN_0046E020` and `FUN_0046E0E0`,
-  the type-3 vertex handlers, three words a call),
+  row 6 forced (its frontend stream is not yet in lockstep, below),
   loads at 3033, returns at 5885 and 5886, and loads the second demo at 6418.
   Klaus's cover and the emblem at 3040 and 3060 match up to his twitch, as
   does the "Demo" caption; the camera's subjects are random draws and differ.
-- **Held: the frontend's random stream.** Every idle frontend pass in the
-  lab draws one word for Klaus's visit and then three from the near-pass
-  type-3 vertex handler (`FUN_0046E020`, its three `FUN_00457930` calls in
-  turn): one jittered vertex is evaluated each frame. Each word, shifted
-  left 16 and right by the record's `+2` byte, offsets one axis of slot
-  `c`'s view point, so the vertex flickers. The port draws Klaus's word but
-  evaluates type-3 vertices as their source slot, without the jitter or the
-  draws (its native vertex path stops on them as unsupported), so after the
-  first frontend frame its stream parts from retail's and the attract
-  demo's mode and row are not retail's. Porting it needs the frontend's
-  model draw to take its words from the process generator, in the order
-  and number retail's lazy vertex evaluation asks for them.
+- **The frontend's random stream.** Every idle frontend pass in the lab draws
+  one word for Klaus's visit and then three from `multipc`'s type-3 vertex
+  (slot 40, record `[3, 26, 0, 38]`): the far-pass handler `FUN_0046E0E0` or
+  the near-pass `FUN_0046E020`, alternating in a 48-pass cycle, three
+  `FUN_00457930` calls either way. The vertex is the shared first endpoint of
+  the prop's three `0x22` sprite-608 sparks, so it is visited once a draw (the
+  slot cache), at the first spark. The port's ring draws now take those words
+  from the process generator (see
+  [type 3](FORMAT_DOCUMENTATION.md#per-vertex-type_flag-transform-table--decoded-2026-06-10)). With the port's
+  word set to the lab's at pass 153 (the ring's first jittered frame), its
+  word after every frame through 3024 equals the lab's (2,872 frames,
+  Klaus's twitches and the frontend sound included), and the countdown's
+  word at 3000 is retail's `0x91AD` (mode 4).
+- **Held: the stream outside the ring.** Unrebased, the port parts from the
+  lab in three places, none of them a vertex draw:
+  - The cold boot. Retail's first frame pump draws two words in
+    `FUN_00425680` (Klaus's construction), then, across the card's timer
+    pass, the card callback's Klaus visit, the first frontend frame's visit
+    and the frontend sound: five words by pass 2. The port draws Klaus's
+    visit and the sound in its first frame and one visit a frame after, so
+    it reaches retail's pass-2 word at its frame 4 and stays two words
+    behind.
+  - The ring's first draw. Retail first reaches the vertex at pass 153, the
+    port at frame 151: its 3-s cold entry counts from its first frame, where
+    retail's starts after the card pass. Six more words.
+  - The game start's fly-out. Retail reaches the vertex through pass 3024
+    and not from 3025 (the lab's snapshots: the receding props are gone by
+    3024, the selected craft by 3031); the port draws the receding ring
+    until its 0.6264-s leg ends, through frame 3032, 24 more words before
+    the row's word at 3032. What stops retail's draw (the receding props'
+    node rejection or the start's draw gating) is not proven: the port's
+    ring band is relative to each prop's own depth and never rejects.
+  So the attract demo's mode and row are retail's only with the stream
+  rebased; held until the boot and the fly-out are ported.
 - Mode 1 (`004DB224` written to 1 before the ring's pop): Intro2 loads at
   3033, the frontend's init is at 7336 and the next demo loads at 7868, in
   the lab and in the port; the last Intro2 frames (7330, 7334) are identical.

@@ -880,7 +880,7 @@ refs are slot indices XOR'd with the requesting slot's mirror bit):
 | 0 | 73,404 | plain vertex (a,b,c); mirror slot = (-a, b, c) |
 | 1 | 0 | screen-space midpoint of slots b and c (avg screen X/Y, min depth; always uses far-pass transforms for its refs) |
 | 2 | 4 | point reflection of slot c through the model origin (= model -v) |
-| 3 | 72 | slot c + per-frame random jitter; magnitude = rand i16 >> a (LCG FUN_00457930) — flicker effects |
+| 3 | 72 | slot c's VIEW point plus one process word per axis: `((word << 16) as i32) >> (a & 0x1F)` (`FUN_00457930`, X then Y then Z) — the sparks' flicker; see below |
 | 4 | 0 | plain vertex; mirror slot = (0, b, c) (pinned to symmetry plane) |
 | 5 | 2,132 | 3-D midpoint of slots b and c |
 | 6 | 620 | parallelogram completion: slot a + slot b − slot c |
@@ -912,6 +912,23 @@ The handlers by pass (table `0x4D4A78`):
 | 12 | `FUN_0046EAE0` | `FUN_0046EA60` | `FUN_0046E9F0` |
 | 13 | `FUN_0046EC60` | `FUN_0046EBD0` | `FUN_0046EB60` |
 | 14 | `FUN_0046F010` | `FUN_0046EE70` | `FUN_0046ECF0` |
+
+Type 3's handlers visit source slot `c` through the pass-3 table when it is
+not cached, then draw three process words and add each, shifted into the high
+half and arithmetically right by the low byte of `a` (`SAR CL` masks it to
+five bits), to one VIEW axis; the far and near handlers then project the
+point. Only the requested slot is written, so a mirrored reference draws its
+own three words. The slot cache keeps it for the rest of the node, so each
+reached type-3 slot draws three words once a draw. Every shipped type-3 slot
+is an endpoint of `0x22` sprite-608 sparks (`multipc` in the frontend;
+`factory6`, `factory7`, `factory9`, `chenobyl`, `chernobylpowerup`,
+`nukesubbit` and `lightnin` in the worlds), reached when their command is.
+OpenV2K's draws take the words from the process generator in command order
+(the walk visits both endpoints of every edge) and offset both the native
+VIEW point and the raw-local point; a draw not lent the generator, or a slot
+first reached after the command walk, skips the vertex with the logged stop
+"model jitter vertex blocked". The actor transform-only pass
+(`FUN_00413BE0`, handler `FUN_0046DF70`) is not lent it yet.
 
 A plain-vertex handler computes both slots of a pair and projects only the
 one asked for; the other keeps its view point with the bare `0x80` outcode,

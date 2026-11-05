@@ -137,6 +137,27 @@ pub enum ModelEdgeEndpointSnapshot {
 /// child raw-local coordinates. None means an unavailable source, not clipping.
 pub type LinkedModelSlots = Vec<[Option<ResolvedModelSlot>; 2]>;
 
+/// One reach of a tf3 slot. Its handlers (`FUN_0046DF70`, `FUN_0046E020`,
+/// `FUN_0046E0E0`) visit source slot `c` first, then draw one `FUN_00457930`
+/// word per VIEW axis and add [`retail_tf3_offset`] to the source's VIEW
+/// point. The slot's cache keeps the result for the rest of the node's draw.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ModelVertexJitter {
+    pub slot: u16,
+    /// The record's `+2` word; only its low byte reaches the shift count.
+    pub shift_operand: i16,
+    pub source: ResolvedModelSlot,
+    /// The reach is a command's own visit, during the command walk. The
+    /// later geometry pass reads the walk's results and must never draw.
+    pub command_visit: bool,
+}
+
+/// `MOVSX`, `CALL 00457930`, `AND EAX,0xFFFF`, `SHL EAX,0x10`, `SAR EAX,CL`
+/// with CL the operand's low byte (SAR masks it to five bits).
+pub fn retail_tf3_offset(word: u16, shift_operand: i16) -> i32 {
+    ((u32::from(word) << 16) as i32) >> (shift_operand as u8 & 0x1F)
+}
+
 /// Context-sensitive vertex families installed by the active render table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelVertexKind {
@@ -202,6 +223,18 @@ pub trait ModelVertexResolver {
 
     fn report_native_vertex_failure(&self, _failure: ModelNativeVertexFailure) {}
 
+    /// A draw that owns the process generator. Its command walk visits both
+    /// endpoints of every edge, so tf3 words are drawn in command order.
+    fn owns_process_random(&self) -> bool {
+        false
+    }
+
+    /// Tf3 for a draw. An owner that is not a draw (a geometry query) keeps
+    /// the source position, as intrinsic decoding does.
+    fn resolve_jitter_raw(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        Some(ResolvedModelSlot::clear(jitter.source.position_raw))
+    }
+
     /// Optional owner of tf14's authored callback parameters. Ordinary intrinsic
     /// decoding retains its raw-parameter fallback when unimplemented.
     /// `node_slots` resolves any slot of the node being drawn through this
@@ -233,6 +266,8 @@ pub(super) struct SlotResolver<'a> {
     pub(super) vertex_resolver: Option<&'a dyn ModelVertexResolver>,
     pub(super) cache: HashMap<u16, Option<ResolvedModelSlot>>,
     pub(super) busy: HashSet<u16>,
+    /// False for the geometry pass after the command walk (see tf3).
+    pub(super) command_visit: bool,
 }
 
 impl<'a> SlotResolver<'a> {
@@ -253,7 +288,14 @@ impl<'a> SlotResolver<'a> {
             vertex_resolver: None,
             cache: HashMap::new(),
             busy: HashSet::new(),
+            command_visit: true,
         }
+    }
+
+    /// Resolve after the command walk: reaches are reads, never visits.
+    pub(super) fn after_command_walk(mut self) -> Self {
+        self.command_visit = false;
+        self
     }
 
     pub(super) fn with_vertex_resolver(
@@ -356,14 +398,14 @@ impl<'a> SlotResolver<'a> {
         };
         match tf {
             1 => return Boundary::ScreenMidpoint { slot },
-            3 | 10 => {
+            10 => {
                 return Boundary::UnsupportedGenerator {
                     slot,
                     type_flag: tf,
                 }
             }
             14 => return Boundary::ExternalFrameUnavailable { slot },
-            0 | 2 | 4..=9 | 11..=13 => {}
+            0 | 2..=9 | 11..=13 => {}
             _ => {
                 return Boundary::UnsupportedGenerator {
                     slot,
@@ -372,7 +414,7 @@ impl<'a> SlotResolver<'a> {
             }
         }
         let refs: Vec<u16> = match tf {
-            2 => vec![c as u16],
+            2 | 3 => vec![c as u16],
             5 | 7 | 8 => vec![b as u16, c as u16],
             6 => vec![b as u16, c as u16, a as u16],
             9 => vec![
@@ -486,10 +528,21 @@ impl<'a> SlotResolver<'a> {
                         ),
                     );
                 }
-                // Slot c + per-frame random jitter; static base position.
+                // Slot c plus one process word per VIEW axis. Handlers: far
+                // FUN_0046E0E0, near FUN_0046E020, transform-only FUN_0046DF70.
+                // Without a presentation owner the static source remains.
                 3 => {
                     count(stats, "jitter");
-                    self.rref(c as i32, odd, stats)
+                    let source = self.resolve(c as u16 ^ odd, stats)?;
+                    return match self.vertex_resolver {
+                        Some(owner) => owner.resolve_jitter_raw(ModelVertexJitter {
+                            slot,
+                            shift_operand: a,
+                            source,
+                            command_visit: self.command_visit,
+                        }),
+                        None => Some(ResolvedModelSlot::clear(source.position_raw)),
+                    };
                 }
                 // 46F1B0 visits B,C,A, then completes A+B-C in saved VIEW words.
                 // Far FUN_0046F400 and near FUN_0046F2D0 do the same, then project.

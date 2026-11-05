@@ -3128,6 +3128,7 @@ fn run_game(
                     current_level_id,
                     last_frame_delta_micros,
                     retail_clock.current(),
+                    world_fx.shared_retail_random_state(),
                     entity_manager.as_ref(),
                     &player_craft,
                     &player_hull,
@@ -4384,17 +4385,20 @@ fn run_game(
                                 renderer.capture_frame(FrameCaptureSource::CurrentScene);
                         }
                     }
-                    render_pause_menu(
-                        &mut *renderer,
-                        shell,
-                        &system_strings,
-                        &menu_resources,
-                        menu_fonts.as_ref(),
-                        &session.cache,
-                        &face_colors,
-                        retail_tick,
-                        paused_world_frame.as_ref(),
-                    );
+                    world_fx.with_process_random(|random| {
+                        render_pause_menu(
+                            &mut *renderer,
+                            shell,
+                            &system_strings,
+                            &menu_resources,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            &face_colors,
+                            retail_tick,
+                            paused_world_frame.as_ref(),
+                            random,
+                        )
+                    });
                 } else {
                     let (billboard_frame, wrapped) = billboard.prepare_frontend_render_frame(
                         elapsed_micros,
@@ -4403,17 +4407,20 @@ fn run_game(
                     );
                     // The card stands for this frame's present.
                     if !frontend_card_drawn {
-                        render_menu(
-                            &mut *renderer,
-                            shell,
-                            &system_strings,
-                            &menu_resources,
-                            menu_fonts.as_ref(),
-                            &session.cache,
-                            &face_colors,
-                            &billboard_frame,
-                            retail_tick,
-                        );
+                        world_fx.with_process_random(|random| {
+                            render_menu(
+                                &mut *renderer,
+                                shell,
+                                &system_strings,
+                                &menu_resources,
+                                menu_fonts.as_ref(),
+                                &session.cache,
+                                &face_colors,
+                                &billboard_frame,
+                                retail_tick,
+                                random,
+                            )
+                        });
                     }
                     if wrapped {
                         GlobalSoundRuntime::new(
@@ -7460,17 +7467,20 @@ fn run_game(
                                     }
                                     paused_world_frame =
                                         renderer.capture_frame(FrameCaptureSource::CurrentScene);
-                                    render_pause_menu(
-                                        &mut *renderer,
-                                        &shell,
-                                        &system_strings,
-                                        &menu_resources,
-                                        menu_fonts.as_ref(),
-                                        &session.cache,
-                                        &face_colors,
-                                        retail_tick,
-                                        paused_world_frame.as_ref(),
-                                    );
+                                    world_fx.with_process_random(|random| {
+                                        render_pause_menu(
+                                            &mut *renderer,
+                                            &shell,
+                                            &system_strings,
+                                            &menu_resources,
+                                            menu_fonts.as_ref(),
+                                            &session.cache,
+                                            &face_colors,
+                                            retail_tick,
+                                            paused_world_frame.as_ref(),
+                                            random,
+                                        )
+                                    });
                                     state = GameState::Paused { shell };
                                     continue 'main_loop;
                                 }
@@ -12488,17 +12498,20 @@ fn run_game(
                 if let Some(shell) = network_pause.as_ref() {
                     // FUN_004514A0 draws the menu over this frame's world.
                     let world = renderer.capture_frame(FrameCaptureSource::CurrentScene);
-                    render_pause_menu(
-                        &mut *renderer,
-                        shell,
-                        &system_strings,
-                        &menu_resources,
-                        menu_fonts.as_ref(),
-                        &session.cache,
-                        &face_colors,
-                        retail_tick,
-                        world.as_ref(),
-                    );
+                    world_fx.with_process_random(|random| {
+                        render_pause_menu(
+                            &mut *renderer,
+                            shell,
+                            &system_strings,
+                            &menu_resources,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            &face_colors,
+                            retail_tick,
+                            world.as_ref(),
+                            random,
+                        )
+                    });
                 } else {
                     renderer.present();
                 }
@@ -12566,6 +12579,7 @@ fn write_probe_events(
     level: Option<u32>,
     delta_us: u32,
     tick: u32,
+    rng: u32,
     manager: Option<&v2k_game::entity::EntityManager>,
     craft: &PlayerCraft,
     hull: &PlayerHull,
@@ -12582,7 +12596,7 @@ fn write_probe_events(
         GameState::ReturningToFrontend => "returning_to_frontend",
         GameState::Playing => "playing",
     };
-    log.frame(frame, state_name, level, delta_us, tick)?;
+    log.frame(frame, state_name, level, delta_us, tick, rng)?;
     let Some(manager) = manager else {
         census.clear();
         return Ok(());
@@ -13410,7 +13424,11 @@ fn draw_gameplay_world(
                     last_boundary: &mut emitter_boundary, current_node_owned: true, current_source_points_view: None,
                 })
             });
-            let mut random_u16 = || world_fx.next_shared_retail_random_u16();
+            // The terminal fallback and tf3 vertices draw from one stream.
+            let process_random =
+                std::cell::RefCell::new(|| world_fx.next_shared_retail_random_u16());
+            let next_random = || (&mut *process_random.borrow_mut())();
+            let mut random_u16 = || next_random();
             // Only absent joint/M/G components authenticate the terminal domain.
             // An authored G descriptor alone cannot prove its live callback owner.
             let fallback = type_record.filter(|record| record.subsection("I").is_none()
@@ -13437,6 +13455,10 @@ fn draw_gameplay_world(
             )
             .with_submission_buffer(&mut model_submissions)
             .with_view(camera.into())
+            .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+                &next_random,
+                camera,
+            ))
             .with_shade_shift(shade_shift);
             // A plain body keeps 4138F0's integer frame for its VIEW points.
             // Sub-H/M presentations below install their own frame owners.
@@ -13951,7 +13973,11 @@ fn render_opening_cinematic(
                     last_boundary: &mut emitter_boundary, current_node_owned: true, current_source_points_view: None,
                 })
             });
-            let mut random_u16 = || world_fx.next_shared_retail_random_u16();
+            // The terminal fallback and tf3 vertices draw from one stream.
+            let process_random =
+                std::cell::RefCell::new(|| world_fx.next_shared_retail_random_u16());
+            let next_random = || (&mut *process_random.borrow_mut())();
+            let mut random_u16 = || next_random();
             // Only absent joint/M/G components authenticate the terminal domain.
             // An authored G descriptor alone cannot prove its live callback owner.
             let fallback = type_record.filter(|record| record.subsection("I").is_none()
@@ -13978,6 +14004,10 @@ fn render_opening_cinematic(
             )
             .with_submission_buffer(&mut model_submissions)
             .with_view(camera.into())
+            .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+                &next_random,
+                camera,
+            ))
             .with_shade_shift(world_model_shade_shift(
                 position,
                 cache.terrain(),
@@ -16561,6 +16591,7 @@ fn render_menu(
     colors: &v2k_game::model_color::ModelMaterialCache,
     billboard: &BillboardRenderFrame,
     retail_tick: u32,
+    random: &dyn Fn() -> u16,
 ) {
     render_menu_scene(
         renderer,
@@ -16574,6 +16605,7 @@ fn render_menu(
         retail_tick,
         MenuPresentation::Frontend,
         None,
+        random,
     );
 }
 
@@ -16588,6 +16620,7 @@ fn render_pause_menu(
     colors: &v2k_game::model_color::ModelMaterialCache,
     retail_tick: u32,
     frozen_world: Option<&CapturedFrame>,
+    random: &dyn Fn() -> u16,
 ) {
     render_menu_scene(
         renderer,
@@ -16601,6 +16634,7 @@ fn render_pause_menu(
         retail_tick,
         MenuPresentation::GameplayPause,
         frozen_world,
+        random,
     );
 }
 
@@ -16617,6 +16651,7 @@ fn render_menu_scene(
     retail_tick: u32,
     presentation: MenuPresentation,
     frozen_world: Option<&CapturedFrame>,
+    random: &dyn Fn() -> u16,
 ) {
     renderer.begin_scene(RenderScene::Menu);
     debug_assert_eq!(
@@ -16713,6 +16748,7 @@ fn render_menu_scene(
             colors,
             billboard.expect("frontend ring requires its render snapshot"),
             retail_tick,
+            random,
         ),
         MenuLayout::Carousel => {
             render_carousel(renderer, shell, menu, system_strings, menu_resources)
@@ -16729,6 +16765,7 @@ fn render_menu_scene(
             billboard,
             retail_tick,
             presentation,
+            random,
         ),
     }
 
@@ -17247,32 +17284,37 @@ fn draw_static_terrain_objects(
                 viewport,
             )
         });
-        ModelTreeRenderer::new_world(
-            renderer,
-            cache,
-            colors,
-            GAMEPLAY_MODEL_SCALE,
-            Some(MenuSceneLight::NEUTRAL),
-            retail_tick as i32,
-        )
-        .with_view(camera.into())
-        .with_native_external_frame(
-            ExternalFrameMode::WorldPoint(object.external_frame_world_point()),
-            native,
-        )
-        .with_shade_shift(world_model_shade_shift(
-            object.position,
-            cache.terrain(),
-            terrain_lights,
-        ))
-        .draw_linked(
-            usize::from(object.model_id),
-            orientation,
-            object.position,
-            8,
-            None,
-            &vars,
-        );
+        world_fx.with_process_random(|random| {
+            ModelTreeRenderer::new_world(
+                renderer,
+                cache,
+                colors,
+                GAMEPLAY_MODEL_SCALE,
+                Some(MenuSceneLight::NEUTRAL),
+                retail_tick as i32,
+            )
+            .with_view(camera.into())
+            .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+                random, camera,
+            ))
+            .with_native_external_frame(
+                ExternalFrameMode::WorldPoint(object.external_frame_world_point()),
+                native,
+            )
+            .with_shade_shift(world_model_shade_shift(
+                object.position,
+                cache.terrain(),
+                terrain_lights,
+            ))
+            .draw_linked(
+                usize::from(object.model_id),
+                orientation,
+                object.position,
+                8,
+                None,
+                &vars,
+            );
+        });
     }
 }
 
@@ -18135,6 +18177,7 @@ fn draw_prop(
     depth_fade: ModelDepthFade,
     retail_tick: u32,
     fly_anim_raw: u16,
+    random: &dyn Fn() -> u16,
 ) {
     let orientation = menu_model_orientation(rotation_y);
     let mut vars = AnimVars::default();
@@ -18152,6 +18195,9 @@ fn draw_prop(
     .with_view(camera.into())
     .with_depth_fade(depth_fade)
     .with_near_clip(ModelNearClip::RetailFrontend)
+    .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+        random, camera,
+    ))
     .draw_linked(model_id, orientation, position, depth, None, &vars);
 }
 
@@ -18737,6 +18783,7 @@ fn render_ring_3d(
     colors: &v2k_game::model_color::ModelMaterialCache,
     billboard: &BillboardRenderFrame,
     retail_tick: u32,
+    random: &dyn Fn() -> u16,
 ) {
     clear_to_frontend_colour(renderer, cache);
     let (vw, vh) = renderer.viewport_size();
@@ -18824,6 +18871,7 @@ fn render_ring_3d(
             ),
             retail_tick,
             v2k_game::game_state::fly_model_anim_raw(shell.phase),
+            random,
         );
     }
 
@@ -19283,6 +19331,7 @@ fn render_list(
     billboard: Option<&BillboardRenderFrame>,
     retail_tick: u32,
     presentation: MenuPresentation,
+    random: &dyn Fn() -> u16,
 ) {
     use v2k_game::menu_text;
 
@@ -19382,6 +19431,7 @@ fn render_list(
                     panel_depth_fade,
                     retail_tick,
                     v2k_game::game_state::fly_model_anim_raw(shell.phase),
+                    random,
                 );
             }
         }
@@ -19420,6 +19470,7 @@ fn render_list(
                     menu_prop_row_depth_fade(row_near_raw, depth_raw, depth_fade_color),
                     retail_tick,
                     v2k_game::game_state::fly_model_anim_raw(shell.phase),
+                    random,
                 );
             }
         }

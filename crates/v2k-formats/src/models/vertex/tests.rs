@@ -295,3 +295,88 @@ fn surface_rejection_retains_the_whole_quad_and_parallel_vertex_metadata() {
         .iter()
         .all(|origin| *origin == ModelSurfaceOrigin::None));
 }
+
+#[test]
+fn tf3_offset_is_the_high_half_word_shifted_by_the_operand_low_byte() {
+    assert_eq!(retail_tf3_offset(0xFFFF, 26), -1);
+    assert_eq!(retail_tf3_offset(0x8000, 26), -32);
+    assert_eq!(retail_tf3_offset(0x7FFF, 26), 31);
+    // SAR CL: the operand's low byte, masked to five bits.
+    assert_eq!(retail_tf3_offset(0x7FFF, 0x011A), 31);
+    assert_eq!(retail_tf3_offset(0x1234, 0x30), 0x1234);
+    assert_eq!(retail_tf3_offset(0xFFFF, 0x20), -0x1_0000);
+}
+
+/// Records every tf3 reach; a draw owner caches the words by slot.
+struct JitterFixture {
+    reaches: RefCell<Vec<(u16, [f64; 3], bool)>>,
+}
+
+impl ModelVertexResolver for JitterFixture {
+    fn resolve_vertex_raw(
+        &self,
+        _kind: ModelVertexKind,
+        source: ResolvedModelSlot,
+    ) -> Option<ResolvedModelSlot> {
+        Some(source)
+    }
+
+    fn owns_process_random(&self) -> bool {
+        true
+    }
+
+    fn resolve_jitter_raw(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        self.reaches.borrow_mut().push((
+            jitter.slot,
+            jitter.source.position_raw,
+            jitter.command_visit,
+        ));
+        let source = jitter.source.position_raw;
+        Some(ResolvedModelSlot::clear([
+            source[0] + 1.0,
+            source[1],
+            source[2],
+        ]))
+    }
+}
+
+#[test]
+fn tf3_is_visited_by_its_edge_command_from_its_source_and_only_read_afterwards() {
+    let vars = AnimVars::default();
+    let owner = JitterFixture {
+        reaches: RefCell::new(Vec::new()),
+    };
+    // Slot 2 jitters slot 0 by >> 26; two 0x22 sprite edges name it, the
+    // first as its second endpoint.
+    let model = ModelEntry {
+        records: vec![[0, 10, 20, 30], [3, 26, 0, 0], [0, 50, 0, 0]],
+        cmd_words: vec![0x22, 608, 12, 4, 2, 0x22, 608, 12, 2, 0, 0],
+        ..ModelEntry::default()
+    };
+    let materialized = model.materialize_with_context(ModelMaterializationContext {
+        vertex_resolver: Some(&owner),
+        ..ModelMaterializationContext::intrinsic(&vars, None)
+    });
+    let reaches = owner.reaches.borrow();
+    // The walk visits both endpoints of the first edge, so the first reach is
+    // a command's; the geometry pass's reaches are reads.
+    assert_eq!(reaches[0], (2, [10.0, 20.0, 30.0], true));
+    assert!(reaches[1..].iter().all(|reach| reach.0 == 2));
+    assert!(reaches.iter().any(|reach| !reach.2));
+    assert_eq!(materialized.edges.len(), 2);
+    let jittered = materialized
+        .vertex_type_flags
+        .iter()
+        .position(|&flag| flag == 3)
+        .unwrap();
+    assert_eq!(materialized.vertices[jittered], [11.0, 20.0, 30.0]);
+
+    // Intrinsic decoding keeps the static source.
+    let intrinsic = model.materialize(&vars);
+    let index = intrinsic
+        .vertex_type_flags
+        .iter()
+        .position(|&flag| flag == 3)
+        .unwrap();
+    assert_eq!(intrinsic.vertices[index], [10.0, 20.0, 30.0]);
+}

@@ -47,10 +47,10 @@ mod vertex;
 pub use native_spatial::ModelNativeSpatialGenerator;
 use vertex::SlotResolver;
 pub use vertex::{
-    LinkedModelSlots, ModelEdgeConstructorClip, ModelEdgeEndpointSnapshot, ModelNativeEdgeBoundary,
-    ModelNativeEdgeEndpoint, ModelNativeEdgeFailure, ModelNativeVertexBoundary,
-    ModelNativeVertexFailure, ModelSlotClip, ModelSurfaceOrigin, ModelVertexKind,
-    ModelVertexResolver, ResolvedModelSlot,
+    retail_tf3_offset, LinkedModelSlots, ModelEdgeConstructorClip, ModelEdgeEndpointSnapshot,
+    ModelNativeEdgeBoundary, ModelNativeEdgeEndpoint, ModelNativeEdgeFailure,
+    ModelNativeVertexBoundary, ModelNativeVertexFailure, ModelSlotClip, ModelSurfaceOrigin,
+    ModelVertexJitter, ModelVertexKind, ModelVertexResolver, ResolvedModelSlot,
 };
 
 mod painter;
@@ -3507,7 +3507,8 @@ impl ModelEntry {
     ) -> Option<ResolvedModelSlot> {
         let mut stats = StreamStats::default();
         let mut resolver = SlotResolver::with_linked(&self.records, context.vars, context.linked)
-            .with_vertex_resolver(context.vertex_resolver);
+            .with_vertex_resolver(context.vertex_resolver)
+            .after_command_walk();
         resolver.resolve(slot, &mut stats)
     }
 
@@ -3740,7 +3741,8 @@ impl ModelEntry {
         );
         let mut resolver =
             SlotResolver::with_linked(&self.records, &evaluated_vars, context.linked)
-                .with_vertex_resolver(context.vertex_resolver);
+                .with_vertex_resolver(context.vertex_resolver)
+                .after_command_walk();
         let ResolvedGeometry {
             mut vertices,
             mut vertex_type_flags,

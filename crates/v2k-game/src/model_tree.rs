@@ -11,8 +11,9 @@ use std::collections::HashMap;
 use v2k_formats::models::{
     AnimVars, Billboard, LinkedModelSlots, MaterializedModel, ModelEntry, ModelFaceCull,
     ModelFaceShading, ModelFaceVertices, ModelInstance, ModelMaterializationContext,
-    ModelNativeEdgeFailure, ModelNativeSpatialGenerator, ModelNativeVertexFailure, ModelVertexKind,
-    ModelVertexProjection, ModelVertexResolver, ModelViewSelection, ResolvedModelSlot,
+    ModelNativeEdgeFailure, ModelNativeSpatialGenerator, ModelNativeVertexFailure,
+    ModelVertexJitter, ModelVertexKind, ModelVertexProjection, ModelVertexResolver,
+    ModelViewSelection, ResolvedModelSlot,
 };
 use v2k_formats::system::PaletteEntry;
 use v2k_render::renderer::ModelSurfaceResolution;
@@ -27,6 +28,169 @@ use v2k_render::{
 
 use crate::model_color::ModelMaterialCache;
 use crate::resource_cache::ResourceCache;
+
+/// The process generator (`FUN_00457930`, state `004F7308`) lent to a scene's
+/// model draws, with the installed camera's VIEW axes in world space, so a
+/// reached tf3 slot draws its three words where retail's draw does.
+#[derive(Clone, Copy)]
+pub struct ModelTreeProcessRandom<'a> {
+    next: &'a dyn Fn() -> u16,
+    /// World directions of VIEW +X (screen right), +Y (up) and +Z (depth).
+    view_axes: [[f32; 3]; 3],
+}
+
+impl<'a> ModelTreeProcessRandom<'a> {
+    pub fn new(next: &'a dyn Fn() -> u16, camera: &v2k_render::Camera) -> Self {
+        // The view matrix's rows are right, up and -forward.
+        let m = camera.view_matrix();
+        Self {
+            next,
+            view_axes: [
+                [m[0], m[4], m[8]],
+                [m[1], m[5], m[9]],
+                [-m[2], -m[6], -m[10]],
+            ],
+        }
+    }
+}
+
+/// Why a reached tf3 slot drew nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ModelJitterBoundary {
+    /// The draw was not lent the process generator.
+    ProcessRandomUnavailable,
+    /// First reached after the command walk, where retail never visited it.
+    UnvisitedSlot,
+}
+
+fn report_jitter_failure(model_id: usize, slot: u16, boundary: ModelJitterBoundary) {
+    static REPORTED: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashSet<(usize, u16, ModelJitterBoundary)>>,
+    > = std::sync::OnceLock::new();
+    if let Ok(mut reported) = REPORTED.get_or_init(Default::default).lock() {
+        if reported.insert((model_id, slot, boundary)) {
+            eprintln!(
+                "model jitter vertex blocked: {boundary:?} (model{model_id} slot{slot}; its primitives skipped)"
+            );
+        }
+    }
+}
+
+/// One node draw's tf3 owner. Retail's slot cache (`+0x10` bit 0x80) keeps a
+/// jittered slot for the rest of the node, so each slot draws once a draw.
+struct ModelJitterOwner<'a> {
+    model_id: usize,
+    random: Option<ModelTreeProcessRandom<'a>>,
+    transform: ModelTransform,
+    drawn: RefCell<HashMap<u16, [i32; 3]>>,
+}
+
+impl<'a> ModelJitterOwner<'a> {
+    fn new(
+        model_id: usize,
+        random: Option<ModelTreeProcessRandom<'a>>,
+        transform: ModelTransform,
+    ) -> Self {
+        Self {
+            model_id,
+            random,
+            transform,
+            drawn: RefCell::new(HashMap::new()),
+        }
+    }
+
+    #[cfg(test)]
+    fn unlent() -> Self {
+        Self::new(
+            0,
+            None,
+            ModelTransform {
+                orientation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                position: [0.0; 3],
+                scale: 1.0,
+            },
+        )
+    }
+
+    fn resolve(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        let fail = |boundary| {
+            report_jitter_failure(self.model_id, jitter.slot, boundary);
+            None
+        };
+        let Some(random) = self.random else {
+            return fail(ModelJitterBoundary::ProcessRandomUnavailable);
+        };
+        let cached = self.drawn.borrow().get(&jitter.slot).copied();
+        let offset = match cached {
+            Some(offset) => offset,
+            None if jitter.command_visit => {
+                // X, then Y, then Z, one word each.
+                let offset: [i32; 3] = std::array::from_fn(|_| {
+                    v2k_formats::models::retail_tf3_offset((random.next)(), jitter.shift_operand)
+                });
+                self.drawn.borrow_mut().insert(jitter.slot, offset);
+                offset
+            }
+            None => return fail(ModelJitterBoundary::UnvisitedSlot),
+        };
+        Some(self.offset_slot(jitter.source, offset, random.view_axes))
+    }
+
+    /// The VIEW offset, in raw units, carried into this node's raw-local frame.
+    fn offset_slot(
+        &self,
+        source: ResolvedModelSlot,
+        offset: [i32; 3],
+        view_axes: [[f32; 3]; 3],
+    ) -> ResolvedModelSlot {
+        let ModelTransform {
+            orientation,
+            position,
+            scale,
+        } = self.transform;
+        let unit = scale.abs() / 100.0;
+        let world: [f32; 3] = std::array::from_fn(|axis| {
+            position[axis]
+                + (0..3)
+                    .map(|view_axis| offset[view_axis] as f32 * view_axes[view_axis][axis])
+                    .sum::<f32>()
+                    * unit
+        });
+        let local =
+            v2k_render::gl_backend::world_point_as_raw_local(world, orientation, position, scale);
+        let mut result = ResolvedModelSlot::clear(std::array::from_fn(|axis| {
+            source.position_raw[axis] + f64::from(local[axis])
+        }));
+        result.native_view_point = source
+            .native_view_point
+            .map(|view| std::array::from_fn(|axis| view[axis].wrapping_add(offset[axis])));
+        result
+    }
+}
+
+/// A frontend draw's vertex owner: the default table's pure tf12/tf13 aliases
+/// and tf3's process words.
+struct FrontendModelVertexResolver<'a> {
+    jitter: ModelJitterOwner<'a>,
+}
+
+impl ModelVertexResolver for FrontendModelVertexResolver<'_> {
+    fn resolve_vertex_raw(
+        &self,
+        _kind: ModelVertexKind,
+        source: ResolvedModelSlot,
+    ) -> Option<ResolvedModelSlot> {
+        Some(ResolvedModelSlot::clear(source.position_raw))
+    }
+
+    fn owns_process_random(&self) -> bool {
+        true
+    }
+
+    fn resolve_jitter_raw(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        self.jitter.resolve(jitter)
+    }
+}
 
 /// World tf12/tf13 callbacks resolve inside the slot dependency graph.
 /// Resolve in raw-local space before generators and linked imports consume it;
@@ -54,6 +218,7 @@ struct WorldModelVertexResolver<'a> {
     /// The transform-only pass resolves every face's vertices; the draw
     /// resolves a tf14 vertex only for a face it keeps.
     admit_every_face: bool,
+    jitter: ModelJitterOwner<'a>,
 }
 
 impl ModelVertexResolver for WorldModelVertexResolver<'_> {
@@ -168,6 +333,14 @@ impl ModelVertexResolver for WorldModelVertexResolver<'_> {
     ) -> Option<[i32; 3]> {
         let (frame, _) = self.native_context.as_ref()?;
         Some(generator.evaluate(frame.origin_view_raw))
+    }
+
+    fn owns_process_random(&self) -> bool {
+        self.jitter.random.is_some()
+    }
+
+    fn resolve_jitter_raw(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        self.jitter.resolve(jitter)
     }
 
     fn report_native_vertex_failure(&self, failure: ModelNativeVertexFailure) {
@@ -682,6 +855,7 @@ pub struct ModelTreeRenderer<'a> {
     projection_authority: v2k_render::projection::SceneProjectionAuthority,
     native_edge_failures: Vec<ModelTreeNativeEdgeFailure>,
     native_vertex_failures: Vec<ModelTreeNativeVertexFailure>,
+    process_random: Option<ModelTreeProcessRandom<'a>>,
 }
 
 impl<'a> ModelTreeRenderer<'a> {
@@ -720,7 +894,14 @@ impl<'a> ModelTreeRenderer<'a> {
             projection_authority,
             native_edge_failures: Vec::new(),
             native_vertex_failures: Vec::new(),
+            process_random: None,
         }
+    }
+
+    /// Lend the draw the process generator, for tf3 vertices.
+    pub fn with_process_random(mut self, random: ModelTreeProcessRandom<'a>) -> Self {
+        self.process_random = Some(random);
+        self
     }
 
     /// Construct the model context installed by retail world setup.
@@ -1612,14 +1793,17 @@ impl<'a> ModelTreeRenderer<'a> {
                 .borrow_mut()
                 .resolve_parameter_world(parameters, self.world_surface, node_view)
         };
+        let transform = ModelTransform {
+            orientation,
+            position,
+            scale: self.scale,
+        };
+        let process_random = self.process_random;
+        let jitter = || ModelJitterOwner::new(model_id, process_random, transform);
         let world_vertex =
-            (self.view_pin == ViewPinMode::WorldSurface).then_some(WorldModelVertexResolver {
+            (self.view_pin == ViewPinMode::WorldSurface).then(|| WorldModelVertexResolver {
                 surface: self.world_surface,
-                transform: ModelTransform {
-                    orientation,
-                    position,
-                    scale: self.scale,
-                },
+                transform,
                 view: self.view_policy.view(),
                 native_view,
                 native_edges_required: native_edge_endpoints_required(
@@ -1632,7 +1816,10 @@ impl<'a> ModelTreeRenderer<'a> {
                 external_points: RefCell::new(HashMap::new()),
                 native_vertex_failures: RefCell::new(Vec::new()),
                 admit_every_face: false,
+                jitter: jitter(),
             });
+        let frontend_vertex = (world_vertex.is_none() && self.process_random.is_some())
+            .then(|| FrontendModelVertexResolver { jitter: jitter() });
         let context = ModelMaterializationContext {
             vars,
             linked,
@@ -1640,9 +1827,11 @@ impl<'a> ModelTreeRenderer<'a> {
                 self.view_policy
                     .selection(orientation, position, self.scale)
             }),
-            vertex_resolver: world_vertex
-                .as_ref()
-                .map(|resolver| resolver as &dyn ModelVertexResolver),
+            vertex_resolver: match (&world_vertex, &frontend_vertex) {
+                (Some(resolver), _) => Some(resolver as &dyn ModelVertexResolver),
+                (None, Some(resolver)) => Some(resolver as &dyn ModelVertexResolver),
+                (None, None) => None,
+            },
         };
         let materialized = model.materialize_with_context(context);
         let child_links: Vec<_> = materialized
@@ -1669,6 +1858,7 @@ impl<'a> ModelTreeRenderer<'a> {
             .map(|resolver| resolver.native_vertex_failures.borrow().clone())
             .unwrap_or_default();
         drop(world_vertex);
+        drop(frontend_vertex);
         drop(owner);
         self.consume_native_vertex_failures(model_id, &native_vertex_failures);
         self.consume_native_edge_failures(model_id, &materialized.native_edge_failures);
@@ -2292,6 +2482,7 @@ mod tests {
 
     mod emitter_tests;
     mod external_surface_tests;
+    mod jitter_tests;
     mod native_geometry_tests;
     mod surface_tests;
 

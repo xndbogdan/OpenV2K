@@ -26,11 +26,11 @@
 <rect x="334.1" y="716.6" width="228.2" height="2.4" fill="#8c959f"/>
 <text x="336.1" y="417.3" fill="#1f2328">Render pipeline 100.0%</text>
 </g>
-<g><title>Format documentation (FORMAT_DOCUMENTATION.md): 140 code, 4 notes, 40 omitted</title>
-<rect x="564.3" y="31" width="220.8" height="189.6" fill="#2da44e"/>
-<rect x="564.3" y="220.6" width="10.5" height="33.9" fill="#d4a72c"/>
-<rect x="574.8" y="220.6" width="210.3" height="33.9" fill="#8c959f"/>
-<text x="566.3" y="43" fill="#1f2328">Format documentation 97.2%</text>
+<g><title>Format documentation (FORMAT_DOCUMENTATION.md): 141 code, 3 notes, 40 omitted</title>
+<rect x="564.3" y="31" width="220.8" height="190.5" fill="#2da44e"/>
+<rect x="564.3" y="221.5" width="4.7" height="32.9" fill="#d4a72c"/>
+<rect x="569" y="221.5" width="216.1" height="32.9" fill="#8c959f"/>
+<text x="566.3" y="43" fill="#1f2328">Format documentation 97.9%</text>
 </g>
 <g><title>Player craft (PLAYER_CRAFT.md): 131 code, 8 notes, 7 omitted</title>
 <rect x="787.1" y="31" width="216.2" height="218.6" fill="#2da44e"/>
@@ -38,11 +38,11 @@
 <rect x="915.1" y="249.6" width="88.2" height="4.9" fill="#8c959f"/>
 <text x="789.1" y="43" fill="#1f2328">Player craft 94.2%</text>
 </g>
-<g><title>Menu system (MENU_SYSTEM.md): 160 code, 4 notes, 28 omitted</title>
-<rect x="1005.3" y="31" width="193.7" height="191.5" fill="#2da44e"/>
-<rect x="1005.3" y="222.5" width="28.3" height="32" fill="#d4a72c"/>
-<rect x="1033.6" y="222.5" width="165.4" height="32" fill="#8c959f"/>
-<text x="1007.3" y="43" fill="#1f2328">Menu system 97.6%</text>
+<g><title>Menu system (MENU_SYSTEM.md): 162 code, 2 notes, 28 omitted</title>
+<rect x="1005.3" y="31" width="193.7" height="193.8" fill="#2da44e"/>
+<rect x="1005.3" y="224.8" width="15.1" height="29.7" fill="#d4a72c"/>
+<rect x="1020.4" y="224.8" width="178.6" height="29.7" fill="#8c959f"/>
+<text x="1007.3" y="43" fill="#1f2328">Menu system 98.8%</text>
 </g>
 <g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 110 code, 11 notes, 3 omitted</title>
 <rect x="564.3" y="256.5" width="162.2" height="243.2" fill="#2da44e"/>

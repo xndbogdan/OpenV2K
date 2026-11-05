@@ -315,7 +315,8 @@ impl EventLog {
     }
 
     /// A frame's clock: its delta and the 50-Hz world tick after it, with
-    /// the game state and the loaded global level.
+    /// the game state, the loaded global level and the process random word
+    /// (`004F7308`) after the frame, as the retail lab's `rng` field.
     pub fn frame(
         &mut self,
         frame: u64,
@@ -323,10 +324,11 @@ impl EventLog {
         level: Option<u32>,
         delta_us: u32,
         tick: u32,
+        rng: u32,
     ) -> std::io::Result<()> {
         self.line(&serde_json::json!({
             "frame": frame, "ev": "frame", "state": state, "level": level,
-            "delta_us": delta_us, "tick": tick,
+            "delta_us": delta_us, "tick": tick, "rng": format!("{rng:08x}"),
         }))
     }
 

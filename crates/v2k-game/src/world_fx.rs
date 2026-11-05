@@ -2496,8 +2496,8 @@ impl WorldFx {
         self.rng_state = state;
     }
 
-    #[cfg(test)]
-    pub(crate) fn shared_retail_random_state(&self) -> u32 {
+    /// The process word `004F7308`, as the event log reports it.
+    pub fn shared_retail_random_state(&self) -> u32 {
         self.rng_state
     }
 
@@ -2782,6 +2782,21 @@ impl WorldFx {
     /// scheduler stateless without accidentally giving it a private seed.
     pub fn next_shared_retail_random_u16(&mut self) -> u16 {
         retail_random_u16(&mut self.rng_state)
+    }
+
+    /// Lend the process word to a scope that draws through a shared reference
+    /// (a model draw's tf3 vertices); the scope's words advance this stream.
+    pub fn with_process_random<R>(&mut self, scope: impl FnOnce(&dyn Fn() -> u16) -> R) -> R {
+        let state = std::cell::Cell::new(self.rng_state);
+        let next = || {
+            let mut word = state.get();
+            let sample = retail_random_u16(&mut word);
+            state.set(word);
+            sample
+        };
+        let result = scope(&next);
+        self.rng_state = state.get();
+        result
     }
 
     /// Disjoint process state for the legacy Intro2 constructor's RNG callback.

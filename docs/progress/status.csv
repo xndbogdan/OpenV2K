@@ -1136,3 +1136,6 @@ address,status,note
 0x00447280,implemented,Player Control's dying alternate: the craft's Dying bounce, or a possessed body's burst and release; a nonempty hold is held (docs/re/PLAYER_CRAFT.md#mind-control)
 0x004475F0,implemented,the wreck burst and sound 0x3E at a dying craft or possessed body (docs/re/PLAYER_CRAFT.md#mind-control)
 0x00446D30,documented,the drop key's FUN_00418500 on the controller's body; on a possessed body's held person it is held with a logged stop (docs/re/PLAYER_CRAFT.md#mind-control)
+0x0046E020,implemented,model vertex type 3 near pass: source VIEW plus three process words; the idle ring's words match the lab (docs/re/FORMAT_DOCUMENTATION.md)
+0x0046E0E0,implemented,model vertex type 3 far pass: source VIEW plus three process words (docs/re/FORMAT_DOCUMENTATION.md)
+0x0046DF70,documented,model vertex type 3 transform-only pass; the actor transform pass is not lent the generator and stops (docs/re/FORMAT_DOCUMENTATION.md)

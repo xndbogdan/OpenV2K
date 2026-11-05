@@ -108,6 +108,7 @@ impl PainterSlotCache {
             vertex_resolver,
             cache: std::mem::take(&mut self.points),
             busy: std::mem::take(&mut self.busy),
+            command_visit: true,
         };
         let output = resolve(&mut resolver);
         self.points = resolver.cache;
@@ -149,6 +150,12 @@ fn edge_endpoint_snapshot(
     };
     let native = owner.owns_native_view();
     if !native && !owner.owns_external_frame_slots() {
+        if owner.owns_process_random() {
+            // 458C60/459000 visit endpoint1, then endpoint2, at the command.
+            for slot in slots {
+                resolver.resolve(slot, stats);
+            }
+        }
         return ModelEdgeEndpointSnapshot::Compatibility;
     }
     let required = owner.requires_native_edge_endpoints();

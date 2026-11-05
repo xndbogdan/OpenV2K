@@ -20,7 +20,9 @@ use v2k_game::{
     gameplay_notifications::GameplayNotifications,
     intro2_type17::{tick_intro2_type17, Intro2Type17Frame, Intro2Type17Owner},
     model_color::ModelMaterialCache,
-    model_tree::{model_is_camera_facing_actor, ModelTreeRenderer, ModelTreeView},
+    model_tree::{
+        model_is_camera_facing_actor, ModelTreeProcessRandom, ModelTreeRenderer, ModelTreeView,
+    },
     opening::{
         intro2_uses_live_actor_pose, intro_actor_heading, intro_actor_pose, intro_actor_visible,
     },
@@ -241,6 +243,15 @@ fn intro2_factory6_roof_ribbons_stay_factory_scale() {
     };
     let colors = ModelMaterialCache::new();
     let mut renderer = RecordingRenderer::default();
+    // The ribbons' tf3 endpoints (slots 62, 63, 66, 67) draw process words.
+    let process = std::cell::Cell::new(0x1234_5678_u32);
+    let next = || {
+        let mut state = process.get();
+        let word = v2k_game::retail_rng::retail_random_u16(&mut state);
+        process.set(state);
+        word
+    };
+    let jitter_camera = Camera::new(640.0 / 480.0);
     ModelTreeRenderer::new_world(
         &mut renderer,
         &session.cache,
@@ -257,7 +268,17 @@ fn intro2_factory6_roof_ribbons_stay_factory_scale() {
         ],
         forward: [0.0, -0.4, -1.0],
     })
+    .with_process_random(ModelTreeProcessRandom::new(&next, &jitter_camera))
     .draw_linked(model_id, orientation, factory.position, 8, None, &vars);
+    let mut words_drawn = 0x1234_5678_u32;
+    for _ in 0..12 {
+        v2k_game::retail_rng::retail_random_u16(&mut words_drawn);
+    }
+    assert_eq!(
+        process.get(),
+        words_drawn,
+        "four tf3 slots, three words each"
+    );
 
     assert!(
         !renderer.bodies.is_empty(),
@@ -323,8 +344,10 @@ fn intro2_factory6_roof_ribbons_stay_factory_scale() {
                     body.transform.position,
                     body.transform.scale,
                 );
+                // Each jittered endpoint moves at most 64 raw per VIEW axis.
+                let jitter_bound = 2.0 * 64.0 * 3.0_f32.sqrt() / 256.0;
                 assert!(
-                    (wa[1] - wb[1]).abs() < 0.05,
+                    (wa[1] - wb[1]).abs() < 0.05 + jitter_bound,
                     "factory6 0x22 ribbons are horizontal roof segments, not vertical world beams: {wa:?} -> {wb:?}"
                 );
             }
