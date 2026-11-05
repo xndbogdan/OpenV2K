@@ -2393,6 +2393,9 @@ pub enum NetworkSend {
         amount: u16,
         attacker_type: u16,
     },
+    /// `FUN_00411030`'s kind 10 after a particle hit jolted a peer's body
+    /// here: its velocity deltas, then those of `+A2`, `+A4` and `+A6`.
+    Impact { entity_id: u32, deltas: [i16; 6] },
     /// `FUN_00414AE0`'s kind 10 for a blast's impulse on a peer's body. Its
     /// handle is read from a stack slot written only after the send (the
     /// previous target's, or older), so it is not sent.
@@ -2595,6 +2598,13 @@ impl WorldFx {
                 x_raw: target_raw[0],
                 z_raw: target_raw[2],
             });
+        }
+    }
+
+    /// `FUN_00411030` on a peer's body: its owner adds the same deltas.
+    pub fn send_network_impact(&mut self, entity_id: u32, deltas: [i16; 6]) {
+        if let Some(sends) = self.network_sends.as_mut() {
+            sends.push(NetworkSend::Impact { entity_id, deltas });
         }
     }
 

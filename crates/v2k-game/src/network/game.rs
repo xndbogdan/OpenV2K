@@ -19,7 +19,8 @@ use super::scoring::{LineTables, Scoring, ScoringEffect};
 use super::slots::{SlotRecord, SlotTable, SLOTS};
 use super::transport::{NetSession, NetSessionError, Received, SessionInfo, SystemMessage};
 use crate::entity::network_body::{
-    basis_rows, NetworkRelationRepair, PLAYER_CRAFT_TYPE, REMOTE_CRAFT_TYPE,
+    basis_rows, NetworkRelationRepair, PeerBirth, PeerBirthWorld, PLAYER_CRAFT_TYPE,
+    REMOTE_CRAFT_TYPE,
 };
 use crate::entity::EntityManager;
 use crate::entity_collision_state::{RetailRuntimeValue, BODY_BASIS_REBUILT_STATE_BIT};
@@ -73,6 +74,11 @@ pub enum NetworkEvent {
     /// `FUN_00417680` could not tell whether this machine's body lists a
     /// peer's body: its Sub-J is unresolved.
     UnknownAttachmentList,
+    /// A peer's body the port built without its constructor.
+    HollowPeerBody {
+        entity_type: u32,
+        reason: &'static str,
+    },
     /// `FUN_00456750`: a winner was named.
     WinnerFlash,
     /// `FUN_00450CC0`: the session was lost, or this machine became the host
@@ -114,7 +120,11 @@ pub struct WorldFrame<'a> {
     pub elapsed_us: u32,
     /// `DAT_004FED60`, the 50 Hz tick count.
     pub ticks: u32,
-    pub random: &'a mut dyn FnMut() -> u32,
+    /// The shared random word (`FUN_00457930`) and the effects a peer's
+    /// birth reaches.
+    pub fx: &'a mut crate::world_fx::WorldFx,
+    /// The models' Section-8 extents, for a peer's birth.
+    pub model_extent_raw: Option<&'a dyn Fn(usize) -> Option<u16>>,
     /// The profile's name and initials (`FUN_00449270`).
     pub profile: (&'a str, &'a str),
     /// The local player's extra sync fields.
@@ -498,7 +508,7 @@ impl NetworkGame {
             self.send(GameRecord::LiveList(detailed));
             if self.is_host() {
                 let tables = self.tables.clone();
-                let random = (frame.random)();
+                let random = u32::from(frame.fx.next_shared_retail_random_u16());
                 if let Some(line) = self.scoring.host_announcement(frame.ticks, &tables, random) {
                     self.send(GameRecord::Line(line.into_bytes()));
                 }
@@ -549,9 +559,9 @@ impl NetworkGame {
                 }
             };
             body.sync_timer_us = if resting {
-                ((frame.random)() & 0xFFFF) + 1_000_000
+                u32::from(frame.fx.next_shared_retail_random_u16()) + 1_000_000
             } else if entity.capability_flags & 1 == 0 {
-                ((frame.random)() & 0xFFF) + 70_000
+                (u32::from(frame.fx.next_shared_retail_random_u16()) & 0xFFF) + 70_000
             } else {
                 35_000
             };
@@ -885,9 +895,26 @@ impl NetworkGame {
                 } else {
                     sync.entity_type
                 };
-                let Some(id) = frame.entities.append_network_body(entity_type) else {
+                let position = (sync.flags & 0x20 != 0).then_some(sync.position);
+                let world = frame.terrain.map(|terrain| PeerBirthWorld {
+                    terrain,
+                    model_extent_raw: frame.model_extent_raw,
+                    world_fx: &mut *frame.fx,
+                    retail_tick: frame.ticks,
+                });
+                let Some(birth) = frame
+                    .entities
+                    .append_network_body(entity_type, position, world)
+                else {
                     return;
                 };
+                if let PeerBirth::Hollow { reason, .. } = birth {
+                    self.events.push(NetworkEvent::HollowPeerBody {
+                        entity_type,
+                        reason,
+                    });
+                }
+                let id = birth.id();
                 if !self.handles.register(sync.handle, id) {
                     frame.entities.remove_network_body(id);
                     return;

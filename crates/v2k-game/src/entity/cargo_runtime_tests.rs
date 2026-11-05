@@ -312,8 +312,8 @@ fn a_peer_body_is_carried_only_when_its_attach_callback_is_null() {
     metadata[9].initializer = Some(choices(&[10, 6]));
     let mut manager =
         EntityManager::from_entities_with_type_metadata_for_test(Vec::new(), metadata, false);
-    let crate_id = manager.append_network_body(68).unwrap();
-    let person = manager.append_network_body(9).unwrap();
+    let crate_id = manager.append_network_body(68, None, None).unwrap().id();
+    let person = manager.append_network_body(9, None, None).unwrap().id();
     let mut tasks = SpecializedActorTaskScheduler::new();
     let mut fx = WorldFx::new();
     let mut notifications = GameplayNotifications::new();

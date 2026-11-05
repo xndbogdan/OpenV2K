@@ -10294,6 +10294,29 @@ fn run_game(
                             );
                             return ParticleCollisionCacheRefresh::Unchanged;
                         };
+                        // A peer's craft: the hit wrapper runs on its copy,
+                        // whose jolt (kind 10) and damage (kind 9) go to the
+                        // owner.
+                        {
+                            use v2k_game::intro2_flyer_impact::PeerCraftImpactOutcome as Peer;
+                            match v2k_game::intro2_flyer_impact::apply_peer_craft_particle_hit(
+                                em, cache, world_fx, &mut gameplay_notifications, retail_tick, entity_impact,
+                            ) {
+                                Peer::NotApplicable => {}
+                                Peer::Applied { filtered_damage_raw } => {
+                                    log!(
+                                        "Particle class {} hit peer craft {}: {filtered_damage_raw} to its owner",
+                                        entity_impact.source_particle_class,
+                                        entity_impact.target_entity_id,
+                                    );
+                                    return ParticleCollisionCacheRefresh::Unchanged;
+                                }
+                                Peer::Blocked { reason, .. } => {
+                                    network_play::report_held(format!("a hit on a peer's craft ({reason})"));
+                                    return ParticleCollisionCacheRefresh::Unchanged;
+                                }
+                            }
+                        }
                         // FUN_00415040's filter, then FUN_00414E90's first
                         // branch: a peer's body takes the damage on its
                         // owner's machine (kind 9).
@@ -10301,6 +10324,12 @@ fn run_game(
                             .network_entity(entity_impact.target_entity_id)
                             .filter(|target| target.is_network_remote())
                         {
+                            // A hollow copy has no hit callback to run, so no
+                            // FUN_00411030 jolt either.
+                            network_play::report_held(format!(
+                                "FUN_00411030's kind 10 on a peer's Type{} copy",
+                                target.entity_type
+                            ));
                             let admitted = target
                                 .collision
                                 .state_flags_at_0x08

@@ -10,7 +10,10 @@ fn manager() -> EntityManager {
 #[test]
 fn a_peer_body_takes_its_types_models_and_the_remote_bit() {
     let mut em = manager();
-    let id = em.append_network_body(REMOTE_CRAFT_TYPE).unwrap();
+    let id = em
+        .append_network_body(REMOTE_CRAFT_TYPE, None, None)
+        .unwrap()
+        .id();
     let body = em.network_entity(id).unwrap();
     assert!(body.is_network_remote());
     assert_eq!(body.model_index, Some(301));
@@ -21,7 +24,7 @@ fn a_peer_body_takes_its_types_models_and_the_remote_bit() {
     );
     assert!(em.network_local_ids().is_empty());
     assert!(
-        em.append_network_body(59).is_some(),
+        em.append_network_body(59, None, None).is_some(),
         "every type with a row"
     );
 }
@@ -29,7 +32,10 @@ fn a_peer_body_takes_its_types_models_and_the_remote_bit() {
 #[test]
 fn a_sync_record_moves_the_body_and_its_velocity_carries_it_on() {
     let mut em = manager();
-    let id = em.append_network_body(REMOTE_CRAFT_TYPE).unwrap();
+    let id = em
+        .append_network_body(REMOTE_CRAFT_TYPE, None, None)
+        .unwrap()
+        .id();
     em.apply_network_sync(
         id,
         &BodySync {
@@ -55,7 +61,10 @@ fn a_sync_record_moves_the_body_and_its_velocity_carries_it_on() {
 #[test]
 fn a_silent_body_lapses_and_is_removed() {
     let mut em = manager();
-    let id = em.append_network_body(REMOTE_CRAFT_TYPE).unwrap();
+    let id = em
+        .append_network_body(REMOTE_CRAFT_TYPE, None, None)
+        .unwrap()
+        .id();
     assert!(em.advance_network_bodies(REMOTE_TIMEOUT_US - 1).is_empty());
     assert_eq!(em.advance_network_bodies(1), vec![id]);
     assert!(em.remove_network_body(id));
@@ -104,7 +113,7 @@ fn cargo_manager() -> (EntityManager, u32, u32) {
     ));
     let mut em =
         EntityManager::from_entities_with_type_metadata_for_test(vec![player], metadata, false);
-    let cargo = em.append_network_body(68).unwrap();
+    let cargo = em.append_network_body(68, None, None).unwrap().id();
     (em, 1, cargo)
 }
 
@@ -191,7 +200,7 @@ fn a_carried_peer_body_its_owner_released_is_hidden_and_asked_for_again() {
 #[test]
 fn cargo_rows_compact_and_the_next_peer_body_takes_the_freed_slot() {
     let (mut em, player, cargo) = cargo_manager();
-    let other = em.append_network_body(68).unwrap();
+    let other = em.append_network_body(68, None, None).unwrap().id();
     for id in [cargo, other] {
         em.player_sub_j_runtime_mut().unwrap().append(id).unwrap();
         em.entity_mut(id)
@@ -284,4 +293,190 @@ fn dropping_a_peer_body_sends_it_to_its_owner_without_a_materialiser() {
     assert_eq!((*parent_id, *cargo_id, *sound_id), (player, cargo, 8));
     // The terrain under the drop point (height 2, 0x40 raw).
     assert_eq!(target_raw[1], 0x40);
+}
+
+/// Arena 6 (world 32) as a host builds it, with the RNG at a known state.
+fn arena_world() -> (crate::session::GameSession, Vec<EntityTypeRuntimeMetadata>) {
+    let mut session = crate::session::GameSession::init(&v2k_test_support::retail_dir()).unwrap();
+    session.load_auxiliary_ovl(3, 1).unwrap();
+    session.load_level_by_id(44, 1).unwrap();
+    let metadata = (0..session.cache.global_entity_model_table().len())
+        .map(|id| {
+            EntityTypeRuntimeMetadata::from_section12(session.cache.global_entity_type(id).unwrap())
+        })
+        .collect();
+    (session, metadata)
+}
+
+fn arena_manager(
+    session: &crate::session::GameSession,
+    metadata: &[EntityTypeRuntimeMetadata],
+    fx: &mut WorldFx,
+) -> EntityManager {
+    EntityManager::from_authored_world(
+        AuthoredWorldConstruction {
+            level: session.cache.level_desc().unwrap(),
+            logical_world_index: 32,
+            type_metadata: metadata,
+            resources: EntityConstructionResources {
+                terrain: session.cache.terrain(),
+                terrain_objects: session.cache.terrain_objects(),
+                model_extent_raw: Some(&|id| session.cache.global_model(id).map(|m| m.radius)),
+            },
+            player_arrival: Some(AuthoredPlayerArrival {
+                position_raw: [0x4000, 0x400, 0x4000],
+                heading_raw: 0,
+            }),
+            retail_tick: 0,
+        },
+        fx,
+    )
+    .unwrap()
+}
+
+fn peer_craft(
+    session: &crate::session::GameSession,
+    manager: &mut EntityManager,
+    fx: &mut WorldFx,
+) -> u32 {
+    let birth = manager
+        .append_network_body(
+            REMOTE_CRAFT_TYPE,
+            Some([0x5000, 0x600, 0x5000]),
+            Some(PeerBirthWorld {
+                terrain: session.cache.terrain().unwrap(),
+                model_extent_raw: Some(&|id| session.cache.global_model(id).map(|m| m.radius)),
+                world_fx: fx,
+                retail_tick: 0,
+            }),
+        )
+        .unwrap();
+    let PeerBirth::Native(id) = birth else {
+        panic!("{birth:?}");
+    };
+    id
+}
+
+fn advanced(mut fx: WorldFx, words: usize) -> u16 {
+    for _ in 0..words {
+        fx.next_shared_retail_random_u16();
+    }
+    fx.next_shared_retail_random_u16()
+}
+
+/// `FUN_00417680`'s birth of a peer's craft is `FUN_00438080`'s for type 51:
+/// type 51's components and class 7 chosen at birth, from four shared words
+/// (Sub-G's, the selector, and B6C0's two task constructors' Sub-G words),
+/// with state bit 31 beside the constructor's `0x06000000`.
+#[v2k_test_support::retail_test]
+fn a_peers_craft_is_built_by_its_constructor() {
+    let (session, metadata) = arena_world();
+    let mut fx = WorldFx::new();
+    let mut manager = arena_manager(&session, &metadata, &mut fx);
+    fx.set_shared_retail_random_state(0x1234_5678);
+    let expected = fx.fork_for_main_base_abort_transaction();
+    let id = peer_craft(&session, &mut manager, &mut fx);
+    assert_eq!(fx.next_shared_retail_random_u16(), advanced(expected, 4));
+    let craft = manager.network_entity(id).unwrap();
+    assert_eq!(craft.entity_type, REMOTE_CRAFT_TYPE);
+    assert!(craft.is_network_remote());
+    assert_eq!(
+        craft
+            .collision
+            .state_flags_at_0x08
+            .masked(REMOTE_STATE_BIT | 0x0600_0000),
+        RetailRuntimeValue::Known(REMOTE_STATE_BIT | 0x0600_0000)
+    );
+    assert_eq!(craft.model_slots, [41, 67, 41, 41].map(Some));
+    assert_eq!(
+        craft.collision.health_raw,
+        RetailRuntimeValue::Known(40_000)
+    );
+    assert_eq!(
+        craft.collision.pair_callbacks.damage_modifier_address,
+        RetailRuntimeValue::Known(None)
+    );
+    assert!(craft.intro2_flyer_frame_owner.is_some());
+    let RetailRuntimeValue::Known(Some(context)) = craft.current_behavior_context else {
+        panic!("class 7 chosen at birth");
+    };
+    let crate::entity_behavior::ActiveBehaviorStyle::Audited(style) = context.active_style() else {
+        panic!("audited style");
+    };
+    assert_eq!(style.class_id, 7);
+}
+
+/// A particle's hit on a peer's craft runs `FUN_00410EB0` on the copy:
+/// class 7's `FUN_0040C690` chooses again (three words), `FUN_00411030`
+/// jolts the copy (three more) and sends the same deltas (kind 10), then
+/// the damage goes to the owner (kind 9).
+#[v2k_test_support::retail_test]
+fn a_hit_on_a_peers_craft_jolts_its_copy_and_sends_kind_10_then_kind_9() {
+    let (session, metadata) = arena_world();
+    let mut fx = WorldFx::new();
+    let mut manager = arena_manager(&session, &metadata, &mut fx);
+    let id = peer_craft(&session, &mut manager, &mut fx);
+    let player = manager.player().unwrap().id;
+    fx.set_network_sends(true);
+    let expected = fx.fork_for_main_base_abort_transaction();
+    let impact = crate::world_fx::ParticleEntityImpact {
+        source_particle_class: 2,
+        impact_position_argument_va: 0,
+        target_entity_id: id,
+        position_world: [0x50 as f32, 6.0, 0x50 as f32],
+        velocity_raw: [0x4000, 0, 0],
+        damage: Some(crate::world_fx::BallisticDamageRequest {
+            packet: crate::damage::DamagePacket {
+                channels: [2, 0],
+                amounts_raw: [2000, 0],
+            },
+            source_entity_type_at_birth: Some(46),
+            source_owner_id: Some(player),
+        }),
+        no_packet: false,
+    };
+    let mut notifications = crate::gameplay_notifications::GameplayNotifications::new();
+    let outcome = crate::intro2_flyer_impact::apply_peer_craft_particle_hit(
+        &mut manager,
+        &session.cache,
+        &mut fx,
+        &mut notifications,
+        7,
+        impact,
+    );
+    let crate::intro2_flyer_impact::PeerCraftImpactOutcome::Applied {
+        filtered_damage_raw,
+    } = outcome
+    else {
+        panic!("{outcome:?}");
+    };
+    assert!(filtered_damage_raw > 0);
+    assert_eq!(fx.next_shared_retail_random_u16(), advanced(expected, 6));
+    let sends = fx.take_network_sends();
+    let [crate::world_fx::NetworkSend::Impact { entity_id, deltas }, crate::world_fx::NetworkSend::Damage {
+        entity_id: damaged,
+        amount,
+        attacker_type: 46,
+    }] = sends[..]
+    else {
+        panic!("{sends:?}");
+    };
+    assert_eq!((entity_id, damaged), (id, id));
+    assert_eq!(i32::from(amount), filtered_damage_raw);
+    let craft = manager.network_entity(id).unwrap();
+    // The copy moves by what the owner is sent.
+    assert_eq!(
+        craft.network_body().unwrap().velocity_raw,
+        [deltas[0], deltas[1], deltas[2]]
+    );
+    assert_eq!(craft.velocity_raw(), [deltas[0], deltas[1], deltas[2]]);
+    assert_eq!(
+        craft.rotation_heading_pitch_roll_raw(),
+        [deltas[3], deltas[4], deltas[5]]
+    );
+    assert!(deltas[0] > 0);
+    assert_eq!(
+        craft.collision.last_hit_presentation_tick_at_0x34,
+        RetailRuntimeValue::Known(7)
+    );
 }

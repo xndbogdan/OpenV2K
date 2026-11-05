@@ -84,14 +84,15 @@ impl Pair {
         ] {
             game.poll(Instant::now());
             game.advance_timer(20_000);
-            let mut random = || 0x1234;
+            let mut fx = crate::world_fx::WorldFx::new();
             let mut frame = WorldFrame {
                 entities,
                 world: 13,
                 world_active: true,
                 elapsed_us: 20_000,
                 ticks: self.ticks,
-                random: &mut random,
+                fx: &mut fx,
+                model_extent_raw: None,
                 profile: (name, name),
                 player: LocalBodyState {
                     model_variables: vec![1, 2, 3],

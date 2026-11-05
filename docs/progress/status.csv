@@ -1143,3 +1143,5 @@ address,status,note
 0x0046ECF0,implemented,model vertex type 14 transform-only pass: the callback point less the viewport origin, in VIEW (docs/re/CLOSING_SCENE.md)
 0x0046EE70,implemented,model vertex type 14 near pass: the callback point less the viewport origin, in VIEW (docs/re/CLOSING_SCENE.md)
 0x0046F010,implemented,model vertex type 14 far pass: the callback point less the viewport origin, in VIEW (docs/re/CLOSING_SCENE.md)
+0x00411030,implemented,impact jolt; on a peer's craft copy it sends the deltas to the owner (kind 10) (docs/re/MULTIPLAYER.md)
+0x00443110,documented,a peer craft's controller: zeroed profile and no body yet, so nothing reaches the copy (docs/re/MULTIPLAYER.md)

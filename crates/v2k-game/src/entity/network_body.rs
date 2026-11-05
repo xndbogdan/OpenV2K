@@ -1,14 +1,48 @@
 //! Bodies of a network game ([MULTIPLAYER.md](../../../../docs/re/MULTIPLAYER.md),
-//! "Bodies across machines").
+//! "Bodies between machines").
 //!
 //! Every machine keeps every body. A body another machine owns carries
 //! state bit 31: `FUN_00412DA0` runs none of its callbacks, only its sync
 //! timeout and the integration of its replicated velocity, and its fields
 //! come from the owner's sync records (`FUN_00417680`). Damage to it goes to
-//! its owner instead (`FUN_00414E90`).
+//! its owner instead (`FUN_00414E90`). Its birth is the full constructor, so
+//! a hit on it runs the copy's own callbacks.
 
 use super::*;
+use crate::intro2_flyers_live::{
+    authenticate_native_flyer_body, authenticate_native_flyer_metadata, publish_native_flyer,
+    NativeFlyerConstructionRequest, TYPE51_ENTITY_TYPE,
+};
 use crate::network::protocol::BodySync;
+
+/// What a peer's birth reads of this machine's world: `FUN_00438080`'s
+/// constructor places the body on this terrain and draws the shared words.
+pub struct PeerBirthWorld<'a> {
+    pub terrain: &'a TerrainGrid,
+    /// The models' Section-8 extents, for `FUN_0040D4A0`'s placement.
+    pub model_extent_raw: Option<&'a dyn Fn(usize) -> Option<u16>>,
+    pub world_fx: &'a mut WorldFx,
+    pub retail_tick: u32,
+}
+
+/// The body a peer's first record built.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PeerBirth {
+    /// `FUN_00438080`'s whole constructor ran: components, the behavior
+    /// chosen at birth and its shared draws.
+    Native(u32),
+    /// The port does not build this type's copy: its models and no
+    /// components, a typed stop.
+    Hollow { id: u32, reason: &'static str },
+}
+
+impl PeerBirth {
+    pub const fn id(self) -> u32 {
+        match self {
+            Self::Native(id) | Self::Hollow { id, .. } => id,
+        }
+    }
+}
 
 /// State bit 31: another machine owns the body.
 pub const REMOTE_STATE_BIT: u32 = 0x8000_0000;
@@ -67,6 +101,15 @@ pub struct PlayerHitReport {
 }
 
 impl Entity {
+    /// A jolt's velocity on a peer's copy: the words `FUN_00412DA0`
+    /// integrates are the body's own.
+    pub(crate) fn set_peer_velocity_raw(&mut self, velocity_raw: [i16; 3]) {
+        self.set_velocity_raw(velocity_raw);
+        if let Some(body) = self.network_body.as_deref_mut() {
+            body.velocity_raw = velocity_raw;
+        }
+    }
+
     /// State bit 31.
     pub fn is_network_remote(&self) -> bool {
         self.network_body.is_some()
@@ -88,9 +131,139 @@ pub struct NetworkDeathDrops {
 }
 
 impl EntityManager {
-    /// `FUN_00438080`'s network birth of a peer's body of `entity_type`:
-    /// an allocation with the type's models and no callbacks. Returns its id.
-    pub fn append_network_body(&mut self, entity_type: u32) -> Option<u32> {
+    /// `FUN_00417680`'s birth of a peer's body: `FUN_00438080` with a zeroed
+    /// record that carries the handle, the type and the record's position
+    /// (`None` when the record has none, whose words retail reads from
+    /// stale stack). Types whose copy the port builds natively go through
+    /// their constructor; any other is a hollow body.
+    pub fn append_network_body(
+        &mut self,
+        entity_type: u32,
+        position_raw: Option<[i16; 3]>,
+        world: Option<PeerBirthWorld<'_>>,
+    ) -> Option<PeerBirth> {
+        let reason = match (entity_type, position_raw, world) {
+            (_, None, _) => "a record without its position",
+            (_, _, None) => "no terrain",
+            (TYPE51_ENTITY_TYPE, Some(position), Some(world)) => {
+                match self.append_native_peer_craft(position, world) {
+                    Ok(id) => return Some(PeerBirth::Native(id)),
+                    Err(reason) => reason,
+                }
+            }
+            _ => "its constructor is not ported for a peer's copy",
+        };
+        let id = self.append_hollow_network_body(entity_type)?;
+        if let Some(position) = position_raw {
+            let entity = self.entity_mut(id)?;
+            entity.set_position_raw(position);
+            entity.network_body.as_mut()?.position_raw = position;
+        }
+        Some(PeerBirth::Hollow { id, reason })
+    }
+
+    /// A peer's craft (type 51) through the class-7 flyer constructor, as
+    /// `FUN_00438080` builds it: `FUN_00443110`'s controller first, whose
+    /// zeroed profile writes nothing to a body not yet built; then
+    /// `FUN_004104B0` with the handle of another slot (state bit 31), Sub-G's
+    /// word (`FUN_0041B8C0`), Sub-D's allocation, the class selector and the
+    /// Sub-G words of B6C0's two task constructors. Its owner is never
+    /// scheduled: `FUN_00412DA0` runs none of a peer's callbacks.
+    fn append_native_peer_craft(
+        &mut self,
+        position_raw: [i16; 3],
+        world: PeerBirthWorld<'_>,
+    ) -> Result<u32, &'static str> {
+        let metadata = self
+            .type_metadata
+            .get(TYPE51_ENTITY_TYPE as usize)
+            .ok_or("no Type51 record")?
+            .clone();
+        authenticate_native_flyer_metadata(TYPE51_ENTITY_TYPE, &metadata)
+            .map_err(|_| "an unexpected Type51 record")?;
+        if !matches!(
+            self.next_common_body_ordinal(),
+            RetailRuntimeValue::Known(_)
+        ) {
+            return Err("the body stamp lineage");
+        }
+        let terrain = world.terrain;
+        if terrain.cells.len() != v2k_formats::terrain::GRID_SIZE * v2k_formats::terrain::GRID_SIZE
+        {
+            return Err("an incomplete terrain");
+        }
+        let surface = crate::entity_initializer::constructor_surface_bits_at_tick(
+            position_raw,
+            terrain,
+            world.retail_tick,
+            self.common_environment_physics().waves_enabled,
+        )
+        .ok_or("the constructor's surface")?;
+        let id = self.next_entity_id;
+        if id == 0 || self.entities.iter().any(|entity| entity.id == id) {
+            return Err("the allocation handle");
+        }
+        let mut entity = native_instance_body(
+            id,
+            RetailRuntimeValue::Unresolved,
+            &metadata,
+            terrain,
+            NativeInstanceBodyRequest {
+                entity_type: TYPE51_ENTITY_TYPE,
+                position_raw,
+                objective: false,
+            },
+        );
+        entity.collision.state_flags_at_0x08.overwrite(
+            SURFACE_STATE_MASK | REMOTE_STATE_BIT,
+            surface | REMOTE_STATE_BIT,
+        );
+        let radius = match entity.collision.active_model_slot() {
+            RetailRuntimeValue::Known(slot) => entity
+                .model_in_slot(slot)
+                .and_then(|model| world.model_extent_raw.and_then(|lookup| lookup(model)))
+                .map(|radius| radius as i16),
+            RetailRuntimeValue::Unresolved => None,
+        };
+        let RetailRuntimeValue::Known(position) =
+            crate::entity_initializer::constructor_position_raw(
+                &metadata,
+                position_raw,
+                Some(terrain),
+                radius,
+            )
+        else {
+            return Err("FUN_0040D4A0's placement");
+        };
+        entity.set_position_raw(position);
+        let allocation = observe_main_base_abort_actor(&entity, self.allocation_generation).lease;
+        authenticate_native_flyer_body(&entity, allocation, &metadata, None)
+            .map_err(|_| "an unexpected Type51 body")?;
+        entity.construction_stamp_at_0xb4 = self.begin_common_body_attempt();
+        publish_native_flyer(
+            NativeFlyerConstructionRequest {
+                entity: &mut entity,
+                allocation,
+                metadata: &metadata,
+                authored: None,
+            },
+            world.world_fx,
+        )
+        .map_err(|_| "the class-7 publication")?;
+        // FUN_004104B0's +44: type 51 has no damage modifier.
+        entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
+        entity.network_body = Some(Box::new(NetworkBody {
+            sync_timeout_us: REMOTE_TIMEOUT_US,
+            position_raw: entity.position_raw(),
+            ..NetworkBody::default()
+        }));
+        assert_eq!(self.allocate_live_entity_id(), id);
+        self.append_live_entity(entity);
+        Ok(id)
+    }
+
+    /// A body with the type's models and no components or callbacks.
+    fn append_hollow_network_body(&mut self, entity_type: u32) -> Option<u32> {
         let metadata = self.type_metadata.get(entity_type as usize)?.clone();
         let id = self.allocate_live_entity_id();
         let mut entity =

@@ -253,7 +253,21 @@ record carries the type, a player's craft (type 46) arriving as type 51;
 otherwise the owner is asked for a whole record (kind 11). The birth is the
 full constructor (`FUN_0040D720`): the peer's copy has its type's components
 and a behavior class chosen here, with the shared random draws those take,
-though it never runs them.
+though it never runs them. The record handed to `FUN_00438080` is zero but
+for the handle, the type and the position, whose words `FUN_00417680` reads
+only when the record carries them (flag `0x20`; otherwise from stale stack).
+For type 51, `FUN_00438080` first builds a remote player's controller
+(`FUN_00443110`) from a zeroed profile: its body link (`+68`) is still null,
+so `FUN_00443560` writes nothing to a body, and the list it joins is only
+ever freed (`FUN_00442E90`); the body's `+88` takes the controller's
+address until a record writes it. `FUN_004104B0` then gives the copy state
+`0x6078801` with the surface bits and bit 31 (the handle's slot is not this
+machine's), whose `0x04000000` no sync record clears: a copy is always
+jolted by `FUN_00411030`. A peer's craft (type 51: C, D, E, G, J and O,
+type 46's flight table and steering, class 7 at weight 10 with alternate
+class 25, Sub-E method 0) draws four words: Sub-G's (`FUN_0041B8C0`), the
+class selector, and the Sub-G word of each of B6C0's two task constructors
+(`FUN_00406070`; type 51 has no Sub-A, whose word the attract craft adds).
 
 The record ends with the body's relation. With state bit `0x1000` it names
 the parent (`+80`): a record without its own position or velocity gives the
@@ -390,24 +404,54 @@ rows of its own bodies) as it does in single player.
 other calls' stack contents (above), which no port can reproduce, and the
 owner would add them to whichever of its bodies the stale handle names.
 
+A peer's craft is built by its constructor, as above, and never scheduled.
+A particle's hit on it runs the wrapper its class takes on the copy:
+`FUN_00410EB0` (stamping `+34`), the static route's `FUN_00411180` (`+80`
+first, eight times the impulse), an infection's `FUN_00411250` or a cure's
+`FUN_00411320` (the `0x2000` bit and its cue). The type's hit hook is class
+7's `FUN_0040C690`, so `FUN_0040AC60` chooses the copy's behavior again: a
+selector word and the two task constructors' Sub-G words. `FUN_00411030`
+then draws three more, adds the deltas to the copy (which moves on by them)
+and sends them to the owner (kind 10), whose `FUN_00417EB0` adds the same
+words to its craft, and `FUN_00415040`'s damage follows as kind 9. Two
+machines on loopback agree word for word: each of the host's 23 Chain Gun
+hits on the guest's craft sent deltas the guest applied unchanged.
+
+`FUN_00447280` (class 25's initializer) on a body other than the one the
+local controller holds (its `+68`) finds no controller (`FUN_00443AF0`
+returns its `0x8802` error),
+so it builds no power-ups and no wreck: it clears task slots 2 and 1 and
+installs a 3-second timed Primary (`FUN_004476F0`), drawing nothing.
+
+A peer's kind 6 names a cell whose static program starts here too. A
+retail sender never sends it for a kind whose program is null: both
+`FUN_00427950` and `FUN_00427B20` burn such a cell at once instead. If the
+receiver's cell holds such a kind (the two terrains disagree), retail's
+`FUN_00428910` still starts the null program, which `FUN_004281A0`
+dereferences on its next visit, a crash; the port stops there.
+
 Held, each with a logged stop ("Network: ... is held"):
 
-- kind 10 from `FUN_00411030`, since the port runs no particle hit wrapper
-  (`FUN_00410EB0`, `FUN_00411180`, `FUN_00411250`) on a peer's body, only its
-  damage. On a peer's copy the wrapper runs its type's hit callback first,
-  and a peer craft's (Type51, class 7) is `FUN_0040C690`, which chooses a
-  behavior again with shared random draws: the port's peer bodies are
-  hollow (no components, no behavior chosen at birth, no birth draws);
+- a peer's body of any type but 51, whose copy stays hollow (its models and
+  no components, no behavior chosen at birth, no birth draws): "a peer's
+  TypeN copy (its constructor is not ported for a peer's copy)". A hit on
+  such a copy sends only its damage, without its type's hit hook or the
+  jolt ("FUN_00411030's kind 10 on a peer's TypeN copy");
+- a hit on a dying peer's craft: `FUN_0040AC60` takes the copy's alternate,
+  class 25, through `FUN_00425660`, whose publication on a class-7 body the
+  port has no owner for;
 - receiving kinds 13 and 15 (`FUN_00418030`, `FUN_004180F0`), whose owner
   side attaches its body to a peer's craft, keeps it on the craft through
   `FUN_00412DA0` and releases it into a Type93 with a peer as the parent;
-  kind 14, which retail never sends; and a peer's kind 6 for a kind whose
-  program the port does not run ("a peer's kind 6 for a static of kind N");
-- a particle's damage to a peer's body of type 73, 109 or 110, whose modifier
-  `FUN_00415040` would run first. On a peer's copy `FUN_00416820` (73, 109)
-  compares the hit with the copy's own `+50` and `+30`, then births a
-  particle and kills the copy (`FUN_00410C10`) without telling the owner,
-  and `FUN_00421910` (110) reads the Queen's component;
+- kind 14, which retail never sends;
+- a peer's kind 6 for a static of a kind with a null program (a retail
+  crash, above) or outside the kinds the port admits;
+- a particle's damage to a peer's body of type 73, 109 or 110: their copies
+  are hollow, and a hit on one runs its type's hit hook before
+  `FUN_00415040`'s modifier, which on the copy reads its own `+68` age,
+  `+50` and `+30` (`FUN_00416820`, which then births a particle and calls
+  `FUN_00410C10`, a no-op on a peer's body) or the Queen's component
+  (`FUN_00421910`);
 - a peer's damage to an owned creature whose type's hit callback or death the
   port's shared damage phase has not ported (the same types its blasts stop
   at), reported per type ("a peer's damage to an owned TypeN");
