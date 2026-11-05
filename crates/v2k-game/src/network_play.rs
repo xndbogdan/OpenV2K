@@ -281,6 +281,7 @@ pub fn advance_network_world(
             profile: (&name, &initials),
             player,
             terrain: cache.level_terrain(),
+            terrain_objects: cache.terrain_objects(),
         };
         net.world_frame(&mut world_frame);
     }

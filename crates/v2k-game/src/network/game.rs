@@ -90,10 +90,7 @@ pub enum NetworkEvent {
     /// peer's body: its Sub-J is unresolved.
     UnknownAttachmentList,
     /// A peer's body the port built without its constructor.
-    HollowPeerBody {
-        entity_type: u32,
-        reason: &'static str,
-    },
+    HollowPeerBody { entity_type: u32, reason: String },
     /// `FUN_00456750`: a winner was named.
     WinnerFlash,
     /// `FUN_00450CC0`: the session was lost, or this machine became the host
@@ -146,6 +143,7 @@ pub struct WorldFrame<'a> {
     pub player: LocalBodyState,
     /// The level's terrain, which the host's kind 3 describes.
     pub terrain: Option<&'a v2k_formats::terrain::TerrainGrid>,
+    pub terrain_objects: Option<&'a v2k_formats::anim_frames::TerrainObjectTable>,
 }
 
 /// `004DC9E0`: where the host's next kind 3 starts. Retail never resets it,
@@ -940,6 +938,7 @@ impl NetworkGame {
                 let position = (sync.flags & 0x20 != 0).then_some(sync.position);
                 let world = frame.terrain.map(|terrain| PeerBirthWorld {
                     terrain,
+                    terrain_objects: frame.terrain_objects,
                     model_extent_raw: frame.model_extent_raw,
                     world_fx: &mut *frame.fx,
                     retail_tick: frame.ticks,
@@ -950,13 +949,13 @@ impl NetworkGame {
                 else {
                     return;
                 };
+                let id = birth.id();
                 if let PeerBirth::Hollow { reason, .. } = birth {
                     self.events.push(NetworkEvent::HollowPeerBody {
                         entity_type,
                         reason,
                     });
                 }
-                let id = birth.id();
                 if !self.handles.register(sync.handle, id) {
                     frame.entities.remove_network_body(id);
                     return;

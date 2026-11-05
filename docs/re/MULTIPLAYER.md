@@ -292,6 +292,31 @@ callbacks: it moves the body on by its last velocity, `((elapsed >> 5) * v)
 >> 15` per axis, and removes it when no record came for 1.25 s (state `0x800`
 without `0x08000000`) or 3.5 s otherwise.
 
+The record `FUN_00417680` hands `FUN_00438080` is the 0x4C request an
+authored record's `FUN_0042E440` builds, but zero after the handle, the type
+and the position, so a copy is the authored constructor's body for an empty
+record. `FUN_004104B0` takes the handle (`+00`, against `DAT_004DCA00` for an
+authored record) and sets bit 31 before Sub-D's `FUN_00409A80` and the
+type's initializer run. The common initializer `FUN_004381F0` reads three
+pointers from the request: the Sub-N animation (`+40`, through
+`FUN_0041BC20`), the Sub-M template (`+44`, through `FUN_00418A90`) and the
+initial behavior (`+48`, else the type's own at `+118`, through
+`FUN_0040AC60`). All three are null in a copy. `FUN_00418A90` without a
+template leaves the Sub-M `FUN_00418A60` zeroed but for `+50`, which becomes
+0x1F, so a peer's factory or Main Base copy has no scientists, output or
+timers and a primary `FUN_0044C830` voice 0x1F at gain 0, which only its
+own callbacks (`FUN_00418F60`) would retune. None of the state word's other
+readers (`FUN_0041BEB0`, the emitters `FUN_004013A0`, `FUN_00402850`,
+`FUN_004061A0`, `FUN_0040E370`, `FUN_004141D0`, `FUN_00414870`,
+`FUN_00422840`, `FUN_00445310`, `FUN_00446FC0`, `FUN_004475F0`, the
+contacts `FUN_00411760` and `FUN_00411AD0`, and the network routines) runs
+inside a constructor.
+
+`FUN_00411AD0` runs a body's surface and static phases only without state
+`0x88000000`: a peer's body has neither, and goes straight to its pairs,
+where a pair of two peers' bodies is skipped. `FUN_00417130`'s harmful sea
+burns a peer's body like any other, so its owner hears of it as kind 9.
+
 | Routine | Does |
 | --- | --- |
 | `FUN_00414E90` | damage to a peer's body goes to its owner (kind 9: handle, amount, `(attacker type + 6) \| slot << 8`), whatever dealt it: a particle through `FUN_00415040`, a blast through `FUN_00414E10`, an attached particle through `FUN_004425D0`. On the local player, a lethal hit runs `FUN_00439C90` (the killer is the attacker's slot when a player's craft, type 46, dealt it) and a player's nonlethal hit `FUN_00439DB0` |
@@ -404,7 +429,17 @@ rows of its own bodies) as it does in single player.
 other calls' stack contents (above), which no port can reproduce, and the
 owner would add them to whichever of its bodies the stale handle names.
 
-A peer's craft is built by its constructor, as above, and never scheduled.
+A peer's copy is built by the port's constructor for its type's authored
+record, given the empty record above (the Sub-M's null template included),
+with bit 31 set: its components, its behavior chosen at birth and the shared
+words those draw. A peer's craft (type 51) is built by its constructor as
+above. No copy is ever scheduled: no task owner adopts one, and the actor
+pass skips its visit. Its contacts skip the surface and static phases. With
+two processes on loopback in each of the six arenas, every type the host
+sent but those held below was built so: 8, 9, 14, 15, 27, 35, 39, 55, 61,
+66, 68, 71, 82, 86, 87, 94, 95, 102, 103, 126, 127, 128 and 129.
+
+A peer's craft is never scheduled either.
 A particle's hit on it runs the wrapper its class takes on the copy:
 `FUN_00410EB0` (stamping `+34`), the static route's `FUN_00411180` (`+80`
 first, eight times the impulse), an infection's `FUN_00411250` or a cure's
@@ -435,8 +470,18 @@ set down at the same point as the host.
 `FUN_00447280` (class 25's initializer) on a body other than the one the
 local controller holds (its `+68`) finds no controller (`FUN_00443AF0`
 returns its `0x8802` error),
-so it builds no power-ups and no wreck: it clears task slots 2 and 1 and
-installs a 3-second timed Primary (`FUN_004476F0`), drawing nothing.
+so it builds no power-ups and no wreck: it clears task slots 2 and 1,
+zeroes model word 7 (`FUN_0040A950`) and installs a 3-second timed Primary
+(`FUN_004476F0`), drawing nothing. That is what a hit on a dying peer's
+craft does to its copy: class 7's `FUN_0040C690` reaches `FUN_0040AC60`,
+which for a body with state `0x4000` (`FUN_00416460`) takes the type's
+alternate through `FUN_00425660` and `FUN_00438340`; `FUN_0040C6B0`
+installs the Dying bounce style (`4CDAA8`, whose `+34` and `+38` state
+policies are null, so `FUN_0040EA10` writes no state) and runs
+`FUN_00447280`. The jolt and the damage then go to the owner as for a live
+craft. The port does all of this but keeps the copy's slot 0 empty, as it
+does the local player's, whose timer its host owns: `FUN_00412DA0` never
+visits a copy's tasks, so the timed object is never run.
 
 A peer's kind 6 names a cell whose static program starts here too. A
 retail sender never sends it for a kind whose program is null: both
@@ -447,23 +492,40 @@ dereferences on its next visit, a crash; the port stops there.
 
 Held, each with a logged stop ("Network: ... is held"):
 
-- a peer's body of any type but 51, whose copy stays hollow (its models and
-  no components, no behavior chosen at birth, no birth draws): "a peer's
-  TypeN copy (its constructor is not ported for a peer's copy)". A hit on
-  such a copy sends only its damage, without its type's hit hook or the
-  jolt ("FUN_00411030's kind 10 on a peer's TypeN copy");
-- a hit on a dying peer's craft: `FUN_0040AC60` takes the copy's alternate,
-  class 25, through `FUN_00425660`, whose publication on a class-7 body the
-  port has no owner for;
+- a peer's body whose type the port does not build by its own constructor
+  (the Hive, type 67, and the exploding ring, type 60, among the arenas'),
+  whose copy stays hollow (its models and no components, no behavior chosen
+  at birth, no birth draws): "a peer's TypeN copy (its constructor is not
+  ported)";
+- a peer's Main Base (type 6): the null template gives its Sub-M the voice
+  0x1F, which the port's Main Base does not carry;
+- a peer's worker whose Job Nearby search meets a hollow copy (types 79, 90,
+  91 and 116 beside the arenas' Hives and Main Bases): the search needs the
+  copy's Sub-M ("worker: Job Nearby evidence");
+- a hit on a peer's copy other than a class-7 flyer's: it sends only its
+  damage, without its type's hit hook or the jolt ("FUN_00411030's kind 10
+  on a peer's TypeN copy"). A class-7 flyer's copy (types 14, 15, 39, 41, 87
+  and 108) takes the hit as a peer's craft does;
 - kinds 13 and 15 for an owned body of a type other than Type68 and Type74
   ("a peer's kind 13 for an owned TypeN"), and a kind 13 naming a parent
   unknown here (retail keeps the handle, and `FUN_00412DA0` then drops the
-  body where it is);
+  body where it is). Besides Type68 (class 0), the arenas' bodies a player
+  can beam (capability `0x1000`) are people: Type8 (classes 54 and 6),
+  Type9 (10, 45, 54, 6), Type86 (45, 10, 54, 6), Type90 (6, 54) and Type95
+  (6, 10, 45, 54). Each of those classes' first styles has an attach
+  callback at `+08` (`FUN_0040CD50` for 6 and 54, `FUN_0040CE70` for 10 and
+  45, styles `4C79C0`, `4C8788`, `4C7618` and `4C86B0`), the carried
+  transition, which `FUN_00416700` runs on the beamer's copy and, on kind
+  13, on the owner's body, whose kind 15 then runs the carried style's
+  release. The port runs those transitions only on this machine's bodies,
+  under their task owners and with this machine's player as the parent, so
+  the beamer stops first ("a peer's cargo attach callback") and a port
+  never sends kind 13 for a person;
 - kind 14, which retail never sends;
 - a peer's kind 6 for a static of a kind with a null program (a retail
   crash, above) or outside the kinds the port admits;
-- a particle's damage to a peer's body of type 73, 109 or 110: their copies
-  are hollow, and a hit on one runs its type's hit hook before
+- a particle's damage to a peer's body of type 73, 109 or 110: a hit on one
+  runs its type's hit hook (held, above) before
   `FUN_00415040`'s modifier, which on the copy reads its own `+68` age,
   `+50` and `+30` (`FUN_00416820`, which then births a particle and calls
   `FUN_00410C10`, a no-op on a peer's body) or the Queen's component

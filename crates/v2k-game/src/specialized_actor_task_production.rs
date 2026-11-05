@@ -1823,7 +1823,7 @@ impl SpecializedActorTaskScheduler {
         };
         let mut adopted = 0;
         for entity in manager.iter_all() {
-            if entity.intro2_type8_runtime.is_some() {
+            if entity.intro2_type8_runtime.is_some() || entity.is_network_remote() {
                 continue;
             }
             if self
@@ -1857,6 +1857,7 @@ impl SpecializedActorTaskScheduler {
         }
         let Some(owner) = manager
             .iter_all()
+            .filter(|entity| !entity.is_network_remote())
             .find_map(|entity| LevelOneFactoryArrivalOwner::adopt_published(entity).ok())
         else {
             return 0;
@@ -2085,6 +2086,7 @@ impl SpecializedActorTaskScheduler {
     pub fn adopt_intro2_type8(&mut self, manager: &mut EntityManager) -> usize {
         let ids: Vec<_> = manager
             .iter_all()
+            .filter(|entity| !entity.is_network_remote())
             .map(|entity| entity.id)
             .filter(|id| !self.owners.iter().any(|owner| owner.entity_id() == *id))
             .collect();
@@ -2289,6 +2291,7 @@ impl SpecializedActorTaskScheduler {
     pub fn adopt_native_type86(&mut self, manager: &mut EntityManager) -> usize {
         let ids: Vec<_> = manager
             .iter_all()
+            .filter(|entity| !entity.is_network_remote())
             .map(|entity| entity.id)
             .filter(|id| !self.owners.iter().any(|owner| owner.entity_id() == *id))
             .collect();
@@ -4802,6 +4805,13 @@ impl SpecializedActorTaskScheduler {
                 break;
             };
             previous_id = Some(entity_id);
+            // FUN_00412DA0 runs none of a peer's body's callbacks (state bit 31).
+            if manager
+                .network_entity(entity_id)
+                .is_some_and(crate::entity::Entity::is_network_remote)
+            {
+                continue;
+            }
             if let Some(context) = hive_components.as_mut() {
                 let hive_pass = hive::tick_hive_component(
                     manager,

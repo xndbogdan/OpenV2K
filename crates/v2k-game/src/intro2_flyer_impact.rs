@@ -468,7 +468,8 @@ pub enum PeerCraftImpactOutcome {
     },
 }
 
-/// A particle hit on a peer's craft (type 51): the wrapper its class takes
+/// A particle hit on a peer's craft (type 51) or on a peer's copy of a
+/// class-7 flyer the port builds natively: the wrapper its class takes
 /// (`FUN_00410EB0`, the static route's `FUN_00411180`, an infection's
 /// `FUN_00411250` or a cure's `FUN_00411320`) runs on the copy. Its type's
 /// hit callback is class 7's `FUN_0040C690`, which chooses the copy's
@@ -483,17 +484,25 @@ pub fn apply_peer_craft_particle_hit(
     retail_tick: u32,
     impact: ParticleEntityImpact,
 ) -> PeerCraftImpactOutcome {
-    if !manager.iter_all().any(|entity| {
-        entity.id == impact.target_entity_id
-            && entity.entity_type == crate::intro2_flyers_live::TYPE51_ENTITY_TYPE
-            && entity.is_network_remote()
-            && entity.intro2_flyer_frame_owner.is_some()
-    }) {
+    let Some(entity_type) = manager
+        .iter_all()
+        .find(|entity| {
+            entity.id == impact.target_entity_id
+                && entity.is_network_remote()
+                && entity.intro2_flyer_frame_owner.is_some()
+        })
+        .map(|entity| entity.entity_type)
+        .filter(|&entity_type| {
+            entity_type == crate::intro2_flyers_live::TYPE51_ENTITY_TYPE
+                || crate::intro2_flyers_live::native_flyer_model_id(entity_type).is_some()
+        })
+    else {
         return PeerCraftImpactOutcome::NotApplicable;
-    }
+    };
     let mut committed = false;
     match run_peer_craft(
         manager,
+        entity_type,
         resources,
         world_fx,
         notifications,
@@ -511,8 +520,49 @@ pub fn apply_peer_craft_particle_hit(
     }
 }
 
+/// `FUN_0040AC60` on a dying peer's craft: `FUN_00425660` installs the
+/// type's alternate, class 25 (`FUN_00438340`, `FUN_0040C6B0`, whose style
+/// install `FUN_0040EA10` has null state policies), and its initializer
+/// `FUN_00447280` finds no controller for a body the local controller does
+/// not hold (`FUN_00443AF0`'s `0x8802`). So it leaves no power-ups, cargo,
+/// burst or text and draws nothing: it clears task slots 2 and 1, zeroes
+/// model word 7 and puts a 3-second timed object (`FUN_004476F0`) in slot 0.
+/// `FUN_00412DA0` never visits a copy's tasks, so the port leaves slot 0
+/// empty, as it does for the local player, whose timer its host owns.
+fn publish_peer_craft_dying(
+    entity: &mut crate::entity::Entity,
+    metadata: &crate::entity_collision_state::EntityTypeRuntimeMetadata,
+) -> Result<(), String> {
+    if metadata
+        .initializer
+        .as_ref()
+        .map(|initializer| initializer.alternate_behavior_class_ref)
+        != Some(25)
+    {
+        return Err("the craft's alternate".into());
+    }
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return Err("the copy's style".into());
+    };
+    let program = crate::entity_behavior::audited_behavior_program(25).ok_or("class 25")?;
+    let context = context
+        .reselect_audited_type_default(program, 0, program.initial_style)
+        .ok_or("class 25 on the copy")?;
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
+    for slot in [
+        crate::actor_task_owner::ActorTaskSlot::Tertiary,
+        crate::actor_task_owner::ActorTaskSlot::Secondary,
+        crate::actor_task_owner::ActorTaskSlot::Primary,
+    ] {
+        entity.actor_tasks.clear_slot(slot);
+    }
+    entity.zero_peer_model_word(7);
+    Ok(())
+}
+
 fn run_peer_craft(
     manager: &mut crate::entity::EntityManager,
+    entity_type: u32,
     resources: &crate::resource_cache::ResourceCache,
     world_fx: &mut crate::world_fx::WorldFx,
     notifications: &mut crate::gameplay_notifications::GameplayNotifications,
@@ -528,9 +578,9 @@ fn run_peer_craft(
         return Err("the copy's allocation".into());
     }
     let metadata = manager
-        .type_runtime_metadata(crate::intro2_flyers_live::TYPE51_ENTITY_TYPE)
+        .type_runtime_metadata(entity_type)
         .cloned()
-        .ok_or("Type51 record")?;
+        .ok_or("the type's record")?;
     let bits = |manager: &crate::entity::EntityManager, mask: u32| {
         manager
             .iter_all()
@@ -588,8 +638,18 @@ fn run_peer_craft(
     };
     match callback_policy(context.active_style(), entry).ok_or("unaudited style hit slot")? {
         ImpactCallbackPolicy::None => {}
-        // C690 -> AC60: the copy's behavior is chosen again; a dying copy
-        // would take its alternate (class 25), which no flyer publishes.
+        // C690 -> AC60: the copy's behavior is chosen again; a dying craft
+        // takes its alternate, class 25.
+        ImpactCallbackPolicy::ReselectBehavior
+            if entity_type == crate::intro2_flyers_live::TYPE51_ENTITY_TYPE
+                && entity
+                    .collision
+                    .state_flags_at_0x08
+                    .masked(0x1000 | DYING_STATE_BIT)
+                    == RetailRuntimeValue::Known(DYING_STATE_BIT) =>
+        {
+            publish_peer_craft_dying(entity, &metadata)?;
+        }
         ImpactCallbackPolicy::ReselectBehavior => {
             reselect_flyer(entity, &metadata, retail_tick, &mut || {
                 u32::from(world_fx.next_shared_retail_random_u16())

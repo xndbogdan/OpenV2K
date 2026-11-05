@@ -19,6 +19,7 @@ use crate::network::protocol::BodySync;
 /// constructor places the body on this terrain and draws the shared words.
 pub struct PeerBirthWorld<'a> {
     pub terrain: &'a TerrainGrid,
+    pub terrain_objects: Option<&'a TerrainObjectTable>,
     /// The models' Section-8 extents, for `FUN_0040D4A0`'s placement.
     pub model_extent_raw: Option<&'a dyn Fn(usize) -> Option<u16>>,
     pub world_fx: &'a mut WorldFx,
@@ -26,23 +27,37 @@ pub struct PeerBirthWorld<'a> {
 }
 
 /// The body a peer's first record built.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PeerBirth {
     /// `FUN_00438080`'s whole constructor ran: components, the behavior
     /// chosen at birth and its shared draws.
     Native(u32),
     /// The port does not build this type's copy: its models and no
     /// components, a typed stop.
-    Hollow { id: u32, reason: &'static str },
+    Hollow { id: u32, reason: String },
 }
 
 impl PeerBirth {
-    pub const fn id(self) -> u32 {
-        match self {
+    pub fn id(&self) -> u32 {
+        match *self {
             Self::Native(id) | Self::Hollow { id, .. } => id,
         }
     }
 }
+
+/// The first authored-record index a peer's copy carries: the port's
+/// bookkeeping only (retail has no such index; no level has this many
+/// records). Copies count up from it in birth order, which is their list
+/// order, as an authored world's records are.
+pub const PEER_COPY_RECORD_INDEX: usize = usize::MAX / 2;
+
+/// `FUN_00418A90` without a template: the zeroed Sub-M's 0x58 bytes with
+/// `+50` (the primary `FUN_0044C830` voice) set to 0x1F.
+const NULL_SUB_M_TEMPLATE: [u8; 0x58] = {
+    let mut template = [0; 0x58];
+    template[0x50] = 0x1F;
+    template
+};
 
 /// State bit 31: another machine owns the body.
 pub const REMOTE_STATE_BIT: u32 = 0x8000_0000;
@@ -110,6 +125,18 @@ impl Entity {
         }
     }
 
+    /// `FUN_0040A950`'s model word `selector` (1-based) of a peer's copy,
+    /// zeroed: the words its owner's records carry.
+    pub(crate) fn zero_peer_model_word(&mut self, selector: usize) {
+        if let Some(word) = self
+            .network_body
+            .as_deref_mut()
+            .and_then(|body| body.model_variables.get_mut(selector - 1))
+        {
+            *word = 0;
+        }
+    }
+
     /// State bit 31.
     pub fn is_network_remote(&self) -> bool {
         self.network_body.is_some()
@@ -143,15 +170,21 @@ impl EntityManager {
         world: Option<PeerBirthWorld<'_>>,
     ) -> Option<PeerBirth> {
         let reason = match (entity_type, position_raw, world) {
-            (_, None, _) => "a record without its position",
-            (_, _, None) => "no terrain",
+            (_, None, _) => "a record without its position".to_string(),
+            (_, _, None) => "no terrain".to_string(),
             (TYPE51_ENTITY_TYPE, Some(position), Some(world)) => {
                 match self.append_native_peer_craft(position, world) {
                     Ok(id) => return Some(PeerBirth::Native(id)),
-                    Err(reason) => reason,
+                    Err(reason) => reason.to_string(),
                 }
             }
-            _ => "its constructor is not ported for a peer's copy",
+            (_, Some(position), Some(world)) if native_authored_publication_type(entity_type) => {
+                match self.append_native_peer_copy(entity_type, position, world) {
+                    Ok(id) => return Some(PeerBirth::Native(id)),
+                    Err(reason) => format!("its constructor stopped: {reason}"),
+                }
+            }
+            _ => "its constructor is not ported".to_string(),
         };
         let id = self.append_hollow_network_body(entity_type)?;
         if let Some(position) = position_raw {
@@ -259,6 +292,105 @@ impl EntityManager {
         }));
         assert_eq!(self.allocate_live_entity_id(), id);
         self.append_live_entity(entity);
+        Ok(id)
+    }
+
+    /// `FUN_00438080` with the zeroed record `FUN_00417680` builds: the
+    /// handle, the type and the position, every other word zero. It is the
+    /// constructor `FUN_0042E440` runs for an authored record (the same
+    /// `FUN_0040D720`, components and type initializer, drawing the same
+    /// shared words), so the port's authored path builds it from an empty
+    /// record. `FUN_004104B0` sets state bit 31 for the handle's slot, and
+    /// the copy is never scheduled.
+    fn append_native_peer_copy(
+        &mut self,
+        entity_type: u32,
+        position_raw: [i16; 3],
+        world: PeerBirthWorld<'_>,
+    ) -> Result<u32, String> {
+        if !matches!(
+            self.construction_provenance,
+            LevelEntityConstructionProvenance::NativeOrdinary { .. }
+        ) {
+            return Err("a world built without its native constructors".into());
+        }
+        if entity_type == 6 {
+            // The template below gives a Main Base's Sub-M a voice.
+            return Err(
+                "FUN_00418A90's null template: a Main Base Sub-M with the FUN_0044C830 voice 0x1F, which the port's Main Base does not carry"
+                    .into(),
+            );
+        }
+        let [x, y, z] = position_raw.map(i16::to_le_bytes);
+        // FUN_004381F0 hands FUN_00418A90 the record's template pointer
+        // (+44), null here: the Sub-M FUN_00418A60 zeroed keeps its words
+        // but for +50, which becomes 0x1F. That is the template below.
+        let has_sub_m = matches!(
+            self.type_metadata
+                .get(entity_type as usize)
+                .map(|metadata| metadata.status_component_descriptor),
+            Some(RetailRuntimeValue::Known(Some(_)))
+        );
+        let record = v2k_formats::levels::EntitySpawn {
+            index: self
+                .entities
+                .iter()
+                .filter_map(|entity| entity.authored_spawn_index)
+                .filter(|&index| index >= PEER_COPY_RECORD_INDEX)
+                .max()
+                .map_or(PEER_COPY_RECORD_INDEX, |index| index + 1),
+            entity_type,
+            pos_data_1: [x[0], x[1], y[0], y[1]],
+            pos_data_2: [z[0], z[1], 0, 0],
+            param: 0,
+            rotation: [0; 3],
+            extra: [0; 40],
+            initial_damage_buffer_raw: 0,
+            model_overrides: [0; 4],
+            has_animation: false,
+            anim_frames: 0,
+            animation: None,
+            has_config: false,
+            config: has_sub_m.then_some(NULL_SUB_M_TEMPLATE),
+        };
+        let id = self.next_entity_id;
+        let type_metadata = self.type_metadata.clone();
+        let construction = LevelSpawnConstruction {
+            type_metadata: &type_metadata,
+            resources: EntityConstructionResources {
+                terrain: Some(world.terrain),
+                terrain_objects: world.terrain_objects,
+                model_extent_raw: world.model_extent_raw,
+            },
+            construction_provenance: self.construction_provenance,
+            retail_first_world: false,
+            waves_enabled: self.common_environment_physics().waves_enabled,
+            restored_world_flags: 0,
+        };
+        self.construct_level_spawn(
+            &record,
+            construction,
+            &mut Some((world.retail_tick, world.world_fx)),
+            &mut None,
+        )
+        .map_err(|error| match error {
+            FreshNewGameEntityConstructionError::NativeActorConstruction { reason, .. } => reason,
+            other => format!("{other:?}"),
+        })?;
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .ok_or("no body published")?;
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(REMOTE_STATE_BIT, REMOTE_STATE_BIT);
+        entity.network_body = Some(Box::new(NetworkBody {
+            sync_timeout_us: REMOTE_TIMEOUT_US,
+            position_raw: entity.position_raw(),
+            ..NetworkBody::default()
+        }));
         Ok(id)
     }
 

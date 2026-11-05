@@ -3502,6 +3502,116 @@ struct NativeSavedPlayerConstruction {
     current_world_flags: u32,
 }
 
+/// Types whose authored record the port publishes through its type's own
+/// constructor (`EntityManager::publish_native_authored_actor`).
+fn native_authored_publication_type(entity_type: u32) -> bool {
+    NativeWorkerProfile::from_entity_type(entity_type).is_some()
+        || crate::native_type86::NativeFourChoiceProfile::from_entity_type(entity_type).is_some()
+        || matches!(
+            entity_type,
+            2 | 3
+                | 5
+                | 6
+                | 9
+                | 12
+                | 13
+                | 14
+                | 15
+                | 16
+                | 17
+                | 18
+                | 22
+                | 23
+                | 24
+                | 25
+                | 37
+                | 20
+                | 19
+                | 117
+                | 21
+                | 26
+                | 27
+                | 28
+                | 29
+                | 30
+                | 31
+                | 32
+                | 33
+                | 35
+                | 36
+                | 38
+                | 39
+                | 40
+                | 41
+                | 43
+                | 47
+                | 49
+                | 50
+                | 52
+                | 53
+                | 54
+                | 55
+                | 58
+                | 61
+                | 62
+                | 66
+                | 82
+                | 125
+                | 68
+                | 71
+                | 72
+                | 73
+                | 74
+                | 76
+                | 77
+                | 81
+                | 87
+                | 92
+                | 94
+                | 96
+                | 97
+                | 99
+                | 100
+                | 102
+                | 103
+                | 104
+                | 107
+                | 108
+                | 109
+                | 110
+                | 112
+                | 113
+                | 115
+                | 80
+                | 83
+                | 85
+                | 89
+                | 106
+                | 118
+                | 119
+                | 121
+                | 122
+                | 123
+                | 124
+                | 126
+                | 127
+                | 128
+                | 129
+        )
+}
+
+/// What one record of the authored loop reads besides the record itself.
+#[derive(Clone, Copy)]
+struct LevelSpawnConstruction<'m, 'r> {
+    type_metadata: &'m [EntityTypeRuntimeMetadata],
+    resources: EntityConstructionResources<'r>,
+    construction_provenance: LevelEntityConstructionProvenance,
+    retail_first_world: bool,
+    /// Controller `+A4` (the level's `+84`).
+    waves_enabled: bool,
+    restored_world_flags: u32,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LevelEntityConstructionProvenance {
     Generic,
@@ -5010,7 +5120,6 @@ impl EntityManager {
         mut completed_world: Option<NativeSaveWorldState<'_>>,
     ) -> Result<Self, FreshNewGameEntityConstructionError> {
         let terrain = resources.terrain;
-        let terrain_objects = resources.terrain_objects;
         let retail_first_world = is_retail_first_world(level_desc);
         let native_ordinary = matches!(
             construction_provenance,
@@ -5208,823 +5317,749 @@ impl EntityManager {
         }
 
         for spawn in &level_desc.entities {
-            let resources = EntityConstructionResources {
-                terrain: completed_world
-                    .as_ref()
-                    .map(|saved| &*saved.terrain)
-                    .or(resources.terrain),
-                ..resources
-            };
-            let terrain = resources.terrain;
-            let mut type47_publication = None;
-            let native_actor_publication = native_ordinary
-                && (NativeWorkerProfile::from_entity_type(u32::from(spawn.entity_type)).is_some()
-                    || crate::native_type86::NativeFourChoiceProfile::from_entity_type(u32::from(
-                        spawn.entity_type,
-                    ))
-                    .is_some()
-                    || matches!(
-                        spawn.entity_type,
-                        2 | 3
-                            | 5
-                            | 6
-                            | 9
-                            | 12
-                            | 13
-                            | 14
-                            | 15
-                            | 16
-                            | 17
-                            | 18
-                            | 22
-                            | 23
-                            | 24
-                            | 25
-                            | 37
-                            | 20
-                            | 19
-                            | 117
-                            | 21
-                            | 26
-                            | 27
-                            | 28
-                            | 29
-                            | 30
-                            | 31
-                            | 32
-                            | 33
-                            | 35
-                            | 36
-                            | 38
-                            | 39
-                            | 40
-                            | 41
-                            | 43
-                            | 47
-                            | 49
-                            | 50
-                            | 52
-                            | 53
-                            | 54
-                            | 55
-                            | 58
-                            | 61
-                            | 62
-                            | 66
-                            | 82
-                            | 125
-                            | 68
-                            | 71
-                            | 72
-                            | 73
-                            | 74
-                            | 76
-                            | 77
-                            | 81
-                            | 87
-                            | 92
-                            | 94
-                            | 96
-                            | 97
-                            | 99
-                            | 100
-                            | 102
-                            | 103
-                            | 104
-                            | 107
-                            | 108
-                            | 109
-                            | 110
-                            | 112
-                            | 113
-                            | 115
-                            | 80
-                            | 83
-                            | 85
-                            | 89
-                            | 106
-                            | 118
-                            | 119
-                            | 121
-                            | 122
-                            | 123
-                            | 124
-                            | 126
-                            | 127
-                            | 128
-                            | 129
-                    ));
-            let construction_stamp_at_0xb4 = manager.begin_common_body_attempt();
-            let native_sub_d = if native_ordinary {
-                let (_, world_fx) = fresh_initial_runtime
-                    .as_mut()
-                    .expect("native process construction");
-                match type_metadata
-                    .get(spawn.entity_type as usize)
-                    .map(|metadata| metadata.sub_d_steering_descriptor)
-                {
-                    Some(RetailRuntimeValue::Known(Some(descriptor))) => {
-                        Some(world_fx.construct_entity_sub_d(descriptor))
-                    }
-                    _ => None,
-                }
-            } else {
-                None
-            };
-            let authored_position_raw =
-                decode_spawn_position_raw(spawn.pos_data_1, spawn.pos_data_2);
-            let mut position = raw_position_world(authored_position_raw);
-            let kind = EntityKind::from_type(spawn.entity_type);
-            let metadata = type_metadata.get(spawn.entity_type as usize);
-            let audited_first_world_weight = retail_first_world
-                && spawn.index == FIRST_WORLD_WEIGHT_SPAWN_INDEX
-                && spawn.entity_type == WEIGHT_ENTITY_TYPE;
-            // Older compatibility fixtures lack D4A0's type policy. Keep
-            // their existing placement only in that explicit metadata gap;
-            // authenticated births use the policy below, never Y==0 as a
-            // grounding sentinel (Reef's Type24 spawn21 intentionally has Y0).
-            if metadata
-                .and_then(|value| value.initializer.as_ref())
-                .is_none()
-                && ((position[1] == 0.0 && kind != EntityKind::Trigger)
-                    || audited_first_world_weight)
-            {
-                if let Some(terrain) = terrain {
-                    position[1] = terrain.height_at(position[0], position[2]);
-                }
-            }
-            let type_defaults = metadata
-                .map(|metadata| metadata.model_slots)
-                .unwrap_or([0; 4]);
-            let model_slots = std::array::from_fn(|slot| {
-                let model = if spawn.model_overrides[slot] != 0 {
-                    spawn.model_overrides[slot] as usize
-                } else {
-                    type_defaults[slot] as usize
-                };
-                (model != 0).then_some(model)
-            });
-            let initializer_request = EntityInitializerRequest {
-                metadata,
-                spawn_param: spawn.param,
-                authored_position_raw,
-                terrain,
-                resource_domain: ResourceDomainRelation::Current,
-            };
-            let initializer = resolve_entity_initializer(initializer_request);
-            let state_flags = initializer.state_flags;
-            let model_index = model_for_constructor_state(model_slots, state_flags);
-            if let Some(metadata) = metadata {
-                let needs_model_extent = terrain.is_some()
-                    && metadata.initializer.as_ref().is_some_and(|initializer| {
-                        initializer.initializer_state_flags_raw & 0x60 == 0x60
-                    });
-                // A native publisher owns its own lookup/failure boundary.
-                // Other policies never read a model header in D4A0.
-                let model_extent = if needs_model_extent && !native_actor_publication {
-                    resources
-                        .model_extent_raw
-                        .zip(model_index)
-                        .and_then(|(lookup, model)| lookup(model))
-                        .map(|extent| extent as i16)
-                } else {
-                    None
-                };
-                if let RetailRuntimeValue::Known(constructor_position) =
-                    crate::entity_initializer::constructor_position_raw(
-                        metadata,
-                        authored_position_raw,
-                        terrain,
-                        model_extent,
-                    )
-                {
-                    position = raw_position_world(constructor_position);
-                }
-            }
-            let sub_n_runtime = entity_sub_n_runtime_from_constructor(
-                metadata,
-                spawn.animation.is_some(),
-                authored_position_raw,
-                terrain
-                    .zip(terrain_objects)
-                    .map(|(terrain, terrain_objects)| SubNConstructorTerrain {
-                        terrain,
-                        terrain_objects,
-                    }),
-            );
-            let authored_radial_emitter = match initializer.initial_behavior {
-                RetailRuntimeValue::Known(Some(selection)) => {
-                    AuthoredRadialEmitterController::from_authored_spawn(
-                        selection.program,
-                        metadata.and_then(|metadata| metadata.sub_n_payload),
-                        spawn.animation.as_ref(),
-                        metadata.and_then(|metadata| match metadata.common_mover_gkl_payloads {
-                            RetailRuntimeValue::Known(payloads) => payloads.sub_k,
-                            _ => None,
-                        }),
-                    )
-                }
-                RetailRuntimeValue::Known(None) | RetailRuntimeValue::Unresolved => None,
-            };
-
-            let id = manager.allocate_live_entity_id();
-
-            if kind == EntityKind::Player && manager.player_id.is_none() {
-                manager.player_id = Some(id);
-            }
-
-            let mut collision = EntityCollisionRuntimeState::from_constructor(
-                metadata,
-                spawn.initial_damage_buffer_raw,
-                state_flags,
-            );
-            if kind == EntityKind::Player {
-                // As the persistent player's: +B2 zero, as 12DA0 leaves it.
-                collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
-            }
-            bind_fresh_level1_type17_constructor_surface(
-                &mut collision,
-                construction_provenance,
-                retail_first_world,
+            manager.construct_level_spawn(
                 spawn,
-                model_slots,
-                metadata,
-                terrain,
-            );
-            let ordinary_type9_immutable_anchor_raw_at_0x90 =
-                terrain.map_or(RetailRuntimeValue::Unresolved, |terrain| {
-                    RetailRuntimeValue::Known([
-                        authored_position_raw[0],
-                        terrain.bilinear_height_raw(
-                            authored_position_raw[0],
-                            authored_position_raw[2],
-                        ),
-                        authored_position_raw[2],
-                    ])
-                });
-            let ordinary_type9_admission =
-                admit_fresh_level1_ordinary_type9(FreshLevel1OrdinaryType9SpawnFacts {
-                    retail_first_world,
-                    authored_spawn_index: spawn.index,
-                    entity_type: spawn.entity_type,
-                    active_model_slot: collision.active_model_slot(),
-                    active_model: model_index,
-                    rotation: spawn.rotation,
-                    immutable_anchor_raw_at_0x90: ordinary_type9_immutable_anchor_raw_at_0x90,
-                });
-            if construction_provenance == LevelEntityConstructionProvenance::FreshNewGamePostIntro
-                && ordinary_type9_admission.is_some()
-            {
-                // Native allocation policy: retail's nonzeroing 104B0 leaves
-                // +B2 as heap residue. The accepted first-visit captures only
-                // happened to wait-clear it; another RNG word can enter the
-                // callback immediately. Give these authenticated native births
-                // an empty transient contribution without inventing a retail
-                // constructor invariant or changing either scheduler gate.
-                collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
-                collision.fresh_level1_type9_first_scheduler_pending = true;
-                if let RetailRuntimeValue::Known(anchor_raw) =
-                    ordinary_type9_immutable_anchor_raw_at_0x90
-                {
-                    // Type 9's exact +0xC0 profile has bit 0x20. D4A0 writes
-                    // FUN_00445860's integer-bilinear result to current +0x98
-                    // before copying the full current position into +0x90.
-                    // Do not retain the generic float sampler's one-raw-unit
-                    // rounding difference at this authenticated boundary.
-                    position = raw_position_world(anchor_raw);
-                }
-                // `resolve_entity_initializer` models the successful D720
-                // wrapper and therefore sets bit 0x4. The production Type-9
-                // composer enters earlier, after common construction but
-                // before link/basis finalization, so retain the native clear
-                // state until its explicit outer suffix runs.
-                collision
-                    .state_flags_at_0x08
-                    .overwrite(BODY_BASIS_REBUILT_STATE_BIT, 0);
-            }
-            let ordinary_type47_admission = if native_ordinary {
-                None
-            } else {
-                admit_fresh_level1_ordinary_type47(
-                    FreshLevel1OrdinaryType47SpawnFacts {
-                        retail_first_world,
-                        authored_spawn_index: spawn.index,
-                        entity_type: spawn.entity_type,
-                        active_model: model_index,
-                    },
-                    metadata,
-                )
-                .ok()
-            };
-            let type47_immutable_anchor_raw_at_0x90 = if ordinary_type47_admission.is_some() {
-                type47_d4a0_immutable_anchor_raw(metadata, authored_position_raw, terrain)
-            } else {
-                RetailRuntimeValue::Unresolved
-            };
-            collision.pair_callbacks = audited_first_world_authored_pair_state(
-                retail_first_world,
-                spawn.index,
-                spawn.entity_type,
-                collision.active_model_slot(),
-                model_index,
-                spawn.rotation,
-            );
-            let captured_fresh_main_base_publication = construction_provenance
-                == LevelEntityConstructionProvenance::FreshNewGamePostIntro
-                && retail_first_world
-                && matches!(
-                    (
-                        spawn.index,
-                        spawn.entity_type,
-                        collision.active_model_slot(),
-                        model_index,
-                        spawn.rotation,
-                    ),
-                    (
-                        FIRST_WORLD_MAIN_BASE_SPAWN_INDEX,
-                        MAIN_BASE_ENTITY_TYPE,
-                        RetailRuntimeValue::Known(0),
-                        Some(FIRST_WORLD_MAIN_BASE_MODEL_ID),
-                        [11_468, 0, 0],
-                    )
-                );
-            let captured_fresh_factory_owner = construction_provenance
-                == LevelEntityConstructionProvenance::FreshNewGamePostIntro
-                && retail_first_world
-                && model_slots == LEVEL_ONE_TYPE66_CAPTURED_MODEL_SLOTS
-                && metadata.is_some_and(exact_level_one_type66_metadata)
-                && matches!(
-                    (
-                        spawn.index,
-                        spawn.entity_type,
-                        collision.active_model_slot(),
-                        model_index,
-                        spawn.rotation,
-                    ),
-                    (
-                        FIRST_WORLD_FACTORY_SPAWN_INDEX,
-                        FACTORY_ENTITY_TYPE,
-                        RetailRuntimeValue::Known(0),
-                        Some(FIRST_WORLD_FACTORY_MODEL_ID),
-                        [0, 0, 0],
-                    )
-                );
-            let captured_fresh_quiet_death_class = if construction_provenance
-                != LevelEntityConstructionProvenance::Generic
-                && retail_first_world
-            {
-                fresh_level_one_quiet_death_profile(spawn.entity_type).and_then(|profile| {
-                    (fresh_level_one_quiet_death_spawn_matches(spawn.entity_type, spawn.index)
-                        && model_slots == fresh_level_one_quiet_death_model_slots(profile)
-                        && metadata.is_some_and(|metadata| {
-                            fresh_level_one_quiet_death_metadata_matches(metadata, profile)
-                                && metadata.constructor_sound_attachment_id
-                                    == RetailRuntimeValue::Known(None)
-                        }))
-                    .then_some(profile.initial_behavior_class_id)
-                })
-            } else {
-                None
-            };
-            let entity_word_at_0x88_bytes: [u8; 4] = spawn.extra[8..12]
-                .try_into()
-                .expect("fixed Section-13 payload slice");
-            let captured_fresh_type54_publication = construction_provenance
-                != LevelEntityConstructionProvenance::Generic
-                && retail_first_world
-                && spawn.index == LEVEL_ONE_TYPE54_SPAWN_INDEX
-                && spawn.entity_type == LEVEL_ONE_TYPE54_ENTITY_TYPE
-                && spawn.rotation == [0; 3]
-                && collision.active_model_slot() == RetailRuntimeValue::Known(0)
-                && model_index == Some(LEVEL_ONE_TYPE54_MODEL_ID)
-                && model_slots == [Some(LEVEL_ONE_TYPE54_MODEL_ID); 4]
-                && i32::from_le_bytes(entity_word_at_0x88_bytes) == 0
-                && metadata.is_some_and(exact_level_one_type54_metadata);
-            let mut base_factory_runtime = base_factory_runtime_from_constructor(
-                spawn.entity_type,
-                metadata,
-                spawn.config.as_ref(),
-            );
-            if captured_fresh_factory_owner {
-                if let RetailRuntimeValue::Known(Some(state)) = &mut base_factory_runtime {
-                    if let Some(production) = state.production {
-                        state.live_owner = Some(FactoryLiveOwnerRuntimeState::from_constructor(
-                            id,
-                            production.cached_health_raw,
-                        ));
-                    }
-                }
-            }
-            let mut entity = Entity {
-                id,
-                construction_stamp_at_0xb4,
-                authored_spawn_index: Some(spawn.index),
-                kind,
-                entity_type: spawn.entity_type,
-                authored_follow_beacon_priority_raw: (spawn.entity_type
-                    == FOLLOW_BEACON_ENTITY_TYPE)
-                    .then(|| i32::from_le_bytes(entity_word_at_0x88_bytes)),
-                power_up_payload_packed: (spawn.entity_type == 61)
-                    .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
-                auto_pilot_payload_packed: metadata
-                    .and_then(|metadata| metadata.initializer.as_ref())
-                    .is_some_and(|initializer| {
-                        initializer.alternate_behavior_class_ref
-                            == u32::from(
-                                crate::entity_behavior::AUTO_PILOT_BEHAVIOR_PROGRAM.class_id,
-                            )
-                    })
-                    .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
-                factory_type61_birth_provenance: None,
-                type60_construction_provenance: None,
-                main_base_type54_sea_delta_source: captured_fresh_type54_publication
-                    .then_some(MainBaseType54SeaDeltaSource::DeriveFromActorModelAndSea)
-                    .map_or(RetailRuntimeValue::Unresolved, RetailRuntimeValue::Known),
-                position,
-                // FUN_004104B0 copies the three Section-13 angles to entity
-                // +0xA2/+0xA4/+0xA6. +0xA2 is heading/yaw.
-                heading: binary_angle_to_radians(spawn.rotation[0]),
-                pitch_roll_raw: [spawn.rotation[1] as i16, spawn.rotation[2] as i16],
-                // Generic `FUN_0040D720` calls `FUN_00413F70` after a
-                // successful `FUN_004104B0`. Fresh Type-9 production delays
-                // that suffix until link/finalize; do not borrow its bit-`0x4`
-                // residue for other types.
-                physical_body_basis_q31: if construction_provenance
-                    == LevelEntityConstructionProvenance::FreshNewGamePostIntro
-                    && ordinary_type9_admission.is_some()
-                {
-                    RetailRuntimeValue::Unresolved
-                } else {
-                    RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(
-                        spawn.rotation[0] as i16,
-                        spawn.rotation[1] as i16,
-                        spawn.rotation[2] as i16,
-                    ))
-                },
-                velocity: [0.0, 0.0, 0.0],
-                surface_lifetime_timer_ms_at_0x48: RetailRuntimeValue::Known(0),
-                mass_raw: metadata.map_or(0, |metadata| metadata.mass_raw),
-                capability_flags: metadata.map_or(0, |metadata| metadata.capability_flags),
-                attached_to: None,
-                model_slots,
-                model_index,
-                collision,
-                initial_behavior: initializer.initial_behavior,
-                current_behavior_context: initializer.current_behavior_context,
-                authored_radial_emitter,
-                sub_n_runtime,
-                base_factory_runtime,
-                actor_animation_runtime: actor_animation_runtime_from_constructor(metadata),
-                sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(metadata),
-                sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(metadata),
-                intro2_type13_common_mover_runtime: None,
-                native_type13_allocation: None,
-                intro2_type13_aim_runtime: None,
-                intro2_type16_aim_runtime: None,
-                intro2_type58_aim_runtime: None,
-                intro2_type94_aim_runtime: None,
-                intro2_flyer_aim_runtime: None,
-                sub_h_external_frame_runtime: sub_h_external_frame_runtime_from_constructor(
-                    metadata,
-                ),
-                sub_j_attachment_runtime: sub_j_attachment_runtime_from_constructor(
-                    metadata,
-                    (spawn.entity_type == PLAYER_ENTITY_TYPE)
-                        .then_some(usize::from(manager.player_cargo_unlock_raw)),
-                    (spawn.entity_type == PLAYER_ENTITY_TYPE).then_some(1),
-                ),
-                actor_common_axis_descriptor: actor_common_axis_descriptor_from_constructor(
-                    metadata,
-                ),
-                actor_tasks: ActorTaskOwner::new(),
-                ordinary_type9_pending_initial_selection: if construction_provenance
-                    == LevelEntityConstructionProvenance::FreshNewGamePostIntro
-                {
-                    ordinary_type9_admission.map(|admission| admission.pending_initial_selection())
-                } else {
-                    None
-                },
-                ordinary_type9_selected_component_runtime: None,
-                main_base_type9_death_component_runtime: None,
-                ordinary_type47_aim_and_fire_runtime: if construction_provenance
-                    != LevelEntityConstructionProvenance::Generic
-                {
-                    ordinary_type47_admission.map(|admission| admission.aim_and_fire_runtime())
-                } else {
-                    None
-                },
-                native_type61_allocation: None,
-                native_type26_allocation: None,
-                intro2_type26_sub_d_frame_owner: None,
-                intro2_type26_sub_d_runtime: None,
-                intro2_type47_sub_d_frame_owner: None,
-                intro2_type47_sub_d_runtime: None,
-                native_type47_construction: None,
-                intro2_flyer_frame_owner: None,
-                intro2_type53_runtime: None,
-                native_type122_runtime: None,
-                native_type30_runtime: None,
-                rolling_boulder_runtime: None,
-                queen: Default::default(),
-                native_type30_aim_runtime: None,
-                native_type40_runtime: None,
-                native_type40_aim_runtime: None,
-                native_type43_runtime: None,
-                portable_radar_runtime: None,
-                network_body: None,
-                native_type43_aim_runtime: None,
-                native_type38_runtime: None,
-                native_type38_aim_runtime: None,
-                native_type12_runtime: None,
-                native_type12_aim_runtime: None,
-                native_type31_runtime: None,
-                native_type69_runtime: None,
-                native_type18_runtime: None,
-                native_type18_aim_runtime: None,
-                shared_fish_aim_runtime: None,
-                native_type28_runtime: None,
-                native_type76_runtime: None,
-                native_type76_aim_runtime: None,
-                native_type56_runtime: None,
-                native_type56_aim_runtime: None,
-                native_type122_aim_runtime: None,
-                shared_fish_runtime: None,
-                cleansing_vehicle_runtime: None,
-                intro2_type16_runtime: None,
-                intro2_type58_runtime: None,
-                intro2_type66_runtime: None,
-                intro2_gun_turret_runtime: None,
-                intro2_gun_turret_aim_runtime: None,
-                class49_death_runtime: None,
-                native_entity_weapon_runtime: None,
-                intro2_type10_runtime: None,
-                intro2_type10_aim_runtime: None,
-                intro2_type57_runtime: None,
-                intro2_type57_aim_runtime: None,
-                emitter_muzzles: [None; 2],
-                broader_detail_when_queued: false,
-                intro2_type94_runtime: None,
-                intro2_type17_runtime: None,
-                native_capture_relation: None,
-                intro2_type8_runtime: None,
-                native_type123_runtime: None,
-                native_type123_anchor_raw_at_0x90: RetailRuntimeValue::Unresolved,
-                native_type86_runtime: None,
-                native_type86_anchor_raw_at_0x90: RetailRuntimeValue::Unresolved,
-                intro2_type9_runtime: None,
-                ordinary_type9_native_receipt: None,
-                main_base_runtime: None,
-                type17_sub_d_frame_owner: None,
-                type17_sub_d_runtime: None,
-                type8_sub_d_frame_owner: None,
-                type8_wander_anchor_raw_at_0x90: RetailRuntimeValue::Unresolved,
-                type8_sub_d_runtime: None,
-                type47_immutable_anchor_raw_at_0x90,
-                active: true,
-            };
-
-            if native_actor_publication {
-                let (retail_tick, world_fx) = fresh_initial_runtime
-                    .as_mut()
-                    .expect("native process construction");
-                let native_result = manager.publish_native_authored_actor(
-                    entity,
-                    metadata,
-                    spawn,
+                LevelSpawnConstruction {
+                    type_metadata,
                     resources,
-                    *retail_tick,
-                    level_desc.raw_u32(0x84).unwrap_or(0) != 0,
-                    native_sub_d,
-                    world_fx,
-                );
-                match native_result {
-                    Ok(()) => {
-                        manager
-                            .apply_completed_world_birth(
-                                id,
-                                spawn,
-                                restored_world_flags,
-                                completed_world.as_mut(),
-                                type_metadata,
-                                world_fx,
-                            )
-                            .map_err(|reason| {
-                                FreshNewGameEntityConstructionError::NativeActorConstruction {
-                                    spawn_index: spawn.index,
-                                    reason,
-                                }
-                            })?;
-                        continue;
-                    }
-                    Err(reason) => {
-                        return Err(
-                            FreshNewGameEntityConstructionError::NativeActorConstruction {
-                                spawn_index: spawn.index,
-                                reason,
-                            },
-                        )
-                    }
-                }
-            }
-
-            let publish_fresh_type9 = construction_provenance
-                == LevelEntityConstructionProvenance::FreshNewGamePostIntro
-                && retail_first_world
-                && ordinary_type9_admission.is_some();
-            if publish_fresh_type9 {
-                // Freeze the already-linked prefix exactly once. All three
-                // nearby evaluators and class-54's later capacity refinement
-                // derive from this same ordered snapshot.
-                let candidates = manager
-                    .entities
-                    .iter()
-                    .map(fresh_level1_type9_production_candidate)
-                    .collect::<Vec<_>>();
-                let metadata =
-                    metadata.ok_or(FreshLevel1Type9InitialProductionFailure::MissingMetadata)?;
-                let (_, world_fx) = fresh_initial_runtime
-                    .as_mut()
-                    .expect("fresh construction provenance owns the shared RNG/effect owner");
-                let mut runtime = InfallibleFreshLevel1Type9ProductionRuntime::new(*world_fx);
-                let link_ready = compose_fresh_level1_type9_initial_production(
-                    entity,
-                    ordinary_type9_admission
-                        .expect("fresh Type-9 publication retained its admission receipt"),
-                    metadata,
-                    &candidates,
-                    &mut runtime,
-                )?;
-                manager.append_and_finalize_fresh_level1_type9(link_ready);
-                continue;
-            }
-
-            let publish_fresh_type47 = construction_provenance
-                != LevelEntityConstructionProvenance::Generic
-                && retail_first_world
-                && FRESH_LEVEL1_ORDINARY_TYPE47_SPAWN_INDICES.contains(&spawn.index)
-                && spawn.entity_type == 47;
-            if publish_fresh_type47 {
-                let (_, world_fx) = fresh_initial_runtime
-                    .as_mut()
-                    .expect("fresh construction provenance owns the shared RNG/effect owner");
-                let metadata =
-                    metadata.ok_or(FreshType47InitialBehaviorError::MissingInitializer)?;
-                let weighted = plan_fresh_type47_initial_behavior(&entity, metadata, world_fx)?;
-
-                let selected_initializer = resolve_entity_initializer_with_selected_behavior(
-                    initializer_request,
-                    Some(weighted.selection),
-                );
-                entity.initial_behavior = selected_initializer.initial_behavior;
-                entity.current_behavior_context = selected_initializer.current_behavior_context;
-                entity.collision.state_flags_at_0x08 = selected_initializer.state_flags;
-                entity.model_index = model_for_constructor_state(
-                    entity.model_slots,
-                    entity.collision.state_flags_at_0x08,
-                );
-                entity.collision.pair_callbacks = audited_first_world_authored_pair_state(
-                    retail_first_world,
-                    spawn.index,
-                    spawn.entity_type,
-                    entity.collision.active_model_slot(),
-                    entity.model_index,
-                    spawn.rotation,
-                );
-                type47_publication = Some(publish_fresh_type47_initial_behavior(
-                    &mut entity,
-                    metadata,
-                    weighted,
-                    world_fx,
-                )?);
-            }
-
-            let publish_fresh_type17 = construction_provenance
-                != LevelEntityConstructionProvenance::Generic
-                && retail_first_world
-                && FRESH_LEVEL1_TYPE17_SPAWN_INDICES.contains(&spawn.index)
-                && spawn.entity_type == TYPE17_IMPACT_ENTITY_TYPE;
-            if publish_fresh_type17 {
-                let (current_tick, world_fx) = fresh_initial_runtime
-                    .as_mut()
-                    .expect("fresh construction provenance owns the shared tick/RNG context");
-                // FUN_004104B0 has not linked this allocation yet. Build the
-                // evaluator view from the already-published prefix in its
-                // exact intrusive order. The persistent player's nonzero ID
-                // remains a real candidate; zero is the null attachment sentinel.
-                let candidates = manager
-                    .iter()
-                    .map(fresh_type17_candidate_ref)
-                    .collect::<Vec<_>>();
-                let metadata =
-                    metadata.ok_or(FreshType17InitialBehaviorError::MissingInitializer)?;
-                let weighted = plan_fresh_type17_initial_behavior(
-                    &entity,
-                    metadata,
-                    &candidates,
-                    *current_tick,
-                    world_fx,
-                )?;
-
-                // Re-enter the existing selected-initializer seam rather than
-                // relying on the fact that all three current type-17
-                // variant-zero policies happen to preserve the same state
-                // bits. The fresh terrain proof is then rebound exactly as it
-                // was for the passive constructor domain.
-                let selected_initializer = resolve_entity_initializer_with_selected_behavior(
-                    initializer_request,
-                    Some(weighted.selection),
-                );
-                entity.initial_behavior = selected_initializer.initial_behavior;
-                entity.current_behavior_context = selected_initializer.current_behavior_context;
-                entity.collision.state_flags_at_0x08 = selected_initializer.state_flags;
-                bind_fresh_level1_type17_constructor_surface(
-                    &mut entity.collision,
                     construction_provenance,
                     retail_first_world,
-                    spawn,
-                    entity.model_slots,
-                    Some(metadata),
-                    terrain,
-                );
-                entity.model_index = model_for_constructor_state(
-                    entity.model_slots,
-                    entity.collision.state_flags_at_0x08,
-                );
-                entity.collision.pair_callbacks = audited_first_world_authored_pair_state(
-                    retail_first_world,
-                    spawn.index,
-                    spawn.entity_type,
-                    entity.collision.active_model_slot(),
-                    entity.model_index,
-                    spawn.rotation,
-                );
-                let _publication = publish_fresh_type17_initial_behavior(
-                    &mut entity,
-                    metadata,
-                    weighted,
-                    world_fx,
-                )?;
-            }
-
-            if let (true, Some(terrain), Some((retail_tick, _))) =
-                (native_ordinary, terrain, fresh_initial_runtime.as_ref())
-            {
-                fill_constructor_surface_bits(
-                    &mut entity,
-                    authored_position_raw,
-                    terrain,
-                    *retail_tick,
-                    level_desc.raw_u32(0x84).unwrap_or(0) != 0,
-                );
-            }
-            // Retail publishes only after the complete selected initializer
-            // (or its unnamed fallback) has returned success.
-            manager.append_live_entity(entity);
-            if let Some(publication) = type47_publication {
-                manager.retain_fresh_level1_type47_initial_production(publication);
-            }
-            if captured_fresh_main_base_publication {
-                let _ = manager.bind_observed_initial_behavior_success(id, 41);
-            }
-            if captured_fresh_factory_owner {
-                let _ = manager.bind_captured_fresh_factory_initialization_success(id);
-            }
-            if let Some(class_id) = captured_fresh_quiet_death_class {
-                let _ = manager.bind_captured_fresh_initial_behavior_success(id, class_id);
-            }
-            if captured_fresh_type54_publication {
-                let _ = manager.bind_captured_fresh_initial_behavior_success(
-                    id,
-                    LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS,
-                );
-            }
-            let _ = manager.bind_alien_hive_initializer_success(id);
-            if restored_world_flags & 3 != 0 {
-                let (_, world_fx) = fresh_initial_runtime
-                    .as_mut()
-                    .expect("native save construction");
-                manager
-                    .apply_completed_world_birth(
-                        id,
-                        spawn,
-                        restored_world_flags,
-                        completed_world.as_mut(),
-                        type_metadata,
-                        world_fx,
-                    )
-                    .map_err(|reason| {
-                        FreshNewGameEntityConstructionError::NativeActorConstruction {
-                            spawn_index: spawn.index,
-                            reason,
-                        }
-                    })?;
-            }
+                    waves_enabled: level_desc.raw_u32(0x84).unwrap_or(0) != 0,
+                    restored_world_flags,
+                },
+                &mut fresh_initial_runtime,
+                &mut completed_world,
+            )?;
         }
 
         if native_ordinary {
             manager.cleanup_authored_gate_helpers();
         }
         Ok(manager)
+    }
+
+    /// One `FUN_00438080` record of `FUN_0042E570`'s authored loop: the
+    /// body, its components and its type's initializer, published before the
+    /// next record. A peer's copy takes the same path with a zeroed record.
+    fn construct_level_spawn(
+        &mut self,
+        spawn: &v2k_formats::levels::EntitySpawn,
+        construction: LevelSpawnConstruction<'_, '_>,
+        fresh_initial_runtime: &mut Option<(u32, &mut WorldFx)>,
+        completed_world: &mut Option<NativeSaveWorldState<'_>>,
+    ) -> Result<(), FreshNewGameEntityConstructionError> {
+        let LevelSpawnConstruction {
+            type_metadata,
+            resources,
+            construction_provenance,
+            retail_first_world,
+            waves_enabled,
+            restored_world_flags,
+        } = construction;
+        let manager = self;
+        let native_ordinary = matches!(
+            construction_provenance,
+            LevelEntityConstructionProvenance::NativeOrdinary { .. }
+        );
+        let resources = EntityConstructionResources {
+            terrain: completed_world
+                .as_ref()
+                .map(|saved| &*saved.terrain)
+                .or(resources.terrain),
+            ..resources
+        };
+        let terrain = resources.terrain;
+        let mut type47_publication = None;
+        let native_actor_publication =
+            native_ordinary && native_authored_publication_type(spawn.entity_type);
+        let construction_stamp_at_0xb4 = manager.begin_common_body_attempt();
+        let native_sub_d = if native_ordinary {
+            let (_, world_fx) = fresh_initial_runtime
+                .as_mut()
+                .expect("native process construction");
+            match type_metadata
+                .get(spawn.entity_type as usize)
+                .map(|metadata| metadata.sub_d_steering_descriptor)
+            {
+                Some(RetailRuntimeValue::Known(Some(descriptor))) => {
+                    Some(world_fx.construct_entity_sub_d(descriptor))
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let authored_position_raw = decode_spawn_position_raw(spawn.pos_data_1, spawn.pos_data_2);
+        let mut position = raw_position_world(authored_position_raw);
+        let kind = EntityKind::from_type(spawn.entity_type);
+        let metadata = type_metadata.get(spawn.entity_type as usize);
+        let audited_first_world_weight = retail_first_world
+            && spawn.index == FIRST_WORLD_WEIGHT_SPAWN_INDEX
+            && spawn.entity_type == WEIGHT_ENTITY_TYPE;
+        // Older compatibility fixtures lack D4A0's type policy. Keep
+        // their existing placement only in that explicit metadata gap;
+        // authenticated births use the policy below, never Y==0 as a
+        // grounding sentinel (Reef's Type24 spawn21 intentionally has Y0).
+        if metadata
+            .and_then(|value| value.initializer.as_ref())
+            .is_none()
+            && ((position[1] == 0.0 && kind != EntityKind::Trigger) || audited_first_world_weight)
+        {
+            if let Some(terrain) = terrain {
+                position[1] = terrain.height_at(position[0], position[2]);
+            }
+        }
+        let type_defaults = metadata
+            .map(|metadata| metadata.model_slots)
+            .unwrap_or([0; 4]);
+        let model_slots = std::array::from_fn(|slot| {
+            let model = if spawn.model_overrides[slot] != 0 {
+                spawn.model_overrides[slot] as usize
+            } else {
+                type_defaults[slot] as usize
+            };
+            (model != 0).then_some(model)
+        });
+        let initializer_request = EntityInitializerRequest {
+            metadata,
+            spawn_param: spawn.param,
+            authored_position_raw,
+            terrain,
+            resource_domain: ResourceDomainRelation::Current,
+        };
+        let initializer = resolve_entity_initializer(initializer_request);
+        let state_flags = initializer.state_flags;
+        let model_index = model_for_constructor_state(model_slots, state_flags);
+        if let Some(metadata) = metadata {
+            let needs_model_extent = terrain.is_some()
+                && metadata.initializer.as_ref().is_some_and(|initializer| {
+                    initializer.initializer_state_flags_raw & 0x60 == 0x60
+                });
+            // A native publisher owns its own lookup/failure boundary.
+            // Other policies never read a model header in D4A0.
+            let model_extent = if needs_model_extent && !native_actor_publication {
+                resources
+                    .model_extent_raw
+                    .zip(model_index)
+                    .and_then(|(lookup, model)| lookup(model))
+                    .map(|extent| extent as i16)
+            } else {
+                None
+            };
+            if let RetailRuntimeValue::Known(constructor_position) =
+                crate::entity_initializer::constructor_position_raw(
+                    metadata,
+                    authored_position_raw,
+                    terrain,
+                    model_extent,
+                )
+            {
+                position = raw_position_world(constructor_position);
+            }
+        }
+        let sub_n_runtime = entity_sub_n_runtime_from_constructor(
+            metadata,
+            spawn.animation.is_some(),
+            authored_position_raw,
+            terrain
+                .zip(resources.terrain_objects)
+                .map(|(terrain, terrain_objects)| SubNConstructorTerrain {
+                    terrain,
+                    terrain_objects,
+                }),
+        );
+        let authored_radial_emitter = match initializer.initial_behavior {
+            RetailRuntimeValue::Known(Some(selection)) => {
+                AuthoredRadialEmitterController::from_authored_spawn(
+                    selection.program,
+                    metadata.and_then(|metadata| metadata.sub_n_payload),
+                    spawn.animation.as_ref(),
+                    metadata.and_then(|metadata| match metadata.common_mover_gkl_payloads {
+                        RetailRuntimeValue::Known(payloads) => payloads.sub_k,
+                        _ => None,
+                    }),
+                )
+            }
+            RetailRuntimeValue::Known(None) | RetailRuntimeValue::Unresolved => None,
+        };
+
+        let id = manager.allocate_live_entity_id();
+
+        if kind == EntityKind::Player && manager.player_id.is_none() {
+            manager.player_id = Some(id);
+        }
+
+        let mut collision = EntityCollisionRuntimeState::from_constructor(
+            metadata,
+            spawn.initial_damage_buffer_raw,
+            state_flags,
+        );
+        if kind == EntityKind::Player {
+            // As the persistent player's: +B2 zero, as 12DA0 leaves it.
+            collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
+        }
+        bind_fresh_level1_type17_constructor_surface(
+            &mut collision,
+            construction_provenance,
+            retail_first_world,
+            spawn,
+            model_slots,
+            metadata,
+            terrain,
+        );
+        let ordinary_type9_immutable_anchor_raw_at_0x90 =
+            terrain.map_or(RetailRuntimeValue::Unresolved, |terrain| {
+                RetailRuntimeValue::Known([
+                    authored_position_raw[0],
+                    terrain.bilinear_height_raw(authored_position_raw[0], authored_position_raw[2]),
+                    authored_position_raw[2],
+                ])
+            });
+        let ordinary_type9_admission =
+            admit_fresh_level1_ordinary_type9(FreshLevel1OrdinaryType9SpawnFacts {
+                retail_first_world,
+                authored_spawn_index: spawn.index,
+                entity_type: spawn.entity_type,
+                active_model_slot: collision.active_model_slot(),
+                active_model: model_index,
+                rotation: spawn.rotation,
+                immutable_anchor_raw_at_0x90: ordinary_type9_immutable_anchor_raw_at_0x90,
+            });
+        if construction_provenance == LevelEntityConstructionProvenance::FreshNewGamePostIntro
+            && ordinary_type9_admission.is_some()
+        {
+            // Native allocation policy: retail's nonzeroing 104B0 leaves
+            // +B2 as heap residue. The accepted first-visit captures only
+            // happened to wait-clear it; another RNG word can enter the
+            // callback immediately. Give these authenticated native births
+            // an empty transient contribution without inventing a retail
+            // constructor invariant or changing either scheduler gate.
+            collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
+            collision.fresh_level1_type9_first_scheduler_pending = true;
+            if let RetailRuntimeValue::Known(anchor_raw) =
+                ordinary_type9_immutable_anchor_raw_at_0x90
+            {
+                // Type 9's exact +0xC0 profile has bit 0x20. D4A0 writes
+                // FUN_00445860's integer-bilinear result to current +0x98
+                // before copying the full current position into +0x90.
+                // Do not retain the generic float sampler's one-raw-unit
+                // rounding difference at this authenticated boundary.
+                position = raw_position_world(anchor_raw);
+            }
+            // `resolve_entity_initializer` models the successful D720
+            // wrapper and therefore sets bit 0x4. The production Type-9
+            // composer enters earlier, after common construction but
+            // before link/basis finalization, so retain the native clear
+            // state until its explicit outer suffix runs.
+            collision
+                .state_flags_at_0x08
+                .overwrite(BODY_BASIS_REBUILT_STATE_BIT, 0);
+        }
+        let ordinary_type47_admission = if native_ordinary {
+            None
+        } else {
+            admit_fresh_level1_ordinary_type47(
+                FreshLevel1OrdinaryType47SpawnFacts {
+                    retail_first_world,
+                    authored_spawn_index: spawn.index,
+                    entity_type: spawn.entity_type,
+                    active_model: model_index,
+                },
+                metadata,
+            )
+            .ok()
+        };
+        let type47_immutable_anchor_raw_at_0x90 = if ordinary_type47_admission.is_some() {
+            type47_d4a0_immutable_anchor_raw(metadata, authored_position_raw, terrain)
+        } else {
+            RetailRuntimeValue::Unresolved
+        };
+        collision.pair_callbacks = audited_first_world_authored_pair_state(
+            retail_first_world,
+            spawn.index,
+            spawn.entity_type,
+            collision.active_model_slot(),
+            model_index,
+            spawn.rotation,
+        );
+        let captured_fresh_main_base_publication = construction_provenance
+            == LevelEntityConstructionProvenance::FreshNewGamePostIntro
+            && retail_first_world
+            && matches!(
+                (
+                    spawn.index,
+                    spawn.entity_type,
+                    collision.active_model_slot(),
+                    model_index,
+                    spawn.rotation,
+                ),
+                (
+                    FIRST_WORLD_MAIN_BASE_SPAWN_INDEX,
+                    MAIN_BASE_ENTITY_TYPE,
+                    RetailRuntimeValue::Known(0),
+                    Some(FIRST_WORLD_MAIN_BASE_MODEL_ID),
+                    [11_468, 0, 0],
+                )
+            );
+        let captured_fresh_factory_owner = construction_provenance
+            == LevelEntityConstructionProvenance::FreshNewGamePostIntro
+            && retail_first_world
+            && model_slots == LEVEL_ONE_TYPE66_CAPTURED_MODEL_SLOTS
+            && metadata.is_some_and(exact_level_one_type66_metadata)
+            && matches!(
+                (
+                    spawn.index,
+                    spawn.entity_type,
+                    collision.active_model_slot(),
+                    model_index,
+                    spawn.rotation,
+                ),
+                (
+                    FIRST_WORLD_FACTORY_SPAWN_INDEX,
+                    FACTORY_ENTITY_TYPE,
+                    RetailRuntimeValue::Known(0),
+                    Some(FIRST_WORLD_FACTORY_MODEL_ID),
+                    [0, 0, 0],
+                )
+            );
+        let captured_fresh_quiet_death_class = if construction_provenance
+            != LevelEntityConstructionProvenance::Generic
+            && retail_first_world
+        {
+            fresh_level_one_quiet_death_profile(spawn.entity_type).and_then(|profile| {
+                (fresh_level_one_quiet_death_spawn_matches(spawn.entity_type, spawn.index)
+                    && model_slots == fresh_level_one_quiet_death_model_slots(profile)
+                    && metadata.is_some_and(|metadata| {
+                        fresh_level_one_quiet_death_metadata_matches(metadata, profile)
+                            && metadata.constructor_sound_attachment_id
+                                == RetailRuntimeValue::Known(None)
+                    }))
+                .then_some(profile.initial_behavior_class_id)
+            })
+        } else {
+            None
+        };
+        let entity_word_at_0x88_bytes: [u8; 4] = spawn.extra[8..12]
+            .try_into()
+            .expect("fixed Section-13 payload slice");
+        let captured_fresh_type54_publication = construction_provenance
+            != LevelEntityConstructionProvenance::Generic
+            && retail_first_world
+            && spawn.index == LEVEL_ONE_TYPE54_SPAWN_INDEX
+            && spawn.entity_type == LEVEL_ONE_TYPE54_ENTITY_TYPE
+            && spawn.rotation == [0; 3]
+            && collision.active_model_slot() == RetailRuntimeValue::Known(0)
+            && model_index == Some(LEVEL_ONE_TYPE54_MODEL_ID)
+            && model_slots == [Some(LEVEL_ONE_TYPE54_MODEL_ID); 4]
+            && i32::from_le_bytes(entity_word_at_0x88_bytes) == 0
+            && metadata.is_some_and(exact_level_one_type54_metadata);
+        let mut base_factory_runtime = base_factory_runtime_from_constructor(
+            spawn.entity_type,
+            metadata,
+            spawn.config.as_ref(),
+        );
+        if captured_fresh_factory_owner {
+            if let RetailRuntimeValue::Known(Some(state)) = &mut base_factory_runtime {
+                if let Some(production) = state.production {
+                    state.live_owner = Some(FactoryLiveOwnerRuntimeState::from_constructor(
+                        id,
+                        production.cached_health_raw,
+                    ));
+                }
+            }
+        }
+        let mut entity = Entity {
+            id,
+            construction_stamp_at_0xb4,
+            authored_spawn_index: Some(spawn.index),
+            kind,
+            entity_type: spawn.entity_type,
+            authored_follow_beacon_priority_raw: (spawn.entity_type == FOLLOW_BEACON_ENTITY_TYPE)
+                .then(|| i32::from_le_bytes(entity_word_at_0x88_bytes)),
+            power_up_payload_packed: (spawn.entity_type == 61)
+                .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
+            auto_pilot_payload_packed: metadata
+                .and_then(|metadata| metadata.initializer.as_ref())
+                .is_some_and(|initializer| {
+                    initializer.alternate_behavior_class_ref
+                        == u32::from(crate::entity_behavior::AUTO_PILOT_BEHAVIOR_PROGRAM.class_id)
+                })
+                .then(|| u32::from_le_bytes(entity_word_at_0x88_bytes)),
+            factory_type61_birth_provenance: None,
+            type60_construction_provenance: None,
+            main_base_type54_sea_delta_source: captured_fresh_type54_publication
+                .then_some(MainBaseType54SeaDeltaSource::DeriveFromActorModelAndSea)
+                .map_or(RetailRuntimeValue::Unresolved, RetailRuntimeValue::Known),
+            position,
+            // FUN_004104B0 copies the three Section-13 angles to entity
+            // +0xA2/+0xA4/+0xA6. +0xA2 is heading/yaw.
+            heading: binary_angle_to_radians(spawn.rotation[0]),
+            pitch_roll_raw: [spawn.rotation[1] as i16, spawn.rotation[2] as i16],
+            // Generic `FUN_0040D720` calls `FUN_00413F70` after a
+            // successful `FUN_004104B0`. Fresh Type-9 production delays
+            // that suffix until link/finalize; do not borrow its bit-`0x4`
+            // residue for other types.
+            physical_body_basis_q31: if construction_provenance
+                == LevelEntityConstructionProvenance::FreshNewGamePostIntro
+                && ordinary_type9_admission.is_some()
+            {
+                RetailRuntimeValue::Unresolved
+            } else {
+                RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(
+                    spawn.rotation[0] as i16,
+                    spawn.rotation[1] as i16,
+                    spawn.rotation[2] as i16,
+                ))
+            },
+            velocity: [0.0, 0.0, 0.0],
+            surface_lifetime_timer_ms_at_0x48: RetailRuntimeValue::Known(0),
+            mass_raw: metadata.map_or(0, |metadata| metadata.mass_raw),
+            capability_flags: metadata.map_or(0, |metadata| metadata.capability_flags),
+            attached_to: None,
+            model_slots,
+            model_index,
+            collision,
+            initial_behavior: initializer.initial_behavior,
+            current_behavior_context: initializer.current_behavior_context,
+            authored_radial_emitter,
+            sub_n_runtime,
+            base_factory_runtime,
+            actor_animation_runtime: actor_animation_runtime_from_constructor(metadata),
+            sub_a_propulsion_runtime: sub_a_propulsion_runtime_from_constructor(metadata),
+            sub_g_06070_runtime: sub_g_06070_runtime_from_constructor(metadata),
+            intro2_type13_common_mover_runtime: None,
+            native_type13_allocation: None,
+            intro2_type13_aim_runtime: None,
+            intro2_type16_aim_runtime: None,
+            intro2_type58_aim_runtime: None,
+            intro2_type94_aim_runtime: None,
+            intro2_flyer_aim_runtime: None,
+            sub_h_external_frame_runtime: sub_h_external_frame_runtime_from_constructor(metadata),
+            sub_j_attachment_runtime: sub_j_attachment_runtime_from_constructor(
+                metadata,
+                (spawn.entity_type == PLAYER_ENTITY_TYPE)
+                    .then_some(usize::from(manager.player_cargo_unlock_raw)),
+                (spawn.entity_type == PLAYER_ENTITY_TYPE).then_some(1),
+            ),
+            actor_common_axis_descriptor: actor_common_axis_descriptor_from_constructor(metadata),
+            actor_tasks: ActorTaskOwner::new(),
+            ordinary_type9_pending_initial_selection: if construction_provenance
+                == LevelEntityConstructionProvenance::FreshNewGamePostIntro
+            {
+                ordinary_type9_admission.map(|admission| admission.pending_initial_selection())
+            } else {
+                None
+            },
+            ordinary_type9_selected_component_runtime: None,
+            main_base_type9_death_component_runtime: None,
+            ordinary_type47_aim_and_fire_runtime: if construction_provenance
+                != LevelEntityConstructionProvenance::Generic
+            {
+                ordinary_type47_admission.map(|admission| admission.aim_and_fire_runtime())
+            } else {
+                None
+            },
+            native_type61_allocation: None,
+            native_type26_allocation: None,
+            intro2_type26_sub_d_frame_owner: None,
+            intro2_type26_sub_d_runtime: None,
+            intro2_type47_sub_d_frame_owner: None,
+            intro2_type47_sub_d_runtime: None,
+            native_type47_construction: None,
+            intro2_flyer_frame_owner: None,
+            intro2_type53_runtime: None,
+            native_type122_runtime: None,
+            native_type30_runtime: None,
+            rolling_boulder_runtime: None,
+            queen: Default::default(),
+            native_type30_aim_runtime: None,
+            native_type40_runtime: None,
+            native_type40_aim_runtime: None,
+            native_type43_runtime: None,
+            portable_radar_runtime: None,
+            network_body: None,
+            native_type43_aim_runtime: None,
+            native_type38_runtime: None,
+            native_type38_aim_runtime: None,
+            native_type12_runtime: None,
+            native_type12_aim_runtime: None,
+            native_type31_runtime: None,
+            native_type69_runtime: None,
+            native_type18_runtime: None,
+            native_type18_aim_runtime: None,
+            shared_fish_aim_runtime: None,
+            native_type28_runtime: None,
+            native_type76_runtime: None,
+            native_type76_aim_runtime: None,
+            native_type56_runtime: None,
+            native_type56_aim_runtime: None,
+            native_type122_aim_runtime: None,
+            shared_fish_runtime: None,
+            cleansing_vehicle_runtime: None,
+            intro2_type16_runtime: None,
+            intro2_type58_runtime: None,
+            intro2_type66_runtime: None,
+            intro2_gun_turret_runtime: None,
+            intro2_gun_turret_aim_runtime: None,
+            class49_death_runtime: None,
+            native_entity_weapon_runtime: None,
+            intro2_type10_runtime: None,
+            intro2_type10_aim_runtime: None,
+            intro2_type57_runtime: None,
+            intro2_type57_aim_runtime: None,
+            emitter_muzzles: [None; 2],
+            broader_detail_when_queued: false,
+            intro2_type94_runtime: None,
+            intro2_type17_runtime: None,
+            native_capture_relation: None,
+            intro2_type8_runtime: None,
+            native_type123_runtime: None,
+            native_type123_anchor_raw_at_0x90: RetailRuntimeValue::Unresolved,
+            native_type86_runtime: None,
+            native_type86_anchor_raw_at_0x90: RetailRuntimeValue::Unresolved,
+            intro2_type9_runtime: None,
+            ordinary_type9_native_receipt: None,
+            main_base_runtime: None,
+            type17_sub_d_frame_owner: None,
+            type17_sub_d_runtime: None,
+            type8_sub_d_frame_owner: None,
+            type8_wander_anchor_raw_at_0x90: RetailRuntimeValue::Unresolved,
+            type8_sub_d_runtime: None,
+            type47_immutable_anchor_raw_at_0x90,
+            active: true,
+        };
+
+        if native_actor_publication {
+            let (retail_tick, world_fx) = fresh_initial_runtime
+                .as_mut()
+                .expect("native process construction");
+            let native_result = manager.publish_native_authored_actor(
+                entity,
+                metadata,
+                spawn,
+                resources,
+                *retail_tick,
+                waves_enabled,
+                native_sub_d,
+                world_fx,
+            );
+            match native_result {
+                Ok(()) => {
+                    manager
+                        .apply_completed_world_birth(
+                            id,
+                            spawn,
+                            restored_world_flags,
+                            completed_world.as_mut(),
+                            type_metadata,
+                            world_fx,
+                        )
+                        .map_err(|reason| {
+                            FreshNewGameEntityConstructionError::NativeActorConstruction {
+                                spawn_index: spawn.index,
+                                reason,
+                            }
+                        })?;
+                    return Ok(());
+                }
+                Err(reason) => {
+                    return Err(
+                        FreshNewGameEntityConstructionError::NativeActorConstruction {
+                            spawn_index: spawn.index,
+                            reason,
+                        },
+                    )
+                }
+            }
+        }
+
+        let publish_fresh_type9 = construction_provenance
+            == LevelEntityConstructionProvenance::FreshNewGamePostIntro
+            && retail_first_world
+            && ordinary_type9_admission.is_some();
+        if publish_fresh_type9 {
+            // Freeze the already-linked prefix exactly once. All three
+            // nearby evaluators and class-54's later capacity refinement
+            // derive from this same ordered snapshot.
+            let candidates = manager
+                .entities
+                .iter()
+                .map(fresh_level1_type9_production_candidate)
+                .collect::<Vec<_>>();
+            let metadata =
+                metadata.ok_or(FreshLevel1Type9InitialProductionFailure::MissingMetadata)?;
+            let (_, world_fx) = fresh_initial_runtime
+                .as_mut()
+                .expect("fresh construction provenance owns the shared RNG/effect owner");
+            let mut runtime = InfallibleFreshLevel1Type9ProductionRuntime::new(*world_fx);
+            let link_ready = compose_fresh_level1_type9_initial_production(
+                entity,
+                ordinary_type9_admission
+                    .expect("fresh Type-9 publication retained its admission receipt"),
+                metadata,
+                &candidates,
+                &mut runtime,
+            )?;
+            manager.append_and_finalize_fresh_level1_type9(link_ready);
+            return Ok(());
+        }
+
+        let publish_fresh_type47 = construction_provenance
+            != LevelEntityConstructionProvenance::Generic
+            && retail_first_world
+            && FRESH_LEVEL1_ORDINARY_TYPE47_SPAWN_INDICES.contains(&spawn.index)
+            && spawn.entity_type == 47;
+        if publish_fresh_type47 {
+            let (_, world_fx) = fresh_initial_runtime
+                .as_mut()
+                .expect("fresh construction provenance owns the shared RNG/effect owner");
+            let metadata = metadata.ok_or(FreshType47InitialBehaviorError::MissingInitializer)?;
+            let weighted = plan_fresh_type47_initial_behavior(&entity, metadata, world_fx)?;
+
+            let selected_initializer = resolve_entity_initializer_with_selected_behavior(
+                initializer_request,
+                Some(weighted.selection),
+            );
+            entity.initial_behavior = selected_initializer.initial_behavior;
+            entity.current_behavior_context = selected_initializer.current_behavior_context;
+            entity.collision.state_flags_at_0x08 = selected_initializer.state_flags;
+            entity.model_index = model_for_constructor_state(
+                entity.model_slots,
+                entity.collision.state_flags_at_0x08,
+            );
+            entity.collision.pair_callbacks = audited_first_world_authored_pair_state(
+                retail_first_world,
+                spawn.index,
+                spawn.entity_type,
+                entity.collision.active_model_slot(),
+                entity.model_index,
+                spawn.rotation,
+            );
+            type47_publication = Some(publish_fresh_type47_initial_behavior(
+                &mut entity,
+                metadata,
+                weighted,
+                world_fx,
+            )?);
+        }
+
+        let publish_fresh_type17 = construction_provenance
+            != LevelEntityConstructionProvenance::Generic
+            && retail_first_world
+            && FRESH_LEVEL1_TYPE17_SPAWN_INDICES.contains(&spawn.index)
+            && spawn.entity_type == TYPE17_IMPACT_ENTITY_TYPE;
+        if publish_fresh_type17 {
+            let (current_tick, world_fx) = fresh_initial_runtime
+                .as_mut()
+                .expect("fresh construction provenance owns the shared tick/RNG context");
+            // FUN_004104B0 has not linked this allocation yet. Build the
+            // evaluator view from the already-published prefix in its
+            // exact intrusive order. The persistent player's nonzero ID
+            // remains a real candidate; zero is the null attachment sentinel.
+            let candidates = manager
+                .iter()
+                .map(fresh_type17_candidate_ref)
+                .collect::<Vec<_>>();
+            let metadata = metadata.ok_or(FreshType17InitialBehaviorError::MissingInitializer)?;
+            let weighted = plan_fresh_type17_initial_behavior(
+                &entity,
+                metadata,
+                &candidates,
+                *current_tick,
+                world_fx,
+            )?;
+
+            // Re-enter the existing selected-initializer seam rather than
+            // relying on the fact that all three current type-17
+            // variant-zero policies happen to preserve the same state
+            // bits. The fresh terrain proof is then rebound exactly as it
+            // was for the passive constructor domain.
+            let selected_initializer = resolve_entity_initializer_with_selected_behavior(
+                initializer_request,
+                Some(weighted.selection),
+            );
+            entity.initial_behavior = selected_initializer.initial_behavior;
+            entity.current_behavior_context = selected_initializer.current_behavior_context;
+            entity.collision.state_flags_at_0x08 = selected_initializer.state_flags;
+            bind_fresh_level1_type17_constructor_surface(
+                &mut entity.collision,
+                construction_provenance,
+                retail_first_world,
+                spawn,
+                entity.model_slots,
+                Some(metadata),
+                terrain,
+            );
+            entity.model_index = model_for_constructor_state(
+                entity.model_slots,
+                entity.collision.state_flags_at_0x08,
+            );
+            entity.collision.pair_callbacks = audited_first_world_authored_pair_state(
+                retail_first_world,
+                spawn.index,
+                spawn.entity_type,
+                entity.collision.active_model_slot(),
+                entity.model_index,
+                spawn.rotation,
+            );
+            let _publication =
+                publish_fresh_type17_initial_behavior(&mut entity, metadata, weighted, world_fx)?;
+        }
+
+        if let (true, Some(terrain), Some((retail_tick, _))) =
+            (native_ordinary, terrain, fresh_initial_runtime.as_ref())
+        {
+            fill_constructor_surface_bits(
+                &mut entity,
+                authored_position_raw,
+                terrain,
+                *retail_tick,
+                waves_enabled,
+            );
+        }
+        // Retail publishes only after the complete selected initializer
+        // (or its unnamed fallback) has returned success.
+        manager.append_live_entity(entity);
+        if let Some(publication) = type47_publication {
+            manager.retain_fresh_level1_type47_initial_production(publication);
+        }
+        if captured_fresh_main_base_publication {
+            let _ = manager.bind_observed_initial_behavior_success(id, 41);
+        }
+        if captured_fresh_factory_owner {
+            let _ = manager.bind_captured_fresh_factory_initialization_success(id);
+        }
+        if let Some(class_id) = captured_fresh_quiet_death_class {
+            let _ = manager.bind_captured_fresh_initial_behavior_success(id, class_id);
+        }
+        if captured_fresh_type54_publication {
+            let _ = manager.bind_captured_fresh_initial_behavior_success(
+                id,
+                LEVEL_ONE_TYPE54_INITIAL_BEHAVIOR_CLASS,
+            );
+        }
+        let _ = manager.bind_alien_hive_initializer_success(id);
+        if restored_world_flags & 3 != 0 {
+            let (_, world_fx) = fresh_initial_runtime
+                .as_mut()
+                .expect("native save construction");
+            manager
+                .apply_completed_world_birth(
+                    id,
+                    spawn,
+                    restored_world_flags,
+                    completed_world.as_mut(),
+                    type_metadata,
+                    world_fx,
+                )
+                .map_err(
+                    |reason| FreshNewGameEntityConstructionError::NativeActorConstruction {
+                        spawn_index: spawn.index,
+                        reason,
+                    },
+                )?;
+        }
+        Ok(())
     }
 
     /// Complete the retained player's 20450 allocation using the process RNG.
@@ -13312,7 +13347,12 @@ impl EntityManager {
         claims: &[MainBaseAbortActorLease],
     ) {
         let allocation_generation = self.allocation_generation;
-        for entity in self.entities.iter_mut().filter(|entity| entity.active) {
+        // A peer's body runs no callbacks here (FUN_00412DA0, state bit 31).
+        for entity in self
+            .entities
+            .iter_mut()
+            .filter(|entity| entity.active && entity.network_body.is_none())
+        {
             let lease = observe_main_base_abort_actor(entity, allocation_generation).lease;
             if claims.contains(&lease) {
                 continue;

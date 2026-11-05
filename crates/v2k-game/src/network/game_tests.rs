@@ -99,6 +99,7 @@ impl Pair {
                     shield: 0,
                 },
                 terrain: None,
+                terrain_objects: None,
             };
             game.world_frame(&mut frame);
             out.push(std::mem::take(&mut game.events));

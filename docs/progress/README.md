@@ -19,7 +19,7 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 496 |
+| implemented | 498 |
 | approximated | 9 |
 | documented | 19 |
 | not-needed | 628 |
@@ -43,11 +43,11 @@ Where the code's references are thinnest:
 |---|---:|---:|---:|
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 11 | 3 | 110 |
 | [Controls](../re/CONTROLS.md) | 11 | 1 | 59 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 7 | 0 | 135 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 6 | 0 | 145 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 7 | 0 | 134 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 6 | 0 | 148 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 3 | 0 | 139 |
-| [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 30 |
-| [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 163 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
+| [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |
 | [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 1 | 0 | 56 |
 | [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 11 |

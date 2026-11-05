@@ -10410,8 +10410,8 @@ fn run_game(
                             .network_entity(entity_impact.target_entity_id)
                             .filter(|target| target.is_network_remote())
                         {
-                            // A hollow copy has no hit callback to run, so no
-                            // FUN_00411030 jolt either.
+                            // The copy's type hit hook and FUN_00411030's
+                            // jolt are ported only for class-7 flyers (above).
                             network_play::report_held(format!(
                                 "FUN_00411030's kind 10 on a peer's Type{} copy",
                                 target.entity_type
@@ -11134,6 +11134,38 @@ fn run_game(
                         retail_tick,
                         actor_tasks: &mut specialized_actor_tasks,
                     };
+                    // FUN_00411AD0 runs a body's surface and static phases
+                    // only without state 0x88000000: a peer's body (bit 31)
+                    // goes straight to its pairs.
+                    if contact_frame
+                        .entities
+                        .network_entity(id)
+                        .is_some_and(|entity| entity.is_network_remote())
+                    {
+                        use v2k_game::intro2_type17::pair::{
+                            resolve_type17_active_contacts_with_playing, CaptureFeedbackPolicy,
+                            Type17PairOutcome,
+                        };
+                        let pairs = resolve_type17_active_contacts_with_playing(
+                            &mut contact_frame,
+                            id,
+                            CaptureFeedbackPolicy::Gameplay,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        report_active_pair_stops(&pairs, &mut active_pair_stops_reported);
+                        if matches!(&pairs, Type17PairOutcome::Blocked { .. })
+                            || matches!(&pairs, Type17PairOutcome::Resolved { visits } if !visits.is_empty())
+                        {
+                            log!("Shared contacts at peer body {id}: {pairs:?}");
+                        }
+                        continue;
+                    }
                     // The Autobot's 11AD0 (its living body lacks 0x8000): the
                     // shared class11 tumble's terrain, water and static phases.
                     if contact_frame
