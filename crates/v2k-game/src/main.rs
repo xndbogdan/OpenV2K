@@ -154,6 +154,9 @@ use v2k_game::player_hull::{
     HULL_LOW_WARNING_BELOW_RAW, PLAYER_TYPE_46_HULL_PROFILE,
 };
 use v2k_game::player_surface_contact::{PlayerSurfaceContactFrame, PlayerSurfaceContactRequest};
+use v2k_game::possession::{
+    MindBallFlight, MindBallSpin, MindBallStep, Possession, MIND_BALL_MODEL_ID,
+};
 use v2k_game::possession_ray::{
     target_model_radius, LockAdvance, LockMode, LockShooter, PlayerMindControlLock,
     POSSESSION_TAKEOVER_HELD, RETICLE_MODEL_ID,
@@ -1054,6 +1057,16 @@ fn apply_gameplay_input_edges(
     if !has_player || player_dying {
         return;
     }
+    if POSSESSED.load(std::sync::atomic::Ordering::Relaxed) {
+        // A possessed Type17 has no weapon for the reader to step; the beam
+        // and hold keys act on the controller's cargo, which is held.
+        if (edges.collect || edges.drop || edges.rotate_hold)
+            && !CARGO_KEYS_REPORTED.swap(true, std::sync::atomic::Ordering::Relaxed)
+        {
+            eprintln!("{POSSESSION_CARGO_KEYS_HELD}");
+        }
+        return;
+    }
     if edges.collect {
         entities.queue_beam(BeamCommand::Collect);
     }
@@ -1073,6 +1086,221 @@ fn apply_gameplay_input_edges(
         {
             hold.rotate_first_to_end();
         }
+    }
+}
+
+/// Whether the controller drives a possessed body this frame, for the input
+/// edges' gate.
+static POSSESSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CARGO_KEYS_REPORTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+const POSSESSION_CARGO_KEYS_HELD: &str = "Possession held: the beam and hold keys while a body is possessed act on the controller's cargo from that body (FUN_00446640's +20E timer, FUN_00446D30), not ported";
+const POSSESSION_TAB_HELD: &str = "Possession held: TAB while a body is possessed installs the Hovering style's VTOL style (FUN_00447970) on that body, not ported";
+const POSSESSION_PASSIVE_SMOKE_HELD: &str = "Possession held: Passive Player's smoke from a craft under 20000 health (FUN_00446FC0, FUN_00441670) is not ported";
+const POSSESSION_STATIC_HOOK_HELD: &str = "Possession held: a possessed body's static contact got its response; its FUN_00447C90 hook and damage deliveries (FUN_00411760) are not ported";
+const POSSESSION_PAIRS_HELD: &str = "Possession held: a possessed body's pairs take the player's pair behavior (FUN_00447D70, its FUN_00443B50 pickup of a person), not ported; they are skipped";
+const POSSESSION_BODY_LOST: &str = "Possession stopped: the possessed body is gone; FUN_00446640 no longer runs and the controller's death of its body (FUN_00450980) is not ported, so control returns to the craft (a labelled stop, not retail)";
+
+fn possession_stop(reported: &mut HashSet<&'static str>, stop: &'static str) {
+    if reported.insert(stop) {
+        eprintln!("{stop}");
+    }
+}
+
+struct PossessionFrame<'a> {
+    em: &'a mut EntityManager,
+    tasks: &'a mut SpecializedActorTaskScheduler,
+    cache: &'a v2k_game::resource_cache::ResourceCache,
+    world_fx: &'a mut WorldFx,
+    possession: &'a mut Option<Possession>,
+    native_owner: &'a bool,
+    mind_ball: &'a mut Option<(u32, MindBallFlight)>,
+    followed_body: &'a mut Option<u32>,
+    chase_camera: &'a mut ChaseCameraState,
+    stops: &'a mut HashSet<&'static str>,
+    channels: &'a MotionChannels,
+    craft_live: bool,
+    elapsed_micros: u32,
+    retail_tick: u32,
+}
+
+/// The possessed body's Player Control visit (`FUN_00446640`): the `+70`
+/// countdown, then `FUN_00446D70`'s release or the hover integrator over its
+/// own components; then the MindBall's flight (`FUN_00409460`) and its end
+/// (`FUN_00409420`).
+fn advance_possession(frame: PossessionFrame<'_>) {
+    let PossessionFrame {
+        em,
+        tasks,
+        cache,
+        world_fx,
+        possession,
+        native_owner,
+        mind_ball,
+        followed_body,
+        chase_camera,
+        stops,
+        channels,
+        craft_live,
+        elapsed_micros,
+        retail_tick,
+    } = frame;
+    let (Some(terrain), Some(terrain_objects)) = (cache.level_terrain(), cache.terrain_objects())
+    else {
+        return;
+    };
+    if let Some(state) = possession.as_mut() {
+        let body_live = em
+            .iter_all()
+            .any(|entity| entity.id == state.body && entity.active);
+        if !body_live {
+            possession_stop(stops, POSSESSION_BODY_LOST);
+            *possession = None;
+            *followed_body = None;
+        } else if state.advance(craft_live, elapsed_micros) {
+            let Possession { body, craft, .. } = *state;
+            *possession = None;
+            // The craft's own behavior source, then the target's.
+            world_fx.next_shared_retail_random_u16();
+            if *native_owner {
+                if let Err(block) =
+                    tasks.release_possessed_intro2_type17(em, body, retail_tick, world_fx)
+                {
+                    eprintln!("Possession release: body {body}'s own behavior stopped: {block:?}");
+                }
+            } else {
+                match em.release_possessed_type17(body, retail_tick, world_fx) {
+                    Ok(v2k_game::type17_impact_reselection::Type17ImpactInstallDecision::FollowBeaconsAcquiring) => {
+                        tasks.adopt_released_type17(em, body);
+                    }
+                    Ok(_) => log!(
+                        "Possession: body {body} chose Capture People or Run Away, which stay out of custody as their births do"
+                    ),
+                    Err(block) => eprintln!("Possession release: body {body}'s own behavior stopped: {block:?}"),
+                }
+            }
+            let at = em
+                .iter_all()
+                .find(|entity| entity.id == body)
+                .map(|entity| entity.position_raw());
+            match at.map(|at| em.construct_mind_ball(at, cache, world_fx, retail_tick)) {
+                Some(Ok(id)) => {
+                    *mind_ball = Some((id, MindBallFlight::born(body, craft)));
+                    *followed_body = Some(id);
+                    log!("Possession: body {body} released, MindBall {id} born");
+                }
+                other => {
+                    // FUN_00446D70's failed birth: the camera restarts on the craft.
+                    eprintln!("Possession release: MindBall birth stopped: {other:?}");
+                    chase_camera.reset();
+                    *followed_body = None;
+                }
+            }
+        } else {
+            let water_enabled = cache
+                .level_desc()
+                .and_then(|level| level.raw_u32(0x84))
+                .unwrap_or(0)
+                != 0;
+            let turn_channel =
+                em.iter_all()
+                    .find(|entity| entity.id == state.body)
+                    .map_or(0, |body| {
+                        let [heading, pitch, _] = body.rotation_heading_pitch_roll_raw();
+                        channels.hover_turn_raw(heading, pitch)
+                    });
+            match em.possessed_body_player_control(
+                state.body,
+                v2k_game::entity::PossessedBodyFrame {
+                    turn_channel,
+                    throttle_q16: channels.throttle_q16,
+                    elapsed_micros,
+                    terrain,
+                    terrain_objects,
+                    model_pool: cache,
+                    water_enabled,
+                    retail_tick,
+                },
+            ) {
+                Ok(None) => {}
+                Ok(Some(_)) => possession_stop(stops, POSSESSION_STATIC_HOOK_HELD),
+                Err(block) => {
+                    if stops.insert("possessed body") {
+                        eprintln!(
+                            "Possession: the possessed body's Player Control stopped: {block:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    if let Some((id, flight)) = mind_ball.as_mut() {
+        let id = *id;
+        if em.fly_mind_ball(id, flight, elapsed_micros as i32, terrain) == MindBallStep::Die {
+            // FUN_00409420: the session follows the craft again.
+            *mind_ball = None;
+            *followed_body = None;
+        }
+    }
+    POSSESSED.store(possession.is_some(), std::sync::atomic::Ordering::Relaxed);
+}
+
+/// `FUN_004097A0`: the MindBall's two rings of model 243.
+#[allow(clippy::too_many_arguments)]
+fn draw_mind_ball(
+    renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
+    colors: &v2k_game::model_color::ModelMaterialCache,
+    camera: &Camera,
+    em: &v2k_game::entity::EntityManager,
+    ball: Option<&(u32, MindBallFlight)>,
+    spin: &mut MindBallSpin,
+    frame_us: u32,
+    retail_tick: u32,
+) {
+    let Some((id, flight)) = ball else {
+        return;
+    };
+    let Some(entity) = em.iter_all().find(|entity| entity.id == *id) else {
+        return;
+    };
+    let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
+        return;
+    };
+    let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
+    let position_raw = entity.position_raw();
+    let draw_position: [f32; 3] = std::array::from_fn(|axis| {
+        camera_raw[axis].wrapping_add(i32::from(
+            position_raw[axis].wrapping_sub(camera_raw[axis] as i16),
+        )) as f32
+            / 256.0
+    });
+    for instance in spin.draw(
+        [basis.lateral, basis.up, basis.forward],
+        flight.fade,
+        frame_us,
+    ) {
+        let mut vars = AnimVars::default();
+        vars.dynamic[0] = i32::from(retail_tick as u16);
+        vars.dynamic[1] = i32::from(instance.size_word);
+        ModelTreeRenderer::new_world(
+            renderer,
+            cache,
+            colors,
+            GAMEPLAY_MODEL_SCALE,
+            Some(MenuSceneLight::NEUTRAL),
+            retail_tick as i32,
+        )
+        .with_view(camera.into())
+        .draw_linked(
+            MIND_BALL_MODEL_ID,
+            instance.orientation(),
+            draw_position,
+            8,
+            None,
+            &vars,
+        );
     }
 }
 
@@ -2487,6 +2715,17 @@ fn run_game(
     let mut pending_player_shots = Vec::new();
     let mut mind_control_lock = PlayerMindControlLock::default();
     let mut mind_control_takeover_reported = false;
+    // FUN_004480E0's controller words, the MindBall a release leaves, the
+    // session's followed body (+2A8) when it is not the craft, and the
+    // possession's typed stops, each reported once a run.
+    let mut possession: Option<Possession> = None;
+    // Whether the possessed Type17's owner was the native one (any world) or
+    // the fresh Level-1 Follow Beacons one.
+    let mut possessed_native_owner = false;
+    let mut mind_ball: Option<(u32, MindBallFlight)> = None;
+    let mut mind_ball_spin = MindBallSpin::default();
+    let mut followed_body: Option<u32> = None;
+    let mut possession_stops_reported: HashSet<&'static str> = HashSet::new();
     let mut native_entity_weapon_error_reported = false;
     let mut held_weapon_selectors_reported = HashSet::new();
     let mut targetter = TargetterRuntime::new(0);
@@ -5228,6 +5467,9 @@ fn run_game(
                 camera = Camera::new(render_w as f32 / render_h.max(1) as f32);
                 world_projection.apply_to(&mut camera, (render_w, render_h));
                 chase_camera.reset();
+                possession = None;
+                mind_ball = None;
+                followed_body = None;
                 if let Some(player) = em.player() {
                     let pose = chase_camera.update(
                         ChaseCameraTarget {
@@ -6598,6 +6840,7 @@ fn run_game(
                         },
                         targetter,
                         mind_control_lock.clone(),
+                        (mind_ball, mind_ball_spin),
                         retail_tick,
                     )
                     .redraw(
@@ -6840,6 +7083,9 @@ fn run_game(
                             specialized_actor_tasks: &mut specialized_actor_tasks,
                             pending_player_shots: &mut pending_player_shots,
                             mind_control_lock: &mut mind_control_lock,
+                            mind_ball: mind_ball.as_ref(),
+                            mind_ball_spin: &mut mind_ball_spin,
+                            frame_us: 0,
                             entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                             player_craft: &player_craft,
                             player_hull: &player_hull,
@@ -7662,7 +7908,7 @@ fn run_game(
                                     entities, world_fx: &world_fx,
                                     specialized_actor_tasks: &specialized_actor_tasks,
                                 },
-                                targetter, mind_control_lock.clone(), retail_tick,
+                                targetter, mind_control_lock.clone(), (mind_ball, mind_ball_spin), retail_tick,
                             )
                         });
                         let mut shell = if kind == GameplayInterruption::Suspend {
@@ -7768,7 +8014,16 @@ fn run_game(
                             // TAB = hovercraft <-> VTOL mode toggle (V2000).
                             // SDL repeat events are filtered by GameWindow, so
                             // this is one request per physical key-down edge.
-                            if *kc == Keycode::Tab && has_player && !player_hull.dying {
+                            if *kc == Keycode::Tab
+                                && has_player
+                                && !player_hull.dying
+                                && possession.is_some()
+                            {
+                                possession_stop(
+                                    &mut possession_stops_reported,
+                                    POSSESSION_TAB_HELD,
+                                );
+                            } else if *kc == Keycode::Tab && has_player && !player_hull.dying {
                                 request_vehicle_mode_toggle(
                                     &mut player_craft,
                                     &mut gameplay_notifications,
@@ -8356,6 +8611,9 @@ fn run_game(
                     };
                 }
                 let mut emitter_angle_words = None;
+                // The craft ran Player Control this frame, or Passive Player.
+                let possessed_at_entry = possession.is_some();
+                POSSESSED.store(possessed_at_entry, std::sync::atomic::Ordering::Relaxed);
                 if chase_mode {
                     // FUN_00446640 snapshots entity +0x30 at callback entry;
                     // the later solid-contact pass cannot affect its warning
@@ -8370,18 +8628,21 @@ fn run_game(
                         MotionChannels::default()
                     } else {
                         // The reader steps the weapon once for any wheel
-                        // motion since its previous call.
-                        apply_gameplay_input_edges(
-                            GameplayInputEdges {
-                                weapon_cycle: wheel_weapon_step(wheel_away),
-                                ..GameplayInputEdges::default()
-                            },
-                            has_player,
-                            player_hull.dying,
-                            em,
-                            &mut weapon_inventory,
-                            &mut player_craft,
-                        );
+                        // motion since its previous call, only on a body with
+                        // a weapon (a possessed Type17 has none).
+                        if !possessed_at_entry {
+                            apply_gameplay_input_edges(
+                                GameplayInputEdges {
+                                    weapon_cycle: wheel_weapon_step(wheel_away),
+                                    ..GameplayInputEdges::default()
+                                },
+                                has_player,
+                                player_hull.dying,
+                                em,
+                                &mut weapon_inventory,
+                                &mut player_craft,
+                            );
+                        }
                         MotionChannels::from_frame(
                             &craft_frame,
                             AnalogInput {
@@ -8401,6 +8662,9 @@ fn run_game(
                         if player_hull.dying {
                             return VehicleFrameForces::DyingCommon;
                         }
+                        if possessed_at_entry {
+                            return player_craft.passive_forces(elapsed_micros, player);
+                        }
                         player_craft.integrate_configured_micros_forces(
                             elapsed_micros,
                             &channels,
@@ -8410,7 +8674,8 @@ fn run_game(
                     });
                     // FUN_00444F60 -> FUN_00420A50 ends the mode controller
                     // with the lock's advance outside network play.
-                    if !player_hull.dying && network_game.is_none() {
+                    let mut takeover_target = None;
+                    if !player_hull.dying && network_game.is_none() && !possessed_at_entry {
                         if let Some(player) = em.player() {
                             let lock = mind_control_lock.for_body(player.id);
                             let shooter = LockShooter {
@@ -8424,16 +8689,45 @@ fn run_game(
                             match lock.advance(shooter, bodies.iter().copied(), elapsed) {
                                 Ok(LockAdvance::Continue) => {}
                                 Ok(LockAdvance::TakeOver { target }) => {
-                                    if !std::mem::replace(&mut mind_control_takeover_reported, true)
-                                    {
-                                        eprintln!("{POSSESSION_TAKEOVER_HELD} (body {target})");
-                                    }
+                                    takeover_target = Some(target);
                                 }
                                 Err(block) => {
                                     eprintln!("Possession Ray lock stopped: {block:?}");
                                     lock.stop();
                                 }
                             }
+                        }
+                    }
+                    // FUN_004480E0: the target takes the controller and runs
+                    // Player Control; the craft runs Passive Player. Each new
+                    // behavior source's install draws its selector word.
+                    if let (Some(target), Some(craft)) =
+                        (takeover_target, em.player().map(|player| player.id))
+                    {
+                        // Only an empty-handed Type17 in custody: the lift reads
+                        // a carried body's mass, and Capture People's cleanup of
+                        // its held body (FUN_0040D040) is not ported here.
+                        let native_owner = em.iter_all().find(|entity| entity.id == target).map(
+                            v2k_game::intro2_type17::intro2_type17_allocation_authenticates_public,
+                        );
+                        let empty_handed = em.iter_all().any(|entity| {
+                            entity.id == target
+                                && entity.entity_type == 17
+                                && matches!(&entity.sub_j_attachment_runtime,
+                                    RetailRuntimeValue::Known(Some(hold)) if hold.is_empty())
+                        });
+                        let supported = empty_handed
+                            && specialized_actor_tasks.release_type17_for_possession(target);
+                        if supported {
+                            possessed_native_owner = native_owner == Some(true);
+                            world_fx.next_shared_retail_random_u16();
+                            world_fx.next_shared_retail_random_u16();
+                            em.possess_body_tasks(target);
+                            possession = Some(Possession::take_over(craft, target));
+                            followed_body = Some(target);
+                            log!("Possession Ray: body {target} taken over");
+                        } else if !std::mem::replace(&mut mind_control_takeover_reported, true) {
+                            eprintln!("{POSSESSION_TAKEOVER_HELD} (body {target})");
                         }
                     }
                     // FUN_00444F60 fires at the end of the mode controller, so
@@ -8731,7 +9025,35 @@ fn run_game(
                     // true during the three-second dying dwell: retail does
                     // not test the dying bit here and the controller remains
                     // bound until the player allocation is removed.
-                    let controlled_player_callback_active = frame_forces.is_some();
+                    let controlled_player_callback_active =
+                        frame_forces.is_some() && !possessed_at_entry;
+                    // FUN_00446FC0 smokes a hurt craft at random; not ported.
+                    if possessed_at_entry && player_hull.health_raw < 20_000 {
+                        possession_stop(
+                            &mut possession_stops_reported,
+                            POSSESSION_PASSIVE_SMOKE_HELD,
+                        );
+                    }
+                    // The possessed body's Player Control, then the MindBall,
+                    // at the tail of the live list.
+                    if possession.is_some() || mind_ball.is_some() {
+                        advance_possession(PossessionFrame {
+                            em,
+                            tasks: &mut specialized_actor_tasks,
+                            cache: &session.cache,
+                            world_fx: &mut world_fx,
+                            possession: &mut possession,
+                            native_owner: &possessed_native_owner,
+                            mind_ball: &mut mind_ball,
+                            followed_body: &mut followed_body,
+                            chase_camera: &mut chase_camera,
+                            stops: &mut possession_stops_reported,
+                            channels: &channels,
+                            craft_live: !player_hull.dying,
+                            elapsed_micros,
+                            retail_tick,
+                        });
+                    }
                     if controlled_player_callback_active
                         && hull_warning_cadence
                             .poll(hull_health_at_controller_entry_raw, retail_tick as i32)
@@ -9016,7 +9338,32 @@ fn run_game(
                         log!("Out of fuel — forced back to Hover");
                     }
 
-                    if let Some(player) = em.player() {
+                    // The session's followed body (+2A8): a possessed body or
+                    // a MindBall's flight while one runs, else the craft.
+                    let followed = followed_body
+                        .and_then(|id| em.iter_all().find(|entity| entity.id == id))
+                        .and_then(|body| match body.physical_body_basis_q31() {
+                            RetailRuntimeValue::Known(basis) => Some((body.position_raw(), basis)),
+                            RetailRuntimeValue::Unresolved => None,
+                        });
+                    if let Some((position_raw, basis)) = followed {
+                        chase_camera
+                            .update(
+                                ChaseCameraTarget {
+                                    position_raw,
+                                    body_basis: ChaseBodyBasis::from_vectors([
+                                        basis.lateral,
+                                        basis.up,
+                                        basis.forward,
+                                    ]),
+                                    active_camera: config.active_camera,
+                                    parameters: pad_bindings.camera_parameters(controller),
+                                },
+                                gameplay_chase_terrain(&session.cache),
+                                elapsed_micros,
+                            )
+                            .apply_to(&mut camera);
+                    } else if let Some(player) = em.player() {
                         // The eye keeps retail's fixed -Z compass bearing while
                         // FUN_0044FFA0's terrain clearance probe adjusts its Y/Z
                         // target. Independent signed-word eye/focus springs
@@ -9107,7 +9454,8 @@ fn run_game(
                             || joystick.is_some_and(JoystickSample::fire)),
                     source_b: fire_allowed && mouse_buttons_down.contains(&MouseButton::Right),
                 };
-                if let Some(player) = em.player() {
+                // Passive Player runs no weapon (FUN_00424E70 is Player Control's).
+                if let Some(player) = em.player().filter(|_| !possessed_at_entry) {
                     let origin = player.position;
                     let descriptor = *weapon_inventory.selected_descriptor();
                     let direction_q31 =
@@ -10632,6 +10980,12 @@ fn run_game(
                             }
                         }
                     }
+                    if possession.is_some_and(|state| state.body == id) {
+                        // Its static response ran in its Player Control visit;
+                        // its pairs take FUN_00447D70, held.
+                        possession_stop(&mut possession_stops_reported, POSSESSION_PAIRS_HELD);
+                        continue;
+                    }
                     let result = resolve_type17_static_contact(&mut contact_frame, id);
                     if !matches!(
                         result,
@@ -11680,6 +12034,9 @@ fn run_game(
                         specialized_actor_tasks: &mut specialized_actor_tasks,
                         pending_player_shots: &mut pending_player_shots,
                         mind_control_lock: &mut mind_control_lock,
+                        mind_ball: mind_ball.as_ref(),
+                        mind_ball_spin: &mut mind_ball_spin,
+                        frame_us: elapsed_micros,
                         entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                         player_craft: &player_craft,
                         player_hull: &player_hull,
@@ -12387,6 +12744,9 @@ struct GameplayWorldFrame<'a> {
     specialized_actor_tasks: &'a mut SpecializedActorTaskScheduler,
     pending_player_shots: &'a mut Vec<PendingPlayerShot>,
     mind_control_lock: &'a mut PlayerMindControlLock,
+    mind_ball: Option<&'a (u32, MindBallFlight)>,
+    mind_ball_spin: &'a mut MindBallSpin,
+    frame_us: u32,
     entity_weapon_error_reported: &'a mut bool,
     player_craft: &'a PlayerCraft,
     player_hull: &'a PlayerHull,
@@ -12484,6 +12844,9 @@ fn draw_gameplay_world(
         specialized_actor_tasks,
         pending_player_shots,
         mind_control_lock,
+        mind_ball,
+        mind_ball_spin,
+        frame_us,
         entity_weapon_error_reported,
         player_craft,
         player_hull,
@@ -12625,6 +12988,17 @@ fn draw_gameplay_world(
                         } else {
                             PlayerCraftDrawAnimation::Live(player_craft)
                         };
+                        draw_mind_ball(
+                            renderer,
+                            cache,
+                            face_colors,
+                            camera,
+                            em,
+                            mind_ball,
+                            mind_ball_spin,
+                            frame_us,
+                            retail_tick,
+                        );
                         draw_mind_control_reticle(
                             renderer,
                             cache,

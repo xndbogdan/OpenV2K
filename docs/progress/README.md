@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,399 | |
 | Marked not needed (excluded below) | 628 | |
-| **Referenced by port code** | **1,707** | **96.4%** |
+| **Referenced by port code** | **1,714** | **96.8%** |
 | Referenced by code or RE notes | 1,771 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -19,12 +19,12 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 462 |
+| implemented | 475 |
 | approximated | 8 |
-| documented | 25 |
+| documented | 15 |
 | not-needed | 628 |
 
-11 `FUN_` citations don't match a retail function
+15 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
 
 ## Map
@@ -41,16 +41,16 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 15 | 3 | 107 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 12 | 0 | 120 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 11 | 3 | 110 |
 | [Controls](../re/CONTROLS.md) | 11 | 1 | 59 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 144 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 9 | 0 | 130 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 141 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 4 | 0 | 140 |
 | [Menu system](../re/MENU_SYSTEM.md) | 4 | 0 | 160 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 31 |
 | [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 1 | 0 | 57 |
-| [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 11 |
+| [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 10 |
 
 ## Omitted
 

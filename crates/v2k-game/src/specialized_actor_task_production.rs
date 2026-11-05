@@ -1710,6 +1710,63 @@ impl SpecializedActorTaskScheduler {
     /// Cold New-Game spawn 18 publishes class 33. Capture People/Run Away and
     /// direct `--level 13` stay out of custody. Variant-one first `FUN_00403CE0`
     /// starts `FUN_00401430` and fails closed at type 17's first `FUN_0041FCB0`.
+    /// `FUN_004480E0` replaces a Follow Beacons Type17's behavior with
+    /// Player Control: its owner leaves custody. False when the body has no
+    /// such owner, which the takeover then holds.
+    pub fn release_type17_for_possession(&mut self, entity_id: u32) -> bool {
+        let Some(index) = self.owners.iter().position(|owner| match owner {
+            SpecializedActorTaskOwner::Type17FollowBeacons(owner) => owner.entity_id() == entity_id,
+            SpecializedActorTaskOwner::Intro2Type17(owner) => owner.entity_id() == entity_id,
+            _ => false,
+        }) else {
+            return false;
+        };
+        self.owners.remove(index);
+        true
+    }
+
+    /// `FUN_00446D70`'s `FUN_0040AC60` on a released Type17 the native
+    /// owner held before the takeover: its own behavior chosen afresh
+    /// (`FUN_0040C690`'s path), and the new task back in custody.
+    pub fn release_possessed_intro2_type17(
+        &mut self,
+        manager: &mut EntityManager,
+        entity_id: u32,
+        retail_tick: u32,
+        world_fx: &mut WorldFx,
+    ) -> Result<(), crate::intro2_type17::Intro2Type17Block> {
+        crate::intro2_type17::behavior::reselect(
+            manager,
+            entity_id,
+            retail_tick,
+            world_fx,
+            crate::intro2_type17::behavior::ReselectionEntry::Impact,
+        )?;
+        let owner = crate::intro2_type17::Intro2Type17Owner::adopt(manager, entity_id)?;
+        self.register_intro2_type17(owner);
+        Ok(())
+    }
+
+    /// A released Type17's fresh Follow Beacons publication returns to
+    /// custody.
+    pub fn adopt_released_type17(&mut self, manager: &EntityManager, entity_id: u32) -> bool {
+        let Some(metadata) = manager.type_runtime_metadata(TYPE17_IMPACT_ENTITY_TYPE) else {
+            return false;
+        };
+        let Some(owner) = manager
+            .iter_all()
+            .find(|entity| entity.id == entity_id)
+            .and_then(|entity| {
+                Type17FollowBeaconsSchedulerOwner::adopt_published(entity, metadata).ok()
+            })
+        else {
+            return false;
+        };
+        self.owners
+            .push(SpecializedActorTaskOwner::Type17FollowBeacons(owner));
+        true
+    }
+
     pub fn adopt_fresh_level1_type17_follow_beacons(&mut self, manager: &EntityManager) -> usize {
         let metadata = match manager.type_runtime_metadata(TYPE17_IMPACT_ENTITY_TYPE) {
             Some(metadata) => metadata.clone(),

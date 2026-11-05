@@ -1592,7 +1592,13 @@ The controller is the player's `0x5AC`-byte record (`+68` its body, `+74` the
 | `FUN_004480E0` | the mind-control takeover (from `FUN_00420C60`): gives the target Type46's behavior source (`+D0`) and the controller (`+88`), gives the old body Type88's, points the controller at the target (`+68`, the old body at `+6C`), reinstalls both behaviors (`FUN_0040AC60`), clears the old body's Sub-G attitude flag and weapon fire-enable word (`FUN_0041B9B0`, `FUN_00424F10`, by the old body's type description `+20` and `+18`), records the target in the session (`FUN_00456770`), and holds controller `+70` at 60000 (500 when the install failed) |
 
 | `FUN_00446D70` | ends a takeover (controller `+70` reaching zero in `FUN_00446640`, or its old body dying): the old body (`+6C`) gets Type46's behavior source and the controller back, the target loses both, and the two handles swap back; when both behaviors reinstall, a released Type98 only moves the session's view to the craft, any other target leaves a Type98 MindBall at it (`FUN_00409950`) that flies to the craft and hands the view back when it ends (`FUN_00409420`); a failed reinstall swaps the handles back and retries in 500 ms |
-| `FUN_00448760` | a Hive swallowing the possessed body sets controller `+70` to 1, so control returns on the next Player Control frame |
+| `FUN_00448760` | a Hive swallowing the possessed body sets controller `+70` to 1, so control returns on the next Player Control frame; its only caller is a dying Hive's mouth walk in `FUN_0041BEB0` (a body within `0x24000` squared of the mouth and `0x20` below it, without capability bit 0 or state `0x1000`, that has a controller and is not a Type98), where any other such body is staged for destruction (`FUN_00410B70`) |
+| `FUN_00446F30` | installs Passive Player (`FUN_00446FC0`), the Passive mode style (`0x4CD8F8`): no TAB style, the Hovering style's environment mask `0x10010`, pair hook `FUN_00447D70` and static hook `FUN_00447C90` |
+| `FUN_00409950` | a released body leaves a MindBall: the network birth (`FUN_00438080`) of a Type98 at the body with no velocity or angles, whose `+88` words are the body and the craft; the ball's type draw becomes `FUN_004097A0`, `+60` the craft |
+| `FUN_00409320`, `FUN_004093B0` | the MindBall task and its 0x24-byte record, copied from the birth's words (body, craft, then the birth frame's unwritten stack, with the phase `+14` at -1) |
+| `FUN_00409460` | the MindBall's flight: a craft gone ends it (`FUN_00410C10`); phase 0 (500 ms) holds it on the body, phase 1 (500 ms) raises it `t >> 4` from where it was, phase 2 (the octagonal distance times 256 plus 250000 us) brings it from that offset to the craft, `t >> 5` high, never under the bilinear ground, phase 3 (500 ms) holds it `0x800 - (t >> 5)` over the craft, then it dies; `t` is the phase's elapsed time times 64 over its length `>> 10`, at most `0xFFFF`, and `+20` the fade (`t / 2`, `(t + 0x10000) / 2`, none, `0xFFFF - t`) |
+| `FUN_00409420` | the MindBall's end: the session follows the craft (`+04`) again and the record is freed |
+| `FUN_004097A0` | the MindBall's draw: the process-global spin `DAT_004DAEDC` grows by the frame's microseconds over 32; eight instances of global model 243 with the frame callback `FUN_00421570`, each turning the ball's matrix once more by the spin about its lateral axis (`FUN_00457A90`) and twice it about its forward axis (`FUN_00457DD0`), the first four of size `0xFFFF - fade`, the next four `0xFFFF - (fade >> 3)` |
 
 The Possession Ray is weapon selector `0x1B` (Cheats -> Weapons code
 `0x3E71B`): infinite, 400 ms cadence, no sound, no auxiliary command. Its
@@ -1601,37 +1607,73 @@ The Possession Ray is weapon selector `0x1B` (Cheats -> Weapons code
 record is the shooter body's component `+0x38`: mode `+34`, mode time `+38`,
 target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
 
-**Port status: the lock is ported; the takeover is held.** Selector `0x1B`
-fires on its 400 ms cadence with no sound (`FUN_00424650` skips a zero sound)
-and the A/B gun phase of any weapon; each launch, drained at the craft's
-draw, starts the lock. The lock's advance, search, hold test and reticle run
-as retail's: the retail lab's Level 1 lock (the craft placed 1200 behind a
+**Port status: the takeover, control, release and MindBall are ported for
+an empty-handed Type17 in custody; the rest is held.** Selector `0x1B` fires
+on its 400 ms cadence with no sound (`FUN_00424650` skips a zero sound) and
+the A/B gun phase of any weapon; each launch, drained at the craft's draw,
+starts the lock. The lock's advance, search, hold test and reticle run as
+retail's: the retail lab's Level 1 lock (the craft placed 1200 behind a
 Type17 at 20 ms passes, the ray fired once) is reproduced pass for pass,
 from the 1.04 s search through the 1 s lock to the takeover. The event log's
 `player` line carries the record while it runs (`mind_control_lock`: mode,
 mode time, target id, locked time, reticle, angle).
 
-The takeover makes the target's own body run Player Control
-(`FUN_00446640`, with the integrator its movement style selects from
-`0x4CD8D0`) over that body's type components, and the craft run Passive
-Player. The port's Player Control drives only the player craft, so where
-retail's lock ends in `FUN_004480E0` the port ends the lock and logs one
-"Possession Ray takeover held" stop per run. A lock value the port does not
-hold for a body (its state word, its recent relation, the locked target's
-model) ends the lock with a logged stop.
+The takeover (`FUN_004480E0`) draws one word for each behavior source it
+installs (`FUN_00425680`: the target's, then the craft's), clears the
+target's three task slots in the Hovering style initializer's order
+(`FUN_004464F0`) and holds the 60000 ms countdown. A possessed Type17 runs
+Player Control in the craft's phase of the frame: the Hovering style's turn
+word turns it by `turn * 0x34 / 64` (Sub-D, `FUN_00420360`, writing its rate
+and step), the `FUN_0040E640` attitude runs from its previous matrix, then
+Sub-C lift, Sub-B and, with the throttle held, Sub-A (whose direction word
+takes the throttle's sign) through that matrix, its Sub-H steps, and the
+common tail runs with the style's environment mask `0x10010` over the type's
+`0x39`: basis rebuild, gravity, drag and motion. A static-model contact gets
+`FUN_00411760`'s response. The retail lab's possession (the throttle held a
+second, then a left turn) is matched by a retail-backed test: from retail's
+entry state, each of 301 Player Control visits lands on retail's next entry
+except where a contact moves the body (one pass of the later contact walk,
+and the static contacts, whose responses depend on the legs' Sub-H frames
+the capture does not hold). The craft runs Passive Player: no reader, lock,
+weapon or warnings; its fan channels ease toward full and it keeps the
+Hover tail without Sub-A. The session's followed body is the possessed
+body, so the chase camera follows it.
 
-What the held part does in retail, from the same lab run carried on with
-the controls: the takeover happens in the craft's Player Control visit, and
-the Type17 later in the live list already runs Player Control in that pass,
-with movement style 0 (hover), so the session's followed body (`+2A8`) and
-the camera's focus spring move to it at once. Thrust and steering keys
-drive the Type17 through its own components. Controller `+70` counts the
-60000 ms down by the frame's milliseconds; at zero (pass 3000 after the
-takeover) the Type17 gets its own behavior back, a Type98 MindBall is born
-at its position and becomes the followed body, and the session follows the
-craft again when the MindBall's flight ends, 140 passes (2.8 s) later in
-that run. The craft, meanwhile running Passive Player, settled where it
-was.
+At zero the release (`FUN_00446D70`) draws the craft's behavior word, gives
+the Type17 its own behavior again (the native owner's `FUN_0040C690` path in
+any world, the fresh Level 1 owner's choice among Follow Beacons, Capture
+People and Run Away there), and leaves a Type98 MindBall at the body, born
+with its behavior word and its Sub-A word. The ball flies to the craft as
+`FUN_00409460` says; a retail-backed record of the lab's 140 visits is
+matched pass for pass, position and record. Its draw is `FUN_004097A0`'s
+eight rings of model 243. The session follows it until its end, then the
+craft.
+
+Held, each with one logged stop a run:
+
+- A target other than an empty-handed Type17 in custody: Player Control on
+  its own components, and Capture People's cleanup of a held body
+  (`FUN_0040D040`), are not ported; the lock ends there as before.
+- The possessed body's pairs, which take the player's pair behavior
+  (`FUN_00447D70`, including its `FUN_00443B50` pickup of a person), and its
+  static contact's hook (`FUN_00447C90`) and damage deliveries.
+- The beam and hold keys and TAB while a body is possessed (the
+  controller's cargo from that body, `FUN_00446D30`; the Hovering style's
+  VTOL style, `FUN_00447970`), and Passive Player's smoke from a craft under
+  20000 health.
+- The Hive case (`FUN_00448760`): its only caller is a dying Hive's mouth
+  walk in `FUN_0041BEB0`, which the port does not run for any body (see
+  [HIVE_WRECK.md](HIVE_WRECK.md#player-suction-and-interior-contact)).
+- A possessed body that is gone: retail's controller then has no body and
+  `FUN_00450980` kills it; the port returns control to the craft instead,
+  with its stop.
+
+The port runs the possessed body in the craft's phase of the frame, after
+the actor pass, as it runs the craft; retail visits it at its own place in
+the live list. In the takeover's frame the port's body has therefore had its
+own behavior's visit before its first Player Control visit, which retail
+gives it instead. In the lab, the release came 3000 passes after the
+takeover and the MindBall's flight took 140.
 
 ### Special weapons
 
@@ -1642,7 +1684,7 @@ A row's code is the power-up word: operation in the low byte, amount above.
 
 | Weapon | Row | Firing | Body and program | Port |
 | --- | --- | --- | --- | --- |
-| Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | lock ported; takeover held |
+| Possession Ray | `0x3E71B` | selector `0x1B`, infinite, 400 ms; row `{0, 1000, 0, 0}` | no body: `FUN_0044E770` starts the [lock](#mind-control) | ported for a Type17; other targets held |
 | Guided Missiles | `0x3E711` | selector `0x11`, 999, 1 s, sound 79; row `{1, 1, 0, 45}` | Type45 (model 240), class 28 | ported |
 | Proximity Mines | `0xA09` (10) | selector 9, 1 s, sound 60; row `{0, 1000, 0, 48}`; `FUN_00424650` aims selectors 4 and 9 alike, so a mine is dropped as a depth charge is | Type48 (model 241), class 34, death class 49 | ported |
 | Virus Bomb, Antidote Bomb | `0x3E71C`, `0x3E71D` | selectors `0x1C`/`0x1D`, 400 ms; particles 77/78 at 2000 | no body; see below | ported |

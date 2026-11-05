@@ -41,7 +41,12 @@ mod hive_runtime;
 pub use hive_runtime::{HiveGenericDeath, HiveGenericDeathBlock};
 mod native_type105_construction;
 mod native_type69_construction;
+mod possessed_body;
 pub use native_type69_construction::Type69BirthRequest;
+pub use possessed_body::{
+    MindBallBlock, PossessedBodyBlock, PossessedBodyFrame, PossessedStaticContact,
+    PossessionReleaseBlock,
+};
 mod native_type56_construction;
 pub mod network_body;
 mod rolling_boulder_construction;

@@ -72,6 +72,8 @@ pub(super) struct PausedGameplayScene {
     world: FrozenWorldPresentationSnapshot,
     targetter: TargetterRuntime,
     mind_control_lock: PlayerMindControlLock,
+    mind_ball: Option<(u32, MindBallFlight)>,
+    mind_ball_spin: MindBallSpin,
     retail_tick: u32,
 }
 
@@ -80,12 +82,15 @@ impl PausedGameplayScene {
         source: FrozenWorldPresentationSource<'_>,
         targetter: TargetterRuntime,
         mind_control_lock: PlayerMindControlLock,
+        mind_ball: (Option<(u32, MindBallFlight)>, MindBallSpin),
         retail_tick: u32,
     ) -> Self {
         Self {
             world: FrozenWorldPresentationSnapshot::capture(source),
             targetter,
             mind_control_lock,
+            mind_ball: mind_ball.0,
+            mind_ball_spin: mind_ball.1,
             retail_tick,
         }
     }
@@ -118,6 +123,9 @@ impl PausedGameplayScene {
                     specialized_actor_tasks: frozen.specialized_actor_tasks,
                     pending_player_shots: &mut pending_player_shots,
                     mind_control_lock: &mut mind_control_lock,
+                    mind_ball: self.mind_ball.as_ref(),
+                    mind_ball_spin: &mut self.mind_ball_spin.clone(),
+                    frame_us: 0,
                     entity_weapon_error_reported: &mut entity_weapon_error_reported,
                     player_craft: draw.craft,
                     player_hull: draw.hull,

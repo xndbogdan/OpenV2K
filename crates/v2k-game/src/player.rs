@@ -464,6 +464,13 @@ impl MotionChannels {
         }
     }
 
+    /// The Hovering style's turn word for a body at `heading_raw` and
+    /// `body_pitch_raw` (Joystick Absolute steers toward a bearing from it).
+    pub fn hover_turn_raw(&self, heading_raw: i16, body_pitch_raw: i16) -> i16 {
+        self.reader_words(heading_raw, body_pitch_raw, SteeringStyle::Ground)
+            .turn
+    }
+
     fn throttle_normalized(self) -> f32 {
         self.throttle_q16 as f32 / 65_536.0
     }
@@ -701,6 +708,24 @@ impl PlayerCraft {
         self.mode_joint_5 = step_mode_joint(self.mode_joint_5, deployed, elapsed_micros);
         self.mode_joint_6 = step_mode_joint(self.mode_joint_6, deployed, elapsed_micros);
         frame_forces
+    }
+
+    /// Passive Player (`FUN_00446FC0`), the craft's task while the Possession
+    /// Ray's takeover holds its controller: no reader, heading or weapon; the
+    /// Sub-O fan channels ease toward full, and Sub-C lift (with the hold's
+    /// mass), the surface effect and Sub-B run as the Hovering style's do,
+    /// with no Sub-A. Its style (`0x4CD8F8`) has the Hovering environment
+    /// mask, so the craft's common tail is the Hover one.
+    pub fn passive_forces(&mut self, elapsed_micros: u32, player: &Entity) -> VehicleFrameForces {
+        let elapsed_micros = elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
+        self.mode = VehicleMode::Hover;
+        self.mode_joint_5 = step_mode_joint(self.mode_joint_5, true, elapsed_micros);
+        self.mode_joint_6 = step_mode_joint(self.mode_joint_6, true, elapsed_micros);
+        VehicleFrameForces::Hover(HoverFrameForces::new(
+            self.previous_force_basis(player),
+            0.0,
+            self.hover_target_speed_raw,
+        ))
     }
 
     /// Current fixed-point requests for the two retail fan loops.

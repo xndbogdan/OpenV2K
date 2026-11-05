@@ -81,6 +81,11 @@ pub enum Intro2Type17Error {
     Selection(Type17ImpactReselectionError),
 }
 
+/// Whether a Type17 is the native owner's (any world but a fresh Level 1).
+pub fn intro2_type17_allocation_authenticates_public(entity: &Entity) -> bool {
+    intro2_type17_allocation_authenticates(entity)
+}
+
 pub(crate) fn intro2_type17_allocation_authenticates(entity: &Entity) -> bool {
     entity.intro2_type17_runtime.is_some_and(|runtime| {
         entity.active
