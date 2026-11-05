@@ -155,10 +155,16 @@ pub enum NativeCaptorPairBlock {
         style: u32,
     },
     HiveImpact(crate::hive_impact::HiveImpactBlock),
-    /// Native Type3/27 Rolling Boulders own construction, motion, contact,
-    /// hits, deaths and the player's own pair pass, but no pair walk with
-    /// other actors. A Hive latch alone cannot authorize that actor's
-    /// remaining 11AD0 physical/damage suffix.
+    /// A Rolling Boulder's pair damage or its class1/class18 death stopped.
+    RollingBoulderPairDamage(
+        crate::live_actor_checked_damage::LiveActorDamageError<
+            crate::rolling_boulder::impact::RollingBoulderDeathProgramBlock,
+            (),
+        >,
+    ),
+    /// A Hive's impact on a body without a native owner (a Rolling Boulder
+    /// among them: the Hive ram's wreck path is not ported). A Hive latch
+    /// alone cannot authorize that actor's remaining 11AD0 suffix.
     UnsupportedHiveImpactCounterpart {
         entity_id: u32,
         entity_type: u32,
@@ -899,7 +905,7 @@ fn resolve(
         // callback or physical write, including a parked Class12 counterpart.
         for owner in [id, candidate_id] {
             let entity = actor(frame.entities, owner)?;
-            if requires_body_custody(entity)
+            if general_body_custody(entity)
                 && !crate::native_actor_descriptor_contact::completed_contact_owner(
                     frame.entities,
                     frame.actor_tasks,
@@ -908,7 +914,7 @@ fn resolve(
             {
                 return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
             }
-            if requires_body_custody(entity) && !participants.contains(&owner) {
+            if general_body_custody(entity) && !participants.contains(&owner) {
                 participants.push(owner);
             }
         }
@@ -1080,7 +1086,7 @@ fn general_pair_hold(
         if !suppressed
             && (current.position_raw() != body.position_raw
                 || current.velocity_raw() != body.velocity_raw)
-            && !requires_body_custody(current)
+            && !general_body_custody(current)
         {
             return Ok(Some(ActivePairHoldReason::NoBodyOwner {
                 entity_type: current.entity_type,
@@ -1093,7 +1099,7 @@ fn general_pair_hold(
         // An owned body lends its completed owner; any other body's tasks
         // must all keep a null contact hook, which A900 skips. The Main Base's
         // null-hook Primary still needs its completed owner, as in A900.
-        let owned = if requires_body_custody(entity)
+        let owned = if general_body_custody(entity)
             || crate::main_base_runtime::main_base_manager_allocation_authenticates(
                 frame.entities,
                 owner,
@@ -1194,6 +1200,11 @@ fn general_behavior_hold(
         PairContactCallbackPolicy::UnknownAddress(0x0040_c800) => {
             is_native_defender_ball(entity)
                 && (opposite.entity_type == DEFENDER_BALL || requires_body_custody(opposite))
+        }
+        // 40C730, a resting boulder's +18: C6B0 wakes it under its owner,
+        // whatever the opposite body.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_c730) => {
+            crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
         }
         _ => false,
     };
@@ -1623,6 +1634,34 @@ fn behavior(
             )?;
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
+        // 40C730 -> C6B0(0): reinstall rolling style0 and its Primary under
+        // the boulder's completed owner, then return null. The opposite body
+        // is never read.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_c730)
+            if crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                frame.entities,
+                owner,
+            ) =>
+        {
+            if !frame
+                .actor_tasks
+                .prepare_native_actor_mutation(frame.entities, owner)
+            {
+                return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
+            }
+            let woken = crate::rolling_boulder::wake_resting_boulder(
+                frame.entities.entity_mut(owner).unwrap(),
+            )
+            .map_err(|_| NativeCaptorPairBlock::Runtime("rolling boulder pair wake"))?;
+            if woken {
+                *committed = true;
+                let replaced =
+                    crate::rolling_boulder::RollingBoulderOwner::adopt(frame.entities, owner)
+                        .map_err(|_| NativeCaptorPairBlock::Runtime("rolling boulder owner"))?;
+                frame.actor_tasks.register_rolling_boulder(replaced);
+            }
+            Ok(NativeCaptorPairBehaviorResult::Null)
+        }
         _ => Err(NativeCaptorPairBlock::UnsupportedBehavior {
             entity_id: owner,
             style,
@@ -1771,7 +1810,7 @@ fn physical(
         let current = actor(frame.entities, body.id)?;
         if (current.position_raw() != body.position_raw
             || current.velocity_raw() != body.velocity_raw)
-            && !requires_body_custody(current)
+            && !general_body_custody(current)
             && !((weapon_pair || shark_pair)
                 && frame
                     .entities
@@ -1972,6 +2011,15 @@ fn is_native_queen(entity: &Entity) -> bool {
         )
 }
 
+/// A body whose owner takes a pair visit's response and collision damage:
+/// the native owners, and a native Rolling Boulder, whose 15040 runs its own
+/// class1 or class18 death. Callbacks that reach the opposite body (the
+/// Hive's impact, a ball's hit) still ask [`requires_body_custody`].
+fn general_body_custody(entity: &Entity) -> bool {
+    requires_body_custody(entity)
+        || crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
+}
+
 fn requires_body_custody(entity: &Entity) -> bool {
     is_native_defender_ball(entity)
         || is_native_autobot(entity)
@@ -2024,6 +2072,41 @@ fn apply_pair_checked_damage(
     committed: &mut bool,
 ) -> Result<(), NativeCaptorPairBlock> {
     let kind = actor(frame.entities, target)?.entity_type;
+    // A boulder's 15040 is the player pair's: class1 for a Type3, class18's
+    // split for a Type27. Both deaths need the Playing world's craft.
+    if let Some(runtime) = actor(frame.entities, target)?
+        .rolling_boulder_runtime
+        .filter(|_| {
+            crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                frame.entities,
+                target,
+            )
+        })
+    {
+        let player = playing_player
+            .ok_or(NativeCaptorPairBlock::MissingPlayingContext { entity_id: target })?;
+        return crate::rolling_boulder::death::apply_rolling_boulder_pair_damage(
+            frame.entities,
+            target,
+            delivery,
+            runtime.profile,
+            crate::rolling_boulder::death::RollingBoulderPairDeathWorld {
+                resources: frame.resources,
+                static_damage: frame.static_damage,
+                world_fx: frame.world_fx,
+                notifications: frame.notifications,
+                scheduler: frame.actor_tasks,
+                player_hull: player.hull,
+                extra_lives: player.extra_lives,
+                retail_tick: frame.retail_tick,
+            },
+        )
+        .map(|_| ())
+        .map_err(|error| {
+            *committed |= error.committed_prefix;
+            NativeCaptorPairBlock::RollingBoulderPairDamage(error)
+        });
+    }
     if (kind == 40
         && crate::native_type40::manager_allocation_authenticates(frame.entities, target))
         || (kind == 56

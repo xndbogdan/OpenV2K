@@ -620,7 +620,10 @@ runs first and writes nothing. It admits the pair when:
   Ball's `40C800`, against another Type63 (`0x004BE320`'s A300, which
   cancels the response) or against a body with a native owner, which takes
   its checked `{1, 40000}` attributed to the ball before the visit goes on;
-- every body the response would move has a native owner;
+  and a resting Rolling Boulder's `40C730`, which wakes it under its owner
+  ([Rolling Boulder](ROLLING_BOULDER.md#port-status));
+- every body the response would move has a native owner (a Rolling
+  Boulder's included: its collision damage runs the player pair's deaths);
 - every body with a native owner lends its completed owner (the same custody
   the family lanes check), and every other body's tasks keep a null contact
   hook. The Main Base's Primary (`25CD0`) keeps `01020`'s null `+0x18`, as the

@@ -587,6 +587,8 @@ address,status,note
 0x0040CF00,implemented,Mobbing Target pair hook (checked 6000 on a capability-bit0 body) (docs/re/INTRO2_TYPE10.md)
 0x0040C770,implemented,style switch to variant 2 (docs/re/INTRO2_TYPE10.md)
 0x0040C750,implemented,style switch to variant 1 (docs/re/INTRO2_TYPE10.md)
+0x0040C730,implemented,resting Rolling Boulder pair and impact hook: C6B0(0) reinstalls rolling style0 in the player's pair, the late walk's other pairs and hits (docs/re/ROLLING_BOULDER.md#port-status)
+0x0040C6B0,implemented,style switch within the current context: 40EA10 installs the style then its initializer runs (docs/re/ROLLING_BOULDER.md#styles-and-tasks)
 0x0041B940,implemented,Sub-G +38 target setter (docs/re/INTRO2_TYPE10.md)
 0x0041B980,implemented,Sub-G mode +40 setter (docs/re/INTRO2_TYPE10.md)
 0x0041B970,implemented,Sub-G mode +3F setter (docs/re/INTRO2_TYPE10.md)

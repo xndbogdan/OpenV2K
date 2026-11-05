@@ -29,7 +29,8 @@
 //! [`crate::native_ground_actor::contact`] the null-hook 11760 static response
 //! in either style. [`impact`] owns the `10EB0/11250/11320` hits; a lethal
 //! Type3 enters the shared class1 terminal and a lethal Type27 the class18
-//! split in [`death`]. Pair contacts are not owned. See
+//! split in [`death`]. The late walk's pairs lend the owner (a resting
+//! boulder's `40C730` wakes it there). See
 //! `docs/re/ROLLING_BOULDER.md`.
 
 use crate::actor_task_dispatcher::ActorTaskRuntime;
@@ -568,7 +569,7 @@ fn install_style_tasks(entity: &mut Entity, style: RollingBoulderStyle) {
 
 /// `40C750`/`40C730 -> 40C6B0`: replace the style within the same context,
 /// apply `40EA10`'s state edit, then run the style's initializer.
-fn switch_style(
+pub(crate) fn switch_style(
     entity: &mut Entity,
     style: RollingBoulderStyle,
 ) -> Result<(), RollingBoulderBlock> {

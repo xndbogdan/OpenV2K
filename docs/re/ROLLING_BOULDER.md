@@ -3,8 +3,9 @@
 `v2k-game::rolling_boulder` owns the authored Type3 and Type27 boulders:
 native construction, both class20 styles and their tasks, the late terrain,
 water and static contacts, hits, player pairs, and both deaths, including
-Type27's split into two Type3 boulders, also inside the Main Base abort. Other
-pairs are still explicit boundaries (see [Port status](#port-status)).
+Type27's split into two Type3 boulders, also inside the Main Base abort, and
+pairs with other actors. The Hive's ram is still an explicit boundary (see
+[Port status](#port-status)).
 
 ## Identity
 
@@ -121,7 +122,17 @@ Implemented:
   pushes them, and a resting boulder's style1 `+18` (`40C730`) reinstalls
   rolling style0 inside the walk, before 411760's damage;
 - late actor pairs: both Primaries' task `+18` is the null `05FF0` leaves,
-  so the walk's component stage passes a boulder under its completed owner;
+  so the walk's component stage passes a boulder under its completed owner.
+  The general visit lends that owner to the response and to the collision
+  damage, whose `15040` runs the player pair's deaths (class1, or class18's
+  split), with the Playing craft. A resting boulder's style1 `+18`
+  (`40C730`) runs `C6B0(0)` whatever the other body: rolling style0 and its
+  Primary are installed before both A900 chains, and the boulder's owner is
+  replaced by the rolling one. In 3,000 ticks of the idle port, world 27's
+  Type127s now push boulders in 10 visits, each with collision damage, where
+  the build before held the touching pair on 126 ticks;
+  retail's Skip to World cannot reach world 27, and a 6,000-tick lab run of
+  world 35 logged no pair damage between a boulder and an actor;
 - both deaths from hits and from Playing or cinematic blasts;
 - a Type27 split from a lethal collision;
 - lethal player rams. The pair's capped packet enters 15040 directly once
@@ -141,8 +152,8 @@ Remaining boundaries, each held rather than approximated:
 - A Type3 killed by a terrain or static collision outside Playing holds at
   "Rolling Boulder class1 radial needs the player hull": only the Playing walk
   lends the craft its radial reaches.
-- Other pairs. Boulder pairs with actors other than the player, and the Hive
-  ram (`UnsupportedHiveImpactCounterpart`, [Hive wreck](HIVE_WRECK.md)).
+- The Hive ram (`UnsupportedHiveImpactCounterpart`,
+  [Hive wreck](HIVE_WRECK.md)).
 - In the Main Base abort, Type27 splits through the same class18 path and
   each Type3 child explodes through class1; worlds 27 and 35 now stop at their
   class15 Type127 and Type12.

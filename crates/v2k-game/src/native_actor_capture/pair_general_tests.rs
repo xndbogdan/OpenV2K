@@ -668,3 +668,168 @@ fn a_native_fish_touching_the_player_takes_the_walk() {
         "12760 separates the pair"
     );
 }
+
+/// The walk in Playing, the craft's hull lent as production lends it.
+fn walk_playing(
+    session: &mut crate::session::GameSession,
+    entities: &mut EntityManager,
+    fx: &mut WorldFx,
+    tasks: &mut SpecializedActorTaskScheduler,
+    hull: &mut crate::player_hull::PlayerHull,
+    subject: u32,
+) -> NativeCaptorPairOutcome {
+    resolve_native_captor_active_contacts_with_playing(
+        &mut Intro2ContactFrame {
+            entities,
+            resources: &mut session.cache,
+            world_fx: fx,
+            static_damage: &mut StaticDamageScheduler::new(),
+            notifications: &mut GameplayNotifications::new(),
+            retail_tick: 4794,
+            actor_tasks: tasks,
+        },
+        subject,
+        CaptureFeedbackPolicy::Gameplay,
+        Some(PlayingPlayerContact {
+            craft: None,
+            hull,
+            extra_lives: RetailRuntimeValue::Known(3),
+        }),
+    )
+}
+
+fn player_hull(
+    session: &crate::session::GameSession,
+    entities: &EntityManager,
+) -> crate::player_hull::PlayerHull {
+    let mut hull = crate::player_hull::PlayerHull::new(
+        crate::player_hull::HullDamageProfile::from_type_record(
+            session.cache.global_entity_type(46).unwrap(),
+        ),
+    );
+    hull.readback_entity_damage_state(&entities.player().unwrap().collision);
+    hull
+}
+
+/// The visit of `pair` (in live order) in a resolved walk, with no stop.
+fn visit_of(outcome: &NativeCaptorPairOutcome, pair: [u32; 2]) -> NativeCaptorPairVisit {
+    assert!(
+        outcome.general_stop_lines().is_empty(),
+        "{:?}",
+        outcome.general_stop_lines()
+    );
+    let NativeCaptorPairOutcome::Resolved { visits } = outcome else {
+        panic!("{outcome:?}");
+    };
+    let visit = visits
+        .iter()
+        .find(|visit| visit.candidate_id == pair[1])
+        .expect("the touching pair is visited")
+        .clone();
+    assert!(
+        matches!(
+            visit.stages.last(),
+            Some(NativeCaptorPairStage::Physical { .. })
+        ),
+        "{visit:?}"
+    );
+    visit
+}
+
+/// World 27's first Type27 against its first Type127, the Type127 driven
+/// into the boulder: the walk's visit from the earlier body.
+fn boulder_pair(
+    style: crate::rolling_boulder::RollingBoulderStyle,
+) -> (
+    EntityManager,
+    SpecializedActorTaskScheduler,
+    u32,
+    NativeCaptorPairVisit,
+) {
+    use crate::rolling_boulder::{switch_style, RollingBoulderOwner};
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(27);
+    let mut tasks = adopt_authored(&mut entities);
+    let first = |kind| {
+        entities
+            .iter_all()
+            .find(|e| e.entity_type == kind)
+            .unwrap()
+            .id
+    };
+    let (boulder, ant) = (first(27), first(127));
+    let body = entities.entity_mut(boulder).unwrap();
+    body.collision
+        .state_flags_at_0x08
+        .overwrite(0x0202_8000, 0x0202_8000);
+    body.collision.subject_scan_gate_at_0x70 = RetailRuntimeValue::Known(0);
+    switch_style(body, style).unwrap();
+    tasks.register_rolling_boulder(RollingBoulderOwner::adopt(&entities, boulder).unwrap());
+    let pair = in_live_order(&entities, boulder, ant);
+    overlap(&mut entities, &session, pair);
+    let from = actor(&entities, boulder).unwrap().position_raw();
+    let at = actor(&entities, ant).unwrap().position_raw();
+    let toward =
+        std::array::from_fn::<i32, 3, _>(|axis| i32::from(from[axis]) - i32::from(at[axis]));
+    let length = toward.iter().map(|v| v * v).sum::<i32>().max(1).isqrt();
+    entities
+        .entity_mut(ant)
+        .unwrap()
+        .set_motion_raw(at, toward.map(|v| (v * 2000 / length) as i16));
+    let mut hull = player_hull(&session, &entities);
+    let outcome = walk_playing(
+        &mut session,
+        &mut entities,
+        &mut fx,
+        &mut tasks,
+        &mut hull,
+        pair[0],
+    );
+    let visit = visit_of(&outcome, pair);
+    assert!(visit
+        .general_types
+        .is_some_and(|types| types.contains(&27) && types.contains(&127)));
+    (entities, tasks, boulder, visit)
+}
+
+/// A rolling boulder's style keeps a null `+18`; its owner takes 12760's
+/// push and the collision damage, as in the player's pair.
+#[v2k_test_support::retail_test]
+fn a_type127_pushes_a_rolling_boulder() {
+    use crate::rolling_boulder::{current_style, RollingBoulderOwner, RollingBoulderStyle};
+    let (entities, _, boulder, visit) = boulder_pair(RollingBoulderStyle::Rolling);
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Physical { capped_damage_raw } if *capped_damage_raw != 0
+    )));
+    assert_ne!(actor(&entities, boulder).unwrap().velocity_raw(), [0; 3]);
+    assert_eq!(
+        current_style(actor(&entities, boulder).unwrap()),
+        Ok(RollingBoulderStyle::Rolling)
+    );
+    assert!(RollingBoulderOwner::adopt(&entities, boulder).is_ok());
+}
+
+/// A resting boulder's `+18`, 40C730, reinstalls rolling style0 through
+/// C6B0 before the A900 chains and the response, and returns null; the
+/// boulder's owner is the rolling one afterwards.
+#[v2k_test_support::retail_test]
+fn a_type127_wakes_a_resting_boulder() {
+    use crate::rolling_boulder::{current_style, RollingBoulderOwner, RollingBoulderStyle};
+    let (entities, mut tasks, boulder, visit) = boulder_pair(RollingBoulderStyle::Resting);
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Behavior {
+            owner,
+            style: 0x004c_78e8,
+            result: NativeCaptorPairBehaviorResult::Null,
+        } if *owner == boulder
+    )));
+    assert_eq!(
+        current_style(actor(&entities, boulder).unwrap()),
+        Ok(RollingBoulderStyle::Rolling)
+    );
+    let owner = RollingBoulderOwner::adopt(&entities, boulder).unwrap();
+    assert_eq!(owner.style(), RollingBoulderStyle::Rolling);
+    assert!(tasks.prepare_native_actor_mutation(&entities, boulder));
+}
