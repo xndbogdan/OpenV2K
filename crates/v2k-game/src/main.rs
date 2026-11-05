@@ -2814,6 +2814,9 @@ fn run_game(
     let mut static_damage = StaticDamageScheduler::new();
     let mut return_to_frontend_pending = false;
     let mut frontend_entry_card: Option<FrontendEntryCard> = None;
+    // FUN_0042B230 has not yet built the frontend's two actors.
+    let mut frontend_first_entry = true;
+    let mut frontend_card_carry_micros = 0u32;
     let mut static_contact_error_reported = false;
     // Each general active-pair stop line is reported once a world.
     let mut active_pair_stops_reported = std::collections::HashSet::<String>::new();
@@ -3402,6 +3405,27 @@ fn run_game(
             }
 
             GameState::Menu(shell) | GameState::Paused { shell } => {
+                if !menu_is_paused && std::mem::take(&mut frontend_first_entry) {
+                    // The process's first FUN_0042B230: no frontend actors
+                    // exist yet (FUN_00468D00 < 2), so it builds the class-1
+                    // proxy and Klaus, each FUN_00438080 spawn drawing one
+                    // FUN_00425680 word. Then, as on every entry, it arms
+                    // the card, and its pass runs no frontend tick.
+                    world_fx.next_shared_retail_random_u16();
+                    world_fx.next_shared_retail_random_u16();
+                    frontend_entry_card = Some(FrontendEntryCard {
+                        last_frame: renderer.capture_frame(FrameCaptureSource::Presented),
+                        timer: probe
+                            .fixed_step_micros
+                            .is_none()
+                            .then(LoadingCardTimer::arm),
+                    });
+                    continue;
+                }
+                // The pass after the card's charges both passes' time.
+                let elapsed_micros = (elapsed_micros
+                    + std::mem::take(&mut frontend_card_carry_micros))
+                .min(RETAIL_FRAME_DELTA_MAX_US);
                 let mut redraw_paused_world =
                     std::mem::take(&mut paused_world_redraw_pending) && menu_is_paused;
                 // FUN_0042B230's last card callback (FUN_0042D620, awaited by
@@ -3447,7 +3471,12 @@ fn run_game(
                     }
                     _ => false,
                 };
-                if !menu_is_paused {
+                if frontend_card_drawn {
+                    // The init's pump call runs the frontend tick after the
+                    // card without FUN_0042AA10; the next call's delta spans
+                    // both passes (the lab: 20,000 then 40,000 us).
+                    frontend_card_carry_micros = elapsed_micros;
+                } else if !menu_is_paused {
                     // The frontend's clock step (FUN_0042AA10).
                     retail_tick = retail_clock.advance(u64::from(elapsed_micros));
                 }
@@ -4400,29 +4429,33 @@ fn run_game(
                             random,
                         )
                     });
+                } else if begin_intro {
+                    // FUN_004942E0 skips the draw chain of a pass whose tick
+                    // switched descriptors; that tick still evolved the planes.
+                    billboard.evolve_depth_fade(elapsed_micros, frontend_fade_before_actor);
                 } else {
                     let (billboard_frame, wrapped) = billboard.prepare_frontend_render_frame(
                         elapsed_micros,
                         frontend_fade_before_actor,
                         shell.frontend_depth_fade_mode(),
                     );
-                    // The card stands for this frame's present.
-                    if !frontend_card_drawn {
-                        world_fx.with_process_random(|random| {
-                            render_menu(
-                                &mut *renderer,
-                                shell,
-                                &system_strings,
-                                &menu_resources,
-                                menu_fonts.as_ref(),
-                                &session.cache,
-                                &face_colors,
-                                &billboard_frame,
-                                retail_tick,
-                                random,
-                            )
-                        });
-                    }
+                    // After a card the same pump call draws and presents the
+                    // first frontend frame too (its ring takes its words).
+                    world_fx.with_process_random(|random| {
+                        render_menu(
+                            &mut *renderer,
+                            shell,
+                            &system_strings,
+                            &menu_resources,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            &face_colors,
+                            &billboard_frame,
+                            retail_tick,
+                            random,
+                        )
+                    });
+                    shell.end_cold_entry(retail_tick);
                     if wrapped {
                         GlobalSoundRuntime::new(
                             &session.cache,
@@ -4645,11 +4678,14 @@ fn run_game(
                 // The stopped session's mode routes to the frontend menu
                 // (FUN_0044FDC0 for the results and map modes, then FUN_0042A940).
                 let shell = make_menu!(false);
-                // FUN_0042B230 restarts the idle countdown from its reload,
-                // and this pass's FUN_0042B5D0 already counts (the lab's
-                // second attract expires 499 passes after the init's).
+                // FUN_0042B230 restarts the idle countdown from its reload;
+                // the init's pass runs no frontend tick.
+                if std::mem::take(&mut frontend_first_entry) {
+                    // A run that started in a world builds them here.
+                    world_fx.next_shared_retail_random_u16();
+                    world_fx.next_shared_retail_random_u16();
+                }
                 idle_countdown.enter_frontend();
-                idle_countdown.tick(elapsed_micros, window_suspended, network_game.is_some());
                 // The init's loading timer (FUN_0042D7F0) draws its card over
                 // whatever was presented last; nothing clears it first.
                 frontend_entry_card = Some(FrontendEntryCard {
@@ -4659,7 +4695,6 @@ fn run_game(
                         .is_none()
                         .then(LoadingCardTimer::arm),
                 });
-                class1_proxy.advance_proxy(elapsed_micros.min(125_000));
                 state = GameState::Menu(shell);
                 // Teardown is synchronous and must not become the first
                 // frontend clock advance.
@@ -18824,6 +18859,28 @@ fn draw_menu_backdrop(
     );
 }
 
+/// `FUN_00465870`'s root test for a menu prop (`FUN_0043B410`): the
+/// display block's focals and frame, with the row's projection centre.
+fn menu_prop_root_in_view(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    model_id: usize,
+    point: [i32; 3],
+    centre: [i32; 2],
+) -> bool {
+    let (Some(model), Some(projection)) = (
+        cache.global_model(model_id),
+        v2k_game::world_projection::WorldProjection::from_cache(cache),
+    ) else {
+        return true;
+    };
+    let [focal_x, focal_y, width, height, ..] = projection.authored_words();
+    v2k_game::game_state::native_root_in_view(
+        point,
+        model.radius,
+        [focal_x, focal_y, width, height, centre[0], centre[1]],
+    )
+}
+
 /// Render the main menu as the original 3D prop ring: the seven props
 /// (player4 vehicle, slopt, screenop, sfxopt, psjoypad, optexit, multipc)
 /// on the ring; the selected one sits at θ=0 — closest and lowest —
@@ -18886,8 +18943,14 @@ fn render_ring_3d(
         .or_else(|| v2k_game::menu_text::layout_point(cache, 0))
         .map(|(_, y)| y)
         .unwrap_or(virtual_h * 155.0 / 240.0);
-    let prop_camera = menu_camera_for_projection_y(projection_y, ui_request);
-    renderer.set_camera(&prop_camera);
+    let selected_camera = menu_camera_for_projection_y(projection_y, ui_request);
+    // A receding prop's centre drops during a fly-out (FUN_0043AA40).
+    let receding_drop = v2k_game::game_state::fly_receding_centre_drop(shell.phase);
+    let receding_camera = menu_camera_for_projection_y(projection_y + receding_drop, ui_request);
+    let centre_x = fonts
+        .and_then(|f| f.layout_point(0))
+        .or_else(|| v2k_game::menu_text::layout_point(cache, 0))
+        .map_or(0, |(x, _)| x as i32);
 
     let sel = menu.selected as f32;
     let depth_fade_color = menu_depth_fade_color(cache);
@@ -18899,6 +18962,25 @@ fn render_ring_3d(
         let theta = (i as f32 - sel + menu.scroll / 200.0) * RING_STEP_RAD;
         let selected = i == menu.selected;
         let y_in = RING_Y_IN + if selected { sel_off } else { other_off };
+        let (prop_camera, centre_y) = if selected {
+            (&selected_camera, projection_y)
+        } else {
+            (&receding_camera, projection_y + receding_drop)
+        };
+        let angle = v2k_game::game_state::ring_prop_angle(
+            menu.items.len(),
+            menu.scroll.round() as i32,
+            i as i32 - menu.selected as i32,
+        );
+        if !menu_prop_root_in_view(
+            cache,
+            model_id as usize,
+            v2k_game::game_state::ring_prop_view_point(angle, y_in as i32 as i16),
+            [centre_x, centre_y as i32],
+        ) {
+            continue;
+        }
+        renderer.set_camera(prop_camera);
         // Raw units → port world units (÷100); camera looks down −Z.
         let local_y_raw = -320.0 * theta.cos();
         let depth_raw = y_in - 1200.0 * theta.cos();
@@ -18914,7 +18996,7 @@ fn render_ring_3d(
             renderer,
             cache,
             colors,
-            &prop_camera,
+            prop_camera,
             model_id as usize,
             pos,
             menu.spin,
@@ -19498,37 +19580,51 @@ fn render_list(
         if let Some(model_id) = menu.backdrop_model {
             if cache.global_model(model_id as usize).is_some() {
                 let virtual_h = fonts.map(|f| f.virtual_h).unwrap_or(240.0);
-                let (_, projection_y) = fonts
+                let (centre_x, projection_y) = fonts
                     .and_then(|f| f.layout_point(6))
                     .or_else(|| menu_text::layout_point(cache, 6))
                     .unwrap_or((virtual_h * 2.0 / 3.0, virtual_h * 170.0 / 240.0));
+                // It recedes as an unselected prop (FUN_0043AA40).
+                let projection_y =
+                    projection_y + v2k_game::game_state::fly_receding_centre_drop(shell.phase);
                 let depth_raw = 2500.0 + other_off;
+                let in_view = menu_prop_root_in_view(
+                    cache,
+                    model_id as usize,
+                    v2k_game::game_state::ring_prop_view_point(
+                        0,
+                        (RING_Y_IN + other_off) as i32 as i16,
+                    ),
+                    [centre_x as i32, projection_y as i32],
+                );
                 let prop_camera = menu_camera_for_projection_y(projection_y, ui_request);
                 renderer.set_camera(&prop_camera);
                 let row_near_raw = frontend_frame
                     .map(|frame| frame.row_depth_fade_near_raw)
                     .unwrap_or(MENU_PROP_ROW_NEUTRAL_NEAR_RAW);
-                draw_prop(
-                    renderer,
-                    cache,
-                    colors,
-                    &prop_camera,
-                    model_id as usize,
-                    [0.0, -0x140 as f32 / 100.0, -depth_raw / 100.0],
-                    menu.spin,
-                    1.0,
-                    2,
-                    // Screen-specific foreground decoration (the monitor on
-                    // Display, speaker on Sound, etc.) keeps authored colour.
-                    MenuSceneLight::NEUTRAL,
-                    // This one-prop row has flags 0x03, so AA40 rebuilds its
-                    // band before B410. Frontend uses the post-pin world near;
-                    // pause retains a capped neutral band without S7[55] red.
-                    menu_prop_row_depth_fade(row_near_raw, depth_raw, depth_fade_color),
-                    retail_tick,
-                    v2k_game::game_state::fly_model_anim_raw(shell.phase),
-                    random,
-                );
+                if in_view {
+                    draw_prop(
+                        renderer,
+                        cache,
+                        colors,
+                        &prop_camera,
+                        model_id as usize,
+                        [0.0, -0x140 as f32 / 100.0, -depth_raw / 100.0],
+                        menu.spin,
+                        1.0,
+                        2,
+                        // Screen-specific foreground decoration (the monitor on
+                        // Display, speaker on Sound, etc.) keeps authored colour.
+                        MenuSceneLight::NEUTRAL,
+                        // This one-prop row has flags 0x03, so AA40 rebuilds its
+                        // band before B410. Frontend uses the post-pin world near;
+                        // pause retains a capped neutral band without S7[55] red.
+                        menu_prop_row_depth_fade(row_near_raw, depth_raw, depth_fade_color),
+                        retail_tick,
+                        v2k_game::game_state::fly_model_anim_raw(shell.phase),
+                        random,
+                    );
+                }
             }
         }
     }

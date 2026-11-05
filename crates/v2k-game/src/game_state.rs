@@ -383,13 +383,27 @@ impl MenuItem {
 // submenu run the FLY transition: the 0x7000 clock decays at ~45776/s →
 // 0.6264 s per leg (fly-out, stack switch, fly-in), during which the screen
 // engine's tick early-outs (input ignored) and text is hidden. After the
-// intro AVI there is a 3.0 s scene-only intro (DAT_004DB200 == 1) before
-// the ring flies in.
+// intro AVI the scene shows alone (DAT_004DB200 == 1) until the 50-Hz clock
+// passes 150, then the ring flies in.
 
-/// One fly-transition leg (0x7000 units at ~45776/s).
+/// The fly clock `DAT_004CB4E0` as `FUN_0043A8E0` arms it.
+pub const FLY_CLOCK: i32 = 0x7000;
+/// One fly leg's length at 125-ms deltas or less (about 0.6264 s).
 pub const FLY_LEG_SECS: f32 = 0.6264;
-/// Scene-only intro after the AVI (150 ticks at 50 Hz).
-pub const INTRO_SECS: f32 = 3.0;
+/// `FUN_0042BA30` ends the scene-only intro once `DAT_004FED60` passes this.
+pub const INTRO_END_TICK: u32 = 150;
+
+/// `FUN_0043C7F0`'s fly clock step: `((dt << 11) * 48000) >> 31` off the
+/// clock, which stops at zero.
+pub fn fly_clock_step(clock: i32, frame_delta_micros: u32) -> i32 {
+    let step = ((i64::from((frame_delta_micros << 11) as i32) * 48_000) >> 31) as i32;
+    let next = clock.wrapping_sub(step);
+    if next < 1 {
+        0
+    } else {
+        next
+    }
+}
 /// Selection-scroll exponential time constant (dv = −v·dt/τ, min step 1).
 pub const SCROLL_TAU: f32 = 0.2097;
 /// Ring prop spin period (DAT_004DCEB0 at ~19073 units/s → 0x10000).
@@ -398,15 +412,16 @@ pub const PROP_SPIN_SECS: f32 = 3.436;
 /// Where the menu is in its presentation cycle.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MenuPhase {
-    /// 3.0 s live-scene intro; no UI drawn, input ignored.
-    Intro { remaining: f32 },
+    /// The cold boot's live-scene intro; no UI drawn, input ignored.
+    Intro,
     /// Old screen's props fly out (text hidden); the switched-to view is
     /// held in `MenuShell::view` while `prev_view` is what's rendered.
-    FlyOut { remaining: f32 },
+    /// `clock` is `DAT_004CB4E0`, from `FLY_CLOCK` down to zero.
+    FlyOut { clock: i32 },
     /// New screen's props fly in from far.
-    FlyIn { remaining: f32 },
+    FlyIn { clock: i32 },
     /// New Game: outgoing ring fly-off and background zoom, then load Intro2.
-    GameStart { remaining: f32 },
+    GameStart { clock: i32 },
     /// Intro2 is resident and ticking behind the first Klaus/iris reveal.
     IntroReveal,
     /// Close Klaus before loading world 1, then open over that resident world.
@@ -422,17 +437,74 @@ pub enum MenuPhase {
 /// brings everything in from far (+0x7000·(1−t)/2).
 pub fn fly_offsets(phase: MenuPhase) -> (f32, f32) {
     match phase {
-        MenuPhase::FlyOut { remaining } | MenuPhase::GameStart { remaining } => {
-            let consumed = 0x7000 as f32 * (1.0 - remaining / FLY_LEG_SECS).clamp(0.0, 1.0);
-            (-consumed / 16.0, consumed / 2.0)
+        MenuPhase::FlyOut { clock } | MenuPhase::GameStart { clock } => {
+            let consumed = FLY_CLOCK - clock;
+            ((-(consumed / 16)) as f32, (consumed / 2) as f32)
         }
-        MenuPhase::FlyIn { remaining } => {
-            let clk = 0x7000 as f32 * (remaining / FLY_LEG_SECS).clamp(0.0, 1.0);
-            (clk / 2.0, clk / 2.0)
-        }
-        MenuPhase::IntroReveal | MenuPhase::PostIntro { .. } => (0.0, 0.0),
+        MenuPhase::FlyIn { clock } => ((clock / 2) as f32, (clock / 2) as f32),
         _ => (0.0, 0.0),
     }
+}
+
+/// `FUN_0043AA40` lowers a receding prop's projection centre during a
+/// fly-out by `(0x7000 - clock) / 64` framebuffer pixels; the selected prop
+/// and every fly-in keep the row's point.
+pub fn fly_receding_centre_drop(phase: MenuPhase) -> f32 {
+    match phase {
+        MenuPhase::FlyOut { clock } | MenuPhase::GameStart { clock } => {
+            ((FLY_CLOCK - clock) / 64) as f32
+        }
+        _ => 0.0,
+    }
+}
+
+/// `FUN_0043AA40`'s 16-bit ring angle for the item `index_delta` places
+/// from the selection on a ring of `count`, with the scroll interpolator
+/// `DAT_004DCEBC`.
+pub fn ring_prop_angle(count: usize, scroll_raw: i32, index_delta: i32) -> i16 {
+    let step = (0xFFFF / (count.max(1) as i32 * 200)) as i16;
+    step.wrapping_mul((scroll_raw as i16).wrapping_add((index_delta * 200) as i16))
+}
+
+/// `FUN_0043B410`'s VIEW point for a prop at ring `angle` and depth `y_in`:
+/// `(800 sin, -320 cos, y_in - 1200 cos)` in the duplicated-word Q31 sine.
+pub fn ring_prop_view_point(angle: i16, y_in: i16) -> [i32; 3] {
+    let q31 = |angle: i32, amplitude: i32| {
+        let quarter = v2k_formats::fixed_math::retail_sine_q15((angle & 0x7FFF) as u32) as u32;
+        let repeated = ((quarter << 16) | quarter) as i32;
+        let sine = if angle & 0x8000 != 0 {
+            repeated.wrapping_neg()
+        } else {
+            repeated
+        };
+        ((i64::from(sine) * i64::from(amplitude)) >> 31) as i32
+    };
+    let angle = i32::from(angle);
+    [
+        q31(angle, 800),
+        -q31(angle + 0x4000, 0x140),
+        i32::from(y_in) - q31(angle + 0x4000, 0x4B0),
+    ]
+}
+
+/// `FUN_00465870`'s root test for a model at a VIEW point under an identity
+/// context: its near depth `z + radius` must pass 0x3F and its projection,
+/// with `radius` pixels to spare, must meet the frame. `lens` is the display
+/// block `DAT_004FEED0`: focal X/Y, width, height, centre X/Y.
+pub fn native_root_in_view(point: [i32; 3], radius: u16, lens: [i32; 6]) -> bool {
+    let [x, y, z] = point.map(i64::from);
+    let [focal_x, focal_y, width, height, centre_x, centre_y] = lens.map(i64::from);
+    let near = i64::from(z as i32 + i32::from(radius));
+    if near <= 0x3F {
+        return false;
+    }
+    let margin = i64::from(radius) * near;
+    let column = centre_x * near + x * focal_x;
+    let row = centre_y * near - y * focal_y;
+    -margin <= column
+        && column < width * near + margin
+        && -margin <= row
+        && row < height * near + margin
 }
 
 /// Dynamic model callback channels 1 and 2 during a menu fly transition
@@ -442,16 +514,11 @@ pub fn fly_offsets(phase: MenuPhase) -> (f32, f32) {
 /// leaves the ring, then unwinds on the submenu fly-in.
 pub fn fly_model_anim_raw(phase: MenuPhase) -> u16 {
     let value = match phase {
-        MenuPhase::FlyOut { remaining } | MenuPhase::GameStart { remaining } => {
-            0x7000 as f32 * (1.0 - remaining / FLY_LEG_SECS).clamp(0.0, 1.0)
-        }
-        MenuPhase::FlyIn { remaining } => {
-            0x7000 as f32 * (remaining / FLY_LEG_SECS).clamp(0.0, 1.0)
-        }
-        MenuPhase::IntroReveal | MenuPhase::PostIntro { .. } => 0.0,
-        _ => 0.0,
+        MenuPhase::FlyOut { clock } | MenuPhase::GameStart { clock } => FLY_CLOCK - clock,
+        MenuPhase::FlyIn { clock } => clock,
+        _ => 0,
     };
-    value.round() as u16
+    value as u16
 }
 
 /// Signed number of ring notches to rotate when the selection moves from
@@ -791,13 +858,9 @@ impl MenuShell {
     /// flies in; returning from gameplay skips straight to the fly-in.
     pub fn new_frontend(ctx: &MenuCtx, intro: bool) -> Self {
         let phase = if intro {
-            MenuPhase::Intro {
-                remaining: INTRO_SECS,
-            }
+            MenuPhase::Intro
         } else {
-            MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS,
-            }
+            MenuPhase::FlyIn { clock: FLY_CLOCK }
         };
         Self::new_with_engine(ctx, MenuEngine::main_menu(), phase, false)
     }
@@ -810,28 +873,14 @@ impl MenuShell {
             SinglePlayerMenuKind::CampaignSave => PAUSE_SIMPLE,
         };
         let engine = MenuEngine::new(root, VIS_INGAME | VIS_INGAME_SP);
-        Self::new_with_engine(
-            ctx,
-            engine,
-            MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS,
-            },
-            true,
-        )
+        Self::new_with_engine(ctx, engine, MenuPhase::FlyIn { clock: FLY_CLOCK }, true)
     }
 
     /// `FUN_00455D60` in a network game: 4D1190 under `FUN_0043CBA0`'s
     /// network mask 1, over the world that keeps running.
     pub fn new_network_pause_menu(ctx: &MenuCtx) -> Self {
         let engine = MenuEngine::new(PAUSE_FULL, VIS_INGAME);
-        Self::new_with_engine(
-            ctx,
-            engine,
-            MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS,
-            },
-            true,
-        )
+        Self::new_with_engine(ctx, engine, MenuPhase::FlyIn { clock: FLY_CLOCK }, true)
     }
 
     /// The suspended mode `0x4D09C0` (`FUN_00451390`) entered from play: the
@@ -839,14 +888,7 @@ impl MenuShell {
     /// in-game mask (`FUN_0043CBA0`).
     pub fn new_suspended(ctx: &MenuCtx, vis_mask: u32) -> Self {
         let engine = MenuEngine::new(SUSPENDED, vis_mask);
-        Self::new_with_engine(
-            ctx,
-            engine,
-            MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS,
-            },
-            true,
-        )
+        Self::new_with_engine(ctx, engine, MenuPhase::FlyIn { clock: FLY_CLOCK }, true)
     }
 
     /// `FUN_00451390` over an open pause menu: the suspended screen goes on
@@ -903,9 +945,7 @@ impl MenuShell {
 
     fn fly_out_to_switch_away(&mut self) {
         self.prev_view = Some(self.view.clone());
-        self.phase = MenuPhase::FlyOut {
-            remaining: FLY_LEG_SECS,
-        };
+        self.phase = MenuPhase::FlyOut { clock: FLY_CLOCK };
         self.pause_switch_away = PauseSwitchAway::ResumeAfterFlyOut;
     }
 
@@ -992,6 +1032,14 @@ impl MenuShell {
         self.klaus_model_state = 0;
         self.transition_ready = false;
         self.prime_klaus_opening();
+    }
+
+    /// `FUN_0042BA30` after a scene-only draw: once the 50-Hz clock passes
+    /// 150 the menu state becomes 2, so the next tick flies the ring in.
+    pub fn end_cold_entry(&mut self, retail_tick: u32) {
+        if self.phase == MenuPhase::Intro && retail_tick > INTRO_END_TICK {
+            self.phase = MenuPhase::FlyIn { clock: FLY_CLOCK };
+        }
     }
 
     /// `FUN_0042B5D0` at the ring: the ring's pop and Klaus's command 5, as
@@ -1190,7 +1238,7 @@ impl MenuShell {
     /// the current screen otherwise. `None` during the scene-only intro.
     pub fn render_view(&self) -> Option<&MenuState> {
         match self.phase {
-            MenuPhase::Intro { .. } | MenuPhase::IntroReveal | MenuPhase::PostIntro { .. } => None,
+            MenuPhase::Intro | MenuPhase::IntroReveal | MenuPhase::PostIntro { .. } => None,
             // Retail leaves the outgoing ring screen live while its 0x7000
             // pop clock sends selected model 41 toward the camera and the
             // other props away. Text and branding are gated separately.
@@ -1274,26 +1322,18 @@ impl MenuShell {
         let dt = frame_delta_micros as f32 / 1_000_000.0;
         let mut activate_pending_slot_overlay = false;
         self.phase = match self.phase {
-            MenuPhase::Intro { remaining } => {
-                let r = remaining - dt;
-                if r <= 0.0 {
-                    MenuPhase::FlyIn {
-                        remaining: FLY_LEG_SECS,
-                    }
-                } else {
-                    MenuPhase::Intro { remaining: r }
-                }
-            }
-            MenuPhase::FlyOut { remaining } => {
-                let r = remaining - dt;
-                if r <= 0.0 {
+            // FUN_0042BA30's draw ends it (`end_cold_entry`).
+            MenuPhase::Intro => MenuPhase::Intro,
+            MenuPhase::FlyOut { clock } => {
+                let r = fly_clock_step(clock, frame_delta_micros);
+                if r == 0 {
                     if self.pause_switch_away == PauseSwitchAway::ResumeAfterFlyOut {
                         // PAUSE_FULL's switch-away callback runs at this exact
                         // 0x7000 clock boundary. Keep the fully flown-out
                         // frame renderable until the main loop consumes the
                         // deferred ResumeGame event.
                         self.pause_switch_away = PauseSwitchAway::ResumeReady;
-                        MenuPhase::FlyOut { remaining: 0.0 }
+                        MenuPhase::FlyOut { clock: 0 }
                     } else {
                         // Ordinary stack switch: drop the old view, restart
                         // the typewriter clock, reset the newly shown list
@@ -1302,32 +1342,28 @@ impl MenuShell {
                         self.ms_open = 0.0;
                         self.list_top = 0;
                         self.list_scroll = 0.0;
-                        MenuPhase::FlyIn {
-                            remaining: FLY_LEG_SECS,
-                        }
+                        MenuPhase::FlyIn { clock: FLY_CLOCK }
                     }
                 } else {
-                    MenuPhase::FlyOut { remaining: r }
+                    MenuPhase::FlyOut { clock: r }
                 }
             }
-            MenuPhase::FlyIn { remaining } => {
-                let r = remaining - dt;
-                if r <= 0.0 {
+            MenuPhase::FlyIn { clock } => {
+                let r = fly_clock_step(clock, frame_delta_micros);
+                if r == 0 {
                     self.ms_open = 0.0;
                     activate_pending_slot_overlay = self.pending_slot_overlay.is_some();
                     MenuPhase::Idle
                 } else {
-                    MenuPhase::FlyIn { remaining: r }
+                    MenuPhase::FlyIn { clock: r }
                 }
             }
-            MenuPhase::GameStart { remaining } => {
-                let r = remaining - dt;
-                if r <= 0.0 {
+            MenuPhase::GameStart { clock } => {
+                let r = fly_clock_step(clock, frame_delta_micros);
+                if r == 0 {
                     self.transition_ready = true;
-                    MenuPhase::GameStart { remaining: 0.0 }
-                } else {
-                    MenuPhase::GameStart { remaining: r }
                 }
+                MenuPhase::GameStart { clock: r }
             }
             MenuPhase::IntroReveal => MenuPhase::IntroReveal,
             MenuPhase::PostIntro { stage } => {
@@ -1357,8 +1393,13 @@ impl MenuShell {
             let decayed = v * (-dt / SCROLL_TAU).exp();
             self.view.scroll = if decayed.abs() < 1.0 { 0.0 } else { decayed };
         }
-        // Global prop spin (ring items + backdrop props).
-        let spin_step = std::f32::consts::TAU * dt / PROP_SPIN_SECS;
+        // Global prop spin (ring items + backdrop props). FUN_0043C7F0
+        // advances it only once the scene-only intro is over.
+        let spin_step = if self.phase == MenuPhase::Intro {
+            0.0
+        } else {
+            std::f32::consts::TAU * dt / PROP_SPIN_SECS
+        };
         self.view.spin = (self.view.spin + spin_step) % std::f32::consts::TAU;
         // During fly-out `render_view()` deliberately returns the outgoing
         // snapshot. DAT_004DCEB0 is global and keeps advancing, so that
@@ -1648,9 +1689,7 @@ impl MenuShell {
                 self.from_gameplay,
             ) {
                 self.prev_view = Some(old_view);
-                self.phase = MenuPhase::FlyOut {
-                    remaining: FLY_LEG_SECS,
-                };
+                self.phase = MenuPhase::FlyOut { clock: FLY_CLOCK };
                 // The list window resets when the fly commits (see update),
                 // so the outgoing list keeps its scroll during the fly-out.
             } else {
@@ -1707,9 +1746,7 @@ impl MenuShell {
                     // Command 5's background zoom reaches zero after 524 ms,
                     // but the outgoing ring remains live until the ordinary
                     // 0x7000 fly clock completes at 626.4 ms.
-                    self.phase = MenuPhase::GameStart {
-                        remaining: FLY_LEG_SECS,
-                    };
+                    self.phase = MenuPhase::GameStart { clock: FLY_CLOCK };
                     self.pending_intro_sequence_command = Some(5);
                     self.transition_ready = false;
                 }
@@ -1721,9 +1758,7 @@ impl MenuShell {
                     // arms the 0x7000 fly-out. PAUSE_FULL's 0x450E40
                     // switch-away callback owns the eventual resume boundary.
                     self.prev_view = Some(self.view.clone());
-                    self.phase = MenuPhase::FlyOut {
-                        remaining: FLY_LEG_SECS,
-                    };
+                    self.phase = MenuPhase::FlyOut { clock: FLY_CLOCK };
                     self.pause_switch_away = PauseSwitchAway::ResumeAfterFlyOut;
                     self.continue_chosen = true;
                 }
@@ -2433,11 +2468,13 @@ pub fn apply_setting_to_config(
 mod tests {
     use super::FrontendDepthFadeMode;
     use super::{
-        apply_setting_to_config, fly_model_anim_raw, fly_offsets, item_bar, ring_step_delta,
-        sync_display_settings, sync_settings_from_config, window_top, Intro2PresentationStage,
-        KlausBackdropAnimState, KlausEffects, KlausSequenceState, MenuCtx, MenuItem, MenuLayout,
-        MenuPhase, MenuShell, MenuState, PauseSwitchAway, PostIntroStage, ShellEvent,
-        SlotOverlayPage, FLY_LEG_SECS, LIST_WINDOW_ROWS,
+        apply_setting_to_config, fly_clock_step, fly_model_anim_raw, fly_offsets,
+        fly_receding_centre_drop, item_bar, native_root_in_view, ring_prop_angle,
+        ring_prop_view_point, ring_step_delta, sync_display_settings, sync_settings_from_config,
+        window_top, Intro2PresentationStage, KlausBackdropAnimState, KlausEffects,
+        KlausSequenceState, MenuCtx, MenuItem, MenuLayout, MenuPhase, MenuShell, MenuState,
+        PauseSwitchAway, PostIntroStage, ShellEvent, SlotOverlayPage, FLY_CLOCK, FLY_LEG_SECS,
+        LIST_WINDOW_ROWS,
     };
     use crate::hover::RETAIL_FRAME_DELTA_MAX_US;
     use crate::menu_data::{
@@ -2622,12 +2659,7 @@ mod tests {
         assert_eq!(shell.engine.current_va(), Some(PAUSE_FULL));
         assert_eq!(shell.engine.vis_mask, VIS_INGAME | VIS_INGAME_SP);
         assert!(shell.from_gameplay);
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyIn { clock: FLY_CLOCK });
         let labels = shell
             .view()
             .items
@@ -2776,12 +2808,7 @@ mod tests {
         assert!(shell.engine.push(crate::menu_data::OPTIONS_INGAME));
         assert!(shell.close_to_play(&ctx));
         assert_eq!(shell.engine.depth(), 1);
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: FLY_CLOCK });
         // A deactivation now is ignored, as FUN_0043A960 ignores it.
         assert!(!shell.suspend(&ctx));
         update_shell_for(&mut shell, FLY_LEG_SECS);
@@ -2818,12 +2845,7 @@ mod tests {
         let events = shell.select_continue(&ctx);
         assert!(events.contains(&ShellEvent::Sound(3)));
         assert_eq!(shell.view().selected, 0);
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: FLY_CLOCK });
         update_shell_for(&mut shell, FLY_LEG_SECS);
         assert_eq!(shell.take_switch_away_event(), Some(ShellEvent::ResumeGame));
 
@@ -2850,12 +2872,7 @@ mod tests {
 
         let events = shell.input(MenuInput::Select, &ctx);
 
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: FLY_CLOCK });
         assert_eq!(shell.view().selected, 0);
         assert!(events.contains(&ShellEvent::Sound(3)));
         assert!(!events.contains(&ShellEvent::ResumeGame));
@@ -2864,15 +2881,11 @@ mod tests {
 
         update_shell_for(&mut shell, FLY_LEG_SECS * 0.5);
         assert_eq!(shell.take_switch_away_event(), None);
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS * 0.5
-            }
-        );
+        // 125,000 + 125,000 + 63,200 us take 5,722 + 5,722 + 2,893.
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: 14_335 });
 
         update_shell_for(&mut shell, FLY_LEG_SECS * 0.5);
-        assert_eq!(shell.phase, MenuPhase::FlyOut { remaining: 0.0 });
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: 0 });
         assert_eq!(shell.take_switch_away_event(), Some(ShellEvent::ResumeGame));
         assert_eq!(shell.take_switch_away_event(), None);
     }
@@ -2959,12 +2972,7 @@ mod tests {
         let events = shell.input(MenuInput::Back, &ctx);
         assert!(events.contains(&ShellEvent::Sound(3)));
         assert_eq!(shell.engine.depth(), 1);
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: FLY_CLOCK });
     }
 
     #[test]
@@ -3122,12 +3130,7 @@ mod tests {
         assert_eq!(effects.sounds.pop(), None);
         shell.update(0, &mut effects);
         assert_eq!(effects.sounds.pop(), Some(SOUND_WHOOSH));
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: FLY_CLOCK });
         assert_eq!(shell.engine.current_va(), Some(MEMCARD_ACCESS));
         assert!(shell.overlay.is_none());
         assert!(shell.pending_slot_overlay.is_some());
@@ -3136,12 +3139,7 @@ mod tests {
         // Retail commits 0x4C1740 after the first leg and displays its slopt
         // access screen for the complete fly-in leg.
         update_shell_for(&mut shell, FLY_LEG_SECS);
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyIn { clock: FLY_CLOCK });
         let access = shell.render_view().unwrap();
         assert_eq!(access.layout, MenuLayout::VerticalList);
         assert_eq!(access.backdrop_model, Some(320));
@@ -3326,24 +3324,14 @@ mod tests {
         assert!(shell.overlay.is_none());
         assert_eq!(shell.engine.depth(), 1);
         assert_eq!(shell.pending_intro_sequence_command, Some(1));
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyOut { clock: FLY_CLOCK });
         assert_eq!(shell.render_view().unwrap().items.len(), NUM_SLOTS);
 
         shell.update(0, &mut effects);
         assert_eq!(effects.sounds.pop(), Some(SOUND_WHOOSH));
         assert_eq!(shell.klaus_sequence_state, KlausSequenceState::Idle);
         update_shell_for(&mut shell, FLY_LEG_SECS);
-        assert_eq!(
-            shell.phase,
-            MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::FlyIn { clock: FLY_CLOCK });
         update_shell_for(&mut shell, FLY_LEG_SECS);
         assert_eq!(shell.phase, MenuPhase::Idle);
         assert_eq!(shell.view().layout, MenuLayout::Carousel);
@@ -3557,28 +3545,113 @@ mod tests {
     }
 
     #[test]
+    fn fly_clock_steps_by_retail_integer_decay_and_stops_at_zero() {
+        // FUN_0043C7F0: ((dt << 11) * 48000) >> 31.
+        assert_eq!(fly_clock_step(FLY_CLOCK, 20_000), FLY_CLOCK - 915);
+        assert_eq!(fly_clock_step(FLY_CLOCK, 125_000), FLY_CLOCK - 5_722);
+        assert_eq!(fly_clock_step(915, 20_000), 0);
+        assert_eq!(fly_clock_step(916, 20_000), 1);
+        // A 20-ms leg lasts 32 passes, as the lab's game start does.
+        let mut clock = FLY_CLOCK;
+        let mut passes = 0;
+        while clock != 0 {
+            clock = fly_clock_step(clock, 20_000);
+            passes += 1;
+        }
+        assert_eq!(passes, 32);
+        assert_eq!(
+            fly_offsets(MenuPhase::FlyOut {
+                clock: FLY_CLOCK - 915
+            }),
+            (-57.0, 457.0)
+        );
+        assert_eq!(
+            fly_receding_centre_drop(MenuPhase::GameStart {
+                clock: FLY_CLOCK - 915 * 25
+            }),
+            357.0
+        );
+        assert_eq!(fly_receding_centre_drop(MenuPhase::FlyIn { clock: 1 }), 0.0);
+    }
+
+    #[test]
+    fn multipc_leaves_the_frame_after_twenty_four_passes_of_the_game_start() {
+        // The idle ring at 640x480: multipc (radius 192) is item 6, ring
+        // point (320, 310), display block 512/512/640/480. The lab reaches
+        // its sparks through the 24th pass after the attract's pop, not the
+        // 25th.
+        let angle = ring_prop_angle(7, 0, 6);
+        assert_eq!(angle, (46 * 1200) as i16);
+        let drawn = |passes: i32| {
+            let phase = MenuPhase::GameStart {
+                clock: FLY_CLOCK - 915 * passes,
+            };
+            let (_, receding) = fly_offsets(phase);
+            let y_in = (0xDAC + receding as i32) as i16;
+            let centre_y = 310 + fly_receding_centre_drop(phase) as i32;
+            native_root_in_view(
+                ring_prop_view_point(angle, y_in),
+                192,
+                [512, 512, 640, 480, 320, centre_y],
+            )
+        };
+        assert_eq!(ring_prop_view_point(angle, 0xDAC), [-670, -175, 2843]);
+        assert!((0..=24).all(drawn));
+        assert!((25..=31).all(|passes| !drawn(passes)));
+        // The near depth must pass 0x3F.
+        assert!(!native_root_in_view(
+            [0, 0, 0x3F - 10],
+            10,
+            [512, 512, 640, 480, 320, 240]
+        ));
+        assert!(native_root_in_view(
+            [0, 0, 0x40 - 10],
+            10,
+            [512, 512, 640, 480, 320, 240]
+        ));
+    }
+
+    #[test]
+    fn cold_entry_ends_in_the_draw_after_the_clock_passes_150() {
+        let mut shell = presentation_test_shell();
+        shell.phase = MenuPhase::Intro;
+        shell.view.spin = 0.0;
+        shell.update(20_000, &mut test_effects(|| 1));
+        assert_eq!(shell.phase, MenuPhase::Intro, "only the draw ends it");
+        assert_eq!(shell.view.spin, 0.0, "FUN_0043C7F0 does not run yet");
+        shell.end_cold_entry(150);
+        assert_eq!(shell.phase, MenuPhase::Intro);
+        shell.end_cold_entry(151);
+        assert_eq!(shell.phase, MenuPhase::FlyIn { clock: FLY_CLOCK });
+        shell.update(20_000, &mut test_effects(|| 1));
+        assert_eq!(
+            shell.phase,
+            MenuPhase::FlyIn {
+                clock: FLY_CLOCK - 915
+            }
+        );
+        assert!(shell.view.spin > 0.0);
+    }
+
+    #[test]
     fn fly_model_channels_reverse_at_the_stack_switch() {
         assert_eq!(
-            fly_model_anim_raw(MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS
-            }),
+            fly_model_anim_raw(MenuPhase::FlyOut { clock: FLY_CLOCK }),
             0
         );
         assert_eq!(
             fly_model_anim_raw(MenuPhase::FlyOut {
-                remaining: FLY_LEG_SECS * 0.5
+                clock: FLY_CLOCK / 2
             }),
             0x3800
         );
         assert_eq!(
-            fly_model_anim_raw(MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS
-            }),
+            fly_model_anim_raw(MenuPhase::FlyIn { clock: FLY_CLOCK }),
             0x7000
         );
         assert_eq!(
             fly_model_anim_raw(MenuPhase::FlyIn {
-                remaining: FLY_LEG_SECS * 0.5
+                clock: FLY_CLOCK / 2
             }),
             0x3800
         );
@@ -3639,11 +3712,9 @@ mod tests {
         assert!(first.take_transition_ready());
         assert_eq!(draws.get(), 53, "Opening and Hidden consume no RNG");
 
-        first.phase = MenuPhase::GameStart {
-            remaining: FLY_LEG_SECS,
-        };
+        first.phase = MenuPhase::GameStart { clock: FLY_CLOCK };
         assert!(!first.frontend_branding_visible());
-        first.phase = MenuPhase::Intro { remaining: 1.0 };
+        first.phase = MenuPhase::Intro;
         assert!(first.frontend_branding_visible());
     }
 
@@ -3753,12 +3824,7 @@ mod tests {
         // must not arm the Intro2 load by itself.
         let events = shell.apply_commands(&[MenuCommand::StartGame]);
         assert!(events.is_empty());
-        assert_eq!(
-            shell.phase,
-            MenuPhase::GameStart {
-                remaining: FLY_LEG_SECS
-            }
-        );
+        assert_eq!(shell.phase, MenuPhase::GameStart { clock: FLY_CLOCK });
         assert!(shell.render_view().is_some());
         assert!(!shell.frontend_branding_visible());
         assert_eq!(shell.menu_backdrop_anim_state().morph_progress, 0);

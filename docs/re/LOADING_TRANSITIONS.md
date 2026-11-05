@@ -471,10 +471,15 @@ so its snapshots number the card one pass after the init: after Space at
 pass 3300 in an attract world, nothing at 3300 and 3301, the card at 3302
 and the frontend from 3303.
 
-The port keeps the last presented frame when it returns to the frontend
-and, on the first frontend frame, runs that callback before the frame: the
+The init's own pass runs no frontend tick. The init's pump call then goes
+on to the first frontend tick and draw with its own delta but without the
+clock step (`FUN_0042AA10`), so in the lab the card and that first frame share
+a pass, and the next pump call's delta spans two passes. The port keeps the
+last presented frame when it enters the frontend (at the process's first
+entry too) and, on the next frame, runs that callback before the frame: the
 clock advance, `MenuShell::visit_klaus` (its random word) and the card,
-which that frame presents in place of the menu (whose update still runs).
+presented; then the frame's tick without the clock step and its draw,
+presented over the card. It carries that frame's delta into the next.
 Real time waits for the timer's callback as the world loads do; a fixed
 step takes the lab's single 7,800-us callback. The port's frontend entry
 reads no overlays, so it never draws an earlier callback's card.

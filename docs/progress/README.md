@@ -19,8 +19,8 @@ Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 491 |
-| approximated | 8 |
+| implemented | 492 |
+| approximated | 9 |
 | documented | 17 |
 | not-needed | 628 |
 
@@ -46,8 +46,8 @@ Where the code's references are thinnest:
 | [Player craft](../re/PLAYER_CRAFT.md) | 7 | 0 | 129 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 6 | 0 | 146 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 3 | 0 | 139 |
-| [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 31 |
-| [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |
+| [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 30 |
+| [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 163 |
 | [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 1 | 0 | 56 |
 | [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 11 |
