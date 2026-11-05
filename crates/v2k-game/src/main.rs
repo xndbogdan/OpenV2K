@@ -13911,6 +13911,8 @@ fn draw_gameplay_world(
         targetter.enabled,
         elapsed_micros,
         retail_tick,
+        native_viewport,
+        root_lens,
     );
 
     // Sea: wave-displaced, per-level height from the Section 10
@@ -14589,7 +14591,9 @@ fn rebuild_particle_terrain_lights(
 /// `FUN_00453710` runs the draw only with the Targetter setting (`+0x34`) on;
 /// the controller keeps updating either way. The ring's animation channels
 /// are `FUN_0044DDD0`'s: 0 the frame counter, 1 the target model radius's
-/// scale, 2 the target's health fraction.
+/// scale, 2 the target's health fraction. Each takes the root test
+/// (`FUN_00465840` at `0x44DC8C` for the ring, `0x44DDAF` for the crosshair);
+/// a rejected one is skipped.
 #[allow(clippy::too_many_arguments)]
 fn draw_targetter_overlay(
     renderer: &mut dyn v2k_render::Renderer,
@@ -14602,6 +14606,8 @@ fn draw_targetter_overlay(
     enabled: bool,
     elapsed_micros: u32,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     if !enabled || !renderer.supports_models() {
         return;
@@ -14638,34 +14644,46 @@ fn draw_targetter_overlay(
             ) = (active_model, entity_pair_to_world(target), health_channel)
             {
                 targetter.advance_ring_spin(elapsed_micros);
-                let spin =
-                    f32::from(targetter.ring_spin_raw() as u16) * std::f32::consts::TAU / 65_536.0;
-                let orientation = mat3_mul(
-                    base_orientation,
-                    orientation_from_ypr(spin, 0.0, spin * 0.5),
-                );
-                let mut vars = AnimVars::default();
-                vars.dynamic[0] = (retail_tick & 0xffff) as i32;
-                let scale_raw = targetter_model_scale_raw(active_model.collision_radius_raw);
-                vars.dynamic[1] = i32::from(scale_raw);
-                vars.dynamic[2] = i32::from(health_channel);
-                ModelTreeRenderer::new_world(
-                    renderer,
-                    cache,
-                    colors,
-                    GAMEPLAY_MODEL_SCALE,
-                    Some(MenuSceneLight::NEUTRAL),
-                    retail_tick as i32,
-                )
-                .with_view(camera.into())
-                .draw_linked(
-                    ring.model_id,
-                    orientation,
-                    camera_relative(camera, target.position),
-                    8,
-                    None,
-                    &vars,
-                );
+                // The ring's root test runs on the target's wrapped origin;
+                // the spin advanced above regardless, as retail advances
+                // `0x4F7184` before its test.
+                let admitted = match native_viewport {
+                    Some(viewport) => {
+                        let point = viewport.actor_origin_view(target.position_raw());
+                        world_model_root_in_view(cache, ring.model_id, point, root_lens)
+                    }
+                    None => true,
+                };
+                if admitted {
+                    let spin = f32::from(targetter.ring_spin_raw() as u16) * std::f32::consts::TAU
+                        / 65_536.0;
+                    let orientation = mat3_mul(
+                        base_orientation,
+                        orientation_from_ypr(spin, 0.0, spin * 0.5),
+                    );
+                    let mut vars = AnimVars::default();
+                    vars.dynamic[0] = (retail_tick & 0xffff) as i32;
+                    let scale_raw = targetter_model_scale_raw(active_model.collision_radius_raw);
+                    vars.dynamic[1] = i32::from(scale_raw);
+                    vars.dynamic[2] = i32::from(health_channel);
+                    ModelTreeRenderer::new_world(
+                        renderer,
+                        cache,
+                        colors,
+                        GAMEPLAY_MODEL_SCALE,
+                        Some(MenuSceneLight::NEUTRAL),
+                        retail_tick as i32,
+                    )
+                    .with_view(camera.into())
+                    .draw_linked(
+                        ring.model_id,
+                        orientation,
+                        camera_relative(camera, target.position),
+                        8,
+                        None,
+                        &vars,
+                    );
+                }
             }
         }
     }
@@ -14697,6 +14715,13 @@ fn draw_targetter_overlay(
     };
     let mut vars = AnimVars::default();
     vars.dynamic[0] = (retail_tick & 0xffff) as i32;
+    // The crosshair's root test runs on its own wrapped raw position.
+    if let Some(viewport) = native_viewport {
+        let point = viewport.actor_origin_view(crosshair.position_raw);
+        if !world_model_root_in_view(cache, crosshair.model_id, point, root_lens) {
+            return;
+        }
+    }
     let position = crosshair
         .position_raw
         .map(|component| f32::from(component) / 256.0);
@@ -21686,6 +21711,11 @@ mod menu_visual_tests {
             MIND_BALL_MODEL_ID,
             v2k_game::hive_wreck_presentation::HIVE_WRECK_RING_MODEL_ID,
             RETICLE_MODEL_ID,
+            v2k_game::targetter::TARGETTER_RING_EXACT_MODEL_ID,
+            v2k_game::targetter::TARGETTER_RING_NEAR_MODEL_ID,
+            v2k_game::targetter::TARGETTER_TERRAIN_CROSSHAIR_MODEL_ID,
+            v2k_game::targetter::TARGETTER_EXACT_CROSSHAIR_MODEL_ID,
+            v2k_game::targetter::TARGETTER_NEAR_CROSSHAIR_MODEL_ID,
         ] {
             // The header radius (zero for model 76) enters the same test.
             assert!(

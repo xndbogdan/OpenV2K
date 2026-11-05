@@ -280,10 +280,11 @@ instances share the ball's origin so one test after the spin is exact). Each cal
 actor way (16-bit delta plus the viewport origin, e.g. `40982E-40986D`,
 `41CC84-41CCA2`, `42150B-421542`) before the call, so the port's wrapped
 VIEW point plus the header radius is the faithful gate for each.
-The port applies it to the MindBall (whole draw), the Hive rings and the
-reticle instances in the authored frame alongside the actor bodies. Still
-without it: the particle models (not presented), `FUN_004136C0`,
-`FUN_0042F270`, `FUN_0044DB10` and the HUD model draws.
+The port applies it to the MindBall (whole draw), the Hive rings, the
+reticle instances and the Targetter ring and crosshair in the authored
+frame alongside the actor bodies. Still without it: the particle models
+(`FUN_00442BA0`/`FUN_00442CB0`, not presented), `FUN_004136C0`,
+`FUN_0042F270` and the HUD model draws (`FUN_004292B0`, `FUN_0042A6F0`).
 
 The later model entry `FUN_00464E60` separately compares signed view Z with
 the unsigned radius at model header `+0x08`. It rejects
