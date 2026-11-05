@@ -329,6 +329,7 @@ fn a_possessed_type17_that_dies_is_released_into_its_own_death() {
             retail_tick: 1597,
         },
         &session.cache,
+        &mut crate::gameplay_notifications::GameplayNotifications::new(),
         PossessionCustody {
             state: Possession::take_over(craft, body),
             native_owner: false,
@@ -454,4 +455,172 @@ fn a_dying_hives_mouth_swallows_every_body_and_releases_the_possessed_one() {
     let mut state = Possession::take_over(1, spiders[0]);
     state.swallowed();
     assert_eq!(state.countdown_ms, 1);
+}
+
+/// A native captor possessed while it carries (world 14's Type17 holding the
+/// Type9 it captured): `FUN_004480E0` keeps the row, the Player Control
+/// visit's common tail hangs the body at the row's slot (`FUN_00418640`),
+/// and the drop key's `FUN_00446D30` pops it through its row callback CAD0
+/// (`16750` with the captor), leaving it where it hangs.
+#[v2k_test_support::retail_test]
+fn a_possessed_captor_carries_its_captured_body_and_drops_it() {
+    use crate::entity::PossessedBodyFrame;
+    use crate::entity_collision_state::RetailRuntimeValue;
+    let Some(mut f) = crate::intro2_type17::capture::tests::fixture() else {
+        return;
+    };
+    let (body, child) = (f.parent, f.child);
+    assert!(live::takeover_keeps_hold(&f.manager, body));
+    let context = f.manager.player_control_context(body).expect("a context");
+    assert!(f.scheduler.release_type17_for_possession(body));
+    f.manager.possess_body_tasks(body, context);
+    let mass = f.manager.attached_mass_for_entity(body);
+    assert_eq!(
+        mass,
+        u32::from(
+            f.manager
+                .iter_all()
+                .find(|entity| entity.id == child)
+                .unwrap()
+                .mass_raw
+        )
+    );
+    let frame = PossessedBodyFrame {
+        turn_channel: 0,
+        throttle_q16: 0,
+        elapsed_micros: 20_000,
+        terrain: f.session.cache.level_terrain().unwrap(),
+        terrain_objects: f.session.cache.terrain_objects().unwrap(),
+        model_pool: &f.session.cache,
+        water_enabled: false,
+        retail_tick: 301,
+    };
+    f.manager
+        .possessed_body_player_control(body, frame)
+        .expect("the visit carries");
+    let hanging = f
+        .manager
+        .iter_all()
+        .find(|entity| entity.id == child)
+        .unwrap();
+    assert_eq!(hanging.attached_to, Some(body));
+    assert_eq!(hanging.velocity_raw(), [0; 3]);
+    let at = hanging.position_raw();
+    let parent = f
+        .manager
+        .iter_all()
+        .find(|entity| entity.id == body)
+        .unwrap();
+    // The row's slot is 110 ahead and 10 up of the pre-integration origin.
+    let reach = (0..3)
+        .map(|axis| (i32::from(at[axis]) - i32::from(parent.position_raw()[axis])).pow(2))
+        .sum::<i32>();
+    assert!((100 * 100..=130 * 130).contains(&reach), "{reach}");
+
+    let dropped = live::drop_cargo(
+        &mut live::PossessionWorld {
+            entities: &mut f.manager,
+            tasks: &mut f.scheduler,
+            world_fx: &mut f.fx,
+            retail_tick: 301,
+        },
+        &mut f.notifications,
+        body,
+    )
+    .expect("the drop runs");
+    assert_eq!(dropped, Some(child));
+    let parent = f
+        .manager
+        .iter_all()
+        .find(|entity| entity.id == body)
+        .unwrap();
+    assert!(matches!(&parent.sub_j_attachment_runtime,
+        RetailRuntimeValue::Known(Some(hold)) if hold.is_empty()));
+    assert!(parent.native_capture_relation.is_none());
+    let set_down = f
+        .manager
+        .iter_all()
+        .find(|entity| entity.id == child)
+        .unwrap();
+    assert_eq!(set_down.attached_to, None);
+    assert_eq!(set_down.position_raw(), at);
+    assert_eq!(
+        set_down.collision.state_flags_at_0x08.masked(0x1000),
+        RetailRuntimeValue::Known(0)
+    );
+    // An empty hold drops nothing.
+    assert_eq!(
+        live::drop_cargo(
+            &mut live::PossessionWorld {
+                entities: &mut f.manager,
+                tasks: &mut f.scheduler,
+                world_fx: &mut f.fx,
+                retail_tick: 301,
+            },
+            &mut f.notifications,
+            body,
+        ),
+        Ok(None)
+    );
+}
+
+/// The possessed captor's death (`FUN_00447280`) drops its hold
+/// (`FUN_00447590`) before the burst and the release, so the release finds
+/// an empty hold; a countdown's release with the body still carrying is
+/// held.
+#[v2k_test_support::retail_test]
+fn a_possessed_captor_drops_its_captive_when_it_dies_and_holds_a_carrying_release() {
+    use crate::entity_collision_state::RetailRuntimeValue;
+    for dies in [true, false] {
+        let Some(mut f) = crate::intro2_type17::capture::tests::fixture() else {
+            return;
+        };
+        let (body, child) = (f.parent, f.child);
+        let previous_context = match f
+            .manager
+            .iter_all()
+            .find(|entity| entity.id == body)
+            .unwrap()
+            .current_behavior_context
+        {
+            RetailRuntimeValue::Known(Some(context)) => context,
+            _ => panic!("a context"),
+        };
+        let context = f.manager.player_control_context(body).expect("a context");
+        assert!(f.scheduler.release_type17_for_possession(body));
+        f.manager.possess_body_tasks(body, context);
+        let custody = PossessionCustody {
+            state: Possession::take_over(0, body),
+            native_owner: true,
+            previous_context,
+        };
+        let mut world = live::PossessionWorld {
+            entities: &mut f.manager,
+            tasks: &mut f.scheduler,
+            world_fx: &mut f.fx,
+            retail_tick: 301,
+        };
+        let released = if dies {
+            live::die(&mut world, &f.session.cache, &mut f.notifications, custody)
+                .expect("the death runs")
+        } else {
+            live::release(&mut world, &f.session.cache, custody)
+        };
+        assert!(released.mind_ball.is_ok());
+        let captive = f
+            .manager
+            .iter_all()
+            .find(|entity| entity.id == child)
+            .unwrap();
+        if dies {
+            assert_eq!(released.behavior_stop, None);
+            assert_eq!(captive.attached_to, None);
+        } else {
+            assert_eq!(
+                released.behavior_stop.as_deref(),
+                Some(live::RELEASE_CARRYING_HELD)
+            );
+            assert_eq!(captive.attached_to, Some(body));
+        }
+    }
 }

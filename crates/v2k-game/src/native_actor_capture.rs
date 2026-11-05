@@ -407,6 +407,25 @@ pub(crate) fn validate_capture_relation(
     held_child(manager, id).map(|_| ())
 }
 
+/// Whether `id` is a native captor holding a captured body in its row.
+pub(crate) fn holds_captured_child(manager: &EntityManager, id: u32) -> bool {
+    matches!(held_child(manager, id), Ok(Some(_)))
+}
+
+/// `FUN_00418500` on a possessed captor's row (the drop key's
+/// `FUN_00446D30`, or the death's `FUN_00447590`): the row's first callback
+/// is CAD0, `16750` with the captor, and no Capture root follows it, so
+/// the relation ends with the row. The released child, if any.
+pub(crate) fn drop_possessed_captured_child(
+    manager: &mut EntityManager,
+    id: u32,
+    context: &mut CaptureContext<'_>,
+) -> Result<Option<u32>, CaptureBlock> {
+    let child = pop_child(manager, id, false, context)?;
+    manager.entity_mut(id).unwrap().native_capture_relation = None;
+    Ok(child)
+}
+
 fn pop_child(
     manager: &mut EntityManager,
     id: u32,

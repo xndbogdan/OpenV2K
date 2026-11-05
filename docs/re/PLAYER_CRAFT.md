@@ -1612,8 +1612,9 @@ target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
 
 **Port status: the takeover, control, release, MindBall, the body's loss,
 TAB, the cargo keys, Passive Player's smoke, the Hive's swallow and the shots
-and blasts that reach the possessed body are ported for an empty-handed
-Type17; other targets and the possessed body's pairs are held.** Selector `0x1B` fires on its 400 ms cadence with no sound
+and blasts that reach the possessed body are ported for a Type17, empty-handed
+or carrying the body it captured; other targets, the possessed body's pairs
+and the release of a body that still carries are held.** Selector `0x1B` fires on its 400 ms cadence with no sound
 (`FUN_00424650` skips a zero sound) and the A/B gun phase of any weapon; each
 launch, drained at the craft's draw, starts the lock. The lock's advance,
 search, hold test and reticle run as retail's: the retail lab's Level 1 lock
@@ -1670,6 +1671,19 @@ body's hold, `FUN_00446D30`), E turns the body's hold (`FUN_004442E0`), the
 weapon keys need its Sub-E (a Type17 has none), and TAB releases the body on
 the following visit (`FUN_004442B0`).
 
+A native captor possessed while it carries keeps the captured body in its
+row: `FUN_0040AC60` installs Player Control through `FUN_00438340` and
+`FUN_0040C6B0`, which run no callback of the old style, so Capture People's
+`FUN_0040D040` is not reached. Player Control's lift and the common tail's
+gravity read the hold's mass (`FUN_004185C0`), and the common tail hangs the
+body at the row's slot (`FUN_00418640`, from the pre-integration origin and
+the rebuilt basis). The drop key's `FUN_00446D30` and the death's
+`FUN_00447590` pop the row through `FUN_00418500`, whose first row callback
+for a captured body is CAD0 (`FUN_0040CAD0`: `FUN_00416750` with the
+captor), so the body is set down where it hangs; no Capture root follows.
+The death drops the hold before its burst and release. Retail-backed tests
+run this on world 14's captor and its captured Type9.
+
 Shots and blasts reach the possessed body through that owner, and none
 runs a behavior hook: every Player Control style has null `+20`, `+24` and
 `+28` words, so the common vtable's `FUN_0040DAC0`, `FUN_0040DA00` and
@@ -1724,12 +1738,14 @@ Held, each with one logged stop a run:
   elevation, Sub-F/I/K/L steps, and the TAB style's switch to the VTOL styles
   for a body with neither Sub-C nor Sub-I, `+20D`) and its own behavior's
   reinstall at the release.
-- A Type17 carrying a body: the takeover keeps the carried body in the hold
-  (`FUN_0040AC60` installs the new style through `FUN_00438340` and
-  `FUN_0040C6B0`, which run no callback of the old style, so Capture People's
-  `FUN_0040D040` is not reached), Player Control's lift then reads its mass
-  (`FUN_004185C0`) and the drop key pops it; the port's custody of a carried
-  body stays with its captor's owner, which the takeover removes.
+- The release of a body that still carries (the countdown or TAB; at 20 ms
+  steps the drop key never drops, below): `FUN_00446D70`'s `FUN_0040AC60`
+  gives the captor its own behavior with a full hold, which the port's captor
+  owners do not take (they take a hold only from their own Capture root, and
+  a Capture People pursuit with a full hold fails `FUN_00418410`'s test
+  rather than capturing). The release itself runs (the craft's controller and
+  the MindBall); the body keeps its captured body and stays without an owner,
+  with a logged stop.
 - The possessed body's pairs, which take the player's pair behavior
   (`FUN_00447D70`, including its `FUN_00443B50` pickup of a person, and the
   pair's damage), and so the drop key on a held person (`FUN_00446D30`) and

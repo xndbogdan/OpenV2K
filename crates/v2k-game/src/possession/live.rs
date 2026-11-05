@@ -30,6 +30,27 @@ pub struct PossessionWorld<'a> {
     pub retail_tick: u32,
 }
 
+/// The release of a body that still carries is held (see [`release`]).
+pub const RELEASE_CARRYING_HELD: &str = "held: the released body still carries its captured body; its own behavior with a full hold (FUN_0040AC60) is not ported, so it stays without an owner";
+
+fn hold_empty(entities: &EntityManager, body: u32) -> bool {
+    entities
+        .iter_all()
+        .find(|entity| entity.id == body)
+        .is_some_and(|entity| match &entity.sub_j_attachment_runtime {
+            RetailRuntimeValue::Known(Some(hold)) => hold.is_empty(),
+            RetailRuntimeValue::Known(None) => true,
+            RetailRuntimeValue::Unresolved => false,
+        })
+}
+
+/// Whether the takeover (`FUN_004480E0`) can keep `body`'s hold as the port
+/// holds it: empty, or a native captor's captured body, which stays in its
+/// row because the install runs no callback of the old style.
+pub fn takeover_keeps_hold(entities: &EntityManager, body: u32) -> bool {
+    hold_empty(entities, body) || crate::native_actor_capture::holds_captured_child(entities, body)
+}
+
 /// What the release left.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Released {
@@ -65,13 +86,19 @@ pub fn release(
         entity.current_behavior_context = RetailRuntimeValue::Known(Some(previous_context));
     }
     world.world_fx.next_shared_retail_random_u16();
+    let carrying = !hold_empty(world.entities, body);
     let dying = world
         .entities
         .iter_all()
         .find(|entity| entity.id == body)
         .map(|entity| entity.collision.state_flags_at_0x08.masked(DYING_STATE_BIT))
         == Some(RetailRuntimeValue::Known(DYING_STATE_BIT));
-    let behavior_stop = if dying && native_owner {
+    let behavior_stop = if carrying {
+        // FUN_0040AC60 gives the body its own behavior with the captured body
+        // still in its hold; the port's captor owners take a hold only from
+        // their own Capture root.
+        Some(RELEASE_CARRYING_HELD.to_owned())
+    } else if dying && native_owner {
         match crate::intro2_common_dying::publish_intro2_common_dying_alternate(
             world.entities,
             body,
@@ -160,6 +187,9 @@ pub enum PossessedContactBlock {
     UnsupportedStaticKind(u32),
     Damage(String),
     Death(&'static str),
+    /// The hold is not a captor's captured row: the possessed body's own
+    /// pickups (`FUN_00443B50`'s rows) are held.
+    Cargo,
 }
 
 /// The static contact's tail in `FUN_00412CF0`'s order: the style's `+1C`
@@ -241,6 +271,38 @@ pub fn deliver_static_contact(
     checked_damage(world, resources, notifications, delivery, custody).map(|(released, _)| released)
 }
 
+/// `FUN_00418500` on the possessed body's hold, from the drop key
+/// (`FUN_00446D30`) or the death (`FUN_00447590`): the last row's callback
+/// runs. A captor's captured body takes CAD0 (`FUN_0040CAD0`, `16750` with
+/// the captor) and is set down where it hangs. The released body, or `None`
+/// for an empty hold.
+pub fn drop_cargo(
+    world: &mut PossessionWorld<'_>,
+    notifications: &mut GameplayNotifications,
+    body: u32,
+) -> Result<Option<u32>, PossessedContactBlock> {
+    if hold_empty(world.entities, body) {
+        return Ok(None);
+    }
+    if !crate::native_actor_capture::holds_captured_child(world.entities, body) {
+        return Err(PossessedContactBlock::Cargo);
+    }
+    crate::native_actor_capture::drop_possessed_captured_child(
+        world.entities,
+        body,
+        &mut crate::native_actor_capture::CaptureContext {
+            resources: None,
+            tasks: &mut *world.tasks,
+            world_fx: &mut *world.world_fx,
+            notifications,
+            retail_tick: world.retail_tick,
+            result_screen: crate::main_base_type9_abort::MainBaseType9ResultScreenState::NotShown,
+            hive_dying: Default::default(),
+        },
+    )
+    .map_err(|block| PossessedContactBlock::Damage(format!("cargo drop: {}", block.reason)))
+}
+
 /// `FUN_00410C10` on the possessed body: health 0, the dying bit and the
 /// type's death sound; `FUN_0040DB80` finds no cleanup in the Player Control
 /// style and installs the body's Type46 source while dying, whose alternate
@@ -249,6 +311,7 @@ pub fn deliver_static_contact(
 pub fn die(
     world: &mut PossessionWorld<'_>,
     resources: &ResourceCache,
+    notifications: &mut GameplayNotifications,
     custody: PossessionCustody,
 ) -> Result<Released, PossessedContactBlock> {
     let body = custody.state.body;
@@ -267,12 +330,6 @@ pub fn die(
     if entity.collision.constructor_sound_attachment_id_at_0x8c != RetailRuntimeValue::Known(None) {
         return Err(PossessedContactBlock::Death("sound attachment"));
     }
-    if !matches!(&entity.sub_j_attachment_runtime,
-        RetailRuntimeValue::Known(Some(hold)) if hold.is_empty())
-    {
-        // FUN_00447590 pops each row through FUN_00418500.
-        return Err(PossessedContactBlock::Death("cargo drop"));
-    }
     let entity = world.entities.entity_mut(body).expect("found above");
     entity.collision.health_raw = RetailRuntimeValue::Known(0);
     entity
@@ -285,6 +342,9 @@ pub fn die(
             .world_fx
             .queue_networked_positional_sound_raw(sound, position);
     }
+    // FUN_00447590: every row of the hold through FUN_00418500.
+    while drop_cargo(world, notifications, body)?.is_some() {}
+    let entity = world.entities.entity_mut(body).expect("found above");
     // FUN_004475F0: the burst sized by half the radius of the model the
     // dying state selects, and sound 0x3E.
     let RetailRuntimeValue::Known(flags) = entity.collision.state_flags_at_0x08.masked(u32::MAX)
@@ -463,14 +523,15 @@ fn checked_damage(
                 retail_tick,
             }),
         },
-        |entities, world_fx, _feedback| {
+        |entities, world_fx, feedback| {
             let mut world = PossessionWorld {
                 entities,
                 tasks,
                 world_fx,
                 retail_tick,
             };
-            released = Some(die(&mut world, resources, custody)?);
+            let feedback = feedback.ok_or(PossessedContactBlock::Death("feedback"))?;
+            released = Some(die(&mut world, resources, feedback.notifications, custody)?);
             Ok::<_, PossessedContactBlock>(LiveActorDeathResult {
                 returned_nonzero: true,
                 publication: None::<()>,
@@ -543,7 +604,7 @@ impl crate::entity::DynamicRadialLiveCallbacks for PossessedRadialCallbacks<'_> 
         _kind: u32,
         world_fx: &mut WorldFx,
         retail_tick: u32,
-        _notifications: &mut GameplayNotifications,
+        notifications: &mut GameplayNotifications,
     ) -> Option<
         Result<
             LiveActorDeathResult<crate::entity::DynamicRadialDeathPublication>,
@@ -558,6 +619,7 @@ impl crate::entity::DynamicRadialLiveCallbacks for PossessedRadialCallbacks<'_> 
                 retail_tick,
             },
             self.resources,
+            notifications,
             self.custody,
         );
         Some(match result {

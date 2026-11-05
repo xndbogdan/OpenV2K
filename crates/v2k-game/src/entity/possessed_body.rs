@@ -61,7 +61,8 @@ pub enum PossessedBodyBlock {
     BodyBasis,
     StateFlags,
     SubARuntime,
-    /// The body carries cargo, whose mass the lift reads (`FUN_004185C0`).
+    /// The body's hold is not a native captor's captured row, or its
+    /// carried pose (`FUN_00418640`) stopped.
     Cargo,
     SubH,
     /// `FUN_0041D0A0` finished a stride, whose cue is not ported here.
@@ -154,17 +155,28 @@ impl EntityManager {
         let RetailRuntimeValue::Known(propulsion_target_raw) = propulsion.target_speed_raw() else {
             return Err(PossessedBodyBlock::SubARuntime);
         };
-        if !matches!(&entity.sub_j_attachment_runtime,
-            RetailRuntimeValue::Known(Some(runtime)) if runtime.is_empty())
-        {
-            return Err(PossessedBodyBlock::Cargo);
-        }
-        let attached_cargo_mass = 0;
+        // A captor keeps its captured body (FUN_004480E0 runs no callback of
+        // the old style); its mass reaches the lift (FUN_004185C0).
+        let carries = match &entity.sub_j_attachment_runtime {
+            RetailRuntimeValue::Known(Some(runtime)) if runtime.is_empty() => false,
+            RetailRuntimeValue::Known(Some(_)) if entity.native_capture_relation.is_some() => true,
+            _ => return Err(PossessedBodyBlock::Cargo),
+        };
         let RetailRuntimeValue::Known(state_flags) =
             entity.collision.state_flags_at_0x08.masked(u32::MAX)
         else {
             return Err(PossessedBodyBlock::StateFlags);
         };
+        let RetailRuntimeValue::Known(attached_cargo_mass) =
+            self.attached_mass_for_entity_state(id)
+        else {
+            return Err(PossessedBodyBlock::Cargo);
+        };
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .expect("found above");
         let active_model_extent_raw = entity
             .model_index
             .and_then(|model| frame.model_pool.global_model(model))
@@ -319,6 +331,17 @@ impl EntityManager {
         }
         entity.set_rotation_heading_pitch_roll_raw(angles);
         entity.set_motion_raw(position_raw, velocity_raw);
+        if carries {
+            // 413135: Sub-J (FUN_00418640) after the type callback, from the
+            // pre-integration origin and the rebuilt basis.
+            crate::native_actor_capture::update_carried_pose(self, id)
+                .map_err(|_| PossessedBodyBlock::Cargo)?;
+        }
+        let entity = self
+            .entities
+            .iter_mut()
+            .find(|entity| entity.id == id)
+            .expect("found above");
         commit_known_common_master_motion(entity, elapsed);
 
         let contact = possessed_static_contact(entity, frame)?;

@@ -1141,8 +1141,7 @@ struct PossessionFrame<'a> {
 enum TakeoverHeld {
     /// Player Control runs only on a Type17 here.
     Type(u32),
-    /// The target carries a body, which stays in its hold: the lift reads its
-    /// mass, and the carried body's custody stays with the captor's owner.
+    /// The target's hold is not a native captor's captured row.
     Carrying,
     /// The target has no owner this port can hand over.
     Custody,
@@ -1166,9 +1165,7 @@ fn take_over_possession_target(
     if entity.entity_type != 17 {
         return Err(TakeoverHeld::Type(entity.entity_type));
     }
-    if !matches!(&entity.sub_j_attachment_runtime,
-        RetailRuntimeValue::Known(Some(hold)) if hold.is_empty())
-    {
+    if !v2k_game::possession::live::takeover_keeps_hold(em, target) {
         return Err(TakeoverHeld::Carrying);
     }
     let native_owner =
@@ -1231,14 +1228,25 @@ fn advance_possession(frame: PossessionFrame<'_>) {
         if body_live
             && em.tick_possessed_beam(elapsed_micros, beam_expiry)
                 == Some(v2k_game::entity::BeamCommand::Drop)
-            && em.iter_all().any(|entity| {
-                entity.id == state.body
-                    && !matches!(&entity.sub_j_attachment_runtime,
-                        RetailRuntimeValue::Known(Some(hold)) if hold.is_empty())
-            })
-            && stops.insert("possessed drop")
         {
-            eprintln!("Possession held: the drop key on a possessed body's hold (FUN_00446D30, FUN_00418500) is not ported");
+            match v2k_game::possession::live::drop_cargo(
+                &mut v2k_game::possession::live::PossessionWorld {
+                    entities: em,
+                    tasks,
+                    world_fx,
+                    retail_tick,
+                },
+                notifications,
+                state.body,
+            ) {
+                Ok(Some(child)) => log!("Possession: body {} dropped {child}", state.body),
+                Ok(None) => {}
+                Err(block) => {
+                    if stops.insert("possessed drop") {
+                        eprintln!("Possession: the possessed body's drop stopped: {block:?}");
+                    }
+                }
+            }
         }
         if !body_live {
             // FUN_00446640 never runs; the frame's end kills the player.
