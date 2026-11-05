@@ -1124,3 +1124,5 @@ address,status,note
 0x0041B9C0,implemented,Sub-G +0x41 from the controller's Self Righting word (docs/re/MENU_SYSTEM.md#the-attract-demo-in-the-port)
 0x00401BB0,implemented,the common mover's two target corrections around Sub-G: Sub-G +0x1C/+0x1E and Sub-E's method word (docs/re/MENU_SYSTEM.md#the-attract-demo-in-the-port)
 0x00456F10,implemented,the session phase (docs/re/MENU_SYSTEM.md#the-attract-demo-in-the-port)
+0x0040A9F0,implemented,actor type-14 selector routing; undrawn pass holds Sub-M and the live +3C record (docs/re/GAME_MECHANICS.md#shot-origins-for-undrawn-actors)
+0x00413BE0,implemented,transform-only pass for queued shots without muzzles (docs/re/GAME_MECHANICS.md#shot-origins-for-undrawn-actors)

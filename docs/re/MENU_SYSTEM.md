@@ -1202,14 +1202,13 @@ where retail's draw pass has spent 129 more words on `FUN_00456AF0` and
 `FUN_00433530`): the craft's position, velocity and attitude match the lab's
 every tick through tick 8, and within one raw unit through tick 175 once its
 view-detail bits are held as retail's (the port's phase-4 camera classifies it
-coarse from the third tick, so its scheduler waits). They part where retail's
-craft kills its target and the port's craft cannot fire (below).
+coarse from the third tick, so its scheduler waits). They parted where
+retail's craft kills its target, at a time when the port's craft could not
+fire undrawn. Its transform-only pass (`FUN_0040A9F0` with Sub-G) now runs,
+and that comparison has not been run again.
 
 **Held, each with a logged stop:**
 
-- its shots, whenever their muzzle is not stamped: the transform-only pass
-  (`FUN_0040A9F0`) for a body with Sub-G is not ported ("shot drain stopped:
-  TransformPass(UnportedSelectorOwner)");
 - damage to it (`FUN_004484A0`, type 46's modifier) and its death into class
   25, which park it ("Attract demo craft N stopped");
 - a demo after a played world: the session record then holds that world's

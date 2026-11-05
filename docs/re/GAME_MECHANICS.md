@@ -1495,9 +1495,24 @@ shot outside both windows left from its centre with its mark still 1.
 Type57's and Type10's guns sit on children turned by joint words the lab
 did not log, so the comparison covers the ant. The port does not own Sub-E
 in the draw of an actor without Sub-H, so such an actor in full detail takes
-the transform pass's stamp, which leaves out the camera view's rounding. An
-actor whose type has Sub-M or a live joint owner stops the pass with a
-logged `UnportedSelectorOwner`; no firing type has one.
+the transform pass's stamp, which leaves out the camera view's rounding.
+
+After Sub-H and Sub-E, `FUN_0040A9F0` gives one selector to Sub-M (type
+`+104`, `FUN_004198E0`) and two to the component table's `+3C` record
+(`FUN_00421AE0`). It never reads the authored Sub-G at type `+E8`.
+`FUN_00409A80` zeroes `+3C` for every actor, and only the Queen's
+`FUN_00421B40` fills it. So the Sub-G gunners (Types 5, 10, 13, 15, 55, 57, 87
+and 108 among them) run the pass as if they had no Sub-G: Sub-E stamps their
+muzzles and their remaining selectors reach the terminal suffix. Two owners
+still stop the pass with a logged error, and neither occurs in the port's
+queues:
+
+- Sub-M (Types 6, 66, 82 and 125), with `SubMSelectorOwner`. `FUN_004198E0`
+  moves the factory's product and clears every queued mark, so the shot keeps
+  its queued position. A Sub-M type queues only through `FUN_00419010` in a
+  network game.
+- A live `+3C` record, with `LiveJointRecord`. That is the Queen, whose guns
+  fire without queued shots.
 
 The shared retail path `FUN_0042AF00` dispatches `FUN_00412DA0` before it later
 reaches `FUN_00411400`. The classification written by presentation therefore
