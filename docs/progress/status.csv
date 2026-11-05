@@ -1139,3 +1139,7 @@ address,status,note
 0x0046E020,implemented,model vertex type 3 near pass: source VIEW plus three process words; the idle ring's words match the lab (docs/re/FORMAT_DOCUMENTATION.md)
 0x0046E0E0,implemented,model vertex type 3 far pass: source VIEW plus three process words (docs/re/FORMAT_DOCUMENTATION.md)
 0x0046DF70,documented,model vertex type 3 transform-only pass; the actor transform pass is not lent the generator and stops (docs/re/FORMAT_DOCUMENTATION.md)
+0x00427050,implemented,static-object type-14 callback: the node's X/Z and world Y zero, in the float and native world views (docs/re/CLOSING_SCENE.md)
+0x0046ECF0,implemented,model vertex type 14 transform-only pass: the callback point less the viewport origin, in VIEW (docs/re/CLOSING_SCENE.md)
+0x0046EE70,implemented,model vertex type 14 near pass: the callback point less the viewport origin, in VIEW (docs/re/CLOSING_SCENE.md)
+0x0046F010,implemented,model vertex type 14 far pass: the callback point less the viewport origin, in VIEW (docs/re/CLOSING_SCENE.md)

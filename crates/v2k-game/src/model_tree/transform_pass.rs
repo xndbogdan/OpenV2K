@@ -226,6 +226,7 @@ impl TransformWalk<'_> {
             // FUN_0046DF70 would draw words here; no pass is lent the
             // generator yet, so a reached tf3 slot stops with its type.
             jitter: ModelJitterOwner::new(model_id, None, transform),
+            fixed_world_point_raw: None,
         };
         let context = ModelMaterializationContext {
             vars,

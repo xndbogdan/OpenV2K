@@ -99,6 +99,15 @@ arrival; `main.rs` runs the scene in the ordinary world loop without a player,
 with the proxy as the camera, and the two legs as `ClosingSceneLeg`.
 `{"closing_scene": [x, y, z]}` starts it directly for probes.
 
+Overlay 49's terrain places static rope ladders (`ropelad`, model 878).
+Their record 0 is type 14: `FUN_00427090` lends static objects the callback
+`FUN_00427050`, which returns the node's own X/Z words and world Y zero, and
+the type-14 handlers (`FUN_0046ECF0`, `FUN_0046EE70`, `FUN_0046F010`)
+subtract the viewport origin and turn the point into VIEW. Slots 4/5 add
+slots 2/3 to it (type 7), and slots 14/15 pin those to the surface (type
+13). The port's static draws give type-14 slots that VIEW point, so the
+ladder draws in the native world view instead of stopping.
+
 Matched against a lab run at 20 ms, the port's frames agree for the first
 ten seconds: the olive opening, "WELL DONE!", the first village shots.
 Later shots follow people and the ant whose own motion parts from retail.
@@ -113,9 +122,6 @@ Later shots follow people and the ant whose own motion parts from retail.
 - The people's wander differs after a few seconds (their choices draw from
   the shared RNG, which the port does not run in lockstep), so the later
   village shots show other poses.
-- Model 878's two type-14 external-frame records (consumer slots 14 and 15)
-  have no owner in the retail view; their callback geometry is skipped and
-  logged.
 - Whether global sound 50, which the port plays when world 13 loads after
   Intro2, also accompanies overlay 49's load is unproven; the port does not
   play it there.

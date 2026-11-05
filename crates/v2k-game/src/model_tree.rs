@@ -219,6 +219,8 @@ struct WorldModelVertexResolver<'a> {
     /// resolves a tf14 vertex only for a face it keeps.
     admit_every_face: bool,
     jitter: ModelJitterOwner<'a>,
+    /// A static object's fixed callback point (`FUN_00427050`), raw world.
+    fixed_world_point_raw: Option<[i32; 3]>,
 }
 
 impl ModelVertexResolver for WorldModelVertexResolver<'_> {
@@ -322,9 +324,19 @@ impl ModelVertexResolver for WorldModelVertexResolver<'_> {
     }
 
     fn resolve_native_view_point(&self, slot: u16, _vars: &AnimVars) -> Option<[i32; 3]> {
-        let (frame, _) = self.native_context.as_ref()?;
+        let (frame, viewport) = self.native_context.as_ref()?;
         let &[kind, a, b, c] = self.model.records.get(usize::from(slot >> 1))?;
-        matches!(kind, 0 | 4).then(|| frame.plain_slot_view_raw(slot, kind, [a, b, c]))
+        match kind {
+            0 | 4 => Some(frame.plain_slot_view_raw(slot, kind, [a, b, c])),
+            // FUN_0046ECF0/0046EE70/0046F010 subtract the viewport origin from
+            // the callback's point and turn it into VIEW; both slots share it.
+            14 => self.fixed_world_point_raw.map(|point| {
+                viewport.world_vector_to_view(std::array::from_fn(|axis| {
+                    point[axis].wrapping_sub(viewport.origin_raw[axis])
+                }))
+            }),
+            _ => None,
+        }
     }
 
     fn resolve_native_spatial_point(
@@ -1787,6 +1799,7 @@ impl<'a> ModelTreeRenderer<'a> {
             self.view_policy.view().is_some() && self.external_frame.owns_external_vertices();
         let native_view = self.external_frame.native_view_selection();
         let native_context = self.external_frame.native_context();
+        let fixed_world_point_raw = self.external_frame.native_fixed_world_point_raw();
         let owner = RefCell::new(&mut self.external_frame);
         let resolve_external = |parameters, node_view: &mut dyn FnMut(u16) -> Option<[i32; 3]>| {
             owner
@@ -1817,6 +1830,7 @@ impl<'a> ModelTreeRenderer<'a> {
                 native_vertex_failures: RefCell::new(Vec::new()),
                 admit_every_face: false,
                 jitter: jitter(),
+                fixed_world_point_raw,
             });
         let frontend_vertex = (world_vertex.is_none() && self.process_random.is_some())
             .then(|| FrontendModelVertexResolver { jitter: jitter() });
@@ -4747,6 +4761,119 @@ mod tests {
             body.native_light_raw,
             Some(frame.model_light_raw(body.light_direction_raw))
         );
+    }
+
+    /// Overlay 49's static `ropelad` (model 878) hangs from `FUN_00427050`'s
+    /// point: its tf14 slots take that callback's VIEW words, so the tf7 rope
+    /// end and its tf13 surface pins draw instead of stopping.
+    #[v2k_test_support::retail_test]
+    fn static_rope_ladder_takes_its_callback_point_in_view() {
+        use crate::native_model_frame::{NativeModelFrame, NativeWorldViewport};
+        use v2k_render::projection::{
+            NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
+        };
+        let data = v2k_test_support::retail_dir();
+        let mut session = crate::session::GameSession::init(&data).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        session.load_level_by_id(49, 1).unwrap();
+        let cache = &session.cache;
+        let model = cache.global_model(878).unwrap();
+        assert_eq!(model.name.as_deref(), Some("ropelad"));
+        assert_eq!(model.records[0], [14, 0, 0, 0]);
+        let (terrain, objects) = (cache.terrain().unwrap(), cache.terrain_objects().unwrap());
+        let ladder = (0..256)
+            .flat_map(|z| (0..256).map(move |x| (x, z)))
+            .find_map(|(x, z)| {
+                let cell = terrain.cell(x, z)?;
+                let record = objects.records.get(usize::from(cell.attribute))?;
+                (cell.attribute != 0 && record.model_id_for(cell.terrain_type) == 878)
+                    .then_some((x as f32, z as f32))
+            })
+            .expect("overlay 49 places a rope ladder");
+        let instance = crate::static_objects::collect_static_terrain_objects(
+            terrain,
+            objects,
+            [ladder.0 + 0.5, 4.0, ladder.1 + 6.5],
+            [0.0, 0.0, -1.0],
+            (24, 24),
+        )
+        .into_iter()
+        .find(|object| object.model_id == 878)
+        .expect("the ladder is in the footprint");
+        let origin_raw = instance
+            .position
+            .map(|value| (value * 256.0).round() as i32 as i16);
+        let viewport = NativeWorldViewport {
+            origin_raw: [
+                i32::from(origin_raw[0]) + 100,
+                i32::from(origin_raw[1]) + 1024,
+                i32::from(origin_raw[2]) + 1536,
+            ],
+            axes_q31: [
+                [-2147347834, 0, 0],
+                [0, 2072352042, -560095147],
+                [0, -560130571, -2072483113],
+            ],
+            identity: false,
+        };
+        let frame = NativeModelFrame::from_static_object(viewport, origin_raw);
+        let frame_for_check = frame.clone();
+        let colors = ModelMaterialCache::new();
+        let mut renderer = RecordingRenderer::default();
+        let mut tree =
+            ModelTreeRenderer::new_world(&mut renderer, cache, &colors, 100.0 / 256.0, None, 0)
+                .with_scene_projection_authority(SceneProjectionAuthority::Native(
+                    NativeScreenProjection::new(
+                        [512, 512],
+                        [320, 240],
+                        [640, 480],
+                        ProjectionEffect::None,
+                    )
+                    .unwrap(),
+                ))
+                .with_view(ModelTreeView {
+                    position: viewport.origin_raw.map(|value| value as f32 / 256.0),
+                    forward: [0.0, 0.0, -1.0],
+                })
+                .with_native_external_frame(
+                    ExternalFrameMode::WorldPoint(instance.external_frame_world_point()),
+                    Some((frame, viewport)),
+                );
+        tree.draw_linked(
+            878,
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            instance.position,
+            8,
+            None,
+            &AnimVars::default(),
+        );
+        assert_eq!(tree.native_vertex_failures(), &[]);
+        drop(tree);
+        let body = renderer.bodies.first().expect("rope ladder body");
+        assert!(!body.triangles.is_empty());
+        let callback = [i32::from(origin_raw[0]), 0, i32::from(origin_raw[2])];
+        let anchor = viewport.world_vector_to_view(std::array::from_fn(|axis| {
+            callback[axis] - viewport.origin_raw[axis]
+        }));
+        // Slots 4/5 (tf7) add slots 2/3 to the anchor, less the node origin.
+        let mut rope_ends: Vec<_> = (0..body.vertices.len())
+            .filter(|&index| body.vertex_type_flags[index] == 7)
+            .map(|index| body.vertex_view_raw[index].unwrap())
+            .collect();
+        rope_ends.sort();
+        let mut expected: Vec<_> = [2, 3]
+            .map(|slot| {
+                let top = frame_for_check.plain_slot_view_raw(slot, 0, [51, 768, 0]);
+                v2k_formats::models::ModelNativeSpatialGenerator::VectorSum {
+                    first: anchor,
+                    second: top,
+                }
+                .evaluate(frame_for_check.origin_view_raw)
+            })
+            .to_vec();
+        expected.sort();
+        assert_eq!(rope_ends, expected);
+        assert!(body.vertex_view_raw.iter().all(Option::is_some));
     }
 
     #[v2k_test_support::retail_test]

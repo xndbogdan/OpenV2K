@@ -525,6 +525,7 @@ fn retail_spatial_generators_receive_native_view_for_both_parities_and_current_p
                 native_vertex_failures: RefCell::new(Vec::new()),
                 admit_every_face: false,
                 jitter: super::super::ModelJitterOwner::unlent(),
+                fixed_world_point_raw: None,
             };
             for phase in [0, 0x8000, 0xffff] {
                 let mut vars = AnimVars::default();
