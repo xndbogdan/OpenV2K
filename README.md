@@ -13,11 +13,13 @@ its data formats, and observed retail runtime behavior.
 
 ## Status
 
-The first world, **Level 1**, is playable. That includes the retail frontend
-(intro, menu ring, New Game / Load / settings), native save loading and campaign
-checkpoints. Later worlds load, but many actors still lack their recovered
-behavior. The main open work is shared actor tasks, movement and lifecycle
-ownership. Network play, retail's deathmatch for up to eight players, runs
+The whole campaign plays, from **Level 1** to the Queen and the closing scene.
+That includes the retail frontend (intro, menu ring, New Game / Load /
+settings, the attract demo), native save loading, campaign checkpoints and the
+cheats. Every map-placed actor in the 36 campaign worlds runs its recovered
+retail behavior. Pieces that are not proven yet stop with a logged message
+instead of guessing; the largest are the Possession Ray's takeover and its
+MindBall. Network play, retail's deathmatch for up to eight players, runs
 between port machines over the port's own transport; its held parts are in
 [`docs/re/MULTIPLAYER.md`](docs/re/MULTIPLAYER.md#the-port).
 [`docs/re/PORT_FIDELITY_GAPS.md`](docs/re/PORT_FIDELITY_GAPS.md) and
