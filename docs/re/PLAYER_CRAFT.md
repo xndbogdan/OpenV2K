@@ -1612,9 +1612,11 @@ target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
 
 **Port status: the takeover, control, release, MindBall, the body's loss,
 TAB, the cargo keys, Passive Player's smoke, the Hive's swallow and the shots
-and blasts that reach the possessed body, and its pairs with bodies other
-than the craft, are ported for a Type17, empty-handed or carrying the body it
-captured; other targets, the body's own pickups, the craft's pairs and the
+and blasts that reach the possessed body, its pairs with bodies other
+than the craft, and the craft's pairs with bodies other than weapons,
+sharks and `0xC00` carriers, are ported for a Type17, empty-handed or carrying the body it
+captured; other targets, the body's own pickups, the craft's pairs with
+weapons, sharks and `0xC00` carriers, and the
 release of a body that still carries are held.** Selector `0x1B` fires on its 400 ms cadence with no sound
 (`FUN_00424650` skips a zero sound) and the A/B gun phase of any weapon; each
 launch, drained at the craft's draw, starts the lock. The lock's advance,
@@ -1782,9 +1784,17 @@ Held, each with one logged stop a run:
   against a body without `0xC00`: the other body's hook is skipped, the
   response and collision damage run, and the walk that met the pair ends
   there. In the lab three of those pairs (1800 each, source type 46) killed
-  the possessed body. The port's player adapter assumes the craft's own
-  controller, so every touching craft pair is held before its visit while a
-  body is possessed (`PassivePlayer`).
+  the possessed body. The port runs this visit for ordinary pairs: both
+  behavior hooks take the null branch (the other body's is skipped), both
+  A900 chains run, the mass-weighted response moves both bodies (the craft
+  through the general visit, exempt from the body-custody gate as the
+  possessed body is), the collision damage runs in both directions (to the
+  craft through the player path, to the possessed body through its release
+  path), and the subject's walk ends after the pair. A retail-backed test
+  runs this on world 14's craft against a second spider, with a person
+  holding the `0xC00` stop in the same walk. Held: the craft's pairs with
+  weapons and sharks, whose lanes assume the craft's own controller, and
+  against a body with `0xC00`, whose branch is not ported (`PassivePlayer`).
 
 Two things retail does not allow, so nothing is held for them:
 

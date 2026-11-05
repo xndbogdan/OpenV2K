@@ -743,7 +743,18 @@ fn resolve(
             .into_iter()
             .any(owns_native_weapon_contact);
         let possession = frame.actor_tasks.possession.map(|custody| custody.state);
-        if possession.is_some_and(|state| state.craft == id || state.craft == candidate_id) {
+        let craft_pair =
+            possession.is_some_and(|state| state.craft == id || state.craft == candidate_id);
+        // Passive Player's `447D70` fails `443AF0` and returns `0x4C20C0`
+        // against a body without `0xC00`: the other hook is skipped, the
+        // response and collision damage run, and the walk ends there. Weapon
+        // and shark pairs keep the held stop: their lanes assume the craft's
+        // own controller.
+        if craft_pair
+            && (pair_weapon
+                || is_native_shark_player_pair(frame.entities, subject, candidate)
+                || is_native_type29_player_pair(frame.entities, subject, candidate))
+        {
             if let Ok(Some(contact)) = classify_oriented_active_pair_contact(
                 crate::player_active_contact::OrientedActivePairContactRequest {
                     subject,
@@ -766,82 +777,89 @@ fn resolve(
             continue;
         }
         let possessed = possession.map(|state| state.body);
+        // A possessed craft's pairs take the general visit below with
+        // Passive Player's `447D70`, not the player adapter (which assumes
+        // the craft's own controller) nor the ownerless stop.
         // The wreck's pairs with native-owned bodies take this walk below.
-        if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player)
-            .filter(|_| !is_native_player_walk_pair(frame.entities, subject, candidate))
-        {
-            let types = [subject.entity_type, candidate.entity_type];
-            let dying = playing_player
-                .as_ref()
-                .is_some_and(|playing| playing.hull.dying);
-            let reason = if dying {
-                // The wreck against a body without a native owner (the
-                // adapter's census-only bodies): a stop where it touches.
-                matches!(
-                    classify_oriented_active_pair_contact(
-                        crate::player_active_contact::OrientedActivePairContactRequest {
-                            subject,
-                            candidate,
-                            subject_entry,
-                            retail_tick: frame.retail_tick,
+        if !craft_pair {
+            if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player)
+                .filter(|_| !is_native_player_walk_pair(frame.entities, subject, candidate))
+            {
+                let types = [subject.entity_type, candidate.entity_type];
+                let dying = playing_player
+                    .as_ref()
+                    .is_some_and(|playing| playing.hull.dying);
+                let reason = if dying {
+                    // The wreck against a body without a native owner (the
+                    // adapter's census-only bodies): a stop where it touches.
+                    matches!(
+                        classify_oriented_active_pair_contact(
+                            crate::player_active_contact::OrientedActivePairContactRequest {
+                                subject,
+                                candidate,
+                                subject_entry,
+                                retail_tick: frame.retail_tick,
+                            },
+                            frame.resources,
+                        ),
+                        Ok(Some(_))
+                    )
+                    .then_some(ActivePairHoldReason::PlayerPair(
+                        crate::player_active_contact::PlayerActivePairError::ResumeAfterPlayerDeath {
+                            entity_id: other,
                         },
-                        frame.resources,
-                    ),
-                    Ok(Some(_))
-                )
-                .then_some(ActivePairHoldReason::PlayerPair(
-                    crate::player_active_contact::PlayerActivePairError::ResumeAfterPlayerDeath {
-                        entity_id: other,
-                    },
-                ))
-            } else {
-                visit_player_adapter_pair(frame, playing_player.as_mut(), other)
-            };
-            if let Some(reason) = reason {
-                visits.push(NativeCaptorPairVisit {
-                    candidate_id,
-                    contact: ActivePairContact {
-                        normal_q12: [0; 3],
-                        penetration_raw: 0,
-                    },
-                    stages: vec![NativeCaptorPairStage::Held(reason)],
-                    physical_suppressed: true,
-                    general_types: Some(types),
-                });
+                    ))
+                } else {
+                    visit_player_adapter_pair(frame, playing_player.as_mut(), other)
+                };
+                if let Some(reason) = reason {
+                    visits.push(NativeCaptorPairVisit {
+                        candidate_id,
+                        contact: ActivePairContact {
+                            normal_q12: [0; 3],
+                            penetration_raw: 0,
+                        },
+                        stages: vec![NativeCaptorPairStage::Held(reason)],
+                        physical_suppressed: true,
+                        general_types: Some(types),
+                    });
+                }
+                continue;
             }
-            continue;
         }
-        if let Some(other) = ownerless_player_pair(frame.entities, subject, candidate, player) {
-            // Retail visits it too; the port has no owner for the body's
-            // callbacks, so a touching pair is a stop.
-            let types = [subject.entity_type, candidate.entity_type];
-            let entity_type = actor(frame.entities, other)?.entity_type;
-            if let Ok(Some(contact)) = classify_oriented_active_pair_contact(
-                crate::player_active_contact::OrientedActivePairContactRequest {
-                    subject,
-                    candidate,
-                    subject_entry,
-                    retail_tick: frame.retail_tick,
-                },
-                frame.resources,
-            ) {
-                visits.push(NativeCaptorPairVisit {
-                    candidate_id,
-                    contact,
-                    stages: vec![NativeCaptorPairStage::Held(
-                        ActivePairHoldReason::NoBodyOwner { entity_type },
-                    )],
-                    physical_suppressed: true,
-                    general_types: Some(types),
-                });
+        if !craft_pair {
+            if let Some(other) = ownerless_player_pair(frame.entities, subject, candidate, player) {
+                // Retail visits it too; the port has no owner for the body's
+                // callbacks, so a touching pair is a stop.
+                let types = [subject.entity_type, candidate.entity_type];
+                let entity_type = actor(frame.entities, other)?.entity_type;
+                if let Ok(Some(contact)) = classify_oriented_active_pair_contact(
+                    crate::player_active_contact::OrientedActivePairContactRequest {
+                        subject,
+                        candidate,
+                        subject_entry,
+                        retail_tick: frame.retail_tick,
+                    },
+                    frame.resources,
+                ) {
+                    visits.push(NativeCaptorPairVisit {
+                        candidate_id,
+                        contact,
+                        stages: vec![NativeCaptorPairStage::Held(
+                            ActivePairHoldReason::NoBodyOwner { entity_type },
+                        )],
+                        physical_suppressed: true,
+                        general_types: Some(types),
+                    });
+                }
+                continue;
             }
-            continue;
         }
         let player_walk = is_native_player_walk_pair(frame.entities, subject, candidate);
         let pair_shark = is_native_shark_player_pair(frame.entities, subject, candidate)
             || is_native_type29_player_pair(frame.entities, subject, candidate)
             || player_walk;
-        if player == Some(id) && !pair_weapon && !pair_shark {
+        if player == Some(id) && !pair_weapon && !pair_shark && !craft_pair {
             continue;
         }
         // A possessed captor runs Player Control: its pairs take 447D70.
@@ -866,8 +884,10 @@ fn resolve(
             || hive_impact_counterpart(subject, candidate).is_some()
             || native_remote_beam_pair(frame.entities, subject, candidate).is_some();
         // The player adapter owns the player's other pairs, and the Main Base
-        // conversion and factory intake passes their deliveries.
+        // conversion and factory intake passes their deliveries. A possessed
+        // craft's pairs belong to the general visit below instead.
         if !listed
+            && !craft_pair
             && (player == Some(candidate_id) || delivery_pair_owned_elsewhere(subject, candidate))
         {
             continue;
@@ -1067,6 +1087,10 @@ fn resolve(
                 adopt_captor(frame, captor)?;
             }
         }
+        // Passive Player's `0x4C20C0` ends the walk after the response.
+        if craft_pair {
+            break;
+        }
     }
     Ok(true)
 }
@@ -1128,6 +1152,25 @@ fn general_pair_hold(
             }
             continue;
         }
+        // Passive Player's `447D70` fails `443AF0` (the controller's `+68`
+        // is the possessed body) and returns `0x4C20C0` against a body
+        // without `0xC00`. The other body's hook is skipped. A body with
+        // `0xC00` keeps the held stop: that branch is not ported.
+        if let Some(craft) = frame
+            .actor_tasks
+            .possession
+            .map(|custody| custody.state.craft)
+        {
+            if owner == craft {
+                if opposite.capability_flags & 0xc00 != 0 {
+                    return Ok(Some(ActivePairHoldReason::PassivePlayer));
+                }
+                continue;
+            }
+            if opposite.id == craft {
+                continue;
+            }
+        }
         if let Some(reason) = general_behavior_hold(entity, opposite)? {
             return Ok(Some(reason));
         }
@@ -1169,6 +1212,10 @@ fn general_pair_hold(
         .actor_tasks
         .possession
         .map(|custody| custody.state.body);
+    let craft = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.craft);
     for body in [&plan.subject, &plan.candidate] {
         let current = actor(frame.entities, body.id)?;
         if !suppressed
@@ -1176,6 +1223,7 @@ fn general_pair_hold(
                 || current.velocity_raw() != body.velocity_raw)
             && !general_body_custody(current)
             && Some(current.id) != possessed
+            && Some(current.id) != craft
         {
             return Ok(Some(ActivePairHoldReason::NoBodyOwner {
                 entity_type: current.entity_type,
@@ -1400,6 +1448,19 @@ fn behavior(
                 style: style_address(entity)?,
             })
         };
+    }
+    // Passive Player's `447D70` while a body is possessed: `443AF0` fails
+    // (the controller's `+68` is the body), so it returns `0x4C20C0`
+    // without feedback against a body without `0xC00`; the other body's
+    // hook is skipped. The general preflight holds the `0xC00` branch.
+    if let Some(craft) = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.craft)
+    {
+        if owner == craft || opposite == craft {
+            return Ok(NativeCaptorPairBehaviorResult::Null);
+        }
     }
     let context = match entity.current_behavior_context {
         RetailRuntimeValue::Known(Some(context)) => context,
@@ -1913,12 +1974,17 @@ fn physical(
         .actor_tasks
         .possession
         .map(|custody| custody.state.body);
+    let craft = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.craft);
     for body in [&plan.subject, &plan.candidate] {
         let current = actor(frame.entities, body.id)?;
         if (current.position_raw() != body.position_raw
             || current.velocity_raw() != body.velocity_raw)
             && !general_body_custody(current)
             && Some(current.id) != possessed
+            && Some(current.id) != craft
             && !((weapon_pair || shark_pair)
                 && frame
                     .entities
@@ -1960,7 +2026,9 @@ fn physical(
                         NativeCaptorPairBlock::PossessedDamage(format!("{block:?}"))
                     },
                 )?;
-            } else if weapon_pair || shark_pair {
+            } else if weapon_pair || shark_pair || Some(target) == craft {
+                // A possessed craft's own damage takes the player path, as
+                // every other player-involved general pair does.
                 apply_native_pair_checked_damage(
                     frame,
                     target,

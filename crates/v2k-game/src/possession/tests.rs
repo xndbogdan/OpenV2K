@@ -765,3 +765,235 @@ fn a_possessed_bodys_pairs_take_player_controls_pair_hook() {
     assert_eq!(released.body, f.spider);
     assert!(released.mind_ball.is_ok());
 }
+
+/// The craft's pairs while a body is possessed take Passive Player's
+/// `FUN_00447D70`: it fails `443AF0` and returns `0x4C20C0` against a body
+/// without `0xC00`, so the other hook is skipped, the response and collision
+/// damage run, and the walk ends after the pair. A body with `0xC00` keeps
+/// the held stop.
+#[v2k_test_support::retail_test]
+fn a_possessed_crafts_pairs_take_passive_players_pair_hook() {
+    use crate::entity_collision_state::RetailRuntimeValue;
+    use crate::intro2_contacts::Intro2ContactFrame;
+    use crate::native_actor_capture::pair::{
+        ActivePairHoldReason, CaptureFeedbackPolicy, NativeCaptorPairOutcome,
+        NativeCaptorPairStage, PlayingPlayerContact,
+    };
+    use crate::player_active_contact::{
+        active_pair_body_from_entity, classify_oriented_active_pair_contact,
+    };
+    use crate::player_hull::{HullDamageProfile, PlayerHull};
+
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(14);
+    let mut scheduler =
+        crate::specialized_actor_task_production::SpecializedActorTaskScheduler::new();
+    assert!(scheduler.adopt_intro2_type17(&entities) > 0);
+    let craft = entities.player().expect("a player").id;
+    let order = entities.retail_live_order_ids().collect::<Vec<_>>();
+    let rank = |id: u32| order.iter().position(|at| *at == id).unwrap();
+    let spiders: Vec<u32> = entities
+        .iter_all()
+        .filter(|entity| entity.entity_type == 17)
+        .map(|entity| entity.id)
+        .collect();
+    assert!(!spiders.is_empty(), "world 14 authors a spider");
+    let spider = spiders[0];
+    // A person after the craft: capability `0xC00`, so the craft's pair with
+    // it keeps the held stop while the spider's pair resolves.
+    let person = entities
+        .iter_all()
+        .filter(|entity| entity.entity_type == 9 && rank(entity.id) > rank(craft))
+        .map(|entity| entity.id)
+        .next()
+        .expect("a person after the craft");
+    // Both touchers after the craft, so the craft's own walk meets them in
+    // rank order.
+    assert!(
+        rank(spider) > rank(craft),
+        "the spider follows the craft in live order"
+    );
+    let touchers = [spider, person];
+
+    // The takeover with the real craft, as the existing pair test does it.
+    let previous_context = match entities
+        .iter_all()
+        .find(|entity| entity.id == spider)
+        .unwrap()
+        .current_behavior_context
+    {
+        RetailRuntimeValue::Known(Some(context)) => context,
+        _ => panic!("a context"),
+    };
+    let context = entities.player_control_context(spider).expect("a context");
+    assert!(scheduler.release_type17_for_possession(spider));
+    entities.possess_body_tasks(spider, context);
+    scheduler.possession = Some(PossessionCustody {
+        state: Possession::take_over(craft, spider),
+        native_owner: true,
+        previous_context,
+    });
+
+    // Park every body, put the craft and each toucher together, then nudge
+    // each toucher until the oriented probe reports a real overlap.
+    entities.entity_mut(craft).unwrap().physical_body_basis_q31 = RetailRuntimeValue::Known(
+        crate::common_mover::type9_attitude::Type9BodyBasis::from_angle_words(0, 0, 0),
+    );
+    let center = [4096i16, 6000, 4096];
+    for id in entities.retail_live_order_ids().collect::<Vec<_>>() {
+        entities.entity_mut(id).unwrap().set_motion_raw(
+            if id == craft || touchers.contains(&id) {
+                center
+            } else {
+                [16000, 16000, 16000]
+            },
+            [0; 3],
+        );
+    }
+    let probe = |entities: &crate::entity::EntityManager, candidate: u32| {
+        let subject = entities
+            .iter_all()
+            .find(|entity| entity.id == craft)
+            .unwrap();
+        let candidate = entities
+            .iter_all()
+            .find(|entity| entity.id == candidate)
+            .unwrap();
+        classify_oriented_active_pair_contact(
+            crate::player_active_contact::OrientedActivePairContactRequest {
+                subject,
+                candidate,
+                subject_entry: &active_pair_body_from_entity(subject, &session.cache),
+                retail_tick: 4794,
+            },
+            &session.cache,
+        )
+        .unwrap()
+    };
+    for (side, toucher) in touchers.iter().enumerate() {
+        let sign = if side == 0 { 1i16 } else { -1i16 };
+        let mut touched = false;
+        'scan: for dy in [-150i16, -75, 0, 75, 150] {
+            for step in [80i16, 160, 240, 320, 400] {
+                for dz in [80i16, 160, -80, -160, 0] {
+                    entities.entity_mut(*toucher).unwrap().set_position_raw([
+                        center[0].wrapping_add(sign * step),
+                        center[1].wrapping_add(dy),
+                        center[2].wrapping_add(dz),
+                    ]);
+                    if probe(&entities, *toucher)
+                        .is_some_and(|contact| contact.penetration_raw >= 32)
+                    {
+                        touched = true;
+                        break 'scan;
+                    }
+                }
+            }
+        }
+        assert!(touched, "toucher {toucher} overlaps the craft");
+    }
+
+    // A head-on pass so the response separates the pair.
+    let at = entities
+        .iter_all()
+        .find(|entity| entity.id == craft)
+        .unwrap()
+        .position_raw();
+    entities
+        .entity_mut(craft)
+        .unwrap()
+        .set_motion_raw(at, [8_000, 0, 0]);
+    for toucher in &touchers {
+        let at = entities
+            .iter_all()
+            .find(|entity| entity.id == *toucher)
+            .unwrap()
+            .position_raw();
+        entities
+            .entity_mut(*toucher)
+            .unwrap()
+            .set_motion_raw(at, [-8_000, 0, 0]);
+    }
+
+    let mut hull = PlayerHull::new(HullDamageProfile::from_type_record(
+        session.cache.global_entity_type(46).unwrap(),
+    ));
+    hull.readback_entity_damage_state(&entities.player().unwrap().collision);
+    let before: std::collections::HashMap<u32, [i16; 3]> = std::iter::once(craft)
+        .chain(touchers.iter().copied())
+        .map(|id| {
+            (
+                id,
+                entities
+                    .iter_all()
+                    .find(|entity| entity.id == id)
+                    .unwrap()
+                    .position_raw(),
+            )
+        })
+        .collect();
+    let outcome =
+        crate::native_actor_capture::pair::resolve_native_captor_active_contacts_with_playing(
+            &mut Intro2ContactFrame {
+                entities: &mut entities,
+                resources: &mut session.cache,
+                world_fx: &mut fx,
+                static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
+                notifications: &mut crate::gameplay_notifications::GameplayNotifications::new(),
+                retail_tick: 4794,
+                actor_tasks: &mut scheduler,
+            },
+            craft,
+            CaptureFeedbackPolicy::Gameplay,
+            Some(PlayingPlayerContact {
+                craft: None,
+                hull: &mut hull,
+                extra_lives: RetailRuntimeValue::Known(3),
+            }),
+        );
+    let NativeCaptorPairOutcome::Resolved { visits } = &outcome else {
+        panic!("the walk resolves: {outcome:?}");
+    };
+    // The person keeps the PassivePlayer hold while the spider's pair
+    // resolves with the response. Whoever the walk meets first decides the
+    // record: a held person lets the walk go on to the spider, while the
+    // resolved spider ends the walk and the person stays unvisited.
+    let reached: Vec<u32> = visits.iter().map(|visit| visit.candidate_id).collect();
+    if rank(spider) < rank(person) {
+        assert_eq!(reached, [spider], "the walk ends: {reached:?}");
+    } else {
+        assert_eq!(reached, [person, spider], "{reached:?}");
+        let held = &visits[0];
+        assert!(
+            held.stages.iter().any(|stage| matches!(
+                stage,
+                NativeCaptorPairStage::Held(ActivePairHoldReason::PassivePlayer)
+            )),
+            "the person keeps the hold: {held:?}"
+        );
+    }
+    let visit = visits
+        .iter()
+        .find(|visit| visit.candidate_id == spider)
+        .expect("the spider pair is visited");
+    assert!(
+        !visit.stages.iter().any(|stage| matches!(
+            stage,
+            NativeCaptorPairStage::Held(ActivePairHoldReason::PassivePlayer)
+        )),
+        "no PassivePlayer hold: {visit:?}"
+    );
+    assert!(
+        visit
+            .stages
+            .iter()
+            .any(|stage| matches!(stage, NativeCaptorPairStage::Physical { .. })),
+        "the response runs: {visit:?}"
+    );
+    let after = entities
+        .iter_all()
+        .find(|entity| entity.id == spider)
+        .unwrap()
+        .position_raw();
+    assert_ne!(after, before[&spider], "12760 separates the pair");
+}
