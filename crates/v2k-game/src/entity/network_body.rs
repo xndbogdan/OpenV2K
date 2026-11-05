@@ -2,8 +2,9 @@
 //! "Bodies between machines").
 //!
 //! Every machine keeps every body. A body another machine owns carries
-//! state bit 31: `FUN_00412DA0` runs none of its callbacks, only its sync
-//! timeout and the integration of its replicated velocity, and its fields
+//! state bit 31: `FUN_00412DA0` runs none of its callbacks; of its bit-31
+//! branch the port runs the sync timeout and the integration of the
+//! replicated velocity (the rest is held, MULTIPLAYER.md), and its fields
 //! come from the owner's sync records (`FUN_00417680`). Damage to it goes to
 //! its owner instead (`FUN_00414E90`). Its birth is the full constructor, so
 //! a hit on it runs the copy's own callbacks.
@@ -641,8 +642,9 @@ impl EntityManager {
 
     /// `FUN_00412DA0`'s branch for a peer's body: no callbacks; its sync
     /// timeout runs down and a lapsed body is staged for removal; it moves by
-    /// its replicated velocity (`(elapsed >> 5) * v >> 15` a word). Returns
-    /// the lapsed bodies.
+    /// its replicated velocity (`(elapsed >> 5) * v >> 15` a word). The
+    /// branch's frames, fan loops and `+84` effects are held
+    /// (MULTIPLAYER.md). Returns the lapsed bodies.
     pub fn advance_network_bodies(&mut self, elapsed_us: u32) -> Vec<u32> {
         let step = elapsed_us.min(0x1E848) >> 5;
         let mut lapsed = Vec::new();

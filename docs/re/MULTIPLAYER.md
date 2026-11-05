@@ -288,9 +288,20 @@ attached its body to the player's craft. Dropping it sends kind 15 from
 `FUN_00443D30`, and the owner builds the Type93 that sets it down.
 
 A peer's body carries state bit `0x80000000`. `FUN_00412DA0` runs none of its
-callbacks: it moves the body on by its last velocity, `((elapsed >> 5) * v)
->> 15` per axis, and removes it when no record came for 1.25 s (state `0x800`
-without `0x08000000`) or 3.5 s otherwise.
+callbacks (so none of its tasks); its bit-31 branch instead steps its Sub-H
+frames (`FUN_0041D0A0`, types 71, 94, 127, 128 and 129 among the arenas')
+and a peer craft's two fan loops (Sub-O, `FUN_00420920`, louder under state
+`0x40`), removes the body when no record came for 1.25 s (state `0x800`
+without `0x08000000`) or 3.5 s otherwise, and reads the change word `+84`
+the owner's last record carried (flag 2): bit 8 draws two shared words and
+emits a plume (`FUN_00441670`), as the owner's craft does below 20000 health
+(`FUN_00446640`, `FUN_00446FC0`, which set that bit), and bit `0x10` or
+`0x20` deposits a class-31 or class-40 particle (`FUN_004061A0`). Then, as
+for any body, `FUN_0044C920` moves its `+8C` emitter to it, and with state
+`0x40000` and without `0x08000000` it moves on by its last velocity,
+`((elapsed >> 5) * v) >> 15` per axis (first decaying that velocity by
+`elapsed >> 8` a word under `0x880000`). The port runs the timeout and the
+motion; the rest is held (below).
 
 The record `FUN_00417680` hands `FUN_00438080` is the 0x4C request an
 authored record's `FUN_0042E440` builds, but zero after the handle, the type
@@ -440,8 +451,11 @@ sent but those held below was built so: 6, 8, 9, 14, 15, 27, 35, 39, 55, 61,
 66, 68, 71, 79, 82, 86, 87, 90, 91, 94, 95, 102, 103, 116, 126, 127, 128
 and 129. A peer's Main Base (type 6) takes the null template like a factory copy: no
 scientists, output or timers, and the primary voice 0x1F at gain 0. The
-port's Main Base publisher admits that template (all zero but word 20)
-alongside the all-zero authored ones; the copy carries its Sub-M, takes
+port mixes neither copy's voice (its factory keeps it, its Main Base does
+not): `FUN_0044C970` skips a loop at gain 0 (no buffer, no warble or alias
+words), and only the Sub-M's own callbacks (`FUN_00418F60`), which never run
+on a copy, would raise it. The port's Main Base publisher admits that
+template (all zero but word 20) alongside the all-zero authored ones; the copy carries its Sub-M, takes
 its behavior at birth and draws shared words, like every other native
 copy. In particular a harmful-sea pass over it sends kind 9 to its owner
 as for any other peer's body. A peer's worker (types 79, 90, 91 and 116)
@@ -536,10 +550,11 @@ Held, each with a logged stop ("Network: ... is held"):
   constructor the port has not ported: hollow copies carry the zeroed
   Sub-M, so searches and remote damage skip them instead of stopping on
   unknown words ("a peer's TypeN copy (its constructor is not ported)");
-- the type's hit hook on a hit to a peer's copy other than a class-7
+- the type's hit hook on a hit to a peer's copy other than a native
   flyer's ("a hit on a peer's TypeN copy's hit hook (a separate port per
-  class)"); a class-7 flyer's copy (types 14, 15, 39, 41, 87 and 108) takes
-  the hit as a peer's craft does;
+  class)"); a native flyer's copy (types 14, 15, 39, 41, 87 and 108, whose
+  styles' hit hooks are `FUN_0040C690` or null; 14 and 41 choose no class 7)
+  takes the hit as a peer's craft does;
 - kinds 13 and 15 for an owned body of a type other than Type68, Type74
   and the carried Type9 person ("a peer's kind 13 for an owned TypeN"), and
   a kind 13 naming a parent unknown here (retail keeps the handle, and
@@ -567,6 +582,9 @@ Held, each with a logged stop ("Network: ... is held"):
 - a peer's damage to an owned creature whose type's hit callback or death the
   port's shared damage phase has not ported (the same types its blasts stop
   at), reported per type ("a peer's damage to an owned TypeN");
-- the components (Sub-H frames) of a peer's body, which `FUN_0041D0A0` and
-  `FUN_00420920` draw on the owner's side, and the dying record's
-  `FUN_00417D30`.
+- the rest of `FUN_00412DA0`'s bit-31 branch (above), which runs on this
+  machine for a peer's body: its Sub-H frames (`FUN_0041D0A0`; "a peer's
+  Sub-H frames"), a peer craft's fan loops (`FUN_00420920`; "a peer craft's
+  fan loops"), and the change word `+84`, which the port neither sends
+  (flag 2) nor reads, so a damaged peer craft trails no plume ("a peer's
+  change word"); and the dying record's `FUN_00417D30`.

@@ -1,10 +1,12 @@
-//! A particle's hit on a peer's copy other than a class-7 flyer:
+//! A particle's hit on a peer's copy other than a native flyer:
 //! `FUN_00410EB0`/`FUN_00411180`/`FUN_00411250`/`FUN_00411320` ->
 //! `FUN_00411030` -> `FUN_00415040` (kind 9).
 //!
 //! This is `intro2_flyer_impact::run_peer_craft`'s wrapper with the type's
-//! hit hook held. The hook (the type record's `+0x14` slot) is a
-//! per-class behavioral unit: class 7's is `FUN_0040C690` and every other
+//! hit hook held. A native flyer's copy (types 14, 15, 39, 41, 87 and 108,
+//! whose styles' hit hooks are `FUN_0040C690` or null; 14 and 41 choose no
+//! class 7) takes the hit as a peer's craft does instead. The hook (the type
+//! record's `+0x14` slot) is a per-class behavioral unit, and every other
 //! class's is a separate port, so it is not run here. The shared process
 //! RNG stream therefore skips the hook's draws; that divergence is labeled
 //! at the hold and the hook is surfaced to the caller as a held reason.

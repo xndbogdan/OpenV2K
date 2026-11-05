@@ -21,6 +21,13 @@ fn metadata() -> Vec<EntityTypeRuntimeMetadata> {
     let mut metadata = vec![EntityTypeRuntimeMetadata::default(); 62];
     metadata[51].model_slots = [301; 4];
     metadata[51].capability_flags = 5;
+    // Type 51's Sub-O: the fan FUN_00412DA0 runs for a peer's craft.
+    metadata[51].common_mover_topology = crate::entity_collision_state::RetailRuntimeValue::Known(
+        crate::entity_collision_state::CommonMoverComponentTopology {
+            sub_o: true,
+            ..Default::default()
+        },
+    );
     metadata[61].model_slots = [302; 4];
     metadata
 }
@@ -155,6 +162,24 @@ fn two_machines_see_each_others_craft_and_names() {
     assert_eq!(pair.host.scoring.names[2], "Bob");
     assert_eq!(pair.guest.scoring.names[1], "Ann");
     assert_eq!(pair.host.scoring.frag_limit, 50);
+}
+
+/// A peer craft's birth reports its held fan loops (`FUN_00412DA0`'s
+/// bit-31 branch runs `FUN_00420920` for it).
+#[test]
+fn a_peer_crafts_birth_holds_its_fan() {
+    let mut pair = Pair::new();
+    let mut held = false;
+    for _ in 0..400 {
+        let (_, guest) = pair.frame();
+        held |= guest.iter().any(|event| {
+            matches!(event, NetworkEvent::HeldPeerBodyPass(what) if what.contains("FUN_00420920"))
+        });
+        if !peer_crafts(&pair.guest_world).is_empty() {
+            break;
+        }
+    }
+    assert!(held);
 }
 
 /// The guest's hit on the host's craft reaches the host as damage from slot

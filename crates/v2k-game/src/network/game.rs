@@ -91,6 +91,8 @@ pub enum NetworkEvent {
     UnknownAttachmentList,
     /// A peer's body the port built without its constructor.
     HollowPeerBody { entity_type: u32, reason: String },
+    /// A part of `FUN_00412DA0`'s bit-31 branch the port does not run.
+    HeldPeerBodyPass(&'static str),
     /// `FUN_00456750`: a winner was named.
     WinnerFlash,
     /// `FUN_00450CC0`: the session was lost, or this machine became the host
@@ -950,6 +952,24 @@ impl NetworkGame {
                     return;
                 };
                 let id = birth.id();
+                // FUN_00412DA0's bit-31 branch steps Sub-H (FUN_0041D0A0)
+                // and runs Sub-O's fan loops (FUN_00420920).
+                if let Some(RetailRuntimeValue::Known(parts)) = frame
+                    .entities
+                    .type_runtime_metadata(entity_type)
+                    .map(|metadata| metadata.common_mover_topology)
+                {
+                    if parts.sub_h {
+                        self.events.push(NetworkEvent::HeldPeerBodyPass(
+                            "a peer's Sub-H frames (FUN_0041D0A0)",
+                        ));
+                    }
+                    if parts.sub_o {
+                        self.events.push(NetworkEvent::HeldPeerBodyPass(
+                            "a peer craft's fan loops (FUN_00420920)",
+                        ));
+                    }
+                }
                 if let PeerBirth::Hollow { reason, .. } = birth {
                     self.events.push(NetworkEvent::HollowPeerBody {
                         entity_type,
@@ -967,6 +987,12 @@ impl NetworkGame {
         let parent = (sync.flags & 0x1000 != 0)
             .then(|| self.handles.lookup(sync.parent))
             .flatten();
+        // FUN_00412DA0 reads +84's bit 8 (plume) and 0x30 (FUN_004061A0).
+        if sync.flags & 2 != 0 && sync.extras & 0x38 != 0 {
+            self.events.push(NetworkEvent::HeldPeerBodyPass(
+                "a peer's change word (FUN_00412DA0's +84 bits 8, 0x10 and 0x20)",
+            ));
+        }
         match frame.entities.apply_network_sync(id, &sync, parent) {
             // The tail's kind 15: the parent, the body, the parent's X and Z.
             Some(NetworkRelationRepair::Dropped { x_raw, z_raw }) => {

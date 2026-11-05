@@ -469,10 +469,10 @@ pub enum PeerCraftImpactOutcome {
 }
 
 /// A particle hit on a peer's craft (type 51) or on a peer's copy of a
-/// class-7 flyer the port builds natively: the wrapper its class takes
+/// flyer the port builds natively: the wrapper its class takes
 /// (`FUN_00410EB0`, the static route's `FUN_00411180`, an infection's
-/// `FUN_00411250` or a cure's `FUN_00411320`) runs on the copy. Its type's
-/// hit callback is class 7's `FUN_0040C690`, which chooses the copy's
+/// `FUN_00411250` or a cure's `FUN_00411320`) runs on the copy. Its style's
+/// hit hook is `FUN_0040C690` (class 7's among others), which chooses the copy's
 /// behavior again with shared draws; `FUN_00411030` then jolts the copy with
 /// three more and sends the owner the same deltas (kind 10), and
 /// `FUN_00415040`'s damage goes to the owner (kind 9).

@@ -539,6 +539,7 @@ pub fn advance_network_world(
                 entity_type,
                 reason,
             } => report_held(format!("a peer's Type{entity_type} copy ({reason})")),
+            NetworkEvent::HeldPeerBodyPass(what) => report_held(what.into()),
             NetworkEvent::UnknownAttachmentList => {
                 report_held("a peer's body named by an unresolved attachment list".into())
             }
