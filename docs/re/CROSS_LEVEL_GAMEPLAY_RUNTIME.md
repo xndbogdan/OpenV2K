@@ -78,9 +78,10 @@ capture-path death, a Type3 boulder through class1's blast and radial, a
 Type27 through its class18 split, whose tail-appended Type3s the resumed walk
 visits in the same frame ([ROLLING_BOULDER.md](ROLLING_BOULDER.md)). A lethal
 subject packet re-enters the player's own checked-damage terminal, so the ram
-can wreck the player with hull/model/sound ownership. A walk that would
-resume after the craft's own death stops as `ResumeAfterPlayerDeath`: the
-wreck's model would pair. Lethal packets to any other family, unsupported
+can wreck the player with hull/model/sound ownership. The wreck's later
+pairs take the late walk's player lane
+([ACTOR_RUNTIME](ACTOR_RUNTIME.md#the-ports-walk)); one with a body
+without a native owner stops as `ResumeAfterPlayerDeath`. Lethal packets to any other family, unsupported
 counterpart owners and externally entered Run Away2 remain boundaries in
 [SPIDER_BEHAVIOR.md](SPIDER_BEHAVIOR.md).
 

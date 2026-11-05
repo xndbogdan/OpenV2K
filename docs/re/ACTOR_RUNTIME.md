@@ -681,10 +681,26 @@ for that one pair, in the walk's order: its held ball, Type17 contact
 plans, rolling-boulder wake, descriptor contacts and deaths commit with the
 pair, and the walk goes on from the successor it read before the pair. A
 pair the adapter stops is reported as a general visit's stop
-(`PlayerPair(...)`); so is a pair touching the craft's wreck, whose pairs
-the port does not model, and a touching pair with a body no lane owns
+(`PlayerPair(...)`); so is a touching pair with a body no lane owns
 (`NoBodyOwner`, a Type61 outside its Power-Up style, say), which retail's
 walk visits too.
+
+`11AD0` has no dying test, so the craft's wreck pairs on through its three
+seconds of Dying bounce (`447280`'s alternate, model slot 1 or 3). That
+style's `+18` is `447D70` too, whose controller branch still runs
+(the capability word stays `5`), and `447280` rebuilds Primary as the
+`BB8`/`4476F0` timed task from a template with a null `+18`, clearing the
+other two slots, so the wreck's A900 calls nothing. `15040` reaches the
+dying hull, where `14E90` only drains the pre-health buffer. The adapter
+pairs only the living craft, so the walk visits the wreck's pairs with
+every native-owned body, those the adapter visits included, as it visits
+the living craft's unadmitted ones. A wreck touching a body without a
+native owner stops as `PlayerPair(ResumeAfterPlayerDeath)`. World 22's
+idle player dies under a Type25 at frame 2,033 and its wreck rests on a
+Type7: the walk now visits that pair 52 times before the wreck goes, where
+the build before stopped. The retail lab's world 22 run died the same way
+(a Type25, about 2,400 ticks after arrival) and logged no pair damage to
+the wreck, which `14D30` skips when the capped damage is zero.
 
 Pairs still resolved apart from the walk, after it: the Main Base's
 conversion of `0x800` bodies, the factory's intake of `0x400` workers, and

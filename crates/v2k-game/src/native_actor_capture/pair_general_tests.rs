@@ -833,3 +833,67 @@ fn a_type127_wakes_a_resting_boulder() {
     assert_eq!(owner.style(), RollingBoulderStyle::Rolling);
     assert!(tasks.prepare_native_actor_mutation(&entities, boulder));
 }
+
+/// 11AD0 has no dying test: the craft's wreck (Dying bounce, whose `+18` is
+/// 447D70 too) pairs with a native Type7, which the adapter visits for the
+/// living craft. 447D70 returns null for a 0xC00 body, the wreck's BB8 task
+/// has a null hook, and the response and damage run with the dying hull.
+#[v2k_test_support::retail_test]
+fn the_crafts_wreck_pairs_with_a_type7() {
+    let (mut session, mut entities, mut fx) =
+        crate::native_type122::construction_tests::native_fixture_with_player(22);
+    let mut tasks = adopt_authored(&mut entities);
+    let player = entities.player().unwrap().id;
+    let worker = entities
+        .iter_all()
+        .find(|e| e.entity_type == 7 && requires_body_custody(e))
+        .expect("world 22 authors a native Type7")
+        .id;
+    assert!(crate::player_active_contact::player_adapter_visits(
+        &entities,
+        actor(&entities, worker).unwrap()
+    ));
+    entities.entity_mut(player).unwrap().physical_body_basis_q31 = RetailRuntimeValue::Known(
+        crate::common_mover::type9_attitude::Type9BodyBasis::from_angle_words(0, 0, 0),
+    );
+    let mut hull = player_hull(&session, &entities);
+    hull.health_raw = 0;
+    hull.dying = true;
+    entities.sync_player_hull_collision_state(&hull);
+    entities
+        .begin_player_dying(crate::entity::PlayerCheckedDamageFrame {
+            hull: &mut hull,
+            resources: &session.cache,
+            world_fx: &mut fx,
+            retail_tick: 4794,
+            notifications: &mut GameplayNotifications::new(),
+            extra_lives: 3,
+        })
+        .unwrap();
+    let pair = in_live_order(&entities, player, worker);
+    overlap(&mut entities, &session, pair);
+    let before = pair.map(|id| actor(&entities, id).unwrap().position_raw());
+    let outcome = walk_playing(
+        &mut session,
+        &mut entities,
+        &mut fx,
+        &mut tasks,
+        &mut hull,
+        pair[0],
+    );
+    let visit = visit_of(&outcome, pair);
+    assert!(visit.stages.iter().any(|stage| matches!(
+        stage,
+        NativeCaptorPairStage::Behavior {
+            owner,
+            style: 0x004c_daa8,
+            result: NativeCaptorPairBehaviorResult::Null,
+        } if *owner == player
+    )));
+    assert_ne!(
+        pair.map(|id| actor(&entities, id).unwrap().position_raw()),
+        before,
+        "12760 separates the pair"
+    );
+    assert!(hull.dying);
+}

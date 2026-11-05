@@ -477,14 +477,21 @@ fn is_native_type29_player_pair(manager: &EntityManager, first: &Entity, second:
 /// The player and a native-owned body the player adapter does not visit
 /// (its pair identity is not closed: Types 5, 10, 15, 39, 87 and more): this
 /// lane visits the pair in live order, from whichever body comes first.
+/// 11AD0 has no dying test, so the craft's wreck (Dying bounce, whose `+18`
+/// is 447D70 too) pairs on; this lane also takes the wreck's pairs with the
+/// native-owned bodies the adapter visits for the living craft.
 fn is_native_player_walk_pair(manager: &EntityManager, first: &Entity, second: &Entity) -> bool {
     let player = manager.player().map(|player| player.id);
     [(first, second), (second, first)]
         .into_iter()
         .any(|(body, other)| {
             Some(other.id) == player
-                && requires_body_custody(body)
-                && crate::player_active_contact::player_pair_left_to_walk(manager, body)
+                && ((requires_body_custody(body)
+                    && crate::player_active_contact::player_pair_left_to_walk(manager, body))
+                    || (other.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)
+                        == RetailRuntimeValue::Known(DYING_STATE_BIT)
+                        && general_body_custody(body)
+                        && crate::player_active_contact::player_adapter_visits(manager, body)))
         })
 }
 
@@ -724,13 +731,17 @@ fn resolve(
         let pair_weapon = [subject, candidate]
             .into_iter()
             .any(owns_native_weapon_contact);
-        if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player) {
+        // The wreck's pairs with native-owned bodies take this walk below.
+        if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player)
+            .filter(|_| !is_native_player_walk_pair(frame.entities, subject, candidate))
+        {
             let types = [subject.entity_type, candidate.entity_type];
             let dying = playing_player
                 .as_ref()
                 .is_some_and(|playing| playing.hull.dying);
             let reason = if dying {
-                // The port does not pair the craft's wreck: a stop where it touches.
+                // The wreck against a body without a native owner (the
+                // adapter's census-only bodies): a stop where it touches.
                 matches!(
                     classify_oriented_active_pair_contact(
                         crate::player_active_contact::OrientedActivePairContactRequest {
