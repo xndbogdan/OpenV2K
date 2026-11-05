@@ -1010,6 +1010,8 @@ address,status,note
 0x004374B0,implemented,terrain_ripple.rs advance_terrain_ripples after the static programs and the radar sea redraw (main.rs); a finished record runs its flash then 4566E0 radial (bit 0x04) then crater
 0x00437470,implemented,WorldFx::clear drops the ripple queue with the world
 0x0042A850,implemented,HUD setting at every world start: on; off past logical world 36 or below phase 5 (docs/re/HUD_RENDERING.md)
+0x004292B0,documented,the HUD draw chain: sprites, gauges, digits and the Section-8 model branches; the two FUN_00465840 calls gate centered aim-at-point models, which the port runs unfiltered (docs/re/RENDER_PIPELINE.md#entity-model-visibility)
+0x0042A6F0,implemented,selected-item HUD model depth: abs(offsetY)*0x104+3000, high-tier width override (docs/re/HUD_RENDERING.md)
 0x0043BB20,implemented,save slot rows: number; rank and name columns (docs/re/MENU_SYSTEM.md#frontend-load-sequence-and-slot-count-runtime-confirmed-2026-07-17)
 0x004490D0,implemented,an occupied slot's rank (docs/re/MENU_SYSTEM.md#frontend-load-sequence-and-slot-count-runtime-confirmed-2026-07-17)
 0x00456E20,implemented,the rank of a controller snapshot and its control words (docs/re/MENU_SYSTEM.md#frontend-load-sequence-and-slot-count-runtime-confirmed-2026-07-17)
@@ -1150,7 +1152,7 @@ address,status,note
 0x0041C830,implemented,Hive ejection: a newborn's launch and a live Hive's mouth throwing out each body in it after FUN_00410C10 on one without capability bit 3; the retail lab's world 13 mouth matches word for word (docs/re/HIVE_WRECK.md#the-mouth-walk)
 0x0041CA90,implemented,Hive ejection timers: a launch's half second and the restored 0x8000 (docs/re/HIVE_WRECK.md#the-mouth-walk)
 0x0042BA30,implemented,the frontend draw: the scene alone until the 50-Hz clock passes 150, then menu state 2 and the ring from the next pass (MenuShell::end_cold_entry; docs/re/MENU_SYSTEM.md)
-0x00465870,approximated,the root test (near depth past 0x3F; the projected sphere against the display block) gates the frontend's props, the world's actor bodies and static objects, the MindBall draw, the Hive rings, the reticle instances, the Targetter ring and crosshair, the shield aura and the two sky copies in the authored frame; the particle models and the HUD model draws still draw without it (docs/re/RENDER_PIPELINE.md#entity-model-visibility)
+0x00465870,approximated,the root test (near depth past 0x3F; the projected sphere against the display block) gates the frontend's props, the world's actor bodies and static objects, the MindBall draw, the Hive rings, the reticle instances, the Targetter ring and crosshair, the shield aura and the two sky copies in the authored frame; the particle models are not presented and the HUD models run unfiltered in their own centered context (docs/re/RENDER_PIPELINE.md#entity-model-visibility)
 0x0043C7F0,implemented,the frontend tick's integer steps: the spin word DAT_004DCEB0, the scroll decay of DAT_004DCEBC/C0 and the fly clock (prop_spin_step, scroll_decay_step, fly_clock_step; docs/re/MENU_SYSTEM.md)
 0x0040D3C0,documented,the type +C0 policy at construction: copied to entity +C8 and decoded through FUN_0040D440 into the state word; a +C0 bit 0x20000 (the Hive and the Queen) sets 0x8000000 for good (docs/re/PLAYER_CRAFT.md#mind-control)
 0x0040D440,documented,a style or type policy's state bits to set and to clear (docs/re/PLAYER_CRAFT.md#mind-control)

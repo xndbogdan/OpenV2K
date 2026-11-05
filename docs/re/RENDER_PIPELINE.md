@@ -263,11 +263,9 @@ adapter show more than that frame and keep drawing every scanned model.
 In the lab's New Game, Intro2's actor fallback callbacks (`0040A99B`,
 `0040A9BB`, `0040A9D4`) draw words on the same passes as the port's from
 pass 432 to 899 but one: 467 of 468 frames, against one without the test
-(the port's frame 434 still draws 21 words where retail draws none). The
-other model roots (particle models `FUN_00442BA0`/`FUN_00442CB0`, the Hive
-`FUN_0041CB10`, `FUN_004136C0`, `FUN_00421230`, `FUN_0042F270`,
-`FUN_0044DB10`) still draw without it. Every one of those roots reaches the
-same wrapper: a static scan of the retail executable for `CALL`
+(the port's frame 434 still draws 21 words where retail draws none). Every
+model root reaches the same wrapper: a static scan of the retail executable
+for `CALL`
 `0x00465840` finds, besides the actor draw, the Hive suffix `0x41CDD9`
 (per ring, skipping a rejected ring), the reticle `0x421545` (per
 instance), the sky `0x42F375`/`0x42F395` (the two copies), the menu prop
@@ -282,9 +280,19 @@ actor way (16-bit delta plus the viewport origin, e.g. `40982E-40986D`,
 VIEW point plus the header radius is the faithful gate for each.
 The port applies it to the MindBall (whole draw), the Hive rings, the
 reticle instances, the Targetter ring and crosshair, the shield aura and
-the two sky copies in the authored frame alongside the actor bodies.
-Still without it: the particle models (`FUN_00442BA0`/`FUN_00442CB0`,
-not presented) and the HUD model draws (`FUN_004292B0`, `FUN_0042A6F0`).
+the two sky copies in the authored frame alongside the actor bodies and
+the static objects. Two roots keep their own dispositions. The particle
+models (`FUN_00442BA0`/`FUN_00442CB0`) are not presented in the port at
+all (attached class 83/84/86 models stop with a logged line); gating them
+belongs to that feature. The HUD models draw in a dedicated HUD context:
+`FUN_004292B0` installs a HUD lens into `DAT_004FEED0`, and the port
+submits each model centered in an aim-at-point camera
+(`menu_camera_for_authored_point`) at a positive Section-8 depth (cargo
+4000, weapons 2560 and up) with its Section-8 radius, so the frame test
+operates on centered geometry from which no reject can arise and the
+near test always clears `0x3F`; the port intentionally runs them
+unfiltered. `FUN_0042A6F0`'s selected-item depth policy is ported as
+`retail_weapon_depth_raw` with its branch tests.
 
 The later model entry `FUN_00464E60` separately compares signed view Z with
 the unsigned radius at model header `+0x08`. It rejects
