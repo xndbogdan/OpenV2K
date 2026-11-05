@@ -636,3 +636,34 @@ impl crate::entity::DynamicRadialLiveCallbacks for PossessedRadialCallbacks<'_> 
         })
     }
 }
+
+/// A pair's collision damage (`FUN_00414D30` -> `FUN_00415040`) on the
+/// possessed body: the checked damage of any body, whose lethal hit runs its
+/// death and so its release inside the walk; the release goes to the
+/// scheduler for the session's MindBall.
+pub(crate) fn possessed_pair_damage(
+    frame: &mut crate::intro2_contacts::Intro2ContactFrame<'_>,
+    delivery: DamageDeliveryRecord,
+) -> Result<(), PossessedContactBlock> {
+    let custody = frame
+        .actor_tasks
+        .possession
+        .ok_or(PossessedContactBlock::Death("possession"))?;
+    let (released, _) = checked_damage(
+        &mut PossessionWorld {
+            entities: frame.entities,
+            tasks: frame.actor_tasks,
+            world_fx: frame.world_fx,
+            retail_tick: frame.retail_tick,
+        },
+        frame.resources,
+        frame.notifications,
+        delivery,
+        custody,
+    )?;
+    if released.is_some() {
+        frame.actor_tasks.possession = None;
+        frame.actor_tasks.possession_released = released;
+    }
+    Ok(())
+}

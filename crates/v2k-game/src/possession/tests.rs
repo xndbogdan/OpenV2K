@@ -624,3 +624,144 @@ fn a_possessed_captor_drops_its_captive_when_it_dies_and_holds_a_carrying_releas
         }
     }
 }
+
+/// The possessed body's pairs take Player Control's `FUN_00447D70` on a body
+/// without capability bit 0 (world 14's captor, possessed): against a body
+/// it could pick up (a person, capability `0xC00`, with room in its hold) the
+/// pickup `FUN_00443B50` is held before the visit; against another spider the
+/// hook returns null and the visit's response and collision damage run, a
+/// lethal hit releasing the body inside the walk.
+#[v2k_test_support::retail_test]
+fn a_possessed_bodys_pairs_take_player_controls_pair_hook() {
+    use crate::entity_collision_state::RetailRuntimeValue;
+    use crate::intro2_type17::pair::tests::{ChildOrder, Fixture};
+    use crate::native_actor_capture::pair::{
+        ActivePairHoldReason, NativeCaptorPairOutcome, NativeCaptorPairStage,
+    };
+
+    let possess = |f: &mut Fixture| {
+        let previous_context = match f
+            .entities
+            .iter_all()
+            .find(|entity| entity.id == f.spider)
+            .unwrap()
+            .current_behavior_context
+        {
+            RetailRuntimeValue::Known(Some(context)) => context,
+            _ => panic!("a context"),
+        };
+        let context = f.entities.player_control_context(f.spider).unwrap();
+        assert!(f.scheduler.release_type17_for_possession(f.spider));
+        f.entities.possess_body_tasks(f.spider, context);
+        f.scheduler.possession = Some(PossessionCustody {
+            state: Possession::take_over(u32::MAX, f.spider),
+            native_owner: true,
+            previous_context,
+        });
+    };
+
+    // A person in reach: the pickup is held and nothing moves.
+    let mut f = Fixture::ready(14, None, ChildOrder::First);
+    possess(&mut f);
+    let before = [f.spider, f.child].map(|id| {
+        f.entities
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .unwrap()
+            .position_raw()
+    });
+    let NativeCaptorPairOutcome::Resolved { visits } =
+        f.pair(crate::intro2_type17::pair::CaptureFeedbackPolicy::Gameplay)
+    else {
+        panic!("the walk resolves");
+    };
+    let person = f
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == f.child)
+        .unwrap()
+        .entity_type;
+    assert!(visits.iter().any(|visit| visit.candidate_id
+        == if f.subject == f.spider {
+            f.child
+        } else {
+            f.spider
+        }
+        && visit.stages
+            == [NativeCaptorPairStage::Held(
+                ActivePairHoldReason::PossessedPickup {
+                    entity_type: person
+                }
+            )]));
+    let after = [f.spider, f.child].map(|id| {
+        f.entities
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .unwrap()
+            .position_raw()
+    });
+    assert_eq!(before, after);
+
+    // Another spider: the visit runs, and a lethal collision releases.
+    let mut f = Fixture::ready(14, None, ChildOrder::First);
+    // World 14's native gunner (Type47) in contact; the earlier of the two in
+    // live order walks the pair.
+    let other = f
+        .entities
+        .iter_all()
+        .find(|entity| entity.entity_type == 47)
+        .expect("a gunner")
+        .id;
+    let person = f.child;
+    let y = f
+        .entities
+        .iter_all()
+        .find(|entity| entity.id == person)
+        .unwrap()
+        .position_raw()[1];
+    f.entities
+        .entity_mut(person)
+        .unwrap()
+        .set_position_raw([0, y, 0]);
+    f.child = other;
+    let gunner = f.entities.entity_mut(other).unwrap();
+    gunner
+        .collision
+        .state_flags_at_0x08
+        .overwrite(0x8000, 0x8000);
+    gunner.collision.subject_scan_gate_at_0x70 = RetailRuntimeValue::Known(0);
+    f.scheduler.adopt_intro2_type47_guards(&f.entities);
+    let order = f.entities.retail_live_order_ids().collect::<Vec<_>>();
+    let rank = |id: u32| order.iter().position(|at| *at == id).unwrap();
+    (f.subject, f.candidate) = if rank(f.spider) < rank(other) {
+        (f.spider, other)
+    } else {
+        (other, f.spider)
+    };
+    f.place_oriented_contact();
+    possess(&mut f);
+    let body = f.entities.entity_mut(f.spider).unwrap();
+    body.collision.health_raw = RetailRuntimeValue::Known(1);
+    let at = body.position_raw();
+    body.set_motion_raw(at, [8_000, 0, 0]);
+    let gunner = f.entities.entity_mut(other).unwrap();
+    let at = gunner.position_raw();
+    gunner.set_motion_raw(at, [-8_000, 0, 0]);
+    let outcome = f.pair(crate::intro2_type17::pair::CaptureFeedbackPolicy::Gameplay);
+    let NativeCaptorPairOutcome::Resolved { visits } = &outcome else {
+        panic!("the walk resolves: {outcome:?}");
+    };
+    let visit = visits
+        .iter()
+        .find(|visit| visit.candidate_id == f.candidate)
+        .expect("the spider pair");
+    assert!(
+        visit.stages.iter().any(|stage| matches!(stage,
+            NativeCaptorPairStage::Physical { capped_damage_raw } if *capped_damage_raw > 0)),
+        "{visit:?}"
+    );
+    assert_eq!(f.scheduler.possession, None);
+    let released = f.scheduler.possession_released.take().expect("released");
+    assert_eq!(released.body, f.spider);
+    assert!(released.mind_ball.is_ok());
+}

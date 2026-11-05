@@ -1612,9 +1612,10 @@ target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
 
 **Port status: the takeover, control, release, MindBall, the body's loss,
 TAB, the cargo keys, Passive Player's smoke, the Hive's swallow and the shots
-and blasts that reach the possessed body are ported for a Type17, empty-handed
-or carrying the body it captured; other targets, the possessed body's pairs
-and the release of a body that still carries are held.** Selector `0x1B` fires on its 400 ms cadence with no sound
+and blasts that reach the possessed body, and its pairs with bodies other
+than the craft, are ported for a Type17, empty-handed or carrying the body it
+captured; other targets, the body's own pickups, the craft's pairs and the
+release of a body that still carries are held.** Selector `0x1B` fires on its 400 ms cadence with no sound
 (`FUN_00424650` skips a zero sound) and the A/B gun phase of any weapon; each
 launch, drained at the craft's draw, starts the lock. The lock's advance,
 search, hold test and reticle run as retail's: the retail lab's Level 1 lock
@@ -1670,6 +1671,19 @@ set the `+20E` countdown, which then runs on the body's Player Control visit
 body's hold, `FUN_00446D30`), E turns the body's hold (`FUN_004442E0`), the
 weapon keys need its Sub-E (a Type17 has none), and TAB releases the body on
 the following visit (`FUN_004442B0`).
+
+The possessed body's pairs take Player Control's pair hook, `FUN_00447D70`
+(every Player Control style's `+18`). A Type17 lacks capability bit 0, so
+the hook's pickup branch is the one it reaches, and against a body it cannot
+pick up (no capability `0xC00`, dying, a zero state word, or a full hold) it
+returns null: the pair takes the walk's general visit, in either seat, with
+both task chains (Player Control's task, built by `FUN_00446530`, has a
+null contact hook), the mass-weighted response and the collision damage,
+whose lethal hit runs the body's death and so its release inside the walk.
+The body walks its successors after its Player Control visit, where its
+static response already ran. A possessed captor's pairs leave the captor
+lane, whose Capture People hook it no longer has. A retail-backed test runs
+this on world 14's captor against its gunner.
 
 A native captor possessed while it carries keeps the captured body in its
 row: `FUN_0040AC60` installs Player Control through `FUN_00438340` and
@@ -1746,27 +1760,31 @@ Held, each with one logged stop a run:
   rather than capturing). The release itself runs (the craft's controller and
   the MindBall); the body keeps its captured body and stays without an owner,
   with a logged stop.
-- The possessed body's pairs, which take the player's pair behavior
-  (`FUN_00447D70`, including its `FUN_00443B50` pickup of a person, and the
-  pair's damage), and so the drop key on a held person (`FUN_00446D30`) and
-  the death's cargo drop (`FUN_00447590`). The port skips the body's pair
-  walk; another subject's walk meets Player Control's context, whose pair
-  hook it does not own, and stops there. The retail lab shows what they
-  need (Level 1, a person moved onto the possessed Type17 at pass 2100):
-  `FUN_00447D70` picks the person up through `FUN_00443B50` (the player's row
-  callbacks `FUN_00443D30`/`FUN_00443D10`, then `FUN_00416700`) and returns
-  the `0xA300` tag `0x4C20D0`, so the pair has no physical response; the
-  craft's own pair hook, Passive Player's `FUN_00447D70`, fails
-  `FUN_00443AF0` (the controller's `+68` is the body) and returns `0x4C20C0`,
-  which skips the other body's hook and ends the craft's walk after that
-  pair's response and damage; three of those craft pairs (1800 each, source
-  type 46) killed the body, whose death popped its hold (`FUN_00418500` ->
-  `FUN_00443D30`: a Type93 at the drop point and `FUN_00416750`) before the
-  release and its MindBall. At 20 ms steps the drop key never drops: its
-  `+20E` countdown of -80 reaches exactly zero, which `FUN_00446640` takes
-  as no expiry. Porting them means a carrier other than the craft for the
-  port's Sub-J append, Type93 drop and lift mass, and a possessed lane in
-  the pair walk.
+- The possessed body's pickup: `FUN_00447D70` on a body without capability
+  bit 0 picks up a live body with a nonzero state word, without the dying
+  bit and with capability `0xC00`, when `FUN_00418410` finds room in its
+  hold. The retail lab (Level 1, a person moved onto the possessed Type17 at
+  pass 2100) shows it: `FUN_00443B50` pushes the row with the player's row
+  callbacks `FUN_00443D30`/`FUN_00443D10` into the body's hold, then
+  `FUN_00416700`, and the hook returns the `0xA300` tag `0x4C20D0`, so the
+  pair has no physical response. The port holds that pair before its visit
+  (`PossessedPickup`): it needs a carrier other than the craft for the
+  port's Sub-J append, `FUN_00443D30`'s Type93 drop from the body's own basis
+  and the rows' pose. The death drop of such a row is the same callback: the
+  lab's body died with the person in its hold, and `FUN_00418500` ->
+  `FUN_00443D30` put a Type93 at the drop point and ran `FUN_00416750`
+  before the release and its MindBall. At 20 ms steps the drop key never
+  drops: its `+20E` countdown of -80 reaches exactly zero, which
+  `FUN_00446640` takes as no expiry.
+- The craft's pairs while a body is possessed. Passive Player's
+  `FUN_00447D70` (capability bit 0) fails `FUN_00443AF0`, the controller's
+  `+68` being the body, and returns `0x4C20C0` (code `0x8802`, not `0xA300`)
+  against a body without `0xC00`: the other body's hook is skipped, the
+  response and collision damage run, and the walk that met the pair ends
+  there. In the lab three of those pairs (1800 each, source type 46) killed
+  the possessed body. The port's player adapter assumes the craft's own
+  controller, so every touching craft pair is held before its visit while a
+  body is possessed (`PassivePlayer`).
 
 Two things retail does not allow, so nothing is held for them:
 

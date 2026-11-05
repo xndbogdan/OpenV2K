@@ -72,6 +72,8 @@ impl PlayingPlayerContact<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeCaptorPairBlock {
     Runtime(&'static str),
+    /// The possessed body's checked collision damage or its death stopped.
+    PossessedDamage(String),
     /// The Autobot's checked hit or its class11 death stopped.
     AutobotPairDamage,
     /// `FUN_0040CAF0` past its receiver: the Type93 or its attach stopped.
@@ -248,6 +250,15 @@ pub enum ActivePairHoldReason {
     /// The player adapter's pair stopped before its commit (or came after
     /// the craft's death, whose wreck's pairs the port does not model).
     PlayerPair(crate::player_active_contact::PlayerActivePairError),
+    /// The craft while a body is possessed: Passive Player's `447D70` fails
+    /// `443AF0` and returns `4C20C0` against a body without `0xC00`, which
+    /// skips the other body's hook and ends the walk after the response.
+    PassivePlayer,
+    /// The possessed body's `447D70` would pick this body up (`443B50`
+    /// into its own hold, with the player's row callbacks).
+    PossessedPickup {
+        entity_type: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -731,6 +742,30 @@ fn resolve(
         let pair_weapon = [subject, candidate]
             .into_iter()
             .any(owns_native_weapon_contact);
+        let possession = frame.actor_tasks.possession.map(|custody| custody.state);
+        if possession.is_some_and(|state| state.craft == id || state.craft == candidate_id) {
+            if let Ok(Some(contact)) = classify_oriented_active_pair_contact(
+                crate::player_active_contact::OrientedActivePairContactRequest {
+                    subject,
+                    candidate,
+                    subject_entry,
+                    retail_tick: frame.retail_tick,
+                },
+                frame.resources,
+            ) {
+                visits.push(NativeCaptorPairVisit {
+                    candidate_id,
+                    contact,
+                    stages: vec![NativeCaptorPairStage::Held(
+                        ActivePairHoldReason::PassivePlayer,
+                    )],
+                    physical_suppressed: true,
+                    general_types: Some([subject.entity_type, candidate.entity_type]),
+                });
+            }
+            continue;
+        }
+        let possessed = possession.map(|state| state.body);
         // The wreck's pairs with native-owned bodies take this walk below.
         if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player)
             .filter(|_| !is_native_player_walk_pair(frame.entities, subject, candidate))
@@ -809,9 +844,10 @@ fn resolve(
         if player == Some(id) && !pair_weapon && !pair_shark {
             continue;
         }
+        // A possessed captor runs Player Control: its pairs take 447D70.
         let pair_captors = [subject, candidate]
             .into_iter()
-            .filter(|entity| owns_captor_contact(entity))
+            .filter(|entity| owns_captor_contact(entity) && Some(entity.id) != possessed)
             .map(|entity| entity.id)
             .collect::<Vec<_>>();
         let pair_type58 = [subject, candidate]
@@ -1035,6 +1071,30 @@ fn resolve(
     Ok(true)
 }
 
+/// `447D70` on the possessed body (a body without capability bit 0): it
+/// picks up (`443B50`) a body with a nonzero state word, without the dying
+/// bit and with capability `0xC00`, while `18410` finds room in its hold;
+/// against any other body it returns null. True for null.
+fn possessed_pair_hook_is_null(
+    entity: &Entity,
+    opposite: &Entity,
+) -> Result<bool, NativeCaptorPairBlock> {
+    if entity.capability_flags & 1 != 0 {
+        return Err(NativeCaptorPairBlock::Runtime("possessed body capability"));
+    }
+    let full = match &entity.sub_j_attachment_runtime {
+        RetailRuntimeValue::Known(Some(hold)) => hold.len() >= hold.capacity(),
+        RetailRuntimeValue::Known(None) => true,
+        RetailRuntimeValue::Unresolved => {
+            return Err(NativeCaptorPairBlock::Runtime("possessed body hold"))
+        }
+    };
+    Ok(opposite.capability_flags & 0xc00 == 0
+        || bits(opposite, DYING_STATE_BIT)? != 0
+        || opposite.collision.state_flags_at_0x08.masked(u32::MAX) == RetailRuntimeValue::Known(0)
+        || full)
+}
+
 /// Preflight of an unlisted pair, before any sound, callback or body write.
 ///
 /// The general visit is the listed lanes' own: sounds, both D780 behaviours,
@@ -1055,7 +1115,20 @@ fn general_pair_hold(
                 entity_type: entity.entity_type,
             }));
         }
-        if let Some(reason) = general_behavior_hold(entity, actor(frame.entities, opposite)?)? {
+        let opposite = actor(frame.entities, opposite)?;
+        if frame
+            .actor_tasks
+            .possession
+            .is_some_and(|custody| custody.state.body == owner)
+        {
+            if !possessed_pair_hook_is_null(entity, opposite)? {
+                return Ok(Some(ActivePairHoldReason::PossessedPickup {
+                    entity_type: opposite.entity_type,
+                }));
+            }
+            continue;
+        }
+        if let Some(reason) = general_behavior_hold(entity, opposite)? {
             return Ok(Some(reason));
         }
     }
@@ -1092,12 +1165,17 @@ fn general_pair_hold(
             }
         }
     }
+    let possessed = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.body);
     for body in [&plan.subject, &plan.candidate] {
         let current = actor(frame.entities, body.id)?;
         if !suppressed
             && (current.position_raw() != body.position_raw
                 || current.velocity_raw() != body.velocity_raw)
             && !general_body_custody(current)
+            && Some(current.id) != possessed
         {
             return Ok(Some(ActivePairHoldReason::NoBodyOwner {
                 entity_type: current.entity_type,
@@ -1308,6 +1386,20 @@ fn behavior(
             }
         }
         return Ok(NativeCaptorPairBehaviorResult::Null);
+    }
+    if frame
+        .actor_tasks
+        .possession
+        .is_some_and(|custody| custody.state.body == owner)
+    {
+        return if possessed_pair_hook_is_null(entity, actor(frame.entities, opposite)?)? {
+            Ok(NativeCaptorPairBehaviorResult::Null)
+        } else {
+            Err(NativeCaptorPairBlock::UnsupportedBehavior {
+                entity_id: owner,
+                style: style_address(entity)?,
+            })
+        };
     }
     let context = match entity.current_behavior_context {
         RetailRuntimeValue::Known(Some(context)) => context,
@@ -1817,11 +1909,16 @@ fn physical(
         contact,
     )
     .map_err(NativeCaptorPairBlock::Geometry)?;
+    let possessed = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.body);
     for body in [&plan.subject, &plan.candidate] {
         let current = actor(frame.entities, body.id)?;
         if (current.position_raw() != body.position_raw
             || current.velocity_raw() != body.velocity_raw)
             && !general_body_custody(current)
+            && Some(current.id) != possessed
             && !((weapon_pair || shark_pair)
                 && frame
                     .entities
@@ -1856,7 +1953,14 @@ fn physical(
                 source_entity_type_raw: source_type,
                 owner_handle: source,
             };
-            if weapon_pair || shark_pair {
+            if Some(target) == possessed {
+                crate::possession::live::possessed_pair_damage(frame, delivery).map_err(
+                    |block| {
+                        *committed = true;
+                        NativeCaptorPairBlock::PossessedDamage(format!("{block:?}"))
+                    },
+                )?;
+            } else if weapon_pair || shark_pair {
                 apply_native_pair_checked_damage(
                     frame,
                     target,

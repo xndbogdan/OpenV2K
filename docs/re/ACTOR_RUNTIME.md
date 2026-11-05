@@ -601,6 +601,11 @@ against a working factory, Type9 peers, Type40 and the Type12 family against
 people, Hive impact, and the Type74 remote beam. These fail closed: a block
 parks the visit's committed prefix and ends the subject's walk.
 
+A possessed body (the Possession Ray's) takes the general visit through
+Player Control's `447D70`, whose null branch the preflight admits; its
+pickup and every pair of the craft while it is possessed are held
+([mind control](PLAYER_CRAFT.md#mind-control)).
+
 Every other touching pair takes the **general visit**: the same sounds,
 behaviours, task hooks, response and damage, in the order above. A preflight
 runs first and writes nothing. It admits the pair when:

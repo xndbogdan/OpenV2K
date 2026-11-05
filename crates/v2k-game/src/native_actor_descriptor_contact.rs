@@ -710,6 +710,14 @@ pub(crate) fn completed_contact_owner(
     let Some(entity) = manager.iter_all().find(|entity| entity.id == id) else {
         return false;
     };
+    // The possession owns a possessed body; Player Control's task
+    // (FUN_00446530's template) has a null contact hook.
+    if tasks
+        .possession
+        .is_some_and(|custody| custody.state.body == id)
+    {
+        return true;
+    }
     // 11AD0 has no dying test, and BC90 never calls A860: until 14990 a class63
     // carrier's retained tasks still take their contact hooks. Only its Finished
     // receipt stands in for the owner the terminal retired.

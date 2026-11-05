@@ -1107,7 +1107,7 @@ static POSSESSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 /// The possessed body, for the reader's hold key.
 static POSSESSED_BODY: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-const POSSESSION_PAIRS_HELD: &str = "Possession held: a possessed body's pairs take the player's pair behavior (FUN_00447D70, its FUN_00443B50 pickup of a person), not ported; they are skipped";
+const POSSESSION_PAIRS_HELD: &str = "Possession: a possessed body's pair walk stopped (its FUN_00447D70 pickup of a person, FUN_00443B50, is held); the rest of its walk this frame is skipped";
 
 fn possession_stop(reported: &mut HashSet<&'static str>, stop: &'static str) {
     if reported.insert(stop) {
@@ -11299,8 +11299,28 @@ fn run_game(
                         .is_some_and(|custody| custody.state.body == id)
                     {
                         // Its static response ran in its Player Control visit;
-                        // its pairs take FUN_00447D70, held.
-                        possession_stop(&mut possession_stops_reported, POSSESSION_PAIRS_HELD);
+                        // its pairs take Player Control's FUN_00447D70.
+                        let pairs = v2k_game::intro2_type17::pair::resolve_type17_active_contacts_with_playing(
+                            &mut contact_frame,
+                            id,
+                            v2k_game::intro2_type17::pair::CaptureFeedbackPolicy::Gameplay,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        report_active_pair_stops(&pairs, &mut active_pair_stops_reported);
+                        if let v2k_game::intro2_type17::pair::Type17PairOutcome::Blocked {
+                            reason,
+                            ..
+                        } = &pairs
+                        {
+                            possession_stop(&mut possession_stops_reported, POSSESSION_PAIRS_HELD);
+                            log!("Possessed body {id} contacts stopped: {reason:?}");
+                        }
                         continue;
                     }
                     let result = resolve_type17_static_contact(&mut contact_frame, id);
