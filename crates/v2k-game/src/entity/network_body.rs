@@ -405,6 +405,24 @@ impl EntityManager {
             0,
             RetailStateWord::exact(REMOTE_STATE_BIT),
         );
+        // A peer's body arrives with FUN_00418A90's null template: the zeroed
+        // Sub-M keeps its words but for +50 (the 0x1F voice). Retail's full
+        // constructor therefore always resolves the component's presence, so
+        // a hollow copy carries the same zeroed state instead of an
+        // unresolved one: searches (Job Nearby) and remote-owner damage
+        // (kind 9) skip it the way they skip a zeroed live Sub-M, rather
+        // than stopping the whole evaluation on unknown words.
+        entity.base_factory_runtime = match &metadata.status_component_descriptor {
+            RetailRuntimeValue::Known(Some(descriptor)) => RetailRuntimeValue::Known(Some(
+                super::BaseFactoryRuntimeState::from_behavior_instance_template(
+                    *descriptor,
+                    None,
+                    None,
+                ),
+            )),
+            RetailRuntimeValue::Known(None) => RetailRuntimeValue::Known(None),
+            RetailRuntimeValue::Unresolved => RetailRuntimeValue::Unresolved,
+        };
         // FUN_004104B0's instance damage modifier `+44` by type.
         entity.collision.pair_callbacks.damage_modifier_address =
             RetailRuntimeValue::Known(match entity_type {

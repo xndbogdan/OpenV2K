@@ -1110,7 +1110,7 @@ pub struct BaseFactoryRuntimeState {
 }
 
 impl BaseFactoryRuntimeState {
-    fn from_behavior_instance_template(
+    pub(crate) fn from_behavior_instance_template(
         status_descriptor: StatusComponentDescriptor,
         config: Option<&[u8; 0x58]>,
         production: Option<FactoryProductionRuntime>,

@@ -556,7 +556,9 @@ fn peer_copy(
 fn a_peers_copies_are_built_from_a_zeroed_record() {
     let mut fx = WorldFx::new();
     let (session, mut manager) = client_arena_one(&mut fx);
-    for entity_type in [8, 9, 15, 39, 61, 66, 68, 71, 82, 102, 103, 126, 128] {
+    for entity_type in [
+        8, 9, 15, 39, 61, 66, 68, 71, 79, 82, 90, 91, 102, 103, 116, 126, 128,
+    ] {
         let mut before = fx.fork_for_main_base_abort_transaction();
         let birth = peer_copy(&session, &mut manager, &mut fx, entity_type);
         let PeerBirth::Native(id) = birth else {
@@ -587,6 +589,40 @@ fn a_peers_copies_are_built_from_a_zeroed_record() {
         matches!(&hive, PeerBirth::Hollow { reason, .. } if reason == "its constructor is not ported"),
         "{hive:?}"
     );
+}
+
+/// A hollow copy carries retail's zeroed null-template Sub-M instead of
+/// unresolved words, so a later worker copy's Job Nearby search skips it
+/// the way retail's null template does instead of stopping the whole
+/// construction on unknown state.
+#[v2k_test_support::retail_test]
+fn a_hollow_copy_does_not_poison_a_worker_copy() {
+    let mut fx = WorldFx::new();
+    let (session, mut manager) = client_arena_one(&mut fx);
+    for entity_type in [60, 67] {
+        let PeerBirth::Hollow { id, .. } = peer_copy(&session, &mut manager, &mut fx, entity_type)
+        else {
+            panic!("Type{entity_type} stays hollow");
+        };
+        let copy = manager.network_entity(id).unwrap();
+        assert!(
+            matches!(copy.base_factory_runtime, RetailRuntimeValue::Known(_)),
+            "Type{entity_type} resolved Sub-M"
+        );
+    }
+    for entity_type in [79, 90, 91, 116] {
+        let birth = peer_copy(&session, &mut manager, &mut fx, entity_type);
+        let PeerBirth::Native(id) = birth else {
+            panic!("Type{entity_type}: {birth:?}");
+        };
+        let copy = manager.network_entity(id).unwrap();
+        assert_eq!(copy.entity_type, entity_type);
+        assert!(copy.is_network_remote());
+        assert!(
+            copy.current_behavior_context != RetailRuntimeValue::Unresolved,
+            "Type{entity_type} behavior"
+        );
+    }
 }
 
 /// `FUN_00438080` with the null template for a Main Base: the zeroed Sub-M
