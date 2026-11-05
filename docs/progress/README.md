@@ -24,7 +24,7 @@ Manual statuses from [`status.csv`](status.csv):
 | documented | 19 |
 | not-needed | 628 |
 
-15 `FUN_` citations don't match a retail function
+16 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
 
 ## Map

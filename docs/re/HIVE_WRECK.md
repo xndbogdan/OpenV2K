@@ -535,7 +535,9 @@ Do not gate presentation on suction being active.
 At the Sub-N anchor X/Z, the callback bilinearly samples the four signed
 Section-10 height bytes with the two arithmetic-shift interpolation stages,
 then adds 200 raw units. This is the ring's base Y; Sub-N anchor Y and the sea
-surface are not used. For phase `p` in milliseconds, the height above that
+surface are not used. Each ring takes the model-root test (`FUN_00465840`
+at `0x41CDD9`, skipping a rejected ring) with the ring's wrapped raw
+position and model 243's radius, as the port does. For phase `p` in milliseconds, the height above that
 base and the private model output are:
 
 | Phase | Height above base, raw | Model callback output 1 |

@@ -1388,6 +1388,8 @@ fn draw_mind_ball(
     spin: &mut MindBallSpin,
     frame_us: u32,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     let Some((id, flight)) = ball else {
         return;
@@ -1398,6 +1400,21 @@ fn draw_mind_ball(
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
         return;
     };
+    // `FUN_004097A0` advances the spin at entry, tests every instance
+    // through `FUN_00465840` and stops the whole draw at the first reject.
+    // All eight share the ball's origin, so one test gates the draw after
+    // the spin advanced.
+    let instances = spin.draw(
+        [basis.lateral, basis.up, basis.forward],
+        flight.fade,
+        frame_us,
+    );
+    if let Some(viewport) = native_viewport {
+        let point = viewport.actor_origin_view(entity.position_raw());
+        if !world_model_root_in_view(cache, MIND_BALL_MODEL_ID, point, root_lens) {
+            return;
+        }
+    }
     let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
     let position_raw = entity.position_raw();
     let draw_position: [f32; 3] = std::array::from_fn(|axis| {
@@ -1406,11 +1423,7 @@ fn draw_mind_ball(
         )) as f32
             / 256.0
     });
-    for instance in spin.draw(
-        [basis.lateral, basis.up, basis.forward],
-        flight.fade,
-        frame_us,
-    ) {
+    for instance in instances {
         let mut vars = AnimVars::default();
         vars.dynamic[0] = i32::from(retail_tick as u16);
         vars.dynamic[1] = i32::from(instance.size_word);
@@ -13376,6 +13389,8 @@ fn draw_gameplay_world(
                             mind_ball_spin,
                             frame_us,
                             retail_tick,
+                            native_viewport,
+                            root_lens,
                         );
                         draw_mind_control_reticle(
                             renderer,
@@ -13386,6 +13401,8 @@ fn draw_gameplay_world(
                             player_craft,
                             mind_control_lock,
                             retail_tick,
+                            native_viewport,
+                            root_lens,
                         );
                         let origins = draw_player_craft(
                             renderer,
@@ -13859,7 +13876,16 @@ fn draw_gameplay_world(
     );
     for entity_id in wreck_ids {
         if let Some(entity) = em.iter_all().find(|entity| entity.id == entity_id) {
-            draw_hive_wreck_rings(renderer, cache, face_colors, camera, entity, retail_tick);
+            draw_hive_wreck_rings(
+                renderer,
+                cache,
+                face_colors,
+                camera,
+                entity,
+                retail_tick,
+                native_viewport,
+                root_lens,
+            );
         }
     }
 
@@ -14352,7 +14378,16 @@ fn render_opening_cinematic(
     );
     for entity_id in wreck_ids {
         if let Some(entity) = entities.iter_all().find(|entity| entity.id == entity_id) {
-            draw_hive_wreck_rings(renderer, cache, face_colors, camera, entity, retail_tick);
+            draw_hive_wreck_rings(
+                renderer,
+                cache,
+                face_colors,
+                camera,
+                entity,
+                retail_tick,
+                native_viewport,
+                root_lens,
+            );
         }
     }
 
@@ -14951,6 +14986,7 @@ fn particle_shadow_colour(cache: &v2k_game::resource_cache::ResourceCache) -> u3
 /// `LAB_0041CB10` continues after the admitted hive's ordinary body draw.
 /// Its ring model uses the global palette and its own callback parameters;
 /// the body's Sub-K words, terrain shade shift and attachment do not carry over.
+/// Each ring takes the root test; a rejected one is skipped.
 fn draw_hive_wreck_rings(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,
@@ -14958,6 +14994,8 @@ fn draw_hive_wreck_rings(
     camera: &Camera,
     entity: &v2k_game::entity::Entity,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     use v2k_game::hive_wreck_presentation::{
         HiveWreckPresentationRequest, HIVE_WRECK_RING_MODEL_ID,
@@ -14969,6 +15007,12 @@ fn draw_hive_wreck_rings(
         return;
     };
     for ring in request.ring_submissions(terrain) {
+        if let Some(viewport) = native_viewport {
+            let point = viewport.actor_origin_view(ring.position_raw);
+            if !world_model_root_in_view(cache, HIVE_WRECK_RING_MODEL_ID, point, root_lens) {
+                continue;
+            }
+        }
         let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
         let draw_position = ring
             .unwrapped_position_raw(camera_raw)
@@ -14994,6 +15038,7 @@ fn draw_hive_wreck_rings(
 }
 
 /// `FUN_00421590`'s suffix: the craft's lock reticle (`FUN_00421230`).
+/// Each instance takes the root test; a rejected one is skipped.
 #[allow(clippy::too_many_arguments)]
 fn draw_mind_control_reticle(
     renderer: &mut dyn v2k_render::Renderer,
@@ -15004,6 +15049,8 @@ fn draw_mind_control_reticle(
     craft: &PlayerCraft,
     lock: &mut PlayerMindControlLock,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     let Some(player) = em.player() else {
         return;
@@ -15041,6 +15088,12 @@ fn draw_mind_control_reticle(
     };
     let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
     for point in points {
+        if let Some(viewport) = native_viewport {
+            let view = viewport.actor_origin_view(point.position_raw);
+            if !world_model_root_in_view(cache, RETICLE_MODEL_ID, view, root_lens) {
+                continue;
+            }
+        }
         let draw_position = point
             .unwrapped_position_raw(camera_raw)
             .map(|raw| raw as f32 / 256.0);
@@ -21610,6 +21663,66 @@ mod menu_visual_tests {
     fn particle_draw_scale_matches_retail_projection_algebra() {
         assert_eq!(particle_sprite_world_dimension(16, 0x0500, 0x0100), 0.3125);
         assert_eq!(particle_sprite_world_dimension(32, 0x0f00, 0x0100), 1.875);
+    }
+
+    /// The remaining model roots that call `FUN_00465840` (the MindBall draw
+    /// `FUN_004097A0`, the Hive rings of `FUN_0041CB10`, the lock reticle
+    /// `FUN_00421230`) wrap the raw origin exactly as actor bodies do, then
+    /// test the header radius against the authored display block. A centered
+    /// model passes; one behind the camera or far off-axis does not.
+    #[v2k_test_support::retail_test]
+    fn off_screen_model_roots_share_the_wrapped_view_point() {
+        use v2k_game::native_model_frame::NativeWorldViewport;
+        let root = v2k_test_support::retail_dir();
+        let mut session = v2k_game::session::GameSession::init(&root).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        let viewport = NativeWorldViewport {
+            origin_raw: [0, 0, 0],
+            axes_q31: [[i32::MAX, 0, 0], [0, i32::MAX, 0], [0, 0, i32::MAX]],
+            identity: true,
+        };
+        let lens = [512, 512, 640, 480, 320, 240];
+        for model in [
+            MIND_BALL_MODEL_ID,
+            v2k_game::hive_wreck_presentation::HIVE_WRECK_RING_MODEL_ID,
+            RETICLE_MODEL_ID,
+        ] {
+            // The header radius (zero for model 76) enters the same test.
+            assert!(
+                session.cache.global_model(model).is_some(),
+                "authored model {model}"
+            );
+            // Retail VIEW depth is positive in front: the port's identity
+            // viewport keeps the raw words, so a centered near point passes
+            // while a point behind the camera fails the 0x3F near test.
+            assert!(
+                world_model_root_in_view(
+                    &session.cache,
+                    model,
+                    viewport.actor_origin_view([0, 0, 5000]),
+                    Some(lens),
+                ),
+                "model {model} centered"
+            );
+            assert!(
+                !world_model_root_in_view(
+                    &session.cache,
+                    model,
+                    viewport.actor_origin_view([0, 0, -5000]),
+                    Some(lens),
+                ),
+                "model {model} behind the camera"
+            );
+            assert!(
+                !world_model_root_in_view(
+                    &session.cache,
+                    model,
+                    viewport.actor_origin_view([30000, 0, 5000]),
+                    Some(lens),
+                ),
+                "model {model} off-axis"
+            );
+        }
     }
 
     #[test]

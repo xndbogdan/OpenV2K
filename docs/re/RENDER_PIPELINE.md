@@ -266,7 +266,24 @@ pass 432 to 899 but one: 467 of 468 frames, against one without the test
 (the port's frame 434 still draws 21 words where retail draws none). The
 other model roots (particle models `FUN_00442BA0`/`FUN_00442CB0`, the Hive
 `FUN_0041CB10`, `FUN_004136C0`, `FUN_00421230`, `FUN_0042F270`,
-`FUN_0044DB10`) still draw without it.
+`FUN_0044DB10`) still draw without it. Every one of those roots reaches the
+same wrapper: a static scan of the retail executable for `CALL`
+`0x00465840` finds, besides the actor draw, the Hive suffix `0x41CDD9`
+(per ring, skipping a rejected ring), the reticle `0x421545` (per
+instance), the sky `0x42F375`/`0x42F395` (the two copies), the menu prop
+`0x43B410`, the particle models `0x442C7C`/`0x442D83`, the Targetter
+`0x44DC8C`/`0x44DDAF`, the HUD draws `0x42959A`/`0x4297E3` (`FUN_004292B0`)
+and `0x42A7EF` (`FUN_0042A6F0`), and two calls in the census-missing
+MindBall draw `FUN_004097A0` (`0x4098D7`/`0x409929`, one per ring of four;
+the spin advances at entry, a reject ends the whole draw, and all eight
+instances share the ball's origin so one test after the spin is exact). Each call site wraps its raw origin the
+actor way (16-bit delta plus the viewport origin, e.g. `40982E-40986D`,
+`41CC84-41CCA2`, `42150B-421542`) before the call, so the port's wrapped
+VIEW point plus the header radius is the faithful gate for each.
+The port applies it to the MindBall (whole draw), the Hive rings and the
+reticle instances in the authored frame alongside the actor bodies. Still
+without it: the particle models (not presented), `FUN_004136C0`,
+`FUN_0042F270`, `FUN_0044DB10` and the HUD model draws.
 
 The later model entry `FUN_00464E60` separately compares signed view Z with
 the unsigned radius at model header `+0x08`. It rejects
