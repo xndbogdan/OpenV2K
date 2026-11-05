@@ -563,3 +563,142 @@ fn remote_beamer_carries_and_drops_through_d1c0() {
     );
     assert_eq!(k1(&world), 0, "the release published a fresh class59 task");
 }
+
+/// A peer's craft carrying this machine's weight: kind 13 attaches it
+/// (`FUN_00418030`, the null class0 `+08`), the actor's `FUN_00412DA0`
+/// keeps it on the peer's craft, and kind 15 (`FUN_004180F0`) sets it down
+/// in a Type93 at the drop point, from two words (the Type93's selector,
+/// then D1C0's living reselection), as the player's own drop.
+#[v2k_test_support::retail_test]
+fn a_peers_kinds_13_and_15_carry_and_set_down_the_weight() {
+    let mut world = World::load(14);
+    let position = world
+        .manager
+        .entity_mut(world.weight)
+        .unwrap()
+        .position_raw();
+    let carried_at = [position[0], position[1].wrapping_add(0x200), position[2]];
+    let carrier = world
+        .manager
+        .append_network_body(51, Some(carried_at), None)
+        .unwrap()
+        .id();
+    let expected_rng = world.fx.fork_for_main_base_abort_transaction();
+    assert_eq!(
+        world
+            .manager
+            .attach_owned_body_to_peer(world.weight, carrier, 1, &world.scheduler),
+        Ok(true)
+    );
+    // Attached already: a second request changes nothing.
+    assert_eq!(
+        world
+            .manager
+            .attach_owned_body_to_peer(world.weight, carrier, 3, &world.scheduler),
+        Ok(false)
+    );
+    let weight = world.manager.entity_mut(world.weight).unwrap();
+    assert_eq!(weight.attached_to, Some(carrier));
+    assert_eq!(
+        weight
+            .collision
+            .state_flags_at_0x08
+            .masked(0x1000 | 0x2000_0000 | 0x800),
+        RetailRuntimeValue::Known(0x1000 | 0x2000_0000)
+    );
+    assert!(matches!(
+        world.tick_actors(),
+        Class0ActorOutcome::Advanced { .. } | Class0ActorOutcome::Waiting { .. }
+    ));
+    assert_eq!(
+        world
+            .manager
+            .entity_mut(world.weight)
+            .unwrap()
+            .position_raw(),
+        carried_at,
+        "the remote parent lends its position"
+    );
+    world.assert_rng_words(expected_rng, 0);
+
+    // A record naming another parent leaves the weight where it rides.
+    let other = world.manager.player().unwrap().id;
+    let (x, z) = (position[0].wrapping_add(0x100), position[2]);
+    let drop = |world: &mut World, parent| {
+        world.manager.drop_owned_body_for_peer(
+            world.weight,
+            Some(parent),
+            x,
+            z,
+            RemoteBeamFrame {
+                scheduler: &mut world.scheduler,
+                world_fx: &mut world.fx,
+                notifications: &mut world.notifications,
+                retail_tick: world.tick,
+                terrain: world.session.cache.terrain().unwrap(),
+            },
+        )
+    };
+    assert_eq!(drop(&mut world, other), Ok(None));
+    let expected_rng = world.fx.fork_for_main_base_abort_transaction();
+    let proxy = drop(&mut world, carrier).unwrap().expect("a Type93");
+    world.assert_rng_words(expected_rng, 2);
+    let target_y = world
+        .session
+        .cache
+        .terrain()
+        .unwrap()
+        .bilinear_height_raw(x, z);
+    let weight = world.manager.entity_mut(world.weight).unwrap();
+    assert_eq!(weight.attached_to, Some(proxy));
+    assert_eq!(
+        world.manager.entity_mut(proxy).unwrap().position_raw(),
+        [x, target_y.wrapping_add(1), z]
+    );
+}
+
+/// The peer's craft that carried the weight is gone (it lapsed or left):
+/// the weight's own visit runs `FUN_004180F0` at its position, a Type93 on
+/// the terrain there from the same two words.
+#[v2k_test_support::retail_test]
+fn a_weight_whose_peer_carrier_is_gone_is_set_down_where_it_is() {
+    let mut world = World::load(14);
+    let position = world
+        .manager
+        .entity_mut(world.weight)
+        .unwrap()
+        .position_raw();
+    let carried_at = [
+        position[0].wrapping_add(0x80),
+        position[1].wrapping_add(0x200),
+        position[2],
+    ];
+    let carrier = world
+        .manager
+        .append_network_body(51, Some(carried_at), None)
+        .unwrap()
+        .id();
+    assert_eq!(
+        world
+            .manager
+            .attach_owned_body_to_peer(world.weight, carrier, 0, &world.scheduler),
+        Ok(true)
+    );
+    world.tick_actors();
+    assert!(world.manager.remove_network_body(carrier));
+    let expected_rng = world.fx.fork_for_main_base_abort_transaction();
+    let outcome = world.tick_actors();
+    assert!(
+        matches!(outcome, Class0ActorOutcome::Advanced { .. }),
+        "{outcome:?}"
+    );
+    world.assert_rng_words(expected_rng, 2);
+    let terrain = world.session.cache.terrain().unwrap();
+    let y = terrain.bilinear_height_raw(carried_at[0], carried_at[2]);
+    let weight = world.manager.entity_mut(world.weight).unwrap();
+    let proxy = weight.attached_to.expect("the Type93 holds the weight");
+    assert_eq!(
+        world.manager.entity_mut(proxy).unwrap().position_raw(),
+        [carried_at[0], y.wrapping_add(1), carried_at[2]]
+    );
+}

@@ -399,16 +399,33 @@ fn run_frame(
     // callback-enable branch. Valid local attachments preserve the class0 task.
     // 413039 explicitly excludes Type111 from parent/member resolution:
     // 416FF0's ordinary gate has +80=self, without a SubJ parent relation.
+    let attached = entity.attached_to.is_some();
     if entity.entity_type == 111 {
-        if entity.attached_to.is_some() {
+        if attached {
             return Err(Class0ActorError::Runtime("gate has cargo attachment"));
         }
         if state & 0x1000 != 0 && manager.native_gate_self_relation(id) != Some(id) {
             return Err(Class0ActorError::Runtime("gate self relation"));
         }
-    } else if state & 0x1000 != 0 {
-        resolve_relation_prefix(manager, id)?;
-    } else if entity.attached_to.is_some() {
+    } else if state & 0x1000 != 0 && !resolve_relation_prefix(manager, id)? {
+        // FUN_004180F0 at the body's own X and Z. The callback gate was read
+        // at entry; a carried body's is off.
+        if callback_enabled {
+            return Err(Class0ActorError::Runtime(
+                "a callback after FUN_004180F0's drop",
+            ));
+        }
+        let terrain = frame
+            .resources
+            .level_terrain()
+            .ok_or(Class0ActorError::Runtime("FUN_004180F0's terrain"))?;
+        // The release and attach re-authenticate the living graph, which
+        // this visit's committed prefix hides.
+        manager.set_native_class0_pending_prefix(id, false);
+        let dropped = manager.drop_class0_body_whose_parent_is_gone(id, terrain, frame.world_fx);
+        manager.set_native_class0_pending_prefix(id, true);
+        dropped.map_err(Class0ActorError::Runtime)?;
+    } else if state & 0x1000 == 0 && attached {
         return Err(Class0ActorError::Runtime("relation state"));
     }
     if callback_enabled {
@@ -584,7 +601,9 @@ fn megablast_visit(
     }
 }
 
-fn resolve_relation_prefix(manager: &mut EntityManager, id: u32) -> Result<(), Class0ActorError> {
+/// 12DA0's relation prelude; `Ok(false)` when the parent is gone, which
+/// retail answers with `FUN_004180F0`.
+fn resolve_relation_prefix(manager: &mut EntityManager, id: u32) -> Result<bool, Class0ActorError> {
     let entity = manager
         .iter_all()
         .find(|entity| entity.id == id)
@@ -592,23 +611,22 @@ fn resolve_relation_prefix(manager: &mut EntityManager, id: u32) -> Result<(), C
     let parent_id = entity
         .attached_to
         .ok_or(Class0ActorError::Runtime("missing relation handle"))?;
-    let parent = manager
-        .iter_all()
-        .find(|entity| entity.id == parent_id)
-        .ok_or(Class0ActorError::Runtime("missing-parent relation repair"))?;
+    let Some(parent) = manager.iter_all().find(|entity| entity.id == parent_id) else {
+        return Ok(false);
+    };
     if bits(parent, REMOTE_OWNED_STATE_BIT)? != 0 {
         let position = parent.position_raw();
         let entity = manager.entity_mut(id).ok_or(Class0ActorError::Allocation)?;
         entity.set_position_raw(position);
         entity.collision.state_flags_at_0x08.overwrite(0x20, 0x20);
-        return Ok(());
+        return Ok(true);
     }
     if !matches!(&parent.sub_j_attachment_runtime, RetailRuntimeValue::Known(Some(sub_j))
         if sub_j.ordered_entity_ids().contains(&id))
     {
         return Err(Class0ActorError::Runtime("missing-member relation release"));
     }
-    Ok(())
+    Ok(true)
 }
 
 fn run_callback(

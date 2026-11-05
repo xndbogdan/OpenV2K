@@ -87,7 +87,7 @@ mod type61_abort_live;
 #[cfg(test)]
 mod type93_abort_tests;
 use crate::ordinary_type9_cargo::Type9CargoReleasePosition;
-pub(crate) use cargo_runtime::RemoteBeamFrame;
+pub use cargo_runtime::RemoteBeamFrame;
 use cargo_runtime::{AttachmentProjectionCallbacks, CargoRelationCallbacks};
 pub use cargo_runtime::{
     LateTailMaterialiserFrame, PlayerCargoAttachmentError, PlayerCargoAttachmentFrame,
@@ -2987,6 +2987,9 @@ enum Type93LifecyclePurpose {
     PlayerCargoDrop,
     /// `FUN_0040CAF0`: a Remote Beamer sent a person to its receiver.
     RemoteBeam,
+    /// `FUN_004180F0`: a body this machine owns is set down where a peer
+    /// dropped it (kind 15), or where it is when its peer parent is gone.
+    RelationDrop,
     Type17MissingRelation {
         type_default_state_flags_at_0xc0: u32,
     },
@@ -3010,7 +3013,9 @@ impl Type93UpdatePhase {
                 Type93LifecyclePurpose::PlayerCargoDrop
             ) | (
                 Self::LateTailMaterialiser,
-                Type93LifecyclePurpose::PlayerCargoDrop | Type93LifecyclePurpose::RemoteBeam
+                Type93LifecyclePurpose::PlayerCargoDrop
+                    | Type93LifecyclePurpose::RemoteBeam
+                    | Type93LifecyclePurpose::RelationDrop
             ) | (
                 Self::LateTailMaterialiser,
                 Type93LifecyclePurpose::Type17MissingRelation { .. }
@@ -13700,6 +13705,7 @@ impl EntityManager {
                 purpose,
                 Type93LifecyclePurpose::PlayerCargoDrop
                     | Type93LifecyclePurpose::RemoteBeam
+                    | Type93LifecyclePurpose::RelationDrop
                     | Type93LifecyclePurpose::FactoryConvertedOutput { .. }
             ) {
                 let Some(plan) = callbacks.prepare_release(
@@ -13744,6 +13750,7 @@ impl EntityManager {
                 match purpose {
                     Type93LifecyclePurpose::PlayerCargoDrop
                     | Type93LifecyclePurpose::RemoteBeam
+                    | Type93LifecyclePurpose::RelationDrop
                     | Type93LifecyclePurpose::FactoryConvertedOutput { .. } => {
                         unreachable!("native cargo uses its prepared relation callback");
                     }

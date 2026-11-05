@@ -417,6 +417,21 @@ words to its craft, and `FUN_00415040`'s damage follows as kind 9. Two
 machines on loopback agree word for word: each of the host's 23 Chain Gun
 hits on the guest's craft sent deltas the guest applied unchanged.
 
+A body this machine owns that a peer's craft carries is attached to that
+craft on the peer's kind 13 (`FUN_00418030`, flags as above); the actor's
+`FUN_00412DA0` then gives it the peer's craft's position each visit and
+sets `0x20`. The peer's kind 15 (`FUN_00418290`) runs `FUN_004180F0`: a
+Type93 at the point, on the terrain's bilinear height, whose selector draws
+a word; the body's release (`FUN_00416750`, which for Type68's and Type74's
+class runs D1C0's terrain basis and living reselection, a second word);
+and `FUN_00408F00`'s attach to the Type93, which sets it down as it does a
+player's drop. When the peer's craft is gone (it lapsed or left), the
+body's own `FUN_00412DA0` finds no parent and runs `FUN_004180F0` at its
+own X and Z, from the same two words; its callbacks stay off for that
+visit, as the gate read at its entry says while it is carried. A guest
+beaming up the host's Type68 in arena 1 and dropping it saw it carried and
+set down at the same point as the host.
+
 `FUN_00447280` (class 25's initializer) on a body other than the one the
 local controller holds (its `+68`) finds no controller (`FUN_00443AF0`
 returns its `0x8802` error),
@@ -440,9 +455,10 @@ Held, each with a logged stop ("Network: ... is held"):
 - a hit on a dying peer's craft: `FUN_0040AC60` takes the copy's alternate,
   class 25, through `FUN_00425660`, whose publication on a class-7 body the
   port has no owner for;
-- receiving kinds 13 and 15 (`FUN_00418030`, `FUN_004180F0`), whose owner
-  side attaches its body to a peer's craft, keeps it on the craft through
-  `FUN_00412DA0` and releases it into a Type93 with a peer as the parent;
+- kinds 13 and 15 for an owned body of a type other than Type68 and Type74
+  ("a peer's kind 13 for an owned TypeN"), and a kind 13 naming a parent
+  unknown here (retail keeps the handle, and `FUN_00412DA0` then drops the
+  body where it is);
 - kind 14, which retail never sends;
 - a peer's kind 6 for a static of a kind with a null program (a retail
   crash, above) or outside the kinds the port admits;

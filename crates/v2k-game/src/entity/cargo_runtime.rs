@@ -104,8 +104,9 @@ impl EntityManager {
     }
 }
 
-/// The world a Remote Beamer's pair callback lends `FUN_0040CAF0`.
-pub(crate) struct RemoteBeamFrame<'a> {
+/// The world a Remote Beamer's pair callback lends `FUN_0040CAF0`, and a
+/// peer's kind 15 `FUN_004180F0`.
+pub struct RemoteBeamFrame<'a> {
     pub scheduler: &'a mut SpecializedActorTaskScheduler,
     pub world_fx: &'a mut WorldFx,
     pub notifications: &'a mut GameplayNotifications,
@@ -117,6 +118,128 @@ pub(crate) struct RemoteBeamFrame<'a> {
 const REMOTE_BEAM_SOUND_ID: u16 = 8;
 
 impl EntityManager {
+    /// `FUN_00418030` (kind 13): a peer asks this machine to attach a body
+    /// it owns to the peer's body that carries it. A body attached to
+    /// anything, or a peer's, is left alone (`Ok(false)`). The attach is
+    /// `FUN_00416700` with that parent; flag 1 sets state `0x20000000` and
+    /// without flag 2 the body is no longer drawn (`0x800`). The port runs
+    /// the null attach callback of Type68 and Type74; any other type's
+    /// callback is held (`Err`).
+    pub fn attach_owned_body_to_peer(
+        &mut self,
+        cargo: u32,
+        parent: u32,
+        flags: u32,
+        scheduler: &SpecializedActorTaskScheduler,
+    ) -> Result<bool, String> {
+        let Some(entity) = self.entities.iter().find(|entity| entity.id == cargo) else {
+            return Ok(false);
+        };
+        match entity
+            .collision
+            .state_flags_at_0x08
+            .masked(REMOTE_OWNED_STATE_BIT | 0x1000)
+        {
+            RetailRuntimeValue::Known(0) => {}
+            RetailRuntimeValue::Known(_) => return Ok(false),
+            RetailRuntimeValue::Unresolved => return Err("unknown state bits".into()),
+        }
+        if !self.native_class0_construction_present(cargo) {
+            return Err(format!("an owned Type{}", entity.entity_type));
+        }
+        if !scheduler.prepare_class0_actor_external_mutation(self, cargo) {
+            return Err("a class0 task not at a completed boundary".into());
+        }
+        super::class0_actor::cargo::attach_to_peer(self, cargo, parent)
+            .map_err(|error| format!("{error:?}"))?;
+        let state = &mut self
+            .entity_mut(cargo)
+            .unwrap()
+            .collision
+            .state_flags_at_0x08;
+        if flags & 1 != 0 {
+            state.overwrite(0x2000_0000, 0x2000_0000);
+        }
+        if flags & 2 == 0 {
+            state.overwrite(0x800, 0);
+        }
+        Ok(true)
+    }
+
+    /// `FUN_004180F0` for a peer's kind 15 (`FUN_00418290`): on a body this
+    /// machine owns that rides nothing or the named parent, a Type93 at the
+    /// point on the terrain; once it is built the body is released
+    /// (`FUN_00416750`) and attached to it (`FUN_00408F00`). Returns the
+    /// Type93, or `None` when retail does nothing. The port drops Type68 and
+    /// Type74; any other type is held (`Err`).
+    pub fn drop_owned_body_for_peer(
+        &mut self,
+        cargo: u32,
+        parent: Option<u32>,
+        x_raw: i16,
+        z_raw: i16,
+        frame: RemoteBeamFrame<'_>,
+    ) -> Result<Option<u32>, String> {
+        let Some(entity) = self.entities.iter().find(|entity| entity.id == cargo) else {
+            return Ok(None);
+        };
+        match entity
+            .collision
+            .state_flags_at_0x08
+            .masked(REMOTE_OWNED_STATE_BIT | 0x1000)
+        {
+            RetailRuntimeValue::Known(0) => {}
+            RetailRuntimeValue::Known(0x1000)
+                if parent.is_some() && entity.attached_to == parent => {}
+            RetailRuntimeValue::Known(_) => return Ok(None),
+            RetailRuntimeValue::Unresolved => return Err("unknown state bits".into()),
+        }
+        if !self.native_class0_construction_present(cargo) {
+            return Err(format!("an owned Type{}", entity.entity_type));
+        }
+        if entity.collision.active_model_slot() == RetailRuntimeValue::Unresolved {
+            return Err("the body's model".into());
+        }
+        let mut callbacks = LiveCargoCallbacks {
+            scheduler: frame.scheduler,
+            world_fx: frame.world_fx,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            terrain: Some(frame.terrain),
+            radar: None,
+            blocked: Vec::new(),
+        };
+        if !callbacks
+            .scheduler
+            .prepare_class0_actor_external_mutation(self, cargo)
+        {
+            return Err("a class0 task not at a completed boundary".into());
+        }
+        let release = super::class0_actor::cargo::prepare_peer_release(self, cargo, frame.terrain)
+            .map_err(|error| format!("{error:?}"))?;
+        let target = [
+            x_raw,
+            frame.terrain.bilinear_height_raw(x_raw, z_raw),
+            z_raw,
+        ];
+        let materialiser =
+            construct_type93_materialiser(self, target, frame.terrain, callbacks.world_fx)
+                .ok_or("the Type93's construction")?;
+        callbacks.commit_release(self, CargoReleasePlan::Class0(release));
+        let Some(attach) = callbacks.prepare_attach(self, cargo, materialiser.entity_id) else {
+            return Err(format!("08F00's attach: {:?}", callbacks.blocked));
+        };
+        self.link_cargo_to_materialiser(
+            &mut callbacks,
+            attach,
+            cargo,
+            materialiser,
+            target,
+            Type93LifecyclePurpose::RelationDrop,
+        );
+        Ok(Some(materialiser.entity_id))
+    }
+
     /// `FUN_0040CAF0` once its pair callback has a person: the receiver is
     /// the beamer's `+60` relation, else the first Type6 in the live list
     /// (never the last node, which the walk does not test), whose `+60` is
@@ -539,6 +662,144 @@ enum CargoReleasePlan {
     Other(u32, Type9CargoReleasePosition),
 }
 
+/// `FUN_00408F00` for a class0 body its own actor visit sets down.
+struct Class0VisitCallbacks;
+
+impl CargoRelationCallbacks for Class0VisitCallbacks {
+    type AttachPlan = super::class0_actor::cargo::Class0AttachPlan;
+    type ReleasePlan = ();
+
+    fn spawn_materialiser(
+        &mut self,
+        _: &mut EntityManager,
+        _: u32,
+        _: [i16; 3],
+        _: &TerrainGrid,
+    ) -> Option<Type93MaterialiserSpawn> {
+        None
+    }
+
+    fn prepare_attach(
+        &mut self,
+        manager: &EntityManager,
+        cargo: u32,
+        parent: u32,
+    ) -> Option<Self::AttachPlan> {
+        super::class0_actor::cargo::prepare_attach(manager, cargo, parent).ok()
+    }
+
+    fn commit_attach(
+        &mut self,
+        manager: &mut EntityManager,
+        plan: Self::AttachPlan,
+        publish_sub_j: impl FnOnce(&mut EntityManager),
+    ) {
+        super::class0_actor::cargo::commit_attach(manager, plan, publish_sub_j);
+    }
+
+    fn prepare_release(
+        &mut self,
+        _: &EntityManager,
+        _: u32,
+        _: u32,
+        _: Type9CargoReleasePosition,
+    ) -> Option<Self::ReleasePlan> {
+        None
+    }
+
+    fn commit_release(&mut self, _: &mut EntityManager, _: Self::ReleasePlan) {}
+
+    fn report_materialiser_block(&mut self, _: u32, _: &'static str) {}
+}
+
+impl EntityManager {
+    /// `FUN_00412DA0`'s relation prelude for a Type68 or Type74 this machine
+    /// owns whose parent is gone (a peer's craft that carried it lapsed or
+    /// left): `FUN_004180F0` at its own X and Z. A Type93 on the terrain
+    /// there (its selector's word), the release (`FUN_00416750`, D1C0's
+    /// word) and `FUN_00408F00`'s attach, inside the body's own visit.
+    pub(crate) fn drop_class0_body_whose_parent_is_gone(
+        &mut self,
+        cargo: u32,
+        terrain: &TerrainGrid,
+        world_fx: &mut WorldFx,
+    ) -> Result<u32, &'static str> {
+        let release = super::class0_actor::cargo::prepare_peer_release(self, cargo, terrain)
+            .map_err(|_| "FUN_004180F0's release")?;
+        let [x, _, z] = self
+            .entities
+            .iter()
+            .find(|entity| entity.id == cargo)
+            .ok_or("the body")?
+            .position_raw();
+        let target = [x, terrain.bilinear_height_raw(x, z), z];
+        let materialiser = construct_type93_materialiser(self, target, terrain, world_fx)
+            .ok_or("FUN_004180F0's Type93")?;
+        super::class0_actor::cargo::commit_release(self, release, world_fx);
+        let attach =
+            super::class0_actor::cargo::prepare_attach(self, cargo, materialiser.entity_id)
+                .map_err(|_| "FUN_00408F00's attach")?;
+        self.link_cargo_to_materialiser(
+            &mut Class0VisitCallbacks,
+            attach,
+            cargo,
+            materialiser,
+            target,
+            Type93LifecyclePurpose::RelationDrop,
+        );
+        Ok(materialiser.entity_id)
+    }
+}
+
+/// `FUN_00438080`'s Type93 at `target`: its singleton selector still draws
+/// a word.
+fn construct_type93_materialiser(
+    manager: &mut EntityManager,
+    target: [i16; 3],
+    terrain: &TerrainGrid,
+    world_fx: &mut WorldFx,
+) -> Option<Type93MaterialiserSpawn> {
+    let metadata = manager
+        .type_runtime_metadata(CARGO_DROP_PROXY_ENTITY_TYPE)?
+        .clone();
+    let expected_selection = authenticate_type93_materialiser_metadata(&metadata)?;
+
+    let initial_state = resolve_entity_initializer_with_selected_behavior(
+        EntityInitializerRequest {
+            metadata: Some(&metadata),
+            spawn_param: 0,
+            authored_position_raw: target,
+            terrain: Some(terrain),
+            resource_domain: ResourceDomainRelation::Current,
+        },
+        Some(expected_selection),
+    )
+    .state_flags;
+    let construction_stamp_at_0xb4 = manager.begin_common_body_attempt();
+    // 38080's singleton Type-93 behavior selector still consumes a word.
+    // This precedes the child's first release selector (CE90 or D1C0), even though only one behavior
+    // has a nonzero weight. Use the shared factory/Type-17 data constructor.
+    let selected = select_initial_behavior(
+        &metadata.initializer.as_ref()?.behavior_choices,
+        |rule| i32::from(rule == BehaviorWeightRule::Always),
+        || u32::from(world_fx.next_shared_retail_random_u16()),
+    )
+    .ok()
+    .flatten()?;
+    assert_eq!(selected, expected_selection);
+    let proxy_id = manager.next_entity_id;
+    let proxy = build_type93_materialiser_entity(
+        &metadata,
+        proxy_id,
+        target,
+        selected,
+        initial_state,
+        construction_stamp_at_0xb4,
+    )
+    .expect("authenticated Type-93 constructor");
+    Some(manager.publish_constructed_type93_materialiser(proxy))
+}
+
 /// Behavior classes whose initial style has a null `+08` attach callback:
 /// None (style `4C7468`), Gun Turret (`4C8230`) and Remote Beamer (`4C72B8`).
 const NULL_ATTACH_CLASSES: [u32; 3] = [0, 29, 59];
@@ -683,44 +944,7 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
                 return self.blocked(cargo, reason);
             }
         }
-        let metadata = manager
-            .type_runtime_metadata(CARGO_DROP_PROXY_ENTITY_TYPE)?
-            .clone();
-        let expected_selection = authenticate_type93_materialiser_metadata(&metadata)?;
-        let initial_state = resolve_entity_initializer_with_selected_behavior(
-            EntityInitializerRequest {
-                metadata: Some(&metadata),
-                spawn_param: 0,
-                authored_position_raw: target,
-                terrain: Some(terrain),
-                resource_domain: ResourceDomainRelation::Current,
-            },
-            Some(expected_selection),
-        )
-        .state_flags;
-        let construction_stamp_at_0xb4 = manager.begin_common_body_attempt();
-        // 38080's singleton Type-93 behavior selector still consumes a word.
-        // This precedes the child's first release selector (CE90 or D1C0), even though only one behavior
-        // has a nonzero weight. Use the shared factory/Type-17 data constructor.
-        let selected = select_initial_behavior(
-            &metadata.initializer.as_ref()?.behavior_choices,
-            |rule| i32::from(rule == BehaviorWeightRule::Always),
-            || u32::from(self.world_fx.next_shared_retail_random_u16()),
-        )
-        .ok()
-        .flatten()?;
-        assert_eq!(selected, expected_selection);
-        let proxy_id = manager.next_entity_id;
-        let proxy = build_type93_materialiser_entity(
-            &metadata,
-            proxy_id,
-            target,
-            selected,
-            initial_state,
-            construction_stamp_at_0xb4,
-        )
-        .expect("authenticated Type-93 constructor");
-        Some(manager.publish_constructed_type93_materialiser(proxy))
+        construct_type93_materialiser(manager, target, terrain, self.world_fx)
     }
 
     fn prepare_attach(

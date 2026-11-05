@@ -50,11 +50,11 @@
 <rect x="707.7" y="495.9" width="18.5" height="17.9" fill="#8c959f"/>
 <text x="565.4" y="265.5" fill="#1f2328">Actor task programs 90.9%</text>
 </g>
-<g><title>Multiplayer (MULTIPLAYER.md): 144 code, 8 notes, 25 omitted</title>
-<rect x="563.4" y="515.8" width="162.7" height="182.6" fill="#2da44e"/>
-<rect x="563.4" y="698.4" width="25.6" height="20.6" fill="#d4a72c"/>
-<rect x="589" y="698.4" width="137.2" height="20.6" fill="#8c959f"/>
-<text x="565.4" y="527.8" fill="#1f2328">Multiplayer 94.7%</text>
+<g><title>Multiplayer (MULTIPLAYER.md): 146 code, 6 notes, 25 omitted</title>
+<rect x="563.4" y="515.8" width="162.7" height="183.7" fill="#2da44e"/>
+<rect x="563.4" y="699.4" width="18.1" height="19.6" fill="#d4a72c"/>
+<rect x="581.5" y="699.4" width="144.6" height="19.6" fill="#8c959f"/>
+<text x="565.4" y="527.8" fill="#1f2328">Multiplayer 96.1%</text>
 </g>
 <g><title>Game mechanics (GAME_MECHANICS.md): 50 code</title>
 <rect x="728.2" y="253.5" width="147.4" height="183.3" fill="#2da44e"/>

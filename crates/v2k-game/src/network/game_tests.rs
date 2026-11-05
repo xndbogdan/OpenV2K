@@ -271,3 +271,50 @@ fn a_power_up_a_peer_picks_up_leaves_the_host_too() {
     }
     assert_eq!(proxy(&pair.guest_world), None);
 }
+
+/// A peer carrying one of this machine's bodies asks for it (kind 13,
+/// `FUN_00418030`) and drops it (kind 15, `FUN_00418290`): the owner gets
+/// its own body and the peer's craft as the parent, and the drop point.
+#[test]
+fn a_peers_attach_and_drop_name_the_owners_body_and_the_peers_craft() {
+    let mut pair = Pair::new();
+    pair.run_until(|p| {
+        peer_crafts(&p.guest_world).len() == 1 && peer_crafts(&p.host_world).len() == 1
+    });
+    let host_craft = peer_crafts(&pair.guest_world)[0].id;
+    let body = pair.guest.handle_of(host_craft).unwrap();
+    let guest_craft = pair.guest.handle_of(1).unwrap();
+    let carrier = peer_crafts(&pair.host_world)[0].id;
+    pair.guest.send(GameRecord::Attach([guest_craft, body, 1]));
+    pair.guest
+        .send(GameRecord::Dropped([guest_craft, body, 0x1200_0340]));
+    let mut events = Vec::new();
+    for _ in 0..100 {
+        let (host_events, _) = pair.frame();
+        events.extend(host_events.into_iter().filter(|event| {
+            matches!(
+                event,
+                NetworkEvent::PeerAttach { .. } | NetworkEvent::PeerDrop { .. }
+            )
+        }));
+        if events.len() == 2 {
+            break;
+        }
+    }
+    assert_eq!(
+        events,
+        [
+            NetworkEvent::PeerAttach {
+                entity_id: 1,
+                parent: Some(carrier),
+                flags: 1,
+            },
+            NetworkEvent::PeerDrop {
+                entity_id: 1,
+                parent: Some(carrier),
+                x_raw: 0x340,
+                z_raw: 0x1200,
+            },
+        ]
+    );
+}

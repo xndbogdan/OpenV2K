@@ -66,7 +66,22 @@ pub enum NetworkEvent {
     /// Kind 6: a static object's destruction starts here too
     /// (`FUN_00428910`): the cell's X and Z.
     StaticDestroyed([u8; 2]),
-    /// Kinds 13..=15: records whose world owners the port holds.
+    /// Kind 13 for a body this machine owns (`FUN_00418030`): attach it to
+    /// the peer's body that carries it (`None`: a handle unknown here).
+    PeerAttach {
+        entity_id: u32,
+        parent: Option<u32>,
+        flags: u32,
+    },
+    /// Kind 15 for a body this machine owns (`FUN_00418290` ->
+    /// `FUN_004180F0`): set it down at X and Z.
+    PeerDrop {
+        entity_id: u32,
+        parent: Option<u32>,
+        x_raw: i16,
+        z_raw: i16,
+    },
+    /// Kind 14, which retail never sends.
     Held { kind: u8 },
     /// `FUN_00438CB0` could not tell whether a body rests: its state word's
     /// bits `0x08000080` are unknown, so it resends on the moving period.
@@ -868,6 +883,33 @@ impl NetworkGame {
                 // FUN_00439880: at most 79 characters.
                 let line = String::from_utf8_lossy(&text[..text.len().min(79)]).into_owned();
                 self.scoring.add_line(&line);
+            }
+            GameRecord::Attach([parent, child, flags]) => {
+                if let Some(id) = self
+                    .handles
+                    .lookup(child)
+                    .filter(|id| self.local.contains_key(id))
+                {
+                    self.events.push(NetworkEvent::PeerAttach {
+                        entity_id: id,
+                        parent: self.handles.lookup(parent),
+                        flags,
+                    });
+                }
+            }
+            GameRecord::Dropped([parent, child, point]) => {
+                if let Some(id) = self
+                    .handles
+                    .lookup(child)
+                    .filter(|id| self.local.contains_key(id))
+                {
+                    self.events.push(NetworkEvent::PeerDrop {
+                        entity_id: id,
+                        parent: self.handles.lookup(parent),
+                        x_raw: point as u16 as i16,
+                        z_raw: (point >> 16) as u16 as i16,
+                    });
+                }
             }
             other => self.events.push(NetworkEvent::Held {
                 kind: other.kind_of(),

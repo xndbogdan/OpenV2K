@@ -481,6 +481,52 @@ pub fn advance_network_world(
                     _ => {}
                 }
             }
+            NetworkEvent::PeerAttach {
+                entity_id,
+                parent,
+                flags,
+            } => {
+                let Some(parent) = parent else {
+                    report_held("a peer's kind 13 naming a parent unknown here".into());
+                    continue;
+                };
+                match em.attach_owned_body_to_peer(entity_id, parent, flags, scheduler) {
+                    Ok(true) => verbose(format_args!(
+                        "Network: owned body {entity_id} attached to peer body {parent}, flags {flags} (kind 13)"
+                    )),
+                    Ok(false) => {}
+                    Err(reason) => report_held(format!("a peer's kind 13 for {reason}")),
+                }
+            }
+            NetworkEvent::PeerDrop {
+                entity_id,
+                parent,
+                x_raw,
+                z_raw,
+            } => {
+                let Some(terrain) = cache.level_terrain() else {
+                    continue;
+                };
+                match em.drop_owned_body_for_peer(
+                    entity_id,
+                    parent,
+                    x_raw,
+                    z_raw,
+                    v2k_game::entity::RemoteBeamFrame {
+                        scheduler: &mut *scheduler,
+                        world_fx: &mut *world_fx,
+                        notifications: &mut *notifications,
+                        retail_tick,
+                        terrain,
+                    },
+                ) {
+                    Ok(Some(proxy)) => verbose(format_args!(
+                        "Network: owned body {entity_id} set down at ({x_raw}, {z_raw}) by Type93 {proxy} (kind 15)"
+                    )),
+                    Ok(None) => {}
+                    Err(reason) => report_held(format!("a peer's kind 15 for {reason}")),
+                }
+            }
             NetworkEvent::Held { kind } => report_held(format!("record kind {kind}")),
             NetworkEvent::HollowPeerBody {
                 entity_type,
