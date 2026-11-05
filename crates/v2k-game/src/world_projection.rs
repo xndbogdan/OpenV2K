@@ -57,6 +57,23 @@ impl WorldProjection {
         ]
     }
 
+    /// The display block `DAT_004FEED0` for `FUN_00465870`'s root test, when
+    /// the frame shown is the authored one (a native view at the authored
+    /// logical size). Free and the resize/widescreen adapter show more than
+    /// the authored frame and keep drawing every scanned model.
+    pub fn root_lens(
+        authored: Option<Self>,
+        native_view: bool,
+        logical_viewport: (u32, u32),
+    ) -> Option<[i32; 6]> {
+        let authored = authored.filter(|lens| {
+            native_view
+                && lens.viewport_pixels.map(|value| value as u32)
+                    == [logical_viewport.0, logical_viewport.1]
+        })?;
+        Some(authored.authored_words())
+    }
+
     /// Install the authored lens in the renderer's logical viewport, retaining
     /// the camera's pose, handedness and clipping planes. Native widescreen
     /// extends the horizontal view at the same vertical scale; 4:3/Stretched
@@ -312,6 +329,25 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn root_lens_is_the_display_block_only_for_the_authored_native_frame() {
+        let words = [512, 512, 640, 480, 320, 240];
+        let authored = WorldProjection::from_words(words).unwrap();
+        assert_eq!(
+            WorldProjection::root_lens(Some(authored), true, (640, 480)),
+            Some(words)
+        );
+        assert_eq!(
+            WorldProjection::root_lens(Some(authored), false, (640, 480)),
+            None
+        );
+        assert_eq!(
+            WorldProjection::root_lens(Some(authored), true, (1280, 720)),
+            None
+        );
+        assert_eq!(WorldProjection::root_lens(None, true, (640, 480)), None);
     }
 
     #[test]

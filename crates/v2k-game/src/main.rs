@@ -13227,6 +13227,11 @@ fn draw_gameplay_world(
             projection_effect,
         ),
     );
+    let root_lens = WorldProjection::root_lens(
+        world_projection,
+        native_viewport.is_some() && matches!(camera_mode, GameplayWorldCameraMode::RetailChase),
+        renderer.viewport_size(),
+    );
     renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(
         renderer,
@@ -13491,6 +13496,14 @@ fn draw_gameplay_world(
             };
             if !within_scan {
                 break 'draw_actor;
+            }
+            // 4138F0's tail (the wreck rings) runs whatever the root test says.
+            if let Some(viewport) = native_viewport {
+                let point = viewport.actor_origin_view(world_position_raw(entity.position));
+                if !world_model_root_in_view(cache, model_id, point, root_lens) {
+                    wreck_ids.push(entity_id);
+                    break 'draw_actor;
+                }
             }
             let orientation = cache
                 .global_model(model_id)
@@ -13804,6 +13817,7 @@ fn draw_gameplay_world(
         retail_tick,
         world_fx,
         native_viewport,
+        root_lens,
     );
     model_submissions.flush(
         renderer,
@@ -13974,6 +13988,11 @@ fn render_opening_cinematic(
             projection_effect,
         ),
     );
+    let root_lens = WorldProjection::root_lens(
+        world_projection,
+        native_viewport.is_some(),
+        renderer.viewport_size(),
+    );
     renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(renderer, cache, None, face_colors, camera, retail_tick);
 
@@ -14050,6 +14069,13 @@ fn render_opening_cinematic(
                 )
             };
             let draw_position = camera_relative(camera, position);
+            if let Some(viewport) = native_viewport {
+                let point = viewport.actor_origin_view(world_position_raw(position));
+                if !world_model_root_in_view(cache, model_id, point, root_lens) {
+                    wreck_ids.push(entity_id);
+                    break 'draw_actor;
+                }
+            }
             let orientation = cache
                 .global_model(model_id)
                 .filter(|model| model_is_camera_facing_actor(model))
@@ -14284,6 +14310,7 @@ fn render_opening_cinematic(
         retail_tick,
         world_fx,
         native_viewport,
+        root_lens,
     );
     model_submissions.flush(
         renderer,
@@ -17373,6 +17400,7 @@ fn draw_static_terrain_objects(
     retail_tick: u32,
     world_fx: &mut WorldFx,
     native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     let (Some(terrain), Some(objects)) = (cache.terrain(), cache.terrain_objects()) else {
         return;
@@ -17423,6 +17451,16 @@ fn draw_static_terrain_objects(
                 viewport,
             )
         });
+        if native.as_ref().is_some_and(|(frame, _)| {
+            !world_model_root_in_view(
+                cache,
+                usize::from(object.model_id),
+                frame.origin_view_raw,
+                root_lens,
+            )
+        }) {
+            continue;
+        }
         world_fx.with_process_random(|random| {
             ModelTreeRenderer::new_world(
                 renderer,
@@ -18934,6 +18972,23 @@ fn menu_prop_root_in_view(
         model.radius,
         [focal_x, focal_y, width, height, centre[0], centre[1]],
     )
+}
+
+/// `FUN_00465870`'s root test for a world model (an actor through
+/// `FUN_004138F0`, a static object through `FUN_00465390`'s copy of it): a
+/// model whose sphere misses the authored frame is not walked, so its
+/// callbacks write nothing and its tf3 vertices draw no words. Without a
+/// root lens (Free, the widescreen adapter) every scanned model is drawn.
+fn world_model_root_in_view(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    model_id: usize,
+    point: [i32; 3],
+    lens: Option<[i32; 6]>,
+) -> bool {
+    let (Some(lens), Some(model)) = (lens, cache.global_model(model_id)) else {
+        return true;
+    };
+    v2k_game::game_state::native_root_in_view(point, model.radius, lens)
 }
 
 /// Render the main menu as the original 3D prop ring: the seven props

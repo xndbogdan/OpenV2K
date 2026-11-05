@@ -246,6 +246,28 @@ that same bit. Both port world draw loops now admit attached bodies only when
 `800` is proven set, while retaining the existing unparented admission and the
 unresolved full body/effect gate above. See [Type17 Capture](TYPE17_CAPTURE.md).
 
+Inside that window the model root (`FUN_00465870`, through `FUN_00465840`
+from the actor draw `FUN_004138F0`; static objects have the same test in
+`FUN_00465390`) transforms the origin into VIEW space and walks the model
+only if its sphere meets the frame: with `c = z + radius` (header `+0x08`),
+`c` must pass 0x3F, and `-radius·c <= cx·c + x·focal_x < (width + radius)·c`
+and `-radius·c <= cy·c - y·focal_y < (height + radius)·c` over the display
+block `DAT_004FEED0`. A rejected model runs none of its callbacks: no
+emitter or Queen muzzle stamps, no Sub-M product marker, no fallback or tf3
+random words. `FUN_004138F0`'s tail after the walk (the health smoothing and
+the wreck draw `FUN_004136C0`) runs either way. The port applies the test to
+the gameplay and Intro2 actor bodies and the static objects whenever the
+frame shown is the authored one (`WorldProjection::root_lens`: a native
+chase view at the display block's logical size); Free and the widescreen
+adapter show more than that frame and keep drawing every scanned model.
+In the lab's New Game, Intro2's actor fallback callbacks (`0040A99B`,
+`0040A9BB`, `0040A9D4`) draw words on the same passes as the port's from
+pass 432 to 899 but one: 467 of 468 frames, against one without the test
+(the port's frame 434 still draws 21 words where retail draws none). The
+other model roots (particle models `FUN_00442BA0`/`FUN_00442CB0`, the Hive
+`FUN_0041CB10`, `FUN_004136C0`, `FUN_00421230`, `FUN_0042F270`,
+`FUN_0044DB10`) still draw without it.
+
 The later model entry `FUN_00464E60` separately compares signed view Z with
 the unsigned radius at model header `+0x08`. It rejects
 `view_z - radius >= far`, and otherwise chooses the far constructor table
