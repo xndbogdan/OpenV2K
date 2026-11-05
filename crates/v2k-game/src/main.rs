@@ -13285,6 +13285,8 @@ fn draw_gameplay_world(
         face_colors,
         camera,
         retail_tick,
+        native_viewport,
+        root_lens,
     );
 
     // 530D0/53570 and pre-actor light writers precede 53760. Actor
@@ -14074,7 +14076,16 @@ fn render_opening_cinematic(
         renderer.viewport_size(),
     );
     renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
-    draw_authored_sky_model(renderer, cache, None, face_colors, camera, retail_tick);
+    draw_authored_sky_model(
+        renderer,
+        cache,
+        None,
+        face_colors,
+        camera,
+        retail_tick,
+        native_viewport,
+        root_lens,
+    );
 
     // 530D0/53570 and pre-actor light writers precede 53760. Actor
     // commands capture this field; 53A60 adds particle light before terrain.
@@ -18439,12 +18450,29 @@ fn draw_authored_sky_model(
     colors: &v2k_game::model_color::ModelMaterialCache,
     camera: &Camera,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     let Some(model_id) = v2k_game::sky::submitted_sky_model_id(cache, frame_request) else {
         return;
     };
     let x = camera.position[0] * 0.5;
     for draw_x in [x, x - 128.0] {
+        // `FUN_0042F270` tests each copy through `FUN_00465840`; the port
+        // gates each on its wrapped raw origin with the sky model's radius.
+        // The radius (32256 raw units) dwarfs every camera-relative offset,
+        // so reachable poses always pass; the gate guards only the absurd.
+        if let Some(viewport) = native_viewport {
+            let origin_raw = [
+                (draw_x * 256.0).round() as i32 as i16,
+                0,
+                (camera.position[2] * 256.0).round() as i32 as i16,
+            ];
+            let point = viewport.actor_origin_view(origin_raw);
+            if !world_model_root_in_view(cache, model_id, point, root_lens) {
+                continue;
+            }
+        }
         ModelTreeRenderer::new_world(
             renderer,
             cache,
@@ -21712,9 +21740,13 @@ mod menu_visual_tests {
 
     /// The remaining model roots that call `FUN_00465840` (the MindBall draw
     /// `FUN_004097A0`, the Hive rings of `FUN_0041CB10`, the lock reticle
-    /// `FUN_00421230`) wrap the raw origin exactly as actor bodies do, then
-    /// test the header radius against the authored display block. A centered
-    /// model passes; one behind the camera or far off-axis does not.
+    /// `FUN_00421230`, the Targetter ring and crosshair of `FUN_0044DB10`,
+    /// the shield aura of `FUN_004136C0`, the sky copies of `FUN_0042F270`)
+    /// wrap the raw origin exactly as actor bodies do, then test the header
+    /// radius against the authored display block. A centered model passes;
+    /// one behind the camera or far off-axis does not. The sky's radius
+    /// (32256) dwarfs every camera-relative offset, so every reachable pose
+    /// passes and only the absurd fails.
     #[v2k_test_support::retail_test]
     fn off_screen_model_roots_share_the_wrapped_view_point() {
         use v2k_game::native_model_frame::NativeWorldViewport;
@@ -21727,6 +21759,14 @@ mod menu_visual_tests {
             identity: true,
         };
         let lens = [512, 512, 640, 480, 320, 240];
+        let gate = |model: usize, raw: [i16; 3]| {
+            world_model_root_in_view(
+                &session.cache,
+                model,
+                viewport.actor_origin_view(raw),
+                Some(lens),
+            )
+        };
         for model in [
             MIND_BALL_MODEL_ID,
             v2k_game::hive_wreck_presentation::HIVE_WRECK_RING_MODEL_ID,
@@ -21746,32 +21786,23 @@ mod menu_visual_tests {
             // Retail VIEW depth is positive in front: the port's identity
             // viewport keeps the raw words, so a centered near point passes
             // while a point behind the camera fails the 0x3F near test.
+            assert!(gate(model, [0, 0, 5000]), "model {model} centered");
+            assert!(!gate(model, [0, 0, -5000]), "model {model} behind");
+            assert!(!gate(model, [30000, 0, 5000]), "model {model} off-axis");
+        }
+        for model in [305, 306] {
             assert!(
-                world_model_root_in_view(
-                    &session.cache,
-                    model,
-                    viewport.actor_origin_view([0, 0, 5000]),
-                    Some(lens),
-                ),
-                "model {model} centered"
+                session.cache.global_model(model).is_some(),
+                "authored sky {model}"
+            );
+            assert!(gate(model, [64, 0, 64]), "sky {model} near the camera");
+            assert!(
+                gate(model, [30000, 0, 30000]),
+                "sky {model} at a wrapped extreme"
             );
             assert!(
-                !world_model_root_in_view(
-                    &session.cache,
-                    model,
-                    viewport.actor_origin_view([0, 0, -5000]),
-                    Some(lens),
-                ),
-                "model {model} behind the camera"
-            );
-            assert!(
-                !world_model_root_in_view(
-                    &session.cache,
-                    model,
-                    viewport.actor_origin_view([30000, 0, 5000]),
-                    Some(lens),
-                ),
-                "model {model} off-axis"
+                !gate(model, [0, 0, -32200]),
+                "sky {model} behind the view plane"
             );
         }
     }

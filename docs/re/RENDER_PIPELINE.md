@@ -281,10 +281,10 @@ actor way (16-bit delta plus the viewport origin, e.g. `40982E-40986D`,
 `41CC84-41CCA2`, `42150B-421542`) before the call, so the port's wrapped
 VIEW point plus the header radius is the faithful gate for each.
 The port applies it to the MindBall (whole draw), the Hive rings, the
-reticle instances, the Targetter ring and crosshair and the shield aura in
-the authored frame alongside the actor bodies. Still without it: the
-particle models (`FUN_00442BA0`/`FUN_00442CB0`, not presented), `FUN_0042F270`
-and the HUD model draws (`FUN_004292B0`, `FUN_0042A6F0`).
+reticle instances, the Targetter ring and crosshair, the shield aura and
+the two sky copies in the authored frame alongside the actor bodies.
+Still without it: the particle models (`FUN_00442BA0`/`FUN_00442CB0`,
+not presented) and the HUD model draws (`FUN_004292B0`, `FUN_0042A6F0`).
 
 The later model entry `FUN_00464E60` separately compares signed view Z with
 the unsigned radius at model header `+0x08`. It rejects
@@ -695,7 +695,11 @@ The high half is an optional global Section-8 model id. Only levels 13 and 14
 set it (305/306 = `sky1`/`sky2`). `FUN_0042F270` submits two identity-oriented
 copies: X follows half the camera X, Z follows the camera, and the second copy
 is offset by `-0x8000` in 8.8 coordinates (−128 world units). This produces the
-distant parallax sky geometry over the solid colour.
+distant parallax sky geometry over the solid colour. Each copy takes the root
+test (`FUN_00465840` at `0x42F375`/`0x42F395`) on its wrapped raw origin with
+the sky model's radius (32256 raw units, which dwarfs every camera-relative
+offset, so reachable poses always pass); the port gates each copy the same
+way in the authored frame.
 
 The port keeps the six-dword request under a per-level-load controller lease.
 After the terrain-transform attempt, it atomically stores controller state 5
