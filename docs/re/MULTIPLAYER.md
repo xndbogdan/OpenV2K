@@ -436,8 +436,15 @@ words those draw. A peer's craft (type 51) is built by its constructor as
 above. No copy is ever scheduled: no task owner adopts one, and the actor
 pass skips its visit. Its contacts skip the surface and static phases. With
 two processes on loopback in each of the six arenas, every type the host
-sent but those held below was built so: 8, 9, 14, 15, 27, 35, 39, 55, 61,
-66, 68, 71, 82, 86, 87, 94, 95, 102, 103, 126, 127, 128 and 129.
+sent but those held below was built so: 6, 8, 9, 14, 15, 27, 35, 39, 55, 61,
+66, 68, 71, 82, 86, 87, 94, 95, 102, 103, 126, 127, 128 and 129. A peer's
+Main Base (type 6) takes the null template like a factory copy: no
+scientists, output or timers, and the primary voice 0x1F at gain 0. The
+port's Main Base publisher admits that template (all zero but word 20)
+alongside the all-zero authored ones; the copy carries its Sub-M, takes
+its behavior at birth and draws shared words, like every other native
+copy. In particular a harmful-sea pass over it sends kind 9 to its owner
+as for any other peer's body.
 
 A peer's craft is never scheduled either.
 A particle's hit on it runs the wrapper its class takes on the copy:
@@ -497,11 +504,10 @@ Held, each with a logged stop ("Network: ... is held"):
   whose copy stays hollow (its models and no components, no behavior chosen
   at birth, no birth draws): "a peer's TypeN copy (its constructor is not
   ported)";
-- a peer's Main Base (type 6): the null template gives its Sub-M the voice
-  0x1F, which the port's Main Base does not carry;
-- a peer's worker whose Job Nearby search meets a hollow copy (types 79, 90,
-  91 and 116 beside the arenas' Hives and Main Bases): the search needs the
-  copy's Sub-M ("worker: Job Nearby evidence");
+- a peer's worker (types 79, 90, 91 and 116) whose Job Nearby search meets
+  a hollow Hive copy beside the arenas' Hives (Main Base copies now carry
+  their Sub-M): the search needs the copy's Sub-M ("worker: Job Nearby
+  evidence");
 - a hit on a peer's copy other than a class-7 flyer's: it sends only its
   damage, without its type's hit hook or the jolt ("FUN_00411030's kind 10
   on a peer's TypeN copy"). A class-7 flyer's copy (types 14, 15, 39, 41, 87

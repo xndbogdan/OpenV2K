@@ -314,13 +314,6 @@ impl EntityManager {
         ) {
             return Err("a world built without its native constructors".into());
         }
-        if entity_type == 6 {
-            // The template below gives a Main Base's Sub-M a voice.
-            return Err(
-                "FUN_00418A90's null template: a Main Base Sub-M with the FUN_0044C830 voice 0x1F, which the port's Main Base does not carry"
-                    .into(),
-            );
-        }
         let [x, y, z] = position_raw.map(i16::to_le_bytes);
         // FUN_004381F0 hands FUN_00418A90 the record's template pointer
         // (+44), null here: the Sub-M FUN_00418A60 zeroed keeps its words

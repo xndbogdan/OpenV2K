@@ -587,10 +587,47 @@ fn a_peers_copies_are_built_from_a_zeroed_record() {
         matches!(&hive, PeerBirth::Hollow { reason, .. } if reason == "its constructor is not ported"),
         "{hive:?}"
     );
-    let base = peer_copy(&session, &mut manager, &mut fx, 6);
+}
+
+/// `FUN_00438080` with the null template for a Main Base: the zeroed Sub-M
+/// keeps its words but for +50 (word 20), which becomes the `FUN_0044C830`
+/// voice 0x1F at gain 0. The copy carries its Sub-M (control and scientists
+/// zero); its behavior is chosen at birth and it draws shared words.
+#[v2k_test_support::retail_test]
+fn a_peers_main_base_copy_takes_the_null_template() {
+    let mut fx = WorldFx::new();
+    let (session, mut manager) = client_arena_one(&mut fx);
+    let mut before = fx.fork_for_main_base_abort_transaction();
+    let birth = peer_copy(&session, &mut manager, &mut fx, 6);
+    let PeerBirth::Native(id) = birth else {
+        panic!("Type6: {birth:?}");
+    };
+    let copy = manager.network_entity(id).unwrap();
+    assert_eq!(copy.entity_type, 6);
+    assert!(copy.is_network_remote());
+    assert_eq!(
+        copy.collision.state_flags_at_0x08.masked(REMOTE_STATE_BIT),
+        RetailRuntimeValue::Known(REMOTE_STATE_BIT)
+    );
+    assert!(copy.authored_spawn_index >= Some(PEER_COPY_RECORD_INDEX));
     assert!(
-        matches!(&base, PeerBirth::Hollow { reason, .. } if reason.contains("0x1F")),
-        "{base:?}"
+        copy.current_behavior_context != RetailRuntimeValue::Unresolved,
+        "Type6 behavior"
+    );
+    assert!(
+        copy.main_base_runtime.is_some(),
+        "Type6 native Main Base owner"
+    );
+    let RetailRuntimeValue::Known(Some(sub_m)) = &copy.base_factory_runtime else {
+        panic!("Type6 Sub-M");
+    };
+    assert_eq!((sub_m.control_value_raw, sub_m.required_scientists), (0, 0));
+    // AC60's selector at least: the constructor drew shared words.
+    assert_ne!(
+        fx.fork_for_main_base_abort_transaction()
+            .next_shared_retail_random_u16(),
+        before.next_shared_retail_random_u16(),
+        "Type6 draws"
     );
 }
 

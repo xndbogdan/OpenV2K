@@ -111,9 +111,14 @@ pub(crate) fn publish_main_base(
     }
     let config =
         FactorySection13Config::decode(spawn.config.as_ref().ok_or(MainBaseError::Config)?);
-    // All28 authored ordinary Type6 templates are zero. Their Sub-M has no
+    // All 28 authored ordinary Type6 templates are zero. Their Sub-M has no
     // production output or C830 voice; retain the whole template for 19750.
-    if config.raw_words() != [0; 22] {
+    // A peer's copy arrives with FUN_00418A90's null template instead: the
+    // zeroed Sub-M keeps its words but for +50 (word 20), which becomes the
+    // FUN_0044C830 voice 0x1F at gain 0 (as for a peer's factory copy).
+    let mut null_peer_template = [0; 22];
+    null_peer_template[20] = 0x1F;
+    if config.raw_words() != [0; 22] && config.raw_words() != null_peer_template {
         return Err(MainBaseError::Config);
     }
     if entity.main_base_runtime.is_some()
