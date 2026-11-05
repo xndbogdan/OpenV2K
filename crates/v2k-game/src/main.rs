@@ -1058,12 +1058,24 @@ fn apply_gameplay_input_edges(
         return;
     }
     if POSSESSED.load(std::sync::atomic::Ordering::Relaxed) {
-        // A possessed Type17 has no weapon for the reader to step; the beam
-        // and hold keys act on the controller's cargo, which is held.
-        if (edges.collect || edges.drop || edges.rotate_hold)
-            && !CARGO_KEYS_REPORTED.swap(true, std::sync::atomic::Ordering::Relaxed)
-        {
-            eprintln!("{POSSESSION_CARGO_KEYS_HELD}");
+        // The reader's callbacks act through the controller on the possessed
+        // body: C and D set the +20E countdown (FUN_004440A0, FUN_00444070),
+        // the hold key turns that body's Sub-J (FUN_004442E0), and the weapon
+        // keys need its Sub-E (FUN_00444180), which a Type17 lacks.
+        if edges.collect {
+            entities.queue_beam(BeamCommand::Collect);
+        }
+        if edges.drop {
+            entities.queue_beam(BeamCommand::Drop);
+        }
+        if edges.rotate_hold {
+            let body = POSSESSED_BODY.load(std::sync::atomic::Ordering::Relaxed);
+            if let Some(RetailRuntimeValue::Known(Some(hold))) = entities
+                .entity_mut(body)
+                .map(|body| &mut body.sub_j_attachment_runtime)
+            {
+                hold.rotate_first_to_end();
+            }
         }
         return;
     }
@@ -1092,15 +1104,10 @@ fn apply_gameplay_input_edges(
 /// Whether the controller drives a possessed body this frame, for the input
 /// edges' gate.
 static POSSESSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static CARGO_KEYS_REPORTED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
+/// The possessed body, for the reader's hold key.
+static POSSESSED_BODY: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
-const POSSESSION_CARGO_KEYS_HELD: &str = "Possession held: the beam and hold keys while a body is possessed act on the controller's cargo from that body (FUN_00446640's +20E timer, FUN_00446D30), not ported";
-const POSSESSION_TAB_HELD: &str = "Possession held: TAB while a body is possessed installs the Hovering style's VTOL style (FUN_00447970) on that body, not ported";
-const POSSESSION_PASSIVE_SMOKE_HELD: &str = "Possession held: Passive Player's smoke from a craft under 20000 health (FUN_00446FC0, FUN_00441670) is not ported";
-const POSSESSION_STATIC_HOOK_HELD: &str = "Possession held: a possessed body's static contact got its response; its FUN_00447C90 hook and damage deliveries (FUN_00411760) are not ported";
 const POSSESSION_PAIRS_HELD: &str = "Possession held: a possessed body's pairs take the player's pair behavior (FUN_00447D70, its FUN_00443B50 pickup of a person), not ported; they are skipped";
-const POSSESSION_BODY_LOST: &str = "Possession stopped: the possessed body is gone; FUN_00446640 no longer runs and the controller's death of its body (FUN_00450980) is not ported, so control returns to the craft (a labelled stop, not retail)";
 
 fn possession_stop(reported: &mut HashSet<&'static str>, stop: &'static str) {
     if reported.insert(stop) {
@@ -1111,7 +1118,9 @@ fn possession_stop(reported: &mut HashSet<&'static str>, stop: &'static str) {
 struct PossessionFrame<'a> {
     em: &'a mut EntityManager,
     tasks: &'a mut SpecializedActorTaskScheduler,
-    cache: &'a v2k_game::resource_cache::ResourceCache,
+    cache: &'a mut v2k_game::resource_cache::ResourceCache,
+    static_damage: &'a mut StaticDamageScheduler,
+    notifications: &'a mut GameplayNotifications,
     world_fx: &'a mut WorldFx,
     possession: &'a mut Option<Possession>,
     native_owner: &'a bool,
@@ -1121,19 +1130,75 @@ struct PossessionFrame<'a> {
     stops: &'a mut HashSet<&'static str>,
     channels: &'a MotionChannels,
     craft_live: bool,
+    /// TAB this frame: the reader, after the `+70` test, sets `+70` to 1
+    /// (`FUN_004442B0`), so the next visit releases the body.
+    tab_pressed: bool,
+    beam_expiry: v2k_game::entity::BeamExpiry,
     elapsed_micros: u32,
     retail_tick: u32,
 }
 
+/// Why the takeover of a lock's target is held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TakeoverHeld {
+    /// Player Control runs only on a Type17 here.
+    Type(u32),
+    /// The target carries a body, which stays in its hold: the lift reads its
+    /// mass, and the carried body's custody stays with the captor's owner.
+    Carrying,
+    /// The target has no owner this port can hand over.
+    Custody,
+}
+
+/// `FUN_004480E0` on the lock's target: one selector word for each behavior
+/// source it installs (`FUN_00425680`: the target's, then the craft's), the
+/// target's task slots cleared in the Hovering style's order (`FUN_004464F0`)
+/// and the 60000 ms countdown. Returns the controller words and whether the
+/// target's owner was the native one.
+fn take_over_possession_target(
+    em: &mut EntityManager,
+    tasks: &mut SpecializedActorTaskScheduler,
+    world_fx: &mut WorldFx,
+    craft: u32,
+    target: u32,
+) -> Result<(Possession, bool), TakeoverHeld> {
+    let entity = em
+        .iter_all()
+        .find(|entity| entity.id == target)
+        .ok_or(TakeoverHeld::Custody)?;
+    if entity.entity_type != 17 {
+        return Err(TakeoverHeld::Type(entity.entity_type));
+    }
+    if !matches!(&entity.sub_j_attachment_runtime,
+        RetailRuntimeValue::Known(Some(hold)) if hold.is_empty())
+    {
+        return Err(TakeoverHeld::Carrying);
+    }
+    let native_owner =
+        v2k_game::intro2_type17::intro2_type17_allocation_authenticates_public(entity);
+    if !tasks.release_type17_for_possession(target) {
+        return Err(TakeoverHeld::Custody);
+    }
+    world_fx.next_shared_retail_random_u16();
+    world_fx.next_shared_retail_random_u16();
+    em.possess_body_tasks(target);
+    Ok((Possession::take_over(craft, target), native_owner))
+}
+
 /// The possessed body's Player Control visit (`FUN_00446640`): the `+70`
 /// countdown, then `FUN_00446D70`'s release or the hover integrator over its
-/// own components; then the MindBall's flight (`FUN_00409460`) and its end
-/// (`FUN_00409420`).
+/// own components and its static contact's hook and deliveries, whose lethal
+/// hit releases it through its death; then the MindBall's flight
+/// (`FUN_00409460`) and its end (`FUN_00409420`). A body gone without that
+/// death leaves the controller bodiless, which the frame's end turns into the
+/// player's death (`FUN_0044FFA0` -> `FUN_00450980`).
 fn advance_possession(frame: PossessionFrame<'_>) {
     let PossessionFrame {
         em,
         tasks,
         cache,
+        static_damage,
+        notifications,
         world_fx,
         possession,
         native_owner,
@@ -1143,61 +1208,50 @@ fn advance_possession(frame: PossessionFrame<'_>) {
         stops,
         channels,
         craft_live,
+        tab_pressed,
+        beam_expiry,
         elapsed_micros,
         retail_tick,
     } = frame;
-    let (Some(terrain), Some(terrain_objects)) = (cache.level_terrain(), cache.terrain_objects())
-    else {
-        return;
-    };
+    let mut released = None;
     if let Some(state) = possession.as_mut() {
         let body_live = em
             .iter_all()
             .any(|entity| entity.id == state.body && entity.active);
+        // FUN_00446640 counts +20E down first: a collect only acts for a body
+        // with capability bit 0; a drop pops the body's hold (FUN_00446D30).
+        if body_live
+            && em.tick_possessed_beam(elapsed_micros, beam_expiry)
+                == Some(v2k_game::entity::BeamCommand::Drop)
+            && em.iter_all().any(|entity| {
+                entity.id == state.body
+                    && !matches!(&entity.sub_j_attachment_runtime,
+                        RetailRuntimeValue::Known(Some(hold)) if hold.is_empty())
+            })
+            && stops.insert("possessed drop")
+        {
+            eprintln!("Possession held: the drop key on a possessed body's hold (FUN_00446D30, FUN_00418500) is not ported");
+        }
         if !body_live {
-            possession_stop(stops, POSSESSION_BODY_LOST);
-            *possession = None;
-            *followed_body = None;
+            // FUN_00446640 never runs; the frame's end kills the player.
         } else if state.advance(craft_live, elapsed_micros) {
-            let Possession { body, craft, .. } = *state;
-            *possession = None;
-            // The craft's own behavior source, then the target's.
-            world_fx.next_shared_retail_random_u16();
-            if *native_owner {
-                if let Err(block) =
-                    tasks.release_possessed_intro2_type17(em, body, retail_tick, world_fx)
-                {
-                    eprintln!("Possession release: body {body}'s own behavior stopped: {block:?}");
-                }
-            } else {
-                match em.release_possessed_type17(body, retail_tick, world_fx) {
-                    Ok(v2k_game::type17_impact_reselection::Type17ImpactInstallDecision::FollowBeaconsAcquiring) => {
-                        tasks.adopt_released_type17(em, body);
-                    }
-                    Ok(_) => log!(
-                        "Possession: body {body} chose Capture People or Run Away, which stay out of custody as their births do"
-                    ),
-                    Err(block) => eprintln!("Possession release: body {body}'s own behavior stopped: {block:?}"),
-                }
-            }
-            let at = em
-                .iter_all()
-                .find(|entity| entity.id == body)
-                .map(|entity| entity.position_raw());
-            match at.map(|at| em.construct_mind_ball(at, cache, world_fx, retail_tick)) {
-                Some(Ok(id)) => {
-                    *mind_ball = Some((id, MindBallFlight::born(body, craft)));
-                    *followed_body = Some(id);
-                    log!("Possession: body {body} released, MindBall {id} born");
-                }
-                other => {
-                    // FUN_00446D70's failed birth: the camera restarts on the craft.
-                    eprintln!("Possession release: MindBall birth stopped: {other:?}");
-                    chase_camera.reset();
-                    *followed_body = None;
-                }
-            }
+            let state = possession.take().expect("possessed");
+            released = Some(v2k_game::possession::live::release(
+                &mut v2k_game::possession::live::PossessionWorld {
+                    entities: em,
+                    tasks,
+                    world_fx,
+                    retail_tick,
+                },
+                cache,
+                state,
+                *native_owner,
+            ));
         } else {
+            if tab_pressed {
+                state.end_on_next_visit();
+            }
+            let state = *state;
             let water_enabled = cache
                 .level_desc()
                 .and_then(|level| level.raw_u32(0x84))
@@ -1210,21 +1264,53 @@ fn advance_possession(frame: PossessionFrame<'_>) {
                         let [heading, pitch, _] = body.rotation_heading_pitch_roll_raw();
                         channels.hover_turn_raw(heading, pitch)
                     });
-            match em.possessed_body_player_control(
-                state.body,
-                v2k_game::entity::PossessedBodyFrame {
-                    turn_channel,
-                    throttle_q16: channels.throttle_q16,
-                    elapsed_micros,
-                    terrain,
-                    terrain_objects,
-                    model_pool: cache,
-                    water_enabled,
-                    retail_tick,
-                },
-            ) {
+            let visit = match (cache.level_terrain(), cache.terrain_objects()) {
+                (Some(terrain), Some(terrain_objects)) => em.possessed_body_player_control(
+                    state.body,
+                    v2k_game::entity::PossessedBodyFrame {
+                        turn_channel,
+                        throttle_q16: channels.throttle_q16,
+                        elapsed_micros,
+                        terrain,
+                        terrain_objects,
+                        model_pool: cache,
+                        water_enabled,
+                        retail_tick,
+                    },
+                ),
+                _ => Err(v2k_game::entity::PossessedBodyBlock::Components),
+            };
+            match visit {
                 Ok(None) => {}
-                Ok(Some(_)) => possession_stop(stops, POSSESSION_STATIC_HOOK_HELD),
+                Ok(Some(contact)) => {
+                    match v2k_game::possession::live::deliver_static_contact(
+                        &mut v2k_game::possession::live::PossessionWorld {
+                            entities: em,
+                            tasks,
+                            world_fx,
+                            retail_tick,
+                        },
+                        cache,
+                        static_damage,
+                        notifications,
+                        contact,
+                        state,
+                        *native_owner,
+                    ) {
+                        Ok(None) => {}
+                        Ok(Some(release)) => {
+                            *possession = None;
+                            released = Some(release);
+                        }
+                        Err(block) => {
+                            if stops.insert("possessed static contact") {
+                                eprintln!(
+                                    "Possession: the possessed body's static contact stopped: {block:?}"
+                                );
+                            }
+                        }
+                    }
+                }
                 Err(block) => {
                     if stops.insert("possessed body") {
                         eprintln!(
@@ -1235,7 +1321,28 @@ fn advance_possession(frame: PossessionFrame<'_>) {
             }
         }
     }
-    if let Some((id, flight)) = mind_ball.as_mut() {
+    if let Some(released) = released {
+        if let Some(stop) = released.behavior_stop {
+            eprintln!("Possession release: the body's own behavior stopped: {stop}");
+        }
+        match released.mind_ball {
+            Ok(id) => {
+                *mind_ball = Some((id, MindBallFlight::born(released.body, released.craft)));
+                *followed_body = Some(id);
+                log!(
+                    "Possession: body {} released, MindBall {id} born",
+                    released.body
+                );
+            }
+            Err(block) => {
+                // FUN_00446D70's failed birth: the session follows the craft.
+                eprintln!("Possession release: MindBall birth stopped: {block}");
+                chase_camera.reset();
+                *followed_body = None;
+            }
+        }
+    }
+    if let (Some((id, flight)), Some(terrain)) = (mind_ball.as_mut(), cache.level_terrain()) {
         let id = *id;
         if em.fly_mind_ball(id, flight, elapsed_micros as i32, terrain) == MindBallStep::Die {
             // FUN_00409420: the session follows the craft again.
@@ -1244,6 +1351,10 @@ fn advance_possession(frame: PossessionFrame<'_>) {
         }
     }
     POSSESSED.store(possession.is_some(), std::sync::atomic::Ordering::Relaxed);
+    POSSESSED_BODY.store(
+        possession.map_or(0, |state| state.body),
+        std::sync::atomic::Ordering::Relaxed,
+    );
 }
 
 /// `FUN_004097A0`: the MindBall's two rings of model 243.
@@ -2726,6 +2837,8 @@ fn run_game(
     let mut mind_ball_spin = MindBallSpin::default();
     let mut followed_body: Option<u32> = None;
     let mut possession_stops_reported: HashSet<&'static str> = HashSet::new();
+    // TAB reached the reader while a body was possessed.
+    let mut possession_tab_pressed = false;
     let mut native_entity_weapon_error_reported = false;
     let mut held_weapon_selectors_reported = HashSet::new();
     let mut targetter = TargetterRuntime::new(0);
@@ -8014,15 +8127,10 @@ fn run_game(
                             // TAB = hovercraft <-> VTOL mode toggle (V2000).
                             // SDL repeat events are filtered by GameWindow, so
                             // this is one request per physical key-down edge.
-                            if *kc == Keycode::Tab
-                                && has_player
-                                && !player_hull.dying
-                                && possession.is_some()
-                            {
-                                possession_stop(
-                                    &mut possession_stops_reported,
-                                    POSSESSION_TAB_HELD,
-                                );
+                            if *kc == Keycode::Tab && has_player && possession.is_some() {
+                                // FUN_004442B0, from the reader inside the
+                                // possessed body's visit.
+                                possession_tab_pressed = true;
                             } else if *kc == Keycode::Tab && has_player && !player_hull.dying {
                                 request_vehicle_mode_toggle(
                                     &mut player_craft,
@@ -8311,24 +8419,36 @@ fn run_game(
                 let mut cargo_full_fx = None;
                 // Picking up a deployed Portable Radar removes its coverage
                 // while the drop context reads terrain: lend the radar apart.
-                let cargo_frame = session.cache.with_detached_terrain_radar(|cache, radar| {
-                    let drop_context = em.player().and_then(|player| {
-                        cache.terrain().map(|terrain| CargoDropContext {
-                            carrier_orientation: player_model_orientation(&player_craft, player),
-                            terrain,
+                // While a body is possessed the controller's +20E countdown
+                // runs on that body's Player Control visit instead.
+                let cargo_frame = if possession.is_some() {
+                    v2k_game::entity::PlayerCargoFrameOutcome {
+                        beam: None,
+                        blocked: Vec::new(),
+                    }
+                } else {
+                    session.cache.with_detached_terrain_radar(|cache, radar| {
+                        let drop_context = em.player().and_then(|player| {
+                            cache.terrain().map(|terrain| CargoDropContext {
+                                carrier_orientation: player_model_orientation(
+                                    &player_craft,
+                                    player,
+                                ),
+                                terrain,
+                            })
+                        });
+                        em.update_player_cargo(PlayerCargoFrame {
+                            elapsed_micros,
+                            beam_expiry,
+                            drop_context,
+                            retail_tick,
+                            scheduler: &mut specialized_actor_tasks,
+                            world_fx: &mut world_fx,
+                            notifications: &mut gameplay_notifications,
+                            radar: Some(radar),
                         })
-                    });
-                    em.update_player_cargo(PlayerCargoFrame {
-                        elapsed_micros,
-                        beam_expiry,
-                        drop_context,
-                        retail_tick,
-                        scheduler: &mut specialized_actor_tasks,
-                        world_fx: &mut world_fx,
-                        notifications: &mut gameplay_notifications,
-                        radar: Some(radar),
                     })
-                });
+                };
                 for (entity_id, reason) in &cargo_frame.blocked {
                     log!("Cargo behavior {entity_id} blocked: {reason}");
                 }
@@ -8367,6 +8487,67 @@ fn run_game(
                                 elapsed_micros,
                                 retail_tick,
                             );
+                        }
+                    }
+                }
+
+                // The craft ran Player Control this frame, or Passive Player.
+                let possessed_at_entry = possession.is_some();
+                // FUN_00444F60 -> FUN_00420A50 ends the craft's mode controller
+                // with the lock's advance outside network play. The craft
+                // leads the live list, so the lock reads the other bodies
+                // before their visits and the craft's previous matrix, and a
+                // takeover (FUN_004480E0) replaces the target's behavior
+                // before the target's own visit this frame.
+                if chase_mode
+                    && has_player
+                    && !player_hull.dying
+                    && network_game.is_none()
+                    && !possessed_at_entry
+                {
+                    let mut takeover_target = None;
+                    if let Some(player) = em.player() {
+                        let lock = mind_control_lock.for_body(player.id);
+                        let shooter = LockShooter {
+                            body: player,
+                            basis: player_body_basis(&player_craft, player),
+                        };
+                        let elapsed =
+                            elapsed_micros.min(v2k_game::hover::RETAIL_FRAME_DELTA_MAX_US) as i32;
+                        let bodies: Vec<_> = em.iter_all().collect();
+                        match lock.advance(shooter, bodies.iter().copied(), elapsed) {
+                            Ok(LockAdvance::Continue) => {}
+                            Ok(LockAdvance::TakeOver { target }) => takeover_target = Some(target),
+                            Err(block) => {
+                                eprintln!("Possession Ray lock stopped: {block:?}");
+                                lock.stop();
+                            }
+                        }
+                    }
+                    if let (Some(target), Some(craft)) =
+                        (takeover_target, em.player().map(|player| player.id))
+                    {
+                        match take_over_possession_target(
+                            em,
+                            &mut specialized_actor_tasks,
+                            &mut world_fx,
+                            craft,
+                            target,
+                        ) {
+                            Ok((state, native_owner)) => {
+                                possession = Some(state);
+                                possession_tab_pressed = false;
+                                possessed_native_owner = native_owner;
+                                followed_body = Some(target);
+                                log!("Possession Ray: body {target} taken over");
+                            }
+                            Err(held) => {
+                                if !std::mem::replace(&mut mind_control_takeover_reported, true) {
+                                    eprintln!(
+                                        "{POSSESSION_TAKEOVER_HELD} (body {target}: {held:?})"
+                                    );
+                                }
+                            }
                         }
                     }
                 }
@@ -8447,6 +8628,22 @@ fn run_game(
                 // moves the body. A death created later in this frame begins
                 // at the final entry boundary and receives its first dt here
                 // on the following controlled visit.
+                // FUN_0044FFA0's controller check ends the previous frame: a
+                // possessed body gone without its death (which would have
+                // released it) leaves the controller bodiless, and
+                // FUN_00450980 kills the player as the craft's own end does.
+                if possession.is_some_and(|state| {
+                    !em.iter_all()
+                        .any(|entity| entity.id == state.body && entity.active)
+                }) && network_game.is_none()
+                {
+                    log!("Possession: the possessed body is gone; the player dies");
+                    em.remove_player_and_attached_entities();
+                    has_player = false;
+                    chase_mode = false;
+                    return_to_frontend_pending = true;
+                    continue 'main_loop;
+                }
                 if player_death.is_active() {
                     match player_death.advance_micros(elapsed_micros) {
                         PlayerDeathTick::ExpiredNow { .. } if network_game.is_some() => {
@@ -8611,8 +8808,6 @@ fn run_game(
                     };
                 }
                 let mut emitter_angle_words = None;
-                // The craft ran Player Control this frame, or Passive Player.
-                let possessed_at_entry = possession.is_some();
                 POSSESSED.store(possessed_at_entry, std::sync::atomic::Ordering::Relaxed);
                 if chase_mode {
                     // FUN_00446640 snapshots entity +0x30 at callback entry;
@@ -8672,64 +8867,8 @@ fn run_game(
                             config.self_righting,
                         )
                     });
-                    // FUN_00444F60 -> FUN_00420A50 ends the mode controller
-                    // with the lock's advance outside network play.
-                    let mut takeover_target = None;
-                    if !player_hull.dying && network_game.is_none() && !possessed_at_entry {
-                        if let Some(player) = em.player() {
-                            let lock = mind_control_lock.for_body(player.id);
-                            let shooter = LockShooter {
-                                body: player,
-                                basis: player_body_basis(&player_craft, player),
-                            };
-                            let elapsed = elapsed_micros
-                                .min(v2k_game::hover::RETAIL_FRAME_DELTA_MAX_US)
-                                as i32;
-                            let bodies: Vec<_> = em.iter_all().collect();
-                            match lock.advance(shooter, bodies.iter().copied(), elapsed) {
-                                Ok(LockAdvance::Continue) => {}
-                                Ok(LockAdvance::TakeOver { target }) => {
-                                    takeover_target = Some(target);
-                                }
-                                Err(block) => {
-                                    eprintln!("Possession Ray lock stopped: {block:?}");
-                                    lock.stop();
-                                }
-                            }
-                        }
-                    }
-                    // FUN_004480E0: the target takes the controller and runs
-                    // Player Control; the craft runs Passive Player. Each new
-                    // behavior source's install draws its selector word.
-                    if let (Some(target), Some(craft)) =
-                        (takeover_target, em.player().map(|player| player.id))
-                    {
-                        // Only an empty-handed Type17 in custody: the lift reads
-                        // a carried body's mass, and Capture People's cleanup of
-                        // its held body (FUN_0040D040) is not ported here.
-                        let native_owner = em.iter_all().find(|entity| entity.id == target).map(
-                            v2k_game::intro2_type17::intro2_type17_allocation_authenticates_public,
-                        );
-                        let empty_handed = em.iter_all().any(|entity| {
-                            entity.id == target
-                                && entity.entity_type == 17
-                                && matches!(&entity.sub_j_attachment_runtime,
-                                    RetailRuntimeValue::Known(Some(hold)) if hold.is_empty())
-                        });
-                        let supported = empty_handed
-                            && specialized_actor_tasks.release_type17_for_possession(target);
-                        if supported {
-                            possessed_native_owner = native_owner == Some(true);
-                            world_fx.next_shared_retail_random_u16();
-                            world_fx.next_shared_retail_random_u16();
-                            em.possess_body_tasks(target);
-                            possession = Some(Possession::take_over(craft, target));
-                            followed_body = Some(target);
-                            log!("Possession Ray: body {target} taken over");
-                        } else if !std::mem::replace(&mut mind_control_takeover_reported, true) {
-                            eprintln!("{POSSESSION_TAKEOVER_HELD} (body {target})");
-                        }
-                    }
+                    // The lock advanced, and any takeover ran, at the craft's
+                    // place before the actor pass.
                     // FUN_00444F60 fires at the end of the mode controller, so
                     // FUN_00424650 reads the heading it turned and the pitch
                     // and roll the environment phase has not yet changed.
@@ -9027,12 +9166,36 @@ fn run_game(
                     // bound until the player allocation is removed.
                     let controlled_player_callback_active =
                         frame_forces.is_some() && !possessed_at_entry;
-                    // FUN_00446FC0 smokes a hurt craft at random; not ported.
-                    if possessed_at_entry && player_hull.health_raw < 20_000 {
-                        possession_stop(
-                            &mut possession_stops_reported,
-                            POSSESSION_PASSIVE_SMOKE_HELD,
-                        );
+                    // FUN_00446FC0's tail: a craft (capability bit 0) under
+                    // 20000 health at entry smokes behind itself at random.
+                    if possessed_at_entry && !player_hull.dying {
+                        let source = em
+                            .player()
+                            .filter(|player| player.capability_flags & 1 != 0)
+                            .map(|player| {
+                                (
+                                    player.position_raw(),
+                                    player_body_basis(&player_craft, player).forward,
+                                    player.id,
+                                )
+                            });
+                        if let Some((position_raw, body_forward_q31, source_id)) = source {
+                            if v2k_game::possession::passive_player_smokes(
+                                hull_health_at_controller_entry_raw,
+                                || world_fx.next_shared_retail_random_u16(),
+                            ) {
+                                let sea_level_raw = session
+                                    .cache
+                                    .terrain()
+                                    .map(|terrain| terrain.sea_level_raw());
+                                world_fx.emit_player_low_hull_smoke_raw(
+                                    position_raw,
+                                    body_forward_q31,
+                                    source_id,
+                                    sea_level_raw,
+                                );
+                            }
+                        }
                     }
                     // The possessed body's Player Control, then the MindBall,
                     // at the tail of the live list.
@@ -9040,7 +9203,9 @@ fn run_game(
                         advance_possession(PossessionFrame {
                             em,
                             tasks: &mut specialized_actor_tasks,
-                            cache: &session.cache,
+                            cache: &mut session.cache,
+                            static_damage: &mut static_damage,
+                            notifications: &mut gameplay_notifications,
                             world_fx: &mut world_fx,
                             possession: &mut possession,
                             native_owner: &possessed_native_owner,
@@ -9050,6 +9215,8 @@ fn run_game(
                             stops: &mut possession_stops_reported,
                             channels: &channels,
                             craft_live: !player_hull.dying,
+                            tab_pressed: std::mem::take(&mut possession_tab_pressed),
+                            beam_expiry,
                             elapsed_micros,
                             retail_tick,
                         });
@@ -9572,6 +9739,27 @@ fn run_game(
                 );
 
                 world_fx.process_pending();
+                // FUN_0041BEB0's mouth walk: a dying Hive swallows the bodies
+                // that fall into its mouth; the possessed body is released.
+                let (swallows, held_fall_ins) =
+                    em.apply_hive_mouth_swallows(possession.map(|state| state.body));
+                for swallow in swallows {
+                    match swallow {
+                        v2k_game::entity::HiveMouthSwallow::Controlled(id) => {
+                            if let Some(state) = possession.as_mut() {
+                                state.swallowed();
+                            }
+                            log!("Hive mouth: the possessed body {id} is released");
+                        }
+                        v2k_game::entity::HiveMouthSwallow::Staged(id) => {
+                            specialized_actor_tasks.retire_swallowed_body(id);
+                            log!("Hive mouth: body {id} swallowed");
+                        }
+                    }
+                }
+                if held_fall_ins != 0 && possession_stops_reported.insert("live hive mouth") {
+                    eprintln!("Hive mouth held: a body fell into a live Hive's mouth, whose kill and draw-in (FUN_00410C10, FUN_0041C830) are not ported");
+                }
                 // Controlled-player movement precedes the Hive's no-RNG wreck
                 // contact phase; its component clock already ran in 13500.
                 pending_failed_world_interior_request |= em

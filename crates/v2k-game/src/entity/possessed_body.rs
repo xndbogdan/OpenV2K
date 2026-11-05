@@ -70,11 +70,15 @@ pub enum PossessedBodyBlock {
     StaticScan,
 }
 
-/// What a static-model contact did; the deliveries are held.
+/// A static-model contact the visit responded to, for its hook and
+/// deliveries ([`crate::possession::live::deliver_static_contact`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PossessedStaticContact {
+    pub contact: crate::static_contact::StaticModelContact,
+    /// The type's contact sound (`+8A`) and where it plays.
+    pub contact_sound: Option<(u16, [i16; 3])>,
+    pub velocity_before_raw: [i16; 3],
     pub impact_raw: i32,
-    pub cell: [u8; 2],
 }
 
 impl EntityManager {
@@ -382,14 +386,23 @@ fn possessed_static_contact(
     else {
         return Ok(None);
     };
+    // FUN_00412CF0 first plays the type's contact sound (+8A).
+    let contact_sound = frame
+        .model_pool
+        .global_entity_type(entity.entity_type as usize)
+        .map(|record| u16::from_le_bytes([record.raw_header[0x8a], record.raw_header[0x8b]]))
+        .ok_or(PossessedBodyBlock::Components)?;
+    let position_before_raw = entity.position_raw();
     let velocity_before_raw = entity.velocity_raw();
     let mut position_raw = entity.position_raw();
     let mut velocity_raw = velocity_before_raw;
     apply_contact_response_raw(&mut position_raw, &mut velocity_raw, contact);
     entity.set_motion_raw(position_raw, velocity_raw);
     Ok(Some(PossessedStaticContact {
+        contact,
+        contact_sound: (contact_sound != 0).then_some((contact_sound, position_before_raw)),
+        velocity_before_raw,
         impact_raw: velocity_delta_impact_raw(velocity_before_raw, velocity_raw, entity.mass_raw),
-        cell: contact.cell,
     }))
 }
 

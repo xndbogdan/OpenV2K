@@ -36,7 +36,7 @@ pub const RETICLE_MODEL_ID: usize = 76;
 
 /// The takeover's stop: `FUN_004480E0` makes the target's own body run
 /// Player Control, which the port runs only on the craft.
-pub const POSSESSION_TAKEOVER_HELD: &str = "Possession Ray takeover held: FUN_004480E0 runs Player Control on the target's own body, which the port runs only on a Follow Beacons Type17 (docs/re/PLAYER_CRAFT.md#mind-control)";
+pub const POSSESSION_TAKEOVER_HELD: &str = "Possession Ray takeover held: FUN_004480E0 runs Player Control on the target's own body, which the port runs only on an empty-handed Type17 (docs/re/PLAYER_CRAFT.md#mind-control)";
 
 /// Capability bit 3 (`+0x64`): a body the search may lock.
 const LOCKABLE_CAPABILITY: u32 = 0x8;

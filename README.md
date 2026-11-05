@@ -30,7 +30,7 @@ between port machines over the port's own transport; its held parts are in
 
 Of the **1,771** game functions in retail `V2000.EXE` the port
 covers ([628 omitted](docs/progress/README.md#omitted)),
-**1,714 (96.8%)** are referenced by the port's code and
+**1,715 (96.8%)** are referenced by the port's code and
 **1,771 (100.0%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 

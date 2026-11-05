@@ -59,6 +59,12 @@ impl Possession {
         self.countdown_ms < 1
     }
 
+    /// `FUN_004442B0`, TAB while the craft waits at `+6C`: `+70` becomes 1,
+    /// so the next Player Control visit releases the body.
+    pub fn end_on_next_visit(&mut self) {
+        self.countdown_ms = 1;
+    }
+
     /// `FUN_00448760`: a Hive swallowing the possessed body releases it on
     /// the next Player Control visit.
     pub fn swallowed(&mut self) {
@@ -66,6 +72,25 @@ impl Possession {
             self.countdown_ms = 1;
         }
     }
+}
+
+/// Passive Player (`FUN_00446FC0`) smokes a craft below this health.
+const PASSIVE_SMOKE_BELOW_HEALTH: i32 = 20_000;
+
+/// `FUN_00446FC0`'s smoke chance for a craft with `health` at its entry:
+/// below 20000 one shared word decides, a 1-in-`health >> 13` chance (at
+/// least 2); a hit then places the plume as Player Control's
+/// (`FUN_00441670`).
+pub fn passive_player_smokes(health: i32, mut next_word: impl FnMut() -> u16) -> bool {
+    if health >= PASSIVE_SMOKE_BELOW_HEALTH {
+        return false;
+    }
+    let divisor = if ((health as u32) & 0xFFFF_E000) as i32 >= 0x4000 {
+        health >> 13
+    } else {
+        2
+    };
+    i64::from(next_word()) % i64::from(divisor) == 0
 }
 
 /// What one MindBall visit asks of its caller.
@@ -292,6 +317,8 @@ fn octagonal_offset(to: [i16; 3], from: [i16; 3]) -> (i32, [i16; 3]) {
     };
     (distance, offset)
 }
+
+pub mod live;
 
 #[cfg(test)]
 mod tests;

@@ -421,6 +421,34 @@ The separate live-hive player fall-in/ejection branch remains an unimplemented
 boundary. Child-birth `FUN_0041C830` ejection and `FUN_0041CA90` restoration are
 owned by the birth host above; neither replaces the wreck's suction law.
 
+## The mouth walk
+
+The same live-list walk first tests each body against the Hive's mouth, on
+every Hive whose Sub-N `+4C` marker gate is set (a Hive born beside a kind
+22..26 object, alive or dead): an admitted (`0x8000`) body within the
+three-axis `< 8000` bound whose signed word offset from the mouth (Sub-N
+`+54`) has `dy < -0x20` and `dx*dx + dz*dz < 0x24000`.
+
+- On a dying Hive, a body without capability bit 0 and without the carried
+  bit `0x1000` is swallowed: the controller's own body (`FUN_00443AF0`), other
+  than a Type98, is released (`FUN_00448760` sets `+70` to 1 while it is
+  nonzero, and the next Player Control visit releases it), and any other body
+  is staged for the deferred sweep (`FUN_00410B70`). The port runs this for
+  every body after the controlled visits, before the craft's suction; a
+  staged body leaves its owner's custody.
+- On a live Hive, a body without capability bit 3 dies (`FUN_00410C10`) and
+  every such body is drawn in (`FUN_0041C830`); this branch stays held with a
+  logged stop, as the live Hive's fall-in.
+
+The retail lab confirmed the dying branch on world 13 (`0x04A30001`, mouth
+`(BB80, FF00, 8180)`, its `+4C` set from birth): with the Hive killed
+(`FUN_00410C10` at pass 2100) and two bodies moved `0x80` below the mouth at
+pass 2301, the next Hive visit (tick 1800) staged the free one and called
+`FUN_00448760` for the possessed Type17 (`+70` 53040 -> 1); at tick 1801 its
+Player Control visit released it (the MindBall born at it) and the same
+tick's walk staged it, now without a controller. A retail-backed test
+replays the gate on the port's world 13 Hive.
+
 ## Player and hive update order
 
 `FUN_00413500` walks the intrusive list and calls `FUN_00412DA0` per entity.

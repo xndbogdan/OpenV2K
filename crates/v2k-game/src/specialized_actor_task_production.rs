@@ -1725,6 +1725,12 @@ impl SpecializedActorTaskScheduler {
         true
     }
 
+    /// A body a dying Hive's mouth staged for the sweep (`FUN_00410B70` in
+    /// `FUN_0041BEB0`) leaves its owner's custody; the sweep removes it.
+    pub fn retire_swallowed_body(&mut self, entity_id: u32) {
+        self.owners.retain(|owner| owner.entity_id() != entity_id);
+    }
+
     /// `FUN_00446D70`'s `FUN_0040AC60` on a released Type17 the native
     /// owner held before the takeover: its own behavior chosen afresh
     /// (`FUN_0040C690`'s path), and the new task back in custody.

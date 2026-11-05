@@ -1591,8 +1591,11 @@ The controller is the player's `0x5AC`-byte record (`+68` its body, `+74` the
 | `FUN_00421230` | draws the lock reticle: instances of global model 76 every `0x80` from the angle `+48`, with the frame callback `FUN_00421570` (selector 0 the world clock, 1 the instance's size word); searching, along the craft's forward row out to the reticle word, size `0x14` and 0 for the instance whose next step passes the end; locked, along the normalized line to the target with a matrix built on it, out to the distance (stored in `+44`) plus the target model's radius (`+08`), size `0x14` up to the sphere and then `sqrt(r^2 - t^2) * 0xFFFF / 1024`, `t` the next step past the distance |
 | `FUN_004480E0` | the mind-control takeover (from `FUN_00420C60`): gives the target Type46's behavior source (`+D0`) and the controller (`+88`), gives the old body Type88's, points the controller at the target (`+68`, the old body at `+6C`), reinstalls both behaviors (`FUN_0040AC60`), clears the old body's Sub-G attitude flag and weapon fire-enable word (`FUN_0041B9B0`, `FUN_00424F10`, by the old body's type description `+20` and `+18`), records the target in the session (`FUN_00456770`), and holds controller `+70` at 60000 (500 when the install failed) |
 
-| `FUN_00446D70` | ends a takeover (controller `+70` reaching zero in `FUN_00446640`, or its old body dying): the old body (`+6C`) gets Type46's behavior source and the controller back, the target loses both, and the two handles swap back; when both behaviors reinstall, a released Type98 only moves the session's view to the craft, any other target leaves a Type98 MindBall at it (`FUN_00409950`) that flies to the craft and hands the view back when it ends (`FUN_00409420`); a failed reinstall swaps the handles back and retries in 500 ms |
-| `FUN_00448760` | a Hive swallowing the possessed body sets controller `+70` to 1, so control returns on the next Player Control frame; its only caller is a dying Hive's mouth walk in `FUN_0041BEB0` (a body within `0x24000` squared of the mouth and `0x20` below it, without capability bit 0 or state `0x1000`, that has a controller and is not a Type98), where any other such body is staged for destruction (`FUN_00410B70`) |
+| `FUN_00446D70` | ends a takeover (controller `+70` reaching zero in `FUN_00446640`, or its old body dying): the old body (`+6C`) gets Type46's behavior source and the controller back, the target loses both, and the two handles swap back; when both behaviors reinstall, a released Type98 only moves the session's view to the craft, any other target leaves a Type98 MindBall at it (`FUN_00409950`) that flies to the craft and hands the view back when it ends (`FUN_00409420`); a failed reinstall swaps the handles back and retries in 500 ms. The target's reinstall has no source (`FUN_0040AC60` with null): a living body's weighted choice of its own behaviors, a dying one's alternate (`FUN_00425660`, no selector word) |
+| `FUN_00448760` | a Hive swallowing the possessed body sets controller `+70` to 1 when it is nonzero, so control returns on the next Player Control frame; its only caller is a dying Hive's mouth walk in `FUN_0041BEB0` (see [the Hive's mouth](HIVE_WRECK.md#the-mouth-walk)) |
+| `FUN_004442B0` | TAB from the reader: while the craft waits at controller `+6C` (a possessed body), `+70` becomes 1 and the next Player Control visit releases the body; otherwise `+20D` asks for the style's TAB style. The reader runs after the visit's `+70` test, so the release comes one visit after the key |
+| `FUN_00447280` | the Player Control styles' dying alternate (class 25), installed when a body with Type46's behavior source dies (`FUN_00410C10` -> `FUN_0040DB80`, whose Player Control styles have no `+2C` cleanup): drops every row of the body's hold (`FUN_00447590`), bursts it (`FUN_004475F0`), then, when controller `+6C` holds a live body (the craft of a possessed body), releases it (`FUN_00446D70`) and returns; otherwise the craft's own death (text `CA`/`D9`, the `+208` latch seed and the 3000 ms Dying bounce wreck) |
+| `FUN_004475F0` | the wreck burst at a body: `FUN_00440950` with kind 10, its source extent half the radius of the model the state selects (`+A8..+AE` by `0x2000`/`0x4000`), and sound `0x3E` |
 | `FUN_00446F30` | installs Passive Player (`FUN_00446FC0`), the Passive mode style (`0x4CD8F8`): no TAB style, the Hovering style's environment mask `0x10010`, pair hook `FUN_00447D70` and static hook `FUN_00447C90` |
 | `FUN_00409950` | a released body leaves a MindBall: the network birth (`FUN_00438080`) of a Type98 at the body with no velocity or angles, whose `+88` words are the body and the craft; the ball's type draw becomes `FUN_004097A0`, `+60` the craft |
 | `FUN_00409320`, `FUN_004093B0` | the MindBall task and its 0x24-byte record, copied from the birth's words (body, craft, then the birth frame's unwritten stack, with the phase `+14` at -1) |
@@ -1607,16 +1610,24 @@ The Possession Ray is weapon selector `0x1B` (Cheats -> Weapons code
 record is the shooter body's component `+0x38`: mode `+34`, mode time `+38`,
 target `+3C`, locked time `+40`, reticle size `+44` and angle `+48`.
 
-**Port status: the takeover, control, release and MindBall are ported for
-an empty-handed Type17 in custody; the rest is held.** Selector `0x1B` fires
-on its 400 ms cadence with no sound (`FUN_00424650` skips a zero sound) and
-the A/B gun phase of any weapon; each launch, drained at the craft's draw,
-starts the lock. The lock's advance, search, hold test and reticle run as
-retail's: the retail lab's Level 1 lock (the craft placed 1200 behind a
-Type17 at 20 ms passes, the ray fired once) is reproduced pass for pass,
-from the 1.04 s search through the 1 s lock to the takeover. The event log's
-`player` line carries the record while it runs (`mind_control_lock`: mode,
-mode time, target id, locked time, reticle, angle).
+**Port status: the takeover, control, release, MindBall, the body's loss,
+TAB, the cargo keys, Passive Player's smoke and the Hive's swallow are ported
+for an empty-handed Type17; other targets and the possessed body's pairs are
+held.** Selector `0x1B` fires on its 400 ms cadence with no sound
+(`FUN_00424650` skips a zero sound) and the A/B gun phase of any weapon; each
+launch, drained at the craft's draw, starts the lock. The lock's advance,
+search, hold test and reticle run as retail's: the retail lab's Level 1 lock
+(the craft placed 1200 behind a Type17 at 20 ms passes, the ray fired once)
+is reproduced pass for pass, from the 1.04 s search through the 1 s lock to
+the takeover. The event log's `player` line carries the record while it runs
+(`mind_control_lock`: mode, mode time, target id, locked time, reticle,
+angle).
+
+The lock advances at the craft's place in the frame, before the actor pass,
+as the craft leads retail's live list: it reads the other bodies before their
+visits and the craft's previous matrix, and a takeover replaces the target's
+behavior before the target's own visit, so on the takeover frame the target's
+only visit is its first Player Control one.
 
 The takeover (`FUN_004480E0`) draws one word for each behavior source it
 installs (`FUN_00425680`: the target's, then the craft's), clears the
@@ -1628,52 +1639,99 @@ and step), the `FUN_0040E640` attitude runs from its previous matrix, then
 Sub-C lift, Sub-B and, with the throttle held, Sub-A (whose direction word
 takes the throttle's sign) through that matrix, its Sub-H steps, and the
 common tail runs with the style's environment mask `0x10010` over the type's
-`0x39`: basis rebuild, gravity, drag and motion. A static-model contact gets
-`FUN_00411760`'s response. The retail lab's possession (the throttle held a
-second, then a left turn) is matched by a retail-backed test: from retail's
-entry state, each of 301 Player Control visits lands on retail's next entry
-except where a contact moves the body (one pass of the later contact walk,
-and the static contacts, whose responses depend on the legs' Sub-H frames
-the capture does not hold). The craft runs Passive Player: no reader, lock,
-weapon or warnings; its fan channels ease toward full and it keeps the
-Hover tail without Sub-A. The session's followed body is the possessed
-body, so the chase camera follows it.
+`0x39`: basis rebuild, gravity, drag and motion. The retail lab's possession
+(the throttle held a second, then a left turn) is matched by a retail-backed
+test: from retail's entry state, each of 301 Player Control visits lands on
+retail's next entry except where a contact moves the body (one pass of the
+later contact walk, and the static contacts, whose responses depend on the
+legs' Sub-H frames the capture does not hold). The craft runs Passive Player:
+no reader, lock, weapon or warnings; its fan channels ease toward full and it
+keeps the Hover tail without Sub-A; under 20000 health at its entry one
+shared word gives a 1-in-`health >> 13` chance (at least 2) of Player
+Control's plume behind it (`FUN_00441670`). The session's followed body is
+the possessed body, so the chase camera follows it.
 
-At zero the release (`FUN_00446D70`) draws the craft's behavior word, gives
-the Type17 its own behavior again (the native owner's `FUN_0040C690` path in
-any world, the fresh Level 1 owner's choice among Follow Beacons, Capture
-People and Run Away there), and leaves a Type98 MindBall at the body, born
-with its behavior word and its Sub-A word. The ball flies to the craft as
-`FUN_00409460` says; a retail-backed record of the lab's 140 visits is
-matched pass for pass, position and record. Its draw is `FUN_004097A0`'s
-eight rings of model 243. The session follows it until its end, then the
-craft.
+A static-model contact runs `FUN_00412CF0` in its order: the type's contact
+sound (`+8A`, none for a Type17), the style's `+1C` hook `FUN_00447C90` (the
+controller's force feedback for an inward speed over `0x200`, and
+`FUN_00427B20`'s destruction of a touched kind-9 object), `FUN_00411760`'s
+response, then its collision packet to the touched object's cell and to the
+body (`FUN_00415040`).
+
+The reader's keys act through the controller on the possessed body: C and D
+set the `+20E` countdown, which then runs on the body's Player Control visit
+(a collect does nothing for a body without capability bit 0; a drop pops the
+body's hold, `FUN_00446D30`), E turns the body's hold (`FUN_004442E0`), the
+weapon keys need its Sub-E (a Type17 has none), and TAB releases the body on
+the following visit (`FUN_004442B0`).
+
+The body's loss takes retail's two paths, both seen in the retail lab (the
+Level 1 possession above):
+
+- Its death (a lethal `FUN_00414E90` at pass 2100): `FUN_00410C10` gives the
+  body health 0, the dying bit and its death sound, and `FUN_0040DB80`
+  installs its Type46 source while dying, whose alternate initializer
+  `FUN_00447280` bursts the body (`FUN_004475F0`) and releases it: the craft
+  takes its controller and a selector word, the body its own dying alternate
+  (a Type17's class 12), and a MindBall is born at it, all inside the damage
+  call. The player plays on. A retail-backed test runs this death on a world
+  13 Type17.
+- Its removal without a death (the lab's direct `FUN_00410B70` at pass
+  2100): the controller has no body at the frame's end, and `FUN_0044FFA0`
+  runs `FUN_00450980`, the player's death, at the next tick, as at the end of
+  the craft's own Dying bounce; the port ends the world the same way.
+
+At zero, or after TAB, the release (`FUN_00446D70`) draws the craft's
+behavior word, gives the Type17 its own behavior again (the native owner's
+`FUN_0040C690` path in any world, the fresh Level 1 owner's choice among
+Follow Beacons, Capture People and Run Away there), and leaves a Type98
+MindBall at the body, born with its behavior word and its Sub-A word. The
+ball flies to the craft as `FUN_00409460` says; a retail-backed record of the
+lab's 140 visits is matched pass for pass, position and record. Its draw is
+`FUN_004097A0`'s eight rings of model 243. The session follows it until its
+end, then the craft.
+
+A dying Hive's mouth releases a possessed body that falls into it
+(`FUN_00448760`) and swallows any other body: see
+[the Hive's mouth](HIVE_WRECK.md#the-mouth-walk).
 
 Held, each with one logged stop a run:
 
-- A target other than an empty-handed Type17 in custody: Player Control on
-  its own components, and Capture People's cleanup of a held body
-  (`FUN_0040D040`), are not ported; the lock ends there as before.
+- A target other than an empty-handed Type17 in custody; the lock ends there
+  as before. Every lockable type (capability bit 3) is a target in retail:
+  types 2, 5, 10-21, 25, 26, 28-33, 37-41, 43, 44, 47, 53, 55-58, 67 (the
+  Hive, in every world), 71, 73, 76, 77, 80, 81, 87, 94, 105, 108-110, 117,
+  119, 122 and 126-129. Each needs Player Control on its own components
+  (`FUN_00446640`'s Sub-E fire through `FUN_00424E70`, `FUN_00444CF0`'s Sub-E
+  elevation, Sub-F/I/K/L steps, and the TAB style's switch to the VTOL styles
+  for a body with neither Sub-C nor Sub-I, `+20D`) and its own behavior's
+  reinstall at the release.
+- A Type17 carrying a body: the takeover keeps the carried body in the hold
+  (`FUN_0040AC60` installs the new style through `FUN_00438340` and
+  `FUN_0040C6B0`, which run no callback of the old style, so Capture People's
+  `FUN_0040D040` is not reached), Player Control's lift then reads its mass
+  (`FUN_004185C0`) and the drop key pops it; the port's custody of a carried
+  body stays with its captor's owner, which the takeover removes.
 - The possessed body's pairs, which take the player's pair behavior
-  (`FUN_00447D70`, including its `FUN_00443B50` pickup of a person), and its
-  static contact's hook (`FUN_00447C90`) and damage deliveries.
-- The beam and hold keys and TAB while a body is possessed (the
-  controller's cargo from that body, `FUN_00446D30`; the Hovering style's
-  VTOL style, `FUN_00447970`), and Passive Player's smoke from a craft under
-  20000 health.
-- The Hive case (`FUN_00448760`): its only caller is a dying Hive's mouth
-  walk in `FUN_0041BEB0`, which the port does not run for any body (see
-  [HIVE_WRECK.md](HIVE_WRECK.md#player-suction-and-interior-contact)).
-- A possessed body that is gone: retail's controller then has no body and
-  `FUN_00450980` kills it; the port returns control to the craft instead,
-  with its stop.
+  (`FUN_00447D70`, including its `FUN_00443B50` pickup of a person), and so
+  the drop key on a held person (`FUN_00446D30`) and the death's cargo drop
+  (`FUN_00447590`); and damage reaching the possessed body from outside its
+  own visit (shots, blasts, pairs), whose routes need the body's owner, which
+  the takeover removed.
+- The possessed body's terrain and water contact: the Hovering style's
+  install (`FUN_0040EA10`) writes its environment masks into the body's state
+  word (`0x10010`), admitting the later contact walk's terrain response
+  (`FUN_004141D0`) and the style's `+10` hook `FUN_00448280` (force feedback,
+  and the 15000 packet on a lava cell); the port keeps the type's own state
+  word, under which a living Type17 has no terrain contact.
+- A live Hive's mouth, which kills (`FUN_00410C10`) the bodies falling into
+  it that lack capability bit 3 (the craft among them) and draws every one
+  in (`FUN_0041C830`).
 
 The port runs the possessed body in the craft's phase of the frame, after
 the actor pass, as it runs the craft; retail visits it at its own place in
-the live list. In the takeover's frame the port's body has therefore had its
-own behavior's visit before its first Player Control visit, which retail
-gives it instead. In the lab, the release came 3000 passes after the
-takeover and the MindBall's flight took 140.
+the live list. In the lab, the release came 3000 passes after the takeover
+and the MindBall's flight took 140.
 
 ### Special weapons
 

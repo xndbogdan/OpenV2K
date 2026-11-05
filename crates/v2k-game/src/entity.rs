@@ -38,7 +38,7 @@ mod gate_helpers;
 mod hive_birth_host;
 mod hive_child;
 mod hive_runtime;
-pub use hive_runtime::{HiveGenericDeath, HiveGenericDeathBlock};
+pub use hive_runtime::{HiveGenericDeath, HiveGenericDeathBlock, HiveMouthSwallow};
 mod native_type105_construction;
 mod native_type69_construction;
 mod possessed_body;
@@ -13436,6 +13436,37 @@ impl EntityManager {
             self.beam_timer_ms = timer.wrapping_sub(narrowed_step);
             None
         }
+    }
+
+    /// The controller's `+20E` countdown on a possessed body's Player Control
+    /// visit (`FUN_00446640`), with the same arithmetic as the craft's: the
+    /// command whose countdown expired, for the caller to run on that body.
+    pub fn tick_possessed_beam(&mut self, dt_us: u32, expiry: BeamExpiry) -> Option<BeamCommand> {
+        let timer = self.beam_timer_ms;
+        if timer == 0 {
+            return None;
+        }
+        let step_ms = dt_us / 1_000;
+        let narrowed_step = step_ms as u8 as i8;
+        let expires = |remaining: u32| match expiry {
+            BeamExpiry::Retail => step_ms > remaining,
+            BeamExpiry::AtZero => step_ms >= remaining,
+        };
+        let (command, remaining) = if timer < 0 {
+            (BeamCommand::Drop, u32::from((-i16::from(timer)) as u16))
+        } else {
+            (BeamCommand::Collect, u32::from(timer as u8))
+        };
+        if expires(remaining) {
+            self.beam_timer_ms = 0;
+            return Some(command);
+        }
+        self.beam_timer_ms = if timer < 0 {
+            timer.wrapping_add(narrowed_step)
+        } else {
+            timer.wrapping_sub(narrowed_step)
+        };
+        None
     }
 
     /// Drain type-93 presentation events without coupling the entity core to

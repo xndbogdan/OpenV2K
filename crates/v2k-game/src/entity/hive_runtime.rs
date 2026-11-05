@@ -349,6 +349,104 @@ impl EntityManager {
     }
 }
 
+/// One body `FUN_0041BEB0`'s mouth walk takes into a dying Hive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HiveMouthSwallow {
+    /// The controller's body: `FUN_00448760` releases it on its next Player
+    /// Control visit.
+    Controlled(u32),
+    /// Any other body: staged for the deferred sweep (`FUN_00410B70`).
+    Staged(u32),
+}
+
+/// `FUN_0041BEB0`'s mouth walk takes a body this far below the mouth.
+const HIVE_MOUTH_DEPTH_RAW: i32 = -0x20;
+/// ... and within this squared horizontal radius of it.
+const HIVE_MOUTH_RADIUS_SQUARED: i32 = 0x24000;
+/// The walk's outer octagonal bound, as the wreck's suction.
+const HIVE_MOUTH_REACH_RAW: i32 = 8_000;
+
+impl EntityManager {
+    /// `FUN_0041BEB0`'s mouth walk, on each Hive whose Sub-N `+4C` marker
+    /// gate is set: an admitted (`0x8000`) body within the outer bound whose
+    /// offset from the mouth (Sub-N `+54`) lies more than `0x20` below it and
+    /// within `0x24000` squared horizontally. On a dying Hive a body without
+    /// capability bit 0 and without the carried bit `0x1000` is swallowed:
+    /// the controller's body (`FUN_00443AF0`) other than a Type98 is released
+    /// (`FUN_00448760`), any other is staged for the sweep (`FUN_00410B70`),
+    /// which this commits. A live Hive's mouth instead kills (`FUN_00410C10`)
+    /// and draws in (`FUN_0041C830`) its bodies, which the port does not run:
+    /// those are returned as the count of held fall-ins.
+    pub fn apply_hive_mouth_swallows(
+        &mut self,
+        controlled_body: Option<u32>,
+    ) -> (Vec<HiveMouthSwallow>, usize) {
+        let mut swallows = Vec::new();
+        let mut held_fall_ins = 0;
+        for hive in &self.entities {
+            let Some(mouth) = hive_wreck_contact_origin(hive) else {
+                continue;
+            };
+            let hive_dying = hive.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)
+                == RetailRuntimeValue::Known(DYING_STATE_BIT);
+            for body in &self.entities {
+                if body.collision.state_flags_at_0x08.masked(0x8000)
+                    != RetailRuntimeValue::Known(0x8000)
+                {
+                    continue;
+                }
+                let at = body.position_raw();
+                if crate::radial_damage::radial_distance_raw(mouth, at) >= HIVE_MOUTH_REACH_RAW {
+                    continue;
+                }
+                let [dx, dy, dz] = std::array::from_fn::<i32, 3, _>(|axis| {
+                    i32::from(at[axis].wrapping_sub(mouth[axis]))
+                });
+                if dy >= HIVE_MOUTH_DEPTH_RAW
+                    || dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz))
+                        >= HIVE_MOUTH_RADIUS_SQUARED
+                {
+                    continue;
+                }
+                if !hive_dying {
+                    held_fall_ins += 1;
+                    continue;
+                }
+                if body.capability_flags & 1 != 0
+                    || body.collision.state_flags_at_0x08.masked(0x1000)
+                        != RetailRuntimeValue::Known(0)
+                {
+                    continue;
+                }
+                swallows.push(if controlled_body == Some(body.id) {
+                    HiveMouthSwallow::Controlled(body.id)
+                } else {
+                    HiveMouthSwallow::Staged(body.id)
+                });
+            }
+        }
+        for swallow in &swallows {
+            let HiveMouthSwallow::Staged(id) = *swallow else {
+                continue;
+            };
+            let Some(entity) = self.entities.iter_mut().find(|entity| entity.id == id) else {
+                continue;
+            };
+            // FUN_00410B70 stages a body once.
+            if entity
+                .collision
+                .state_flags_at_0x08
+                .masked(crate::entity_collision_state::DEFERRED_DESTROY_PENDING_STATE_BIT)
+                == RetailRuntimeValue::Known(0)
+            {
+                entity.mark_actor_deferred_destroy_pending();
+                self.queue_actor_deferred_destroy(id);
+            }
+        }
+        (swallows, held_fall_ins)
+    }
+}
+
 /// Why `FUN_00410C10` could not run on a Hive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HiveGenericDeathBlock {
