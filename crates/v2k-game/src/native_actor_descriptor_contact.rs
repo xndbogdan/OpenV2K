@@ -169,7 +169,7 @@ fn admit_slot(
             ActorTaskRuntime::BoulderRolling(_) | ActorTaskRuntime::BoulderResting(_)
         )
     {
-        //00404580 and404B40 both build their Primary through05FF0, which
+        //FUN_00404580 and404B40 both build their Primary through05FF0, which
         //zeroes the task+18. Only the boulder's completed owner lends custody.
         if !crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(entities, id)
             || !tasks.prepare_native_actor_mutation(entities, id)

@@ -10,11 +10,11 @@
 <rect x="1" y="93.8" width="331.1" height="298.1" fill="#8c959f"/>
 <text x="3" y="43" fill="#1f2328">Direct3d table 100.0%</text>
 </g>
-<g><title>Platform (PLATFORM_RUNTIME.md): 27 code, 7 notes, 403 omitted</title>
-<rect x="1" y="393.8" width="9.7" height="290.5" fill="#2da44e"/>
-<rect x="1" y="684.3" width="9.7" height="34.7" fill="#d4a72c"/>
+<g><title>Platform (PLATFORM_RUNTIME.md): 31 code, 3 notes, 403 omitted</title>
+<rect x="1" y="393.8" width="9.7" height="305.7" fill="#2da44e"/>
+<rect x="1" y="699.5" width="9.7" height="19.5" fill="#d4a72c"/>
 <rect x="10.7" y="393.8" width="321.4" height="325.2" fill="#8c959f"/>
-<text x="3" y="405.8" fill="#1f2328">Platform 79.4%</text>
+<text x="3" y="405.8" fill="#1f2328">Platform 91.2%</text>
 </g>
 <g><title>Software raster (SOFTWARE_RASTER.md): 132 code, 9 omitted</title>
 <rect x="334.1" y="31" width="228.6" height="355.7" fill="#2da44e"/>
@@ -38,17 +38,17 @@
 <rect x="798.1" y="223.1" width="207.6" height="34.3" fill="#8c959f"/>
 <text x="789.7" y="43" fill="#1f2328">Format documentation 97.2%</text>
 </g>
-<g><title>Menu system (MENU_SYSTEM.md): 159 code, 5 notes, 28 omitted</title>
+<g><title>Menu system (MENU_SYSTEM.md): 160 code, 4 notes, 28 omitted</title>
 <rect x="1007.8" y="31" width="191.2" height="193.9" fill="#2da44e"/>
-<rect x="1007.8" y="224.9" width="28.4" height="32.5" fill="#d4a72c"/>
-<rect x="1036.1" y="224.9" width="162.9" height="32.5" fill="#8c959f"/>
-<text x="1009.8" y="43" fill="#1f2328">Menu system 97.0%</text>
+<rect x="1007.8" y="224.9" width="27.9" height="32.4" fill="#d4a72c"/>
+<rect x="1035.7" y="224.9" width="163.3" height="32.4" fill="#8c959f"/>
+<text x="1009.8" y="43" fill="#1f2328">Menu system 97.6%</text>
 </g>
-<g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 99 code, 23 notes, 3 omitted</title>
-<rect x="564.6" y="259.4" width="167.3" height="208.4" fill="#2da44e"/>
-<rect x="564.6" y="467.8" width="160.2" height="46.7" fill="#d4a72c"/>
-<rect x="724.9" y="467.8" width="7.1" height="46.7" fill="#8c959f"/>
-<text x="566.6" y="271.4" fill="#1f2328">Actor task programs 81.1%</text>
+<g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 107 code, 15 notes, 3 omitted</title>
+<rect x="564.6" y="259.4" width="167.3" height="228.9" fill="#2da44e"/>
+<rect x="564.6" y="488.3" width="154.7" height="26.2" fill="#d4a72c"/>
+<rect x="719.3" y="488.3" width="12.6" height="26.2" fill="#8c959f"/>
+<text x="566.6" y="271.4" fill="#1f2328">Actor task programs 87.7%</text>
 </g>
 <g><title>Multiplayer (MULTIPLAYER.md): 144 code, 8 notes, 25 omitted</title>
 <rect x="564.6" y="516.5" width="167.3" height="182.4" fill="#2da44e"/>
@@ -56,21 +56,21 @@
 <rect x="590.9" y="698.9" width="141" height="20.1" fill="#8c959f"/>
 <text x="566.6" y="528.5" fill="#1f2328">Multiplayer 94.7%</text>
 </g>
-<g><title>Hud rendering (HUD_RENDERING.md): 43 code, 2 notes, 2 omitted</title>
-<rect x="733.9" y="259.4" width="140.5" height="163.3" fill="#2da44e"/>
-<rect x="733.9" y="422.7" width="70" height="5.2" fill="#d4a72c"/>
-<rect x="804" y="422.7" width="70.5" height="5.2" fill="#8c959f"/>
-<text x="735.9" y="271.4" fill="#1f2328">Hud rendering 95.6%</text>
+<g><title>Hud rendering (HUD_RENDERING.md): 44 code, 1 notes, 2 omitted</title>
+<rect x="733.9" y="259.4" width="140.5" height="165.8" fill="#2da44e"/>
+<rect x="733.9" y="425.1" width="6.5" height="2.7" fill="#d4a72c"/>
+<rect x="740.5" y="425.1" width="134" height="2.7" fill="#8c959f"/>
+<text x="735.9" y="271.4" fill="#1f2328">Hud rendering 97.8%</text>
 </g>
 <g><title>Game mechanics (GAME_MECHANICS.md): 48 code</title>
 <rect x="733.9" y="429.9" width="140.5" height="163.8" fill="#2da44e"/>
 <text x="735.9" y="441.9" fill="#1f2328">Game mechanics 100.0%</text>
 </g>
-<g><title>Controls (CONTROLS.md): 53 code, 17 notes, 20 omitted</title>
-<rect x="733.9" y="595.7" width="97.9" height="123.3" fill="#2da44e"/>
-<rect x="831.8" y="595.7" width="42.6" height="34.1" fill="#d4a72c"/>
-<rect x="831.8" y="629.8" width="42.6" height="89.2" fill="#8c959f"/>
-<text x="735.9" y="607.7" fill="#1f2328">Controls 75.7%</text>
+<g><title>Controls (CONTROLS.md): 59 code, 11 notes, 20 omitted</title>
+<rect x="733.9" y="595.7" width="99.3" height="123.3" fill="#2da44e"/>
+<rect x="833.2" y="595.7" width="41.2" height="31.1" fill="#d4a72c"/>
+<rect x="833.2" y="626.8" width="41.2" height="92.2" fill="#8c959f"/>
+<text x="735.9" y="607.7" fill="#1f2328">Controls 84.3%</text>
 </g>
 <g><title>Loading transitions (LOADING_TRANSITIONS.md): 58 code, 1 notes, 7 omitted</title>
 <rect x="876.4" y="259.4" width="124.8" height="120.5" fill="#2da44e"/>
@@ -93,11 +93,10 @@
 <rect x="876.4" y="386.6" width="128.5" height="82" fill="#2da44e"/>
 <text x="878.4" y="398.6" fill="#1f2328">Vtol flight 100.0%</text>
 </g>
-<g><title>Actor (ACTOR_RUNTIME.md): 48 code, 1 notes, 1 omitted</title>
-<rect x="1006.9" y="386.6" width="105" height="82" fill="#2da44e"/>
-<rect x="1111.9" y="386.6" width="0.8" height="73.1" fill="#d4a72c"/>
-<rect x="1111.9" y="459.6" width="0.8" height="8.9" fill="#8c959f"/>
-<text x="1008.9" y="398.6" fill="#1f2328">Actor 98.0%</text>
+<g><title>Actor (ACTOR_RUNTIME.md): 49 code, 1 omitted</title>
+<rect x="1006.9" y="386.6" width="105.7" height="82" fill="#2da44e"/>
+<rect x="1112.6" y="386.6" width="0.1" height="82" fill="#8c959f"/>
+<text x="1008.9" y="398.6" fill="#1f2328">Actor 100.0%</text>
 </g>
 <g><title>Entity damage and death (ENTITY_DAMAGE_AND_DEATH.md): 30 code, 2 omitted</title>
 <rect x="1114.7" y="386.6" width="83.5" height="82" fill="#2da44e"/>
@@ -176,10 +175,9 @@
 <rect x="1132.1" y="536.9" width="32.8" height="41.4" fill="#2da44e"/>
 <text x="1134.1" y="548.9" fill="#1f2328">Int…</text>
 </g>
-<g><title>Demo re (DEMO_RE.md): 5 code, 1 notes, 1 omitted</title>
-<rect x="1166.9" y="536.9" width="32.1" height="39.3" fill="#2da44e"/>
-<rect x="1166.9" y="576.2" width="12.4" height="2.1" fill="#d4a72c"/>
-<rect x="1179.3" y="576.2" width="19.7" height="2.1" fill="#8c959f"/>
+<g><title>Demo re (DEMO_RE.md): 6 code, 1 omitted</title>
+<rect x="1166.9" y="536.9" width="32.1" height="40.1" fill="#2da44e"/>
+<rect x="1166.9" y="577" width="32.1" height="1.3" fill="#8c959f"/>
 <text x="1168.9" y="548.9" fill="#1f2328">Dem…</text>
 </g>
 <g><title>Intro2 meteors (INTRO2_METEORS.md): 4 code</title>

@@ -3,7 +3,7 @@
 //! 44E770's row `0x11` is rocket-shaped (`{1, 1, 0, 45}`): speed 1 plus the
 //! shooter's forward closing speed. Class28's initializer `40D160` clears
 //! Secondary, publishes the rocket's class31 trail in Tertiary
-//! (`4069E0(entity, 2, 0x1F)`) and the Primary `407F20`: record `408610`
+//! (`4069E0(entity, 2, 0x1F)`) and the Primary `FUN_00407F20`: record `408610`
 //! (target, flight time, speed: the integer length of the birth velocity,
 //! after `413F70` rebuilt the basis), tick `407FB0`, destructor `4086A0`.
 //! Neither publication draws a random word. The style's `+34` sets `0x4000`,
@@ -74,7 +74,7 @@ pub struct GuidedMissileTaskState {
 }
 
 impl GuidedMissileTaskState {
-    /// `408610`: the zeroed record, its speed the `457730` length of the
+    /// `FUN_00408610`: the zeroed record, its speed the `457730` length of the
     /// birth velocity, narrowed to a signed word.
     pub fn new(velocity_raw: [i16; 3]) -> Self {
         let squared = velocity_raw.into_iter().fold(0_u32, |sum, word| {
@@ -111,7 +111,7 @@ fn local_coordinates(vector: [i16; 3], basis: &Type9BodyBasis) -> [i32; 3] {
     })
 }
 
-/// `4083F0`: the closest admitted body ahead, scored by forward distance plus
+/// `FUN_004083F0`: the closest admitted body ahead, scored by forward distance plus
 /// twice the lateral and vertical offsets, inside a 45-degree cone.
 pub fn search_guided_missile_target(
     own_id: u32,
@@ -158,7 +158,7 @@ fn clamp_turn(value: i32, limit: i32) -> i32 {
     }
 }
 
-/// `407FB0` after its lifetime test: the roll, the turn toward `target`
+/// `FUN_00407FB0` after its lifetime test: the roll, the turn toward `target`
 /// (its position, or `None` when the record holds no live body), the speed
 /// and the new velocity. The caller runs `4083F0` first when the target is
 /// gone and passes `None` here.

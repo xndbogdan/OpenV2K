@@ -1353,7 +1353,7 @@ fn interpret(
                 pc += 4;
             }
 
-            // FUN_004669E0/00466A70 open an unsorted child queue at the
+            // FUN_004669E0/FUN_00466A70 open an unsorted child queue at the
             // maximum/minimum referenced camera Z. 0x38 is the optional
             // FUN_004689D0 vertex-number diagnostic: with4FEEF4 clear it skips
             // resolution entirely. Nothing writes that word, so normal

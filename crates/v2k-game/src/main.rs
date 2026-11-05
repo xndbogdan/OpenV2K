@@ -2949,8 +2949,9 @@ fn run_game(
             )
         });
         // FUN_00495940 applies the window's activity (WM_ACTIVATEAPP) once a
-        // frame: deactivating raises the suspended flag and pause reason 4
-        // and runs the mode's deactivate hook, reactivating the reverse.
+        // frame: deactivating (FUN_0044E6A0) raises the suspended flag and
+        // pause reason 4 and runs the mode's deactivate hook, reactivating
+        // (FUN_0044E6E0) the reverse.
         let mut suspend_now = false;
         let mut unsuspend_now = false;
         if let Some(active) = events.iter().rev().find_map(|event| match event {
@@ -3123,7 +3124,8 @@ fn run_game(
                 }
 
                 // The pause and suspended modes' hooks (FUN_00451420 and
-                // FUN_00451390 install FUN_004513E0 and FUN_00451400): the
+                // FUN_00451390 set the window hooks FUN_004513E0 and
+                // FUN_00451400 through FUN_0044E720 and FUN_0044E730): the
                 // window going inactive puts the suspended screen over the
                 // menu, and active again pops it. The map's save menu has
                 // no hooks.
@@ -13760,7 +13762,9 @@ fn rebuild_particle_terrain_lights(
 
 /// Submit the acquired Targetter's ring and crosshair Section-8 models.
 /// `FUN_00453710` runs the draw only with the Targetter setting (`+0x34`) on;
-/// the controller keeps updating either way.
+/// the controller keeps updating either way. The ring's animation channels
+/// are `FUN_0044DDD0`'s: 0 the frame counter, 1 the target model radius's
+/// scale, 2 the target's health fraction.
 #[allow(clippy::too_many_arguments)]
 fn draw_targetter_overlay(
     renderer: &mut dyn v2k_render::Renderer,
@@ -14834,9 +14838,10 @@ fn draw_fullscreen_map(
 
     renderer.begin_scene(RenderScene::Menu);
     // The map mode's tick (FUN_004542E0) clears only its first two frames, to
-    // colour 85; later frames draw the same opaque map, icons over it and the
-    // same panel text over that clear. The port redraws onto a fresh buffer
-    // each frame, so it repeats the clear: the frames shown are the same.
+    // colour 85, counting them with FUN_00453FD0; later frames draw the same
+    // opaque map, icons over it and the same panel text over that clear. The
+    // port redraws onto a fresh buffer each frame, so it repeats the clear:
+    // the frames shown are the same.
     clear_to_palette_colour(renderer, request.cache, 85);
     renderer.set_sprite_clip(None);
 
