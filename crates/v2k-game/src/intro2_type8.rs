@@ -4,7 +4,7 @@
 //! first-query full reset. The shared Type9 ABDI descriptors do not transfer
 //! either the peasant's allocation receipt or its Sub-I sound record.
 //!
-//! Ordinary workers79/90/91/116 select the same complete task graph with their
+//! Ordinary workers 79/90/91/116 select the same complete task graph with their
 //! own model, axis, ordered choices, animation cues and surface policy. The
 //! immutable profile remains part of each allocation receipt.
 

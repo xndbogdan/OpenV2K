@@ -22,7 +22,7 @@ impl NativeInstanceBodyRequest {
     }
 }
 
-/// The source4C creation-record words a family constructor reads: an authored
+/// The source 4C creation-record words a family constructor reads: an authored
 /// Section-13 spawn's, or a zeroed record's (a Hive birth) that carries only
 /// type, position and the objective bit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

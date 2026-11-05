@@ -163,7 +163,7 @@ fn native_type16_aim_cadence_and_fifo_survive_root_replacement_and_drain_once() 
     assert!(result.queued_shots_added > 0, "{result:?}");
     // 24650 queues its one runtime+20 cue after the successful append loop.
     // WorldFx's host handoff materializes queued events before audio drains;
-    // the later11400 projectile drain does not own this sound.
+    // the later 11400 projectile drain does not own this sound.
     fx.process_pending();
     let sounds = fx.take_positional_sounds();
     assert_eq!(sounds.len(), 1);

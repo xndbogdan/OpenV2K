@@ -1,4 +1,4 @@
-//! Shared authored104B0/09A80/D4A0 entry with actual process component custody.
+//! Shared authored 104B0/09A80/D4A0 entry with actual process component custody.
 
 use super::*;
 use crate::{
@@ -193,7 +193,7 @@ fn publish_birth(
         crate::common_mover::SubAPropulsionRuntime::from_20450_constructor(a, next_random() as u16),
     ));
     entity.set_position_raw(receipt.anchor_raw);
-    // Fresh+34=0 makes16490 false: tick<250 and signedtick>249 cannot both hold.
+    // Fresh+34=0 makes 16490 false: tick<250 and signedtick>249 cannot both hold.
     let under_attack = retail_tick < 250 && (retail_tick as i32) > 249;
     let mut selector_word = 0;
     let selection = crate::entity_behavior::select_initial_behavior(

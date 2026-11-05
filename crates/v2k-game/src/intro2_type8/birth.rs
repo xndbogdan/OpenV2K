@@ -320,7 +320,7 @@ pub(crate) fn publish_intro2_type8(
         .state_flags_at_0x08
         .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
     // V200002: all three exact allocations retain B2=0 at constructor
-    // return, first12DA0 and same-visit130F6 mass read (base AX=10).
+    // return, first 12DA0 and same-visit 130F6 mass read (base AX=10).
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         unreachable!();

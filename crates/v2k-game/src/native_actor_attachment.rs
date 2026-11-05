@@ -2,7 +2,7 @@
 //! people/workers (FUN_0040CD50 selects carrying variant 1 through CD70).
 //! Profile owners prove their metadata and current graph first.
 //! ADB0 publishes carrying None; Class14's variant1 instead runs C470/A860
-//! and410B70 immediately. Neither path owns removal of the parent's Sub-J row.
+//! and 410B70 immediately. Neither path owns removal of the parent's Sub-J row.
 
 use crate::{
     actor_animation::ActorAnimationController,
@@ -201,7 +201,7 @@ impl NativeActorAttachmentPlan {
         entity.current_behavior_context = RetailRuntimeValue::Known(Some(self.context));
         match self.outcome {
             NativeActorAttachOutcome::RetainedGraph => {
-                // ADB0's explicit clears are2→1, followed by replacement0.
+                // ADB0's explicit clears are 2→1, followed by replacement 0.
                 for slot in [ActorTaskSlot::Tertiary, ActorTaskSlot::Secondary] {
                     entity
                         .actor_tasks

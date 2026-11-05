@@ -106,7 +106,7 @@ pub struct ModelNativeVertexFailure {
 }
 
 /// An owned 0x22 constructor stops before allocating any primitive when a
-/// reached endpoint carries bit0x40. This is a source rejection, not missing
+/// reached endpoint carries bit 0x40. This is a source rejection, not missing
 /// endpoint custody; the unvisited endpoint must not be synthesized or replayed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelEdgeConstructorClip {

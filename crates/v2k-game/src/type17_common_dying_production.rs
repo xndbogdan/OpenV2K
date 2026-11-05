@@ -607,7 +607,7 @@ fn resolve_production_frame(
                 }
             );
             // A coarse wait returned above; only an actual relation callback
-            // enters104B0, before its selector and the later surface random.
+            // enters 104B0, before its selector and the later surface random.
             let relation_prelude =
                 relation_prelude.begin_type93_constructor(manager, next_shared_random);
             let post_task_suffix =

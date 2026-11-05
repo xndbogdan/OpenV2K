@@ -138,7 +138,7 @@ pub(super) fn finish(
         entity.mass_raw,
     );
     if entry_flags & 2 != 0 {
-        // Every admitted post-task mask has40 clear: DF70 has no model-radius suffix.
+        // Every admitted post-task mask has 40 clear: DF70 has no model-radius suffix.
         if current_flags & 0x40 != 0 {
             return Err(Block::Runtime("cleansing snap extent"));
         }

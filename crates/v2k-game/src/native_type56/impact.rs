@@ -1,4 +1,4 @@
-//! Type56's native10EB0/11250 impact entry and own class2 death publisher.
+//! Type56's native 10EB0/11250 impact entry and own class2 death publisher.
 pub use crate::native_ground_actor::impact::{
     NativeGroundImpactBlock as Type56ImpactBlock, NativeGroundImpactOutcome as Type56ImpactOutcome,
 };

@@ -559,7 +559,7 @@ fn native_type66_hut_crater_updates_real_terrain_and_grounded_pose_without_euler
         .unwrap()
         .rotation_heading_pitch_roll_raw();
     // An ordinary peasant at the exact same point is still excluded by
-    // EB20's fixed08000000 bit, despite its default ground-snap20 policy.
+    // EB20's fixed 08000000 bit, despite its default ground-snap 20 policy.
     let peasant = manager.entity_mut(3).unwrap();
     peasant.set_position_raw([-28672, 777, -32768]);
     assert_eq!(

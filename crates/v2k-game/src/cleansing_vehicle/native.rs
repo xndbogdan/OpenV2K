@@ -90,7 +90,7 @@ pub(crate) fn publish_cleansing_vehicle(
     let RetailRuntimeValue::Known(Some(a)) = metadata.sub_a_propulsion_descriptor else {
         unreachable!()
     };
-    //09A80: D construction precedes A20450's one random target-speed word.
+    // 09A80: D construction precedes A20450's one random target-speed word.
     entity.sub_a_propulsion_runtime = RetailRuntimeValue::Known(Some(
         SubAPropulsionRuntime::from_20450_constructor(a, next_random() as u16),
     ));

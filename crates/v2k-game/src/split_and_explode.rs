@@ -16,7 +16,7 @@ pub struct SplitSource {
     pub entity_type: u32,
     /// Current null/default handle value `DAT_004DCA00`, copied to birth+00.
     /// `104B0` allocates a fresh handle when zero; otherwise it requests that
-    /// explicit handle via43A3C0. This is a value, never the global address.
+    /// explicit handle via 43A3C0. This is a value, never the global address.
     pub requested_entity_handle_raw: u32,
 }
 
@@ -116,7 +116,7 @@ pub trait SplitAndExplodeHost {
         &mut self,
         error: Self::ConstructorError,
     ) -> Result<(), Self::Block>;
-    /// `410B70`: retain the parent link, clear60000/set100000 and stage its
+    /// `410B70`: retain the parent link, clear 60000/set 100000 and stage its
     /// idempotent deferred removal. Do not splice it out inside this callback.
     fn mark_source_deferred_destroy(&mut self, source_id: u32) -> Result<(), Self::Block>;
 }

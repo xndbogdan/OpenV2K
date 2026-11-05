@@ -227,7 +227,7 @@ pub(crate) fn drain_type13_transient_request(
 /// branch and inherit source velocity at drain.
 ///
 /// Type40's actual row at `0x004D02D0` is `{0, 4000, 1, 0}`. Method1 takes
-/// `FUN_0044EA60`'s default gravity result1 during aim; its class1 packet takes
+/// `FUN_0044EA60`'s default gravity result 1 during aim; its class1 packet takes
 /// `FUN_004410B0`'s unchanged default path to `FUN_00440A60`, including below
 /// the sea plane. It shares the row-driven math, without substituting method30.
 pub(crate) fn drain_intro2_flyer_transient_request(
@@ -271,8 +271,8 @@ fn drain_transient_request(
     )
 }
 
-///11400 applies the same time correction to a callback-stamped muzzle and
-///an actor-centre record.4E770's actual table row decides velocity inheritance.
+/// 11400 applies the same time correction to a callback-stamped muzzle and
+///an actor-centre record. 4E770's actual table row decides velocity inheritance.
 ///The caller authenticates its method/row and owns FIFO and particle custody.
 pub(crate) fn drain_transient_with_method_row(
     request: GenericEmitterAppendRequest,

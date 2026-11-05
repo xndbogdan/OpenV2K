@@ -270,7 +270,7 @@ fn type30_kl_null_target_retains_inputs_and_reads_motion_before_c_a_b() {
     assert_eq!(fixture.kl.sub_l_exact_raw(), 128);
     assert_eq!((fixture.sub_d_runtime, fixture.sub_d_owner), sub_d_before);
     // K uses incoming Y velocity -125. L reads incoming height -20 against
-    // retained target50. C later changes both motion inputs.
+    // retained target 50. C later changes both motion inputs.
     assert_eq!(fixture.kl.model_variables_raw(), &[-2048, 768, -256, 250]);
     assert_ne!(fixture.entity.position_raw()[1], -20);
     assert_ne!(fixture.entity.velocity_raw()[1], -125);

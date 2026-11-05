@@ -1006,7 +1006,7 @@ mod tests {
             .iter()
             .find(|model| model.entity_id == id)
             .unwrap();
-        // Type+78 binds K to selectors11/10, then L to6/7. FCE0 uses those
+        // Type+78 binds K to selectors11/10, then L to 6/7. FCE0 uses those
         // same entity-owned words when constructing its collision walker.
         assert_eq!(
             [

@@ -29,8 +29,8 @@ use crate::sub_h_external_frame::{completion_sound_pitch_16_16, SubHCompletionSo
 use crate::wander_near_location::WanderNearPrivateState;
 use v2k_formats::terrain::TerrainGrid;
 
-// J is an attachment owner outside01430. Types16/58 additionally own E, whose
-// separate Aim callback invokes24650; neither01430 nor018A0 dispatches E.
+// J is an attachment owner outside 01430. Types16/58 additionally own E, whose
+// separate Aim callback invokes 24650; neither 01430 nor 018A0 dispatches E.
 const ABCDHJ_TOPOLOGY: CommonMoverComponentTopology = CommonMoverComponentTopology {
     sub_a: true,
     sub_b: true,

@@ -95,7 +95,7 @@ fn retain_failed_prefix(frame: &mut Intro2ContactFrame<'_>, id: u32, committed: 
         if let Ok(owner) = Intro2Type58Owner::adopt_blocked_prefix(frame.entities, id) {
             frame.actor_tasks.register_intro2_type58(owner);
         }
-        // Retain the current scheduler owner even when11760 has already
+        // Retain the current scheduler owner even when 11760 has already
         // published Class12. No later pair or scheduler visit may replay it.
         frame
             .actor_tasks
@@ -212,8 +212,8 @@ fn apply_selected_contact(
     {
         return Err(Block::Runtime("Type58 static callback policy"));
     }
-    // 27E20's pickup modes require player capability1. Living effective39 and
-    // Class12 effective28 (39 & ~2015) exclude D920's400 generic crush branch.
+    // 27E20's pickup modes require player capability1. Living effective 39 and
+    // Class12 effective 28 (39 & ~2015) exclude D920's400 generic crush branch.
     let hook = contact_task_hook(entity)?;
     let furniture_damage = match hook {
         Type58StaticTaskHook::Null => None,
@@ -224,7 +224,7 @@ fn apply_selected_contact(
             None
         }
         Type58StaticTaskHook::Furniture => {
-            // 405FF0 zeroes task+20 and401CA0 leaves it null. C890 instead
+            // 405FF0 zeroes task+20 and 401CA0 leaves it null. C890 instead
             // ignores the static filter/program result and calls C690 directly,
             // including NoDamage, ChanceRejected, Duplicate or a changed cell.
             let damage = deliver_static(
@@ -251,7 +251,7 @@ fn apply_selected_contact(
     };
 
     // D920 re-resolves the actor after any style initializer. Keep the old
-    // contact plane/cell, but capture motion and mass only now for11760.
+    // contact plane/cell, but capture motion and mass only now for 11760.
     let entity = frame
         .entities
         .entity_mut(id)
@@ -360,14 +360,14 @@ fn contact_task_hook(entity: &Entity) -> Result<Type58StaticTaskHook, Intro2Type
     let tertiary = entity.actor_task_state(ActorTaskSlot::Tertiary);
     // A8B0 visits current Primary/Secondary/Tertiary in order; FUN_00401270 calls
     // each slot's +20 static hook with its +24 context. Acquiring
-    // secondaries and ADE0's Tertiary Aim retain05FF0's null static hook.
-    // 02B10/03B70/03360 install02CA0 at template+20 (402B6B/403BDB/4033C3).
+    // secondaries and ADE0's Tertiary Aim retain 05FF0's null static hook.
+    // 02B10/03B70/03360 install 02CA0 at template+20 (402B6B/403BDB/4033C3).
     match (style, primary, secondary, tertiary) {
         (0x4c7ed0, Some(Task::CommonDying(_)), None, None)
             if entity.collision.state_flags_at_0x08.masked(0x4000)
                 == RetailRuntimeValue::Known(0x4000) =>
         {
-            // 404120 retains05FF0's null+20;4C7ED0 also has null+1C.
+            // 404120 retains 05FF0's null+20; 4C7ED0 also has null+1C.
             // Neither callback changes tasks, components or the shared RNG.
             Ok(Type58StaticTaskHook::Null)
         }

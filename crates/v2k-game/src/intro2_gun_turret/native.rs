@@ -133,8 +133,8 @@ pub(crate) struct GunTurretAuthoredConstruction<'a> {
     pub constructor_surface_bits: u32,
 }
 
-/// The ordinary104B0 allocation carries its actual authored pose and param.
-/// It is independent of Intro2's authored identities and451C00 zero records.
+/// The ordinary 104B0 allocation carries its actual authored pose and param.
+/// It is independent of Intro2's authored identities and 451C00 zero records.
 pub(crate) fn publish_authored_gun_turret(
     request: GunTurretAuthoredConstruction<'_>,
     next_random: &mut impl FnMut() -> u32,
@@ -254,7 +254,7 @@ fn publish_gun_turret_at(
             crate::entity_collision_state::SURFACE_STATE_MASK,
             surface_bits,
         );
-        //104B0+44 and common type-vtable+30 are null for these E/L rows.
+        // 104B0+44 and common type-vtable+30 are null for these E/L rows.
         entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
         entity
             .collision
@@ -298,7 +298,7 @@ fn publish_gun_turret_at(
     // absent. D720/13F70 then rebuilds Q31 from the spawn Euler words.
     entity.set_position_raw([xz[0], terrain.bilinear_height_raw(xz[0], xz[1]), xz[1]]);
     entity.apply_d720_euler_body_basis();
-    // Explicit deterministic native policy for104B0's unwritten B2 residue.
+    // Explicit deterministic native policy for 104B0's unwritten B2 residue.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     let publication = select(entity, profile, next_random)?;
     if profile.is_flower() {
@@ -397,8 +397,8 @@ fn publish_graph(
         .state_flags_at_0x08
         .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     if selection.program.class_id == 0 {
-        //C490 clears Secondary then Tertiary before installing02800's
-        //9000ms Primary timer. E/L and the presentation FIFO survive.
+        //C490 clears Secondary then Tertiary before installing 02800's
+        // 9000ms Primary timer. E/L and the presentation FIFO survive.
         entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
         entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
         entity.actor_tasks.replace_prepared(
@@ -417,7 +417,7 @@ fn publish_graph(
         .intro2_gun_turret_runtime
         .as_ref()
         .expect("authenticated E/L allocation");
-    //44EA60(method12/14) returns zero; flower method16 returns one.
+    // 44EA60(method12/14) returns zero; flower method16 returns one.
     let state = task::GunTurretTaskState::from_408df0(
         // Retail reads the type record's capability word (FUN_00410480).
         entity.capability_flags,

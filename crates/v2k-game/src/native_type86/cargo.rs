@@ -73,7 +73,7 @@ pub(crate) fn prepare_attach(
     {
         return Err(Type86Block::Runtime("Type86 attach choice list"));
     }
-    // CD50 selects variant1 for class6/54; CE70 selects variant2 for10/45.
+    // CD50 selects variant1 for class6/54; CE70 selects variant2 for 10/45.
     // Class14 also selects variant1, whose C470 retires the actor immediately.
     let carrying_variant: u8 = match program.class_id {
         6 | 54 | 14 => 1,

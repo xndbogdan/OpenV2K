@@ -1,4 +1,4 @@
-//! Shared authored104B0/09A80/D4A0 entry, independent of replay coordinates.
+//! Shared authored 104B0/09A80/D4A0 entry, independent of replay coordinates.
 
 use super::*;
 use crate::{
@@ -142,7 +142,7 @@ pub(crate) fn publish_authored_type17(
     state.overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
     entity.collision.state_flags_at_0x08 = state;
     entity.model_index = Some(MODEL);
-    // The common104B0 default is null+44; Type17's type-vtable+30 is also
+    // The common 104B0 default is null+44; Type17's type-vtable+30 is also
     // null. Pair contact/orientation retain their separately owned evidence.
     entity.collision.pair_callbacks.damage_modifier_address = RetailRuntimeValue::Known(None);
     entity

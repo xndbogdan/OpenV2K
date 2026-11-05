@@ -90,9 +90,9 @@ impl Fixture {
             .find(|entity| entity.entity_type == 67)
             .unwrap()
             .id;
-        // Execute the actual1CF90 alternate-cleanup prefix against the live
+        // Execute the actual 1CF90 alternate-cleanup prefix against the live
         // Section10 allocation. Other actors are then made inactive to isolate
-        // the reached component/task lane. This does not claim the full56960
+        // the reached component/task lane. This does not claim the full 56960
         // sweep or an RNG receipt from a retail failed-world recording.
         let geometry = snapshot_main_base_abort_terrain_geometry(&session.cache).unwrap();
         let mut static_damage = StaticDamageScheduler::new();
@@ -535,9 +535,9 @@ fn failed_level1_native_wasp_restores_pairs_then_uses_full_hit_and_quiet_death_o
 
 #[v2k_test_support::retail_test]
 fn failed_level1_hive_wasp_playing_contact_restores_gate_and_corrects_solid_burial() {
-    // The real OVL13 constructor,1CF90 cleanup and Hive birth/ejection/task
+    // The real OVL13 constructor, 1CF90 cleanup and Hive birth/ejection/task
     // lane supply custody. Only the contact stress pose is controlled; this
-    // isolated lane is not a full56960 sweep or a retail trajectory oracle.
+    // isolated lane is not a full 56960 sweep or a retail trajectory oracle.
     for prior_draws in [0, 19] {
         for delta in [16_667, 40_000, 125_000] {
             let mut f = Fixture::new();
@@ -583,7 +583,7 @@ fn failed_level1_hive_wasp_playing_contact_restores_gate_and_corrects_solid_buri
             let child = f.manager.entity_mut(id).unwrap();
             assert_eq!((child.position_raw(), child.velocity_raw()), initial_pose);
 
-            //1CA90 ages its ejection slot in microseconds. The task's generic
+            // 1CA90 ages its ejection slot in microseconds. The task's generic
             // wrapper independently truncates each callback delta to ms.
             let mut ejection_elapsed_us = delta;
             let mut wander_elapsed_ms = delta / 1_000;

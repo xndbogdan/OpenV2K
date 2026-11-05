@@ -87,7 +87,7 @@ fn ordinary_autonomous_factory_publishes_real_pickup_and_waits_for_collection() 
         tick.outcome
     );
     owner = tick.retained_owner.unwrap();
-    //12DA0 caps each callback delta at125000us even when random waits are
+    // 12DA0 caps each callback delta at125000us even when random waits are
     // disabled. The authored250000us threshold therefore needs two visits.
     let half = base(&manager, id).production.unwrap();
     assert_eq!(
@@ -318,7 +318,7 @@ fn native_type66_zero_threshold_templates_advance_both_modes_without_product_rng
                 RetailRuntimeValue::Known(125)
             );
             if !detailed {
-                //12DA0 zero gate reloads +70 then+6C. Factory itself has no
+                // 12DA0 zero gate reloads +70 then+6C. Factory itself has no
                 // production or effect draws on these authored zero thresholds.
                 expected.next_shared_retail_random_u16();
                 expected.next_shared_retail_random_u16();
@@ -624,7 +624,7 @@ fn native_type66_dormant_timeout_is_strict_and_reselects_after_unwind_without_rn
     let id = publish(&mut manager, &session, &metadata, 51);
     enabled(&mut manager, id, true);
     let entity = manager.entity_mut(id).unwrap();
-    // Controlled terminal suffix fixture: death tests own19750's prefix.
+    // Controlled terminal suffix fixture: death tests own 19750's prefix.
     entity.collision.state_flags_at_0x08.overwrite(
         crate::entity_collision_state::DYING_STATE_BIT,
         crate::entity_collision_state::DYING_STATE_BIT,

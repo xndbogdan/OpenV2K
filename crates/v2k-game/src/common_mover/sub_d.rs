@@ -198,8 +198,8 @@ pub const TYPE47_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
 };
 
 /// Exact native Intro2 Type16 Section-12 descriptor. 1F660's same no-pitch
-/// steering path uses its authored divisor128, forward600 and lateral256;
-/// classifier13 selects the already recovered steepness/water/object branches.
+/// steering path uses its authored divisor128, forward 600 and lateral 256;
+/// classifier 13 selects the already recovered steepness/water/object branches.
 pub const INTRO2_TYPE16_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     steering_divisor_raw: 128,
     couple_yaw_into_roll_raw: 0,
@@ -211,7 +211,7 @@ pub const INTRO2_TYPE16_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
 };
 
 /// Exact native Intro2 Type58 descriptor. Its no-pitch 1F660 path uses
-/// divisor96, forward512, lateral200 and the recovered object/water/slope13.
+/// divisor96, forward 512, lateral 200 and the recovered object/water/slope13.
 pub const INTRO2_TYPE58_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     steering_divisor_raw: 96,
     couple_yaw_into_roll_raw: 0,
@@ -436,7 +436,7 @@ pub const TYPE41_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
 };
 
 /// Type10's own Section12 steering divisor. `41F660 -> 20260` divides by
-/// this signed word; flags0 take41FC90 without querying the cache origin.
+/// this signed word; flags0 take 41FC90 without querying the cache origin.
 pub const INTRO2_TYPE10_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     steering_divisor_raw: 48,
     ..FLYER_SUB_D
@@ -462,7 +462,7 @@ pub const TYPE62_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
 };
 
 /// Type49's water-capable rover uses steepness/object checks, deliberately
-/// skipping water and infected-material rejection (classifier flags0x11).
+/// skipping water and infected-material rejection (classifier flags 0x11).
 pub const CLEANSING_VEHICLE_SUB_D: SubDSteeringDescriptor = SubDSteeringDescriptor {
     steering_divisor_raw: 64,
     couple_yaw_into_roll_raw: 0,
@@ -667,7 +667,7 @@ pub(crate) const fn intro2_type16_first_query_owner_for_birth(
     }
 }
 
-/// Spawn40's own203D0 allocation/first41FCC4 read in V200001, retained as
+/// Spawn40's own 203D0 allocation/first 41FCC4 read in V200001, retained as
 /// intro2-type58-{constructors,origins}.txt (2026-09-08). Seed19's first
 /// 00401602 -> 0041F7A8 query BDFF/0DC8 takes full-reset, class0, row0=1.
 /// This receipt neither assigns generic origin bytes nor admits other births.
@@ -687,7 +687,7 @@ pub(crate) const fn intro2_type58_first_query_owner_for_birth(
     }
 }
 
-/// Spawn43's own203D0 allocation/first41FCC4 read in V200001, retained as
+/// Spawn43's own 203D0 allocation/first 41FCC4 read in V200001, retained as
 /// intro2-type94-{constructors,origins}.txt (2026-09-09). Seed1C's first
 /// 00401602 -> 0041F7A8 query C1FF/82C8 takes full-reset, class0, row0=1.
 /// Equal descriptor bytes do not authorize borrowing Type58's birth receipt.
@@ -1826,10 +1826,10 @@ fn classify_type9_terrain(terrain: &TerrainGrid, point_raw: [i16; 2]) -> u16 {
 fn classify_terrain(terrain: &TerrainGrid, point_raw: [i16; 2], flags: u8) -> u16 {
     let [x_raw, z_raw] = point_raw.map(|word| word as u16);
 
-    // 41FEB0 tests bit0x20 before every other classifier arm. It reads one
+    // 41FEB0 tests bit 0x20 before every other classifier arm. It reads one
     // signed cell height, not the later water arm's four-corner footprint.
     // Exactly256 raw units of water remains traversable; shallower water
-    // and land return6. Both operands widen AFTER the retail signed words.
+    // and land return 6. Both operands widen AFTER the retail signed words.
     if flags & 0x20 != 0
         && i32::from(terrain.sea_level_raw()) - i32::from(cell_height_raw(terrain, x_raw, z_raw))
             < 0x100
@@ -3797,7 +3797,7 @@ mod tests {
 
         let mut grid = terrain(-16, 0);
         // The wrapped center is cell255,255; a dry adjacent corner does not
-        // replace its512-unit depth. Conversely, that center becoming dry
+        // replace its 512-unit depth. Conversely, that center becoming dry
         // must win before the steep footprint, object and material arms.
         cell_mut(&mut grid, 0, 0).height = 0;
         assert_eq!(classify_terrain(&grid, point, 0x20), 0);
@@ -3821,7 +3821,7 @@ mod tests {
             ),
             Type9SubDStep::Applied { .. }
         ));
-        // 41F660's non4/non5 central classification, with divisor32.
+        // 41F660's non 4/non 5 central classification, with divisor32.
         assert_eq!(runtime.yaw_rate_raw, 0x1_8000 / 32);
     }
 }

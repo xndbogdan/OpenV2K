@@ -196,7 +196,7 @@ pub struct Intro2Type66Tick {
     pub outcome: Intro2Type66Outcome,
     pub retained_owner: Option<Intro2Type66Owner>,
     pub explosion_lights: Vec<TerrainExplosionLight>,
-    /// `19B50` invokes56750 only after terminal death returns, in mode zero.
+    /// `19B50` invokes 56750 only after terminal death returns, in mode zero.
     pub progressive_death_presentation_requested: bool,
     pub terrain_changed: bool,
 }
@@ -356,7 +356,7 @@ fn run_frame(
         finish_world(manager, id, frame, dt, detailed)?;
     }
     let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
-    //12DA0 clears B2 even when the type callback is disabled.
+    // 12DA0 clears B2 even when the type callback is disabled.
     commit_common_scheduler_post_callback(&mut entity.collision);
     let motion = plan_common_master_motion(
         entity.position_raw(),
@@ -511,7 +511,7 @@ fn run_factory_callback(
             animation_state_raw: live.animation_state_raw,
             elapsed_micros: dt,
             world_style_raw: frame.world_style_raw,
-            //19010's phase1 callback is gated by multiplayer DAT4F741C,
+            // 19010's phase1 callback is gated by multiplayer DAT4F741C,
             //independently of the detailed/restricted callback argument.
             phase1_presentation_enabled: false,
             suppress_status_publication: !detailed,
@@ -739,8 +739,8 @@ fn finish_world(
                 .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
-    //25027 omits attitude10, retains physical basis4000, skips gravity4 and
-    //drag8. DF70 still grounds at old X/Z without a model-origin40 offset.
+    // 25027 omits attitude 10, retains physical basis4000, skips gravity4 and
+    //drag8. DF70 still grounds at old X/Z without a model-origin 40 offset.
     // Type82's 21005 rebuilds the basis (413F70) and has no DF70.
     let flags = super::working_factory_initializer_state_raw(entity.entity_type);
     if flags & 0x4000 == 0 {

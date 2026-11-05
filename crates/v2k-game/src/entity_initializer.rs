@@ -71,7 +71,7 @@ pub(crate) fn constructor_position_raw(
 }
 
 /// 104B0 compares the pre-D4A0 authored Y against the current sea/wave.
-/// The wave flag is the world descriptor +84 policy copied by42EA30/433BD0;
+/// The wave flag is the world descriptor +84 policy copied by 42EA30/433BD0;
 /// it is independent from the renderer's water-plane visibility threshold.
 pub(crate) fn constructor_surface_bits_at_tick(
     authored_position_raw: [i16; 3],
@@ -99,7 +99,7 @@ pub(crate) fn constructor_surface_bits_at_tick(
 /// Its wave branch is unreachable when the integer-cell floor is at or above
 /// sea, so these two bits need neither a draw clock nor a collision radius.
 /// Wet cells remain unresolved without the constructor's wave clock. Terrain
-/// type bit0x10 selects another state domain and does not gate this comparison.
+/// type bit 0x10 selects another state domain and does not gate this comparison.
 /// All 42 authored Type-9 births in gameplay overlays 13--49 select dry cells
 /// here, including the 36 births outside Level 1. Their pre-grounding Y is zero
 /// and their static sea is negative, so this source branch resolves them without

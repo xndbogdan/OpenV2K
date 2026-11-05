@@ -91,7 +91,7 @@ fn delivered_fixture(world: u32) -> Fixture {
         },
     )
     .unwrap();
-    // The production D0B0 pair adapter adopts the captor after completedC690.
+    // The production D0B0 pair adapter adopts the captor after completed C690.
     // Direct callback entry in this fixture must retain that same new owner
     // before either the original-deletion or restored-contact branch runs.
     f.scheduler.register_intro2_type17(
@@ -334,7 +334,7 @@ fn repeated_native_delivery_preserves_already_pending_state_and_one_receipt() {
             f.child
         ));
         // Stress the independent callback-enable words on this authentic
-        // pending graph. 16750/D440 and CE90 own their edits; a second10B70
+        // pending graph. 16750/D440 and CE90 own their edits; a second 10B70
         // must leave whatever those callbacks produce exactly intact.
         f.entities
             .entity_mut(f.child)
@@ -346,7 +346,7 @@ fn repeated_native_delivery_preserves_already_pending_state_and_one_receipt() {
         let mut expected_scheduler = f.scheduler.fork_for_main_base_abort_transaction();
         let mut expected_fx = f.fx.fork_for_main_base_abort_transaction();
         let mut expected_notifications = GameplayNotifications::new();
-        // D040's cleanup owns the identical16750 callback without10B70.
+        // D040's cleanup owns the identical 16750 callback without 10B70.
         // Compare that native release with D0B0's repeated destroy callback.
         execute_capture_root(
             &mut expected_entities,

@@ -345,7 +345,7 @@ fn entered_worker_body_keeps_its_stamp_and_component_prefix_when_publication_sto
     let entity_count = manager.entities.len();
     let seed = fx.next_sub_d_allocation_seed();
     let mut expected_fx = fx.fork_for_main_base_abort_transaction();
-    expected_fx.next_shared_retail_random_u16(); //20450, before selector/task.
+    expected_fx.next_shared_retail_random_u16(); // 20450, before selector/task.
     let body = manager.begin_type8_body_construction(8, &mut fx);
     assert!(body.is_for_entity_type(8));
     assert!(!body.is_for_entity_type(90));

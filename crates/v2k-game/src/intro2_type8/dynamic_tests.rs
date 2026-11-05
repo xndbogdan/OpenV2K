@@ -235,7 +235,7 @@ fn real_factory_worker_runs_carrying_callbacks_and_reselects_at_the_released_anc
         }
         assert_eq!(scheduler.adopt_intro2_type8(&mut manager), 0);
         assert_eq!(scheduler.adopt_live_type8_go_to_job(&manager), 0);
-        // Hold the proxy phase while exercising the child's real12DA0 visit.
+        // Hold the proxy phase while exercising the child's real 12DA0 visit.
         for step in 1..=20 {
             tick(
                 &mut session,
@@ -305,8 +305,8 @@ fn real_factory_worker_runs_carrying_callbacks_and_reselects_at_the_released_anc
             assert_eq!(worker.collision.health_raw, carried_health);
             assert_eq!(Intro2Type8Owner::published_graph(worker), carried_graph);
             assert_eq!(worker.attached_to, Some(proxy.entity_id.get()));
-            // 415060 rejects checked damage before filtering when8000 is clear.
-            // Exercise the independent10C10 entry, which has no8000 gate, to
+            // 415060 rejects checked damage before filtering when 8000 is clear.
+            // Exercise the independent 10C10 entry, which has no 8000 gate, to
             // cover class14's null release without undoing carrying protection.
             let death = impact::run_intro2_type8_standard_death(&mut manager, id, &mut fx).unwrap();
             scheduler.register_intro2_type8(death.publication.unwrap());
@@ -317,7 +317,7 @@ fn real_factory_worker_runs_carrying_callbacks_and_reselects_at_the_released_anc
                 Some((_, _, TaskKind::Exploding))
             ));
         }
-        // Controlled physical relocation of the real proxy isolates409030's
+        // Controlled physical relocation of the real proxy isolates 409030's
         // mutable anchor writer without altering the child's graph or receipt.
         let mut landing = before_position;
         landing[0] = landing[0].wrapping_add(256);
@@ -370,8 +370,8 @@ fn real_factory_worker_runs_carrying_callbacks_and_reselects_at_the_released_anc
             }
             if lethal_while_carried {
                 // 18640 retires a dying row before copying the proxy pose.
-                // Only the child's next continuing12DA0 sees the absent row
-                // and calls16750 through class14's null release callback.
+                // Only the child's next continuing 12DA0 sees the absent row
+                // and calls 16750 through class14's null release callback.
                 let worker = manager.entity_mut(id).unwrap();
                 assert_eq!(
                     (

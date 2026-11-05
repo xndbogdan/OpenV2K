@@ -379,7 +379,7 @@ fn canonical_spider_pen_keeps_intrinsic_collision_slots_and_authored_damage() {
         assert_eq!(broken.collision_radius_raw, 0);
         assert!(broken.collision_program.is_empty());
 
-        // Retail globals 4CBF70/4CBF88 both contain channel2 amount2000;
+        // Retail globals 4CBF70/4CBF88 both contain channel2 amount 2000;
         // kind9's 4C9C90 profile uses threshold1000 and multiplier512.
         // An admitted hit is destructible: geometry must not be repaired
         // by inventing primary-weapon immunity for this material.

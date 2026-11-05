@@ -1,4 +1,4 @@
-//! Particle draw callbacks:43D300 forward copies and442240 fading backward copies.
+//! Particle draw callbacks:43D300 forward copies and 442240 fading backward copies.
 
 use super::*;
 use v2k_formats::fixed_math::retail_integer_sqrt;
@@ -92,7 +92,7 @@ impl WorldFx {
                 _ => DrawRecord::Live,
             };
             // Class19 is an authored invisible collision probe. Ordinary
-            // null-frame D410 sets80 before projection; D300's equivalent
+            // null-frame D410 sets 80 before projection; D300's equivalent
             // write affects only its stack copy, never the live allocation.
             if descriptor.frame_list_va() == 0 {
                 if record == DrawRecord::Live
@@ -100,8 +100,8 @@ impl WorldFx {
                 {
                     self.particles.free(slot);
                 } else if record == DrawRecord::LiveThenBackwardStackStreak {
-                    //44230B first calls D410 on the real record. D410 sets80;
-                    //40120 owns later removal, while copied calls set only80
+                    // 44230B first calls D410 on the real record. D410 sets 80;
+                    // 40120 owns later removal, while copied calls set only 80
                     //in their own stack record.
                     if let Some(live) = self.particles.slots[slot].as_mut() {
                         live.pending_destruction = true;
@@ -127,7 +127,7 @@ impl WorldFx {
             let mut sample = particle;
             let mut position_raw = world_position_to_raw(particle.position);
             if record != DrawRecord::Live {
-                // D410 reads signed position words even for442240's first
+                // D410 reads signed position words even for 442240's first
                 // live pointer. Its presentation copy must not invent legacy
                 // float remainders. The copied +8/+A/+C words also own the first projection;
                 // keep legacy fractional integration out of this draw copy.
@@ -136,7 +136,7 @@ impl WorldFx {
             for index in 0..count {
                 if record == DrawRecord::LiveThenBackwardStackStreak {
                     if index == 0 {
-                        //44226D takes the signed descriptor+0A scale, not the
+                        // 44226D takes the signed descriptor+0A scale, not the
                         //separate frame tuple scale. The copy predates D410.
                         sample.draw_scale_raw = descriptor.draw_scale_raw();
                     } else {
@@ -185,8 +185,8 @@ impl WorldFx {
                             live.pending_destruction = true;
                         }
                     }
-                    //43D300 and442240 continue their copied D410 calls after a
-                    //sample sets80. D410 never reads that bit to skip the next
+                    // 43D300 and 442240 continue their copied D410 calls after a
+                    //sample sets 80. D410 never reads that bit to skip the next
                     //call. The copy's10 visible bit likewise is not written
                     //back. Each accepted sample independently reaches light,
                     //then the ordinary later far/rectangle sprite gate.
@@ -202,16 +202,16 @@ impl WorldFx {
     }
 }
 
-///43D30D..43D3B9 normalizes the signed velocity words into signed Q12 words,
-///then arithmetic-shifts each product by12. The sqrt return is narrowed to
-///i16 BEFORE division; this is not457960's Q31 normalization or +1 length.
+/// 43D30D..43D3B9 normalizes the signed velocity words into signed Q12 words,
+///then arithmetic-shifts each product by 12. The sqrt return is narrowed to
+///i16 BEFORE division; this is not 457960's Q31 normalization or +1 length.
 fn streak_step_raw(velocity: [i16; 3]) -> [i16; 3] {
     let squared = velocity.into_iter().fold(0_i32, |sum, component| {
         sum.wrapping_add(i32::from(component).wrapping_mul(i32::from(component)))
     });
     let speed = i32::from(retail_integer_sqrt(squared) as i16);
     let direction_q12 = if speed == 0 {
-        //43D373 stores00001000, then loads BX=1000,DI=0,AX=0.
+        // 43D373 stores 00001000, then loads BX=1000,DI=0,AX=0.
         [0x1000, 0, 0]
     } else {
         velocity.map(|component| ((i32::from(component) << 12) / speed) as i16)

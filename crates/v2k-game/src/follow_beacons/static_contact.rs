@@ -94,7 +94,7 @@ pub fn plan_follow_beacons_static_contact(
     })
 }
 
-///02B10,03650,03B70 and03E20 install the identical02CA0 callback.
+/// 02B10, 03650, 03B70 and 03E20 install the identical 02CA0 callback.
 /// Only their shared private record is written; typed task owners preserve
 /// their own lifetime, route and audio records when committing this result.
 pub(crate) struct WanderPrivateStaticContactRequest {

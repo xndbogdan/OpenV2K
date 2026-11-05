@@ -279,7 +279,7 @@ pub(crate) fn resolve_null_hook_flying_surface<E, D: Copy>(
     )
     .map_err(Block::SurfaceCallback)?;
     // A solid hit can publish another style before this water callback. Both
-    // D860 and141D0 reread the surviving body after the synchronous hook.
+    // D860 and 141D0 reread the surviving body after the synchronous hook.
     let context = TerrainCollisionContext::from_current_level_cache(frame.resources)
         .ok_or(Block::Runtime("terrain contact environment"))?;
     let entity = frame

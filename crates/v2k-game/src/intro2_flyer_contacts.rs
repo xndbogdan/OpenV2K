@@ -1,5 +1,5 @@
 //! Native Type15/87 11AD0 surface admission and task custody.
-//! Their null Search hooks run the same shared141D0 phases as other flyers.
+//! Their null Search hooks run the same shared 141D0 phases as other flyers.
 
 use crate::{
     entity::Entity,
@@ -20,7 +20,7 @@ pub type Intro2FlyerContactBlock =
 pub type Intro2FlyerContactOutcome =
     crate::native_flying_surface_contact::NativeFlyingSurfaceContactOutcome;
 
-/// The complete surface/static prefix of the source11AD0 visit.
+/// The complete surface/static prefix of the source 11AD0 visit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NativeFlyerContactOutcome {
     pub surface: Intro2FlyerContactOutcome,

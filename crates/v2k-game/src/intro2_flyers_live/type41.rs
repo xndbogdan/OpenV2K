@@ -331,7 +331,7 @@ pub(super) fn tick_flee(
     Ok((transition, sound))
 }
 
-/// `10C10`'s prefix and `AC60`'s alternate12 (`C620`) for a living Type41.
+/// `10C10`'s prefix and `AC60`'s alternate 12 (`C620`) for a living Type41.
 /// Remote and already-dying entries are `10C10`'s no-ops.
 pub(crate) fn publish_standard_death(
     manager: &mut EntityManager,

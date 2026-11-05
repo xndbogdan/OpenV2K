@@ -86,12 +86,12 @@ pub struct AttachedParticleCascadeOwner {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AttachedParticleCascadeOwnerRequest {
     pub cached_allocation: crate::main_base_abort::MainBaseAbortActorLease,
-    ///44288E copies the current physical particle's+14, independent of EDI.
+    /// 44288E copies the current physical particle's+14, independent of EDI.
     pub emission_owner_handle: Option<u32>,
 }
 
-/// Source reads the original EDI record after15040, even when it is dying or
-/// awaiting14990. A missing/rebound allocation cannot authorize frozen velocity.
+/// Source reads the original EDI record after 15040, even when it is dying or
+/// awaiting 14990. A missing/rebound allocation cannot authorize frozen velocity.
 pub fn sample_attached_particle_cached_owner(
     entities: &crate::entity::EntityManager,
     request: AttachedParticleCascadeOwnerRequest,
@@ -113,7 +113,7 @@ pub fn sample_attached_particle_cached_owner(
             .emission_owner_handle
             .map(|id| ParticleOwnerAtBirth {
                 entity_id: id,
-                //400A60's independent3A580 lookup yields type0 for a missing handle.
+                // 400A60's independent 3A580 lookup yields type0 for a missing handle.
                 entity_type: entities
                     .iter_all()
                     .find(|entity| entity.id == id)

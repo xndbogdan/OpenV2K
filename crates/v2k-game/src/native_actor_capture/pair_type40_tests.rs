@@ -1,4 +1,4 @@
-//! Real NULL-J C910 kill keeps the opposite callbacks and12760 suffix.
+//! Real NULL-J C910 kill keeps the opposite callbacks and 12760 suffix.
 
 use super::{
     pair::{actor, *},

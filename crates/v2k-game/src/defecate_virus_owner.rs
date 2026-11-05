@@ -139,8 +139,8 @@ pub fn apply_defecate_virus_setup<T, E>(
     mut prepare: impl FnMut(DefecateVirusTaskPreparation) -> Result<PreparedActorTask<T>, E>,
 ) -> Result<(), DefecateVirusSetupError<E>> {
     // Existing Type16/26 preparers retain their bounded family-state policy:
-    // clear1 -> prepare/publish2 -> prepare0 -> A literal1 -> publish0.
-    // They do not supply406070's H/RNG/A suffix. That remains their explicit
+    // clear 1 -> prepare/publish 2 -> prepare 0 -> A literal1 -> publish 0.
+    // They do not supply 406070's H/RNG/A suffix. That remains their explicit
     // integration boundary; delegating here does not grant native parity.
     apply_defecate_virus_setup_with_component_suffix(owner, request, sub_a, |phase, _| {
         prepare(phase)
@@ -148,9 +148,9 @@ pub fn apply_defecate_virus_setup<T, E>(
 }
 
 /// Same failure/publication matrix, with the real component topology borrowed
-/// during each successful preparation. Native callers apply406070's ordered
+/// during each successful preparation. Native callers apply 406070's ordered
 /// H -> RNG -> A writes before the prepared wrapper becomes visible. The
-/// final032A0 A literal1 write still belongs to this setup after phase1.
+/// final 032A0 A literal1 write still belongs to this setup after phase1.
 pub fn apply_defecate_virus_setup_with_component_suffix<'a, T, E>(
     owner: &mut ActorTaskOwner<T>,
     request: DefecateVirusSetupRequest,
@@ -255,7 +255,7 @@ mod tests {
                     if fail_at == Some(phase.phase_index) {
                         return Err("allocation");
                     }
-                    // A real406070 suffix finishes H/RNG/A before returning
+                    // A real 406070 suffix finishes H/RNG/A before returning
                     // its prepared wrapper; the host never queues it later.
                     suffixes.push(phase.phase_index);
                     let DefecateVirusSubATopology::Authored(a) = topology else {

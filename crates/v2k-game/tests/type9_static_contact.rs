@@ -141,7 +141,7 @@ impl Fixture {
                 });
                 level.entities = prefix.into_iter().chain([peasant]).collect();
                 level.sub_count = level.entities.len() as u32;
-                // RunAway's authored acquisition filter84 accepts the
+                // RunAway's authored acquisition filter 84 accepts the
                 // player's capability4, separately from the BaddieNearby
                 // root's mask8. The spider selects the root; the live player
                 // supplies an eligible target for the progressed task.
@@ -583,11 +583,11 @@ fn world15_kind2_contact_filters_static_damage_then_keeps_the_real_peasant_owner
         .scheduler
         .ordinary_type9_completed_walking_owner(&fixture.manager, fixture.peasant));
     // Actual world15 model142/kind2 overlap from the release walk. A stronger
-    // incoming velocity makes11760 deliver a nonzero, sub-threshold packet.
+    // incoming velocity makes 11760 deliver a nonzero, sub-threshold packet.
     fixture.place([30_449, -1183, 18_961], [-500, 0, 0]);
     let health = fixture.health_raw();
     // A filtered static packet consumes no chance/cue/particle RNG. A8B0's
-    // earlier native02CA0 still consumes X then Z, including this branch.
+    // earlier native 02CA0 still consumes X then Z, including this branch.
     fixture.world_fx = WorldFx::new();
     let mut expected_fx = WorldFx::new();
     expected_fx.next_shared_retail_random_u16();

@@ -136,7 +136,7 @@ impl EntityManager {
                     let entity_id =
                         self.construct_campaign_cargo(identity.entity_type(), &mut context)?;
                     // 451DFC overwrites the successful body's temporary stamp;
-                    // it never changes/refunds the counter consumed by104B0.
+                    // it never changes/refunds the counter consumed by 104B0.
                     self.entity_mut(entity_id)
                         .expect("newborn exists")
                         .construction_stamp_at_0xb4 = identity.saved_stamp();
@@ -147,7 +147,7 @@ impl EntityManager {
         }
 
         // FUN_0042EB50 reads Section13+48. This is the world style, not a level id.
-        // The signed comparison follows4185C0's wrapping unsigned mass sum.
+        // The signed comparison follows 4185C0's wrapping unsigned mass sum.
         if context.level.world_style == 6 {
             let mass = match self.attached_cargo_mass_state() {
                 RetailRuntimeValue::Known(mass) => mass as i32,
@@ -526,9 +526,9 @@ impl EntityManager {
             context.level.raw_u32(0x84).expect("descriptor+84") != 0,
         )
         .ok_or(CampaignCargoRestoreError::TerrainUnavailable)?;
-        // 451C36..451CCA compares the old signed Y with445920 first. That
+        // 451C36..451CCA compares the old signed Y with 445920 first. That
         // helper returns sea when waves are disabled or the coarse floor is
-        // dry (44592A/44593A ->445A2F), exactly as the constructor classifier.
+        // dry (44592A/44593A -> 445A2F), exactly as the constructor classifier.
         let player = self.entity_mut(player_id).expect("player remains live");
         player.collision.state_flags_at_0x08.overwrite(
             crate::entity_collision_state::SURFACE_STATE_MASK,

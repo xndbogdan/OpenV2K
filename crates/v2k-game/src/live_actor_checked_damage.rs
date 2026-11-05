@@ -406,9 +406,9 @@ pub(crate) fn apply_live_actor_checked_damage_with_split<D, E>(
     )
     .map_err(|reason| error(Phase::Death, true, LiveActorDamageBlock::Death(reason)))?;
     outcome.death_publication = death_result.publication;
-    // 14E90 reads the target bit after successful10C10, then calls568B0(4)
-    // for source46. This local resource hint is separate from the following
-    // network-statistics branch and from415040's filtered-zero selector23.
+    // 14E90 reads the target bit after successful 10C10, then calls 568B0(4)
+    // for source 46. This local resource hint is separate from the following
+    // network-statistics branch and from 415040's filtered-zero selector23.
     if request.delivery.source_entity_type_raw == 46 && death_result.returned_nonzero {
         let flags = manager
             .entity_mut(request.entity_id)

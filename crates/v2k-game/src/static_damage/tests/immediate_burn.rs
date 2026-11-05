@@ -2,9 +2,9 @@ use super::*;
 
 #[test]
 fn kind2_exact_descriptor_filters_both_slots_before_its_zero_chance_gate() {
-    // Read-only retail PE E9BE7A83: 4C9E90 descriptor and4C9C58 profile.
-    //11760 submits [1,0,impact,0,type,owner];27950 passes the first four
-    //words to255E0 before testing severity, chance or the null program.
+    // Read-only retail PE E9BE7A83: 4C9E90 descriptor and 4C9C58 profile.
+    // 11760 submits [1,0,impact,0,type,owner];27950 passes the first four
+    //words to 255E0 before testing severity, chance or the null program.
     let descriptor = static_kind_descriptor(KIND_2_STATIC_OBJECT).unwrap();
     assert_eq!(
         *descriptor.raw_words(),

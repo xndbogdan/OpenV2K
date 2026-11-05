@@ -305,7 +305,7 @@ impl SaveManager {
     /// an imported row. Only a portable JSON shadow at that writable location
     /// is retired after success; read-only imports remain untouched. Retained
     /// legacy-layout fixtures preserve their original data/parent placement.
-    /// The menu supplies the overwrite decision; 448CF0 owns magic5 and CRCs.
+    /// The menu supplies the overwrite decision; 448CF0 owns magic 5 and CRCs.
     pub fn write_checkpoint(
         &mut self,
         slot: usize,

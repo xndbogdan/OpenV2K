@@ -324,7 +324,7 @@ fn coarse_callback_owns_no_timer_or_surface_tail() {
 #[v2k_test_support::retail_test]
 fn detailed_callback_reselects_living_singleton_once_and_preserves_wet_profile() {
     // Canonical L33 owns both profiles below its sea plane: Type68 spawn4
-    // grounds at4000 and Type52 spawn5 at416+header08(200), with sea4096.
+    // grounds at 4000 and Type52 spawn5 at 416+header08(200), with sea4096.
     let mut world = World::load(33);
     for entity_type in [52, 68] {
         let id = world.first(entity_type);

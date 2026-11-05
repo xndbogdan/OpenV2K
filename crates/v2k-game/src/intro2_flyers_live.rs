@@ -677,9 +677,9 @@ fn publish_flyer_behavior_phase(
     // initialize the transient callback-mass offset deterministically once.
     // Later animation/contact writers and scheduler resets retain ownership.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
-    //10090 sets every Section12 type+7C to4C8A30;438080's special patches
-    // admit67/46/51, not15/87. Original4C8A30+30 is null. This generic
-    //14E90 hook is distinct from Search's primary/infected style hooks.
+    // 10090 sets every Section12 type+7C to 4C8A30; 438080's special patches
+    // admit 67/46/51, not 15/87. Original 4C8A30+30 is null. This generic
+    // 14E90 hook is distinct from Search's primary/infected style hooks.
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
     if flyer_has_emitter(entity.entity_type) {
         crate::intro2_flyer_aim::ensure_intro2_flyer_aim_runtime(entity, Some(metadata))

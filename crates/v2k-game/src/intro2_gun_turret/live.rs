@@ -388,7 +388,7 @@ fn finish_world(
                 .queue_networked_positional_sound_raw(sound, entity.position_raw());
         }
     }
-    //25027 retains the incoming body basis, omits E640, skips E100 gravity
+    // 25027 retains the incoming body basis, omits E640, skips E100 gravity
     //and drag, but executes DF70 grounding at the current X/Z. The turret's
     //private yaw/pitch only drive its component bindings, never this basis.
     if effective & 2 != 0 {

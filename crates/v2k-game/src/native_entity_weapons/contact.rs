@@ -1,9 +1,9 @@
 //! Native post-mover Type42/59 model-terrain and whole-body water contact.
 //!
 //! 11AD0 retains the selected entry model across solid checked damage, then
-//! reads the surviving body's pose/state again for129B0. This module accepts
+//! reads the surviving body's pose/state again for 129B0. This module accepts
 //! constructor custody, uses the physical rolling matrix, and delegates the
-//! synchronous410C10 owner. Static/active pair suffixes need their own current
+//! synchronous 410C10 owner. Static/active pair suffixes need their own current
 //! opposite-body/static-cell callback context and are separate from this pass.
 
 use super::{
@@ -139,7 +139,7 @@ pub enum EntityWeaponSurfaceOutcome {
     },
 }
 
-/// Resolve Type42's terminal style+10 and both types' null+14 into common141D0.
+/// Resolve Type42's terminal style+10 and both types' null+14 into common 141D0.
 /// The terminal closure runs synchronously after the lethal health write.
 pub(crate) fn resolve_entity_weapon_surface_contact_with_terminal<E>(
     manager: &mut EntityManager,
@@ -272,7 +272,7 @@ fn run<E>(
             kind,
             EntityWeaponKind::Rocket | EntityWeaponKind::GuidedMissile
         ) {
-            // Class22 and class28 +10 run40CEF0 before D7F0 re-resolves and invokes141D0.
+            // Class22 and class28 +10 run 40CEF0 before D7F0 re-resolves and invokes 141D0.
             // Mark a begun terminal prefix before it can return a host stop.
             *committed = true;
             terminal(manager, frame.resources, frame.world_fx, id)

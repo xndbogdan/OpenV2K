@@ -112,7 +112,7 @@ pub(crate) fn publish_main_base(
     let config =
         FactorySection13Config::decode(spawn.config.as_ref().ok_or(MainBaseError::Config)?);
     // All28 authored ordinary Type6 templates are zero. Their Sub-M has no
-    // production output or C830 voice; retain the whole template for19750.
+    // production output or C830 voice; retain the whole template for 19750.
     if config.raw_words() != [0; 22] {
         return Err(MainBaseError::Config);
     }
@@ -167,7 +167,7 @@ pub(crate) fn publish_main_base(
         .ok_or(MainBaseError::Selection)?;
     entity.set_position_raw([x, terrain.bilinear_height_raw(x, z), z]);
     entity.collision.state_flags_at_0x08 = resolution.state_flags;
-    // Explicit native birth policy for104B0's unwritten transient mass word.
+    // Explicit native birth policy for 104B0's unwritten transient mass word.
     // Subsequent12DA0 visits retain their own source clear/contributor order.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     entity.initial_behavior = RetailRuntimeValue::Known(Some(publication.selection));

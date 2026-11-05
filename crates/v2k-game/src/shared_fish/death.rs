@@ -1,8 +1,8 @@
 //! Native fish `10C10 -> DB80 -> AC60 -> C470` quiet-death ownership.
 //!
 //! Types22/23/24/62 select class2 directly after dying is set. C470 owns no timed
-//! task: it releases physical slots0/1/2 and marks10B70 deferred removal;
-//! the later14990 sweep unlinks the allocation.
+//! task: it releases physical slots0/1/2 and marks 10B70 deferred removal;
+//! the later 14990 sweep unlinks the allocation.
 //! Type124 selects class63 instead: BAF0's burst and radial, then BC90 drops
 //! the Type61 authored in its `+88` and stages removal without clearing tasks.
 
@@ -36,7 +36,7 @@ pub enum SharedFishDeathBlock {
     AutoPilot(Box<crate::class49_terminal::Class49TerminalBlock>),
 }
 
-/// A completed callback remains damage-addressable until14990 removes it.
+/// A completed callback remains damage-addressable until 14990 removes it.
 /// Class2 identity alone cannot authenticate a fabricated terminal owner.
 pub(crate) fn completed_shared_fish_death(manager: &EntityManager, id: u32) -> bool {
     super::allocation_authenticates(manager, id)

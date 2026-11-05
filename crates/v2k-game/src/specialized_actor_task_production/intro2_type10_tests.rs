@@ -187,7 +187,7 @@ fn native_type10_inline_radial_replaces_both_slots_but_only_unvisited_tumble_run
                 .task_in_slot(ActorTaskSlot::Tertiary)
                 .is_none());
             assert_eq!(e.collision.health_raw, RetailRuntimeValue::Known(0));
-            oracle.next_shared_retail_random_u16(); // own404360/06070 G draw
+            oracle.next_shared_retail_random_u16(); // own 404360/06070 G draw
         }
         let mut scheduler = SpecializedActorTaskScheduler::new();
         scheduler.owners = pending;

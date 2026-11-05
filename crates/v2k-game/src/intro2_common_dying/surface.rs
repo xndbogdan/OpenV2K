@@ -43,7 +43,7 @@ pub(crate) fn run_living_actor_surface(
 }
 
 /// The shared E370 phase with an explicit allocation/death policy. Existing
-/// common12 callers retain their original receipt and publisher; native Type8
+/// common 12 callers retain their original receipt and publisher; native Type8
 /// supplies its independent allocation and class14 publication instead.
 /// Neither policy changes timer -> release -> death -> bubble -> sound order.
 pub(crate) fn run_actor_surface_with_death<D>(

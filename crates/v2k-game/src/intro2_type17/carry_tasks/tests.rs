@@ -133,7 +133,7 @@ fn beacon_search_uses_lowest_signed_score_and_keeps_sentinel_failure() {
         entity.capability_flags = 0;
     }
     // Controlled selector records preserve the actual list order; only the
-    // fields consumed by22F10 are varied, independently of the task publisher.
+    // fields consumed by 22F10 are varied, independently of the task publisher.
     for (candidate, score) in [(1, 50), (2, -7), (3, 0)] {
         let entity = manager.entity_mut(candidate).unwrap();
         entity.capability_flags = 0x100;

@@ -251,7 +251,7 @@ impl World {
             .find(|proxy| proxy.proxy_id == proxy_id)
             .unwrap();
         assert!(!sidecar.task_active);
-        // Even a full settling interval cannot run09030 after class2 clears
+        // Even a full settling interval cannot run 09030 after class2 clears
         // the materialiser task. Abnormal090B0 must not reselect the child.
         assert_eq!(self.cargo_frame(1_000_000), None);
         assert!(self

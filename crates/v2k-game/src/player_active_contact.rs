@@ -1294,7 +1294,7 @@ pub(crate) fn active_pair_body_from_entity<P: CollisionModelPool + ?Sized>(
         RetailRuntimeValue::Unresolved => 0,
     };
     // Entity construction encodes a raw model-slot word0 as None. Retail
-    // 11AD0/12530 still index the actual Section-8 pool at0: PRELOAD's
+    // 11AD0/12530 still index the actual Section-8 pool at 0: PRELOAD's
     // `nothing` model has collision radius0 and is rejected by the normal
     // subject/candidate radius gates. Resolve that record rather than treating
     // the host encoding as missing geometry or inventing an unconditional skip.

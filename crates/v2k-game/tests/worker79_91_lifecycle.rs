@@ -555,7 +555,7 @@ fn type91_reselects_near_real_factory_and_commits_native_intake_once() {
     assert!(
         matches!(world.actor(id).actor_task_state(ActorTaskSlot::Primary),Some(ActorTaskRuntime::GoToJob(state)) if state.target_id()==Some(factory))
     );
-    // Controlled final contact pose retains the genuinely selected54 graph.
+    // Controlled final contact pose retains the genuinely selected 54 graph.
     world.entities.entity_mut(id).unwrap().position = position;
     let stale = prepare_factory_scientist_arrival(&world.entities, factory, id).unwrap();
     let angles = world.actor(id).rotation_heading_pitch_roll_raw();

@@ -224,7 +224,7 @@ fn intro2_living_surface_exact_expiry_constructs_before_random_and_overshoot_ski
             );
             assert_eq!(entity.velocity_raw(), [7, 500, 9]);
             assert_eq!(fx.particle_count(), 0);
-            // Constructor consumes38 first. At exact expiry bubble7719
+            // Constructor consumes 38 first. At exact expiry bubble7719
             // misses divisor2; dying skips the sound gate. Overshoot returns
             // its unsigned wrapped percentage before either random gate.
             assert_eq!(

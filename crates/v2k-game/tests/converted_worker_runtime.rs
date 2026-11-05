@@ -299,7 +299,7 @@ fn native_worker_ejections_retain_own_birth_and_materialiser_lifetimes() {
         let before_order: Vec<_> = world.entities.retail_live_order_ids().collect();
         let ordinal = world.ordinal();
         let seed = world.fx.next_sub_d_allocation_seed();
-        oracle.fx.next_shared_retail_random_u16(); //20450 Sub-A.
+        oracle.fx.next_shared_retail_random_u16(); // 20450 Sub-A.
         let selector = oracle.fx.next_shared_retail_random_u16();
         let task_word = oracle.fx.next_shared_retail_random_u16();
         oracle.fx.next_shared_retail_random_u16(); //Type93 singleton selector.
@@ -456,7 +456,7 @@ fn native_worker_ejections_retain_own_birth_and_materialiser_lifetimes() {
         assert!(!world.entities.iter_all().any(|e| e.id == materialiser));
         world.assert_worker(worker, worker_type);
         oracle.fx.next_shared_retail_random_u16(); //CE90 root reselection.
-        oracle.fx.next_shared_retail_random_u16(); //6/54 task construction.
+        oracle.fx.next_shared_retail_random_u16(); // 6/54 task construction.
         assert_eq!(
             world.fx.next_shared_retail_random_u16(),
             oracle.fx.next_shared_retail_random_u16(),
@@ -521,7 +521,7 @@ fn authored116_zero_capacity_and_factory_absence_are_not_invented_ejections() {
         assert!(world.entities.factory_converted_output_births().is_empty());
         assert_eq!(world.tasks.adopt_intro2_type8(&mut world.entities), workers);
         assert_eq!(world.tasks.adopt_intro2_type8(&mut world.entities), 0);
-        //47's existing nonzero-wind worker boundary is outside this birth seam.
+        // 47's existing nonzero-wind worker boundary is outside this birth seam.
         if level == 42 {
             world.step(5);
         }
@@ -563,7 +563,7 @@ fn prepare_people_contact(world: &mut World) -> (u32, u32) {
 #[v2k_test_support::retail_test]
 fn native_person_cohorts_convert_through_actual_base_contact() {
     // WindyIce32 remains an explicit movement prerequisite; its sole factory
-    // has zero authored capacity. Every other78/86/95 world uses its own graph.
+    // has zero authored capacity. Every other 78/86/95 world uses its own graph.
     for (level, source_type, worker_type) in [
         (16, 95, 91),
         (17, 78, 79),

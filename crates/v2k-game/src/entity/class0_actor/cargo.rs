@@ -1,8 +1,8 @@
 //! Type68's null class0 attach and D1C0 terrain-align/reselection release,
 //! which Type74's class59 style `4C72B8` shares (+08 null, +0C D1C0).
 //!
-//! DC50 at40DC76/40DC85 passes entity+C0 as the second callback argument;
-//! the packaged parent is the third argument. D1C0 at40D1CB/40D1D2 reads
+//! DC50 at 40DC76/40DC85 passes entity+C0 as the second callback argument;
+//! the packaged parent is the third argument. D1C0 at 40D1CB/40D1D2 reads
 //! that second argument's context[0], so AC60 receives the type-default
 //! choice source. No packed handle is interpreted as a choice-list address.
 
@@ -148,7 +148,7 @@ pub(crate) fn commit_release(
     assert_eq!(Class0ActorOwner::adopt(manager, plan.cargo), Ok(plan.owner));
     if let Type9CargoReleasePosition::Materialiser(raw) = plan.position {
         // 409030 copies the proxy's current XYZ into both child+96 and+90,
-        // then enables master motion before entering16750.
+        // then enables master motion before entering 16750.
         manager
             .entity_mut(plan.cargo)
             .unwrap()
@@ -176,7 +176,7 @@ pub(crate) fn commit_release(
         relation_release_state_word_after(entity.collision.state_flags_at_0x08, defaults);
     entity.collision.default_state_flags_at_0xc8 = RetailRuntimeValue::Known(defaults);
     entity.attached_to = None;
-    // 16AC0 changes the physical columns and sets28, preserving Euler words
+    // 16AC0 changes the physical columns and sets 28, preserving Euler words
     // and position. D1C0 then takes AC60's living singleton selector once.
     entity.physical_body_basis_q31 = RetailRuntimeValue::Known(plan.body_basis);
     entity.collision.state_flags_at_0x08.overwrite(0x28, 0x28);

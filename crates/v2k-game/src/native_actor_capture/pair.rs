@@ -1,5 +1,5 @@
 //! The 11AD0 pair walk, after the same subject's static contact: native
-//! captor17/122, independent58 and bounded insect/Type66 lanes, and the
+//! captor 17/122, independent 58 and bounded insect/Type66 lanes, and the
 //! general visit for every other pair.
 //!
 //! The intrusive next chain and actual oriented Section-8 query select contacts.
@@ -336,8 +336,8 @@ pub fn resolve_native_captor_active_contacts_with_playing(
     )
 }
 
-/// The caller snapshots11AD0's subject admission before its static prefix.
-/// Only eligibility, domain, model and+70 remain latched;12530 and callbacks
+/// The caller snapshots 11AD0's subject admission before its static prefix.
+/// Only eligibility, domain, model and+70 remain latched; 12530 and callbacks
 /// still read the current body, relations, basis and task slots.
 pub(crate) struct NativeActorPairRequest<'a> {
     pub id: u32,
@@ -706,7 +706,7 @@ fn resolve(
     // subject in the same live order, so each unordered pair is visited
     // exactly once from its earlier participant's pass.
     while let Some(candidate_id) = candidate_cursor {
-        //11AD0 caches this candidate's successor before its callbacks. A new
+        // 11AD0 caches this candidate's successor before its callbacks. A new
         //tail can become visible through a later candidate's current next,
         //but a birth during the old terminal candidate does not extend it.
         candidate_cursor = frame
@@ -1267,8 +1267,8 @@ fn behavior(
             )
             || is_native_player_walk_pair(frame.entities, entity, actor(frame.entities, opposite)?))
     {
-        //447D70: the actual local controller bound to this player satisfies
-        //43AF0. A body without capability c00 leaves the two bodies'
+        // 447D70: the actual local controller bound to this player satisfies
+        // 43AF0. A body without capability c00 leaves the two bodies'
         //relative-speed feedback; a c00 body returns null with none. It neither
         //changes body/task state nor returns an A300 suppression.
         let body = actor(frame.entities, opposite)?;
@@ -1352,8 +1352,8 @@ fn behavior(
                 }
             *committed = true;
             run_weapon_pair_terminal(frame, owner, playing_player)?;
-            //CEF0 always discards10C10's result and returns null. The
-            //opposing D780 call, both current A900 chains and12760 remain.
+            //CEF0 always discards 10C10's result and returns null. The
+            //opposing D780 call, both current A900 chains and 12760 remain.
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         // C910 rejects a non-person before reading any captor state. Other
@@ -1391,9 +1391,9 @@ fn behavior(
             }
             // 418410 (FUN_00418410, the Sub-J full test) returns full for the
             // genuine null J. C910 invokes the
-            // contact person's10C10 and discards it at40CAC5: no attachment,
+            // contact person's10C10 and discards it at 40CAC5: no attachment,
             // transport task or A300 return. Opposing behavior/components and
-            // the12760 physical suffix still execute after this null result.
+            // the 12760 physical suffix still execute after this null result.
             let result = capture::kill_capture_contact(
                 frame.entities,
                 opposite,
@@ -1493,9 +1493,9 @@ fn behavior(
             {
                 return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
             }
-            //CD50 forwards selector1 toCD70. The callback reads its owner's
+            //CD50 forwards selector1 to CD70. The callback reads its owner's
             //capabilities, not the opposite actor's: native Type30 has neither
-            //C00 nor1000, so both branches reachCE62's zero return. No task,
+            //C00 nor 1000, so both branches reach CE62's zero return. No task,
             //component, body or process-RNG mutation precedes that return.
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
@@ -1534,7 +1534,7 @@ fn behavior(
             }
         }
         // 259F0 reads the opposing capability words before any hive-owned state.
-        // Its consuming operation33/deferred-destroy branch stays explicit;
+        // Its consuming operation 33/deferred-destroy branch stays explicit;
         // it must never fall through to 1CE10 when both masks match.
         PairContactCallbackPolicy::Hive => {
             use crate::hive_impact::{hive_pair_callback_branch, HivePairCallbackBranch};

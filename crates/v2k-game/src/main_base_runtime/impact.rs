@@ -192,7 +192,7 @@ fn run(
     if let Some(owner) = checked.death_publication {
         scheduler.register_main_base(owner);
     }
-    // Type6's exact capability0x20 has no class5 accepted-hit emission.
+    // Type6's exact capability 0x20 has no class5 accepted-hit emission.
     // 10EB0 tests the filter's signed nonzero return, not post-buffer damage.
     if !infected && !cured && checked.filtered_damage_raw != 0 {
         let entity = manager.entity_mut(id).unwrap();

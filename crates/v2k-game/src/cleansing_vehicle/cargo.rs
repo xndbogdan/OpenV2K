@@ -88,7 +88,7 @@ pub(crate) fn prepare_attach(
     })
 }
 
-/// Membership+parent are committed by16700's caller before this style callback.
+/// Membership+parent are committed by 16700's caller before this style callback.
 pub(crate) fn commit_attach(entity: &mut Entity, plan: AttachPlan, world_fx: &mut WorldFx) {
     if plan.carrying {
         tasks::publish_carrying(entity, &plan.metadata, &mut || {

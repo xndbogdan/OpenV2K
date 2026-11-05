@@ -338,9 +338,9 @@ fn native_authored_scientist_contact_commits_only_its_target_factory_intake() {
         SpecializedActorTaskProductionFrame, SpecializedActorTaskProductionOutcome,
     };
     use v2k_game::static_damage::StaticDamageScheduler;
-    // World42's sole factory (spawn2) has authored capacity0, so its native
+    // World42's sole factory (spawn2) has authored capacity 0, so its native
     // Type116 workers correctly have no intake destination. World43 retains
-    // the same worker profile and has a real capacity5 factory at spawn22.
+    // the same worker profile and has a real capacity 5 factory at spawn22.
     for (level_id, worker_type, worker_count, model_id) in
         [(25, 8, 4, 559), (24, 90, 1, 890), (43, 116, 5, 1136)]
     {

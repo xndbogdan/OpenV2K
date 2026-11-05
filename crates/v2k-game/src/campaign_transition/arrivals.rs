@@ -37,7 +37,7 @@ pub struct CampaignArrivalCatalog {
 
 impl CampaignArrivalCatalog {
     /// Read every ordinary tier-selected world without replacing resident
-    /// resources. Logical1..36 map to OVL13..48;49/50 are cinematics.
+    /// resources. Logical1..36 map to OVL13..48; 49/50 are cinematics.
     pub fn load(session: &GameSession, variant: u32) -> Result<Self, String> {
         let mut entries = Vec::new();
         for source_level_id in 13..=48 {

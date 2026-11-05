@@ -1,7 +1,7 @@
-//! Exact released Type9 task custody between443D10/10B70 and14990.
+//! Exact released Type9 task custody between 443D10/10B70 and 14990.
 //!
-//! 10B70 disables ordinary actor visits but leaves the completed16750 graph
-//! alive. A later11AD0/A900 contact borrows that graph; it cannot reconstruct
+//! 10B70 disables ordinary actor visits but leaves the completed 16750 graph
+//! alive. A later 11AD0/A900 contact borrows that graph; it cannot reconstruct
 //! publication authority from task bytes or revive its ordinary scheduler.
 
 use super::*;

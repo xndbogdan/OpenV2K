@@ -588,7 +588,7 @@ impl WorldFx {
         let weather_fall = weather::uses_weather_fall_update_callback(particle.source_class);
         if attached_update {
             // 40D5C's nonzero descriptor model word sets particle+1D bit40;
-            // 40120 at4401E4 skips generic integration. The stored +E/+10/+12
+            // 40120 at 4401E4 skips generic integration. The stored +E/+10/+12
             // words are attachment offsets, not a velocity on this branch.
             debug_assert_ne!(
                 particle_descriptor(particle.source_class)
@@ -995,8 +995,8 @@ impl WorldFx {
         } else if is_f780_primary_projectile(particle.source_class)
             || particle_uses_fun_0043f7c0_entity_hit(particle.source_class)
         {
-            // F780/F7C0 omitF610. Suppression skips11250/11320 but still
-            // consumes the parent. Mode3 then triesFF10 withF920/F950
+            // F780/F7C0 omit F610. Suppression skips 11250/11320 but still
+            // consumes the parent. Mode3 then tries FF10 with F920/F950
             // before the E180/E1A0 surface tail.
             if let Some(model_pool) = collision_model_pool {
                 if let Some(entities) = collision_entities {

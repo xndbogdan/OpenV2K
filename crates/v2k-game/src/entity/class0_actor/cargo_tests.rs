@@ -347,7 +347,7 @@ fn later_weight_keeps_timer_through_carry_and_reselects_each_normal_release() {
             }
         }
         let released = released.expect("strict Type93 settling tail releases the weight");
-        world.assert_rng_words(expected_rng, 1); // 409030 ->16750 ->D1C0.
+        world.assert_rng_words(expected_rng, 1); // 409030 -> 16750 ->D1C0.
         assert_ne!(world.timer().0, proxy_timer.0);
         assert_eq!(world.timer().1, 0);
         assert_eq!(

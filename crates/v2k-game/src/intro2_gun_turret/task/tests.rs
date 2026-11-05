@@ -80,7 +80,7 @@ fn turret_live_selection_preserves_order_priority_relation_and_rng() {
     let mut task = state(&manager, id);
     let mut fx = WorldFx::new();
     let mut expected = WorldFx::new();
-    expected.next_shared_retail_random_u16(); //unconditional500000 timer
+    expected.next_shared_retail_random_u16(); //unconditional 500000 timer
     let priority_word = expected.next_shared_retail_random_u16(); //enemy score>1FFFF
     acquire(&mut manager, id, &mut task, &mut fx).unwrap();
     assert_eq!(task.target_handle(), enemy);
@@ -132,7 +132,7 @@ fn turret_current_target_distance_penalty_can_select_a_farther_new_target() {
         expected.next_shared_retail_random_u16();
     }
     acquire(&mut manager, id, &mut task, &mut fx).unwrap();
-    //The old1000 range becomes1500; the new1400 range wins. Each newly
+    //The old 1000 range becomes 1500; the new 1400 range wins. Each newly
     //best hostile consumes its own high-priority timer word.
     assert_eq!(task.target_handle(), new);
     assert_eq!(

@@ -151,8 +151,8 @@ fn native_flyer_class5_zero_filter_reselects_both_actual_births_without_primary_
                 0,
                 "both authored +82 cues are null"
             );
-            // C690 singleton selector + two6030 constructors, then11030's
-            // three angle draws even though425590 returns zero force.
+            // C690 singleton selector + two6030 constructors, then 11030's
+            // three angle draws even though 425590 returns zero force.
             for _ in 0..6 {
                 oracle.next_shared_retail_random_u16();
             }
@@ -454,7 +454,7 @@ fn native_flyer_foreign_custody_and_static_route_reject_before_any_prefix() {
     }
 }
 
-/// Type14's and Type39's alternate1: a lethal Playing hit completes the
+/// Type14's and Type39's alternate 1: a lethal Playing hit completes the
 /// class-1 terminal (BAC0/BAF0) synchronously and leaves its Finished receipt.
 /// The world-less shared entry refuses that death instead of borrowing the
 /// quiet one.

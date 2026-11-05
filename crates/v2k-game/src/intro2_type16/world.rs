@@ -16,7 +16,7 @@ pub(super) fn effective_flags(entity: &Entity) -> Result<u32, Intro2Type16Block>
         return Err(Block::Graph);
     };
     // Defecate/Aimless/Capture (carrying included) have zero masks. Search
-    // clears21080 or80; all admitted styles leave the authored C8=439 unchanged.
+    // clears 21080 or 80; all admitted styles leave the authored C8=439 unchanged.
     if !matches!(
         context.active_style().style_address(),
         0x4c7e88

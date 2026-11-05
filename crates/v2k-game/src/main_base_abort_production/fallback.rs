@@ -3,7 +3,7 @@
 //! The strict 170A0 actor walk remains authoritative. Until every authored actor
 //! family has a native lifecycle, the interactive game retains its existing
 //! compatibility policy: arm known factories, transform terrain, then publish
-//! controller state5 and the replacement frame. Missing callbacks remain in the
+//! controller state 5 and the replacement frame. Missing callbacks remain in the
 //! returned diagnostic; this policy does not pretend to execute their deaths.
 
 use super::*;

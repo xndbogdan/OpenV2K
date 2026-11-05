@@ -22,7 +22,7 @@ pub(crate) fn publish_birth(
     let RetailRuntimeValue::Known(Some(a)) = metadata.sub_a_propulsion_descriptor else {
         return Err(Type56Block::Metadata);
     };
-    //09A80 constructs H/D before20450; the SubA draw precedes425680.
+    // 09A80 constructs H/D before 20450; the SubA draw precedes 425680.
     entity.sub_a_propulsion_runtime = RetailRuntimeValue::Known(Some(
         crate::common_mover::SubAPropulsionRuntime::from_20450_constructor(a, next_random() as u16),
     ));

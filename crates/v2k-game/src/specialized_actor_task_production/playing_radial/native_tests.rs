@@ -171,7 +171,7 @@ fn real_player_manager_radial_publishes_native_death_tasks_and_updates_player_hu
             .filter(|id| *id == target || *id == player_id)
             .collect();
         let mut expected_fx = f.fx.fork_for_main_base_abort_transaction();
-        expected_fx.next_shared_retail_random_u16(); //25730/257C0 selector orC3A0 Sub-A constructor.
+        expected_fx.next_shared_retail_random_u16(); // 25730/257C0 selector or C3A0 Sub-A constructor.
         let outcome = deliver(&mut f, origin, template());
         assert!(outcome.blocked.is_none(), "type{kind}: {outcome:?}");
         assert_eq!(outcome.completed_target_ids, expected_order);

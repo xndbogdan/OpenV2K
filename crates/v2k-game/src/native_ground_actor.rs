@@ -247,7 +247,7 @@ impl NativeGroundAllocationOrigin {
 }
 
 /// Completed synchronous terminal publication. Quiet death has no timed task;
-/// its issuing allocation/context remain damage-addressable until14990.
+/// its issuing allocation/context remain damage-addressable until 14990.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeGroundDeferredDeathReceipt {
     allocation: crate::main_base_abort::MainBaseAbortActorLease,
@@ -276,7 +276,7 @@ pub enum NativeGroundTerminalPublication {
     Deferred(NativeGroundDeferredDeathReceipt),
 }
 
-/// Existing53/122 callbacks only read resources. Class4's coarse02850 writes
+/// Existing53/122 callbacks only read resources. Class4's coarse 02850 writes
 /// the terrain immediately before the remaining actor phases read it.
 pub enum NativeGroundResources<'a> {
     ReadOnly(&'a crate::resource_cache::ResourceCache),

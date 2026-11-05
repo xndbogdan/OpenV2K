@@ -207,7 +207,7 @@ impl WorldCompleteTally {
 
     /// `FUN_004567b0`: stamp `DAT_004FED60` into session `+0x2BC` when the
     /// abort byte `+0x28F` is clear and `+0x2BC < 1`.
-    /// A true result also admits2EE70's saved-world transaction. Failed or
+    /// A true result also admits 2EE70's saved-world transaction. Failed or
     /// already-stamped calls must suppress that transaction as well as time.
     pub fn stamp_fun_004567b0(&mut self, abort_0x28f: bool, dat_004fed60: i32) -> bool {
         if abort_0x28f {

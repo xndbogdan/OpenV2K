@@ -348,7 +348,7 @@ fn advance_progressive(
     if previous.elapsed_micros_raw <= 0 {
         return Ok(());
     }
-    //19B50 commits elapsed time before the first model walk. Terminal-1 is a
+    // 19B50 commits elapsed time before the first model walk. Terminal-1 is a
     // later write, after every crossed effect stage has actually completed.
     base.progressive_death.elapsed_micros_raw = previous.elapsed_micros_raw.wrapping_add(dt as i32);
     for effect in advance.effects {
@@ -366,7 +366,7 @@ fn advance_progressive(
             return Err(MainBaseError::ComponentStorage);
         };
         base.progressive_death.elapsed_micros_raw = -1;
-        //10C10 commits health/state and the wreck selector before19750's
+        // 10C10 commits health/state and the wreck selector before 19750's
         // template callback and staffing writes.
         entity.collision.health_raw = RetailRuntimeValue::Known(0);
         entity
@@ -380,7 +380,7 @@ fn advance_progressive(
             .select_active_model_slot(usize::from(slot | 1))
             .ok_or(MainBaseError::Runtime("terminal model"))?;
         // Type6's zero template contains no product handle/effect request or
-        // C830 channels.19750 still clears staffing and publishes class zero.
+        // C830 channels. 19750 still clears staffing and publishes class zero.
         let RetailRuntimeValue::Known(Some(base)) = &mut entity.base_factory_runtime else {
             unreachable!()
         };
@@ -390,7 +390,7 @@ fn advance_progressive(
         tick.terminal_abort_origin = Some(MainBaseTerminalAbortOrigin::issue(
             entity.main_base_runtime.unwrap().allocation,
         ));
-        //19C30 calls56750 after10C10 only for detailed callback mode zero.
+        // 19C30 calls 56750 after 10C10 only for detailed callback mode zero.
         tick.progressive_death_presentation_requested = detailed;
     }
     Ok(())

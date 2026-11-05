@@ -219,7 +219,7 @@ fn live_cargo_attach_transfers_living_graphs_and_retires_terminal_people_and_wor
                 let mut prefix_calls = 0;
                 callbacks.commit_attach(&mut manager, plan, |manager| {
                     prefix_calls += 1;
-                    // The production caller must publish Sub-J before16700.
+                    // The production caller must publish Sub-J before 16700.
                     assert_eq!(actor(manager, id).attached_to, None);
                     let RetailRuntimeValue::Known(Some(rows)) =
                         &mut manager.entity_mut(parent).unwrap().sub_j_attachment_runtime

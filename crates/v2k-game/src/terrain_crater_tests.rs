@@ -259,7 +259,7 @@ fn crater_late_unknown_static_preserves_exact_height_prefix_without_fake_radar_c
 fn crater_16ac0_uses_forward_slope_not_heading_and_retains_integer_normalization() {
     let mut grid = terrain(0, 0);
     let flat = terrain_aligned_actor_basis(&grid, [0; 3]);
-    // Q12 one maps toMAX, then57960 shifts it to16383 and adds1
+    // Q12 one maps toMAX, then 57960 shifts it to 16383 and adds 1
     // after the square root. This differs from an Euler identity column.
     assert_eq!(flat.lateral, [2147352576, 0, 0]);
     assert_eq!(flat.up, [0, 2147352576, 0]);

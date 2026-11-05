@@ -694,8 +694,8 @@ pub const QUIET_DEATH_BEHAVIOR_PROGRAM: BehaviorProgram = behavior!(
     0x0040C470
 );
 
-/// PE class18 descriptor4C8860 selects style4C73D8. Its only nonzero
-/// style word is initializer40C080 at+40; the initializer owns synchronous
+/// PE class18 descriptor 4C8860 selects style4C73D8. Its only nonzero
+/// style word is initializer 40C080 at+40; the initializer owns synchronous
 /// Type56 split births and deferred parent destruction.
 pub const SPLIT_AND_EXPLODE_BEHAVIOR_PROGRAM: BehaviorProgram = behavior!(
     18,

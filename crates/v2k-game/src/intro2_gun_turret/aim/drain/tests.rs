@@ -61,7 +61,7 @@ fn turret_muzzle_walk_keeps_selected_face_group_stamp_and_last_callback_order() 
         [Some([10, 33, 300]), Some([10, 33, 300])]
     );
     // The pass's integer frame: each Q31 product shifts on its own.
-    // C6 explicitly resolves44 after the selector0 face. The trailing38
+    // C6 explicitly resolves 44 after the selector0 face. The trailing 38
     // diagnostic has no normal callback effect; the second instance wins.
     assert_eq!(
         pass([100, 200, 300], &vars),
@@ -82,9 +82,9 @@ fn turret_canonical_both_barrels_follow_live_mounts_and_retained_body() {
         let entity = manager.entity_mut(id).unwrap();
         entity.set_position_raw([32_740, -500, -32_740]);
         entity.physical_body_basis_q31 = RetailRuntimeValue::Known(identity_body());
-        // Independent scalar oracle for authored162->163->164: both barrel
+        // Independent scalar oracle for authored 162->163->164: both barrel
         // attachments are +/-88, the quarter-turn mounts move muzzleY14
-        // inward, root/pillar heights are55+124, muzzleZ is271. Production
+        // inward, root/pillar heights are 55+124, muzzleZ is 271. Production
         // reads all these points and instance transforms from the actual pool.
         for (yaw, pitch) in [(0_i16, 0_i16), (4096, 6144), (-8192, -4096)] {
             entity

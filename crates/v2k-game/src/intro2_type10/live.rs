@@ -271,7 +271,7 @@ fn run_frame(
         .ok_or(Block::Metadata)?;
     authenticate_metadata(profile, &metadata).map_err(|_| Block::Metadata)?;
     if callback_enabled {
-        // This type omits J. The later18640 phase must remain absent even
+        // This type omits J. The later 18640 phase must remain absent even
         // when the callback is enabled; a live attachment would change it.
         if entity.sub_j_attachment_runtime != RetailRuntimeValue::Known(None) {
             return Err(Block::Runtime("absent Sub-J"));

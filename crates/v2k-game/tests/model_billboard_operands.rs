@@ -25,9 +25,9 @@ fn bigfuel_tick_animation_decodes_complemented_glow_size() {
         .expect("global model 141");
     assert_eq!(model.name.as_deref(), Some("bigfuel"));
 
-    // Original466870 DD with operands[1,0x400E,0x00C1] returns
-    // word0xFFF6 at tick2292 (clock<<9=0xE800). The following1D
-    // subtracts decoded-48, yielding38 for each authored617 billboard.
+    // Original 466870 DD with operands[1,0x400E,0x00C1] returns
+    // word 0xFFF6 at tick2292 (clock<<9=0xE800). The following 1D
+    // subtracts decoded-48, yielding 38 for each authored 617 billboard.
     for (tick, expected_size) in [(0, 48), (1_784, 41), (2_292, 38), (5_012, 62)] {
         let mut vars = AnimVars::default();
         vars.dynamic[0] = tick;

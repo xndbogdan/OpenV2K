@@ -103,7 +103,7 @@ fn native_type111_sound100_follows_suspends_resumes_and_releases_its_pcm38_voice
         !alias.alias_hops.is_empty(),
         "sound100 is an alias, not direct PCM"
     );
-    //4954EC consumes one word per alias hop even if its variance is zero.
+    // 4954EC consumes one word per alias hop even if its variance is zero.
     let admission_draws = alias.alias_hops.len();
     let mut state = OrderedEntityLoops::default();
     let mut backend = FakeBackend::default();

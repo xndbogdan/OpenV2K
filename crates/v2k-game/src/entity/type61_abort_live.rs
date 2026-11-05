@@ -592,7 +592,7 @@ impl EntityManager {
         let provenance = entity
             .type60_construction_provenance()
             .ok_or(MainBaseType60RingDeathBlock::ConstructionProvenanceMismatch)?;
-        //10C10 and the class48 -> class2 cleanup are identical in every
+        // 10C10 and the class48 -> class2 cleanup are identical in every
         //world. Constructor provenance authenticates model selection; the
         //live task/owner checks below authenticate the callback lifetime.
         let remote_owned = match entity

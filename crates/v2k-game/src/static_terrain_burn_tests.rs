@@ -145,7 +145,7 @@ fn fixture() -> Option<(GameSession, EntityManager, WorldFx)> {
     }
     let cell = &mut terrain.cells[142 * GRID_SIZE + 124];
     cell.attribute = 30;
-    // 4337E0 has already set08 at the capture's callback-entry boundary.
+    // 4337E0 has already set 08 at the capture's callback-entry boundary.
     cell.terrain_type = 0x2a & !0x08;
     let empty_level = parse_level(&[0; 0xd0]).unwrap();
     let manager = EntityManager::from_level(&empty_level, &[], None);

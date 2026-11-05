@@ -1537,7 +1537,7 @@ mod viewport_tests {
             },
             color: [0.0; 3],
         };
-        // Promoted original-PE controls retain queue-absent/pass3 separately;
+        // Promoted original-PE controls retain queue-absent/pass 3 separately;
         // these seven rows execute the active queued-world selector.
         for (z, radius, flags, expected) in [
             (899, 100, 0, Some(Near)),

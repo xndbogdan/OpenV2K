@@ -7,7 +7,7 @@
 //! 108 mix sound 11 from the `FUN_0044C920` pre-integration snapshot and the
 //! detached audible-only warble.
 //! Factory Sub-M independently owns two C830 rows at component+8C/+90;
-//!18F60 retunes their configured samples without restarting audible voices.
+//! 18F60 retunes their configured samples without restarting audible voices.
 
 use v2k_formats::anim_sound::{SoundPool, SoundResolutionError};
 use v2k_render::{
@@ -280,7 +280,7 @@ impl<Handle: Copy> OrderedEntityLoops<Handle> {
             next.push(row);
         }
 
-        //18BE0 frees a factory's secondary handle before its primary. Other
+        // 18BE0 frees a factory's secondary handle before its primary. Other
         // constructor rows retain their established live-list release order.
         while !retained.is_empty() {
             let row = retained.remove(0);

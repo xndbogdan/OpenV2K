@@ -137,8 +137,8 @@ impl EntityManager {
             return Ok(());
         };
         // The 1BEB0 forced branch emits at retained Sub-N+54 before its later
-        // state0 visit enters10C10. Keep that pending until the complete nested
-        // effect host exists; a damage packet/instant25F60 would change ordering.
+        // state 0 visit enters 10C10. Keep that pending until the complete nested
+        // effect host exists; a damage packet/instant 25F60 would change ordering.
         if matches!(self.entities[index].sub_n_runtime,
             RetailRuntimeValue::Known(Some(runtime)) if runtime.forced_death_requested())
         {
@@ -290,7 +290,7 @@ impl EntityManager {
 
 impl EntityManager {
     /// Source1BEB0 wreck contact, after the controlled-player integration.
-    /// The port stages that integration separately from13500; retain this
+    /// The port stages that integration separately from 13500; retain this
     /// complete no-RNG contact phase at the proven post-player boundary.
     /// Its clock was advanced exactly once by the Hive's component visit.
     /// Return456D10's interior request without selecting an authored marker;

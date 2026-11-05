@@ -491,7 +491,7 @@ mod model_sine_product_tests {
 
     #[test]
     fn model_sine_product_matches_original_dd_ed_machine_boundaries() {
-        // Original466870/466900/470840 instructions on the verified retail PE,
+        // Original 466870/466900/470840 instructions on the verified retail PE,
         // with controlled register operands. Covers both half-cycles, low-angle
         // bit discard, quarter seams, and all unsigned amplitude extremes.
         let cases: &[(u16, u16, u16)] = &[

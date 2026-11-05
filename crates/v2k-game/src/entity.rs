@@ -522,7 +522,7 @@ pub enum MainBaseConversionDestroyQueueOutcome {
 pub(crate) struct MainBaseScientistSpawnRequest<'a> {
     /// Actual world-style-selected worker record, never a Type8 alias.
     pub(crate) entity_type: u32,
-    /// One entered104B0 attempt, retained through component/selector phases.
+    /// One entered 104B0 attempt, retained through component/selector phases.
     pub(crate) body: Type8BodyConstruction,
     pub(crate) source_id: u32,
     pub(crate) main_base_id: u32,
@@ -1627,7 +1627,7 @@ pub struct Entity {
     pub native_type56_runtime: Option<crate::native_type56::Type56Runtime>,
     pub native_type56_aim_runtime:
         Option<crate::intro2_native_ballistic_aim::NativeBallisticAimRuntime>,
-    /// Allocation-owned method24 queue, drained in11400 presentation order.
+    /// Allocation-owned method24 queue, drained in 11400 presentation order.
     pub native_type122_aim_runtime:
         Option<crate::intro2_native_ballistic_aim::NativeBallisticAimRuntime>,
     pub(crate) shared_fish_runtime: Option<crate::shared_fish::SharedFishRuntime>,
@@ -2132,7 +2132,7 @@ impl Entity {
                 *output = i32::from(value);
             }
             // Section12's D320/D350 callback pair treats selector0 as the
-            // global50-Hz clock, not bank storage. Zebrafsh's model38 uses
+            // global 50-Hz clock, not bank storage. Zebrafsh's model38 uses
             // it to animate fins independently of the Sub-F body channels.
             vars.dynamic[0] = i32::from(retail_tick as u16);
         }
@@ -3526,7 +3526,7 @@ impl Default for Intro2BirthSelection {
 }
 
 /// Native load counters have distinct lifetimes: Sub-D remains process-wide,
-/// while451710 resets the body ordinal once for the current world.
+/// while 451710 resets the body ordinal once for the current world.
 struct NativeIntro2ConstructionContext<'a> {
     sub_d: &'a mut crate::common_mover::sub_d::SubDAllocationCounter,
     common_body: construction_stamp::CommonBodyStampCounter,
@@ -4280,7 +4280,7 @@ impl EntityManager {
         let mut manager =
             Self::from_level_with_type_metadata(level_desc, type_metadata, template_resources);
         manager.common_body_stamps = counters.as_ref().map(|counters| counters.common_body);
-        // Mode2 suppresses the player through450390, but451797 still reserves
+        // Mode2 suppresses the player through 450390, but 451797 still reserves
         // its ordinal. Generic templates above have not attempted native bodies.
         manager.begin_common_body_attempt();
         for spawn in &level_desc.entities {
@@ -4349,7 +4349,7 @@ impl EntityManager {
             }
             match spawn.index {
                 _ if spawn.entity_type == 52 => {
-                    // These authored flags use the same104B0/D4A0/C490 birth
+                    // These authored flags use the same 104B0/D4A0/C490 birth
                     // as ordinary worlds. Their dry coarse cells make the
                     // initial surface comparison independent of the clock.
                     let class0_error = CapturedIntro2EntityConstructionError::Class0Publication;
@@ -5113,7 +5113,7 @@ impl EntityManager {
         } = construction_provenance
         {
             let saved = restore.player;
-            // 451AF0 ->443560 restores the player before42E570 enters its
+            // 451AF0 -> 443560 restores the player before 42E570 enters its
             // authored allocation loop. Candidate selectors and allocation
             // stamps must observe this player first, with its saved pose.
             manager.place_or_spawn_player_at_campaign_arrival(
@@ -5149,7 +5149,7 @@ impl EntityManager {
             };
             manager.session_phase_4 = attract.is_some();
             // 451710 creates the persistent player or explicitly reserves its
-            // ordinal through451797 before any authored body is attempted;
+            // ordinal through 451797 before any authored body is attempted;
             // in phase 4 the player is the attract row's craft.
             if let Some(arrival) = attract.and_then(|attract| attract.craft) {
                 manager
@@ -5180,8 +5180,8 @@ impl EntityManager {
             else {
                 unreachable!()
             };
-            //42E570 ->42EA30 ->33BD0 precedes the Section13 allocation loop.
-            //42EF60 only admits the37-slot controller table.
+            // 42E570 -> 42EA30 -> 33BD0 precedes the Section13 allocation loop.
+            // 42EF60 only admits the 37-slot controller table.
             let exit_marker_bits = if (0..37).contains(&logical_world_index) {
                 exit_marker_bits
             } else {
@@ -6086,7 +6086,7 @@ impl EntityManager {
     ///
     /// This intentionally appends a missing player for the portable subset.
     /// Native saves instead use AuthoredWorldConstruction's explicit saved
-    /// player request before authored births, matching451AF0 ->443560.
+    /// player request before authored births, matching 451AF0 -> 443560.
     pub fn restore_persistent_player_from_save(
         &mut self,
         metadata: Option<&EntityTypeRuntimeMetadata>,
@@ -7440,7 +7440,7 @@ impl EntityManager {
         .state_flags;
         let entity_id = self.next_entity_id;
         let nonzero_id = std::num::NonZeroU32::new(entity_id)?;
-        //104B0's stamp precedes Type93's singleton selector. Publication
+        // 104B0's stamp precedes Type93's singleton selector. Publication
         // below retains this attempt and must not charge a second time.
         let construction_stamp_at_0xb4 = self.begin_common_body_attempt();
         let mut selector_rng_word = None;
@@ -8612,7 +8612,7 @@ impl EntityManager {
     }
 
     /// Read-only relation/destruction admission before the replacement enters
-    ///104B0. The final append repeats it without charging another body attempt.
+    /// 104B0. The final append repeats it without charging another body attempt.
     pub(crate) fn preflight_main_base_scientist_append(
         &self,
         source_id: u32,
@@ -12926,7 +12926,7 @@ impl EntityManager {
 
     /// Apply type 46's dying model-slot selection (`0x4000` state).
     ///
-    /// Preserve the infection bit while selecting native dying slot1 or3.
+    /// Preserve the infection bit while selecting native dying slot1 or 3.
     /// The first-world rows happen to share model67; their selector bits remain
     /// distinct, so a missing authored slot cannot use its sibling as fallback.
     pub fn switch_player_to_dying_model(&mut self) -> Option<usize> {
@@ -20185,7 +20185,7 @@ mod tests {
                 .expect("native worker constructor with explicit surface clock");
             let entity = manager.entity_mut(output.entity_id.get()).unwrap();
             assert_eq!(entity.position_raw(), [0, -4096, 0]);
-            // Retail's known wave oracle at x=z=0 is4096 at tick0 and4114
+            // Retail's known wave oracle at x=z=0 is 4096 at tick0 and 4114
             // at tick1. Comparing the post-D4A0 floor would fail both equalities.
             assert_eq!(
                 entity

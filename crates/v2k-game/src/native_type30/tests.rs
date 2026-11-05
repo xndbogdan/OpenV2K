@@ -387,7 +387,7 @@ fn prepare_dying_fixture() -> (
         crate::intro2_common_dying::publish_intro2_common_standard_death(&mut manager, id, &mut fx)
             .unwrap()
             .unwrap();
-    // The detailed callback branch is selected by the real02000000 bit, not
+    // The detailed callback branch is selected by the real 02000000 bit, not
     // the callback-enable/motion bits. Its source scheduler skips both waits.
     manager
         .entity_mut(id)

@@ -220,7 +220,7 @@ mod tests {
             ],
         };
         terrain.cells[GRID_SIZE + 1].height = 8;
-        // Synthetic inputs evaluated by unmodified retail415160 in an x86
+        // Synthetic inputs evaluated by unmodified retail 415160 in an x86
         // emulator. Include the flat rendered half, deep burial, and a sphere
         // beyond the raised corner; these are not triangle-derived answers.
         for (center, radius, normal, depth) in [

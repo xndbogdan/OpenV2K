@@ -730,7 +730,7 @@ pub(crate) enum NativeCorpseRelationPrefix {
 
 /// 12DA0's local existing-parent membership check. Missing-parent180F0 is a
 /// distinct callback boundary. For class14 the cached DC50 style hook is null,
-/// so an absent row needs only16750's fixed writes and preserves the task.
+/// so an absent row needs only 16750's fixed writes and preserves the task.
 pub(crate) fn prepare_native_corpse_relation(
     manager: &EntityManager,
     id: u32,

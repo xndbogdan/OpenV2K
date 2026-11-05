@@ -105,7 +105,7 @@ fn source_specific_ground_replacements_keep_physical_address_provenance_and_mode
         assert_eq!(fx.particles.lists[2].tail, Some(slot));
 
         // Although E3D0 remains in its descriptor, collision mode0 skips it
-        // on the next visit. Calling it here would incorrectly change to73.
+        // on the next visit. Calling it here would incorrectly change to 73.
         fx.update(ParticleUpdateRequest::terrain(20_000, 2, context));
         let later = fx.particles.slots[slot].unwrap();
         assert_eq!(later.source_class, replacement);

@@ -1,9 +1,9 @@
 //! E370's fish surface profiles: no selectors, or Zebra's +72=0/+73=1.
 //!
 //! The latter first visits 162B0 above the strict static sea plane, then
-//! *still* reaches the shared timer decay at40E607. Below/equal sea therefore
+//! *still* reaches the shared timer decay at 40E607. Below/equal sea therefore
 //! decays twice; above sea ordinarily adds then subtracts the same delta.
-//! PE40E3C8 ->40E3F1 ->40E402 ->40E607 proves this asymmetric fallthrough.
+//! PE40E3C8 -> 40E3F1 -> 40E402 -> 40E607 proves this asymmetric fallthrough.
 
 use crate::{
     common_mover::type9_surface::{
@@ -51,7 +51,7 @@ pub(super) fn run(
             timer = timer.wrapping_add(elapsed_micros / 1000);
             entity.surface_lifetime_timer_ms_at_0x48 = RetailRuntimeValue::Known(timer);
             if effects.surface_lifetime_ms.wrapping_sub(timer) as i32 <= 0 {
-                // 16750's relation release and10C10 quiet death must complete
+                // 16750's relation release and 10C10 quiet death must complete
                 // synchronously before E370 can apply its final timer decay.
                 // Preserve the reached prefix and let the outer owner retain
                 // its pending receipt; never silently skip those callbacks.

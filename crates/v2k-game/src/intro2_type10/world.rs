@@ -34,7 +34,7 @@ pub(super) fn effective_flags(entity: &Entity) -> Result<u32, Intro2Type10Block>
     {
         return Err(Intro2Type10Block::Runtime("effective style flags"));
     }
-    // Class7's clears21080/80 and class11's clears95/11 all preserve
+    // Class7's clears 21080/80 and class11's clears 95/11 all preserve
     // authored bit8; Guard's, Mobbing's and Run Away's styles clear nothing
     // (their +34/+38 are zero). Every one of these
     // styles has a zero enable mask.

@@ -1,4 +1,4 @@
-//! Class42 AD50/ADB0 and403040, plus the shared class68 C490 timer.
+//! Class42 AD50/ADB0 and 403040, plus the shared class68 C490 timer.
 use super::*;
 use crate::{
     actor_task_dispatcher::{
@@ -42,7 +42,7 @@ impl CleansingMovementTaskState {
         self.elapsed_ms = self.elapsed_ms.wrapping_add(elapsed_micros / 1000);
     }
     /// 40308D..4031E7. The unsigned low-word divisions deliberately differ
-    /// from Wander's bit shift once the expanding radius ceases to divide32768.
+    /// from Wander's bit shift once the expanding radius ceases to divide 32768.
     pub fn retarget(
         &mut self,
         anchor: [i16; 3],

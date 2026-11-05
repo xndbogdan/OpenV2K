@@ -3,7 +3,7 @@
 //! Both Search and both Guard styles and Mobbing's three authenticate C690
 //! independently at +20/+28; Run Away's two hold it at +20/+24 only. Search
 //! completion, fallback and the two Tumble styles have null hit callbacks.
-//! Lethal checked damage publishes the exact alternate11 owner synchronously.
+//! Lethal checked damage publishes the exact alternate 11 owner synchronously.
 
 use super::{intro2_type10_allocation_authenticates, Intro2Type10Block, Intro2Type10Owner};
 use crate::{

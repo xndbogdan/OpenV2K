@@ -71,7 +71,7 @@ impl AttachedParticleDamageRequest {
 }
 
 /// The mutable world includes nested class49 radial calls and their terrain
-/// writes. This function enters15040 directly without a primary/style hit.
+/// writes. This function enters 15040 directly without a primary/style hit.
 pub fn apply_attached_particle_damage(
     frame: AttachedParticleDamageFrame<'_>,
     request: AttachedParticleDamageRequest,
@@ -187,7 +187,7 @@ fn apply_actor_damage(
 ) -> Result<i32, AttachedParticleDamageBlock> {
     let id = live_request.entity_id;
     // Custody is required only on the nonzero path that can write or enter
-    // callbacks. Admission-clear and filtered-zero are real15040 zero returns;
+    // callbacks. Admission-clear and filtered-zero are real 15040 zero returns;
     // 14E90 itself always writes.
     let mutation_requested = matches!(live_request.entry, LiveActorDamageEntry::Network { .. })
         || frame

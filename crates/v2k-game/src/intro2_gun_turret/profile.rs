@@ -1,8 +1,8 @@
-//! E/L Gun Turret data. Live authored92/96/97/99/102/103/104/115 and Intro2
-//! authored92/102/115 retain distinct receipts; campaign reconstruction also
-//! uses96/100 metadata.
+//! E/L Gun Turret data. Live authored 92/96/97/99/102/103/104/115 and Intro2
+//! authored 92/102/115 retain distinct receipts; campaign reconstruction also
+//! uses 96/100 metadata.
 //! Castle Type104's Section12 row uses common vtable4C8A30 and class29/4C8230:
-//! D4A0 birth, D190 initializer, null style death cleanup, alternate49/BD20.
+//! D4A0 birth, D190 initializer, null style death cleanup, alternate 49/BD20.
 
 use super::{AXIS, EMITTER, MODEL};
 use crate::{damage::DamageProfile, entity::Entity};
@@ -25,7 +25,7 @@ pub enum Intro2GunTurretProfile {
 
 impl Intro2GunTurretProfile {
     /// Authored104B0 allocations with the common D4A0/D190 E/L constructor.
-    /// Type115 retains alternate1; sharing this birth does not grant class49.
+    /// Type115 retains alternate 1; sharing this birth does not grant class49.
     pub const fn for_native_authored(entity_type: u32) -> Option<Self> {
         match entity_type {
             92 => Some(Self::Type92),

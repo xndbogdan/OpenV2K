@@ -302,7 +302,7 @@ fn run_frame(
         .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
     let mut velocity = entity.velocity_raw();
     let mut angles = [heading, pitch, roll];
-    // E100's effective2F/AD retains drag bit8. EC60 uses the frame-owned
+    // E100's effective 2F/AD retains drag bit8. EC60 uses the frame-owned
     // authored/current wind and changes angle words after F70; the physical
     // basis stays at F70 until the next source rebuild.
     apply_common_wind_drag_raw(

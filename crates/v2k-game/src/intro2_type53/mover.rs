@@ -1,4 +1,4 @@
-//! Type53 receipt binding for the shared01430 mover.
+//! Type53 receipt binding for the shared 01430 mover.
 use super::*;
 pub(super) use crate::native_ground_actor::mover::MoverFrame;
 use crate::{

@@ -103,8 +103,8 @@ fn first_insects_start_at_retail_sub_c_clearance_before_activation() {
         &mut fx,
     )
     .unwrap();
-    // Births retained identically by20260712-203635-full-session and
-    //20260722-022303-intro2-actor-ai.40D691 adds Sub-C before +90 is copied.
+    // Births retained identically by 20260712-203635-full-session and
+    // 20260722-022303-intro2-actor-ai. 40D691 adds Sub-C before +90 is copied.
     for mut manager in [captured, native] {
         manager.disable_authored_behavior_components();
         for (spawn, expected) in [

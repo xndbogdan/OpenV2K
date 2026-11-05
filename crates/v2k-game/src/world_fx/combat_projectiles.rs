@@ -25,7 +25,7 @@ pub(super) enum CombatProjectileProgram {
     SubmergedTurretBolt(TurretBoltPair),
 }
 
-///4410B0,441C90 and43F030 preserve each authored bolt descriptor pair.
+/// 4410B0, 441C90 and 43F030 preserve each authored bolt descriptor pair.
 ///Their callbacks are shared, but their color and damage packets are not.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum TurretBoltPair {
@@ -137,8 +137,8 @@ fn flat_sea_raw(environment: ParticleEnvironment<'_>) -> Option<i16> {
 }
 
 impl WorldFx {
-    /// The proven 4E770 particle rows for methods10/12/13/14 call410B0 before
-    ///40A60. Other 410B0 input classes have distinct policies and are not
+    /// The proven 4E770 particle rows for methods10/12/13/14 call 410B0 before
+    /// 40A60. Other 410B0 input classes have distinct policies and are not
     /// admitted through this combat-projectile constructor.
     pub fn materialize_combat_projectile_410b0(
         &mut self,
@@ -159,8 +159,8 @@ impl WorldFx {
                     request.source_class = TYPE13_PROJECTILE_UNDERWATER_PARTICLE_CLASS;
                     request.position_raw[1] = request.position_raw[1].wrapping_sub(100);
                 }
-                //4410F3 class0x31 selects0x50;441111 class0x37 selects0x51;
-                //441102 class0x38 selects0x52, retaining green's own packet.
+                // 4410F3 class 0x31 selects 0x50; 441111 class 0x37 selects 0x51;
+                // 441102 class 0x38 selects 0x52, retaining green's own packet.
                 49 => request.source_class = TurretBoltPair::Class49.submerged(),
                 55 => request.source_class = TurretBoltPair::Class55.submerged(),
                 56 => request.source_class = TurretBoltPair::Class56.submerged(),
@@ -228,8 +228,8 @@ impl WorldFx {
                 // F030 first restores the airborne descriptor when the
                 // sphere is no longer fully submerged, resetting age to 0.
                 if particle.water_state != 0 {
-                    //43F11A restores80→49;43F0C2 restores81→55;
-                    //43F067 restores82→56.
+                    // 43F11A restores 80→49; 43F0C2 restores 81→55;
+                    // 43F067 restores 82→56.
                     self.relink_combat_projectile(slot, particle, pair.airborne());
                 }
                 if particle.age_ticks > 5.0 {
@@ -444,8 +444,8 @@ impl WorldFx {
             | CombatProjectileProgram::SubmergedTurretBolt(pair) => {
                 if selector == 6 {
                     if particle.source_class == pair.airborne() {
-                        //441D90 selects80 for49;441D38 selects81 for55;
-                        //441CDD selects82 for56.
+                        // 441D90 selects 80 for 49; 441D38 selects 81 for 55;
+                        // 441CDD selects 82 for 56.
                         self.relink_combat_projectile(slot, particle, pair.submerged());
                     }
                     // 441DE1 is shared by every selector-6 path, including

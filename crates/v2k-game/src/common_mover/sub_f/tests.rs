@@ -93,8 +93,8 @@ fn oracle_terrain() -> TerrainGrid {
 
 #[test]
 fn callback_matches_original_executable_vectors() {
-    // Original PE4236D0 executed in Unicorn; seed424220, samples1/2/3/15/17/91/599
-    // of600 matching cases. This is executable arithmetic evidence, not a TTD
+    // Original PE4236D0 executed in Unicorn; seed424220, samples 1/2/3/15/17/91/599
+    // of 600 matching cases. This is executable arithmetic evidence, not a TTD
     // fish trajectory. Fixtures include all modes, negative phase, reversals,
     // targetY, signed terrain, dt0-like subquantum steps, sea/beach, alias writes
     // and the dying branch. Layout before -> after is decoded explicitly below.

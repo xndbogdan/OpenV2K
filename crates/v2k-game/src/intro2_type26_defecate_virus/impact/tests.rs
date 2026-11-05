@@ -654,11 +654,11 @@ fn native_type26_static_route_impulse_has_eightfold_primary_force() {
         );
         velocities.push(manager.entity_mut(id).unwrap().velocity_raw());
     }
-    // 11030 first divides0x400000 by authored mass400, yielding10485.
-    // The Q16 scales are319 for the original2000 impact and2559 for
-    // 11180's16000 impact; direction8192 then gives Q15 deltas79 and639.
-    // Multiplying the already quantized primary79 by8 would give632 and
-    // would place the11180 multiplier after the native fixed-point stages.
+    // 11030 first divides 0x400000 by authored mass400, yielding 10485.
+    // The Q16 scales are 319 for the original 2000 impact and 2559 for
+    // 11180's16000 impact; direction 8192 then gives Q15 deltas79 and 639.
+    // Multiplying the already quantized primary79 by 8 would give 632 and
+    // would place the 11180 multiplier after the native fixed-point stages.
     assert_eq!(
         velocities[0],
         [0, 0, 79],

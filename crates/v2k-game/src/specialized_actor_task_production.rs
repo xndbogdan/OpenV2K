@@ -233,8 +233,8 @@ pub enum SpecializedActorTaskFamily {
 
 #[derive(Debug, PartialEq, Eq)]
 enum SpecializedActorTaskOwner {
-    /// A real443D10 release completed before10B70 retired ordinary visits.
-    /// Contact may borrow its exact graph until14990 removes the allocation.
+    /// A real 443D10 release completed before 10B70 retired ordinary visits.
+    /// Contact may borrow its exact graph until 14990 removes the allocation.
     DeliveredType9Contact {
         allocation: MainBaseAbortActorLease,
         retained: Box<SpecializedActorTaskOwner>,
@@ -1333,7 +1333,7 @@ impl SpecializedActorTaskScheduler {
             }
         }
     }
-    /// Move each completed native19750 Base origin once into the host's
+    /// Move each completed native 19750 Base origin once into the host's
     /// synchronous level-abort owner. This receipt deliberately is not Clone.
     pub fn take_main_base_terminal_abort_origins(
         &mut self,
@@ -3237,7 +3237,7 @@ impl SpecializedActorTaskScheduler {
             }
         }
     }
-    /// Attached direct15040 admits two living flyer families outside the old
+    /// Attached direct 15040 admits two living flyer families outside the old
     /// radial custody matrix. Their completed prefix cannot resume an old task.
     pub(crate) fn park_attached_damage_prefix(&mut self, entity_id: u32) {
         self.park_intro2_type57_external_prefix(entity_id);
@@ -7480,7 +7480,7 @@ fn prepare_intro2_radial_actor_mutation(
         return false;
     };
     if crate::native_type61::has_native_allocation(entity) {
-        //256C0/class23 is infallible and creates no task. A different or
+        // 256C0/class23 is infallible and creates no task. A different or
         //suspended owner cannot stand in for that authored absence.
         return crate::native_type61::allocation_authenticates(manager, entity_id)
             && !owners.iter().any(|owner| owner.entity_id() == entity_id)

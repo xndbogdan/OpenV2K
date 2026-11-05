@@ -118,8 +118,8 @@ fn run(
     let retail_tick = frame.retail_tick;
     use Intro2GunTurretImpactBlock as Block;
     let id = impact.target_entity_id;
-    // 442950 owns the distinct411180 wrapper; the class29 primary/infected
-    // slot proof does not authorize substituting10EB0 for that entry.
+    // 442950 owns the distinct 411180 wrapper; the class29 primary/infected
+    // slot proof does not authorize substituting 10EB0 for that entry.
     if crate::world_fx::particle_uses_static_route_entity_hit(impact.source_particle_class) {
         return Err(Block::Runtime("unsupported411180 turret target"));
     }
@@ -274,7 +274,7 @@ fn run(
         *committed |= error.committed_prefix;
         Block::Damage(error)
     })?;
-    // Infected entry changes live capability44 to48. A later primary hit
+    // Infected entry changes live capability44 to 48. A later primary hit
     // must observe that bit8 even when this hit has just removed the turret.
     if !infected && !cured && checked.filtered_damage_raw != 0 {
         let entity = manager.entity_mut(id).unwrap();

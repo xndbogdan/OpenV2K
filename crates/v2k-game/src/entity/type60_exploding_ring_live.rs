@@ -64,7 +64,7 @@ impl EntityManager {
             return Type60ConstructionOutcome::RejectedBeforeSelector;
         };
         // Missing host metadata is admission failure, not an entered retail
-        // allocation. Once admitted,104B0 consumes456C20 before body/component
+        // allocation. Once admitted, 104B0 consumes 456C20 before body/component
         // allocation; every subsequent allocator rejection retains this stamp.
         let construction_stamp_at_0xb4 = self.begin_common_body_attempt();
         if !allocator.prepare_components(request) {

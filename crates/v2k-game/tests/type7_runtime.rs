@@ -288,7 +288,7 @@ fn type7_native_factory_ejection_materialiser_release_and_staffing_keep_one_allo
         6,
         "full source and no other nearby candidates"
     );
-    oracle.fx.next_shared_retail_random_u16(); //20450.
+    oracle.fx.next_shared_retail_random_u16(); // 20450.
     assert_eq!(
         birth.selector_rng_word(),
         oracle.fx.next_shared_retail_random_u16()
@@ -487,7 +487,7 @@ fn type7_dynamic_class45_keeps_full_constructor_rng_and_live_notification_before
         for _ in 0..offset {
             oracle.next_shared_retail_random_u16();
         }
-        oracle.next_shared_retail_random_u16(); //20450 before selection.
+        oracle.next_shared_retail_random_u16(); // 20450 before selection.
         let selector = oracle.next_shared_retail_random_u16();
         let selection = select_initial_behavior(
             &choices,

@@ -1008,9 +1008,9 @@ impl PlayerCraft {
         ]
     }
 
-    /// Restore native443560 or portable-save attitude words without a lossy
+    /// Restore native 443560 or portable-save attitude words without a lossy
     /// intermediate policy. The native caller also rebuilds the entity basis
-    /// through413F70 before publishing authored actors.
+    /// through 413F70 before publishing authored actors.
     pub fn restore_body_angle_words(&mut self, [pitch_raw, roll_raw]: [i16; 2]) {
         self.body_pitch = angle_word_to_rad(pitch_raw);
         self.body_roll = angle_word_to_rad(roll_raw);
@@ -1076,7 +1076,7 @@ impl PlayerCraft {
     /// `up*sin(barrel) + forward*cos(barrel)`. Applying the shared retail body
     /// matrix to local `[0, sin(barrel), cos(barrel)]` keeps the projectile
     /// aligned with the visible craft in Hover and VTOL. Launch position is
-    /// owned separately by411400's draw-stamped transient or centre fallback.
+    /// owned separately by 411400's draw-stamped transient or centre fallback.
     pub fn primary_fire_direction(&self, heading: f32) -> [f32; 3] {
         let body = self.model_orientation(heading);
         let barrel = self.gun_barrel_rad();
@@ -1092,7 +1092,7 @@ impl PlayerCraft {
     /// supplies the independent global clock in callback word 0 (40D320).
     pub fn anim_vars(&self) -> AnimVars {
         let mut v = AnimVars::default();
-        //40A950 selector1 aliases Sub-E's barrel joint. PLAYER4's authored
+        // 40A950 selector1 aliases Sub-E's barrel joint. PLAYER4's authored
         //op5C consumes this WORD before each side-gun instance.
         v.dynamic[1] = i32::from(self.gun_barrel as i16 as u16);
         v.dynamic[2] = i32::from(self.primary_joint_pulses[0]);

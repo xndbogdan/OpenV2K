@@ -151,7 +151,7 @@ pub(crate) fn publish_shared_root_class(
             )
             .is_ok()
         } else if matches!(class, 5 | 6) {
-            // ACD0/AD10: clear2 -> clear1 -> 402B10 or 402E20 (owner, 0,
+            // ACD0/AD10: clear 2 -> clear 1 -> 402B10 or 402E20 (owner, 0,
             // 5000), then 06070 once.
             actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
             actor_tasks.clear_slot(ActorTaskSlot::Secondary);

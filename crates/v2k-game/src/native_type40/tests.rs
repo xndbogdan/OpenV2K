@@ -432,7 +432,7 @@ fn real_c690_hit_reselection_installs_own_class7_method1_then_fifo_survives_spli
         RetailRuntimeValue::Known(Type9BodyBasis::from_angle_words(0x4000, 0, 0));
     e.collision.state_flags_at_0x08.overwrite(u32::MAX, 4);
     e.collision.last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(4794);
-    // At tick4794 the actual UnderAttack rule weights both branches1, so
+    // At tick4794 the actual UnderAttack rule weights both branches 1, so
     // 425680's `(word * 2) >> 16` selects class7 for a word below 0x8000.
     // Find one in the live process stream; do not install a captured RNG state.
     for _ in 0..65536 {
@@ -724,7 +724,7 @@ fn actual_missing_child_model_blocks_after_launch_prefix_and_never_replays_or_fa
     let id = parent(&manager);
     assert_eq!(session.cache.global_model_system_level(1040), Some(9));
     assert_eq!(session.cache.global_model_system_level(1041), Some(9));
-    // A test-only resident resource failure. Preserve the canonical1040 parent
+    // A test-only resident resource failure. Preserve the canonical 1040 parent
     // and section12 data; remove the next model from the new in-memory layer.
     // No OVL bytes or generated assets are written or shifted.
     let mut missing =

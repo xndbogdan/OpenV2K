@@ -106,8 +106,8 @@ pub struct OrdinaryType9LateContactOutcome {
     pub pair_suffix: OrdinaryType9PairSuffix,
 }
 
-/// One ordinary peasant's late11AD0 prefix and successor-only pair suffix.
-/// The source retains entry flags/model/+70 before12CF0, even if11760 kills
+/// One ordinary peasant's late 11AD0 prefix and successor-only pair suffix.
+/// The source retains entry flags/model/+70 before 12CF0, even if 11760 kills
 /// the actor. Current pose, behavior and A900 slots are read after static
 /// response. An unowned static suffix stops this subject, not the live pass.
 pub fn resolve_ordinary_type9_late_contact(
@@ -250,7 +250,7 @@ fn resolve(
     let Some(contact) = contact else {
         return Ok(OrdinaryType9StaticContactOutcome::Miss);
     };
-    // 12CF0 reads type +0x8A before27E20/A8B0/D920. An authored nonzero cue
+    // 12CF0 reads type +0x8A before 27E20/A8B0/D920. An authored nonzero cue
     // has unaudited sound semantics; fail closed instead of playing nothing.
     let type_record = frame
         .resources
@@ -265,8 +265,8 @@ fn resolve(
         return Err(Block::UnsupportedStaticSound(sound));
     }
     // Preserve the walking-family admission. Both zero-damage separation and
-    // velocity response below are external writes after the completed12DA0
-    // tail, so consume that exact observation before11760 can mutate it.
+    // velocity response below are external writes after the completed 12DA0
+    // tail, so consume that exact observation before 11760 can mutate it.
     // Task clocks, current family and next transaction identity survive.
     if !frame
         .scheduler
@@ -274,10 +274,10 @@ fn resolve(
     {
         return Ok(OrdinaryType9StaticContactOutcome::Ineligible);
     }
-    //27E20's kind actions require capability1, which canonical Type9 lacks.
-    // The actual living6/10/45/54 styles have null+1C. Wander4C79C0
-    // clears21000; the other masks are zero (4C7618/7660,4C86B0/86F8,
-    //4C8788). None enables400, and their C8=2F
+    // 27E20's kind actions require capability1, which canonical Type9 lacks.
+    // The actual living 6/10/45/54 styles have null+1C. Wander4C79C0
+    // clears 21000; the other masks are zero (4C7618/7660,4C86B0/86F8,
+    // 4C8788). None enables 400, and their C8=2F
     // therefore never enters D9B0's400 crushing branch. Audit only the
     // admitted walking graph; Carried/Class14 retain their separate owner.
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
@@ -447,11 +447,11 @@ fn apply_contact(
     Ok(applied)
 }
 
-///01270 visits the freshly read slots in0/1/2 order. The common Type9
-/// constructors install02CA0 at402E7B (Wander),402B6B (retarget),4032FB
-/// (Attract local wander),4036B3 (job/target route) and403E83 (fleeing).
-/// Candidate01F80 and acquisition02050 use405F80; cue02A10 preserves
-///405FF0's null+20 at406019. Carried and Class14 have separate admission.
+/// 01270 visits the freshly read slots in 0/1/2 order. The common Type9
+/// constructors install 02CA0 at 402E7B (Wander),402B6B (retarget),4032FB
+/// (Attract local wander),4036B3 (job/target route) and 403E83 (fleeing).
+/// Candidate01F80 and acquisition 02050 use 405F80; cue02A10 preserves
+/// 405FF0's null+20 at 406019. Carried and Class14 have separate admission.
 fn task_has_static_retarget(task: &ActorTaskRuntime) -> Option<bool> {
     match task {
         ActorTaskRuntime::OrdinaryType9Wander(_)

@@ -145,7 +145,7 @@ fn native_constructor_consumes_sub_f_draws_before_choice_and_keeps_authored_inst
             &mut crate::common_mover::sub_d::SubDAllocationCounter::from_next_seed(0xd3),
             d,
         );
-        // Gate draw0 forces the non-floor branch in all five neutral fish.
+        // Gate draw 0 forces the non-floor branch in all five neutral fish.
         // The third, distinct word chooses speed; fourth selects behavior,
         // even when Type62's passive initializer already named its singleton.
         assert!(f.target_speed_base_raw >= 50);

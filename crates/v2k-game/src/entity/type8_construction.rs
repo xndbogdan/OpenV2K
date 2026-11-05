@@ -37,7 +37,7 @@ pub(crate) enum Type8BodyConstruction {
 
 impl EntityManager {
     /// Called only after the caller has closed constructor prerequisites.
-    /// 104B0 consumes the body stamp before09A80 allocates D then A;
+    /// 104B0 consumes the body stamp before 09A80 allocates D then A;
     /// 20450's random draw precedes AC60. Publication never charges again.
     pub(crate) fn begin_type8_body_construction(
         &mut self,

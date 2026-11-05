@@ -6,7 +6,7 @@ use crate::{common_mover::type9_attitude::Type9BodyBasis, hover::q31_mul};
 /// 411400 keeps a draw-stamped transient origin (flag+2A=0), or refreshes
 /// an unstamped one from the source centre. The caller owns that selection.
 /// Catch-up then rewinds source movement and advances by the table speed;
-/// rocket's closing-speed boost belongs to the later44E770 velocity suffix.
+/// rocket's closing-speed boost belongs to the later 44E770 velocity suffix.
 pub fn entity_weapon_drain_position_raw(
     kind: EntityWeaponKind,
     origin_raw: [i16; 3],

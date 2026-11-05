@@ -4567,9 +4567,9 @@ mod tests {
             NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
         };
         let mut session = native_painter_session();
-        // Tick952 belongs to Intro2. Its authenticated terrain50 gives the
-        // captured tf13 shadow caches; fresh ordinary terrain13 differs here.
-        // Unmodified terrain50 and the captured process map agree at all seven
+        // Tick952 belongs to Intro2. Its authenticated terrain 50 gives the
+        // captured tf13 shadow caches; fresh ordinary terrain 13 differs here.
+        // Unmodified terrain 50 and the captured process map agree at all seven
         // reached body-shadow samples, despite unrelated distant crater cells.
         session.load_level_by_id(50, 1).unwrap();
         let model = session.cache.global_model(302).unwrap();
@@ -5101,9 +5101,9 @@ mod tests {
             NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
         };
         let mut session = native_painter_session();
-        // Tick952 belongs to Intro2. Its authenticated terrain50 gives the
-        // captured tf13 shadow caches; fresh ordinary terrain13 differs here.
-        // Unmodified terrain50 and the captured process map agree at all seven
+        // Tick952 belongs to Intro2. Its authenticated terrain 50 gives the
+        // captured tf13 shadow caches; fresh ordinary terrain 13 differs here.
+        // Unmodified terrain 50 and the captured process map agree at all seven
         // reached body-shadow samples, despite unrelated distant crater cells.
         session.load_level_by_id(50, 1).unwrap();
         let model = session.cache.global_model(302).unwrap();
@@ -5730,7 +5730,7 @@ mod tests {
             child_frame.origin_view_raw[2], frame.origin_view_raw[2],
             "authored mount changes the current child VIEW origin"
         );
-        // This controlled parent header adds20 to test the local bypass. The
+        // This controlled parent header adds 20 to test the local bypass. The
         // actual Stag/claw hierarchy and unsigned radii remain the source input.
         let mut bypass_parent = model_entry(
             267,

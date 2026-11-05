@@ -294,7 +294,7 @@ fn world20_living_and_dying_spiders_complete_kind4_contact_with_exact_task_custo
             .into_iter()
             .find_map(|(center, cell, model)| world.locate_contact(center, cell, model))
             .expect("world20 authors a solid kind4 fuel object");
-        //11760's-256 response adds one-eighth rebound, not a full reflection.
+        // 11760's-256 response adds one-eighth rebound, not a full reflection.
         // Derive the search bound from the actual plane so every candidate's
         // components fit signed words; measure damage with the current mass.
         let max_normal_axis = contact
@@ -468,7 +468,7 @@ fn breached_cell_stops_colliding_and_acquiring_hook_preserves_its_secondary_and_
         }
         Type17ContactOutcome::Applied(applied) => {
             // This actual body basis can also overlap the neighboring intact
-            // model540. That legitimate contact must survive the532->533 breach.
+            // model540. That legitimate contact must survive the 532->533 breach.
             assert_ne!(applied.contact.cell, [157, 151]);
             assert_ne!(applied.contact.model_id, 533);
             expected_fx.next_shared_retail_random_u16();

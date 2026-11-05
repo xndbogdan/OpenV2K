@@ -42,7 +42,7 @@ pub(crate) struct Intro2Type66TerminalEffectsOutcome {
     pub terrain_changed: bool,
 }
 
-/// The exact56-byte template consumed at37390 after19750 writes its source
+/// The exact 56-byte template consumed at 37390 after 19750 writes its source
 /// type/handle. This is distinct from a particle or radial damage request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Intro2Type66TerminalEffectRequest {
@@ -185,7 +185,7 @@ pub fn publish_intro2_type66_standard_death(
 }
 
 /// Terminal19B50 callback. Its caller has already committed clock-1 and
-/// deferred the tracked pickup; this function owns only10C10/19750/DB80.
+/// deferred the tracked pickup; this function owns only 10C10/19750/DB80.
 pub(crate) fn finish_intro2_type66_progressive_death(
     manager: &mut EntityManager,
     entity_id: u32,
@@ -373,7 +373,7 @@ fn finish_with_world<W>(
         return Err(block("terminal factory template", false));
     }
     let mut template_words: [u32; 14] = config[6..20].try_into().expect("fixed Section13 template");
-    // 19750 writes these two runtime words immediately before37390; the
+    // 19750 writes these two runtime words immediately before 37390; the
     // surrounding payload belongs to the exact authored factory allocation.
     template_words[10] = entity.entity_type;
     template_words[11] = entity.id;
@@ -397,7 +397,7 @@ fn finish_with_world<W>(
         .select_active_model_slot(usize::from(slot | 1))
         .expect("admitted wreck slot");
     world_fx.queue_networked_positional_sound_raw(62, request.position_raw);
-    // 37390 executes before staff/capacity, both animation resets and19630.
+    // 37390 executes before staff/capacity, both animation resets and 19630.
     // The crater's EB20 pass can change this actor's Y/basis here.
     let mut effects = effects(manager, world_fx, world, request).map_err(|mut error| {
         error.committed_prefix = true;
@@ -450,7 +450,7 @@ fn finish_with_world<W>(
         effects.terrain_changed |= broadcast(manager, world_fx, world)
             .map_err(|phase| post_effect_block(phase, effects))?;
     }
-    // DB80 re-resolves, then AC60 selects alternate0 without RNG.
+    // DB80 re-resolves, then AC60 selects alternate 0 without RNG.
     let owner = reselect_intro2_type66_dormant(manager, entity_id)
         .map_err(|error| post_effect_block(error.phase, effects))?;
     Ok(Intro2Type66DeathOutcome {

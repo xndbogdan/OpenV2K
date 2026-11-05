@@ -132,7 +132,7 @@ fn publish_exploding_task(
     }
     animation.apply_exploding_person_reset();
     entity.collision.state_flags_at_0x08.overwrite(0x8000, 0);
-    // C3A0 prepares the 1000ms task before the shared06070 constructor RNG.
+    // C3A0 prepares the 1000ms task before the shared 06070 constructor RNG.
     let prepared = PreparedActorTask::new(ActorTaskRuntime::SharedRetarget(
         SharedRetargetTaskState::new(position, 1000),
     ));

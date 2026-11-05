@@ -23,7 +23,7 @@ fn fixture() -> Option<(
         .unwrap()
         .id;
     let entity = manager.entity_mut(id).unwrap();
-    // Explicit local, enabled11030 and415040 inputs. Retain the other native
+    // Explicit local, enabled 11030 and 415040 inputs. Retain the other native
     // known/unknown fields rather than manufacturing a fully resolved actor.
     entity
         .collision

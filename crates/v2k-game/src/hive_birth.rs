@@ -175,7 +175,7 @@ pub trait HiveBirthHost {
         request: HiveEjectionRequest,
     ) -> Result<HiveEjectionGeometry, Self::Block>;
     fn sample_hive_ejection_terrain_height_raw(&self, x_raw: i16, z_raw: i16) -> i16;
-    /// Clears child state8000 and publishes the completed raw launch words.
+    /// Clears child state 8000 and publishes the completed raw launch words.
     fn publish_hive_child_ejection(&mut self, child_handle: u32, ejection: HiveChildEjection);
     fn restore_hive_child_pairs(&mut self, child_handle: u32);
     fn next_shared_random_u16(&mut self) -> u16;
@@ -425,7 +425,7 @@ impl HiveBirthRuntime {
     }
 
     /// Final `1CA90`, called once after this callback's contact walk. A new
-    /// launch already ages by this callback's delta; equality restores8000.
+    /// launch already ages by this callback's delta; equality restores 8000.
     pub fn advance_ejections<H: HiveBirthHost>(
         &mut self,
         elapsed_us: u32,

@@ -45,8 +45,8 @@ fn turret_nested_blast_finishes_inner_ring_and_death_before_outer_without_replay
         .entity_mut(second)
         .unwrap()
         .set_position_raw([200, 10_000, -300]);
-    //A prior200 damage leaves this real4000-health allocation at3800.
-    //The source radial filters its channel3 amount4000 through threshold200.
+    //A prior 200 damage leaves this real 4000-health allocation at 3800.
+    //The source radial filters its channel3 amount 4000 through threshold200.
     manager.entity_mut(second).unwrap().collision.health_raw = RetailRuntimeValue::Known(3800);
     let mut scheduler = SpecializedActorTaskScheduler::new();
     // Three defensive turrets and the native flower share living E/L custody.

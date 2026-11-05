@@ -457,7 +457,7 @@ pub enum Intro2Type13StaticBlock {
     C690Publication(Type13Class7AcquiringError),
     Adoption(Intro2Type13SchedulerAdoptionError),
     Damage(LiveActorDamageError<Intro2Type13DeathBlock, Intro2Type13DeathOwner>),
-    /// 442950 delivers11180 regardless of suppression. A missing packet is
+    /// 442950 delivers 11180 regardless of suppression. A missing packet is
     /// an incomplete request, not evidence that the source skipped damage.
     MissingPacket,
     /// This adapter owns Type13 spawn0; the shared native Type9 adapter owns

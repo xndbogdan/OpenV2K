@@ -1152,7 +1152,7 @@ pub struct ParticleUpdateOutcome {
 
 #[derive(Clone, Copy)]
 pub struct ParticleBirthContext<'a> {
-    ///440A60 stores the current terrain/wave classification at allocation.
+    /// 440A60 stores the current terrain/wave classification at allocation.
     pub environment: ParticleEnvironment<'a>,
     pub retail_tick: u32,
 }
@@ -1254,7 +1254,7 @@ impl ParticleEntityImpact {
         }
     }
     /// Complete packet selected by the actual entity-hit callback. F780/F7C0
-    /// select static004CBFD0/004CBFE8 with zero trailing words; the other
+    /// select static 004CBFD0/004CBFE8 with zero trailing words; the other
     /// supported callbacks copy immutable particle birth provenance instead.
     pub fn damage_delivery_record(self) -> Option<DamageDeliveryRecord> {
         let damage = self.damage?;
@@ -1390,10 +1390,10 @@ impl PositionalSoundEvent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorldEvent {
     ParticleBurst(ParticleBurst),
-    ///443B50's complete transfer packet. Playing's early controller adapter
+    /// 443B50's complete transfer packet. Playing's early controller adapter
     /// submits it before the particle pass, although the retail entity
     /// callback allocates after that pass. Materialization has an explicit
-    /// end-of-pass boundary and consumes no RNG for descriptor33.
+    /// end-of-pass boundary and consumes no RNG for descriptor 33.
     DeferredCargoTransfer {
         position_raw: [i16; 3],
         parent_id: u32,
@@ -3885,7 +3885,7 @@ impl WorldFx {
         }
     }
 
-    /// Finish the443B50 transfer presentation at the end of the entity pass,
+    /// Finish the 443B50 transfer presentation at the end of the entity pass,
     /// or immediately after campaign loading. Ordinary pending processing
     /// deliberately leaves these records newborn until this named boundary.
     pub fn process_deferred_cargo_transfers(&mut self, birth: ParticleBirthContext<'_>) {
@@ -5980,7 +5980,7 @@ fn fun_0043f6e0_damage_request(particle: &WorldParticle) -> Option<BallisticDama
     })
 }
 
-/// F780/F7C0 skip their11250/11320 entry when `+0x1D` bit0 is set.
+/// F780/F7C0 skip their 11250/11320 entry when `+0x1D` bit0 is set.
 fn model_switch_particle_damage_request(
     particle: &WorldParticle,
 ) -> Option<BallisticDamageRequest> {
@@ -6558,11 +6558,11 @@ fn static_collision_anim_vars(retail_tick: u32) -> AnimVars {
     vars
 }
 
-/// F920/F950 call27DE0/27E00 (`FUN_00427E00`) with probe+1C/+20 tile-center
+/// F920/F950 call 27DE0/27E00 (`FUN_00427E00`) with probe+1C/+20 tile-center
 /// words.
 ///
 /// Those words are `FUN_00427410`'s tile-center 8.8 pair (`cell<<8|0x7F`).
-/// Matched C closes27DE0/27E00 as33720(x,z,1/0); the extra cdecl
+/// Matched C closes 27DE0/27E00 as 33720(x,z,1/0); the extra cdecl
 /// `0x7D0` and `g_default_param` arguments are unused. Same-state writes stay
 /// off the deferred overlay, matching the helper's change-only notify path.
 fn queue_static_model_switch_infection(
@@ -9806,7 +9806,7 @@ mod tests {
         fx.rng_state = seed;
 
         // 10C10 submits a nonzero header+90 cue before entering BD20/BAF0.
-        // Type83's recovered cue is62, also used independently by440950.
+        // Type83's recovered cue is 62, also used independently by 440950.
         fx.emit_fixed_positional_sound_raw(62, position);
         assert_eq!(fx.rng_state, seed);
         assert_eq!(fx.particle_count(), 0);

@@ -317,7 +317,7 @@ fn primary(id: u32, amount: i32) -> ParticleEntityImpact {
             },
             source_entity_type_at_birth: Some(46),
             // The source owner is retained packet provenance, not a target
-            // allocation claim. Player handle1 is the real ordinary birth.
+            // allocation claim. Player handle 1 is the real ordinary birth.
             source_owner_id: Some(1),
         }),
     }
@@ -666,7 +666,7 @@ fn hit_reselection_into_class45_queues_its_parity_graph_text_and_sound_once() {
             continue;
         }
         selected = true;
-        expected_fx.next_shared_retail_random_u16(); //425680 weighted choice.
+        expected_fx.next_shared_retail_random_u16(); // 425680 weighted choice.
         let parity = expected_fx.next_shared_retail_random_u16(); //BA40.
         for _ in 0..(2 + usize::from(parity & 1 != 0)) {
             expected_fx.next_shared_retail_random_u16();
@@ -726,7 +726,7 @@ fn hit_reselection_into_class45_queues_its_parity_graph_text_and_sound_once() {
 
 #[v2k_test_support::retail_test]
 fn ordinary_zero_impact_and_buffered_primary_keep_reaction_and_sound_gates() {
-    // Type9 channel2 only contributes above its strict400 threshold.
+    // Type9 channel2 only contributes above its strict 400 threshold.
     for (suppressed, amount, buffered) in
         [(false, 0, false), (true, 0, false), (false, 1_000, true)]
     {
@@ -788,7 +788,7 @@ fn later_world_particle_death_adopts_class14_once_and_retires_the_allocation() {
         let id = world.ids()[0];
         let result = applied(world.hit(infected(id)));
         assert!(result.death_publication.is_some());
-        // Packet death uses the complete native12DA0/DCA0/E870 owner. The
+        // Packet death uses the complete native 12DA0/DCA0/E870 owner. The
         // older OrdinaryType9Class14 adapter has a different callback scope.
         assert_eq!(
             world.scheduler.family_for(id),

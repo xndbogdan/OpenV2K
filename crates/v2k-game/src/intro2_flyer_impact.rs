@@ -3,7 +3,7 @@
 //!
 //! Every style's hit hooks reselect the authenticated current graph before
 //! reaction and filtering. Alternate2 owns quiet death, not a falling corpse;
-//! Type14's alternate1 explodes through the class-1 terminal, which needs
+//! Type14's alternate 1 explodes through the class-1 terminal, which needs
 //! Playing's lent static world and player. Native Hive births retain this
 //! same constructor/task custody.
 
@@ -65,7 +65,7 @@ enum HitEntry {
 
 fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<ImpactCallbackPolicy> {
     // Authenticated executable style words, independent +20/+28 hooks.
-    // Completed alternate2 has null hooks; no class11 publication is borrowed.
+    // Completed alternate 2 has null hooks; no class11 publication is borrowed.
     let (_, infected, cured, primary) = [
         (0x004C_7A50, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search acquiring
         (0x004C_7A98, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search pursuing

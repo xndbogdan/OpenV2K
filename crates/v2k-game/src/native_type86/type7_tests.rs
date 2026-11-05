@@ -398,7 +398,7 @@ fn type7_real_player_selects_both_class45_parities_and_preserves_cue106() {
         fx.process_pending();
         fx.take_positional_sounds();
         let mut oracle = fx.fork_for_main_base_abort_transaction();
-        oracle.next_shared_retail_random_u16(); //425680 selector.
+        oracle.next_shared_retail_random_u16(); // 425680 selector.
         let owner = birth::reselect(&mut manager, id, &mut fx).unwrap();
         if owner.kind == TaskKind::AttractAcquiring {
             let parity = oracle.next_shared_retail_random_u16() & 1;

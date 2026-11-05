@@ -37,7 +37,7 @@ pub struct NativeSaveRestore {
     pub capabilities: PlayerCapabilities,
     pub cargo: CampaignCargoControllerState,
     pub campaign: PlayerCampaignProgress,
-    /// Session +1C4, applied by 44F830 ->450FC0 independently of progress.
+    /// Session +1C4, applied by 44F830 -> 450FC0 independently of progress.
     pub session_flags_raw: u32,
     /// 443560 writes saved-profile +148 to entity +50, the shield buffer.
     pub pre_health_damage_buffer_raw: i32,

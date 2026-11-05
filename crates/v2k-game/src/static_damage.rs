@@ -12,8 +12,8 @@
 //! exact camera-focus-gated full-frame request before its authored burn/radial
 //! tail. It preserves that decision and timing layer without coupling it to
 //! particles, audio, model lookup, camera state, or dynamic entities.
-//! Kinds2/4/22 additionally admit27950's null-program branch: an accepted hit
-//! requests immediate4337E0 ignition without allocating a timed-program node.
+//! Kinds2/4/22 additionally admit 27950's null-program branch: an accepted hit
+//! requests immediate 4337E0 ignition without allocating a timed-program node.
 //! Class38 also submits its standalone 4C98F8 terrain-light program through
 //! the same 28720 cell registry; this program requires no static object.
 //!
@@ -181,7 +181,7 @@ pub enum StaticDamageOutcome {
     NoDamage {
         severity_raw: i32,
     },
-    ///27950's accepted, unburned null-program branch calls4337E0(...,1)
+    /// 27950's accepted, unburned null-program branch calls 4337E0(...,1)
     /// synchronously, before the caller continues with another recipient.
     ImmediateBurn {
         cell: [u8; 2],

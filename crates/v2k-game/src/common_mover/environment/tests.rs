@@ -49,7 +49,7 @@ fn steady_wind_uses_height_cap_and_signed_angular_and_linear_words() {
     run(wind, &grid, [0, 2048, 0], &mut velocity, &mut angles);
     assert_eq!(velocity, [2, 0, 4]);
     // Retail zero heading points forward+X and lateral-Z. Signed Q31
-    // projection therefore gives forward1023/lateral-2048, then EC60 adds
+    // projection therefore gives forward 1023/lateral-2048, then EC60 adds
     // floor(20000*1023*4096/2^31)=39 to pitch and
     // floor(20000*(-2048)*(-16384)/2^31)=312 to roll.
     assert_eq!(angles, [10, 59, 342]);

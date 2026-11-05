@@ -205,7 +205,7 @@ fn ordinary_class29_turrets_fire_their_own_emitter_method_and_drain_once() {
 
 /// Type112/113 share Type115's flower row (Mutated-weighted class29 or the
 /// class0 wait) apart from models, capability, muzzle slot, Sub-L and their
-/// alternate49 death.
+/// alternate 49 death.
 #[v2k_test_support::retail_test]
 fn ordinary_type112_113_flowers_publish_their_own_native_owner() {
     let mut births = 0;

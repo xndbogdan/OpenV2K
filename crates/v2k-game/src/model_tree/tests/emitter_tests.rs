@@ -55,7 +55,7 @@ fn player_draw() -> PlayerDraw {
         &mut WorldFx::new(),
     )
     .unwrap();
-    // Enter the recovered13F70 body-basis writer before presentation. Fresh
+    // Enter the recovered 13F70 body-basis writer before presentation. Fresh
     // player allocation itself deliberately does not claim that later phase.
     manager.player_mut().unwrap().apply_d720_euler_body_basis();
     let player = manager.player().unwrap();
@@ -198,7 +198,7 @@ fn native_type46_callback4_stamps_each_current_tubegun_side_and_raw_barrel_mount
             assert!(commands.iter().any(|c| matches!(c, ModelNativeMountCommand::Rotate { axis: 0, angle } if *angle == barrel)));
             let child = draw.frame.child(root, gun, &vars).unwrap();
             // Tubegun's command branch reaches tf14 slot30/selector0 for
-            // inherited side1, and slot32/selector1 for inherited side0.
+            // inherited side 1, and slot32/selector1 for inherited side 0.
             let selector = 1 - gun.registers[3];
             let slot = if selector == 0 { 18 } else { 20 };
             let view = child

@@ -1236,7 +1236,7 @@ fn deep_water_drop_keeps_carried_surface_time_through_release_and_class14_cleanu
                 if !saw_death {
                     // Observe retained timer custody through behavior, without
                     // exposing the private +48 field. A reset at landing would
-                    // need another full five seconds. Allow one maximum125-ms
+                    // need another full five seconds. Allow one maximum 125-ms
                     // callback gate delay when comparing wall and actor time.
                     let after_landing_millis = (frame + 1) * 20;
                     assert!(after_landing_millis < 5_000);

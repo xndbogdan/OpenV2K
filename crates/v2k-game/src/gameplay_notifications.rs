@@ -33,7 +33,7 @@ pub const CARGO_FULL_TEXT_ID: usize = 0xda;
 pub const CARGO_FULL_HINT_EVENT_ID: u8 = 0x11;
 /// Deduplicated hint emitted after collecting entity type 68 (`weight`).
 pub const WEIGHT_COLLECTED_HINT_EVENT_ID: u8 = 0x15;
-///443B50's successful attachment of a child whose capability800 is set.
+/// 443B50's successful attachment of a child whose capability800 is set.
 pub const CARGO_COLLECTED_HINT_EVENT_ID: u8 = 0;
 /// Deduplicated resource hint selected after a successful player-authored
 /// lethal hit on a target carrying retail state bit `0x01000000`.
@@ -285,7 +285,7 @@ impl GameplayNotifications {
     }
 
     /// 45189C/4518AE: ordinary native Loading (+28E == 0) clears both visible
-    /// slots after authored construction and451C00.437F30 leaves each slot's
+    /// slots after authored construction and 451C00.437F30 leaves each slot's
     /// resource-event mask at+0C intact, so a collected-weight/BA40 hint that
     /// already fired during load must not return when gameplay begins.
     pub fn clear_native_load_slots(&mut self) {
@@ -366,7 +366,7 @@ impl GameplayNotifications {
         self.queue_resource(WEIGHT_COLLECTED_HINT_EVENT_ID, retail_tick);
     }
 
-    ///443BEE requests this before the Type68-specific hint443C11.
+    /// 443BEE requests this before the Type68-specific hint443C11.
     pub fn queue_cargo_collected(&mut self, retail_tick: i32) {
         self.queue_resource(CARGO_COLLECTED_HINT_EVENT_ID, retail_tick);
     }

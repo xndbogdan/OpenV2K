@@ -153,7 +153,7 @@ fn primary_and_static_route_keep_distinct_impulse_with_filtered_packets() {
     for kind in [EntityWeaponKind::Rocket, EntityWeaponKind::Grenade] {
         let mut primary = World::new(kind);
         let mut static_hit = World::new(kind);
-        // Impact channel2 below its threshold exercises11030 without killing.
+        // Impact channel2 below its threshold exercises 11030 without killing.
         let direct = primary.hit(16, 2, 100);
         let amplified = static_hit.hit(52, 2, 100);
         assert!(

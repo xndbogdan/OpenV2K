@@ -276,7 +276,7 @@ fn publish_birth(
         return Err(Intro2Type94Error::Identity);
     }
     let mut selector_owner = behavior::candidate(entity);
-    // D4A0's type-default bit0x20 terrain snap precedes the AC60 range reads.
+    // D4A0's type-default bit 0x20 terrain snap precedes the AC60 range reads.
     let RetailRuntimeValue::Known(position) = crate::entity_initializer::constructor_position_raw(
         metadata,
         selector_owner.position_raw,
@@ -298,7 +298,7 @@ fn publish_birth(
         unreachable!()
     };
     // 09A80 constructs H, D, then A20450. Only A consumes a word. E24E30
-    // subsequently zeroes all0x3c bytes and copies method/sound; its four
+    // subsequently zeroes all 0x3c bytes and copies method/sound; its four
     // bindings (+18..1B) are null. Descriptor+12=102 is not a binding.
     let sub_a = SubAPropulsionRuntime::from_20450_constructor(descriptor, next_random() as u16);
     let sub_e_runtime = GenericEmitterRuntime {

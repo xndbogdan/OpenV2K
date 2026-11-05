@@ -13,7 +13,7 @@ use v2k_formats::terrain::TerrainGrid;
 pub(super) struct SteadyWind {
     pub vector_raw: [i16; 3],
     pub height_limit_raw: i32,
-    /// `42ED00`: Section13+80, interpreted as a boolean at44ECB5.
+    /// `42ED00`: Section13+80, interpreted as a boolean at 44ECB5.
     pub above_sea: bool,
 }
 
@@ -42,7 +42,7 @@ pub(super) fn apply(body: &mut EnvironmentBody, frame: EnvironmentFrame<'_>) {
         apply_type9_environment_drag_raw(&mut body.velocity_raw, frame.elapsed_micros, frame.drag);
         return;
     };
-    //44ECD4/44ECE0 use signed WORD shifts. Both bilinear probes wrap X/Z.
+    // 44ECD4/44ECE0 use signed WORD shifts. Both bilinear probes wrap X/Z.
     let [x, y, z] = body.position_raw;
     let half = frame.terrain.bilinear_height_raw(
         x.wrapping_sub(wind.vector_raw[0] >> 1),
@@ -54,7 +54,7 @@ pub(super) fn apply(body: &mut EnvironmentBody, frame: EnvironmentFrame<'_>) {
     );
     let clearance = (i32::from(y) - i32::from(half.max(full))).min(wind.height_limit_raw);
     if clearance < 0 {
-        //44EEAB returns directly: sheltered actors do not receive fallback drag.
+        // 44EEAB returns directly: sheltered actors do not receive fallback drag.
         return;
     }
     let scale = clearance.wrapping_shl(5);
@@ -75,7 +75,7 @@ pub(super) fn apply(body: &mut EnvironmentBody, frame: EnvironmentFrame<'_>) {
         frame.elapsed_micros as i32,
         project(body.forward_q31).wrapping_shl(12),
     ) as i16);
-    //44EFF6 divides the LOW dword of dt*strength by unsigned (B0<<3).
+    // 44EFF6 divides the LOW dword of dt*strength by unsigned (B0<<3).
     let factor = (frame.elapsed_micros.wrapping_mul(frame.drag.strength)
         / (u32::from(frame.drag.callback_mass_raw.get()) << 3)) as i32;
     for (velocity, difference) in body.velocity_raw.iter_mut().zip(difference) {
@@ -167,10 +167,10 @@ mod tests {
 
     #[test]
     fn steady_current_matches_original_executable_vectors() {
-        // Actual PE44EC60; oracle seed4460, cases1/2/78. Only lookup and
-        //42ED00 were stubbed. Terrain is signed and varies in both directions.
+        // Actual PE44EC60; oracle seed4460, cases 1/2/78. Only lookup and
+        // 42ED00 were stubbed. Terrain is signed and varies in both directions.
         // Layout: mode,medium,dt,strength,mass,limit,sea,wind3,pos3,vel3,
-        // pitch,roll,lateral3,forward3, expected velocity3/pitch/roll.
+        // pitch,roll,lateral 3,forward 3, expected velocity3/pitch/roll.
         let cases: [[i64; 29]; 3] = [
             [
                 1,

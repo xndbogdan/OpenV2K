@@ -161,8 +161,8 @@ pub(crate) fn publish_working_factory(
         return Err(Intro2Type66Error::ComponentStorage);
     }
     // All fallible admission precedes AC60's one unconditional selector word.
-    // This singleton has no component constructor RNG and 25BD0 uses01020,
-    // not the generic06070 component-reset constructor.
+    // This singleton has no component constructor RNG and 25BD0 uses 01020,
+    // not the generic 06070 component-reset constructor.
     let mut selector_word = 0;
     let selection = select_initial_behavior(
         &INITIAL_CHOICES,
@@ -185,7 +185,7 @@ pub(crate) fn publish_working_factory(
     // 09A80/D4A0 relocates this body. The initializer resolution owns every
     // other known state bit; admission above checks those domains separately.
     // Preserve the earlier surface write, including its legacy unknown state.
-    // Explicit native policy for104B0's unwritten transient mass contribution.
+    // Explicit native policy for 104B0's unwritten transient mass contribution.
     // 12DA0 and future contributors retain ownership after this one birth write.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
@@ -215,7 +215,7 @@ fn publish_working_factory_graph(
 ) {
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
     // 257C0 clears T thenS, then FUN_00425BD0 publishes its zero-lifetime Primary.
-    // The class39 style has zero+34/+38 policy words and no06070 suffix.
+    // The class39 style has zero+34/+38 policy words and no 06070 suffix.
     entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
     entity.actor_tasks.replace_prepared(
@@ -231,7 +231,7 @@ fn publish_working_factory_graph(
 /// After the complete `2E570` constructor/radar phase, mode<4 writes current
 /// health1 for Type66 (the preceding Type34/capability8 branch is distinct).
 /// This does not change the type's99999 maximum, Sub-M's health cache, task
-/// clocks, or RNG. Keep it separate from104B0/18A90 construction and reject
+/// clocks, or RNG. Keep it separate from 104B0/18A90 construction and reject
 /// repeated or post-callback application. The caller owns the Intro2 phase.
 pub fn apply_intro2_type66_post_load_health(entity: &mut Entity) -> Result<(), Intro2Type66Error> {
     if !intro2_type66_allocation_authenticates(entity) {

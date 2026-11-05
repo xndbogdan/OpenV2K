@@ -1,12 +1,12 @@
 //! Complete source-owned Type42/59/34 static-model contact after the surface
 //! pass.
 //!
-//! 412CF0: type+8A cue, 427E20, A8B0, D920, style+1C, then11760. 427E20's
+//! 412CF0: type+8A cue, 427E20, A8B0, D920, style+1C, then 11760. 427E20's
 //! programs act only for capability1, the player's. The actual published
-//! task constructors retain05FF0's null+20 hook; living flags12/8 and the
+//! task constructors retain 05FF0's null+20 hook; living flags12/8 and the
 //! meteor's 4008 exclude D9B0. Class22/35's +1C is 40CEF0; class19's is
 //! null, so a meteor goes straight to 11760. The terminal callback can mutate
-//! the world synchronously, so11760 retains only the selected plane and
+//! the world synchronously, so 11760 retains only the selected plane and
 //! reacquires current motion/static cells.
 
 use super::reborrow_terminal_world;

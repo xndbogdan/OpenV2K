@@ -665,8 +665,8 @@ fn finish_world(
     let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
         return Err(Block::Runtime("physical basis"));
     };
-    // All three native styles retain authored439. E870 selects restricted
-    // tasks; both callbacks then execute E640/F70/E100/E370 before12DA0 motion.
+    // All three native styles retain authored 439. E870 selects restricted
+    // tasks; both callbacks then execute E640/F70/E100/E370 before 12DA0 motion.
     let attitude = plan_type9_terrain_attitude_raw(Type9TerrainAttitudeInput {
         terrain,
         position_raw: entity.position_raw(),

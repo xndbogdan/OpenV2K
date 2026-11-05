@@ -35,7 +35,7 @@ pub(super) fn select(
 }
 
 pub(super) fn emitter_constructor(row: Type30Row) -> GenericEmitterRuntime {
-    // 24E30 zeroes0x3c and copies method/sound. E+12 is not a model binding.
+    // 24E30 zeroes 0x3c and copies method/sound. E+12 is not a model binding.
     GenericEmitterRuntime {
         joint_bindings: [None; 2],
         projectile_method: row.emitter().projectile_method,
@@ -124,7 +124,7 @@ pub(super) fn publish_acquiring(
         } => a.apply_shared_initializer_target_speed_write(target_speed_raw),
     };
     let succeeded = if selection.program.class_id == 5 {
-        // 40ACD0 clear2 -> clear1 -> 402B10(owner,0,5000), then6070 once.
+        // 40ACD0 clear 2 -> clear 1 -> 402B10(owner,0,5000), then 6070 once.
         actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
         actor_tasks.clear_slot(ActorTaskSlot::Secondary);
         match prepare_shared_generic_constructor_suffix(

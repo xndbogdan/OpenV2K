@@ -593,7 +593,7 @@ mod accepted_model302_screen_tests {
     #[test]
     fn all_eighty_warm_tick952_screen_rows_match_the_actual_native_projector() {
         // V200001 tick952 model302, accepted raw lens512/512/640/480/320/240.
-        // Source VIEW/cache and original46CD90 independently agree for these
+        // Source VIEW/cache and original 46CD90 independently agree for these
         // 80 warmed projected rows. No cold or VIEW-only screen is borrowed.
         let expected: [(u16, [i32; 3], [i16; 2], u8); 80] = [
             (0, [-1844, 100, 2848], [-11, 223], 17),

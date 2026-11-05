@@ -158,7 +158,7 @@ pub(crate) fn publish_intro2_type16(
     }) {
         return Err(Intro2Type16Error::Prefix);
     }
-    // Each receipt joins this own allocation to its first41F7A8 full reset
+    // Each receipt joins this own allocation to its first 41F7A8 full reset
     // in V200001. No Type17 or other cohort's origin is substituted.
     let sub_d_owner = intro2_type16_first_query_owner_for_birth(spawn, sub_d_seed)
         .expect("authenticated Type16 spawn/seed owns its first-query receipt");
@@ -294,7 +294,7 @@ fn publish_birth(
         .authored_spawn_index
         .ok_or(Intro2Type16Error::Identity)?;
     let mut selector_owner = behavior::candidate(entity);
-    // D4A0's type-default bit0x20 terrain snap precedes the AC60 range reads.
+    // D4A0's type-default bit 0x20 terrain snap precedes the AC60 range reads.
     let RetailRuntimeValue::Known(position) = crate::entity_initializer::constructor_position_raw(
         metadata,
         selector_owner.position_raw,
@@ -315,7 +315,7 @@ fn publish_birth(
         unreachable!()
     };
     // 09A80 constructs H, D, then A20450. Only A consumes a word. E24E30
-    // subsequently zeroes all0x3c bytes and copies method/sound; its four
+    // subsequently zeroes all 0x3c bytes and copies method/sound; its four
     // bindings (+18..1B) are null. Descriptor+12=158 is not a binding.
     let sub_a = SubAPropulsionRuntime::from_20450_constructor(descriptor, next_random() as u16);
     let sub_e_runtime = GenericEmitterRuntime {
@@ -407,8 +407,8 @@ pub(super) fn publish_initial_style(
         unreachable!()
     };
     let succeeded = if selection.program.class_id == 4 {
-        // B9E0: clear1, publish mode5 slot2, prepare shared mover slot0,
-        // reset A target to literal1, publish0. Neither phase calls06070.
+        // B9E0: clear 1, publish mode5 slot2, prepare shared mover slot0,
+        // reset A target to literal1, publish 0. Neither phase calls 06070.
         let RetailRuntimeValue::Known(lifetime) = metadata.terrain_contact_task_lifetime_ms else {
             unreachable!()
         };
@@ -434,7 +434,7 @@ pub(super) fn publish_initial_style(
             } => sub_a.apply_shared_initializer_target_speed_write(target_speed_raw),
         };
         if selection.program.class_id == 5 {
-            // ACD0: clear2, clear1, then2B10(5000). Its06070 suffix runs once.
+            // ACD0: clear 2, clear 1, then 2B10(5000). Its06070 suffix runs once.
             actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
             actor_tasks.clear_slot(ActorTaskSlot::Secondary);
             match prepare_shared_generic_constructor_suffix(

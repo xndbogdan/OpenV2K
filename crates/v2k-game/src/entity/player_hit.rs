@@ -8,8 +8,8 @@ use super::*;
 use crate::damage::absorb_pre_health_damage_buffer;
 use crate::world_fx::ParticleEntityImpact;
 
-/// 15040 versus14E10: both filter255E0; only Checked owns bit8000 and
-/// source46 filtered-zero feedback. Radial falloff owns its outer admission.
+/// 15040 versus 14E10: both filter 255E0; only Checked owns bit8000 and
+/// source 46 filtered-zero feedback. Radial falloff owns its outer admission.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerDamageEntry {
     Checked,
@@ -63,7 +63,7 @@ impl PlayerDyingContactRuntime {
         self.next_burst_retail_tick
     }
 
-    ///447AF0 uses a strict signed comparison, then calls475F0 before reseeding.
+    /// 447AF0 uses a strict signed comparison, then calls 475F0 before reseeding.
     pub fn emit_if_due(
         &mut self,
         fx: &mut WorldFx,
@@ -362,7 +362,7 @@ impl EntityManager {
         if let (Some(_), Some(terrain)) = (self.network_player_hits.as_ref(), terrain) {
             self.leave_network_power_ups(position, terrain, fx, retail_tick);
         }
-        // 447280: empty cargo release, synchronous475F0, then controller208
+        // 447280: empty cargo release, synchronous 475F0, then controller208
         // seed. The seed consumes its RNG word even without a later contact.
         fx.emit_player_wreck_burst_raw(position, plan.source_extent_raw, plan.sea_level_raw, id);
         // 447468..447484: after the burst and the authenticated null +6C,
@@ -373,7 +373,7 @@ impl EntityManager {
             player_id: id,
             next_burst_retail_tick: (retail_tick as i32).wrapping_add(delay),
         });
-        // 4474B7..44755A clears 2 then1 and replaces0. The PlayerDeathLifecycle
+        // 4474B7..44755A clears 2 then 1 and replaces 0. The PlayerDeathLifecycle
         // host owns the new zeroed control7/BB8 wrapper, not an actor callback.
         let entity = &mut self.entities[plan.index];
         entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
@@ -592,7 +592,7 @@ impl EntityManager {
             }
             death = Some(self.prepare_player_dying(index, infected, resources)?);
             // 14E90 reads the post-10C10 target bit and queues resource4 only
-            // for the delivered source46 word, independently of target type.
+            // for the delivered source 46 word, independently of target type.
             if request.delivery.source_entity_type_raw == 46 {
                 player_kill_hint = known(
                     collision.state_flags_at_0x08.masked(0x0100_0000),

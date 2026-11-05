@@ -69,7 +69,7 @@ impl crate::native_ground_actor::NativeGroundTaskCustody for Intro2RadialCursorC
         {
             return Err("split child already owns a cursor task");
         }
-        // 4135C2 reloads the current allocation's live successor after12DA0.
+        // 4135C2 reloads the current allocation's live successor after 12DA0.
         // Class18 appends this genuine child synchronously, so it receives its
         // first callback in this pass even though the earlier ID snapshot does
         // not contain it. Keep its owner in the actual unvisited storage.
@@ -245,7 +245,7 @@ pub(super) fn retain_terminal(
             retained.push(SpecializedActorTaskOwner::Intro2CommonDying(owner));
         }
         // Class2 has synchronously cleared the graph and queued the actual
-        // allocation for14990; there is no living or terminal task to retain.
+        // allocation for 14990; there is no living or terminal task to retain.
         NativeGroundTerminalPublication::Deferred(_) => {}
     }
 }

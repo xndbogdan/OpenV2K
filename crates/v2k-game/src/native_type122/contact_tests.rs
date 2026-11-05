@@ -1,4 +1,4 @@
-//! Real model274/terrain contacts exercise D9B0 before the retained11760 plane.
+//! Real model274/terrain contacts exercise D9B0 before the retained 11760 plane.
 
 use super::*;
 use crate::{
@@ -172,7 +172,7 @@ fn generic_crushing_precedes_retained_plane_and_never_reselects_living_or_class1
             apply_contact_response_raw(&mut position, &mut velocity, plane);
             let mut oracle_rng = f.fx.fork_for_main_base_abort_transaction();
             // A8B0 visits the real living Primary02CA0 first. Class12 has no
-            // task callback; the later D9B0 still filters the full40000 packet.
+            // task callback; the later D9B0 still filters the full 40000 packet.
             if !dying {
                 oracle_rng.next_shared_retail_random_u16();
                 oracle_rng.next_shared_retail_random_u16();

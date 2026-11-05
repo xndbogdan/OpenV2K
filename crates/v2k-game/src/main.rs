@@ -389,7 +389,7 @@ fn record_world_complete_after_hive_death(
     world_fx: &mut WorldFx,
 ) {
     notifications.queue_hive_destroyed_hint(retail_tick);
-    // 4567B0 gates both the time stamp and2EE70 campaign write on session28F
+    // 4567B0 gates both the time stamp and 2EE70 campaign write on session 28F
     // and the retained timestamp. A failed Hive kill only opens its retry.
     if tally.stamp_fun_004567b0(abort.abort_flag_0x28f(), retail_tick) {
         match abort.complete_current_world(progress) {
@@ -2394,7 +2394,7 @@ fn run_game(
     let mut actor_stops_reported = HashSet::<u32>::new();
     let mut type9_task_diagnostics = type9_task_diagnostics::Type9TaskDiagnostics::default();
     let mut current_level_id: Option<u32> = None;
-    // Session+38 retains entry XYZ across movement.456D10 reuses these words
+    // Session+38 retains entry XYZ across movement. 456D10 reuses these words
     // for failed-world return and forces fresh velocity/attitude/heading.
     let mut current_world_entry_position_raw: Option<[i16; 3]> = None;
     let mut pending_failed_world_interior_request = false;
@@ -4353,7 +4353,7 @@ fn run_game(
                         .play_global_sound(v2k_game::queen::CHEAT_ENABLE_SOUND_ID);
                     }
                 }
-                // 42E270 stages flags0xF before the old body is released.
+                // 42E270 stages flags 0xF before the old body is released.
                 // Both a map checkpoint and a direct handoff restore this
                 // controller snapshot before any destination actor is born.
                 // The Cheats world selector stages nothing: the snapshot's
@@ -4645,7 +4645,7 @@ fn run_game(
                     player_craft.fuel_raw = v2k_game::weapon_inventory::NETWORK_ENTRY_FUEL_RAW;
                 }
                 if let Some(restore) = native_restore {
-                    // Mode6 restores these controller owners before42E570's
+                    // Mode6 restores these controller owners before 42E570's
                     // world initialization and before any pickup/death event.
                     weapon_inventory = restore.inventory.clone();
                     player_capabilities = restore.capabilities;
@@ -5051,7 +5051,7 @@ fn run_game(
                         terrain_objects: session.cache.terrain_objects(),
                         model_extent_raw: Some(&model_extent_raw),
                     };
-                    // 51710 runs451C00 after every ordinary native player
+                    // 51710 runs 451C00 after every ordinary native player
                     // load, including an empty fresh profile. Its surface
                     // and world-style6 ballast phases are not warp-only.
                     let cargo_state = campaign_cargo_controller_state.unwrap_or_else(|| {
@@ -5256,7 +5256,7 @@ fn run_game(
                     .map(HullDamageProfile::from_type_record)
                     .unwrap_or(PLAYER_TYPE_46_HULL_PROFILE);
                 player_hull = if arrived_by_campaign_warp {
-                    // 443440's flag1 refills hull health;443560 also restores
+                    // 443440's flag1 refills hull health; 443560 also restores
                     // the retained controller+1BC shield into entity+50.
                     player_hull.campaign_world_replacement(loaded_hull_profile)
                 } else {
@@ -5301,7 +5301,7 @@ fn run_game(
                     Some(id) => log!("Player model: player4 = global pool id {}", id),
                     None => log!("Player model: player4 not found in global pool"),
                 }
-                // The old manager was cleared before construction.451C00 may
+                // The old manager was cleared before construction. 451C00 may
                 // already own authored class0 cargo or a native ballast birth;
                 // preserve those leases while adopting the remaining families.
                 card_yield!("player and camera setup");
@@ -5414,9 +5414,9 @@ fn run_game(
                     log!("Intro2: adopted {meteors} Boulder/Trailing Fire owners");
                 }
                 // FUN_004568B0 admits the callback only in gameplay phase 5.
-                // Ordinary native Section-13 rebuilds drain here.451710 then
+                // Ordinary native Section-13 rebuilds drain here. 451710 then
                 // clears the visible load slots while preserving their hint
-                // masks, before428AD0 resets the world clock below.
+                // masks, before 428AD0 resets the world clock below.
                 if purpose.uses_authored_world_publication(lid) {
                     match gameplay_notifications
                         .drain_fresh_level1_type9_attract_attention_receipts(&mut em)
@@ -7009,7 +7009,7 @@ fn run_game(
                                 else {
                                     return Err("cargo snapshot unavailable".into());
                                 };
-                                // 4D0568's low words are153..188 for logical1..36;
+                                // 4D0568's low words are 153..188 for logical 1..36;
                                 // 451FB0 uses only that half of the name/briefing pair.
                                 let name = session
                                     .cache
@@ -9225,7 +9225,7 @@ fn run_game(
 
                 world_fx.process_pending();
                 // Controlled-player movement precedes the Hive's no-RNG wreck
-                // contact phase; its component clock already ran in13500.
+                // contact phase; its component clock already ran in 13500.
                 pending_failed_world_interior_request |= em
                     .apply_authored_hive_wreck_player_contacts(
                         v2k_game::hive_controller::HiveWreckPlayerContactFrame {
@@ -10524,7 +10524,7 @@ fn run_game(
                             },
                             native_ground_actor::contact::NativeGroundContactOutcome,
                         };
-                        // The same11AD0 prefix owns Intro2 and native Hive children:
+                        // The same 11AD0 prefix owns Intro2 and native Hive children:
                         // solid/water, then static using the retained entry model.
                         let outcome = resolve_native_flyer_contacts_with_playing(
                             &mut contact_frame,
@@ -10852,7 +10852,7 @@ fn run_game(
                             continue;
                         }
                     }
-                    //11AD0 retains the peasant's entry admission, runs its
+                    // 11AD0 retains the peasant's entry admission, runs its
                     // fence response, then visits successor actor pairs.
                     if contact_frame
                         .entities
@@ -12400,8 +12400,8 @@ struct GameplayWorldFrame<'a> {
 }
 
 /// 11720 visits attached allocations too: 11400 tests body bit800, not
-/// relation bit1000. 18440 clears800 for a hidden Sub-J slot, whereas the
-/// spider's authored policy1 slot retains it. Keep the existing unparented
+/// relation bit1000. 18440 clears 800 for a hidden Sub-J slot, whereas the
+/// spider's authored policy 1 slot retains it. Keep the existing unparented
 /// admission until the complete body/effect presentation gate is owned.
 fn world_body_submission_eligible(entity: &Entity) -> bool {
     entity.attached_to.is_none()
@@ -12604,7 +12604,7 @@ fn draw_gameplay_world(
     while let Some(entity_id) = actor_cursor {
         if Some(entity_id) == player_entity_id {
             // The live craft uses its morph/fan child policy. The authored
-            // dying flag switches type 46 to model slot 1 (play4ded), whose
+            // dying flag switches type 46 to model slot 1 (play 4ded), whose
             // own linked hierarchy must be drawn without grafting live
             // player4 fan/gun transforms onto the wreck pieces.
             {
@@ -12991,7 +12991,7 @@ fn draw_gameplay_world(
                 _ => {}
             }
         }
-        //11720 reloads the current body's successor after11400, allowing
+        // 11720 reloads the current body's successor after 11400, allowing
         // bodies appended by the player's transient drain to draw at age zero.
         actor_cursor = em
             .retail_live_order_ids()
@@ -14422,9 +14422,9 @@ struct WorldAudioFrame<'a> {
     positional_masked: bool,
 }
 
-/// Map454EE0 and pause4513E0 enter44F3E0's mask8. Stop retained physical
+/// Map 454EE0 and pause 4513E0 enter 44F3E0's mask8. Stop retained physical
 /// loops while preserving their logical owners; disposable one-shots already
-/// playing and independent UI voices are not handles owned by44CE70.
+/// playing and independent UI voices are not handles owned by 44CE70.
 /// Retail FUN_0044CE70: the mask's first nonzero value stops the world's voices.
 fn suspend_world_audio(
     world_fx: &mut WorldFx,
@@ -14436,7 +14436,7 @@ fn suspend_world_audio(
     player_audio.suspend_physical_voices(sound_manager.as_mut());
     world_fx.garbage_collect_disposable_positional_sounds();
     // Modal branches skip world mixing/RNG. The next gameplay update admits
-    // fresh physical voices, matching4556A0/4512E0 clearing the mask.
+    // fresh physical voices, matching 4556A0/4512E0 clearing the mask.
 }
 
 fn world_sound_listener(camera: &Camera) -> PositionalSoundListener {

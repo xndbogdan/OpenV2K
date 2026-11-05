@@ -1,4 +1,4 @@
-//! Shared authored104B0/09A80/D4A0 entry with actual process Sub-D custody.
+//! Shared authored 104B0/09A80/D4A0 entry with actual process Sub-D custody.
 
 use super::*;
 use crate::{

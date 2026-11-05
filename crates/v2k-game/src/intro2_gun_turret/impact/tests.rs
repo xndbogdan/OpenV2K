@@ -184,7 +184,7 @@ fn turret_infected_zero_damage_still_reselects_then_primary_uses_live_capability
     assert!(world
         .scheduler
         .intro2_gun_turret_completed_owner(&world.manager, world.id));
-    //An ordinary accepted hit after infection reads livecap48, not birth44.
+    //An ordinary accepted hit after infection reads livecap48, not birth 44.
     for _ in 0..8 {
         world.fx.advance_frame_pacing(20_000);
     }

@@ -63,7 +63,7 @@ fn native_world(world: u32, replacement_sounds: Option<[u32; 2]>) -> (GameSessio
         let allocation = manager.main_base_abort_actor_observation(id).unwrap().lease;
         if replacement_sounds.is_some() {
             // The controlled template changes only the two selectors. Match
-            // the generic18A90 component prefix before native publication.
+            // the generic 18A90 component prefix before native publication.
             factory_mut(&mut manager, id).production =
                 Some(FactoryProductionRuntime::from_retail_template(
                     FactorySection13Config::decode(spawn.config.as_ref().unwrap()),
@@ -260,7 +260,7 @@ fn native_factory_production_repair_and_recovery_retunes_survive_completed_prefi
     );
     let handle = state.rows[0].physical.unwrap();
 
-    // A small real health loss preserves both scientists and enters19010's
+    // A small real health loss preserves both scientists and enters 19010's
     // repair branch. Its C8E0 retune must survive subsequent status snapshots.
     manager.entity_mut(id).unwrap().collision.health_raw = RetailRuntimeValue::Known(98_999);
     owner = step(&mut session, &mut manager, id, owner, 101);
@@ -325,7 +325,7 @@ fn native_factory_production_repair_and_recovery_retunes_survive_completed_prefi
 
 #[v2k_test_support::retail_test]
 fn factory_channels_keep_same_pcm_independent_and_release_secondary_first() {
-    // Controlled source template proves neither31 nor unique PCM is policy.
+    // Controlled source template proves neither 31 nor unique PCM is policy.
     let (_, mut manager) = native_world(13, Some([44, 44]));
     let id = manager
         .iter_all()
@@ -497,7 +497,7 @@ fn map_mask_stops_retained_loops_once_and_resumes_aliases_without_resetting_fact
         .map(|row| (row.source, row.warble))
         .collect();
     // An unrelated mixer handle stands for UI/already-playing disposable
-    // one-shots, which44CE70 cannot reach through a retained logical row.
+    // one-shots, which 44CE70 cannot reach through a retained logical row.
     backend.active.insert(999_999);
     backend.events.clear();
     state.suspend_physical_voices(&mut backend);

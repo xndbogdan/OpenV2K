@@ -235,7 +235,7 @@ fn intro2_type58_surface_consumes_authored_twenty_milliseconds_without_rescaling
     use crate::world_fx::ParticleEnvironment;
 
     // 162B0 adds floor(dt_us/1000), then subtracts directly from the raw
-    // type+74 dword. Type58 stores20 here; Type16 independently stores20000.
+    // type+74 dword. Type58 stores 20 here; Type16 independently stores 20000.
     for (elapsed_micros, timer, dies, next_word) in [
         (4_999, 4, false, 38),
         (20_000, 20, true, 54_006),

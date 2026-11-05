@@ -69,7 +69,7 @@ pub enum ObjectivePredicateBlock {
     UnresolvedObjectiveState { entity_id: u32 },
 }
 
-/// `15120`: live-list order, capability8, non-dying and state01000000.
+/// `15120`: live-list order, capability8, non-dying and state 01000000.
 pub fn objective_hostile_present<'a>(
     entities: impl IntoIterator<Item = &'a Entity>,
 ) -> Result<bool, ObjectivePredicateBlock> {
@@ -93,7 +93,7 @@ pub fn objective_hostile_present<'a>(
     Ok(false)
 }
 
-/// Live positive-health branch. The guarded1CE10 latch and its distinct
+/// Live positive-health branch. The guarded 1CE10 latch and its distinct
 /// two-visit component-death effect host are separate from this health policy.
 pub(crate) struct HiveLiveHealth<'a> {
     pub health_raw: &'a mut i32,

@@ -180,7 +180,7 @@ pub(super) fn publish_acquiring(
         } => a.apply_shared_initializer_target_speed_write(target_speed_raw),
     };
     let succeeded = if selection.program.class_id == 5 {
-        // 40ACD0 clear2 -> clear1 -> 402B10(owner,0,5000), then 06070 once.
+        // 40ACD0 clear 2 -> clear 1 -> 402B10(owner,0,5000), then 06070 once.
         actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
         actor_tasks.clear_slot(ActorTaskSlot::Secondary);
         match prepare_shared_generic_constructor_suffix(

@@ -84,7 +84,7 @@ impl EntityWeaponKind {
 }
 
 /// A modeled 44E770 request, after the transient's shooter words are resolved.
-/// Rotation is copied by14870 from the shooter's current Euler words; the
+/// Rotation is copied by 14870 from the shooter's current Euler words; the
 /// barrel direction changes velocity independently.
 #[derive(Debug, Clone, Copy)]
 pub struct EntityWeaponConstructionRequest {
@@ -117,7 +117,7 @@ pub(crate) struct NativeEntityWeaponRuntime {
     pub(crate) sub_k_raw: [u16; 2],
 }
 
-/// Exact live allocation and published task wrappers, retained by13500.
+/// Exact live allocation and published task wrappers, retained by 13500.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NativeEntityWeaponOwner {
     pub(crate) actor: MainBaseAbortActorLease,
