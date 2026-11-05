@@ -18641,6 +18641,14 @@ const MENU_MODEL_LOCAL_X_BASIS: [[f32; 3]; 3] =
 /// the port-basis equivalent of the retail menu renderer's angle-zero basis.
 const MENU_OPTIONS_PANEL_ROTATION_Y: f32 = std::f32::consts::PI;
 
+/// The spin word `DAT_004DCEB0` as the renderer's angle. `FUN_0042A2E0`
+/// builds `[sin a, 0, -cos a; 0, 1, 0; cos a, 0, sin a]` from it, a quarter
+/// turn ahead of the port's yaw basis at every angle (the lab's New Game ring
+/// at pass 395, word 0x69A7, matches only at +0x4000).
+fn menu_spin_radians(spin: u16) -> f32 {
+    f32::from(spin.wrapping_add(0x4000)) * std::f32::consts::TAU / 65536.0
+}
+
 fn menu_model_orientation(rotation_y: f32) -> [[f32; 3]; 3] {
     mat3_mul(
         orientation_from_ypr(rotation_y, 0.0, 0.0),
@@ -18948,6 +18956,12 @@ fn render_ring_3d(
 ) {
     clear_to_frontend_colour(renderer, cache);
     let (vw, vh) = renderer.viewport_size();
+    // FUN_0042B040 draws the bottom sprites straight to the surface in the
+    // UI pass, before FUN_0042AA90 drains the sorted queue, so every model
+    // (a fly-out's approaching craft included) paints over them.
+    if shell.frontend_branding_visible() {
+        draw_menu_branding(renderer, system_strings, menu_resources, vw, vh);
+    }
     let ui_request = UiMappingRequest {
         viewport: [vw, vh],
         authored_canvas: fonts
@@ -18999,14 +19013,11 @@ fn render_ring_3d(
         .or_else(|| v2k_game::menu_text::layout_point(cache, 0))
         .map_or(0, |(x, _)| x as i32);
 
-    let sel = menu.selected as f32;
     let depth_fade_color = menu_depth_fade_color(cache);
     for (i, item) in menu.items.iter().enumerate() {
         let Some(model_id) = item.model_id else {
             continue;
         };
-        // θ = (idx − sel + scroll/200) · step; selected lands at θ=0 (front).
-        let theta = (i as f32 - sel + menu.scroll / 200.0) * RING_STEP_RAD;
         let selected = i == menu.selected;
         let y_in = RING_Y_IN + if selected { sel_off } else { other_off };
         let (prop_camera, centre_y) = if selected {
@@ -19016,24 +19027,25 @@ fn render_ring_3d(
         };
         let angle = v2k_game::game_state::ring_prop_angle(
             menu.items.len(),
-            menu.scroll.round() as i32,
+            menu.scroll,
             i as i32 - menu.selected as i32,
         );
+        let view_point = v2k_game::game_state::ring_prop_view_point(angle, y_in as i32 as i16);
         if !menu_prop_root_in_view(
             cache,
             model_id as usize,
-            v2k_game::game_state::ring_prop_view_point(angle, y_in as i32 as i16),
+            view_point,
             [centre_x, centre_y as i32],
         ) {
             continue;
         }
         renderer.set_camera(prop_camera);
-        // Raw units → port world units (÷100); camera looks down −Z.
-        let local_y_raw = -320.0 * theta.cos();
-        let depth_raw = y_in - 1200.0 * theta.cos();
+        // FUN_0043B410's integer VIEW point, raw units → port world units
+        // (÷100); camera looks down −Z.
+        let depth_raw = view_point[2] as f32;
         let pos = [
-            800.0 * theta.sin() / 100.0,
-            local_y_raw / 100.0,
+            view_point[0] as f32 / 100.0,
+            view_point[1] as f32 / 100.0,
             -depth_raw / 100.0,
         ];
         // ALL props spin about one axis at 3.436 s/rev (DAT_004DCEB0);
@@ -19046,7 +19058,7 @@ fn render_ring_3d(
             prop_camera,
             model_id as usize,
             pos,
-            menu.spin,
+            menu_spin_radians(menu.spin),
             1.0,
             2,
             MenuSceneLight::NEUTRAL,
@@ -19097,10 +19109,6 @@ fn render_ring_3d(
             let label_x = (vw as i32 - label_w as i32) / 2;
             renderer.draw_sprite(&label_rgba, label_w, label_h, label_x, vh as i32 * 11 / 12);
         }
-    }
-
-    if shell.frontend_branding_visible() {
-        draw_menu_branding(renderer, system_strings, menu_resources, vw, vh);
     }
 }
 
@@ -19429,7 +19437,7 @@ fn render_carousel(
     // Compute carousel layout (fallback path): rotation from the original
     // scroll interpolator; selected item lands at the front.
     let n = menu.items.len().max(1) as f32;
-    let angle = (menu.scroll / 200.0 - menu.selected as f32) * (std::f32::consts::TAU / n);
+    let angle = (menu.scroll as f32 / 200.0 - menu.selected as f32) * (std::f32::consts::TAU / n);
     let slots = compute_carousel_layout(menu.items.len(), angle, cx, cy, rx, ry);
     let (selected_offset, other_offset) = v2k_game::game_state::fly_offsets(shell.phase);
 
@@ -19451,8 +19459,8 @@ fn render_carousel(
         // projected displacement as well as the icon makes the selected prop
         // approach the lens while all other props recede, without inventing a
         // separate software-only transition.
-        let theta =
-            (slot.item_index as f32 - menu.selected as f32 + menu.scroll / 200.0) * RING_STEP_RAD;
+        let theta = (slot.item_index as f32 - menu.selected as f32 + menu.scroll as f32 / 200.0)
+            * RING_STEP_RAD;
         let base_depth = RING_Y_IN - 1200.0 * theta.cos();
         let offset = if slot.item_index == menu.selected {
             selected_offset
@@ -19657,7 +19665,7 @@ fn render_list(
                         &prop_camera,
                         model_id as usize,
                         [0.0, -0x140 as f32 / 100.0, -depth_raw / 100.0],
-                        menu.spin,
+                        menu_spin_radians(menu.spin),
                         1.0,
                         2,
                         // Screen-specific foreground decoration (the monitor on

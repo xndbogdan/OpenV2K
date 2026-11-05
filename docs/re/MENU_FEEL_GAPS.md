@@ -365,7 +365,9 @@ by leverage:
 17. ✅ **Bottom branding row.** Original every frame: sprite 1290 Frontier
     logo at x=0, 1292 copyright line centered, 1291 logo right-aligned, all
     at y = screen_h − sprite_h. Port does this (draw_menu_branding) — keep,
-    including vertical-list submenus and their fly transitions. Note the
+    including vertical-list submenus, their fly transitions and the game
+    start's fly-out (New Game and the attract demo); on the ring the models
+    paint over the row, as the sorted queue drains after it. Note the
     sprites' global ids differ per graphics detail (L5 hi-res 1290–1292 vs
     L3 lo-res alts). Classic 4:3/Stretched modes must retain the loaded UI
    variant's authored framebuffer (320×240 low; 640×480, 800×600 or 1024×768 high) so these

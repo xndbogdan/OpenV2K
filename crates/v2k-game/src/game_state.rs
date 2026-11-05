@@ -404,10 +404,24 @@ pub fn fly_clock_step(clock: i32, frame_delta_micros: u32) -> i32 {
         next
     }
 }
-/// Selection-scroll exponential time constant (dv = −v·dt/τ, min step 1).
-pub const SCROLL_TAU: f32 = 0.2097;
-/// Ring prop spin period (DAT_004DCEB0 at ~19073 units/s → 0x10000).
-pub const PROP_SPIN_SECS: f32 = 3.436;
+/// `FUN_0043C7F0`'s prop spin step: `((dt << 11) * 20000) >> 31` added to
+/// the 16-bit word `DAT_004DCEB0` (about one turn per 3.436 s).
+pub fn prop_spin_step(frame_delta_micros: u32) -> u16 {
+    ((i64::from((frame_delta_micros << 11) as i32) * 20_000) >> 31) as u16
+}
+
+/// `FUN_0043C7F0`'s decay of a scroll interpolator (`DAT_004DCEBC` for the
+/// ring, `DAT_004DCEC0` for a list window): `((dt << 13) * (v * 5 / 4)) >> 31`
+/// off the value, at least one unit toward zero.
+pub fn scroll_decay_step(value: i32, frame_delta_micros: u32) -> i32 {
+    if value == 0 {
+        return 0;
+    }
+    let rate = value.wrapping_mul(5) / 4;
+    let step = ((i64::from((frame_delta_micros << 13) as i32) * i64::from(rate)) >> 31) as i32;
+    let step = if value > 0 { step.max(1) } else { step.min(-1) };
+    value.wrapping_sub(step)
+}
 
 /// Where the menu is in its presentation cycle.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -568,17 +582,14 @@ pub struct MenuState {
     pub items: Vec<MenuItem>,
     /// Screen title (displayed for submenus).
     pub title: String,
-    /// Selection-scroll interpolator, mirroring DAT_004DCEBC/C0: cursor
-    /// moves add ±200 per notch (circular-shortest, so a ring wrap is one
-    /// notch, not a spin back — see [`ring_step_delta`]), then the value
-    /// decays with τ ≈ 0.21 s. Ring rotation offset = (scroll / 200) · item
-    /// spacing; list rows shift by step_y · scroll / 200 while the highlight
-    /// snaps.
-    pub scroll: f32,
-    /// Global prop spin angle (radians; one revolution per 3.436 s —
-    /// shared by ring props and screen backdrop props like the original's
-    /// DAT_004DCEB0).
-    pub spin: f32,
+    /// The ring's scroll interpolator `DAT_004DCEBC`: cursor moves add ±200
+    /// per notch (circular-shortest, so a ring wrap is one notch, not a spin
+    /// back — see [`ring_step_delta`]), then [`scroll_decay_step`] takes it
+    /// back to zero.
+    pub scroll: i32,
+    /// The global prop spin word `DAT_004DCEB0`, shared by ring props and
+    /// screen backdrop props ([`prop_spin_step`]).
+    pub spin: u16,
     /// Decorative 3D prop shown on this screen (global model pool id) —
     /// the non-selectable Prop item in the screen record (e.g. `screenop`
     /// on the Display screen), drawn at layout pt6 spinning at the global
@@ -604,8 +615,8 @@ impl MenuState {
             selected: 0,
             items: Vec::new(),
             title: String::new(),
-            scroll: 0.0,
-            spin: 0.0,
+            scroll: 0,
+            spin: 0,
             backdrop_model: None,
             has_backdrop_panel: false,
             list_window_rows: LIST_WINDOW_ROWS,
@@ -740,10 +751,11 @@ pub struct MenuShell {
     /// slide. `list_top` is the committed integer index of the top visible
     /// row; it changes when selection reaches either window edge so retail can
     /// retain a one-row navigation margin where list bounds allow it.
-    /// `list_scroll` chases `list_top` smoothly (τ) — the rendered window
-    /// origin — so a scroll glides one row instead of jumping.
+    /// `list_scroll` is DCEC0: each committed row of window movement adds
+    /// ±200, which [`scroll_decay_step`] takes back to zero, so the rendered
+    /// window origin glides one row instead of jumping.
     list_top: usize,
-    list_scroll: f32,
+    list_scroll: i32,
     /// Engine item index for each view item.
     view_map: Vec<usize>,
     overlay: Option<SlotOverlay>,
@@ -964,7 +976,7 @@ impl MenuShell {
             ms_open: 0.0,
             ms_since_list_scroll: 0.0,
             list_top: 0,
-            list_scroll: 0.0,
+            list_scroll: 0,
             view_map: Vec::new(),
             overlay: None,
             pending_slot_overlay: None,
@@ -1135,7 +1147,7 @@ impl MenuShell {
     /// offset — `list_scroll.floor()` is the first drawn row, the fraction
     /// is the sub-row slide).
     pub fn list_scroll(&self) -> f32 {
-        self.list_scroll
+        self.list_top as f32 - self.list_scroll as f32 / 200.0
     }
 
     /// Authored row count of the active vertical-list window.
@@ -1152,9 +1164,9 @@ impl MenuShell {
             return f32::MAX;
         }
 
-        let delta = self.list_top as f32 - self.list_scroll;
-        if self.view.retype_scrolled_rows && delta.abs() >= 0.01 {
-            let entering = if delta > 0.0 {
+        let delta = self.list_scroll;
+        if self.view.retype_scrolled_rows && delta != 0 {
+            let entering = if delta > 0 {
                 self.list_top
                     .saturating_add(self.view.list_window_rows.saturating_sub(1))
                     .min(self.view.items.len().saturating_sub(1))
@@ -1249,11 +1261,12 @@ impl MenuShell {
     }
 
     /// The Frontier/copyright/publisher strip is absent during both mouth
-    /// bridges. It remains visible during the ordinary boot scene intro.
+    /// bridges. It remains visible during the boot scene intro and the game
+    /// start's fly-out (`FUN_0042BA30` draws it on every frontend pass).
     pub fn frontend_branding_visible(&self) -> bool {
         !matches!(
             self.phase,
-            MenuPhase::GameStart { .. } | MenuPhase::IntroReveal | MenuPhase::PostIntro { .. }
+            MenuPhase::IntroReveal | MenuPhase::PostIntro { .. }
         )
     }
 
@@ -1341,7 +1354,7 @@ impl MenuShell {
                         self.prev_view = None;
                         self.ms_open = 0.0;
                         self.list_top = 0;
-                        self.list_scroll = 0.0;
+                        self.list_scroll = 0;
                         MenuPhase::FlyIn { clock: FLY_CLOCK }
                     }
                 } else {
@@ -1386,27 +1399,22 @@ impl MenuShell {
             self.activate_pending_slot_overlay();
         }
 
-        // Ring selection scroll: exponential decay with the original's
-        // minimum step (terminates instead of asymptoting).
-        let v = self.view.scroll;
-        if v != 0.0 {
-            let decayed = v * (-dt / SCROLL_TAU).exp();
-            self.view.scroll = if decayed.abs() < 1.0 { 0.0 } else { decayed };
-        }
+        // FUN_0043C7F0's ring scroll decay.
+        self.view.scroll = scroll_decay_step(self.view.scroll, frame_delta_micros);
         // Global prop spin (ring items + backdrop props). FUN_0043C7F0
         // advances it only once the scene-only intro is over.
         let spin_step = if self.phase == MenuPhase::Intro {
-            0.0
+            0
         } else {
-            std::f32::consts::TAU * dt / PROP_SPIN_SECS
+            prop_spin_step(frame_delta_micros)
         };
-        self.view.spin = (self.view.spin + spin_step) % std::f32::consts::TAU;
+        self.view.spin = self.view.spin.wrapping_add(spin_step);
         // During fly-out `render_view()` deliberately returns the outgoing
         // snapshot. DAT_004DCEB0 is global and keeps advancing, so that
         // snapshot must follow it too; otherwise the selected prop visibly
         // freezes until the stack commits.
         if let Some(prev) = &mut self.prev_view {
-            prev.spin = (prev.spin + spin_step) % std::f32::consts::TAU;
+            prev.spin = prev.spin.wrapping_add(spin_step);
         }
 
         self.update_klaus(frame_delta_micros, effects);
@@ -1431,20 +1439,14 @@ impl MenuShell {
             self.transition_ready = true;
         }
 
-        // Settings-list window: commit retail's one-row navigation margin,
-        // then glide `list_scroll` toward that integer top.
+        // Settings-list window: FUN_0043C7F0's DCEC0 decay, then retail's
+        // one-row navigation margin.
         if self.view.layout == MenuLayout::VerticalList {
+            self.list_scroll = scroll_decay_step(self.list_scroll, frame_delta_micros);
             self.commit_list_window();
-            let target = self.list_top as f32;
-            let d = target - self.list_scroll;
-            self.list_scroll = if d.abs() < 0.01 {
-                target
-            } else {
-                self.list_scroll + d * (1.0 - (-dt / SCROLL_TAU).exp())
-            };
         } else {
             self.list_top = 0;
-            self.list_scroll = 0.0;
+            self.list_scroll = 0;
         }
     }
 
@@ -1554,7 +1556,7 @@ impl MenuShell {
         if self.engine.push(va) {
             self.ms_open = 0.0;
             self.list_top = 0;
-            self.list_scroll = 0.0;
+            self.list_scroll = 0;
             self.refresh(ctx);
         }
     }
@@ -1599,7 +1601,7 @@ impl MenuShell {
         };
         self.ms_open = 0.0;
         self.list_top = 0;
-        self.list_scroll = 0.0;
+        self.list_scroll = 0;
         self.rebuild_view(ctx);
         self.commit_list_window();
     }
@@ -1696,7 +1698,7 @@ impl MenuShell {
                 self.ms_open = 0.0;
                 // Non-flying switch shows instantly — reset the list window.
                 self.list_top = 0;
-                self.list_scroll = 0.0;
+                self.list_scroll = 0;
             }
         } else if self.view.selected != old_sel
             && self.view.layout == old_view.layout
@@ -1712,7 +1714,7 @@ impl MenuShell {
             // this — its window scrolls independently (see update()), so the
             // highlight just snaps between rows while the list stays put.
             let delta = ring_step_delta(old_sel, self.view.selected, self.view.items.len());
-            self.view.scroll = old_view.scroll + delta as f32 * 200.0;
+            self.view.scroll = old_view.scroll + delta * 200;
         }
         // Retail commits DAT_004DCA16 and resets DCEC8 in the same navigation
         // callback that changes the selection, before the next rendered tick.
@@ -1935,7 +1937,7 @@ impl MenuShell {
         self.view = pending.view;
         self.view_map.clear();
         self.list_top = 0;
-        self.list_scroll = 0.0;
+        self.list_scroll = 0;
         self.ms_open = 0.0;
     }
 
@@ -1964,7 +1966,7 @@ impl MenuShell {
     fn commit_list_window(&mut self) {
         if self.view.layout != MenuLayout::VerticalList {
             self.list_top = 0;
-            self.list_scroll = 0.0;
+            self.list_scroll = 0;
             return;
         }
 
@@ -1975,6 +1977,7 @@ impl MenuShell {
             self.view.list_window_rows,
         );
         if new_top != self.list_top {
+            self.list_scroll += (new_top as i32 - self.list_top as i32) * 200;
             self.list_top = new_top;
             self.ms_since_list_scroll = 0.0;
         }
@@ -2469,12 +2472,12 @@ mod tests {
     use super::FrontendDepthFadeMode;
     use super::{
         apply_setting_to_config, fly_clock_step, fly_model_anim_raw, fly_offsets,
-        fly_receding_centre_drop, item_bar, native_root_in_view, ring_prop_angle,
-        ring_prop_view_point, ring_step_delta, sync_display_settings, sync_settings_from_config,
-        window_top, Intro2PresentationStage, KlausBackdropAnimState, KlausEffects,
-        KlausSequenceState, MenuCtx, MenuItem, MenuLayout, MenuPhase, MenuShell, MenuState,
-        PauseSwitchAway, PostIntroStage, ShellEvent, SlotOverlayPage, FLY_CLOCK, FLY_LEG_SECS,
-        LIST_WINDOW_ROWS,
+        fly_receding_centre_drop, item_bar, native_root_in_view, prop_spin_step, ring_prop_angle,
+        ring_prop_view_point, ring_step_delta, scroll_decay_step, sync_display_settings,
+        sync_settings_from_config, window_top, Intro2PresentationStage, KlausBackdropAnimState,
+        KlausEffects, KlausSequenceState, MenuCtx, MenuItem, MenuLayout, MenuPhase, MenuShell,
+        MenuState, PauseSwitchAway, PostIntroStage, ShellEvent, SlotOverlayPage, FLY_CLOCK,
+        FLY_LEG_SECS, LIST_WINDOW_ROWS,
     };
     use crate::hover::RETAIL_FRAME_DELTA_MAX_US;
     use crate::menu_data::{
@@ -2522,7 +2525,7 @@ mod tests {
             ms_open: 0.0,
             ms_since_list_scroll: 0.0,
             list_top: 0,
-            list_scroll: 0.0,
+            list_scroll: 0,
             view_map: Vec::new(),
             overlay: None,
             pending_slot_overlay: None,
@@ -3066,7 +3069,10 @@ mod tests {
 
         // Once the glide has settled, the row returns to the ordinary
         // per-index DCEC4 clock rather than remaining tied to DCEC8.
-        shell.update(2_000_000, &mut test_effects(|| 1));
+        for _ in 0..20 {
+            shell.update(100_000, &mut test_effects(|| 1));
+        }
+        assert_eq!(shell.list_scroll, 0);
         assert!((shell.list_row_typewriter_elapsed_ms(5) - 3_600.0).abs() < 0.01);
 
         // Row-group flag 0x10 suppresses only the scroll re-reveal policy;
@@ -3074,7 +3080,7 @@ mod tests {
         shell.view.retype_scrolled_rows = false;
         shell.view.selected = 4;
         shell.list_top = 0;
-        shell.list_scroll = 0.0;
+        shell.list_scroll = 0;
         shell.ms_open = 2_000.0;
         shell.ms_since_list_scroll = 750.0;
         shell.commit_list_window();
@@ -3545,6 +3551,30 @@ mod tests {
     }
 
     #[test]
+    fn prop_spin_and_scroll_follow_the_labs_words() {
+        // The lab's watch on DAT_004DCEB0: 0x17D a pass from pass 153 (the
+        // first tick after the cold entry), 0x69A7 after pass 395.
+        assert_eq!(prop_spin_step(20_000), 0x17D);
+        let spin = (153..=395).fold(0u16, |spin, _| spin.wrapping_add(prop_spin_step(20_000)));
+        assert_eq!(spin, 0x69A7);
+        // The lab's watch on DAT_004DCEBC after Right at pass 300: the +200
+        // notch, then one decay a pass down to zero at 345.
+        let lab = [
+            181, 164, 149, 135, 123, 112, 102, 93, 85, 77, 70, 64, 58, 53, 48, 44, 40, 37, 34, 31,
+            29, 27, 25, 23, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2,
+            1, 0,
+        ];
+        let mut scroll = 200;
+        for expected in lab {
+            scroll = scroll_decay_step(scroll, 20_000);
+            assert_eq!(scroll, expected);
+        }
+        assert_eq!(scroll_decay_step(0, 20_000), 0);
+        // A negative value steps at least one unit toward zero.
+        assert_eq!(scroll_decay_step(-1, 20_000), 0);
+    }
+
+    #[test]
     fn fly_clock_steps_by_retail_integer_decay_and_stops_at_zero() {
         // FUN_0043C7F0: ((dt << 11) * 48000) >> 31.
         assert_eq!(fly_clock_step(FLY_CLOCK, 20_000), FLY_CLOCK - 915);
@@ -3615,10 +3645,10 @@ mod tests {
     fn cold_entry_ends_in_the_draw_after_the_clock_passes_150() {
         let mut shell = presentation_test_shell();
         shell.phase = MenuPhase::Intro;
-        shell.view.spin = 0.0;
+        shell.view.spin = 0;
         shell.update(20_000, &mut test_effects(|| 1));
         assert_eq!(shell.phase, MenuPhase::Intro, "only the draw ends it");
-        assert_eq!(shell.view.spin, 0.0, "FUN_0043C7F0 does not run yet");
+        assert_eq!(shell.view.spin, 0, "FUN_0043C7F0 does not run yet");
         shell.end_cold_entry(150);
         assert_eq!(shell.phase, MenuPhase::Intro);
         shell.end_cold_entry(151);
@@ -3630,7 +3660,7 @@ mod tests {
                 clock: FLY_CLOCK - 915
             }
         );
-        assert!(shell.view.spin > 0.0);
+        assert_eq!(shell.view.spin, 0x17D, "the lab's word after pass 153");
     }
 
     #[test]
@@ -3713,7 +3743,7 @@ mod tests {
         assert_eq!(draws.get(), 53, "Opening and Hidden consume no RNG");
 
         first.phase = MenuPhase::GameStart { clock: FLY_CLOCK };
-        assert!(!first.frontend_branding_visible());
+        assert!(first.frontend_branding_visible());
         first.phase = MenuPhase::Intro;
         assert!(first.frontend_branding_visible());
     }
@@ -3826,7 +3856,10 @@ mod tests {
         assert!(events.is_empty());
         assert_eq!(shell.phase, MenuPhase::GameStart { clock: FLY_CLOCK });
         assert!(shell.render_view().is_some());
-        assert!(!shell.frontend_branding_visible());
+        assert!(
+            shell.frontend_branding_visible(),
+            "the lab keeps the bottom row through the fly-out"
+        );
         assert_eq!(shell.menu_backdrop_anim_state().morph_progress, 0);
         assert_eq!(shell.menu_billboard_pose().scale_raw(), 132349);
         update_shell_for(&mut shell, MENU_BACKGROUND_ZOOM_SECS * 0.5);

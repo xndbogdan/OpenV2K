@@ -248,13 +248,21 @@ screen of the stack is rendered (no parents behind).
 - `DAT_004DCEDC` = depth in the screen stack; slots at `0x4DCA10 + depth*8`
   = `{screen_ptr, s16 sel_index, s16 window_scroll}` (max 10 deep).
 - `DAT_004DCEBC` (ring/horizontal) / `DAT_004DCEC0` (list/vertical) =
-  selection scroll interpolators: cursor moves add ±200/step; each tick both
-  decay `val -= (dt_µs · val·5/4) >> 18` → **time constant τ ≈ 0.21 s**
-  (min step 1). Lists shift by `step.dy × val/200` px (whole list slides;
+  selection scroll interpolators: cursor moves add ±200/step; each tick
+  `FUN_0043C7F0` takes `((dt << 13) * (val * 5 / 4)) >> 31` off each, at
+  least one unit toward zero → **time constant τ ≈ 0.21 s**. The lab's watch
+  after Right at pass 300 reads 200, then 181, 164, 149 … 2, 1 and 0 at pass
+  345; the port keeps both as these integers (`scroll_decay_step`). Lists shift by `step.dy × val/200` px (whole list slides;
   the highlight itself snaps instantly via font swap). Ring:
   `x_angle = floor(65535/(count·200)) · (val + (idx−sel)·200)`.
-- `DAT_004DCEB0` = ring prop spin angle: `+= (dt_µs·20000·2^12)>>32` ≈
-  19,073 units/s → **one revolution per 3.436 s** (single axis; b4/b8 = 0).
+- `DAT_004DCEB0` = ring prop spin angle, a 16-bit word:
+  `+= ((dt << 11) * 20000) >> 31` (0x17D at 20 ms) ≈ 19,073 units/s → **one
+  revolution per 3.436 s** (single axis; b4/b8 = 0). The lab's watch: 0 until
+  the first tick after the cold entry (pass 153, 0x17D), 0x69A7 after pass
+  395; the port's word (`prop_spin_step`) matches. `FUN_0042A2E0` turns it
+  into `[sin a, 0, -cos a; 0, 1, 0; cos a, 0, sin a]`, a quarter turn ahead of
+  the port's yaw basis: the port draws the props at `a + 0x4000`, the only
+  offset (in steps of 0x100) whose ring at pass 395 matches the lab's.
 - `DAT_004DCEC4/C8` = ms since screen open / since last scroll (typewriter).
 - `_DAT_004CB4E0` = **fly transition clock**: armed to 0x7000 by
   `FUN_0043A8E0` on a push or pop, from the flags of the screen on top
@@ -664,6 +672,15 @@ near/far −0x200/0x200, +0x7C terminal depth-fade color.
   (Grolier logo, right), each at y = screen_h − sprite_h. Variant-0 dimensions
   are 54×33 / 155×14 / 46×22; variants 1–3 are 110×68 / 309×28 / 115×56.
   `FUN_0042B040` submits those native dimensions in the selected framebuffer;
+  it writes them straight to the surface in the UI pass, before
+  `FUN_0042AA90` drains the sorted queue, so every model paints over them
+  (New Game's approaching craft covers the copyright line in the lab's pass
+  420). They stay through the game start's fly-out, New Game's and the
+  attract demo's alike (the lab's snapshots to pass 3031; the port's frames
+  3005 and 3031 and New Game's 395 equal the lab's in the bottom 40 rows).
+  The pass whose tick starts the game skips its draw chain, and the next
+  drawn frame (the lab's snapshot at 3032 and 431, the port's frames 3033
+  and 432) has none.
   any later monitor stretch scales the complete row with the framebuffer.
   The port's High Native footer independently uses the readability scale above
   the original outputs (1.8 at 1080p, 3.6 at 4K), keeping the actual left/centre/right
@@ -1143,7 +1160,7 @@ the frontend's init follows one pass later, again with no Klaus leg.
   a cold start, draws the same mode word at 3000 and row word at 3032 (its
   frontend stream is in lockstep, below), loads world 11 at 3033, returns at
   5885 and 5886, and loads the second demo at 6418 (its row differs: the
-  demo world's own stream is not in lockstep).
+  demo world's own stream is not in lockstep, below).
   Klaus's cover and the emblem at 3040 and 3060 match up to his twitch, as
   does the "Demo" caption; the camera's subjects are random draws and differ.
 - **The frontend's random stream.** Every idle frontend pass in the lab draws
@@ -1188,6 +1205,27 @@ the frontend's init follows one pass later, again with no Klaus leg.
   400; Intro2 loads at 432 in both). After a return from a demo world the
   emblem's sound falls on the lab's passes; Klaus's twitches part, as the
   stream does in the world.
+- **Held: the demo world's stream.** The second demo's row word is drawn
+  after 2,852 world ticks, so it is retail's only if every draw of the demo
+  world is. From 3033 the port parts at once (the lab's idle run to 6450,
+  `rng` logged with callers; the port's word per frame):
+  - The world's construction (3033) draws 46,117 words in the lab and 46,116
+    in the port. The radar's 45,898 (`0044A6B6`) and the 48 fish's
+    `FUN_00425680` and `FUN_00424220` words match; the actors are built in
+    another order (retail interleaves the Type18s and Type28s as authored, the
+    port builds the four Type28s first); each Type28 draws three words in the
+    lab (`FUN_00425680`, then `00406146` twice) and two in the port, and the
+    port's other construction words (its Type111s and Type61s) come to 11
+    against the lab's 8 lone `FUN_00425680` words.
+  - The first tick (3034) draws 249 words in the lab, 128 of them from
+    `FUN_00433530` at its end; the port draws 122 and has no such block.
+  - Every later tick in the lab opens with `FUN_00412DA0`'s random gate, two
+    words for each of 45 to 47 actors (`00412E44`, `00412E9D`), and the
+    actors' own visits follow; the port's demo world draws from its owners
+    in its own order (fish, ground actors, Defecate Virus) without that gate.
+  Matching the second row needs the world's whole visit order in lockstep
+  with retail's one process word, so the port's second and later demos keep
+  their own rows.
 - Mode 1 (`004DB224` written to 1 before the ring's pop): Intro2 loads at
   3033, the frontend's init is at 7336 and the next demo loads at 7868, in
   the lab and in the port; the last Intro2 frames (7330, 7334) are identical.
