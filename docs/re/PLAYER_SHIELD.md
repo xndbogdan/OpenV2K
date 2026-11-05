@@ -44,6 +44,9 @@ those are local `Ry(-angle)` followed by `Rz(angle)`. Its callback descriptor at
 16 bits; every other selector returns `clamp(trunc(difference / 1000), 0, 7)`.
 The model's own command stream selects additive textures620..627 and supplies
 the geometry and animated size. No generated sphere, tint or texture is used.
+`FUN_004136C0` ends by testing that wrapped origin through `FUN_00465840`
+and skipping a rejected aura; the port gates the craft's aura draw on the
+craft's wrapped origin with model 245's radius in the authored frame.
 
 `player_shield::PlayerShieldPresentation` retains only transient display and
 the current player adapter's admitted callback clock. It resets with each

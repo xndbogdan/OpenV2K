@@ -13365,6 +13365,9 @@ fn draw_gameplay_world(
                 if let Some(player) = em.player() {
                     let draw_pos = camera_relative(camera, player.position);
                     let player_orientation = player_model_orientation(player_craft, player);
+                    // The aura's root test (below) needs the raw origin after
+                    // the player adapter's mutable pass; retain it up front.
+                    let player_position_raw = player.position_raw();
                     let resolved = player
                         .model_index
                         .or(player_model_id)
@@ -13457,25 +13460,42 @@ fn draw_gameplay_world(
                             if cache.global_model(PLAYER_SHIELD_MODEL_ID).is_some()
                                 && cache.global_sprite(sprite_id).is_some()
                             {
-                                ModelTreeRenderer::new_world(
-                                    renderer,
-                                    cache,
-                                    face_colors,
-                                    GAMEPLAY_MODEL_SCALE,
-                                    Some(MenuSceneLight::NEUTRAL),
-                                    retail_tick as i32,
-                                )
-                                .with_submission_buffer(&mut model_submissions)
-                                .with_view(camera.into())
-                                .with_shade_shift(player_shade_shift.unwrap_or(0))
-                                .draw_linked(
-                                    PLAYER_SHIELD_MODEL_ID,
-                                    shield.orientation(player_orientation),
-                                    draw_pos,
-                                    0,
-                                    None,
-                                    &shield.animation_vars(),
-                                );
+                                // `FUN_004136C0`'s root test on the craft's
+                                // wrapped origin with model 245's radius; a
+                                // rejected aura submits nothing.
+                                let admitted = match native_viewport {
+                                    Some(viewport) => {
+                                        let point = viewport.actor_origin_view(player_position_raw);
+                                        world_model_root_in_view(
+                                            cache,
+                                            PLAYER_SHIELD_MODEL_ID,
+                                            point,
+                                            root_lens,
+                                        )
+                                    }
+                                    None => true,
+                                };
+                                if admitted {
+                                    ModelTreeRenderer::new_world(
+                                        renderer,
+                                        cache,
+                                        face_colors,
+                                        GAMEPLAY_MODEL_SCALE,
+                                        Some(MenuSceneLight::NEUTRAL),
+                                        retail_tick as i32,
+                                    )
+                                    .with_submission_buffer(&mut model_submissions)
+                                    .with_view(camera.into())
+                                    .with_shade_shift(player_shade_shift.unwrap_or(0))
+                                    .draw_linked(
+                                        PLAYER_SHIELD_MODEL_ID,
+                                        shield.orientation(player_orientation),
+                                        draw_pos,
+                                        0,
+                                        None,
+                                        &shield.animation_vars(),
+                                    );
+                                }
                             } else {
                                 static REPORTED: std::sync::Once = std::sync::Once::new();
                                 REPORTED.call_once(|| {
@@ -21711,6 +21731,7 @@ mod menu_visual_tests {
             MIND_BALL_MODEL_ID,
             v2k_game::hive_wreck_presentation::HIVE_WRECK_RING_MODEL_ID,
             RETICLE_MODEL_ID,
+            v2k_game::player_shield::PLAYER_SHIELD_MODEL_ID,
             v2k_game::targetter::TARGETTER_RING_EXACT_MODEL_ID,
             v2k_game::targetter::TARGETTER_RING_NEAR_MODEL_ID,
             v2k_game::targetter::TARGETTER_TERRAIN_CROSSHAIR_MODEL_ID,
