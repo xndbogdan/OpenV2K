@@ -123,14 +123,16 @@ impl EntityManager {
     /// anything, or a peer's, is left alone (`Ok(false)`). The attach is
     /// `FUN_00416700` with that parent; flag 1 sets state `0x20000000` and
     /// without flag 2 the body is no longer drawn (`0x800`). The port runs
-    /// the null attach callback of Type68 and Type74; any other type's
-    /// callback is held (`Err`).
+    /// the null attach callback of Type68 and Type74, and the full carrying
+    /// attach of an owned Type-9 person; any other type's callback is held
+    /// (`Err`).
     pub fn attach_owned_body_to_peer(
         &mut self,
         cargo: u32,
         parent: u32,
         flags: u32,
-        scheduler: &SpecializedActorTaskScheduler,
+        scheduler: &mut SpecializedActorTaskScheduler,
+        world_fx: &mut WorldFx,
     ) -> Result<bool, String> {
         let Some(entity) = self.entities.iter().find(|entity| entity.id == cargo) else {
             return Ok(false);
@@ -143,6 +145,9 @@ impl EntityManager {
             RetailRuntimeValue::Known(0) => {}
             RetailRuntimeValue::Known(_) => return Ok(false),
             RetailRuntimeValue::Unresolved => return Err("unknown state bits".into()),
+        }
+        if entity.entity_type == 9 {
+            return self.attach_peer_carried_type9(cargo, parent, flags, scheduler, world_fx);
         }
         if !self.native_class0_construction_present(cargo) {
             return Err(format!("an owned Type{}", entity.entity_type));
@@ -166,12 +171,83 @@ impl EntityManager {
         Ok(true)
     }
 
+    /// The person's arm of `FUN_00418030`: the local Type-9 carrying attach
+    /// with the peer's body as the relation owner. The carried tick lends a
+    /// remote parent's position with no Sub-J check (membership applies to
+    /// local parents only), so no row joins the parent and the peer copy's
+    /// own CD70 style switch stays held there; the effective attach state is
+    /// established here, on the owner.
+    fn attach_peer_carried_type9(
+        &mut self,
+        cargo: u32,
+        parent: u32,
+        flags: u32,
+        scheduler: &mut SpecializedActorTaskScheduler,
+        world_fx: &mut WorldFx,
+    ) -> Result<bool, String> {
+        let Some(actor) = scheduler.prepare_type9_cargo_attach(self, cargo) else {
+            return Err("a Type-9 task not at a completed boundary".into());
+        };
+        let Some(metadata) = self.type_runtime_metadata(9) else {
+            return Err("Type-9 metadata unavailable".into());
+        };
+        let Some(owner) = self.iter_all().find(|entity| entity.id == parent) else {
+            // The peer's body is gone here. Retail's next 12DA0 visit would
+            // release and reselect the child synchronously; the port holds
+            // the body until a later record says otherwise.
+            return Ok(false);
+        };
+        let relation = Type9RelationOwner {
+            id: parent,
+            capability_flags: owner.capability_flags,
+            position_raw: owner.position_raw(),
+        };
+        let Some(entity) = self.iter_all().find(|entity| entity.id == cargo) else {
+            return Ok(false);
+        };
+        let plan = match ordinary_type9_cargo::plan_attach(entity, metadata, relation) {
+            Ok(plan) => plan,
+            Err(reason) => return Err(format!("{reason:?}")),
+        };
+        // The local Type-9 commit order, without the parent's Sub-J row:
+        // consume custody, 16700's relation write, the relation sound, then
+        // the carrying commit and carried registration.
+        assert!(
+            scheduler.take_type9_for_cargo(self, actor),
+            "prepared selected custody"
+        );
+        let entity = self.entity_mut(cargo).expect("prepared cargo");
+        project_relation_attach(entity, parent);
+        if let Some((sound, position)) = plan.sound() {
+            world_fx.queue_networked_positional_sound_raw(sound, position);
+        }
+        let carried = ordinary_type9_cargo::commit_attach(entity, actor, plan)
+            .expect("prepared synchronous Type-9 attachment");
+        assert!(scheduler
+            .register_type9_carried(carried)
+            .expect("unique carried owner")
+            .is_none());
+        let state = &mut self
+            .entity_mut(cargo)
+            .unwrap()
+            .collision
+            .state_flags_at_0x08;
+        if flags & 1 != 0 {
+            state.overwrite(0x2000_0000, 0x2000_0000);
+        }
+        if flags & 2 == 0 {
+            state.overwrite(0x800, 0);
+        }
+        Ok(true)
+    }
+
     /// `FUN_004180F0` for a peer's kind 15 (`FUN_00418290`): on a body this
     /// machine owns that rides nothing or the named parent, a Type93 at the
     /// point on the terrain; once it is built the body is released
     /// (`FUN_00416750`) and attached to it (`FUN_00408F00`). Returns the
     /// Type93, or `None` when retail does nothing. The port drops Type68 and
-    /// Type74; any other type is held (`Err`).
+    /// Type74, and the carried Type-9 person with its CE90/AC60 reselect;
+    /// any other type is held (`Err`).
     pub fn drop_owned_body_for_peer(
         &mut self,
         cargo: u32,
@@ -193,6 +269,9 @@ impl EntityManager {
                 if parent.is_some() && entity.attached_to == parent => {}
             RetailRuntimeValue::Known(_) => return Ok(None),
             RetailRuntimeValue::Unresolved => return Err("unknown state bits".into()),
+        }
+        if entity.entity_type == 9 {
+            return self.drop_peer_carried_type9(cargo, x_raw, z_raw, frame);
         }
         if !self.native_class0_construction_present(cargo) {
             return Err(format!("an owned Type{}", entity.entity_type));
@@ -226,6 +305,85 @@ impl EntityManager {
             construct_type93_materialiser(self, target, frame.terrain, callbacks.world_fx)
                 .ok_or("the Type93's construction")?;
         callbacks.commit_release(self, CargoReleasePlan::Class0(release));
+        let Some(attach) = callbacks.prepare_attach(self, cargo, materialiser.entity_id) else {
+            return Err(format!("08F00's attach: {:?}", callbacks.blocked));
+        };
+        self.link_cargo_to_materialiser(
+            &mut callbacks,
+            attach,
+            cargo,
+            materialiser,
+            target,
+            Type93LifecyclePurpose::RelationDrop,
+        );
+        Ok(Some(materialiser.entity_id))
+    }
+
+    /// The person's arm of `FUN_004180F0`: the carried release at the drop
+    /// point runs as the player's own drop (the CE90/AC60 reselect from the
+    /// carried custody), and the Type93 built at the point receives the
+    /// person through the local `FUN_00408F00` attach. The carrier is the
+    /// relation owner from its kind 13, so no row joins it here.
+    fn drop_peer_carried_type9(
+        &mut self,
+        cargo: u32,
+        x_raw: i16,
+        z_raw: i16,
+        frame: RemoteBeamFrame<'_>,
+    ) -> Result<Option<u32>, String> {
+        let mut callbacks = LiveCargoCallbacks {
+            scheduler: frame.scheduler,
+            world_fx: frame.world_fx,
+            notifications: frame.notifications,
+            retail_tick: frame.retail_tick,
+            terrain: Some(frame.terrain),
+            radar: None,
+            blocked: Vec::new(),
+        };
+        let Some(carried) = callbacks.scheduler.type9_carried(cargo) else {
+            return Err("carried Type-9 task authority unavailable".into());
+        };
+        if self
+            .main_base_abort_actor_observation(cargo)
+            .map(|observation| observation.lease)
+            != Some(carried.actor)
+        {
+            return Err("carried Type-9 allocation changed".into());
+        }
+        let Some(metadata) = self.type_runtime_metadata(9).cloned() else {
+            return Err("Type-9 metadata unavailable".into());
+        };
+        let Some(entity) = self.iter_all().find(|entity| entity.id == cargo) else {
+            return Ok(None);
+        };
+        let (candidates, jobs) = type9_release_scans(self);
+        let request = Type9CargoReleaseRequest {
+            metadata: &metadata,
+            candidates: &candidates,
+            job_evidence: &jobs,
+            position: Type9CargoReleasePosition::Retained,
+        };
+        let prepared = ordinary_type9_cargo::prepare_release(entity, carried, &request)
+            .map_err(|reason| format!("{reason:?}"))?;
+        let target = [
+            x_raw,
+            frame.terrain.bilinear_height_raw(x_raw, z_raw),
+            z_raw,
+        ];
+        let materialiser =
+            construct_type93_materialiser(self, target, frame.terrain, callbacks.world_fx)
+                .ok_or("the Type93's construction")?;
+        callbacks.commit_release(
+            self,
+            CargoReleasePlan::Type9 {
+                cargo,
+                metadata,
+                candidates,
+                jobs,
+                position: Type9CargoReleasePosition::Retained,
+                prepared,
+            },
+        );
         let Some(attach) = callbacks.prepare_attach(self, cargo, materialiser.entity_id) else {
             return Err(format!("08F00's attach: {:?}", callbacks.blocked));
         };
@@ -800,6 +958,60 @@ fn construct_type93_materialiser(
     Some(manager.publish_constructed_type93_materialiser(proxy))
 }
 
+/// The live-list evidence the Type-9 release reselection probes: every
+/// entity in retail live order as the reselection's root candidate, and the
+/// same list as the go-to-job capacity scan. The local beam/drop arm and
+/// the peer's kind-15 prepare share it.
+fn type9_release_scans(
+    manager: &EntityManager,
+) -> (
+    Vec<OrdinaryType9RootEntityRef>,
+    Vec<OrdinaryType9GoToJobCandidateEvidence>,
+) {
+    let candidates: Vec<_> = manager
+        .retail_live_order_ids()
+        .map(|id| {
+            manager
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .expect("live-list entity")
+        })
+        .map(|entity| OrdinaryType9RootEntityRef {
+            id: entity.id,
+            entity_type: entity.entity_type,
+            position_raw: entity.position_raw(),
+            state_flags_raw: entity.collision.state_flags_at_0x08,
+            capability_flags: RetailRuntimeValue::Known(entity.capability_flags),
+            attached_entity_handle: entity.collision.recent_relation_id_at_0x60,
+        })
+        .collect();
+    let jobs: Vec<_> = manager
+        .retail_live_order_ids()
+        .map(|id| {
+            manager
+                .iter_all()
+                .find(|entity| entity.id == id)
+                .expect("live-list entity")
+        })
+        .map(|entity| OrdinaryType9GoToJobCandidateEvidence {
+            candidate_id: entity.id,
+            state_flags: entity.collision.state_flags_at_0x08,
+            capability_flags: RetailRuntimeValue::Known(entity.capability_flags),
+            capacity: match entity.base_factory_runtime {
+                RetailRuntimeValue::Known(Some(state)) => {
+                    RetailRuntimeValue::Known(Some(crate::job_nearby::JobCapacityState {
+                        current_jobs_raw: i32::from(state.current_scientists),
+                        capacity_raw: i32::from(state.required_scientists),
+                    }))
+                }
+                RetailRuntimeValue::Known(None) => RetailRuntimeValue::Known(None),
+                RetailRuntimeValue::Unresolved => RetailRuntimeValue::Unresolved,
+            },
+        })
+        .collect();
+    (candidates, jobs)
+}
+
 /// Behavior classes whose initial style has a null `+08` attach callback:
 /// None (style `4C7468`), Gun Turret (`4C8230`) and Remote Beamer (`4C72B8`).
 const NULL_ATTACH_CLASSES: [u32; 3] = [0, 29, 59];
@@ -957,8 +1169,13 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
         if entity.is_network_remote() {
             // FUN_00416700 runs the peer copy's style +08 through FUN_0040DBF0.
             // A peer keeps its type's initial class style, which is known to
-            // have none only for the classes below.
-            return if peer_attach_has_no_callback(manager, entity.entity_type) {
+            // have none only for the classes below. A carried Type-9 person's
+            // style +08 is CD70, which the peer copy holds: the projection
+            // here is the relation row alone, and the effective attach state
+            // is established on the owner when its kind 13 record arrives.
+            return if entity.entity_type == 9
+                || peer_attach_has_no_callback(manager, entity.entity_type)
+            {
                 Some(CargoAttachPlan::Other(cargo, parent))
             } else {
                 self.blocked(cargo, "a peer's cargo attach callback")
@@ -1389,47 +1606,7 @@ impl CargoRelationCallbacks for LiveCargoCallbacks<'_> {
         let Some(metadata) = manager.type_runtime_metadata(9) else {
             return self.blocked(cargo, "Type-9 metadata unavailable");
         };
-        let candidates: Vec<_> = manager
-            .retail_live_order_ids()
-            .map(|id| {
-                manager
-                    .iter_all()
-                    .find(|entity| entity.id == id)
-                    .expect("live-list entity")
-            })
-            .map(|entity| OrdinaryType9RootEntityRef {
-                id: entity.id,
-                entity_type: entity.entity_type,
-                position_raw: entity.position_raw(),
-                state_flags_raw: entity.collision.state_flags_at_0x08,
-                capability_flags: RetailRuntimeValue::Known(entity.capability_flags),
-                attached_entity_handle: entity.collision.recent_relation_id_at_0x60,
-            })
-            .collect();
-        let jobs: Vec<_> = manager
-            .retail_live_order_ids()
-            .map(|id| {
-                manager
-                    .iter_all()
-                    .find(|entity| entity.id == id)
-                    .expect("live-list entity")
-            })
-            .map(|entity| OrdinaryType9GoToJobCandidateEvidence {
-                candidate_id: entity.id,
-                state_flags: entity.collision.state_flags_at_0x08,
-                capability_flags: RetailRuntimeValue::Known(entity.capability_flags),
-                capacity: match entity.base_factory_runtime {
-                    RetailRuntimeValue::Known(Some(state)) => {
-                        RetailRuntimeValue::Known(Some(crate::job_nearby::JobCapacityState {
-                            current_jobs_raw: i32::from(state.current_scientists),
-                            capacity_raw: i32::from(state.required_scientists),
-                        }))
-                    }
-                    RetailRuntimeValue::Known(None) => RetailRuntimeValue::Known(None),
-                    RetailRuntimeValue::Unresolved => RetailRuntimeValue::Unresolved,
-                },
-            })
-            .collect();
+        let (candidates, jobs) = type9_release_scans(manager);
         let request = Type9CargoReleaseRequest {
             metadata,
             candidates: &candidates,

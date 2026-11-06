@@ -585,16 +585,24 @@ fn a_peers_kinds_13_and_15_carry_and_set_down_the_weight() {
         .id();
     let expected_rng = world.fx.fork_for_main_base_abort_transaction();
     assert_eq!(
-        world
-            .manager
-            .attach_owned_body_to_peer(world.weight, carrier, 1, &world.scheduler),
+        world.manager.attach_owned_body_to_peer(
+            world.weight,
+            carrier,
+            1,
+            &mut world.scheduler,
+            &mut world.fx,
+        ),
         Ok(true)
     );
     // Attached already: a second request changes nothing.
     assert_eq!(
-        world
-            .manager
-            .attach_owned_body_to_peer(world.weight, carrier, 3, &world.scheduler),
+        world.manager.attach_owned_body_to_peer(
+            world.weight,
+            carrier,
+            3,
+            &mut world.scheduler,
+            &mut world.fx,
+        ),
         Ok(false)
     );
     let weight = world.manager.entity_mut(world.weight).unwrap();
@@ -679,9 +687,13 @@ fn a_weight_whose_peer_carrier_is_gone_is_set_down_where_it_is() {
         .unwrap()
         .id();
     assert_eq!(
-        world
-            .manager
-            .attach_owned_body_to_peer(world.weight, carrier, 0, &world.scheduler),
+        world.manager.attach_owned_body_to_peer(
+            world.weight,
+            carrier,
+            0,
+            &mut world.scheduler,
+            &mut world.fx,
+        ),
         Ok(true)
     );
     world.tick_actors();
@@ -700,5 +712,209 @@ fn a_weight_whose_peer_carrier_is_gone_is_set_down_where_it_is() {
     assert_eq!(
         world.manager.entity_mut(proxy).unwrap().position_raw(),
         [carried_at[0], y.wrapping_add(1), carried_at[2]]
+    );
+}
+
+fn person_tick(
+    session: &mut GameSession,
+    manager: &mut EntityManager,
+    scheduler: &mut SpecializedActorTaskScheduler,
+    fx: &mut WorldFx,
+    notifications: &mut GameplayNotifications,
+    retail_tick: u32,
+) {
+    let mut static_damage = StaticDamageScheduler::new();
+    let pass = scheduler.tick(
+        manager,
+        SpecializedActorTaskProductionFrame {
+            world: crate::specialized_actor_task_production::SpecializedActorTaskWorld::Cinematic,
+            hive_components: None,
+            notification_phase: crate::gameplay_notifications::GameplayNotificationPhase::Playing,
+            resources: &mut session.cache,
+            world_fx: fx,
+            static_damage: &mut static_damage,
+            elapsed_micros: 20_000,
+            global_elapsed_micros: 20_000,
+            retail_tick,
+            main_base_abort_active: false,
+        },
+        notifications,
+    );
+    assert!(pass.block.is_none(), "{:?}", pass.block);
+}
+
+fn assert_rng_words(fx: &mut WorldFx, expected: &mut WorldFx, count: usize) {
+    for _ in 0..count {
+        expected.next_shared_retail_random_u16();
+    }
+    assert_eq!(
+        fx.next_shared_retail_random_u16(),
+        expected.next_shared_retail_random_u16()
+    );
+}
+
+/// A peer's craft carrying this machine's person: kind 13 attaches it
+/// (`FUN_00418030`, the local Type-9 carrying attach with the peer's body
+/// as relation owner, no Sub-J row), the carried tick lends the remote
+/// parent's position, and kind 15 (`FUN_004180F0`) sets it down in a Type93
+/// at the drop point, from two words (the Type93's selector, then the
+/// carried release's CE90/AC60 reselection), as the player's own drop.
+#[v2k_test_support::retail_test]
+fn a_peers_kinds_13_and_15_carry_and_set_down_the_person() {
+    let data = v2k_test_support::retail_dir();
+    assert!(
+        data.join("PRELOAD.DAT").is_file(),
+        "normal-tier corpus required"
+    );
+    let mut session = GameSession::init(&data).unwrap();
+    session.load_auxiliary_ovl(3, 1).unwrap();
+    session.load_level_by_id(13, 1).unwrap();
+    let metadata: Vec<_> = session
+        .cache
+        .global_entity_model_table()
+        .iter()
+        .enumerate()
+        .map(|(id, _)| {
+            EntityTypeRuntimeMetadata::from_section12(session.cache.global_entity_type(id).unwrap())
+        })
+        .collect();
+    let mut fx = WorldFx::new();
+    let mut manager = EntityManager::from_fresh_new_game_level_with_type_metadata(
+        session.cache.level_desc().unwrap(),
+        &metadata,
+        EntityConstructionResources::new(session.cache.terrain(), session.cache.terrain_objects()),
+        0,
+        &mut fx,
+    )
+    .unwrap();
+    let mut scheduler = SpecializedActorTaskScheduler::new();
+    assert!(
+        scheduler
+            .adopt_fresh_level1_type9_selected(&mut manager)
+            .unwrap()
+            > 0,
+        "the first world's people are selected"
+    );
+    let mut notifications = GameplayNotifications::new();
+    for retail_tick in 0..3u32 {
+        person_tick(
+            &mut session,
+            &mut manager,
+            &mut scheduler,
+            &mut fx,
+            &mut notifications,
+            retail_tick,
+        );
+    }
+    let person = manager
+        .iter_all()
+        .filter(|entity| entity.entity_type == 9)
+        .find(|entity| {
+            scheduler
+                .prepare_type9_cargo_attach(&manager, entity.id)
+                .is_some()
+        })
+        .expect("an adopted person at a completed boundary")
+        .id;
+    let position = manager.entity_mut(person).unwrap().position_raw();
+    let carried_at = [position[0], position[1].wrapping_add(0x200), position[2]];
+    let carrier = manager
+        .append_network_body(51, Some(carried_at), None)
+        .unwrap()
+        .id();
+    let mut expected_rng = fx.fork_for_main_base_abort_transaction();
+    assert_eq!(
+        manager.attach_owned_body_to_peer(person, carrier, 1, &mut scheduler, &mut fx,),
+        Ok(true)
+    );
+    // Attached already: a second request changes nothing.
+    assert_eq!(
+        manager.attach_owned_body_to_peer(person, carrier, 3, &mut scheduler, &mut fx,),
+        Ok(false)
+    );
+    let person_entity = manager.entity_mut(person).unwrap();
+    assert_eq!(person_entity.attached_to, Some(carrier));
+    assert_eq!(
+        person_entity
+            .collision
+            .state_flags_at_0x08
+            .masked(0x1000 | 0x2000_0000 | 0x800),
+        RetailRuntimeValue::Known(0x1000 | 0x2000_0000)
+    );
+    assert_rng_words(&mut fx, &mut expected_rng, 0);
+    person_tick(
+        &mut session,
+        &mut manager,
+        &mut scheduler,
+        &mut fx,
+        &mut notifications,
+        3,
+    );
+    assert_eq!(
+        manager.entity_mut(person).unwrap().position_raw(),
+        carried_at,
+        "the remote parent lends its position"
+    );
+    let (x, z) = (position[0].wrapping_add(0x100), position[2]);
+    let drop = |manager: &mut EntityManager,
+                scheduler: &mut SpecializedActorTaskScheduler,
+                fx: &mut WorldFx,
+                notifications: &mut GameplayNotifications,
+                session: &mut GameSession,
+                retail_tick: u32,
+                parent: Option<u32>| {
+        manager.drop_owned_body_for_peer(
+            person,
+            parent,
+            x,
+            z,
+            RemoteBeamFrame {
+                scheduler,
+                world_fx: fx,
+                notifications,
+                retail_tick,
+                terrain: session.cache.terrain().unwrap(),
+            },
+        )
+    };
+    // A record naming another parent leaves the person where it rides.
+    let other = manager.player().unwrap().id;
+    assert_eq!(
+        drop(
+            &mut manager,
+            &mut scheduler,
+            &mut fx,
+            &mut notifications,
+            &mut session,
+            4,
+            Some(other),
+        ),
+        Ok(None)
+    );
+    let mut expected_rng = fx.fork_for_main_base_abort_transaction();
+    let proxy = drop(
+        &mut manager,
+        &mut scheduler,
+        &mut fx,
+        &mut notifications,
+        &mut session,
+        5,
+        Some(carrier),
+    )
+    .unwrap()
+    .expect("a Type93");
+    // The drop draws five words: the Type93's birth selector in
+    // `construct_type93_materialiser`, then the carried release's CE90/AC60
+    // reselection and branch-constructor words through `commit_release`'s
+    // world_fx closure — the same words a local player's own drop of the
+    // person draws. The release's share is branch/RNG-state dependent, so the
+    // count is pinned for this deterministic person and RNG state.
+    assert_rng_words(&mut fx, &mut expected_rng, 5);
+    let target_y = session.cache.terrain().unwrap().bilinear_height_raw(x, z);
+    let person_entity = manager.entity_mut(person).unwrap();
+    assert_eq!(person_entity.attached_to, Some(proxy));
+    assert_eq!(
+        manager.entity_mut(proxy).unwrap().position_raw(),
+        [x, target_y.wrapping_add(1), z]
     );
 }

@@ -487,6 +487,26 @@ visit, as the gate read at its entry says while it is carried. A guest
 beaming up the host's Type68 in arena 1 and dropping it saw it carried and
 set down at the same point as the host.
 
+The same two kinds carry a person (Type9) this machine owns, through the
+full carrying attach rather than the null-callback projection. The peer's
+kind 13 runs the local Type-9 carrying attach with the peer's body as the
+relation owner, under the person's task owner; the attach draws no selector
+word. A carried person's tick lends a remote parent's position with no
+Sub-J check — membership applies to local parents only — so no row joins
+the peer's craft and the peer copy's own CD70 style `+08` stays held
+there, the effective attach state being established on the owner. The
+peer's kind 15 (`FUN_00418290`) runs `FUN_004180F0`: a Type93 at the
+point, on the terrain's bilinear height, whose selector draws a word; the
+carried release (`FUN_00416750`), its CE90/AC60 reselection and branch
+constructor, whose word count is branch/RNG-state dependent (four, for the
+loopback person at its captured RNG state, five words in all with the
+Type93's); and `FUN_00408F00`'s attach to the Type93,
+which sets it down as it does a player's own drop. Two labeled holds differ
+from retail: the peer copy's CD70 style `+08` is held (the projection is
+the relation row alone), and a kind 13 naming a parent unknown here holds
+the body (`Ok(false)`) until a later record, where retail's next
+`FUN_00412DA0` visit would release and reselect it synchronously.
+
 `FUN_00447280` (class 25's initializer) on a body other than the one the
 local controller holds (its `+68`) finds no controller (`FUN_00443AF0`
 returns its `0x8802` error),
@@ -520,21 +540,21 @@ Held, each with a logged stop ("Network: ... is held"):
   flyer's ("a hit on a peer's TypeN copy's hit hook (a separate port per
   class)"); a class-7 flyer's copy (types 14, 15, 39, 41, 87 and 108) takes
   the hit as a peer's craft does;
-- kinds 13 and 15 for an owned body of a type other than Type68 and Type74
-  ("a peer's kind 13 for an owned TypeN"), and a kind 13 naming a parent
-  unknown here (retail keeps the handle, and `FUN_00412DA0` then drops the
-  body where it is). Besides Type68 (class 0), the arenas' bodies a player
-  can beam (capability `0x1000`) are people: Type8 (classes 54 and 6),
-  Type9 (10, 45, 54, 6), Type86 (45, 10, 54, 6), Type90 (6, 54) and Type95
-  (6, 10, 45, 54). Each of those classes' first styles has an attach
-  callback at `+08` (`FUN_0040CD50` for 6 and 54, `FUN_0040CE70` for 10 and
-  45, styles `4C79C0`, `4C8788`, `4C7618` and `4C86B0`), the carried
-  transition, which `FUN_00416700` runs on the beamer's copy and, on kind
-  13, on the owner's body, whose kind 15 then runs the carried style's
-  release. The port runs those transitions only on this machine's bodies,
-  under their task owners and with this machine's player as the parent, so
-  the beamer stops first ("a peer's cargo attach callback") and a port
-  never sends kind 13 for a person;
+- kinds 13 and 15 for an owned body of a type other than Type68, Type74
+  and the carried Type9 person ("a peer's kind 13 for an owned TypeN"), and
+  a kind 13 naming a parent unknown here (retail keeps the handle, and
+  `FUN_00412DA0` then drops the body where it is). Besides Type68 (class 0),
+  Type74 and the carried Type9 person, the arenas' bodies a player can beam
+  (capability `0x1000`) are people: Type8 (classes 54 and 6), Type86 (45,
+  10, 54, 6), Type90 (6, 54) and Type95 (6, 10, 45, 54). Each of those
+  classes' first styles has an attach callback at `+08` (`FUN_0040CD50` for
+  6 and 54, `FUN_0040CE70` for 10 and 45, styles `4C79C0`, `4C8788`,
+  `4C7618` and `4C86B0`), the carried transition, which `FUN_00416700` runs
+  on the beamer's copy and, on kind 13, on the owner's body, whose kind 15
+  then runs the carried style's release. The port runs those transitions
+  only on this machine's bodies, under their task owners and with this
+  machine's player as the parent, so the beamer stops first ("a peer's cargo
+  attach callback") and a port never sends kind 13 for one of those;
 - kind 14, which retail never sends;
 - a peer's kind 6 for a static of a kind with a null program (a retail
   crash, above) or outside the kinds the port admits;

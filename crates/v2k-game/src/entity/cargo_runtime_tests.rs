@@ -288,10 +288,13 @@ fn live_cargo_attach_transfers_living_graphs_and_retires_terminal_people_and_wor
     }
 }
 
-/// `FUN_00416700` on a peer's body runs its style `+08`: only a type born
-/// with null-callback classes is attached; a person (classes 10, 6) stops.
+/// `FUN_00416700` on a peer's body runs its style `+08`. A type born with
+/// null-callback classes is attached through that route. A carried Type-9
+/// person (classes 10, 6) is attached too: the peer copy keeps the CD70
+/// style `+08`, so the projection is the relation row alone and the
+/// effective attach state lands on the owner when its kind 13 record arrives.
 #[test]
-fn a_peer_body_is_carried_only_when_its_attach_callback_is_null() {
+fn a_peer_body_is_carried_when_its_callback_is_null_or_it_is_a_person() {
     use v2k_formats::collision::BehaviorChoice;
     let choices = |classes: &[u32]| crate::entity_collision_state::EntityInitializerSpec {
         initializer_state_flags_raw: 0,
@@ -330,9 +333,11 @@ fn a_peer_body_is_carried_only_when_its_attach_callback_is_null() {
         callbacks.prepare_attach(&manager, crate_id, 1),
         Some(CargoAttachPlan::Other(id, 1)) if id == crate_id
     ));
-    assert!(callbacks.prepare_attach(&manager, person, 1).is_none());
-    assert_eq!(
-        callbacks.blocked,
-        vec![(person, "\"a peer's cargo attach callback\"".to_string())]
-    );
+    // The person is carried too, through the CD70 peer-copy route: the same
+    // `Other` projection, and no blocked row.
+    assert!(matches!(
+        callbacks.prepare_attach(&manager, person, 1),
+        Some(CargoAttachPlan::Other(id, 1)) if id == person
+    ));
+    assert!(callbacks.blocked.is_empty());
 }

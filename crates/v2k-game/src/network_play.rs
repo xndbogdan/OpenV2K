@@ -491,7 +491,13 @@ pub fn advance_network_world(
                     report_held("a peer's kind 13 naming a parent unknown here".into());
                     continue;
                 };
-                match em.attach_owned_body_to_peer(entity_id, parent, flags, scheduler) {
+                match em.attach_owned_body_to_peer(
+                    entity_id,
+                    parent,
+                    flags,
+                    &mut *scheduler,
+                    &mut *world_fx,
+                ) {
                     Ok(true) => verbose(format_args!(
                         "Network: owned body {entity_id} attached to peer body {parent}, flags {flags} (kind 13)"
                     )),
