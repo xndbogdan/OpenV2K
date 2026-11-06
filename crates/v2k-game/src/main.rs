@@ -10416,44 +10416,42 @@ fn run_game(
                                 }
                             }
                         }
-                        // FUN_00415040's filter, then FUN_00414E90's first
-                        // branch: a peer's body takes the damage on its
-                        // owner's machine (kind 9).
-                        if let Some(target) = em
-                            .network_entity(entity_impact.target_entity_id)
-                            .filter(|target| target.is_network_remote())
-                        {
-                            // The copy's type hit hook and FUN_00411030's
-                            // jolt are ported only for class-7 flyers (above).
-                            network_play::report_held(format!(
-                                "FUN_00411030's kind 10 on a peer's Type{} copy",
-                                target.entity_type
-                            ));
-                            let admitted = target
-                                .collision
-                                .state_flags_at_0x08
-                                .masked(v2k_game::entity_collision_state::CHECKED_DAMAGE_ENABLED_STATE_BIT)
-                                != RetailRuntimeValue::Known(0);
-                            if let (true, Some(delivery), RetailRuntimeValue::Known(profile)) =
-                                (admitted, entity_impact.damage_delivery_record(), target.collision.damage_profile)
-                            {
-                                let amount = delivery.packet.filtered_raw_with_ratio(Some(&profile), 0, 0);
-                                let modifier = target.collision.pair_callbacks.damage_modifier_address;
-                                if amount != 0 && modifier != RetailRuntimeValue::Known(None) {
-                                    // FUN_00415040 runs the body's +44 first.
-                                    network_play::report_held(format!(
-                                        "a peer's Type{} damage modifier {modifier:x?}",
-                                        target.entity_type
-                                    ));
-                                } else if amount != 0 {
-                                    world_fx.send_network_damage(
-                                        target.id,
-                                        amount as u16,
-                                        delivery.source_entity_type_raw as u16,
-                                    );
+                        // A particle hit on any other peer's copy: the
+                        // wrapper's stamp and cue, FUN_00411030's jolt (kind
+                        // 10) and FUN_00415040's checked damage (kind 9) go
+                        // to the owner, and the copy's type hit hook stays
+                        // held (a separate port per class).
+                        match v2k_game::peer_copy_impact::apply_peer_copy_particle_hit(
+                            em, cache, world_fx, retail_tick, entity_impact,
+                        ) {
+                            v2k_game::peer_copy_impact::PeerCopyImpactOutcome::NotApplicable => {}
+                            v2k_game::peer_copy_impact::PeerCopyImpactOutcome::Applied {
+                                filtered_damage_raw,
+                                held,
+                            } => {
+                                for reason in held {
+                                    network_play::report_held(reason);
                                 }
+                                log!(
+                                    "Particle class {} hit peer copy {}: {filtered_damage_raw} to its owner",
+                                    entity_impact.source_particle_class,
+                                    entity_impact.target_entity_id,
+                                );
+                                return ParticleCollisionCacheRefresh::Unchanged;
                             }
-                            return ParticleCollisionCacheRefresh::Unchanged;
+                            v2k_game::peer_copy_impact::PeerCopyImpactOutcome::Blocked {
+                                reason,
+                                held,
+                                ..
+                            } => {
+                                for reason in held {
+                                    network_play::report_held(reason);
+                                }
+                                network_play::report_held(format!(
+                                    "a hit on a peer's copy ({reason})"
+                                ));
+                                return ParticleCollisionCacheRefresh::Unchanged;
+                            }
                         }
                         let cleansing = v2k_game::cleansing_vehicle::impact::apply_cleansing_vehicle_particle_hit(
                             v2k_game::cleansing_vehicle::impact::CleansingVehicleImpactFrame {

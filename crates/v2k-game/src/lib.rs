@@ -234,6 +234,7 @@ pub mod overlay_51_backdrop;
 pub mod pad_layout;
 pub mod pad_vibration;
 pub mod particle_descriptors;
+pub mod peer_copy_impact;
 pub mod player;
 pub mod player_active_contact;
 pub mod player_contact_style;

@@ -463,6 +463,15 @@ words to its craft, and `FUN_00415040`'s damage follows as kind 9. Two
 machines on loopback agree word for word: each of the host's 23 Chain Gun
 hits on the guest's craft sent deltas the guest applied unchanged.
 
+A particle's hit on any other peer's copy takes the same wrapper and the
+jolt: the stamp and the cue as above, then `FUN_00411030` draws three more,
+adds the deltas to the copy (which moves on by them) and sends them to the
+owner (kind 10), and `FUN_00415040`'s damage follows as kind 9. The type's
+hit hook is the type record's `+0x14` slot; class 7's is `FUN_0040C690`, and
+every other class's is a separate port, so the port holds it, its draws
+skipped from the shared stream (below). A hit on a peer's type-9 copy jolted
+it by the very deltas the port sent its owner.
+
 A body this machine owns that a peer's craft carries is attached to that
 craft on the peer's kind 13 (`FUN_00418030`, flags as above); the actor's
 `FUN_00412DA0` then gives it the peer's craft's position each visit and
@@ -507,10 +516,10 @@ Held, each with a logged stop ("Network: ... is held"):
   constructor the port has not ported: hollow copies carry the zeroed
   Sub-M, so searches and remote damage skip them instead of stopping on
   unknown words ("a peer's TypeN copy (its constructor is not ported)");
-- a hit on a peer's copy other than a class-7 flyer's: it sends only its
-  damage, without its type's hit hook or the jolt ("FUN_00411030's kind 10
-  on a peer's TypeN copy"). A class-7 flyer's copy (types 14, 15, 39, 41, 87
-  and 108) takes the hit as a peer's craft does;
+- the type's hit hook on a hit to a peer's copy other than a class-7
+  flyer's ("a hit on a peer's TypeN copy's hit hook (a separate port per
+  class)"); a class-7 flyer's copy (types 14, 15, 39, 41, 87 and 108) takes
+  the hit as a peer's craft does;
 - kinds 13 and 15 for an owned body of a type other than Type68 and Type74
   ("a peer's kind 13 for an owned TypeN"), and a kind 13 naming a parent
   unknown here (retail keeps the handle, and `FUN_00412DA0` then drops the

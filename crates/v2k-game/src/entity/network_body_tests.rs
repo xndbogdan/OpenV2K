@@ -482,6 +482,102 @@ fn a_hit_on_a_peers_craft_jolts_its_copy_and_sends_kind_10_then_kind_9() {
     );
 }
 
+/// A particle's hit on a peer's copy other than a class-7 flyer runs the
+/// wrapper on the copy: the stamp, `FUN_00411030`'s jolt (three shared
+/// words) whose deltas go to the owner as kind 10, then `FUN_00415040`'s
+/// filtered damage as kind 9. The copy's type hit hook stays held (a
+/// separate port per class), so it draws no shared words of its own.
+#[v2k_test_support::retail_test]
+fn a_hit_on_a_peers_non_flyer_copy_jolts_and_sends_kind_10_then_kind_9() {
+    let mut fx = WorldFx::new();
+    let (session, mut manager) = client_arena_one(&mut fx);
+    let birth = peer_copy(&session, &mut manager, &mut fx, 9);
+    let PeerBirth::Native(id) = birth else {
+        panic!("{birth:?}");
+    };
+    let player = manager.player().unwrap().id;
+    // The copy's jolt-enable detail bit and checked-damage gate, as its
+    // type's full-detail state carries them.
+    {
+        let copy = manager.entity_mut(id).unwrap();
+        copy.collision
+            .state_flags_at_0x08
+            .overwrite(0x0600_0000, 0x0600_0000);
+        copy.collision.state_flags_at_0x08.overwrite(0x0800_0000, 0);
+        copy.collision.state_flags_at_0x08.overwrite(
+            crate::entity_collision_state::CHECKED_DAMAGE_ENABLED_STATE_BIT,
+            crate::entity_collision_state::CHECKED_DAMAGE_ENABLED_STATE_BIT,
+        );
+    }
+    fx.set_network_sends(true);
+    let expected = fx.fork_for_main_base_abort_transaction();
+    let impact = crate::world_fx::ParticleEntityImpact {
+        source_particle_class: 2,
+        impact_position_argument_va: 0,
+        target_entity_id: id,
+        position_world: [0x50 as f32, 6.0, 0x50 as f32],
+        velocity_raw: [0x4000, 0, 0],
+        damage: Some(crate::world_fx::BallisticDamageRequest {
+            packet: crate::damage::DamagePacket {
+                channels: [2, 0],
+                amounts_raw: [2000, 0],
+            },
+            source_entity_type_at_birth: Some(46),
+            source_owner_id: Some(player),
+        }),
+        no_packet: false,
+    };
+    let outcome = crate::peer_copy_impact::apply_peer_copy_particle_hit(
+        &mut manager,
+        &session.cache,
+        &mut fx,
+        7,
+        impact,
+    );
+    let crate::peer_copy_impact::PeerCopyImpactOutcome::Applied {
+        filtered_damage_raw,
+        held,
+    } = outcome
+    else {
+        panic!("{outcome:?}");
+    };
+    assert!(filtered_damage_raw > 0);
+    // The hook is held, so only the jolt's three words are drawn.
+    assert_eq!(fx.next_shared_retail_random_u16(), advanced(expected, 3));
+    let sends = fx.take_network_sends();
+    let [crate::world_fx::NetworkSend::Impact { entity_id, deltas }, crate::world_fx::NetworkSend::Damage {
+        entity_id: damaged,
+        amount,
+        attacker_type: 46,
+    }] = sends[..]
+    else {
+        panic!("{sends:?}");
+    };
+    assert_eq!((entity_id, damaged), (id, id));
+    assert_eq!(i32::from(amount), filtered_damage_raw);
+    let copy = manager.network_entity(id).unwrap();
+    // The copy moves by what the owner is sent.
+    assert_eq!(
+        copy.network_body().unwrap().velocity_raw,
+        [deltas[0], deltas[1], deltas[2]]
+    );
+    assert_eq!(copy.velocity_raw(), [deltas[0], deltas[1], deltas[2]]);
+    assert_eq!(
+        copy.rotation_heading_pitch_roll_raw(),
+        [deltas[3], deltas[4], deltas[5]]
+    );
+    assert!(deltas[0] > 0);
+    assert_eq!(
+        copy.collision.last_hit_presentation_tick_at_0x34,
+        RetailRuntimeValue::Known(7)
+    );
+    // The only held piece is the copy's type hit hook.
+    assert_eq!(
+        held,
+        vec!["a hit on a peer's Type9 copy's hit hook (a separate port per class)".to_string(),]
+    );
+}
+
 /// Arena 1 (world 13) as a client builds it: no authored bodies.
 fn client_arena_one(fx: &mut WorldFx) -> (crate::session::GameSession, EntityManager) {
     let mut session = crate::session::GameSession::init(&v2k_test_support::retail_dir()).unwrap();
