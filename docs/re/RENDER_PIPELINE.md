@@ -256,10 +256,15 @@ block `DAT_004FEED0`. A rejected model runs none of its callbacks: no
 emitter or Queen muzzle stamps, no Sub-M product marker, no fallback or tf3
 random words. `FUN_004138F0`'s tail after the walk (the health smoothing and
 the wreck draw `FUN_004136C0`) runs either way. The port applies the test to
-the gameplay and Intro2 actor bodies and the static objects whenever the
-frame shown is the authored one (`WorldProjection::root_lens`: a native
-chase view at the display block's logical size); Free and the widescreen
-adapter show more than that frame and keep drawing every scanned model.
+the gameplay and Intro2 actor bodies and the static objects in the authored
+frame whatever frame is shown (`WorldProjection::authored_words`). Inside it
+models walk retail and their callbacks write the game; outside it, a shown
+authored frame skips them, while a wider shown frame (Free, the widescreen
+adapter) still draws every scanned model but pixels-only, with every game
+write kept out (detached RNG copy and sub-H clone, no muzzle stamps, no
+Sub-M product writes). `display_independent_game` holds this: a New Game
+into Intro2 plays one process random stream in the software 4:3 frame and
+in the OpenGL widescreen.
 In the lab's New Game, Intro2's actor fallback callbacks (`0040A99B`,
 `0040A9BB`, `0040A9D4`) draw words on the same passes as the port's from
 pass 432 to 899 but one: 467 of 468 frames, against one without the test
@@ -1635,8 +1640,10 @@ continue even beyond the context far word, allowing the documented light-only
 case; clipped centres apply the behind, far, and extreme-screen rejection, with
 descriptor flag `0x02` retaining a hidden record. Sprite depth and expanded
 screen-rectangle overlap are tested later. The port evaluates this gate once
-per frame and shares its owned survivors between light accumulation and sprite
-submission. Stable visible Intro2 and Level 1 both use the captured far word
+per frame in the authored frame (its lens at its logical size) and shares
+its owned survivors between light accumulation and sprite submission; a
+wider shown frame reprojects the admitted records, and the `+1D` on-screen
+bits stay those of the authored frame. Stable visible Intro2 and Level 1 both use the captured far word
 `0x1800`; `0x1000` belongs only to the transient menu/pre-handoff context. Its
 lifecycle/clip policy is exact; the current centre projection still uses the
 port floating camera. The retained camera/model VIEW words do not by

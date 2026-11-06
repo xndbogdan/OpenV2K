@@ -13275,6 +13275,8 @@ fn draw_gameplay_world(
         native_viewport.is_some() && matches!(camera_mode, GameplayWorldCameraMode::RetailChase),
         renderer.viewport_size(),
     );
+    // The game's root test is always the authored frame's, whatever the frame shown.
+    let authored_lens = world_projection.map(WorldProjection::authored_words);
     renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(
         renderer,
@@ -13567,13 +13569,21 @@ fn draw_gameplay_world(
                 break 'draw_actor;
             }
             // 4138F0's tail (the wreck rings) runs whatever the root test says.
-            if let Some(viewport) = native_viewport {
-                let point = viewport.actor_origin_view(world_position_raw(entity.position));
-                if !world_model_root_in_view(cache, model_id, point, root_lens) {
-                    wreck_ids.push(entity_id);
-                    break 'draw_actor;
-                }
+            let walk = match native_viewport {
+                Some(viewport) => world_model_walk(
+                    cache,
+                    model_id,
+                    viewport.actor_origin_view(world_position_raw(entity.position)),
+                    authored_lens,
+                    root_lens,
+                ),
+                None => ModelWalk::Game,
+            };
+            if walk == ModelWalk::Skipped {
+                wreck_ids.push(entity_id);
+                break 'draw_actor;
             }
+            let pixels_only = walk == ModelWalk::PixelsOnly;
             let orientation = cache
                 .global_model(model_id)
                 .filter(|model| model_is_camera_facing_actor(model))
@@ -13629,6 +13639,9 @@ fn draw_gameplay_world(
             let mut drawn_muzzles = [None; 2];
             let mut stamp_origin =
                 |point: v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePoint| {
+                    if pixels_only {
+                        return;
+                    }
                     if let Some(muzzle) = drawn_muzzles.get_mut(usize::from(point.emitter_index)) {
                         *muzzle = Some(point.position_words);
                     }
@@ -13645,11 +13658,20 @@ fn draw_gameplay_world(
                     last_boundary: &mut emitter_boundary, current_node_owned: true, current_source_points_view: None,
                 })
             });
-            // The terminal fallback and tf3 vertices draw from one stream.
-            let process_random =
-                std::cell::RefCell::new(|| world_fx.next_shared_retail_random_u16());
+            // The terminal fallback and tf3 vertices draw from one stream; a
+            // pixels-only walk draws from a copy of it.
+            let mut detached_random = world_fx.shared_retail_random_state();
+            let process_random = std::cell::RefCell::new(|| {
+                if pixels_only {
+                    v2k_game::retail_rng::retail_random_u16(&mut detached_random)
+                } else {
+                    world_fx.next_shared_retail_random_u16()
+                }
+            });
             let next_random = || (&mut *process_random.borrow_mut())();
             let mut random_u16 = || next_random();
+            let mut detached_sub_h =
+                pixels_only.then(|| entity.sub_h_external_frame_runtime.clone());
             // Only absent joint/M/G components authenticate the terminal domain.
             // An authored G descriptor alone cannot prove its live callback owner.
             let fallback = type_record.filter(|record| record.subsection("I").is_none()
@@ -13717,7 +13739,9 @@ fn draw_gameplay_world(
             if let (Some(descriptor), Some(model), RetailRuntimeValue::Known(Some(runtime))) = (
                 descriptor.as_ref(),
                 cache.global_model(model_id),
-                &mut entity.sub_h_external_frame_runtime,
+                detached_sub_h
+                    .as_mut()
+                    .unwrap_or(&mut entity.sub_h_external_frame_runtime),
             ) {
                 tree = tree.with_sub_h_presentation(
                     v2k_game::sub_h_external_frame::SubHPresentation {
@@ -13759,7 +13783,7 @@ fn draw_gameplay_world(
             }
             drop(random_u16);
             drop(queen_stamp);
-            for (selector, position_raw) in queen_stamps {
+            for (selector, position_raw) in queen_stamps.into_iter().filter(|_| !pixels_only) {
                 v2k_game::queen::stamp_drawn_muzzle(&mut entity.queen, selector, position_raw);
             }
             if let Some(boundary) = queen_boundary {
@@ -13772,7 +13796,7 @@ fn draw_gameplay_world(
                 eprintln!("Entity {entity_id} draw muzzle stamp stopped: {reason:?}");
             }
             wreck_ids.push(entity_id);
-            if let Some(write) = sub_m_product_write {
+            if let Some(write) = sub_m_product_write.filter(|_| !pixels_only) {
                 em.apply_sub_m_product_marker_write(write);
             }
         }
@@ -13829,6 +13853,7 @@ fn draw_gameplay_world(
         GameplayWorldParticles::Live => prepare_particle_presentation(
             renderer,
             camera,
+            world_projection,
             world_fx,
             em,
             // D410's far word is the view's fog far plane (0x004D0560), the
@@ -13842,17 +13867,20 @@ fn draw_gameplay_world(
         ),
         GameplayWorldParticles::Frozen(frame) => {
             let (width, height) = renderer.viewport_size();
-            frame.reprojected([width, height], |particle| {
-                project_particle_center(
-                    camera,
-                    [width, height],
-                    camera_relative(camera, particle.position),
-                )
-            })
+            ParticlePresentation {
+                game: None,
+                shown: frame.reprojected([width, height], |particle| {
+                    project_particle_center(
+                        camera,
+                        [width, height],
+                        camera_relative(camera, particle.position),
+                    )
+                }),
+            }
         }
     };
     if let Some(terrain) = cache.terrain() {
-        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation);
+        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation.shown);
     }
     // 536A0 runs the world's weather (42DB70) before terrain and statics.
     if let Some(weather) = cache.level_desc().map(LevelWeather::from_level) {
@@ -13886,6 +13914,7 @@ fn draw_gameplay_world(
         retail_tick,
         world_fx,
         native_viewport,
+        authored_lens,
         root_lens,
     );
     model_submissions.flush(
@@ -13957,7 +13986,7 @@ fn draw_gameplay_world(
         world_fx.note_spray_presented(0);
         return GameplayWorldPresentation {
             shield: presented_shield,
-            particles: particle_presentation,
+            particles: particle_presentation.shown,
         };
     };
     let particle_fog = ParticleSpriteFogPlanes::gameplay(
@@ -13969,16 +13998,20 @@ fn draw_gameplay_world(
         cache,
         face_colors,
         camera,
-        &particle_presentation,
+        &particle_presentation.shown,
         particle_fog,
     );
     if live_particles {
-        world_fx.mark_particles_on_screen(&on_screen);
+        world_fx.mark_particles_on_screen(&particle_presentation.on_screen(
+            cache,
+            face_colors,
+            on_screen,
+        ));
     }
     world_fx.note_spray_presented(spray_presented);
     GameplayWorldPresentation {
         shield: presented_shield,
-        particles: particle_presentation,
+        particles: particle_presentation.shown,
     }
 }
 
@@ -14073,6 +14106,8 @@ fn render_opening_cinematic(
         native_viewport.is_some(),
         renderer.viewport_size(),
     );
+    // The game's root test is always the authored frame's, whatever the frame shown.
+    let authored_lens = world_projection.map(WorldProjection::authored_words);
     renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(
         renderer,
@@ -14158,13 +14193,21 @@ fn render_opening_cinematic(
                 )
             };
             let draw_position = camera_relative(camera, position);
-            if let Some(viewport) = native_viewport {
-                let point = viewport.actor_origin_view(world_position_raw(position));
-                if !world_model_root_in_view(cache, model_id, point, root_lens) {
-                    wreck_ids.push(entity_id);
-                    break 'draw_actor;
-                }
+            let walk = match native_viewport {
+                Some(viewport) => world_model_walk(
+                    cache,
+                    model_id,
+                    viewport.actor_origin_view(world_position_raw(position)),
+                    authored_lens,
+                    root_lens,
+                ),
+                None => ModelWalk::Game,
+            };
+            if walk == ModelWalk::Skipped {
+                wreck_ids.push(entity_id);
+                break 'draw_actor;
             }
+            let pixels_only = walk == ModelWalk::PixelsOnly;
             let orientation = cache
                 .global_model(model_id)
                 .filter(|model| model_is_camera_facing_actor(model))
@@ -14211,6 +14254,9 @@ fn render_opening_cinematic(
             let mut drawn_muzzles = [None; 2];
             let mut stamp_origin =
                 |point: v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePoint| {
+                    if pixels_only {
+                        return;
+                    }
                     if let Some(muzzle) = drawn_muzzles.get_mut(usize::from(point.emitter_index)) {
                         *muzzle = Some(point.position_words);
                     }
@@ -14227,11 +14273,20 @@ fn render_opening_cinematic(
                     last_boundary: &mut emitter_boundary, current_node_owned: true, current_source_points_view: None,
                 })
             });
-            // The terminal fallback and tf3 vertices draw from one stream.
-            let process_random =
-                std::cell::RefCell::new(|| world_fx.next_shared_retail_random_u16());
+            // The terminal fallback and tf3 vertices draw from one stream; a
+            // pixels-only walk draws from a copy of it.
+            let mut detached_random = world_fx.shared_retail_random_state();
+            let process_random = std::cell::RefCell::new(|| {
+                if pixels_only {
+                    v2k_game::retail_rng::retail_random_u16(&mut detached_random)
+                } else {
+                    world_fx.next_shared_retail_random_u16()
+                }
+            });
             let next_random = || (&mut *process_random.borrow_mut())();
             let mut random_u16 = || next_random();
+            let mut detached_sub_h =
+                pixels_only.then(|| entity.sub_h_external_frame_runtime.clone());
             // Only absent joint/M/G components authenticate the terminal domain.
             // An authored G descriptor alone cannot prove its live callback owner.
             let fallback = type_record.filter(|record| record.subsection("I").is_none()
@@ -14283,7 +14338,9 @@ fn render_opening_cinematic(
                 live_actor_pose,
                 descriptor.as_ref(),
                 cache.global_model(model_id),
-                &mut entity.sub_h_external_frame_runtime,
+                detached_sub_h
+                    .as_mut()
+                    .unwrap_or(&mut entity.sub_h_external_frame_runtime),
             ) {
                 tree = tree.with_sub_h_presentation(
                     v2k_game::sub_h_external_frame::SubHPresentation {
@@ -14336,7 +14393,7 @@ fn render_opening_cinematic(
                 eprintln!("Entity {entity_id} draw muzzle stamp stopped: {reason:?}");
             }
             wreck_ids.push(entity_id);
-            if let Some(write) = sub_m_product_write {
+            if let Some(write) = sub_m_product_write.filter(|_| !pixels_only) {
                 entities.apply_sub_m_product_marker_write(write);
             }
         }
@@ -14367,12 +14424,13 @@ fn render_opening_cinematic(
     let particle_presentation = prepare_particle_presentation(
         renderer,
         camera,
+        world_projection,
         world_fx,
         entities,
         INTRO2_PARTICLE_FAR_DEPTH_RAW,
     );
     if let Some(terrain) = cache.terrain() {
-        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation);
+        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation.shown);
     }
     if let Some(terrain) = cache.terrain() {
         let colors = cache
@@ -14399,6 +14457,7 @@ fn render_opening_cinematic(
         retail_tick,
         world_fx,
         native_viewport,
+        authored_lens,
         root_lens,
     );
     model_submissions.flush(
@@ -14449,10 +14508,14 @@ fn render_opening_cinematic(
         cache,
         face_colors,
         camera,
-        &particle_presentation,
+        &particle_presentation.shown,
         ParticleSpriteFogPlanes::INTRO2,
     );
-    world_fx.mark_particles_on_screen(&on_screen);
+    world_fx.mark_particles_on_screen(&particle_presentation.on_screen(
+        cache,
+        face_colors,
+        on_screen,
+    ));
     finish_opening_cinematic_frame(
         renderer,
         cache,
@@ -14551,16 +14614,52 @@ fn configure_opening_world_camera(camera: &mut Camera) {
     camera.left_handed = true;
 }
 
+fn project_particles(
+    camera: &Camera,
+    viewport: [u32; 2],
+) -> impl Fn(&v2k_game::world_fx::WorldParticle) -> v2k_render::ParticleCenterProjection + '_ {
+    move |particle| {
+        project_particle_center(camera, viewport, camera_relative(camera, particle.position))
+    }
+}
+
+/// The particle gate's records: those shown, and, when the frame shown is
+/// wider than the authored one, the game's own in the authored frame.
+struct ParticlePresentation {
+    game: Option<(Camera, ParticlePresentationFrame)>,
+    shown: ParticlePresentationFrame,
+}
+
+impl ParticlePresentation {
+    /// The live slots whose `+1D` bit `0x10` the frame sets: the authored
+    /// frame's, whatever the frame shown.
+    fn on_screen(
+        &self,
+        cache: &v2k_game::resource_cache::ResourceCache,
+        materials: &v2k_game::model_color::ModelMaterialCache,
+        shown: Vec<usize>,
+    ) -> Vec<usize> {
+        match &self.game {
+            Some((camera, frame)) => particle_on_screen_slots(cache, materials, camera, frame),
+            None => shown,
+        }
+    }
+}
+
 /// Run the destructive retail particle gate once for the presented world
 /// frame. The resulting owned list is shared by terrain lighting and the later
 /// sprite pass so neither phase can observe a different particle lifetime.
+/// The gate's deletions are the game's, so they run in the authored frame
+/// (its lens at its logical size) whatever the frame shown; a wider frame
+/// shown reprojects the admitted records.
 fn prepare_particle_presentation(
     renderer: &dyn v2k_render::Renderer,
     camera: &Camera,
+    world_projection: Option<WorldProjection>,
     world_fx: &mut WorldFx,
     entities: &EntityManager,
     far_depth_raw: i32,
-) -> ParticlePresentationFrame {
+) -> ParticlePresentation {
     static ATTACHED_MODEL_REPORTED: std::sync::atomic::AtomicBool =
         std::sync::atomic::AtomicBool::new(false);
     if world_fx
@@ -14570,10 +14669,35 @@ fn prepare_particle_presentation(
         eprintln!("Particle draw0x00442CB0: the model an attached class 83/84/86 particle shows on a detailed owner is not presented yet; the particle keeps its retail life and damage.");
     }
     let (width, height) = renderer.viewport_size();
-    let viewport = [width, height];
-    world_fx.prepare_presentation(viewport, far_depth_raw, |particle| {
-        project_particle_center(camera, viewport, camera_relative(camera, particle.position))
-    })
+    let shown_viewport = [width, height];
+    let authored = world_projection
+        .map(|projection| {
+            let words = projection.authored_words();
+            (projection, [words[2] as u32, words[3] as u32])
+        })
+        .filter(|(_, viewport)| *viewport != shown_viewport);
+    let Some((projection, viewport)) = authored else {
+        return ParticlePresentation {
+            game: None,
+            shown: world_fx.prepare_presentation(
+                shown_viewport,
+                far_depth_raw,
+                project_particles(camera, shown_viewport),
+            ),
+        };
+    };
+    let mut game_camera = Camera { ..*camera };
+    projection.apply_to(&mut game_camera, (viewport[0], viewport[1]));
+    let game = world_fx.prepare_presentation(
+        viewport,
+        far_depth_raw,
+        project_particles(&game_camera, viewport),
+    );
+    let shown = game.reprojected(shown_viewport, project_particles(camera, shown_viewport));
+    ParticlePresentation {
+        game: Some((game_camera, game)),
+        shown,
+    }
 }
 
 /// Clear/position 530D0/53570 before actor model callbacks and light reads.
@@ -14895,23 +15019,13 @@ fn draw_world_fx(
     for presented in presentation.particles() {
         let particle = &presented.particle;
         let frame = particle.current_frame();
-        let Some((width, height)) = materials.sprite_dimensions(cache, frame.sprite_id) else {
+        let Some((size, half_extent)) =
+            particle_sprite_extent(cache, materials, camera, viewport, presented)
+        else {
             continue;
         };
         let draw_scale_raw = prepared_particle_draw_scale_raw(presented);
-        let size = [
-            particle_sprite_world_dimension(width, draw_scale_raw, frame.scale_raw),
-            particle_sprite_world_dimension(height, draw_scale_raw, frame.scale_raw),
-        ];
         let descriptor = particle_descriptor(particle.source_class);
-        let clamp_half_extent = descriptor.is_some_and(|descriptor| descriptor.flags() & 0x08 != 0);
-        let half_extent = particle_sprite_screen_half_extent(
-            camera,
-            viewport,
-            size,
-            presented.projection.depth_raw,
-            clamp_half_extent,
-        );
         if !presentation.sprite_visible(presented, half_extent) {
             continue;
         }
@@ -14978,6 +15092,60 @@ fn draw_world_fx(
     }
     renderer.draw_world_sprites(&sprites);
     (spray_presented, on_screen)
+}
+
+/// A particle sprite's world size and its D410 screen half extent.
+fn particle_sprite_extent(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    materials: &v2k_game::model_color::ModelMaterialCache,
+    camera: &Camera,
+    viewport: [u32; 2],
+    presented: &v2k_game::world_fx::PreparedParticle,
+) -> Option<([f32; 2], [i32; 2])> {
+    let particle = &presented.particle;
+    let frame = particle.current_frame();
+    let (width, height) = materials.sprite_dimensions(cache, frame.sprite_id)?;
+    let draw_scale_raw = prepared_particle_draw_scale_raw(presented);
+    let size = [
+        particle_sprite_world_dimension(width, draw_scale_raw, frame.scale_raw),
+        particle_sprite_world_dimension(height, draw_scale_raw, frame.scale_raw),
+    ];
+    let clamp_half_extent = particle_descriptor(particle.source_class)
+        .is_some_and(|descriptor| descriptor.flags() & 0x08 != 0);
+    let half_extent = particle_sprite_screen_half_extent(
+        camera,
+        viewport,
+        size,
+        presented.projection.depth_raw,
+        clamp_half_extent,
+    );
+    Some((size, half_extent))
+}
+
+/// The live records D410 shows in the game's (authored) frame: the `+1D`
+/// bit `0x10` the weather and shell callbacks read next tick.
+fn particle_on_screen_slots(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    materials: &v2k_game::model_color::ModelMaterialCache,
+    camera: &Camera,
+    presentation: &ParticlePresentationFrame,
+) -> Vec<usize> {
+    presentation
+        .particles()
+        .filter(|presented| {
+            presented.draw_record_address
+                == v2k_game::world_fx::ParticleDrawRecordAddress::LivePoolSlot
+                && particle_sprite_extent(
+                    cache,
+                    materials,
+                    camera,
+                    presentation.viewport(),
+                    presented,
+                )
+                .is_some_and(|(_, half_extent)| presentation.sprite_visible(presented, half_extent))
+        })
+        .map(|presented| presented.slot)
+        .collect()
 }
 
 /// `FUN_0043DB60` for a drawn particle: the terrain height under it,
@@ -17539,6 +17707,7 @@ fn draw_static_terrain_objects(
     retail_tick: u32,
     world_fx: &mut WorldFx,
     native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    authored_lens: Option<[i32; 6]>,
     root_lens: Option<[i32; 6]>,
 ) {
     let (Some(terrain), Some(objects)) = (cache.terrain(), cache.terrain_objects()) else {
@@ -17590,17 +17759,19 @@ fn draw_static_terrain_objects(
                 viewport,
             )
         });
-        if native.as_ref().is_some_and(|(frame, _)| {
-            !world_model_root_in_view(
+        let walk = native.as_ref().map_or(ModelWalk::Game, |(frame, _)| {
+            world_model_walk(
                 cache,
                 usize::from(object.model_id),
                 frame.origin_view_raw,
+                authored_lens,
                 root_lens,
             )
-        }) {
+        });
+        if walk == ModelWalk::Skipped {
             continue;
         }
-        world_fx.with_process_random(|random| {
+        let draw = |random: &dyn Fn() -> u16| {
             ModelTreeRenderer::new_world(
                 renderer,
                 cache,
@@ -17630,7 +17801,18 @@ fn draw_static_terrain_objects(
                 None,
                 &vars,
             );
-        });
+        };
+        if walk == ModelWalk::PixelsOnly {
+            let detached = std::cell::Cell::new(world_fx.shared_retail_random_state());
+            draw(&|| {
+                let mut word = detached.get();
+                let sample = v2k_game::retail_rng::retail_random_u16(&mut word);
+                detached.set(word);
+                sample
+            });
+        } else {
+            world_fx.with_process_random(draw);
+        }
     }
 }
 
@@ -19145,6 +19327,37 @@ fn world_model_root_in_view(
         return true;
     };
     v2k_game::game_state::native_root_in_view(point, model.radius, lens)
+}
+
+/// How a world model with game-writing callbacks is walked this frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ModelWalk {
+    /// Retail walks it: its callbacks write the game.
+    Game,
+    /// Outside the authored frame but inside the wider frame shown (the
+    /// widescreen adapter): drawn, with every game write kept out, so the
+    /// game is the authored frame's whatever the display.
+    PixelsOnly,
+    /// Outside the authored frame, and the frame shown is the authored one.
+    Skipped,
+}
+
+/// `FUN_00465870`'s root test over the authored lens (the game's) and the
+/// lens of the frame shown (`None` when it is wider than the authored one).
+fn world_model_walk(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    model_id: usize,
+    point: [i32; 3],
+    authored_lens: Option<[i32; 6]>,
+    shown_lens: Option<[i32; 6]>,
+) -> ModelWalk {
+    if world_model_root_in_view(cache, model_id, point, authored_lens) {
+        ModelWalk::Game
+    } else if shown_lens.is_none() {
+        ModelWalk::PixelsOnly
+    } else {
+        ModelWalk::Skipped
+    }
 }
 
 /// Render the main menu as the original 3D prop ring: the seven props
