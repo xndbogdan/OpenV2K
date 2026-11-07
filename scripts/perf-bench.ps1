@@ -23,6 +23,8 @@ param(
     [string]$Exe = 'target/release/v2k-game.exe',
     [string]$Levels = '13,20,30,40',
     [string]$Renderers = 'opengl,software',
+    [int]$Width = 640,
+    [int]$Height = 480,
     [string]$Baseline
 )
 
@@ -52,7 +54,7 @@ if (-not $Baseline) {
                     -RedirectStandardError (Join-Path $out "err$name.txt") -ArgumentList @(
                     '--data-dir', "`"$data`"", '--settings', "`"$(Join-Path $out 'settings')`"",
                     '--start', "`"$state`"", '--hidden', '--renderer', $renderer,
-                    '--width', '640', '--height', '480', '--fixed-step-micros', '20000',
+                    '--width', "$Width", '--height', "$Height", '--fixed-step-micros', '20000',
                     '--frames', $Frames, '--snapshot', "`"$(Join-Path $out "end$name.png")`"",
                     '--event-log', "`"$(Join-Path $out "events$name.jsonl")`"")
                 $seconds = ((Get-Date) - $began).TotalSeconds

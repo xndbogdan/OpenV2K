@@ -976,10 +976,6 @@ address,status,note
 0x0044F0C0,implemented,particle wind and drag (common_mover/environment.rs apply_particle_wind_drag_raw)
 0x0043F290,implemented,class-31 trail update with wind (world_fx traversal)
 0x00437550,implemented,radar redraw after a sea-level change (ResourceCache::advance_radar_sea_refresh)
-# Manual per-function status overrides for scripts/progress.ps1.
-# status: implemented | approximated | documented | not-needed
-# not-needed removes a game function from the progress denominator.
-address,status,note
 0x00495940,implemented,window activity, one change a frame; the port applies the frame's last SDL focus change (docs/re/PLATFORM_RUNTIME.md)
 0x0044E6A0,implemented,deactivation: suspended flag, pause reason 4, the mode's deactivate hook (docs/re/MENU_SYSTEM.md#suspended-game)
 0x0044E6E0,implemented,activation: clears the flag and pause reason 4, runs the activate hook (docs/re/MENU_SYSTEM.md#suspended-game)

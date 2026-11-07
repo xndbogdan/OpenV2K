@@ -47,6 +47,36 @@ All end snapshots byte-identical. The ship binary is also smaller
 LTO 5–10%, x86-64-v2 2–4%): at 640x480 hidden the OpenGL runs sit on a flat
 ~4.5 ms a frame on every level but 40, so the frame is not all game code.
 
+## Higher resolutions (2026-11-07)
+
+`scripts/perf-bench.ps1` takes `-Width/-Height` (default 640x480).
+`ship-1080p` vs `pgo-1080p`, 3000 frames, median of three:
+
+| Level | Renderer | Ship (fps) | PGO (fps) |
+| --- | --- | --- | --- |
+| 13 | OpenGL | 221.3 | 222.6 (+0.6%) |
+| 20 | OpenGL | 222.2 | 223.5 (+0.6%) |
+| 30 | OpenGL | 222.3 | 223.5 (+0.5%) |
+| 40 | OpenGL | 186.8 | 210.0 (+12.4%) |
+| 13 | Software | 217.2 | 197.4 (-9.1%) |
+| 20 | Software | 187.9 | 173.4 (-7.7%) |
+| 30 | Software | 255.4 | 215.8 (-15.5%) |
+| 40 | Software | 199.8 | 185.0 (-7.4%) |
+
+All end snapshots byte-identical — including level 20 on both renderers.
+The OpenGL frame is resolution-insensitive (same ~4.5 ms floor at
+640x480, 1080p and 4K), so compiler gains carry over unchanged; the
+software raster's CPU cost grows only weakly with pixels (level 13:
+316 -> 217 fps for 6.75x pixels). The software path's PGO loss is
+consistent across resolutions — the 1080p training profile is
+GL/Vulkan-heavy (only three short software scenes), so PGO shapes the
+binary for those paths at the software raster's expense.
+
+At 3840x2160, OpenGL only (`ship-4k` vs `pgo-4k`): 218.3 -> 220.4 (+1.0%),
+218.3 -> 219.5 (+0.5%), 221.3 -> 222.7 (+0.6%), 177.4 -> 185.0 (+4.3%),
+all snapshots byte-identical. The GPU eats 4K for free; the frame stays
+CPU-bound.
+
 ## Profile-guided builds (blocked: level 20 diverges)
 
 `scripts/build-pgo.ps1` ports the Infestation PGO pipeline: an instrumented
@@ -60,7 +90,7 @@ is not ported yet.
 
 Stage 2 against stage 1 (the incremental value of PGO over ship): OpenGL
 +0.5/+0.5/+0.4/+3.1%, software -5.2/-5.4/-3.8/+1.5% — no reliable gain at
-this resolution. Worse, stage 2 diverges on level 20
+640x480. Level 20 excluded from that sentence: stage 2 diverges there
 (0.45% of pixels, central bbox, both renderers), while every other
 level/renderer is byte-identical across all three builds. Each build is
 self-consistent (three reps byte-identical), so this is systematic, not
@@ -72,9 +102,28 @@ divergence comes from the profile-guided step, not the toolchain. Bisected
 since: snapshots are identical at 500 and 1500 frames, and the actor logs
 match exactly for the first 2971 frames; at frame ~2972 five actors (types
 14, 16, 94, 94, 29) jump at once by up to tens of units while every other
-actor matches. So it is a discrete late event, not gradual drift — a shared
-impulse/threshold whose float inputs PGO's layout/inlining choices perturb
-below visibility, or a padding/uninitialized read the new layout changes
-(the run logs' `Particle class68 draw 0x00442240` stack-address warnings are
-the known suspects in this area). PGO is therefore **not** the release path:
-`release.ps1` ships plain `ship`. `build-pgo.ps1` stays as the reproducer.
+actor matches, with no spawn/dispose/weapon event and no health change
+around the jump. The same frame's shared-stream `rng` word also wobbles
+(`82bfe7cb` vs `d227ccec` at frame 2971) and then reads equal again at 2972 —
+a pure LCG advance cannot re-converge, so a conditional state assignment or
+draw-count branch is implicated, firing in the same frame as the actor
+jumps with the player state untouched throughout.
+
+Cleared suspects, all verified in code: the run logs' `Particle class68
+draw 0x00442240` stack-address warning comes from
+`prepared_particle_draw_scale_raw` (`main.rs:14996`) via
+`native_effective_draw_scale_raw` (`world_fx.rs:1701`), which is
+deterministic (owned pool-VA math or an owned captured address, else the
+explicit unadjusted-scale fallback) and presentation-only sprite scale — it
+cannot move actors. Float perturbation is also out as a direct mechanism:
+no FMA on x86-64-v2, no fast-math anywhere, so PGO cannot change a scalar
+FP result. Wall-clock timing is out too: a level-20 run under eight busy
+cores is byte-identical (snapshot and full event log) to the idle run.
+Standing hypothesis: an uninitialized/padding read whose garbage follows
+PGO's changed layout, feeding the shared-stream draw cadence or an
+impulse/branch condition at frame ~2971. PGO is therefore **not** the
+release path: `release.ps1` ships plain `ship`. `build-pgo.ps1` stays as
+the reproducer.
+
+The divergence is resolution-dependent: the same PGO binary is clean at
+1920x1080 and 3840x2160 (below), diverging only at 640x480.
