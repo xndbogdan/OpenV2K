@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
 | Marked not needed (excluded below) | 628 | |
-| **Referenced by port code** | **1,739** | **98.0%** |
+| **Referenced by port code** | **1,744** | **98.3%** |
 | Referenced by code or RE notes | 1,775 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -42,15 +42,15 @@ Where the code's references are thinnest:
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 9 | 3 | 112 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 6 | 0 | 136 |
 | [Controls](../re/CONTROLS.md) | 5 | 0 | 65 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 3 | 0 | 153 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
+| [Player craft](../re/PLAYER_CRAFT.md) | 3 | 0 | 139 |
 | [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |
 | [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 1 | 0 | 53 |
 | [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 1 | 0 | 141 |
 | [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 11 |
+| [Hud rendering](../re/HUD_RENDERING.md) | 1 | 1 | 44 |
 
 ## Omitted
 

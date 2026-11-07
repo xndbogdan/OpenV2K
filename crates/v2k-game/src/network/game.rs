@@ -81,7 +81,9 @@ pub enum NetworkEvent {
         x_raw: i16,
         z_raw: i16,
     },
-    /// Kind 14, which retail never sends.
+    /// Kind 14, which retail never sends (`FUN_004180A0` would release the
+    /// named parent's hold through `FUN_00416750`; its pack `FUN_004182F0`
+    /// has no caller but the message table).
     Held { kind: u8 },
     /// `FUN_00438CB0` could not tell whether a body rests: its state word's
     /// bits `0x08000080` are unknown, so it resends on the moving period.

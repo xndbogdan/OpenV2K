@@ -568,7 +568,9 @@ impl PadBindings {
     }
 
     /// Chase-camera parameters from the right stick. The console's in-play
-    /// set binds it; the PC never feeds these parameters.
+    /// set binds it; the PC never feeds these parameters. Retail attaches
+    /// each axis binding's value record through `FUN_00471510` (into the
+    /// `004FB830` list); the port carries the bound values directly.
     pub fn camera_parameters(&self, sample: Option<ControllerSample>) -> ChaseCameraParameters {
         match (self.layout, sample) {
             (ControllerLayout::PcOriginal, _)

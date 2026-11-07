@@ -26,11 +26,11 @@
 <rect x="333.1" y="716.6" width="231.1" height="2.4" fill="#8c959f"/>
 <text x="335.1" y="411.9" fill="#1f2328">Render pipeline 100.0%</text>
 </g>
-<g><title>Player craft (PLAYER_CRAFT.md): 136 code, 6 notes, 7 omitted</title>
-<rect x="566.3" y="31" width="219.1" height="219.6" fill="#2da44e"/>
-<rect x="566.3" y="250.6" width="83" height="3.2" fill="#d4a72c"/>
-<rect x="649.2" y="250.6" width="136.1" height="3.2" fill="#8c959f"/>
-<text x="568.3" y="43" fill="#1f2328">Player craft 95.8%</text>
+<g><title>Player craft (PLAYER_CRAFT.md): 139 code, 3 notes, 7 omitted</title>
+<rect x="566.3" y="31" width="219.1" height="220" fill="#2da44e"/>
+<rect x="566.3" y="251" width="67.3" height="2.8" fill="#d4a72c"/>
+<rect x="633.5" y="251" width="151.8" height="2.8" fill="#8c959f"/>
+<text x="568.3" y="43" fill="#1f2328">Player craft 97.9%</text>
 </g>
 <g><title>Format documentation (FORMAT_DOCUMENTATION.md): 141 code, 1 notes, 40 omitted</title>
 <rect x="787.4" y="31" width="217" height="189.7" fill="#2da44e"/>
@@ -50,11 +50,11 @@
 <rect x="710.9" y="496.4" width="20" height="16.6" fill="#8c959f"/>
 <text x="568.3" y="267.8" fill="#1f2328">Actor task programs 92.6%</text>
 </g>
-<g><title>Multiplayer (MULTIPLAYER.md): 153 code, 3 notes, 25 omitted</title>
-<rect x="566.3" y="515" width="164.6" height="185.5" fill="#2da44e"/>
-<rect x="566.3" y="700.5" width="11.9" height="18.5" fill="#d4a72c"/>
-<rect x="578.2" y="700.5" width="152.7" height="18.5" fill="#8c959f"/>
-<text x="568.3" y="527" fill="#1f2328">Multiplayer 98.1%</text>
+<g><title>Multiplayer (MULTIPLAYER.md): 155 code, 1 notes, 25 omitted</title>
+<rect x="566.3" y="515" width="164.6" height="186.4" fill="#2da44e"/>
+<rect x="566.3" y="701.4" width="3.7" height="17.6" fill="#d4a72c"/>
+<rect x="570" y="701.4" width="160.9" height="17.6" fill="#8c959f"/>
+<text x="568.3" y="527" fill="#1f2328">Multiplayer 99.4%</text>
 </g>
 <g><title>Game mechanics (GAME_MECHANICS.md): 48 code</title>
 <rect x="732.8" y="255.8" width="145.9" height="178.5" fill="#2da44e"/>
