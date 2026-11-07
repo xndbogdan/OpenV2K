@@ -458,6 +458,8 @@ impl EntityManager {
     }
 
     /// `FUN_00417680`'s writes to a peer's body from one sync record.
+    /// A record newly setting dying bit `0x4000` runs `FUN_00417D30` to reset
+    /// its Sub-H component.
     /// `parent` is the parent's local id when the record names one. Returns
     /// what its relation tail asks of the network layer.
     pub fn apply_network_sync(

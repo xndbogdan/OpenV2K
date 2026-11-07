@@ -209,7 +209,7 @@ when the buffer is too small.
 |---|---|
 | `FUN_0040AF10` / `FUN_0040C5E0` | clear task slots 1 and 2, then install through `FUN_00403650` or `FUN_004051B0` |
 | `FUN_0040B1B0` | clears task slots 2 and 1, then calls `FUN_004076E0` |
-| `FUN_0040B780` / `FUN_00426170` | clear task slot 2, install slot 1 through `FUN_00402190` or `FUN_00402050` and, when that succeeds, run `FUN_00402B10(entity, 0, 500)` |
+| `FUN_0040B780` / `FUN_00426170` | clear task slot 2, install slot 1 through `FUN_00402190` or `FUN_00402050` and, when that succeeds, run `FUN_00402B10(entity, 0, 500)`; `FUN_00426170` sits only in unreferenced style block `0x004C9628` (zero code xrefs, block never loaded) and is excluded as dead in `status.csv` |
 | `FUN_004158C0` | scales a triple of signed words by a Q12 factor |
 | `FUN_00417E70` | copies a 16-byte record into a caller's buffer (returns 16, or -1 when the buffer is too small) |
 | `FUN_004183D0` | pops every entry of a callback stack (`FUN_00418590`), then frees its storage and the stack |

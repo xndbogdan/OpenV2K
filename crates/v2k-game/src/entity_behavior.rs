@@ -838,6 +838,8 @@ pub static REACHABLE_BEHAVIOR_PROGRAMS: &[BehaviorProgram] = &[
         initializer_argument_raw: RetailRuntimeValue::Known(0),
         ..behavior!(10, "Run Away", 0x004C88E0, 0x004C7618, 0, 0, 0, 0x0040B6C0)
     },
+    // Class 13 Flocking initial style 0x004C7DF8 carries initializer FUN_0040AEA0,
+    // which installs a 5,000-ms task through FUN_00402780 with tick FUN_004027A0.
     behavior!(13, "Flocking", 0x004C88B8, 0x004C7DF8, 0, 0, 0, 0x0040B640),
     behavior!(
         15,

@@ -64,7 +64,9 @@ fn walk(words: &[u16]) -> (Vec<usize>, BTreeSet<usize>, u64, u64) {
                 truncated += 1;
                 continue;
             }
-            let next = pc.saturating_add(1).saturating_add((words[pc + 3] / 2) as usize);
+            let next = pc
+                .saturating_add(1)
+                .saturating_add((words[pc + 3] / 2) as usize);
             if next <= words.len() {
                 pending.push(next);
             } else {
@@ -150,9 +152,7 @@ fn every_restore_follows_a_reset() {
                 restores += 1;
                 // 0x0F and 0x10 are both length-1 commands, so a 0x0F word
                 // immediately before is the preceding command itself.
-                let ok = pc > 0
-                    && entry.cmd_words[pc - 1] == 0x0F
-                    && starts.contains(&(pc - 1));
+                let ok = pc > 0 && entry.cmd_words[pc - 1] == 0x0F && starts.contains(&(pc - 1));
                 if !ok {
                     violations.push(format!(
                         "entry {i} ({}) 0x10 at word {pc} not preceded by 0x0F",

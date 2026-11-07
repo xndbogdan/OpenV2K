@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
-| Marked not needed (excluded below) | 636 | |
-| **Referenced by port code** | **1,746** | **98.8%** |
-| Referenced by code or RE notes | 1,767 | 100.0% |
+| Marked not needed (excluded below) | 642 | |
+| **Referenced by port code** | **1,761** | **100.0%** |
+| Referenced by code or RE notes | 1,761 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -22,7 +22,7 @@ Manual statuses from [`status.csv`](status.csv):
 | implemented | 499 |
 | approximated | 9 |
 | documented | 20 |
-| not-needed | 636 |
+| not-needed | 642 |
 
 0 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,16 +41,7 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Controls](../re/CONTROLS.md) | 5 | 0 | 65 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 3 | 0 | 115 |
-| [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 3 | 0 | 139 |
-| [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |
-| [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 11 |
-| [Hud rendering](../re/HUD_RENDERING.md) | 1 | 1 | 44 |
-| [Loading transitions](../re/LOADING_TRANSITIONS.md) | 1 | 1 | 58 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 1 | 0 | 155 |
-| [Save and settings](../re/SAVE_AND_SETTINGS.md) | 1 | 1 | 6 |
+
 
 ## Omitted
 
@@ -92,11 +83,17 @@ denominator, each with its reason: the never-installed
 | dead: weight-rule evaluator with no selector; rules 3/4/14 never appear in any authored choice (scan of all 130 global entity types) and the port rejects unknown rule ids; whole-image scan finds zero E8/E9 code xrefs, one DWORD ref in the rule-evaluator table (docs/re/ACTOR_RUNTIME.md) | 2 |
 | replaced: the port's SDL platform (the debug log file, debugger output and fatal-error exit; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 2 |
 | dead: behavior class 57 (Fire Monster) has no selector; whole-image scan finds zero E8/E9 code xrefs and one DWORD ref at the class-57 initial style initializer slot (docs/re/ACTOR_TASK_PROGRAMS.md) | 1 |
+| dead: debug body selector setter called only by unreferenced in-play debug action FUN_00456590 (docs/re/CONTROLS.md) | 1 |
+| dead: debug craft-type getter called only by unreferenced in-play debug action FUN_004564E0 (docs/re/CONTROLS.md) | 1 |
+| dead: debug craft-type switcher called only by unreferenced in-play debug action FUN_004564E0 (docs/re/CONTROLS.md) | 1 |
+| dead: in-play debug action (step body selector); zero code xrefs and single data ref at 0x004D06F0 is never bound to any key in table 0x004C26D0 or anywhere in retail (docs/re/CONTROLS.md) | 1 |
+| dead: in-play debug action (step craft type); zero code xrefs and single data ref at 0x004D06E8 is never bound to any key in table 0x004C26D0 or anywhere in retail (docs/re/CONTROLS.md) | 1 |
 | dead: its body runs only when the load-progress callback DAT_004F7310 is set, which nothing writes (FUN_00433BD0 and FUN_0044AB20 call it to no effect) | 1 |
 | dead: only stored as the first word of the FUN_00433130 render request at 0x004DB250, which no code reads or calls | 1 |
 | dead: projector-table slot +0xBC of 0x004D4A78, which no instruction calls (docs/re/FORMAT_DOCUMENTATION.md) | 1 |
 | dead: projector-table slot +0xC8 of 0x004D4A78, which no instruction calls (docs/re/FORMAT_DOCUMENTATION.md) | 1 |
 | dead: stored in software fill slot +0x101C, which no thunk or call site calls (docs/re/SOFTWARE_RASTER.md) | 1 |
+| dead: task installer in unreferenced style block 0x004C9628; zero E8/E9 code xrefs and single data ref at 0x004C9628 is never pointed to by any table or code (docs/re/SMALL_FUNCTIONS.md) | 1 |
 | dead: the module's default callback for the full-frame request (004DB250), which FUN_00433130 copies but nothing ever calls | 1 |
 | dead: the undefined model opcode trap, an endless loop; no shipped model stream holds an undefined opcode (docs/re/FORMAT_DOCUMENTATION.md) | 1 |
 | no effect: its only caller FUN_0042B870 passes the word it reads to FUN_0040F350, which ignores that argument (docs/re/SMALL_FUNCTIONS.md) | 1 |

@@ -2846,7 +2846,8 @@ fn run_game(
     let mut static_damage = StaticDamageScheduler::new();
     let mut return_to_frontend_pending = false;
     let mut frontend_entry_card: Option<FrontendEntryCard> = None;
-    // FUN_0042B230 has not yet built the frontend's two actors.
+    // FUN_0042B230 cleans up prior craft bodies through FUN_004382E0 / FUN_0040D750
+    // and has not yet built the frontend's two actors.
     let mut frontend_first_entry = true;
     let mut frontend_card_carry_micros = 0u32;
     let mut static_contact_error_reported = false;
@@ -6111,7 +6112,7 @@ fn run_game(
                 if let Some(shell) = card_klaus.as_deref_mut() {
                     shell.visit_after_load(card_callback_micros);
                 }
-                // The callback's FUN_0042AF00 then draws the card: Klaus over
+                // The worker defaults (FUN_0042F4F0) and callback's FUN_0042AF00/FUN_0042B1E0 then draw and present the card: Klaus over
                 // black and the blinking "Loading". A world load's record
                 // (004F71B0) leaves the logo flag (+0C) zero.
                 let card_tick = card_clock.advance(u64::from(card_callback_micros));
@@ -8711,7 +8712,7 @@ fn run_game(
                 // FUN_0044FFA0's controller check ends the previous frame: a
                 // possessed body gone without its death (which would have
                 // released it) leaves the controller bodiless, and
-                // FUN_00450980 kills the player as the craft's own end does.
+                // FUN_00450980 kills the player as the craft's own end does (updating bit 4 via FUN_0042EEE0).
                 if specialized_actor_tasks.possession.is_some_and(|custody| {
                     !em.iter_all()
                         .any(|entity| entity.id == custody.state.body && entity.active)

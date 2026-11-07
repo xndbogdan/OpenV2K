@@ -2883,7 +2883,8 @@ struct PlayerSubJAppendPlan {
     outer_policy_raw: u32,
 }
 
-/// Section-13 globals initialized by `FUN_0044EB40` and consumed by common
+/// Section-13 globals initialized by defaults `FUN_0044EAE0` and `FUN_0044EB40`,
+/// and consumed by common
 /// environment callback `FUN_0044EC60`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct CommonEnvironmentPhysics {
