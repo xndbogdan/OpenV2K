@@ -28,10 +28,10 @@ between port machines over the port's own transport; its held parts are in
 <!-- progress:start -->
 [![RE coverage](https://img.shields.io/badge/RE%20coverage-97.2%25%20code%20%2F%20100.0%25%20notes-orange)](docs/progress/README.md)
 
-Of the **1,771** game functions in retail `V2000.EXE` the port
+Of the **1,775** game functions in retail `V2000.EXE` the port
 covers ([628 omitted](docs/progress/README.md#omitted)),
-**1,721 (97.2%)** are referenced by the port's code and
-**1,771 (100.0%)** by its code or RE notes.
+**1,725 (97.2%)** are referenced by the port's code and
+**1,775 (100.0%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 
 [![Map of the retail functions by RE note and state](docs/progress/treemap.svg)](docs/progress/README.md#map)
