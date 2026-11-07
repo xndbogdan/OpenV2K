@@ -5,6 +5,45 @@ machine (Windows, NVIDIA, 640x480 hidden, 20 ms fixed step, 3000 frames,
 median of three; `scripts/perf-bench.ps1`). Raw runs under
 `.tmp/perf/<tag>/` (ignored); `summary.json` holds each tag's medians.
 
+## Sampling profiler (2026-11-07)
+
+`scripts/perf-sample.py` suspends each busy thread ~60 times a second and
+walks its RBP chain (no administrator rights needed for our own child);
+`scripts/perf-bucket.py` attributes PCs to functions via `llvm-nm`
+(MinGW addr2line 2.39 cannot parse rustc's DWARF) and prints shares.
+Needs a profiling build with the same codegen as the measured binary plus
+line tables and frame pointers, in its own target dir so the measured
+binaries are untouched:
+
+```
+$env:CARGO_TARGET_DIR='target/prof'
+$env:CARGO_PROFILE_SHIP_DEBUG='line-tables-only'
+$env:RUSTFLAGS='-C link-arg=-Wl,--stack,8388608 -C target-cpu=x86-64-v2 -C force-frame-pointers=yes'
+cargo build --profile ship -p v2k-game
+```
+
+then e.g. `python3 scripts/perf-sample.py --out .tmp/perf/prof-soft30
+--warmup 8 --duration 60 --rate 100 -- target/prof/ship/v2k-game.exe
+...` (game flags after `--`) and `python3 scripts/perf-bucket.py --dir
+.tmp/perf/prof-soft30 --ms 2.7`. Caveats: the walker records every frame
+it can validate and drops the rest (frameless leaves, misaligned links),
+so leaf-heavy entries are the most trustworthy; shares turn into ms at
+the unsampled frame time (`perf-bench` median).
+
+First profile (level 30, software raster, 4039 samples, 2.7 ms a frame):
+
+| Function area | Share | ms | Note |
+| --- | --- | --- | --- |
+| `ntdll.dll` (syscalls) | 19.8% | 0.54 | needs a breakdown (present? waits?) |
+| `scan::fill_chains` | 18.7% | 0.50 | edge chains, the top game hotspot |
+| `Blit_RGB565_32` + `SDL_MapSurface` | 8.2% | 0.22 | present-path blit |
+| material/texture creation (`materials_for_palette`, `create_texture_nearest`, `indexed_from_rgba`, `raw_from_rgba`) | ~12% | ~0.33 | per-frame creation, with `hash_one`/SipHash ~3% |
+| `draw_world_fx`, HUD, contacts, tick | ~5% | ~0.14 | rest of game code |
+
+The per-model-draw Vec/HashMap trim (below) came out of the same code
+reading; the profile confirms the software rasterizer and its material
+handling dominate the CPU frame.
+
 ## Method
 
 `scripts/perf-bench.ps1 -Tag <name>` copies the executable aside, then runs
