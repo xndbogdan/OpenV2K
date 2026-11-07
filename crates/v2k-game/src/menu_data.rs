@@ -68,6 +68,11 @@ pub const PAUSE_FULL: u32 = 0x4D1190;
 /// The suspended screen: one "Suspended" line (global string 122), opened
 /// by the suspended mode's entry `FUN_00451390` while the window is inactive
 /// (or, from the in-play step `FUN_00453AD0`, while no input device is open).
+/// The device-absent poll counts input states whose value record reads zero
+/// (`FUN_00428C10`, and `FUN_00428C60` over slots 1, 2 and 8 for the menu's
+/// visibility mask). The PC's keyboard holds an input state in every mode
+/// with keys and nothing binds its record, so the count never reaches zero
+/// on PC; the port opens this screen on window focus loss only.
 /// Popping it runs its switch-away callback `FUN_00450E40`, the resume
 /// `FUN_004512E0`.
 pub const SUSPENDED: u32 = 0x4C5008;
