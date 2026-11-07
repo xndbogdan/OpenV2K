@@ -1461,6 +1461,15 @@ fn interpret(
                 out.painter_program.push(ModelPainterOp::EndGroup);
                 pc += 1;
             }
+            // Mount publish (FUN_00467010): retail copies the composed basis
+            // (ctx+0xC4, the target of every mount op) to the current mount
+            // (ctx+0x18) and its global copy at 0x004FEEA0, and clears +0x3C.
+            // Every shipped 0x10 immediately follows an 0x0F mount reset
+            // (guarded by model_mount_policy::every_restore_follows_a_reset
+            // over the full corpus), so the composed basis is Q1.31 identity
+            // here and the publish is a fixed point: skipping it keeps the
+            // exact mount state. The port holds no global copy (the collision
+            // projector block at that address is set up by its own walk).
             0x10 => pc += 1,
             // Mount reset (FUN_00466fc0): restore the current mount frame to
             // Q1.31 identity. The Level-1 `lifter` uses this between its

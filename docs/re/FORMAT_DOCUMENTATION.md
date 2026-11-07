@@ -698,23 +698,27 @@ Face, edge and billboard opcodes have a near and a fog constructor each
 ([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); the 186
 undefined opcodes reach `FUN_00466150`, an endless loop.
 
-**Opcode-`0x10` corpus (2026-11-07 scan).** `0x10` is live: 80 commands in
-20 shipped models (5,366 Section-8 streams across all Overlay tiers plus
-`PRELOAD.DAT`, walked with the canonical dispatch including both sides of
-every conditional branch; zero unknown-opcode or truncation stops).
+**Opcode-`0x10` corpus (2026-11-07 scan, now a guard test).** `0x10` is live:
+80 commands in 20 shipped models (5,366 Section-8 streams across all Overlay
+tiers plus `PRELOAD.DAT`, walked with the canonical dispatch including both
+sides of every conditional branch; zero unknown-opcode or truncation stops).
 Every use is the pair `0x0F, 0x10` — mount reset to identity, then restore
 of the node's saved basis: `player3`, `man2`, `lev1sci2`, `rockman2`,
 `lev2sci2`, `caveman2`, `lev3sci2`, `eskimo2`, `ressci2`, `vulc2`, `diver2`
 at stream offset 1, and `grock`/`grock2`/`grock3`, `boulder`/`boulder2`/
 `boulder3`, `lavarock`/`lavarock2`/`lavarock3` mid-stream after an
-`0xFFFF`-terminated slot list. The port's `v2k-formats::models` skips
-`0x10` (`pc += 1`) without restoring anything, so `FUN_00467010` stays
-open: a correct port needs the `00467010` body, which routine writes the
-node's saved basis, and who reads the `0x004FEEA0` global copy (the same
-address is the projector scratch block the collision cylinder/box queries
-keep across `FUN_0046AEF0` walks). If the saved basis provably equals the
-current mount at every shipped `0x0F, 0x10` site, the skip is exact and
-the handler can be cited as such instead.
+`0xFFFF`-terminated slot list. Read from retail (`FUN_00467010`):
+the `0x10` handler copies the composed basis (`ctx+0xC4`, the target of
+every mount op: `0x0F` reset, `0x1C` rotation, `0x3C`/`0x5C` composition)
+to the current mount (`ctx+0x18`) and its global copy at `0x004FEEA0`,
+and clears `+0x3C`. The port's `v2k-formats::models` skips `0x10`, which is
+exact on shipped data precisely because every `0x10` immediately follows
+an `0x0F`: the composed basis is Q1.31 identity there, so the publish is a
+fixed point. `model_mount_policy::every_restore_follows_a_reset` asserts
+that precondition (and a live `0x10` count) over the full corpus; if any
+stream ever uses `0x10` elsewhere, implement the real restore. The port
+holds no global copy (the collision projector block at that address is set
+up by its own walk).
 
 **Variable ops** `[dst][a][b]` decode both operands with `FUN_00470840` and
 store a 16-bit result in register `dst`:

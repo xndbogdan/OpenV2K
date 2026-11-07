@@ -32,11 +32,10 @@
 <rect x="633.1" y="252.5" width="150.8" height="2.9" fill="#8c959f"/>
 <text x="568.3" y="43" fill="#1f2328">Player craft 97.9%</text>
 </g>
-<g><title>Format documentation (FORMAT_DOCUMENTATION.md): 141 code, 1 notes, 40 omitted</title>
-<rect x="785.9" y="31" width="215.5" height="191" fill="#2da44e"/>
-<rect x="785.9" y="222" width="1.9" height="33.3" fill="#d4a72c"/>
-<rect x="787.7" y="222" width="213.6" height="33.3" fill="#8c959f"/>
-<text x="787.9" y="43" fill="#1f2328">Format documentation 99.3%</text>
+<g><title>Format documentation (FORMAT_DOCUMENTATION.md): 142 code, 40 omitted</title>
+<rect x="785.9" y="31" width="215.5" height="191.3" fill="#2da44e"/>
+<rect x="785.9" y="222.3" width="215.5" height="33" fill="#8c959f"/>
+<text x="787.9" y="43" fill="#1f2328">Format documentation 100.0%</text>
 </g>
 <g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 113 code, 4 notes, 9 omitted</title>
 <rect x="1003.3" y="31" width="195.7" height="210.1" fill="#2da44e"/>
