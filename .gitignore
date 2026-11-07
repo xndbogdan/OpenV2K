@@ -5,6 +5,10 @@
 # Scratch output (visual smoke captures, logs)
 /.tmp/
 
+# Python bytecode caches from the repo's helper scripts.
+__pycache__/
+*.pyc
+
 # Private original game data: only the setup notes are tracked.
 /retail/*
 !/retail/README.md
