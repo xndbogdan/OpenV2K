@@ -1238,6 +1238,21 @@ The proven evaluator ids are:
 | 12 | Base Nearby | `FUN_004165B0` |
 | 13 | Job Nearby | `FUN_004165C0` |
 
+Rule ids 3, 4 and 14 have no evaluator use in shipped data: a scan of all
+130 global entity types (auxiliary OVL 3,
+`EntityTypeRuntimeMetadata::from_section12`; every weighted
+`behavior_choices` entry) finds only rule ids 1, 2 and 5--13, and the port
+rejects unknown ids (`BehaviorWeightRule::from_raw`). `FUN_00416430`
+(rule 4: 1 when the handle does not resolve or `+08` bit `0x2000` is
+clear) and `FUN_00416530` (rule 14: 1 when `+08` bit `0x4000000` is
+clear) are therefore excluded from the port's coverage denominator
+(`status.csv`): a whole-image scan finds zero E8/E9 code xrefs to either,
+with one DWORD reference each in the rule-evaluator table (`0x4BE488`,
+`0x4BE4D8`). ("Rule 3" in type notes means the `behavior_rule_ref`
+authentication tag, not a weight rule.) If future evidence shows a rule
+3/4/14 choice, remove those exclusions and port the two one-line
+predicates.
+
 The nearby rules 6, 7, 10, 11 and 12 all call `FUN_004164D0` with their
 capability mask (1, 8, `0xC00`, `0x100`, `0x20`). It searches the live list
 through `FUN_00422C10` within the strict limit of the actor's live axis
