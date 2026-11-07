@@ -387,6 +387,11 @@ fn advance_progressive(
         base.required_scientists = 0;
         base.current_scientists = 0;
         publish_dormant(entity)?;
+        // Retail's generic-death suffix for the lost Main Base reaches
+        // FUN_00456DB0 -> FUN_0042F160, which only raises the pending
+        // campaign-selector flag (controller +0x1F8). The port issues the
+        // terminal abort origin here; the campaign selector consumes its
+        // presence as the Main Base request.
         tick.terminal_abort_origin = Some(MainBaseTerminalAbortOrigin::issue(
             entity.main_base_runtime.unwrap().allocation,
         ));

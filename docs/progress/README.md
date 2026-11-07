@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
 | Marked not needed (excluded below) | 634 | |
-| **Referenced by port code** | **1,745** | **98.6%** |
+| **Referenced by port code** | **1,746** | **98.7%** |
 | Referenced by code or RE notes | 1,769 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -42,15 +42,15 @@ Where the code's references are thinnest:
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
 | [Controls](../re/CONTROLS.md) | 5 | 0 | 65 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 4 | 3 | 113 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 4 | 3 | 114 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 3 | 0 | 139 |
 | [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |
-| [Factory system](../re/FACTORY_SYSTEM.md) | 1 | 0 | 53 |
 | [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 11 |
 | [Hud rendering](../re/HUD_RENDERING.md) | 1 | 1 | 44 |
 | [Loading transitions](../re/LOADING_TRANSITIONS.md) | 1 | 1 | 58 |
 | [Multiplayer](../re/MULTIPLAYER.md) | 1 | 0 | 155 |
+| [Save and settings](../re/SAVE_AND_SETTINGS.md) | 1 | 1 | 6 |
 
 ## Omitted
 

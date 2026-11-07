@@ -1393,7 +1393,20 @@ every weighted `behavior_choices` entry plus `alternate_behavior_class_ref`)
 finds no class-27 reference, and no note records a runtime transition into
 it. `FUN_0040B800`, `FUN_00402430` and `FUN_004024E0` are therefore excluded
 from the port's coverage denominator (`status.csv`), alongside the other dead
-retail paths. If future evidence shows a caller, remove that exclusion and
+retail paths. The exclusion survives style sharing: each 0x48-byte style
+record carries its task installer at `+0x40` (`B800` at class 27's initial
+style `0x4C7780`, like `B7C0` at class 26's `0x4C7738`), and a whole-image
+scan finds zero E8/E9 code xrefs to all three routines with single data
+refs consistent with the one dead chain (`B800` calls `00402430`, whose
+word immediate is the `004024E0` tick). Initial selection is always variant
+0 (no program overrides `initial_style_table_index_raw`), and the shared
+class-15/26 tick `FUN_00401DA0` (read via REA) performs no variant
+selection — it scans, moves, and returns continue/reselect, with
+`FUN_0040C690` reselecting behavior (variant 0 of the new class) — while no
+documented variant selector (CD50/CE70/C470/C7B0/`47AC`/C910) targets a
+`B800`-holding style. The port audits neither `0x4C7780` nor any alias, so
+any such selection would fail closed with a logged stop; none has been
+observed. If future evidence shows a selector, remove that exclusion and
 port the owner: the class-26 Trash Furniture module (`trash_furniture.rs`)
 is the template (same 0x24-byte record and `FUN_00401430` mover, plus the
 `+0x1C/+0x20` sound words and the `FUN_00424650` emitter fire).
@@ -1437,10 +1450,14 @@ DWORD reference is the class-57 initial style's initializer slot — style
 `FUN_0040B800` (class table `0x4C8AA0` names all three). Its one code
 caller is `FUN_004066B0`'s installer, called from `0x0040B902` inside
 `FUN_0040B8E0` itself, whose tick immediate `0x00406740` sits at
-`0x004066F1`: the whole chain is dead with class 57. If future evidence
-shows a selector, remove those exclusions and port the owner: the class-26
-Trash Furniture module (`trash_furniture.rs`) is the template (same
-`FUN_004230C0` furniture scan and `FUN_00401430` mover).
+`0x004066F1`: the whole chain is dead with class 57. As with class 27,
+initial selection is always variant 0, the shared class-15/26 tick
+performs no variant selection, and no documented variant selector targets
+a `B8E0`-holding style; the port audits neither `0x4C7810` nor any alias,
+so any such selection would fail closed with a logged stop. If future
+evidence shows a selector, remove those exclusions and port the owner:
+the class-26 Trash Furniture module (`trash_furniture.rs`) is the template
+(same `FUN_004230C0` furniture scan and `FUN_00401430` mover).
 | 58 Tractor Beam | `FUN_00405240` | tick, detailed visits: sits on its target (record `+8`; gone or dying takes `4BE160`) and measures the target against the beam's owner (`+60`): beyond 2,560 units the beam dies through `FUN_00410C10`; beyond 1,024 it pulls the two together, with an impulse that grows as the gap closes toward 1,024 |
 | 59 Remote Beamer | `FUN_00405420` | builds the Primary: tick `FUN_004054C0` and destructor `FUN_004054A0` |
 | 59 Remote Beamer | `FUN_004054C0` | tick: while the body is not held (state `0x1000`), advances Sub-K variable 1 by the elapsed microseconds over 16, saturating at `0xFFFF`; a held body resets it to 0 |

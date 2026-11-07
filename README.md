@@ -26,11 +26,11 @@ between port machines over the port's own transport; its held parts are in
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-98.6%25%20code%20%2F%20100.0%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-98.7%25%20code%20%2F%20100.0%25%20notes-orange)](docs/progress/README.md)
 
 Of the **1,769** game functions in retail `V2000.EXE` the port
 covers ([634 omitted](docs/progress/README.md#omitted)),
-**1,745 (98.6%)** are referenced by the port's code and
+**1,746 (98.7%)** are referenced by the port's code and
 **1,769 (100.0%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 
