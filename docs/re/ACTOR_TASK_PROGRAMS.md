@@ -1421,6 +1421,19 @@ is the template (same 0x24-byte record and `FUN_00401430` mover, plus the
 | 55 Megablast | `FUN_004078C0` | tick: sits on its owner, spins, and charges (mode 0) or drains and blasts (mode 1); see [special weapons](PLAYER_CRAFT.md#special-weapons) |
 | 55 Megablast | `FUN_00407800` | builds the Primary through `FUN_00401020` with tick `FUN_004078C0`, stores the caller's word in Sub-K variable 2 and clears variable 1 |
 | 57 Fire Monster | `FUN_00406740` | tick (installed by `FUN_004066B0`): on nearly every visit (all but a random one in 10,000,000/elapsed) emits a class-47 particle at the body's X/Z, on the higher of the ground and the waved sea |
+
+Class 57 is unreachable in shipped `V2000.EXE` data: a scan of all 130
+global entity types (auxiliary OVL 3, `EntityTypeRuntimeMetadata::from_section12`;
+every weighted `behavior_choices` entry plus `alternate_behavior_class_ref`)
+finds no class-57 reference, and no note records a runtime transition or
+direct caller into it. `FUN_004066B0` and `FUN_00406740` are therefore excluded
+from the port's coverage denominator (`status.csv`), alongside the other dead
+retail paths. If future evidence shows a selector, remove that exclusion and
+port the owner: the class-26 Trash Furniture module (`trash_furniture.rs`)
+is the template (same `FUN_004230C0` furniture scan and `FUN_00401430` mover).
+`FUN_0040B8E0` (clears slots 2/1, then calls `FUN_004066B0`) stays open: its
+Fire Monster branch is dead with class 57, but whether another live
+initializer calls it is unproven.
 | 58 Tractor Beam | `FUN_00405240` | tick, detailed visits: sits on its target (record `+8`; gone or dying takes `4BE160`) and measures the target against the beam's owner (`+60`): beyond 2,560 units the beam dies through `FUN_00410C10`; beyond 1,024 it pulls the two together, with an impulse that grows as the gap closes toward 1,024 |
 | 59 Remote Beamer | `FUN_00405420` | builds the Primary: tick `FUN_004054C0` and destructor `FUN_004054A0` |
 | 59 Remote Beamer | `FUN_004054C0` | tick: while the body is not held (state `0x1000`), advances Sub-K variable 1 by the elapsed microseconds over 16, saturating at `0xFFFF`; a held body resets it to 0 |
