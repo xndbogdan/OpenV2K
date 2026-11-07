@@ -1309,11 +1309,12 @@ fn interpret(
                 }
             }
 
-            // Jump if imm32 <= view_dist; static dist = 0, imm > 0 → fall
-            // through.
+            // Jump if imm32 <= view_dist (LOD select, FUN_004670D0);
+            // static dist = 0, imm > 0 → fall through to the near branch.
             0x13 => pc += 4,
 
-            // Jump if view_dist < imm32; static dist = 0 → take the jump.
+            // Jump if view_dist < imm32 (FUN_00467100); static dist = 0 →
+            // take the jump to the near branch.
             0x14 => {
                 if pc + 4 > n {
                     break;

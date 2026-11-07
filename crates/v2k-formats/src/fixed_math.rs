@@ -356,6 +356,38 @@ pub fn retail_integer_sqrt(value: i32) -> u32 {
     result
 }
 
+/// Exact retail 64-bit integer-square-root helper returned by `FUN_004577D0`.
+///
+/// The executable accepts a signed 64-bit operand and returns zero for every
+/// value not above zero. Positive inputs use the same bit-by-bit restoring
+/// division as the 32-bit `FUN_00457730`, starting from the highest power of
+/// four not above the input, so the result is the mathematical floor square
+/// root (the 64-bit result holds the full root, without the 32-bit routine's
+/// `0xFFFF` saturation at `0x4000_0000`).
+pub fn retail_integer_sqrt_i64(value: i64) -> u64 {
+    if value <= 0 {
+        return 0;
+    }
+    // Restoring binary square root: start from the highest power of four not
+    // above the input and decide each root bit against the running remainder,
+    // exactly the procedure SMALL_FUNCTIONS.md attributes to FUN_004577D0.
+    let mut remainder = value as u64;
+    let mut root = 0_u64;
+    let mut place = 1_u64 << 62;
+    while place > remainder {
+        place >>= 2;
+    }
+    while place != 0 {
+        if remainder >= root + place {
+            remainder -= root + place;
+            root += 2 * place;
+        }
+        root >>= 1;
+        place >>= 2;
+    }
+    root
+}
+
 /// Exact retail inverse sine returned by `FUN_00457F70`.
 ///
 /// The operand is a signed Q31 ratio and the result a signed angle in the
@@ -482,6 +514,27 @@ mod tests {
         assert_eq!(retail_integer_sqrt(0x3fff_ffff), 0x7fff);
         assert_eq!(retail_integer_sqrt(0x4000_0000), 0xffff);
         assert_eq!(retail_integer_sqrt(i32::MAX), 0xffff);
+    }
+
+    #[test]
+    fn integer_square_root_64_matches_floor_for_the_signed_domain() {
+        // FUN_004577D0: zero for values not above zero, otherwise the floor.
+        assert_eq!(retail_integer_sqrt_i64(i64::MIN), 0);
+        assert_eq!(retail_integer_sqrt_i64(-1), 0);
+        assert_eq!(retail_integer_sqrt_i64(0), 0);
+        for value in [1_i64, 2, 3, 4, 15, 16, 17, 1_000_000, 0x3fff_ffff] {
+            assert_eq!(
+                retail_integer_sqrt_i64(value),
+                (value as f64).sqrt().floor() as u64,
+                "isqrt({value})"
+            );
+        }
+        // Full 64-bit range: the mathematical floor, no 16-bit saturation.
+        assert_eq!(retail_integer_sqrt_i64(1_000_000_000_000), 1_000_000);
+        assert_eq!(retail_integer_sqrt_i64(i64::MAX), 3_037_000_499);
+        // Cross-check the 32-bit boundary values through the 64-bit entry.
+        assert_eq!(retail_integer_sqrt_i64(0x4000_0000), 0x8000);
+        assert_eq!(retail_integer_sqrt_i64(0x7fff_ffff), 46340);
     }
 }
 

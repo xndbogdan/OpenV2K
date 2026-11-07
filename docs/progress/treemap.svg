@@ -32,11 +32,11 @@
 <rect x="675.1" y="249.9" width="110.3" height="3.9" fill="#8c959f"/>
 <text x="568.3" y="43" fill="#1f2328">Player craft 95.1%</text>
 </g>
-<g><title>Format documentation (FORMAT_DOCUMENTATION.md): 139 code, 3 notes, 40 omitted</title>
-<rect x="787.4" y="31" width="217" height="189.3" fill="#2da44e"/>
-<rect x="787.4" y="220.3" width="4.6" height="33.5" fill="#d4a72c"/>
-<rect x="792" y="220.3" width="212.3" height="33.5" fill="#8c959f"/>
-<text x="789.4" y="43" fill="#1f2328">Format documentation 97.9%</text>
+<g><title>Format documentation (FORMAT_DOCUMENTATION.md): 141 code, 1 notes, 40 omitted</title>
+<rect x="787.4" y="31" width="217" height="189.7" fill="#2da44e"/>
+<rect x="787.4" y="220.7" width="1.9" height="33.1" fill="#d4a72c"/>
+<rect x="789.3" y="220.7" width="215.1" height="33.1" fill="#8c959f"/>
+<text x="789.4" y="43" fill="#1f2328">Format documentation 99.3%</text>
 </g>
 <g><title>Menu system (MENU_SYSTEM.md): 162 code, 2 notes, 28 omitted</title>
 <rect x="1006.4" y="31" width="192.6" height="193" fill="#2da44e"/>
@@ -50,11 +50,11 @@
 <rect x="712.1" y="495.3" width="18.7" height="17.7" fill="#8c959f"/>
 <text x="568.3" y="267.8" fill="#1f2328">Actor task programs 90.9%</text>
 </g>
-<g><title>Multiplayer (MULTIPLAYER.md): 150 code, 6 notes, 25 omitted</title>
-<rect x="566.3" y="515" width="164.6" height="184.7" fill="#2da44e"/>
-<rect x="566.3" y="699.7" width="18.3" height="19.3" fill="#d4a72c"/>
-<rect x="584.6" y="699.7" width="146.3" height="19.3" fill="#8c959f"/>
-<text x="568.3" y="527" fill="#1f2328">Multiplayer 96.2%</text>
+<g><title>Multiplayer (MULTIPLAYER.md): 153 code, 3 notes, 25 omitted</title>
+<rect x="566.3" y="515" width="164.6" height="185.5" fill="#2da44e"/>
+<rect x="566.3" y="700.5" width="11.9" height="18.5" fill="#d4a72c"/>
+<rect x="578.2" y="700.5" width="152.7" height="18.5" fill="#8c959f"/>
+<text x="568.3" y="527" fill="#1f2328">Multiplayer 98.1%</text>
 </g>
 <g><title>Game mechanics (GAME_MECHANICS.md): 48 code</title>
 <rect x="732.8" y="255.8" width="145.9" height="178.5" fill="#2da44e"/>
@@ -66,11 +66,11 @@
 <rect x="739.6" y="595.7" width="139.1" height="2.6" fill="#8c959f"/>
 <text x="734.8" y="448.3" fill="#1f2328">Hud rendering 97.8%</text>
 </g>
-<g><title>Controls (CONTROLS.md): 59 code, 11 notes, 20 omitted</title>
-<rect x="732.8" y="600.4" width="103.1" height="118.6" fill="#2da44e"/>
-<rect x="835.9" y="600.4" width="42.8" height="29.9" fill="#d4a72c"/>
-<rect x="835.9" y="630.3" width="42.8" height="88.7" fill="#8c959f"/>
-<text x="734.8" y="612.4" fill="#1f2328">Controls 84.3%</text>
+<g><title>Controls (CONTROLS.md): 60 code, 10 notes, 20 omitted</title>
+<rect x="732.8" y="600.4" width="106.5" height="118.6" fill="#2da44e"/>
+<rect x="839.3" y="600.4" width="39.4" height="22.3" fill="#d4a72c"/>
+<rect x="839.3" y="622.6" width="39.4" height="96.4" fill="#8c959f"/>
+<text x="734.8" y="612.4" fill="#1f2328">Controls 85.7%</text>
 </g>
 <g><title>Loading transitions (LOADING_TRANSITIONS.md): 58 code, 1 notes, 7 omitted</title>
 <rect x="880.7" y="255.8" width="120.9" height="124.3" fill="#2da44e"/>

@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
 | Marked not needed (excluded below) | 628 | |
-| **Referenced by port code** | **1,725** | **97.2%** |
+| **Referenced by port code** | **1,731** | **97.5%** |
 | Referenced by code or RE notes | 1,775 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -42,14 +42,14 @@ Where the code's references are thinnest:
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
 | [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 11 | 3 | 110 |
-| [Controls](../re/CONTROLS.md) | 11 | 1 | 59 |
+| [Controls](../re/CONTROLS.md) | 10 | 0 | 60 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 7 | 0 | 135 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 6 | 0 | 150 |
-| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 3 | 0 | 139 |
+| [Multiplayer](../re/MULTIPLAYER.md) | 3 | 0 | 153 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
 | [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |
 | [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
 | [Factory system](../re/FACTORY_SYSTEM.md) | 1 | 0 | 53 |
+| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 1 | 0 | 141 |
 | [Hive wreck](../re/HIVE_WRECK.md) | 1 | 0 | 11 |
 
 ## Omitted
