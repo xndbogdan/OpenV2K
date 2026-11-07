@@ -715,7 +715,9 @@ impl PlayerCraft {
     /// Sub-O fan channels ease toward full, and Sub-C lift (with the hold's
     /// mass), the surface effect and Sub-B run as the Hovering style's do,
     /// with no Sub-A. Its style (`0x4CD8F8`) has the Hovering environment
-    /// mask, so the craft's common tail is the Hover one.
+    /// mask, so the craft's common tail is the Hover one. Retail installs
+    /// this task around its update (`FUN_00446F30`); the port runs it as the
+    /// craft's forces while the takeover holds the controller.
     pub fn passive_forces(&mut self, elapsed_micros: u32, player: &Entity) -> VehicleFrameForces {
         let elapsed_micros = elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
         self.mode = VehicleMode::Hover;

@@ -2864,7 +2864,8 @@ fn run_game(
     // The MindBall a release leaves, the session's followed body (+2A8) when
     // it is not the craft, and the possession's typed stops, each reported
     // once a run. The task scheduler owns the possessed body (FUN_004480E0's
-    // controller words).
+    // controller words). `None` is the craft: retail keeps its handle in
+    // `+2A8`, written by `FUN_00456770` on takeover and release.
     let mut mind_ball: Option<(u32, MindBallFlight)> = None;
     let mut mind_ball_spin = MindBallSpin::default();
     let mut followed_body: Option<u32> = None;
@@ -8615,6 +8616,8 @@ fn run_game(
                             Ok(custody) => {
                                 specialized_actor_tasks.possession = Some(custody);
                                 possession_tab_pressed = false;
+                                // FUN_00456770: the takeover records the target
+                                // in the session's followed body (+2A8).
                                 followed_body = Some(target);
                                 log!("Possession Ray: body {target} taken over");
                             }
@@ -9584,7 +9587,8 @@ fn run_game(
                     }
 
                     // The session's followed body (+2A8): a possessed body or
-                    // a MindBall's flight while one runs, else the craft.
+                    // a MindBall's flight while one runs, else the craft
+                    // (`None` is the craft).
                     let followed = followed_body
                         .and_then(|id| em.iter_all().find(|entity| entity.id == id))
                         .and_then(|body| match body.physical_body_basis_q31() {

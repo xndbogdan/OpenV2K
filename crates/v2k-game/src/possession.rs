@@ -153,7 +153,8 @@ impl MindBallFlight {
 
     /// `FUN_00409460` for one visit of `elapsed_us`. `target` and `craft` are
     /// the bodies' current positions (`None` when gone); `ground` is the
-    /// current terrain's bilinear height. Writes the ball's position.
+    /// current terrain's bilinear height. Writes the ball's position. This
+    /// is the MindBall task's (`FUN_00409320`) per-visit work on its record.
     pub fn advance(
         &mut self,
         ball_raw: &mut [i16; 3],
