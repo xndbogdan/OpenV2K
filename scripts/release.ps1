@@ -71,13 +71,13 @@ try {
     # defaults to C23, which SDL2's bundled sources reject.
     $env:CFLAGS = '-std=gnu17'
     Invoke-Checked 'build (Windows)' 'cargo' @(
-        'build', '--release', '-p', 'v2k-game'
+        'build', '--profile', 'ship', '-p', 'v2k-game'
     )
     $windowsName = "OpenV2K-$tag-windows-x64"
     $windowsDir = Join-Path $out $windowsName
     New-Item -ItemType Directory $windowsDir | Out-Null
     Copy-Item README.md, LAUNCHER.md, LICENSE-MIT, LICENSE-APACHE, $licenses $windowsDir
-    Copy-Item 'target/release/v2k-game.exe' (Join-Path $windowsDir 'OpenV2K.exe')
+    Copy-Item 'target/ship/v2k-game.exe' (Join-Path $windowsDir 'OpenV2K.exe')
     Push-Location $out
     try {
         Invoke-Checked 'package (Windows)' (Join-Path $env:SystemRoot 'System32/tar.exe') @('-a', '-c', '-f', "$windowsName.zip", $windowsName)
