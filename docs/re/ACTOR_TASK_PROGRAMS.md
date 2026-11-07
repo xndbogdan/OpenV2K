@@ -1386,6 +1386,17 @@ selects; "detailed visits" are those of a body with the detail bit.
 | 27 Destroy Furniture | `FUN_0040B800` | initializer: plays the type's sound (`+0x9A`) at the body, clears Tertiary and Secondary, then builds the 5,000-ms Primary `FUN_00402430` with the type's sound `+0x9C` and period `+0xA8` |
 | 27 Destroy Furniture | `FUN_00402430` | builds the Primary as `FUN_00401CA0` does, with tick `FUN_004024E0`, then stores the caller's sound id and period at record `+0x1C` and `+0x20` |
 | 27 Destroy Furniture | `FUN_004024E0` | tick: without furniture (or on a 1-in-16 retry) asks `FUN_004230C0` for one and keeps its X/Z with the bilinear ground height; moves through `FUN_00401430`; while alive, plays the record's sound at its period on detailed visits and fires the type's emitter (`+0x18`) at the furniture through `FUN_00424650` |
+
+Class 27 is unreachable in shipped `V2000.EXE` data: a scan of all 130
+global entity types (auxiliary OVL 3, `EntityTypeRuntimeMetadata::from_section12`;
+every weighted `behavior_choices` entry plus `alternate_behavior_class_ref`)
+finds no class-27 reference, and no note records a runtime transition into
+it. `FUN_0040B800`, `FUN_00402430` and `FUN_004024E0` are therefore excluded
+from the port's coverage denominator (`status.csv`), alongside the other dead
+retail paths. If future evidence shows a caller, remove that exclusion and
+port the owner: the class-26 Trash Furniture module (`trash_furniture.rs`)
+is the template (same 0x24-byte record and `FUN_00401430` mover, plus the
+`+0x1C/+0x20` sound words and the `FUN_00424650` emitter fire).
 | 28 Guided Missile | `FUN_00407F20` | builds the Primary through `FUN_00401020`: record `FUN_00408610`, tick `FUN_00407FB0`, destructor `FUN_004086A0` |
 | 28 Guided Missile | `FUN_00408610` | allocates the zeroed 12-byte record (target, flight time, speed), rebuilds the basis (`FUN_00413F70`) and starts at the speed of its current velocity |
 | 28 Guided Missile | `FUN_00407FB0` | tick: dies through `FUN_00410C10` after 15 s; rolls its basis; with a live target it turns toward it (500 above when far), each turn capped at the elapsed time over 32, the larger turn whole and the other halved; without one it searches (`FUN_004083F0`); accelerates by its steering descriptor's word 0 up to a quarter of word 2 and flies along its forward axis, climbing by an eighth when untargeted or far |

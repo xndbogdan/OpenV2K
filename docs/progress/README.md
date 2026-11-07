@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
-| Marked not needed (excluded below) | 628 | |
-| **Referenced by port code** | **1,744** | **98.3%** |
-| Referenced by code or RE notes | 1,775 | 100.0% |
+| Marked not needed (excluded below) | 631 | |
+| **Referenced by port code** | **1,744** | **98.4%** |
+| Referenced by code or RE notes | 1,772 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -22,7 +22,7 @@ Manual statuses from [`status.csv`](status.csv):
 | implemented | 499 |
 | approximated | 9 |
 | documented | 20 |
-| not-needed | 628 |
+| not-needed | 631 |
 
 0 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,7 +41,7 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 9 | 3 | 112 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 6 | 3 | 112 |
 | [Controls](../re/CONTROLS.md) | 5 | 0 | 65 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 3 | 0 | 139 |
@@ -81,6 +81,7 @@ denominator, each with its reason: the never-installed
 | dead: installed at Graph2D +0x1068..+0x107C by FUN_00480D10, but no queue thunk or call site reads those slots (docs/re/SOFTWARE_RASTER.md) | 6 |
 | dead: only in the default game-channel descriptor 004D4A00, which FUN_0046BED0 uses when its caller passes none; both callers (FUN_0046CAC0, FUN_0046CB50) pass the game's 004CAFA8 (docs/re/MULTIPLAYER.md#player-slots) | 4 |
 | dead: stored in software fill slots +0x10B0..+0x10BC, which no thunk or call site calls (docs/re/SOFTWARE_RASTER.md) | 4 |
+| dead: behavior class 27 (Destroy Furniture) has no selector; no shipped type selects it (scan of all 130 global entity types' weighted and alternate choices) and no note records a runtime transition into it (docs/re/ACTOR_TASK_PROGRAMS.md) | 3 |
 | dead: no Section-12 type selects class 52 (Lightning Shield) as a behavior or alternate (docs/re/PLAYER_CRAFT.md#special-weapons) | 3 |
 | dead: no shipped model vertex has type 10 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: no shipped model vertex has type 4 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
