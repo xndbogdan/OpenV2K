@@ -68,9 +68,13 @@ flakiness.
 
 A plain MSVC `ship` build without profile data (`target/pgo/msvc-control`)
 is byte-identical to the MinGW builds on level 20, both renderers — so the
-divergence comes from the profile-guided step, not the toolchain. PGO is
-therefore **not** the release path: `release.ps1` ships plain `ship`.
-`build-pgo.ps1` stays as the reproducer for whoever chases the level 20
-divergence (suspects: profile-driven inlining/code motion around the
-particle/retail-stack approximations the run logs warn about, e.g.
-`Particle class68 draw 0x00442240`).
+divergence comes from the profile-guided step, not the toolchain. Bisected
+since: snapshots are identical at 500 and 1500 frames, and the actor logs
+match exactly for the first 2971 frames; at frame ~2972 five actors (types
+14, 16, 94, 94, 29) jump at once by up to tens of units while every other
+actor matches. So it is a discrete late event, not gradual drift — a shared
+impulse/threshold whose float inputs PGO's layout/inlining choices perturb
+below visibility, or a padding/uninitialized read the new layout changes
+(the run logs' `Particle class68 draw 0x00442240` stack-address warnings are
+the known suspects in this area). PGO is therefore **not** the release path:
+`release.ps1` ships plain `ship`. `build-pgo.ps1` stays as the reproducer.
