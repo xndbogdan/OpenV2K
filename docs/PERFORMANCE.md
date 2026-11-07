@@ -151,6 +151,36 @@ OpenGL is untouched (its path never allocated here). The gain was checked
 against thermal drift with an alternating old/new A/B (medians 375.4 vs
 377.5, all 8 snapshots one hash): the +5–8% stands.
 
+## Material-map hashing and sprite-flag caching (2026-11-07)
+
+Same program, next layer. The profiler's `hash_one`/`HashMap` samples
+traced to the per-face material path: `ModelMaterialCache`'s two
+`RefCell<HashMap>`s (SipHash), `DerivedMaterials::by_flags`, and the local
+map in `indexed_from_rgba` — all now `FxHashMap` (`rustc-hash`, already in
+the lockfile). Bigger: `sprite_render_flags` rescanned the whole global
+sprite pool (`ResourceCache::global_sprite`, a linear layer walk plus an
+`entries.iter().find`) for every sprite face of every model every frame;
+it now memoizes per sprite id, same as the texture cache (same
+PRELOAD-slot stability invariant the texture cache already relies on).
+
+`ship-opt2` vs `ship-opt`, alternating old/new A/B, 640x480, median of
+three, all end snapshots byte-identical (and identical across the A/B's
+own runs):
+
+| Level | Renderer | Before (fps) | After (fps) |
+| --- | --- | --- | --- |
+| 13 | OpenGL | 222.8 | 222.1 (-0.3%) |
+| 30 | OpenGL | 223.4 | 223.3 (-0.0%) |
+| 13 | Software | 336.0 | 406.9 (+21.1%) |
+| 30 | Software | 390.1 | 441.1 (+13.1%) |
+
+Levels 20/40 ran only as full tags, same direction (software up,
+OpenGL flat); only 13/30 have alternating A/B medians, which are the
+numbers to trust. OpenGL is untouched — its path never built these maps
+— while the software raster gains 13–21% where measured. (An early
+non-alternated comparison read +117% on OpenGL; the A/B showed that was
+machine cool-down between sessions, not the change. Compare alternating.)
+
 ## Profile-guided builds (blocked: level 20 diverges)
 
 `scripts/build-pgo.ps1` ports the Infestation PGO pipeline: an instrumented

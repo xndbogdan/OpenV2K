@@ -102,7 +102,7 @@ impl OwnedMaterial {
     ) -> Option<Self> {
         let texels = width as usize * height as usize;
         let mut palette = vec![0u16];
-        let mut lookup = std::collections::HashMap::new();
+        let mut lookup = rustc_hash::FxHashMap::default();
         let mut indices = Vec::with_capacity(texels);
         let mut keyed = false;
         for pixel in rgba.chunks_exact(4).take(texels) {

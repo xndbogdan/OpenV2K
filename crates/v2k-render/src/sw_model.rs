@@ -13,8 +13,6 @@
 //! camera, and is only as exact as the materializer's world point. The
 //! constructors themselves are byte-exact.
 
-use std::collections::HashMap;
-
 use v2k_formats::models::{
     ModelEdgeEndpointSnapshot, ModelEdgeStyle, ModelFaceCull, ModelFaceShading, ModelFaceVertices,
     ModelPainterDepthKey, ModelSlotClip, ModelVertexProjection,
@@ -959,7 +957,7 @@ fn queue_native_particle(
 /// Derived sprite materials, keyed by texture and face flags.
 #[derive(Default)]
 pub(crate) struct DerivedMaterials {
-    pub(crate) by_flags: HashMap<(u32, u16), MaterialId>,
+    pub(crate) by_flags: rustc_hash::FxHashMap<(u32, u16), MaterialId>,
 }
 
 impl DerivedMaterials {
