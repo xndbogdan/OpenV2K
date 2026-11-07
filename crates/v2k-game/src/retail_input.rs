@@ -16,6 +16,13 @@
 //! The reader `FUN_004445E0` consumes those values. This module holds its
 //! arithmetic; `docs/re/CONTROLS.md` records the evidence. No menu binding set
 //! has a mouse or joystick slot, so these terms apply to the craft only.
+//!
+//! A value record with a period would re-deliver its axis value only when its
+//! timer fires (`FUN_00471540` arms it, `FUN_00471710` is the timer,
+//! `FUN_004715B0` stops it). The period is the record's descriptor's third
+//! word. The PC's axis descriptors are the zeroed `004FE660..004FE6C0`
+//! (mouse and joystick axes), which no code writes, so no PC axis is
+//! throttled: every change is delivered at once, as here.
 
 use v2k_formats::fixed_math::{retail_arcsine_q31, retail_integer_sqrt};
 use v2k_render::{ControllerSample, PadSnapshot};
