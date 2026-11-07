@@ -42,7 +42,7 @@ Where the code's references are thinnest:
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
 | [Controls](../re/CONTROLS.md) | 5 | 0 | 65 |
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 3 | 2 | 114 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 3 | 0 | 115 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 3 | 0 | 139 |
 | [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |

@@ -646,6 +646,16 @@ after slot 1 has been cleared. Variant 2 clears slots 2 and 1 and installs
 event entry/task semantics remain unresolved. Its `FUN_0040CE90` completion
 marks `0x8000`, finishes the component route, and reselects behavior.
 
+`FUN_0040AEA0` (install a 5000-ms task through `FUN_00402780` with tick
+`FUN_004027A0`; on failure clear slots 1 and 0) has no code caller: a
+whole-image scan finds zero E8/E9 xrefs, with only two DWORD refs at
+`0x4C7DA8` and `0x4C7DF0` (style records whose frames are `0x4C7DB0` and
+class-13's initial `0x4C7DF8`). The port's accepted Flocking publication
+matches `FUN_0040B640`'s documented effects without invoking it, and the
+port cites neither address. Which dispatcher reads those DWORDs — and
+whether `FUN_0040AEA0` ever runs — is open; it is not excludable while a
+live class's initial style carries its address.
+
 ### Shared Aim And Fire slot-2 task (STATICALLY CONFIRMED)
 
 `FUN_00402220(owner, slot, lifetime_ms, target, optional_sound, sound_period)`
