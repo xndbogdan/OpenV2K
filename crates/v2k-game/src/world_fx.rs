@@ -1754,6 +1754,11 @@ impl ParticlePresentationFrame {
         self.particles.iter()
     }
 
+    /// The logical viewport the records were projected into.
+    pub fn viewport(&self) -> [u32; 2] {
+        self.viewport
+    }
+
     /// Reproject the exact draw records admitted by the live traversal for a
     /// frozen redraw. This preserves their ordering, copied streak positions,
     /// scale and address-dependent jitter; it does not repeat lifecycle culling
