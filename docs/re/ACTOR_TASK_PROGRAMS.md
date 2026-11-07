@@ -1425,15 +1425,22 @@ is the template (same 0x24-byte record and `FUN_00401430` mover, plus the
 Class 57 is unreachable in shipped `V2000.EXE` data: a scan of all 130
 global entity types (auxiliary OVL 3, `EntityTypeRuntimeMetadata::from_section12`;
 every weighted `behavior_choices` entry plus `alternate_behavior_class_ref`)
-finds no class-57 reference, and no note records a runtime transition or
-direct caller into it. `FUN_004066B0` and `FUN_00406740` are therefore excluded
-from the port's coverage denominator (`status.csv`), alongside the other dead
-retail paths. If future evidence shows a selector, remove that exclusion and
-port the owner: the class-26 Trash Furniture module (`trash_furniture.rs`)
-is the template (same `FUN_004230C0` furniture scan and `FUN_00401430` mover).
-`FUN_0040B8E0` (clears slots 2/1, then calls `FUN_004066B0`) stays open: its
-Fire Monster branch is dead with class 57, but whether another live
-initializer calls it is unproven.
+finds no class-57 reference, and no note records a runtime transition into
+it. `FUN_004066B0` and `FUN_00406740` are therefore excluded from the
+port's coverage denominator (`status.csv`), alongside the other dead retail
+paths. `FUN_0040B8E0` is excluded with them: a whole-image scan
+(`v2000/decompiled/tools/scan_callers.py`, tested by
+`test_scan_callers.py`) finds zero E8/E9 code xrefs to it, and its single
+DWORD reference is the class-57 initial style's initializer slot — style
+`0x4C7810` holds `FUN_0040B8E0` at `+0x40`, exactly as class 26's
+`0x4C7738` holds `FUN_0040B7C0` and dead class 27's `0x4C7780` holds
+`FUN_0040B800` (class table `0x4C8AA0` names all three). Its one code
+caller is `FUN_004066B0`'s installer, called from `0x0040B902` inside
+`FUN_0040B8E0` itself, whose tick immediate `0x00406740` sits at
+`0x004066F1`: the whole chain is dead with class 57. If future evidence
+shows a selector, remove those exclusions and port the owner: the class-26
+Trash Furniture module (`trash_furniture.rs`) is the template (same
+`FUN_004230C0` furniture scan and `FUN_00401430` mover).
 | 58 Tractor Beam | `FUN_00405240` | tick, detailed visits: sits on its target (record `+8`; gone or dying takes `4BE160`) and measures the target against the beam's owner (`+60`): beyond 2,560 units the beam dies through `FUN_00410C10`; beyond 1,024 it pulls the two together, with an impulse that grows as the gap closes toward 1,024 |
 | 59 Remote Beamer | `FUN_00405420` | builds the Primary: tick `FUN_004054C0` and destructor `FUN_004054A0` |
 | 59 Remote Beamer | `FUN_004054C0` | tick: while the body is not held (state `0x1000`), advances Sub-K variable 1 by the elapsed microseconds over 16, saturating at `0xFFFF`; a held body resets it to 0 |

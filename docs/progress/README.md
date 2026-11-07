@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
-| Marked not needed (excluded below) | 633 | |
-| **Referenced by port code** | **1,744** | **98.5%** |
-| Referenced by code or RE notes | 1,770 | 100.0% |
+| Marked not needed (excluded below) | 634 | |
+| **Referenced by port code** | **1,744** | **98.6%** |
+| Referenced by code or RE notes | 1,769 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -22,7 +22,7 @@ Manual statuses from [`status.csv`](status.csv):
 | implemented | 499 |
 | approximated | 9 |
 | documented | 20 |
-| not-needed | 633 |
+| not-needed | 634 |
 
 0 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,8 +41,8 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 5 | 3 | 113 |
 | [Controls](../re/CONTROLS.md) | 5 | 0 | 65 |
+| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 4 | 3 | 113 |
 | [Platform](../re/PLATFORM_RUNTIME.md) | 3 | 0 | 29 |
 | [Player craft](../re/PLAYER_CRAFT.md) | 3 | 0 | 139 |
 | [Menu system](../re/MENU_SYSTEM.md) | 2 | 0 | 162 |
@@ -90,6 +90,7 @@ denominator, each with its reason: the never-installed
 | dead: behavior class 57 (Fire Monster) has no selector; no shipped type selects it (scan of all 130 global entity types' weighted and alternate choices) and no note records a runtime transition or direct caller into it (docs/re/ACTOR_TASK_PROGRAMS.md) | 2 |
 | dead: sea table 0x004C92B8 is installed by FUN_004129B0 but never walked (docs/re/TERRAIN_COLLISION.md) | 2 |
 | replaced: the port's SDL platform (the debug log file, debugger output and fatal-error exit; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 2 |
+| dead: behavior class 57 (Fire Monster) has no selector; whole-image scan finds zero E8/E9 code xrefs and one DWORD ref at the class-57 initial style initializer slot (docs/re/ACTOR_TASK_PROGRAMS.md) | 1 |
 | dead: its body runs only when the load-progress callback DAT_004F7310 is set, which nothing writes (FUN_00433BD0 and FUN_0044AB20 call it to no effect) | 1 |
 | dead: only stored as the first word of the FUN_00433130 render request at 0x004DB250, which no code reads or calls | 1 |
 | dead: projector-table slot +0xBC of 0x004D4A78, which no instruction calls (docs/re/FORMAT_DOCUMENTATION.md) | 1 |

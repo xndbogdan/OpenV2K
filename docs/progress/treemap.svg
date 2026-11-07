@@ -38,11 +38,11 @@
 <rect x="787.7" y="222" width="213.6" height="33.3" fill="#8c959f"/>
 <text x="787.9" y="43" fill="#1f2328">Format documentation 99.3%</text>
 </g>
-<g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 113 code, 5 notes, 8 omitted</title>
+<g><title>Actor task programs (ACTOR_TASK_PROGRAMS.md): 113 code, 4 notes, 9 omitted</title>
 <rect x="1003.3" y="31" width="195.7" height="210.1" fill="#2da44e"/>
-<rect x="1003.3" y="241.1" width="21.5" height="14.2" fill="#d4a72c"/>
-<rect x="1024.9" y="241.1" width="174.1" height="14.2" fill="#8c959f"/>
-<text x="1005.3" y="43" fill="#1f2328">Actor task programs 95.8%</text>
+<rect x="1003.3" y="241.1" width="17.8" height="14.2" fill="#d4a72c"/>
+<rect x="1021.2" y="241.1" width="177.8" height="14.2" fill="#8c959f"/>
+<text x="1005.3" y="43" fill="#1f2328">Actor task programs 96.6%</text>
 </g>
 <g><title>Menu system (MENU_SYSTEM.md): 162 code, 2 notes, 28 omitted</title>
 <rect x="566.3" y="257.3" width="166.4" height="223.4" fill="#2da44e"/>

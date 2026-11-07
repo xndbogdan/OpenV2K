@@ -698,6 +698,24 @@ Face, edge and billboard opcodes have a near and a fog constructor each
 ([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); the 186
 undefined opcodes reach `FUN_00466150`, an endless loop.
 
+**Opcode-`0x10` corpus (2026-11-07 scan).** `0x10` is live: 80 commands in
+20 shipped models (5,366 Section-8 streams across all Overlay tiers plus
+`PRELOAD.DAT`, walked with the canonical dispatch including both sides of
+every conditional branch; zero unknown-opcode or truncation stops).
+Every use is the pair `0x0F, 0x10` — mount reset to identity, then restore
+of the node's saved basis: `player3`, `man2`, `lev1sci2`, `rockman2`,
+`lev2sci2`, `caveman2`, `lev3sci2`, `eskimo2`, `ressci2`, `vulc2`, `diver2`
+at stream offset 1, and `grock`/`grock2`/`grock3`, `boulder`/`boulder2`/
+`boulder3`, `lavarock`/`lavarock2`/`lavarock3` mid-stream after an
+`0xFFFF`-terminated slot list. The port's `v2k-formats::models` skips
+`0x10` (`pc += 1`) without restoring anything, so `FUN_00467010` stays
+open: a correct port needs the `00467010` body, which routine writes the
+node's saved basis, and who reads the `0x004FEEA0` global copy (the same
+address is the projector scratch block the collision cylinder/box queries
+keep across `FUN_0046AEF0` walks). If the saved basis provably equals the
+current mount at every shipped `0x0F, 0x10` site, the skip is exact and
+the handler can be cited as such instead.
+
 **Variable ops** `[dst][a][b]` decode both operands with `FUN_00470840` and
 store a 16-bit result in register `dst`:
 
