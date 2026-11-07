@@ -181,6 +181,32 @@ numbers to trust. OpenGL is untouched — its path never built these maps
 non-alternated comparison read +117% on OpenGL; the A/B showed that was
 machine cool-down between sessions, not the change. Compare alternating.)
 
+## Present-path texture reuse (2026-11-07)
+
+`SoftwareRenderer::present` built a fresh streaming texture every frame
+(a driver alloc+free per present) and copied the whole RGB565 surface
+through a fresh byte `Vec`. It now keeps one streaming texture across
+frames (recreated only on surface resize; the `Texture` borrows its
+creator, so the creator — an owned `Rc` clone holding no GPU resources —
+is intentionally leaked once, documented at the field) and uploads via a
+zero-copy `align_to::<u8>` retype of the surface pixels (fail-closed on a
+nonempty prefix/suffix).
+
+Alternating old/new A/B, 640x480, median of three, all end snapshots
+byte-identical across both binaries and all reps:
+
+| Level | Renderer | Before (fps) | After (fps) |
+| --- | --- | --- | --- |
+| 13 | OpenGL | 502.4 | 456.0 (noise*) |
+| 30 | OpenGL | 556.1 | 551.2 (-0.9%) |
+| 13 | Software | 413.5 | 449.3 (+8.7%) |
+| 30 | Software | 390.1 | 441.1 (+13.1%) |
+
+Software wins in all 6 per-rep pairings (+7–9% on the medians).
+*Level-13 OpenGL scattered ±10% in *both* binaries (old 448–522, new
+445–519), so its -9.2% median is session noise, not signal; level 30's
+tight ±1% reads -0.9%. OpenGL's present path is untouched by this change.
+
 ## Profile-guided builds (blocked: level 20 diverges)
 
 `scripts/build-pgo.ps1` ports the Infestation PGO pipeline: an instrumented
