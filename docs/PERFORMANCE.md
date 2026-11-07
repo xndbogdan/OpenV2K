@@ -77,6 +77,41 @@ At 3840x2160, OpenGL only (`ship-4k` vs `pgo-4k`): 218.3 -> 220.4 (+1.0%),
 all snapshots byte-identical. The GPU eats 4K for free; the frame stays
 CPU-bound.
 
+## Software-raster per-model allocations (2026-11-07)
+
+Ported from the Infestation playbook after surveying every candidate
+against the code (double draw, texture resolve, arena, snapshots, x87
+rounding: no-ops or already done; only this one applied). Each software
+model draw built a `HashMap<usize, (u8, Vec<i16>)>` (SipHash) plus
+`normals`/`colours`/`sprites`/`face_order` Vecs (`prepare_model_body`),
+a heap `Vec<i16>` per face (`Triangle`/`Quad` indices), and `emit`
+collected each face's corners into a fresh `Vec<ModelCorner>`.
+
+Now (`v2k-render/src/sw_model.rs`, `software/model.rs`): faces live in a
+`Vec<Option<(u8, FaceWords)>>` indexed by triangle — no hashing, since
+lookups are always by triangle id and the map is never iterated; each
+face's words are an inline `[i16; 10]` (`FaceOp::words` maxes at 2+4+4);
+`emit` fills a `[ModelCorner; 4]` on the stack; all Vecs carry their
+final capacities. Same values, no new behaviour: 288 `v2k-render` tests
+pass and every end snapshot is byte-identical.
+
+`ship-opt` vs `ship-after`, 640x480, median of three:
+
+| Level | Renderer | Before (fps) | After (fps) |
+| --- | --- | --- | --- |
+| 13 | OpenGL | 222.5 | 222.4 (+-0%) |
+| 20 | OpenGL | 222.0 | 222.5 (+0.2%) |
+| 30 | OpenGL | 223.5 | 223.3 (-0.1%) |
+| 40 | OpenGL | 211.8 | 217.4 (+2.6%) |
+| 13 | Software | 324.6 | 345.1 (+6.3%) |
+| 20 | Software | 290.6 | 305.4 (+5.1%) |
+| 30 | Software | 366.9 | 395.9 (+7.9%) |
+| 40 | Software | 247.3 | 267.7 (+8.2%) |
+
+OpenGL is untouched (its path never allocated here). The gain was checked
+against thermal drift with an alternating old/new A/B (medians 375.4 vs
+377.5, all 8 snapshots one hash): the +5–8% stands.
+
 ## Profile-guided builds (blocked: level 20 diverges)
 
 `scripts/build-pgo.ps1` ports the Infestation PGO pipeline: an instrumented

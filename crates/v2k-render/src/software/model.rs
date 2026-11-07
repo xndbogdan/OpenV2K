@@ -235,10 +235,11 @@ fn emit(
     if normal.culled {
         return Ok(());
     }
-    let corners: Vec<ModelCorner> = words[2..2 + op.corners]
-        .iter()
-        .map(|&word| context.corners[index(word)])
-        .collect();
+    let mut corners = [ModelCorner::default(); 4];
+    for (slot, &word) in words[2..2 + op.corners].iter().enumerate() {
+        corners[slot] = context.corners[index(word)];
+    }
+    let corners = &corners[..op.corners];
     let outcode = corners.iter().fold(0u8, |code, corner| code | corner.clip);
     if OUTCODE_VISIBLE[usize::from(outcode)] == 0 {
         return Ok(());
