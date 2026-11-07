@@ -24,14 +24,23 @@ changes a result: Rust never contracts or reassociates floating point
 unasked, and the end snapshots equal `--release` on every level and renderer.
 `--release` stays the quick build for tests and probes.
 
-`release-before` (plain `--release`, pre-x86-64-v2) against `ship-after`:
+`release-before` (plain `--release`, pre-x86-64-v2) against `ship-after`
+(stage 1, the post-optimization shipped build) and `pgo-after` (stage 2,
+profile-guided; blocked, see below):
 
-| Level | OpenGL before | OpenGL ship | Software before | Software ship |
+| Level | Renderer | Pre (fps) | Stage 1 ship (fps) | Stage 2 PGO (fps) |
 | --- | --- | --- | --- | --- |
-| 13 | 221.1 | 222.5 (+0.6%) | 315.9 | 324.6 (+2.8%) |
-| 20 | 220.7 | 222.0 (+0.6%) | 272.9 | 290.6 (+6.5%) |
-| 30 | 222.1 | 223.5 (+0.6%) | 356.5 | 366.9 (+2.9%) |
-| 40 | 209.2 | 211.8 (+1.2%) | 231.6 | 247.3 (+6.8%) |
+| 13 | OpenGL | 221.1 | 222.5 (+0.6%) | 223.6 (+1.1%) |
+| 20 | OpenGL | 220.7 | 222.0 (+0.6%) | 223.2 (+1.1%) * |
+| 30 | OpenGL | 222.1 | 223.5 (+0.6%) | 224.3 (+1.0%) |
+| 40 | OpenGL | 209.2 | 211.8 (+1.2%) | 218.4 (+4.4%) |
+| 13 | Software | 315.9 | 324.6 (+2.8%) | 307.7 (-2.6%) |
+| 20 | Software | 272.9 | 290.6 (+6.5%) | 274.9 (+0.7%) * |
+| 30 | Software | 356.5 | 366.9 (+2.9%) | 353.0 (-1.0%) |
+| 40 | Software | 231.6 | 247.3 (+6.8%) | 251.0 (+8.4%) |
+
+\* Stage 2 diverges on level 20 (0.45% of pixels, both renderers); the other
+seven cells are byte-identical across all three builds.
 
 All end snapshots byte-identical. The ship binary is also smaller
 (22.0 MB against 29.0 MB). Gains are smaller than OpenInfestation's (their
@@ -49,17 +58,9 @@ with SDL2 bundled and the CRT statically linked; the main thread keeps its
 8 MiB reserve. Rust's Linux toolchain has the runtime; the Linux counterpart
 is not ported yet.
 
-`pgo-after` against `release-before`:
-
-| Level | OpenGL | Software |
-| --- | --- | --- |
-| 13 | 221.1 -> 223.6 (+1.1%) | 315.9 -> 307.7 (-2.6%) |
-| 20 | 220.7 -> 223.2 (+1.1%) | 272.9 -> 274.9 (+0.7%) |
-| 30 | 222.1 -> 224.3 (+1.0%) | 356.5 -> 353.0 (-1.0%) |
-| 40 | 209.2 -> 218.4 (+4.4%) | 231.6 -> 251.0 (+8.4%) |
-
-Against `ship-after` the PGO binary is within +3%/-5%: no reliable gain on
-top of ship at this resolution. Worse, its level 20 end snapshot differs
+Stage 2 against stage 1 (the incremental value of PGO over ship): OpenGL
++0.5/+0.5/+0.4/+3.1%, software -5.2/-5.4/-3.8/+1.5% — no reliable gain at
+this resolution. Worse, stage 2 diverges on level 20
 (0.45% of pixels, central bbox, both renderers), while every other
 level/renderer is byte-identical across all three builds. Each build is
 self-consistent (three reps byte-identical), so this is systematic, not
