@@ -202,6 +202,18 @@ snapshots byte-identical across all 24 runs:
 
 Every new-binary rep beats every old-binary rep on all four levels.
 
+### `indexed_from_rgba` pre-sizing (2026-11-08)
+
+Same playbook, smallest instance: the per-sprite palette hash map in
+`indexed_from_rgba` (`v2k-render`) grew from empty on every call, so
+`reserve_rehash` showed up in the profile. Now pre-sized for the 256-entry
+cap (`FxHashMap::with_capacity_and_hasher`); the reserved index-0 entry
+for transparent texels is unchanged. No behavior change possible — same
+keys, same values — and the unit tests plus the full A/B below confirm it.
+
+Folded into the alternating A/B above (the ship-opt2 baseline predates it):
+no separate number claimed; it only removes rehash growth.
+
 ## Present-path texture reuse (2026-11-07)
 
 `SoftwareRenderer::present` built a fresh streaming texture every frame
