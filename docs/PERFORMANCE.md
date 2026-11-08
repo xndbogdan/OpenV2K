@@ -214,6 +214,34 @@ keys, same values — and the unit tests plus the full A/B below confirm it.
 Folded into the alternating A/B above (the ship-opt2 baseline predates it):
 no separate number claimed; it only removes rehash growth.
 
+### Where this stops (2026-11-08)
+
+Fresh profiles of current staging (60 s fixed-step, level 30, software
+2.5 ms/frame) plus a first OpenGL profile say the remaining items fail
+a cost/benefit test, so optimization pauses here:
+
+- Software: `fill_chains` 25.6% is byte-exact pixel loops with no safe
+  discrete cut (the Infestation analog was per-polygon `Vec` churn, which
+  this rasterizer never had — its chains live in fixed `state.lists`
+  slots and `Edge = [i32; 18]` fixed arrays).
+- OpenGL is wait/driver-bound, not CPU-bound: 65.4% ntdll + 10.5%
+  win32u + 2.7% nvoglv64, game code only in slivers
+  (`draw_terrain` 2.0%, `draw_water` 1.0%, `draw_tris_gl` 0.7%).
+  Cross-check: software does *more* game work yet shows far less ntdll
+  (19.5%), so the OpenGL system share is waits/driver, not allocator
+  pressure from our code. CPU work cannot move it — consistent with every
+  OpenGL A/B coming back flat.
+- `present` upload/blit (~5%) is necessary work for a visible frame; the
+  texture object and the upload copy are already deduplicated.
+- The rest is fragmented HUD sprite conversion (~2–4% total) that would
+  need a content cache with key design and invalidation (glyph/marker
+  identity, resize handling) for a low-single-digit gain — below the bar
+  this series set for itself (+5–21% per change, each verified by A/B).
+
+Event-logging overhead was measured, not guessed: with vs without
+`--event-log` differs by ~0.7% (noise), so benchmarks are honest and the
+ntdll share is not our logging.
+
 ## Present-path texture reuse (2026-11-07)
 
 `SoftwareRenderer::present` built a fresh streaming texture every frame
