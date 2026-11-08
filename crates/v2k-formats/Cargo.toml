@@ -8,6 +8,9 @@ description = "OpenV2K — OVL parser and section decoders"
 
 [dependencies]
 v2k-core = { path = "../v2k-core" }
+# FxHash for per-model vertex caches (std HashMap's SipHash showed up hot
+# in profiles); same values, cheaper hash.
+rustc-hash = "2"
 
 [dev-dependencies]
 v2k-test-support = { path = "../v2k-test-support" }

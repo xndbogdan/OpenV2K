@@ -181,6 +181,27 @@ numbers to trust. OpenGL is untouched — its path never built these maps
 non-alternated comparison read +117% on OpenGL; the A/B showed that was
 machine cool-down between sessions, not the change. Compare alternating.)
 
+## Vertex-resolver hashing (2026-11-08)
+
+Same playbook, one layer deeper. The fresh profile still showed
+`hash_one`/SipHash plus `RawTable::reserve_rehash`: `SlotResolver`
+(`v2k-formats`) builds a fresh `HashMap<u16, _>` + `HashSet<u16>` per
+model materialization, and `PainterSlotCache` swaps the same map types
+in and out. Now `FxHashMap`/`FxHashSet` (cache pre-sized with the
+record count), same values — 256 `v2k-formats` tests pass.
+
+Alternating old/new A/B, 640x480 software, median of three, all end
+snapshots byte-identical across all 24 runs:
+
+| Level | Before (fps) | After (fps) |
+| --- | --- | --- |
+| 13 | 388.2 | 435.0 (+12.1%) |
+| 20 | 331.9 | 365.3 (+10.1%) |
+| 30 | 436.9 | 490.4 (+12.2%) |
+| 40 | 337.2 | 373.2 (+10.7%) |
+
+Every new-binary rep beats every old-binary rep on all four levels.
+
 ## Present-path texture reuse (2026-11-07)
 
 `SoftwareRenderer::present` built a fresh streaming texture every frame

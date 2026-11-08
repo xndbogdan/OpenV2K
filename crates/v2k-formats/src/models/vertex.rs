@@ -1,6 +1,6 @@
 //! Recursive model vertices with presentation-owned contextual callbacks.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::{
     eval_var, retail_tf8_axis, retail_tf9_axis, AnimVars, ModelNativeSpatialGenerator, StreamStats,
@@ -264,8 +264,8 @@ pub(super) struct SlotResolver<'a> {
     pub(super) vars: &'a AnimVars,
     pub(super) linked: Option<&'a LinkedModelSlots>,
     pub(super) vertex_resolver: Option<&'a dyn ModelVertexResolver>,
-    pub(super) cache: HashMap<u16, Option<ResolvedModelSlot>>,
-    pub(super) busy: HashSet<u16>,
+    pub(super) cache: FxHashMap<u16, Option<ResolvedModelSlot>>,
+    pub(super) busy: FxHashSet<u16>,
     /// False for the geometry pass after the command walk (see tf3).
     pub(super) command_visit: bool,
 }
@@ -286,8 +286,8 @@ impl<'a> SlotResolver<'a> {
             vars,
             linked,
             vertex_resolver: None,
-            cache: HashMap::new(),
-            busy: HashSet::new(),
+            cache: FxHashMap::with_capacity_and_hasher(records.len(), rustc_hash::FxBuildHasher),
+            busy: FxHashSet::default(),
             command_visit: true,
         }
     }
@@ -388,7 +388,7 @@ impl<'a> SlotResolver<'a> {
 
     /// Diagnose only already-reached dependencies: this must never execute a
     /// provider, resolve an unvisited corner, or replay the source graph.
-    fn native_boundary(&self, slot: u16, seen: &mut HashSet<u16>) -> ModelNativeVertexBoundary {
+    fn native_boundary(&self, slot: u16, seen: &mut FxHashSet<u16>) -> ModelNativeVertexBoundary {
         use ModelNativeVertexBoundary as Boundary;
         if !seen.insert(slot) {
             return Boundary::SlotUnavailable { slot };
@@ -704,7 +704,8 @@ impl<'a> SlotResolver<'a> {
                             owner.report_native_vertex_failure(ModelNativeVertexFailure {
                                 consumer_slot: slot,
                                 source_slot,
-                                boundary: self.native_boundary(source_slot, &mut HashSet::new()),
+                                boundary: self
+                                    .native_boundary(source_slot, &mut FxHashSet::default()),
                             });
                             return None;
                         }

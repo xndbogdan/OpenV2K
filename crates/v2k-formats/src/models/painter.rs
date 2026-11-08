@@ -1,6 +1,6 @@
 //! Deferred model-queue commands, before any camera or presentation policy.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::ops::Range;
 
 use super::{
@@ -84,8 +84,8 @@ pub(super) fn signed_offset(low: u16, high: u16) -> i32 {
 /// independent geometry resolver's existing interpretation.
 #[derive(Default)]
 pub(super) struct PainterSlotCache {
-    points: HashMap<u16, Option<ResolvedModelSlot>>,
-    busy: HashSet<u16>,
+    points: FxHashMap<u16, Option<ResolvedModelSlot>>,
+    busy: FxHashSet<u16>,
 }
 
 impl PainterSlotCache {
