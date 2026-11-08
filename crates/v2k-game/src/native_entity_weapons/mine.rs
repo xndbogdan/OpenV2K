@@ -3,13 +3,13 @@
 //! 44E770's row 9 is depth-charge-shaped (`{0, 1000, 0, 48}`), so the mine is
 //! dropped as a depth charge is and owned (`+60`) by its shooter. Class34's
 //! first style `4C8548` (initializer `40B080`) clears Secondary then Tertiary
-//! and publishes the lifetime-0 falling Primary (`406B00 -> 406BA0`). Within
+//! and publishes the lifetime-0 falling Primary (`FUN_00406B00 -> 406BA0`). Within
 //! 300 of the higher of its cell's ground and the sea, the tick returns tag
 //! 9C00, whose style `+04` (`40C750 -> 40C6B0`) installs the armed style
-//! `4C8590`. Its initializer `40B0B0` clears Secondary, publishes the shared
+//! `4C8590`. Its initializer `FUN_0040B0B0` clears Secondary, publishes the shared
 //! target search (`401F80(entity, 1, 0, 0)`: one visit in four, the type's
 //! 0x300 range and capability mask 8, never the shooter) and replaces the
-//! Primary with the floating tick (`406E90 -> 406F20`: Sub-C lift on the
+//! Primary with the floating tick (`FUN_00406E90 -> 406F20`: Sub-C lift on the
 //! waved sea, then Sub-B drag). A found target runs the armed style's `+04`,
 //! `40CEF0`; both styles' `+18` pair and `+1C` static hooks are `40CEF0` too,
 //! and `410C10` takes the alternate class49 (`40BD20`). Both styles' `+10`,
@@ -106,7 +106,7 @@ fn eased_pitch(pitch_raw: i16, goal_raw: i32, elapsed_micros: u32) -> i16 {
     (sum / 4) as i16
 }
 
-/// `406BA0` on the body's heading/pitch and Sub-K words. Returns whether it
+/// `FUN_00406BA0` on the body's heading/pitch and Sub-K words. Returns whether it
 /// took tag 9C00: within 300 of the higher of its cell's ground byte << 5
 /// and the sea.
 pub fn step_falling_mine(
@@ -125,7 +125,7 @@ pub fn step_falling_mine(
         <= MINE_ARMING_CLEARANCE_RAW
 }
 
-/// `406F20`'s attitude and Sub-K prefix, before its Sub-C and Sub-B forces.
+/// `FUN_00406F20`'s attitude and Sub-K prefix, before its Sub-C and Sub-B forces.
 pub fn step_armed_mine_words(
     rotation_raw: &mut [i16; 3],
     sub_k_raw: &mut [u16; 2],

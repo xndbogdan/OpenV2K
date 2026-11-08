@@ -11,8 +11,9 @@ use std::collections::HashMap;
 use v2k_formats::models::{
     AnimVars, Billboard, LinkedModelSlots, MaterializedModel, ModelEntry, ModelFaceCull,
     ModelFaceShading, ModelFaceVertices, ModelInstance, ModelMaterializationContext,
-    ModelNativeEdgeFailure, ModelNativeSpatialGenerator, ModelNativeVertexFailure, ModelVertexKind,
-    ModelVertexProjection, ModelVertexResolver, ModelViewSelection, ResolvedModelSlot,
+    ModelNativeEdgeFailure, ModelNativeSpatialGenerator, ModelNativeVertexFailure,
+    ModelVertexJitter, ModelVertexKind, ModelVertexProjection, ModelVertexResolver,
+    ModelViewSelection, ResolvedModelSlot,
 };
 use v2k_formats::system::PaletteEntry;
 use v2k_render::renderer::ModelSurfaceResolution;
@@ -27,6 +28,169 @@ use v2k_render::{
 
 use crate::model_color::ModelMaterialCache;
 use crate::resource_cache::ResourceCache;
+
+/// The process generator (`FUN_00457930`, state `004F7308`) lent to a scene's
+/// model draws, with the installed camera's VIEW axes in world space, so a
+/// reached tf3 slot draws its three words where retail's draw does.
+#[derive(Clone, Copy)]
+pub struct ModelTreeProcessRandom<'a> {
+    next: &'a dyn Fn() -> u16,
+    /// World directions of VIEW +X (screen right), +Y (up) and +Z (depth).
+    view_axes: [[f32; 3]; 3],
+}
+
+impl<'a> ModelTreeProcessRandom<'a> {
+    pub fn new(next: &'a dyn Fn() -> u16, camera: &v2k_render::Camera) -> Self {
+        // The view matrix's rows are right, up and -forward.
+        let m = camera.view_matrix();
+        Self {
+            next,
+            view_axes: [
+                [m[0], m[4], m[8]],
+                [m[1], m[5], m[9]],
+                [-m[2], -m[6], -m[10]],
+            ],
+        }
+    }
+}
+
+/// Why a reached tf3 slot drew nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ModelJitterBoundary {
+    /// The draw was not lent the process generator.
+    ProcessRandomUnavailable,
+    /// First reached after the command walk, where retail never visited it.
+    UnvisitedSlot,
+}
+
+fn report_jitter_failure(model_id: usize, slot: u16, boundary: ModelJitterBoundary) {
+    static REPORTED: std::sync::OnceLock<
+        std::sync::Mutex<std::collections::HashSet<(usize, u16, ModelJitterBoundary)>>,
+    > = std::sync::OnceLock::new();
+    if let Ok(mut reported) = REPORTED.get_or_init(Default::default).lock() {
+        if reported.insert((model_id, slot, boundary)) {
+            eprintln!(
+                "model jitter vertex blocked: {boundary:?} (model{model_id} slot{slot}; its primitives skipped)"
+            );
+        }
+    }
+}
+
+/// One node draw's tf3 owner. Retail's slot cache (`+0x10` bit 0x80) keeps a
+/// jittered slot for the rest of the node, so each slot draws once a draw.
+struct ModelJitterOwner<'a> {
+    model_id: usize,
+    random: Option<ModelTreeProcessRandom<'a>>,
+    transform: ModelTransform,
+    drawn: RefCell<HashMap<u16, [i32; 3]>>,
+}
+
+impl<'a> ModelJitterOwner<'a> {
+    fn new(
+        model_id: usize,
+        random: Option<ModelTreeProcessRandom<'a>>,
+        transform: ModelTransform,
+    ) -> Self {
+        Self {
+            model_id,
+            random,
+            transform,
+            drawn: RefCell::new(HashMap::new()),
+        }
+    }
+
+    #[cfg(test)]
+    fn unlent() -> Self {
+        Self::new(
+            0,
+            None,
+            ModelTransform {
+                orientation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                position: [0.0; 3],
+                scale: 1.0,
+            },
+        )
+    }
+
+    fn resolve(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        let fail = |boundary| {
+            report_jitter_failure(self.model_id, jitter.slot, boundary);
+            None
+        };
+        let Some(random) = self.random else {
+            return fail(ModelJitterBoundary::ProcessRandomUnavailable);
+        };
+        let cached = self.drawn.borrow().get(&jitter.slot).copied();
+        let offset = match cached {
+            Some(offset) => offset,
+            None if jitter.command_visit => {
+                // X, then Y, then Z, one word each.
+                let offset: [i32; 3] = std::array::from_fn(|_| {
+                    v2k_formats::models::retail_tf3_offset((random.next)(), jitter.shift_operand)
+                });
+                self.drawn.borrow_mut().insert(jitter.slot, offset);
+                offset
+            }
+            None => return fail(ModelJitterBoundary::UnvisitedSlot),
+        };
+        Some(self.offset_slot(jitter.source, offset, random.view_axes))
+    }
+
+    /// The VIEW offset, in raw units, carried into this node's raw-local frame.
+    fn offset_slot(
+        &self,
+        source: ResolvedModelSlot,
+        offset: [i32; 3],
+        view_axes: [[f32; 3]; 3],
+    ) -> ResolvedModelSlot {
+        let ModelTransform {
+            orientation,
+            position,
+            scale,
+        } = self.transform;
+        let unit = scale.abs() / 100.0;
+        let world: [f32; 3] = std::array::from_fn(|axis| {
+            position[axis]
+                + (0..3)
+                    .map(|view_axis| offset[view_axis] as f32 * view_axes[view_axis][axis])
+                    .sum::<f32>()
+                    * unit
+        });
+        let local =
+            v2k_render::gl_backend::world_point_as_raw_local(world, orientation, position, scale);
+        let mut result = ResolvedModelSlot::clear(std::array::from_fn(|axis| {
+            source.position_raw[axis] + f64::from(local[axis])
+        }));
+        result.native_view_point = source
+            .native_view_point
+            .map(|view| std::array::from_fn(|axis| view[axis].wrapping_add(offset[axis])));
+        result
+    }
+}
+
+/// A frontend draw's vertex owner: the default table's pure tf12/tf13 aliases
+/// and tf3's process words.
+struct FrontendModelVertexResolver<'a> {
+    jitter: ModelJitterOwner<'a>,
+}
+
+impl ModelVertexResolver for FrontendModelVertexResolver<'_> {
+    fn resolve_vertex_raw(
+        &self,
+        _kind: ModelVertexKind,
+        source: ResolvedModelSlot,
+    ) -> Option<ResolvedModelSlot> {
+        Some(ResolvedModelSlot::clear(source.position_raw))
+    }
+
+    fn owns_process_random(&self) -> bool {
+        true
+    }
+
+    fn resolve_jitter_raw(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        self.jitter.resolve(jitter)
+    }
+}
 
 /// World tf12/tf13 callbacks resolve inside the slot dependency graph.
 /// Resolve in raw-local space before generators and linked imports consume it;
@@ -54,6 +218,9 @@ struct WorldModelVertexResolver<'a> {
     /// The transform-only pass resolves every face's vertices; the draw
     /// resolves a tf14 vertex only for a face it keeps.
     admit_every_face: bool,
+    jitter: ModelJitterOwner<'a>,
+    /// A static object's fixed callback point (`FUN_00427050`), raw world.
+    fixed_world_point_raw: Option<[i32; 3]>,
 }
 
 impl ModelVertexResolver for WorldModelVertexResolver<'_> {
@@ -157,9 +324,19 @@ impl ModelVertexResolver for WorldModelVertexResolver<'_> {
     }
 
     fn resolve_native_view_point(&self, slot: u16, _vars: &AnimVars) -> Option<[i32; 3]> {
-        let (frame, _) = self.native_context.as_ref()?;
+        let (frame, viewport) = self.native_context.as_ref()?;
         let &[kind, a, b, c] = self.model.records.get(usize::from(slot >> 1))?;
-        matches!(kind, 0 | 4).then(|| frame.plain_slot_view_raw(slot, kind, [a, b, c]))
+        match kind {
+            0 | 4 => Some(frame.plain_slot_view_raw(slot, kind, [a, b, c])),
+            // FUN_0046ECF0/0046EE70/0046F010 subtract the viewport origin from
+            // the callback's point and turn it into VIEW; both slots share it.
+            14 => self.fixed_world_point_raw.map(|point| {
+                viewport.world_vector_to_view(std::array::from_fn(|axis| {
+                    point[axis].wrapping_sub(viewport.origin_raw[axis])
+                }))
+            }),
+            _ => None,
+        }
     }
 
     fn resolve_native_spatial_point(
@@ -168,6 +345,14 @@ impl ModelVertexResolver for WorldModelVertexResolver<'_> {
     ) -> Option<[i32; 3]> {
         let (frame, _) = self.native_context.as_ref()?;
         Some(generator.evaluate(frame.origin_view_raw))
+    }
+
+    fn owns_process_random(&self) -> bool {
+        self.jitter.random.is_some()
+    }
+
+    fn resolve_jitter_raw(&self, jitter: ModelVertexJitter) -> Option<ResolvedModelSlot> {
+        self.jitter.resolve(jitter)
     }
 
     fn report_native_vertex_failure(&self, failure: ModelNativeVertexFailure) {
@@ -682,6 +867,7 @@ pub struct ModelTreeRenderer<'a> {
     projection_authority: v2k_render::projection::SceneProjectionAuthority,
     native_edge_failures: Vec<ModelTreeNativeEdgeFailure>,
     native_vertex_failures: Vec<ModelTreeNativeVertexFailure>,
+    process_random: Option<ModelTreeProcessRandom<'a>>,
 }
 
 impl<'a> ModelTreeRenderer<'a> {
@@ -720,7 +906,14 @@ impl<'a> ModelTreeRenderer<'a> {
             projection_authority,
             native_edge_failures: Vec::new(),
             native_vertex_failures: Vec::new(),
+            process_random: None,
         }
+    }
+
+    /// Lend the draw the process generator, for tf3 vertices.
+    pub fn with_process_random(mut self, random: ModelTreeProcessRandom<'a>) -> Self {
+        self.process_random = Some(random);
+        self
     }
 
     /// Construct the model context installed by retail world setup.
@@ -1606,20 +1799,24 @@ impl<'a> ModelTreeRenderer<'a> {
             self.view_policy.view().is_some() && self.external_frame.owns_external_vertices();
         let native_view = self.external_frame.native_view_selection();
         let native_context = self.external_frame.native_context();
+        let fixed_world_point_raw = self.external_frame.native_fixed_world_point_raw();
         let owner = RefCell::new(&mut self.external_frame);
         let resolve_external = |parameters, node_view: &mut dyn FnMut(u16) -> Option<[i32; 3]>| {
             owner
                 .borrow_mut()
                 .resolve_parameter_world(parameters, self.world_surface, node_view)
         };
+        let transform = ModelTransform {
+            orientation,
+            position,
+            scale: self.scale,
+        };
+        let process_random = self.process_random;
+        let jitter = || ModelJitterOwner::new(model_id, process_random, transform);
         let world_vertex =
-            (self.view_pin == ViewPinMode::WorldSurface).then_some(WorldModelVertexResolver {
+            (self.view_pin == ViewPinMode::WorldSurface).then(|| WorldModelVertexResolver {
                 surface: self.world_surface,
-                transform: ModelTransform {
-                    orientation,
-                    position,
-                    scale: self.scale,
-                },
+                transform,
                 view: self.view_policy.view(),
                 native_view,
                 native_edges_required: native_edge_endpoints_required(
@@ -1632,7 +1829,11 @@ impl<'a> ModelTreeRenderer<'a> {
                 external_points: RefCell::new(HashMap::new()),
                 native_vertex_failures: RefCell::new(Vec::new()),
                 admit_every_face: false,
+                jitter: jitter(),
+                fixed_world_point_raw,
             });
+        let frontend_vertex = (world_vertex.is_none() && self.process_random.is_some())
+            .then(|| FrontendModelVertexResolver { jitter: jitter() });
         let context = ModelMaterializationContext {
             vars,
             linked,
@@ -1640,9 +1841,11 @@ impl<'a> ModelTreeRenderer<'a> {
                 self.view_policy
                     .selection(orientation, position, self.scale)
             }),
-            vertex_resolver: world_vertex
-                .as_ref()
-                .map(|resolver| resolver as &dyn ModelVertexResolver),
+            vertex_resolver: match (&world_vertex, &frontend_vertex) {
+                (Some(resolver), _) => Some(resolver as &dyn ModelVertexResolver),
+                (None, Some(resolver)) => Some(resolver as &dyn ModelVertexResolver),
+                (None, None) => None,
+            },
         };
         let materialized = model.materialize_with_context(context);
         let child_links: Vec<_> = materialized
@@ -1669,6 +1872,7 @@ impl<'a> ModelTreeRenderer<'a> {
             .map(|resolver| resolver.native_vertex_failures.borrow().clone())
             .unwrap_or_default();
         drop(world_vertex);
+        drop(frontend_vertex);
         drop(owner);
         self.consume_native_vertex_failures(model_id, &native_vertex_failures);
         self.consume_native_edge_failures(model_id, &materialized.native_edge_failures);
@@ -2292,6 +2496,7 @@ mod tests {
 
     mod emitter_tests;
     mod external_surface_tests;
+    mod jitter_tests;
     mod native_geometry_tests;
     mod surface_tests;
 
@@ -4558,6 +4763,119 @@ mod tests {
         );
     }
 
+    /// Overlay 49's static `ropelad` (model 878) hangs from `FUN_00427050`'s
+    /// point: its tf14 slots take that callback's VIEW words, so the tf7 rope
+    /// end and its tf13 surface pins draw instead of stopping.
+    #[v2k_test_support::retail_test]
+    fn static_rope_ladder_takes_its_callback_point_in_view() {
+        use crate::native_model_frame::{NativeModelFrame, NativeWorldViewport};
+        use v2k_render::projection::{
+            NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
+        };
+        let data = v2k_test_support::retail_dir();
+        let mut session = crate::session::GameSession::init(&data).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        session.load_level_by_id(49, 1).unwrap();
+        let cache = &session.cache;
+        let model = cache.global_model(878).unwrap();
+        assert_eq!(model.name.as_deref(), Some("ropelad"));
+        assert_eq!(model.records[0], [14, 0, 0, 0]);
+        let (terrain, objects) = (cache.terrain().unwrap(), cache.terrain_objects().unwrap());
+        let ladder = (0..256)
+            .flat_map(|z| (0..256).map(move |x| (x, z)))
+            .find_map(|(x, z)| {
+                let cell = terrain.cell(x, z)?;
+                let record = objects.records.get(usize::from(cell.attribute))?;
+                (cell.attribute != 0 && record.model_id_for(cell.terrain_type) == 878)
+                    .then_some((x as f32, z as f32))
+            })
+            .expect("overlay 49 places a rope ladder");
+        let instance = crate::static_objects::collect_static_terrain_objects(
+            terrain,
+            objects,
+            [ladder.0 + 0.5, 4.0, ladder.1 + 6.5],
+            [0.0, 0.0, -1.0],
+            (24, 24),
+        )
+        .into_iter()
+        .find(|object| object.model_id == 878)
+        .expect("the ladder is in the footprint");
+        let origin_raw = instance
+            .position
+            .map(|value| (value * 256.0).round() as i32 as i16);
+        let viewport = NativeWorldViewport {
+            origin_raw: [
+                i32::from(origin_raw[0]) + 100,
+                i32::from(origin_raw[1]) + 1024,
+                i32::from(origin_raw[2]) + 1536,
+            ],
+            axes_q31: [
+                [-2147347834, 0, 0],
+                [0, 2072352042, -560095147],
+                [0, -560130571, -2072483113],
+            ],
+            identity: false,
+        };
+        let frame = NativeModelFrame::from_static_object(viewport, origin_raw);
+        let frame_for_check = frame.clone();
+        let colors = ModelMaterialCache::new();
+        let mut renderer = RecordingRenderer::default();
+        let mut tree =
+            ModelTreeRenderer::new_world(&mut renderer, cache, &colors, 100.0 / 256.0, None, 0)
+                .with_scene_projection_authority(SceneProjectionAuthority::Native(
+                    NativeScreenProjection::new(
+                        [512, 512],
+                        [320, 240],
+                        [640, 480],
+                        ProjectionEffect::None,
+                    )
+                    .unwrap(),
+                ))
+                .with_view(ModelTreeView {
+                    position: viewport.origin_raw.map(|value| value as f32 / 256.0),
+                    forward: [0.0, 0.0, -1.0],
+                })
+                .with_native_external_frame(
+                    ExternalFrameMode::WorldPoint(instance.external_frame_world_point()),
+                    Some((frame, viewport)),
+                );
+        tree.draw_linked(
+            878,
+            [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            instance.position,
+            8,
+            None,
+            &AnimVars::default(),
+        );
+        assert_eq!(tree.native_vertex_failures(), &[]);
+        drop(tree);
+        let body = renderer.bodies.first().expect("rope ladder body");
+        assert!(!body.triangles.is_empty());
+        let callback = [i32::from(origin_raw[0]), 0, i32::from(origin_raw[2])];
+        let anchor = viewport.world_vector_to_view(std::array::from_fn(|axis| {
+            callback[axis] - viewport.origin_raw[axis]
+        }));
+        // Slots 4/5 (tf7) add slots 2/3 to the anchor, less the node origin.
+        let mut rope_ends: Vec<_> = (0..body.vertices.len())
+            .filter(|&index| body.vertex_type_flags[index] == 7)
+            .map(|index| body.vertex_view_raw[index].unwrap())
+            .collect();
+        rope_ends.sort();
+        let mut expected: Vec<_> = [2, 3]
+            .map(|slot| {
+                let top = frame_for_check.plain_slot_view_raw(slot, 0, [51, 768, 0]);
+                v2k_formats::models::ModelNativeSpatialGenerator::VectorSum {
+                    first: anchor,
+                    second: top,
+                }
+                .evaluate(frame_for_check.origin_view_raw)
+            })
+            .to_vec();
+        expected.sort();
+        assert_eq!(rope_ends, expected);
+        assert!(body.vertex_view_raw.iter().all(Option::is_some));
+    }
+
     #[v2k_test_support::retail_test]
     fn native_painter_actual_newant_uses_paired_view_keys_and_drains_prepared_h_edges() {
         use crate::native_model_frame::{NativeModelFrame, NativeWorldViewport};
@@ -4567,9 +4885,9 @@ mod tests {
             NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
         };
         let mut session = native_painter_session();
-        // Tick952 belongs to Intro2. Its authenticated terrain50 gives the
-        // captured tf13 shadow caches; fresh ordinary terrain13 differs here.
-        // Unmodified terrain50 and the captured process map agree at all seven
+        // Tick952 belongs to Intro2. Its authenticated terrain 50 gives the
+        // captured tf13 shadow caches; fresh ordinary terrain 13 differs here.
+        // Unmodified terrain 50 and the captured process map agree at all seven
         // reached body-shadow samples, despite unrelated distant crater cells.
         session.load_level_by_id(50, 1).unwrap();
         let model = session.cache.global_model(302).unwrap();
@@ -5101,9 +5419,9 @@ mod tests {
             NativeScreenProjection, ProjectionEffect, SceneProjectionAuthority,
         };
         let mut session = native_painter_session();
-        // Tick952 belongs to Intro2. Its authenticated terrain50 gives the
-        // captured tf13 shadow caches; fresh ordinary terrain13 differs here.
-        // Unmodified terrain50 and the captured process map agree at all seven
+        // Tick952 belongs to Intro2. Its authenticated terrain 50 gives the
+        // captured tf13 shadow caches; fresh ordinary terrain 13 differs here.
+        // Unmodified terrain 50 and the captured process map agree at all seven
         // reached body-shadow samples, despite unrelated distant crater cells.
         session.load_level_by_id(50, 1).unwrap();
         let model = session.cache.global_model(302).unwrap();
@@ -5730,7 +6048,7 @@ mod tests {
             child_frame.origin_view_raw[2], frame.origin_view_raw[2],
             "authored mount changes the current child VIEW origin"
         );
-        // This controlled parent header adds20 to test the local bypass. The
+        // This controlled parent header adds 20 to test the local bypass. The
         // actual Stag/claw hierarchy and unsigned radii remain the source input.
         let mut bypass_parent = model_entry(
             267,

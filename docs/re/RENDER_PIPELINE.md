@@ -246,6 +246,59 @@ that same bit. Both port world draw loops now admit attached bodies only when
 `800` is proven set, while retaining the existing unparented admission and the
 unresolved full body/effect gate above. See [Type17 Capture](TYPE17_CAPTURE.md).
 
+Inside that window the model root (`FUN_00465870`, through `FUN_00465840`
+from the actor draw `FUN_004138F0`; static objects have the same test in
+`FUN_00465390`) transforms the origin into VIEW space and walks the model
+only if its sphere meets the frame: with `c = z + radius` (header `+0x08`),
+`c` must pass 0x3F, and `-radius·c <= cx·c + x·focal_x < (width + radius)·c`
+and `-radius·c <= cy·c - y·focal_y < (height + radius)·c` over the display
+block `DAT_004FEED0`. A rejected model runs none of its callbacks: no
+emitter or Queen muzzle stamps, no Sub-M product marker, no fallback or tf3
+random words. `FUN_004138F0`'s tail after the walk (the health smoothing and
+the wreck draw `FUN_004136C0`) runs either way. The port applies the test to
+the gameplay and Intro2 actor bodies and the static objects in the authored
+frame whatever frame is shown (`WorldProjection::authored_words`). Inside it
+models walk retail and their callbacks write the game; outside it, a shown
+authored frame skips them, while a wider shown frame (Free, the widescreen
+adapter) still draws every scanned model but pixels-only, with every game
+write kept out (detached RNG copy and sub-H clone, no muzzle stamps, no
+Sub-M product writes). `display_independent_game` holds this: a New Game
+into Intro2 plays one process random stream in the software 4:3 frame and
+in the OpenGL widescreen.
+In the lab's New Game, Intro2's actor fallback callbacks (`0040A99B`,
+`0040A9BB`, `0040A9D4`) draw words on the same passes as the port's from
+pass 432 to 899 but one: 467 of 468 frames, against one without the test
+(the port's frame 434 still draws 21 words where retail draws none). Every
+model root reaches the same wrapper: a static scan of the retail executable
+for `CALL`
+`0x00465840` finds, besides the actor draw, the Hive suffix `0x41CDD9`
+(per ring, skipping a rejected ring), the reticle `0x421545` (per
+instance), the sky `0x42F375`/`0x42F395` (the two copies), the menu prop
+`0x43B410`, the particle models `0x442C7C`/`0x442D83`, the Targetter
+`0x44DC8C`/`0x44DDAF`, the HUD draws `0x42959A`/`0x4297E3` (`FUN_004292B0`)
+and `0x42A7EF` (`FUN_0042A6F0`), and two calls in the census-missing
+MindBall draw `FUN_004097A0` (`0x4098D7`/`0x409929`, one per ring of four;
+the spin advances at entry, a reject ends the whole draw, and all eight
+instances share the ball's origin so one test after the spin is exact). Each call site wraps its raw origin the
+actor way (16-bit delta plus the viewport origin, e.g. `40982E-40986D`,
+`41CC84-41CCA2`, `42150B-421542`) before the call, so the port's wrapped
+VIEW point plus the header radius is the faithful gate for each.
+The port applies it to the MindBall (whole draw), the Hive rings, the
+reticle instances, the Targetter ring and crosshair, the shield aura and
+the two sky copies in the authored frame alongside the actor bodies and
+the static objects. Two roots keep their own dispositions. The particle
+models (`FUN_00442BA0`/`FUN_00442CB0`) are not presented in the port at
+all (attached class 83/84/86 models stop with a logged line); gating them
+belongs to that feature. The HUD models draw in a dedicated HUD context:
+`FUN_004292B0` installs a HUD lens into `DAT_004FEED0`, and the port
+submits each model centered in an aim-at-point camera
+(`menu_camera_for_authored_point`) at a positive Section-8 depth (cargo
+4000, weapons 2560 and up) with its Section-8 radius, so the frame test
+operates on centered geometry from which no reject can arise and the
+near test always clears `0x3F`; the port intentionally runs them
+unfiltered. `FUN_0042A6F0`'s selected-item depth policy is ported as
+`retail_weapon_depth_raw` with its branch tests.
+
 The later model entry `FUN_00464E60` separately compares signed view Z with
 the unsigned radius at model header `+0x08`. It rejects
 `view_z - radius >= far`, and otherwise chooses the far constructor table
@@ -655,7 +708,11 @@ The high half is an optional global Section-8 model id. Only levels 13 and 14
 set it (305/306 = `sky1`/`sky2`). `FUN_0042F270` submits two identity-oriented
 copies: X follows half the camera X, Z follows the camera, and the second copy
 is offset by `-0x8000` in 8.8 coordinates (−128 world units). This produces the
-distant parallax sky geometry over the solid colour.
+distant parallax sky geometry over the solid colour. Each copy takes the root
+test (`FUN_00465840` at `0x42F375`/`0x42F395`) on its wrapped raw origin with
+the sky model's radius (32256 raw units, which dwarfs every camera-relative
+offset, so reachable poses always pass); the port gates each copy the same
+way in the authored frame.
 
 The port keeps the six-dword request under a per-level-load controller lease.
 After the terrain-transform attempt, it atomically stores controller state 5
@@ -1583,8 +1640,10 @@ continue even beyond the context far word, allowing the documented light-only
 case; clipped centres apply the behind, far, and extreme-screen rejection, with
 descriptor flag `0x02` retaining a hidden record. Sprite depth and expanded
 screen-rectangle overlap are tested later. The port evaluates this gate once
-per frame and shares its owned survivors between light accumulation and sprite
-submission. Stable visible Intro2 and Level 1 both use the captured far word
+per frame in the authored frame (its lens at its logical size) and shares
+its owned survivors between light accumulation and sprite submission; a
+wider shown frame reprojects the admitted records, and the `+1D` on-screen
+bits stay those of the authored frame. Stable visible Intro2 and Level 1 both use the captured far word
 `0x1800`; `0x1000` belongs only to the transient menu/pre-handoff context. Its
 lifecycle/clip policy is exact; the current centre projection still uses the
 port floating camera. The retained camera/model VIEW words do not by

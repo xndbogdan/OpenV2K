@@ -386,6 +386,22 @@ impl BehaviorContextRuntime {
         }
     }
 
+    /// `FUN_004480E0`'s install on the possessed body: `FUN_0040ABB0` reuses
+    /// its context for Player Control's Hovering style from Type46's list
+    /// (`+D0`), keeping the target and auxiliary words.
+    pub fn possessed_by_player_control(self) -> Option<Self> {
+        let program = behavior_program(24)?;
+        let next = self.reselect_named_type_default(
+            program,
+            program.initial_style_table_index_raw,
+            program.initial_style,
+        )?;
+        Some(Self {
+            choice_list_source: RetailRuntimeValue::Known(BehaviorChoiceListSource::TypeRecord(46)),
+            ..next
+        })
+    }
+
     /// `FUN_0040ABE0` with a request's list: as
     /// [`Self::from_fresh_weighted_selection`], with that list as the source.
     pub(crate) fn from_fresh_weighted_selection_from(
@@ -694,8 +710,8 @@ pub const QUIET_DEATH_BEHAVIOR_PROGRAM: BehaviorProgram = behavior!(
     0x0040C470
 );
 
-/// PE class18 descriptor4C8860 selects style4C73D8. Its only nonzero
-/// style word is initializer40C080 at+40; the initializer owns synchronous
+/// PE class18 descriptor 4C8860 selects style4C73D8. Its only nonzero
+/// style word is initializer 40C080 at+40; the initializer owns synchronous
 /// Type56 split births and deferred parent destruction.
 pub const SPLIT_AND_EXPLODE_BEHAVIOR_PROGRAM: BehaviorProgram = behavior!(
     18,
@@ -822,6 +838,8 @@ pub static REACHABLE_BEHAVIOR_PROGRAMS: &[BehaviorProgram] = &[
         initializer_argument_raw: RetailRuntimeValue::Known(0),
         ..behavior!(10, "Run Away", 0x004C88E0, 0x004C7618, 0, 0, 0, 0x0040B6C0)
     },
+    // Class 13 Flocking initial style 0x004C7DF8 carries initializer FUN_0040AEA0,
+    // which installs a 5,000-ms task through FUN_00402780 with tick FUN_004027A0.
     behavior!(13, "Flocking", 0x004C88B8, 0x004C7DF8, 0, 0, 0, 0x0040B640),
     behavior!(
         15,

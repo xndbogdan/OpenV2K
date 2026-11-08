@@ -154,6 +154,9 @@ use v2k_game::player_hull::{
     HULL_LOW_WARNING_BELOW_RAW, PLAYER_TYPE_46_HULL_PROFILE,
 };
 use v2k_game::player_surface_contact::{PlayerSurfaceContactFrame, PlayerSurfaceContactRequest};
+use v2k_game::possession::{
+    MindBallFlight, MindBallSpin, MindBallStep, Possession, MIND_BALL_MODEL_ID,
+};
 use v2k_game::possession_ray::{
     target_model_radius, LockAdvance, LockMode, LockShooter, PlayerMindControlLock,
     POSSESSION_TAKEOVER_HELD, RETICLE_MODEL_ID,
@@ -389,7 +392,7 @@ fn record_world_complete_after_hive_death(
     world_fx: &mut WorldFx,
 ) {
     notifications.queue_hive_destroyed_hint(retail_tick);
-    // 4567B0 gates both the time stamp and2EE70 campaign write on session28F
+    // 4567B0 gates both the time stamp and 2EE70 campaign write on session 28F
     // and the retained timestamp. A failed Hive kill only opens its retry.
     if tally.stamp_fun_004567b0(abort.abort_flag_0x28f(), retail_tick) {
         match abort.complete_current_world(progress) {
@@ -1054,6 +1057,28 @@ fn apply_gameplay_input_edges(
     if !has_player || player_dying {
         return;
     }
+    if POSSESSED.load(std::sync::atomic::Ordering::Relaxed) {
+        // The reader's callbacks act through the controller on the possessed
+        // body: C and D set the +20E countdown (FUN_004440A0, FUN_00444070),
+        // the hold key turns that body's Sub-J (FUN_004442E0), and the weapon
+        // keys need its Sub-E (FUN_00444180), which a Type17 lacks.
+        if edges.collect {
+            entities.queue_beam(BeamCommand::Collect);
+        }
+        if edges.drop {
+            entities.queue_beam(BeamCommand::Drop);
+        }
+        if edges.rotate_hold {
+            let body = POSSESSED_BODY.load(std::sync::atomic::Ordering::Relaxed);
+            if let Some(RetailRuntimeValue::Known(Some(hold))) = entities
+                .entity_mut(body)
+                .map(|body| &mut body.sub_j_attachment_runtime)
+            {
+                hold.rotate_first_to_end();
+            }
+        }
+        return;
+    }
     if edges.collect {
         entities.queue_beam(BeamCommand::Collect);
     }
@@ -1073,6 +1098,352 @@ fn apply_gameplay_input_edges(
         {
             hold.rotate_first_to_end();
         }
+    }
+}
+
+/// Whether the controller drives a possessed body this frame, for the input
+/// edges' gate.
+static POSSESSED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// The possessed body, for the reader's hold key.
+static POSSESSED_BODY: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+const POSSESSION_PAIRS_HELD: &str = "Possession: a possessed body's pair walk stopped (its FUN_00447D70 pickup of a person, FUN_00443B50, is held); the rest of its walk this frame is skipped";
+
+fn possession_stop(reported: &mut HashSet<&'static str>, stop: &'static str) {
+    if reported.insert(stop) {
+        eprintln!("{stop}");
+    }
+}
+
+struct PossessionFrame<'a> {
+    em: &'a mut EntityManager,
+    tasks: &'a mut SpecializedActorTaskScheduler,
+    cache: &'a mut v2k_game::resource_cache::ResourceCache,
+    static_damage: &'a mut StaticDamageScheduler,
+    notifications: &'a mut GameplayNotifications,
+    world_fx: &'a mut WorldFx,
+    mind_ball: &'a mut Option<(u32, MindBallFlight)>,
+    followed_body: &'a mut Option<u32>,
+    chase_camera: &'a mut ChaseCameraState,
+    stops: &'a mut HashSet<&'static str>,
+    channels: &'a MotionChannels,
+    craft_live: bool,
+    /// TAB this frame: the reader, after the `+70` test, sets `+70` to 1
+    /// (`FUN_004442B0`), so the next visit releases the body.
+    tab_pressed: bool,
+    beam_expiry: v2k_game::entity::BeamExpiry,
+    elapsed_micros: u32,
+    retail_tick: u32,
+}
+
+/// Why the takeover of a lock's target is held.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TakeoverHeld {
+    /// Player Control runs only on a Type17 here.
+    Type(u32),
+    /// The target's hold is not a native captor's captured row.
+    Carrying,
+    /// The target has no owner this port can hand over.
+    Custody,
+}
+
+/// `FUN_004480E0` on the lock's target: one selector word for each behavior
+/// source it installs (`FUN_00425680`: the target's, then the craft's), the
+/// target's task slots cleared in the Hovering style's order (`FUN_004464F0`)
+/// and the 60000 ms countdown: the possessed body's owner.
+fn take_over_possession_target(
+    em: &mut EntityManager,
+    tasks: &mut SpecializedActorTaskScheduler,
+    world_fx: &mut WorldFx,
+    craft: u32,
+    target: u32,
+) -> Result<v2k_game::possession::PossessionCustody, TakeoverHeld> {
+    let entity = em
+        .iter_all()
+        .find(|entity| entity.id == target)
+        .ok_or(TakeoverHeld::Custody)?;
+    if entity.entity_type != 17 {
+        return Err(TakeoverHeld::Type(entity.entity_type));
+    }
+    if !v2k_game::possession::live::takeover_keeps_hold(em, target) {
+        return Err(TakeoverHeld::Carrying);
+    }
+    let native_owner =
+        v2k_game::intro2_type17::intro2_type17_allocation_authenticates_public(entity);
+    let previous_context = match entity.current_behavior_context {
+        RetailRuntimeValue::Known(Some(context)) => context,
+        _ => return Err(TakeoverHeld::Custody),
+    };
+    let context = em
+        .player_control_context(target)
+        .ok_or(TakeoverHeld::Custody)?;
+    if !tasks.release_type17_for_possession(target) {
+        return Err(TakeoverHeld::Custody);
+    }
+    world_fx.next_shared_retail_random_u16();
+    world_fx.next_shared_retail_random_u16();
+    em.possess_body_tasks(target, context);
+    Ok(v2k_game::possession::PossessionCustody {
+        state: Possession::take_over(craft, target),
+        native_owner,
+        previous_context,
+    })
+}
+
+/// The possessed body's Player Control visit (`FUN_00446640`): the `+70`
+/// countdown, then `FUN_00446D70`'s release or the hover integrator over its
+/// own components and its static contact's hook and deliveries, whose lethal
+/// hit releases it through its death; then the MindBall's flight
+/// (`FUN_00409460`) and its end (`FUN_00409420`). A body gone without that
+/// death leaves the controller bodiless, which the frame's end turns into the
+/// player's death (`FUN_0044FFA0` -> `FUN_00450980`).
+fn advance_possession(frame: PossessionFrame<'_>) {
+    let PossessionFrame {
+        em,
+        tasks,
+        cache,
+        static_damage,
+        notifications,
+        world_fx,
+        mind_ball,
+        followed_body,
+        chase_camera,
+        stops,
+        channels,
+        craft_live,
+        tab_pressed,
+        beam_expiry,
+        elapsed_micros,
+        retail_tick,
+    } = frame;
+    // A death inside a damage call since the last visit released the body.
+    let mut released = tasks.possession_released.take();
+    if let Some(custody) = tasks.possession {
+        let mut state = custody.state;
+        let body_live = em
+            .iter_all()
+            .any(|entity| entity.id == state.body && entity.active);
+        // FUN_00446640 counts +20E down first: a collect only acts for a body
+        // with capability bit 0; a drop pops the body's hold (FUN_00446D30).
+        if body_live
+            && em.tick_possessed_beam(elapsed_micros, beam_expiry)
+                == Some(v2k_game::entity::BeamCommand::Drop)
+        {
+            match v2k_game::possession::live::drop_cargo(
+                &mut v2k_game::possession::live::PossessionWorld {
+                    entities: em,
+                    tasks,
+                    world_fx,
+                    retail_tick,
+                },
+                notifications,
+                state.body,
+            ) {
+                Ok(Some(child)) => log!("Possession: body {} dropped {child}", state.body),
+                Ok(None) => {}
+                Err(block) => {
+                    if stops.insert("possessed drop") {
+                        eprintln!("Possession: the possessed body's drop stopped: {block:?}");
+                    }
+                }
+            }
+        }
+        if !body_live {
+            // FUN_00446640 never runs; the frame's end kills the player.
+        } else if state.advance(craft_live, elapsed_micros) {
+            tasks.possession = None;
+            released = Some(v2k_game::possession::live::release(
+                &mut v2k_game::possession::live::PossessionWorld {
+                    entities: em,
+                    tasks,
+                    world_fx,
+                    retail_tick,
+                },
+                cache,
+                v2k_game::possession::PossessionCustody { state, ..custody },
+            ));
+        } else {
+            if tab_pressed {
+                state.end_on_next_visit();
+            }
+            if let Some(custody) = tasks.possession.as_mut() {
+                custody.state = state;
+            }
+            let water_enabled = cache
+                .level_desc()
+                .and_then(|level| level.raw_u32(0x84))
+                .unwrap_or(0)
+                != 0;
+            let turn_channel =
+                em.iter_all()
+                    .find(|entity| entity.id == state.body)
+                    .map_or(0, |body| {
+                        let [heading, pitch, _] = body.rotation_heading_pitch_roll_raw();
+                        channels.hover_turn_raw(heading, pitch)
+                    });
+            let visit = match (cache.level_terrain(), cache.terrain_objects()) {
+                (Some(terrain), Some(terrain_objects)) => em.possessed_body_player_control(
+                    state.body,
+                    v2k_game::entity::PossessedBodyFrame {
+                        turn_channel,
+                        throttle_q16: channels.throttle_q16,
+                        elapsed_micros,
+                        terrain,
+                        terrain_objects,
+                        model_pool: cache,
+                        water_enabled,
+                        retail_tick,
+                    },
+                ),
+                _ => Err(v2k_game::entity::PossessedBodyBlock::Components),
+            };
+            match visit {
+                Ok(None) => {}
+                Ok(Some(contact)) => {
+                    match v2k_game::possession::live::deliver_static_contact(
+                        &mut v2k_game::possession::live::PossessionWorld {
+                            entities: em,
+                            tasks,
+                            world_fx,
+                            retail_tick,
+                        },
+                        cache,
+                        static_damage,
+                        notifications,
+                        contact,
+                        v2k_game::possession::PossessionCustody { state, ..custody },
+                    ) {
+                        Ok(None) => {}
+                        Ok(Some(release)) => {
+                            tasks.possession = None;
+                            released = Some(release);
+                        }
+                        Err(block) => {
+                            if stops.insert("possessed static contact") {
+                                eprintln!(
+                                    "Possession: the possessed body's static contact stopped: {block:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(block) => {
+                    if stops.insert("possessed body") {
+                        eprintln!(
+                            "Possession: the possessed body's Player Control stopped: {block:?}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+    if let Some(released) = released {
+        if let Some(stop) = released.behavior_stop {
+            eprintln!("Possession release: the body's own behavior stopped: {stop}");
+        }
+        match released.mind_ball {
+            Ok(id) => {
+                *mind_ball = Some((id, MindBallFlight::born(released.body, released.craft)));
+                *followed_body = Some(id);
+                log!(
+                    "Possession: body {} released, MindBall {id} born",
+                    released.body
+                );
+            }
+            Err(block) => {
+                // FUN_00446D70's failed birth: the session follows the craft.
+                eprintln!("Possession release: MindBall birth stopped: {block}");
+                chase_camera.reset();
+                *followed_body = None;
+            }
+        }
+    }
+    if let (Some((id, flight)), Some(terrain)) = (mind_ball.as_mut(), cache.level_terrain()) {
+        let id = *id;
+        if em.fly_mind_ball(id, flight, elapsed_micros as i32, terrain) == MindBallStep::Die {
+            // FUN_00409420: the session follows the craft again.
+            *mind_ball = None;
+            *followed_body = None;
+        }
+    }
+    POSSESSED.store(
+        tasks.possession.is_some(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    POSSESSED_BODY.store(
+        tasks.possession.map_or(0, |custody| custody.state.body),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+}
+
+/// `FUN_004097A0`: the MindBall's two rings of model 243.
+#[allow(clippy::too_many_arguments)]
+fn draw_mind_ball(
+    renderer: &mut dyn v2k_render::Renderer,
+    cache: &v2k_game::resource_cache::ResourceCache,
+    colors: &v2k_game::model_color::ModelMaterialCache,
+    camera: &Camera,
+    em: &v2k_game::entity::EntityManager,
+    ball: Option<&(u32, MindBallFlight)>,
+    spin: &mut MindBallSpin,
+    frame_us: u32,
+    retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
+) {
+    let Some((id, flight)) = ball else {
+        return;
+    };
+    let Some(entity) = em.iter_all().find(|entity| entity.id == *id) else {
+        return;
+    };
+    let RetailRuntimeValue::Known(basis) = entity.physical_body_basis_q31() else {
+        return;
+    };
+    // `FUN_004097A0` advances the spin at entry, tests every instance
+    // through `FUN_00465840` and stops the whole draw at the first reject.
+    // All eight share the ball's origin, so one test gates the draw after
+    // the spin advanced.
+    let instances = spin.draw(
+        [basis.lateral, basis.up, basis.forward],
+        flight.fade,
+        frame_us,
+    );
+    if let Some(viewport) = native_viewport {
+        let point = viewport.actor_origin_view(entity.position_raw());
+        if !world_model_root_in_view(cache, MIND_BALL_MODEL_ID, point, root_lens) {
+            return;
+        }
+    }
+    let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
+    let position_raw = entity.position_raw();
+    let draw_position: [f32; 3] = std::array::from_fn(|axis| {
+        camera_raw[axis].wrapping_add(i32::from(
+            position_raw[axis].wrapping_sub(camera_raw[axis] as i16),
+        )) as f32
+            / 256.0
+    });
+    for instance in instances {
+        let mut vars = AnimVars::default();
+        vars.dynamic[0] = i32::from(retail_tick as u16);
+        vars.dynamic[1] = i32::from(instance.size_word);
+        ModelTreeRenderer::new_world(
+            renderer,
+            cache,
+            colors,
+            GAMEPLAY_MODEL_SCALE,
+            Some(MenuSceneLight::NEUTRAL),
+            retail_tick as i32,
+        )
+        .with_view(camera.into())
+        .draw_linked(
+            MIND_BALL_MODEL_ID,
+            instance.orientation(),
+            draw_position,
+            8,
+            None,
+            &vars,
+        );
     }
 }
 
@@ -2394,7 +2765,7 @@ fn run_game(
     let mut actor_stops_reported = HashSet::<u32>::new();
     let mut type9_task_diagnostics = type9_task_diagnostics::Type9TaskDiagnostics::default();
     let mut current_level_id: Option<u32> = None;
-    // Session+38 retains entry XYZ across movement.456D10 reuses these words
+    // Session+38 retains entry XYZ across movement. 456D10 reuses these words
     // for failed-world return and forces fresh velocity/attitude/heading.
     let mut current_world_entry_position_raw: Option<[i16; 3]> = None;
     let mut pending_failed_world_interior_request = false;
@@ -2475,6 +2846,10 @@ fn run_game(
     let mut static_damage = StaticDamageScheduler::new();
     let mut return_to_frontend_pending = false;
     let mut frontend_entry_card: Option<FrontendEntryCard> = None;
+    // FUN_0042B230 cleans up prior craft bodies through FUN_004382E0 / FUN_0040D750
+    // and has not yet built the frontend's two actors.
+    let mut frontend_first_entry = true;
+    let mut frontend_card_carry_micros = 0u32;
     let mut static_contact_error_reported = false;
     // Each general active-pair stop line is reported once a world.
     let mut active_pair_stops_reported = std::collections::HashSet::<String>::new();
@@ -2487,6 +2862,18 @@ fn run_game(
     let mut pending_player_shots = Vec::new();
     let mut mind_control_lock = PlayerMindControlLock::default();
     let mut mind_control_takeover_reported = false;
+    // The MindBall a release leaves, the session's followed body (+2A8) when
+    // it is not the craft, and the possession's typed stops, each reported
+    // once a run. The task scheduler owns the possessed body (FUN_004480E0's
+    // controller words). `None` is the craft: retail keeps its handle in
+    // `+2A8`, written by `FUN_00456770` on takeover and release.
+    let mut mind_ball: Option<(u32, MindBallFlight)> = None;
+    let mut mind_ball_spin = MindBallSpin::default();
+    let mut followed_body: Option<u32> = None;
+    let mut possession_stops_reported: HashSet<&'static str> = HashSet::new();
+    let mut hive_mouth_stops_reported: HashSet<String> = HashSet::new();
+    // TAB reached the reader while a body was possessed.
+    let mut possession_tab_pressed = false;
     let mut native_entity_weapon_error_reported = false;
     let mut held_weapon_selectors_reported = HashSet::new();
     let mut targetter = TargetterRuntime::new(0);
@@ -2776,6 +3163,7 @@ fn run_game(
                     current_level_id,
                     last_frame_delta_micros,
                     retail_clock.current(),
+                    world_fx.shared_retail_random_state(),
                     entity_manager.as_ref(),
                     &player_craft,
                     &player_hull,
@@ -2949,8 +3337,9 @@ fn run_game(
             )
         });
         // FUN_00495940 applies the window's activity (WM_ACTIVATEAPP) once a
-        // frame: deactivating raises the suspended flag and pause reason 4
-        // and runs the mode's deactivate hook, reactivating the reverse.
+        // frame: deactivating (FUN_0044E6A0) raises the suspended flag and
+        // pause reason 4 and runs the mode's deactivate hook, reactivating
+        // (FUN_0044E6E0) the reverse.
         let mut suspend_now = false;
         let mut unsuspend_now = false;
         if let Some(active) = events.iter().rev().find_map(|event| match event {
@@ -3047,6 +3436,27 @@ fn run_game(
             }
 
             GameState::Menu(shell) | GameState::Paused { shell } => {
+                if !menu_is_paused && std::mem::take(&mut frontend_first_entry) {
+                    // The process's first FUN_0042B230: no frontend actors
+                    // exist yet (FUN_00468D00 < 2), so it builds the class-1
+                    // proxy and Klaus, each FUN_00438080 spawn drawing one
+                    // FUN_00425680 word. Then, as on every entry, it arms
+                    // the card, and its pass runs no frontend tick.
+                    world_fx.next_shared_retail_random_u16();
+                    world_fx.next_shared_retail_random_u16();
+                    frontend_entry_card = Some(FrontendEntryCard {
+                        last_frame: renderer.capture_frame(FrameCaptureSource::Presented),
+                        timer: probe
+                            .fixed_step_micros
+                            .is_none()
+                            .then(LoadingCardTimer::arm),
+                    });
+                    continue;
+                }
+                // The pass after the card's charges both passes' time.
+                let elapsed_micros = (elapsed_micros
+                    + std::mem::take(&mut frontend_card_carry_micros))
+                .min(RETAIL_FRAME_DELTA_MAX_US);
                 let mut redraw_paused_world =
                     std::mem::take(&mut paused_world_redraw_pending) && menu_is_paused;
                 // FUN_0042B230's last card callback (FUN_0042D620, awaited by
@@ -3092,7 +3502,12 @@ fn run_game(
                     }
                     _ => false,
                 };
-                if !menu_is_paused {
+                if frontend_card_drawn {
+                    // The init's pump call runs the frontend tick after the
+                    // card without FUN_0042AA10; the next call's delta spans
+                    // both passes (the lab: 20,000 then 40,000 us).
+                    frontend_card_carry_micros = elapsed_micros;
+                } else if !menu_is_paused {
                     // The frontend's clock step (FUN_0042AA10).
                     retail_tick = retail_clock.advance(u64::from(elapsed_micros));
                 }
@@ -3123,7 +3538,8 @@ fn run_game(
                 }
 
                 // The pause and suspended modes' hooks (FUN_00451420 and
-                // FUN_00451390 install FUN_004513E0 and FUN_00451400): the
+                // FUN_00451390 set the window hooks FUN_004513E0 and
+                // FUN_00451400 through FUN_0044E720 and FUN_0044E730): the
                 // window going inactive puts the suspended screen over the
                 // menu, and active again pops it. The map's save menu has
                 // no hooks.
@@ -4030,25 +4446,33 @@ fn run_game(
                                 renderer.capture_frame(FrameCaptureSource::CurrentScene);
                         }
                     }
-                    render_pause_menu(
-                        &mut *renderer,
-                        shell,
-                        &system_strings,
-                        &menu_resources,
-                        menu_fonts.as_ref(),
-                        &session.cache,
-                        &face_colors,
-                        retail_tick,
-                        paused_world_frame.as_ref(),
-                    );
+                    world_fx.with_process_random(|random| {
+                        render_pause_menu(
+                            &mut *renderer,
+                            shell,
+                            &system_strings,
+                            &menu_resources,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            &face_colors,
+                            retail_tick,
+                            paused_world_frame.as_ref(),
+                            random,
+                        )
+                    });
+                } else if begin_intro {
+                    // FUN_004942E0 skips the draw chain of a pass whose tick
+                    // switched descriptors; that tick still evolved the planes.
+                    billboard.evolve_depth_fade(elapsed_micros, frontend_fade_before_actor);
                 } else {
                     let (billboard_frame, wrapped) = billboard.prepare_frontend_render_frame(
                         elapsed_micros,
                         frontend_fade_before_actor,
                         shell.frontend_depth_fade_mode(),
                     );
-                    // The card stands for this frame's present.
-                    if !frontend_card_drawn {
+                    // After a card the same pump call draws and presents the
+                    // first frontend frame too (its ring takes its words).
+                    world_fx.with_process_random(|random| {
                         render_menu(
                             &mut *renderer,
                             shell,
@@ -4059,8 +4483,10 @@ fn run_game(
                             &face_colors,
                             &billboard_frame,
                             retail_tick,
-                        );
-                    }
+                            random,
+                        )
+                    });
+                    shell.end_cold_entry(retail_tick);
                     if wrapped {
                         GlobalSoundRuntime::new(
                             &session.cache,
@@ -4283,11 +4709,14 @@ fn run_game(
                 // The stopped session's mode routes to the frontend menu
                 // (FUN_0044FDC0 for the results and map modes, then FUN_0042A940).
                 let shell = make_menu!(false);
-                // FUN_0042B230 restarts the idle countdown from its reload,
-                // and this pass's FUN_0042B5D0 already counts (the lab's
-                // second attract expires 499 passes after the init's).
+                // FUN_0042B230 restarts the idle countdown from its reload;
+                // the init's pass runs no frontend tick.
+                if std::mem::take(&mut frontend_first_entry) {
+                    // A run that started in a world builds them here.
+                    world_fx.next_shared_retail_random_u16();
+                    world_fx.next_shared_retail_random_u16();
+                }
                 idle_countdown.enter_frontend();
-                idle_countdown.tick(elapsed_micros, window_suspended, network_game.is_some());
                 // The init's loading timer (FUN_0042D7F0) draws its card over
                 // whatever was presented last; nothing clears it first.
                 frontend_entry_card = Some(FrontendEntryCard {
@@ -4297,7 +4726,6 @@ fn run_game(
                         .is_none()
                         .then(LoadingCardTimer::arm),
                 });
-                class1_proxy.advance_proxy(elapsed_micros.min(125_000));
                 state = GameState::Menu(shell);
                 // Teardown is synchronous and must not become the first
                 // frontend clock advance.
@@ -4351,7 +4779,7 @@ fn run_game(
                         .play_global_sound(v2k_game::queen::CHEAT_ENABLE_SOUND_ID);
                     }
                 }
-                // 42E270 stages flags0xF before the old body is released.
+                // 42E270 stages flags 0xF before the old body is released.
                 // Both a map checkpoint and a direct handoff restore this
                 // controller snapshot before any destination actor is born.
                 // The Cheats world selector stages nothing: the snapshot's
@@ -4643,7 +5071,7 @@ fn run_game(
                     player_craft.fuel_raw = v2k_game::weapon_inventory::NETWORK_ENTRY_FUEL_RAW;
                 }
                 if let Some(restore) = native_restore {
-                    // Mode6 restores these controller owners before42E570's
+                    // Mode6 restores these controller owners before 42E570's
                     // world initialization and before any pickup/death event.
                     weapon_inventory = restore.inventory.clone();
                     player_capabilities = restore.capabilities;
@@ -5049,7 +5477,7 @@ fn run_game(
                         terrain_objects: session.cache.terrain_objects(),
                         model_extent_raw: Some(&model_extent_raw),
                     };
-                    // 51710 runs451C00 after every ordinary native player
+                    // 51710 runs 451C00 after every ordinary native player
                     // load, including an empty fresh profile. Its surface
                     // and world-style6 ballast phases are not warp-only.
                     let cargo_state = campaign_cargo_controller_state.unwrap_or_else(|| {
@@ -5226,6 +5654,9 @@ fn run_game(
                 camera = Camera::new(render_w as f32 / render_h.max(1) as f32);
                 world_projection.apply_to(&mut camera, (render_w, render_h));
                 chase_camera.reset();
+                specialized_actor_tasks.possession = None;
+                mind_ball = None;
+                followed_body = None;
                 if let Some(player) = em.player() {
                     let pose = chase_camera.update(
                         ChaseCameraTarget {
@@ -5254,7 +5685,7 @@ fn run_game(
                     .map(HullDamageProfile::from_type_record)
                     .unwrap_or(PLAYER_TYPE_46_HULL_PROFILE);
                 player_hull = if arrived_by_campaign_warp {
-                    // 443440's flag1 refills hull health;443560 also restores
+                    // 443440's flag1 refills hull health; 443560 also restores
                     // the retained controller+1BC shield into entity+50.
                     player_hull.campaign_world_replacement(loaded_hull_profile)
                 } else {
@@ -5299,7 +5730,7 @@ fn run_game(
                     Some(id) => log!("Player model: player4 = global pool id {}", id),
                     None => log!("Player model: player4 not found in global pool"),
                 }
-                // The old manager was cleared before construction.451C00 may
+                // The old manager was cleared before construction. 451C00 may
                 // already own authored class0 cargo or a native ballast birth;
                 // preserve those leases while adopting the remaining families.
                 card_yield!("player and camera setup");
@@ -5412,9 +5843,9 @@ fn run_game(
                     log!("Intro2: adopted {meteors} Boulder/Trailing Fire owners");
                 }
                 // FUN_004568B0 admits the callback only in gameplay phase 5.
-                // Ordinary native Section-13 rebuilds drain here.451710 then
+                // Ordinary native Section-13 rebuilds drain here. 451710 then
                 // clears the visible load slots while preserving their hint
-                // masks, before428AD0 resets the world clock below.
+                // masks, before 428AD0 resets the world clock below.
                 if purpose.uses_authored_world_publication(lid) {
                     match gameplay_notifications
                         .drain_fresh_level1_type9_attract_attention_receipts(&mut em)
@@ -5681,7 +6112,7 @@ fn run_game(
                 if let Some(shell) = card_klaus.as_deref_mut() {
                     shell.visit_after_load(card_callback_micros);
                 }
-                // The callback's FUN_0042AF00 then draws the card: Klaus over
+                // The worker defaults (FUN_0042F4F0) and callback's FUN_0042AF00/FUN_0042B1E0 then draw and present the card: Klaus over
                 // black and the blinking "Loading". A world load's record
                 // (004F71B0) leaves the logo flag (+0C) zero.
                 let card_tick = card_clock.advance(u64::from(card_callback_micros));
@@ -6596,6 +7027,7 @@ fn run_game(
                         },
                         targetter,
                         mind_control_lock.clone(),
+                        (mind_ball, mind_ball_spin),
                         retail_tick,
                     )
                     .redraw(
@@ -6838,6 +7270,9 @@ fn run_game(
                             specialized_actor_tasks: &mut specialized_actor_tasks,
                             pending_player_shots: &mut pending_player_shots,
                             mind_control_lock: &mut mind_control_lock,
+                            mind_ball: mind_ball.as_ref(),
+                            mind_ball_spin: &mut mind_ball_spin,
+                            frame_us: 0,
                             entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                             player_craft: &player_craft,
                             player_hull: &player_hull,
@@ -7007,7 +7442,7 @@ fn run_game(
                                 else {
                                     return Err("cargo snapshot unavailable".into());
                                 };
-                                // 4D0568's low words are153..188 for logical1..36;
+                                // 4D0568's low words are 153..188 for logical 1..36;
                                 // 451FB0 uses only that half of the name/briefing pair.
                                 let name = session
                                     .cache
@@ -7099,17 +7534,20 @@ fn run_game(
                                     }
                                     paused_world_frame =
                                         renderer.capture_frame(FrameCaptureSource::CurrentScene);
-                                    render_pause_menu(
-                                        &mut *renderer,
-                                        &shell,
-                                        &system_strings,
-                                        &menu_resources,
-                                        menu_fonts.as_ref(),
-                                        &session.cache,
-                                        &face_colors,
-                                        retail_tick,
-                                        paused_world_frame.as_ref(),
-                                    );
+                                    world_fx.with_process_random(|random| {
+                                        render_pause_menu(
+                                            &mut *renderer,
+                                            &shell,
+                                            &system_strings,
+                                            &menu_resources,
+                                            menu_fonts.as_ref(),
+                                            &session.cache,
+                                            &face_colors,
+                                            retail_tick,
+                                            paused_world_frame.as_ref(),
+                                            random,
+                                        )
+                                    });
                                     state = GameState::Paused { shell };
                                     continue 'main_loop;
                                 }
@@ -7660,7 +8098,7 @@ fn run_game(
                                     entities, world_fx: &world_fx,
                                     specialized_actor_tasks: &specialized_actor_tasks,
                                 },
-                                targetter, mind_control_lock.clone(), retail_tick,
+                                targetter, mind_control_lock.clone(), (mind_ball, mind_ball_spin), retail_tick,
                             )
                         });
                         let mut shell = if kind == GameplayInterruption::Suspend {
@@ -7766,7 +8204,14 @@ fn run_game(
                             // TAB = hovercraft <-> VTOL mode toggle (V2000).
                             // SDL repeat events are filtered by GameWindow, so
                             // this is one request per physical key-down edge.
-                            if *kc == Keycode::Tab && has_player && !player_hull.dying {
+                            if *kc == Keycode::Tab
+                                && has_player
+                                && specialized_actor_tasks.possession.is_some()
+                            {
+                                // FUN_004442B0, from the reader inside the
+                                // possessed body's visit.
+                                possession_tab_pressed = true;
+                            } else if *kc == Keycode::Tab && has_player && !player_hull.dying {
                                 request_vehicle_mode_toggle(
                                     &mut player_craft,
                                     &mut gameplay_notifications,
@@ -8054,24 +8499,36 @@ fn run_game(
                 let mut cargo_full_fx = None;
                 // Picking up a deployed Portable Radar removes its coverage
                 // while the drop context reads terrain: lend the radar apart.
-                let cargo_frame = session.cache.with_detached_terrain_radar(|cache, radar| {
-                    let drop_context = em.player().and_then(|player| {
-                        cache.terrain().map(|terrain| CargoDropContext {
-                            carrier_orientation: player_model_orientation(&player_craft, player),
-                            terrain,
+                // While a body is possessed the controller's +20E countdown
+                // runs on that body's Player Control visit instead.
+                let cargo_frame = if specialized_actor_tasks.possession.is_some() {
+                    v2k_game::entity::PlayerCargoFrameOutcome {
+                        beam: None,
+                        blocked: Vec::new(),
+                    }
+                } else {
+                    session.cache.with_detached_terrain_radar(|cache, radar| {
+                        let drop_context = em.player().and_then(|player| {
+                            cache.terrain().map(|terrain| CargoDropContext {
+                                carrier_orientation: player_model_orientation(
+                                    &player_craft,
+                                    player,
+                                ),
+                                terrain,
+                            })
+                        });
+                        em.update_player_cargo(PlayerCargoFrame {
+                            elapsed_micros,
+                            beam_expiry,
+                            drop_context,
+                            retail_tick,
+                            scheduler: &mut specialized_actor_tasks,
+                            world_fx: &mut world_fx,
+                            notifications: &mut gameplay_notifications,
+                            radar: Some(radar),
                         })
-                    });
-                    em.update_player_cargo(PlayerCargoFrame {
-                        elapsed_micros,
-                        beam_expiry,
-                        drop_context,
-                        retail_tick,
-                        scheduler: &mut specialized_actor_tasks,
-                        world_fx: &mut world_fx,
-                        notifications: &mut gameplay_notifications,
-                        radar: Some(radar),
                     })
-                });
+                };
                 for (entity_id, reason) in &cargo_frame.blocked {
                     log!("Cargo behavior {entity_id} blocked: {reason}");
                 }
@@ -8110,6 +8567,68 @@ fn run_game(
                                 elapsed_micros,
                                 retail_tick,
                             );
+                        }
+                    }
+                }
+
+                // The craft ran Player Control this frame, or Passive Player.
+                let possessed_at_entry = specialized_actor_tasks.possession.is_some();
+                // FUN_00444F60 -> FUN_00420A50 ends the craft's mode controller
+                // with the lock's advance outside network play. The craft
+                // leads the live list, so the lock reads the other bodies
+                // before their visits and the craft's previous matrix, and a
+                // takeover (FUN_004480E0) replaces the target's behavior
+                // before the target's own visit this frame.
+                if chase_mode
+                    && has_player
+                    && !player_hull.dying
+                    && network_game.is_none()
+                    && !possessed_at_entry
+                {
+                    let mut takeover_target = None;
+                    if let Some(player) = em.player() {
+                        let lock = mind_control_lock.for_body(player.id);
+                        let shooter = LockShooter {
+                            body: player,
+                            basis: player_body_basis(&player_craft, player),
+                        };
+                        let elapsed =
+                            elapsed_micros.min(v2k_game::hover::RETAIL_FRAME_DELTA_MAX_US) as i32;
+                        let bodies: Vec<_> = em.iter_all().collect();
+                        match lock.advance(shooter, bodies.iter().copied(), elapsed) {
+                            Ok(LockAdvance::Continue) => {}
+                            Ok(LockAdvance::TakeOver { target }) => takeover_target = Some(target),
+                            Err(block) => {
+                                eprintln!("Possession Ray lock stopped: {block:?}");
+                                lock.stop();
+                            }
+                        }
+                    }
+                    if let (Some(target), Some(craft)) =
+                        (takeover_target, em.player().map(|player| player.id))
+                    {
+                        match take_over_possession_target(
+                            em,
+                            &mut specialized_actor_tasks,
+                            &mut world_fx,
+                            craft,
+                            target,
+                        ) {
+                            Ok(custody) => {
+                                specialized_actor_tasks.possession = Some(custody);
+                                possession_tab_pressed = false;
+                                // FUN_00456770: the takeover records the target
+                                // in the session's followed body (+2A8).
+                                followed_body = Some(target);
+                                log!("Possession Ray: body {target} taken over");
+                            }
+                            Err(held) => {
+                                if !std::mem::replace(&mut mind_control_takeover_reported, true) {
+                                    eprintln!(
+                                        "{POSSESSION_TAKEOVER_HELD} (body {target}: {held:?})"
+                                    );
+                                }
+                            }
                         }
                     }
                 }
@@ -8190,6 +8709,22 @@ fn run_game(
                 // moves the body. A death created later in this frame begins
                 // at the final entry boundary and receives its first dt here
                 // on the following controlled visit.
+                // FUN_0044FFA0's controller check ends the previous frame: a
+                // possessed body gone without its death (which would have
+                // released it) leaves the controller bodiless, and
+                // FUN_00450980 kills the player as the craft's own end does (updating bit 4 via FUN_0042EEE0).
+                if specialized_actor_tasks.possession.is_some_and(|custody| {
+                    !em.iter_all()
+                        .any(|entity| entity.id == custody.state.body && entity.active)
+                }) && network_game.is_none()
+                {
+                    log!("Possession: the possessed body is gone; the player dies");
+                    em.remove_player_and_attached_entities();
+                    has_player = false;
+                    chase_mode = false;
+                    return_to_frontend_pending = true;
+                    continue 'main_loop;
+                }
                 if player_death.is_active() {
                     match player_death.advance_micros(elapsed_micros) {
                         PlayerDeathTick::ExpiredNow { .. } if network_game.is_some() => {
@@ -8354,6 +8889,7 @@ fn run_game(
                     };
                 }
                 let mut emitter_angle_words = None;
+                POSSESSED.store(possessed_at_entry, std::sync::atomic::Ordering::Relaxed);
                 if chase_mode {
                     // FUN_00446640 snapshots entity +0x30 at callback entry;
                     // the later solid-contact pass cannot affect its warning
@@ -8368,18 +8904,21 @@ fn run_game(
                         MotionChannels::default()
                     } else {
                         // The reader steps the weapon once for any wheel
-                        // motion since its previous call.
-                        apply_gameplay_input_edges(
-                            GameplayInputEdges {
-                                weapon_cycle: wheel_weapon_step(wheel_away),
-                                ..GameplayInputEdges::default()
-                            },
-                            has_player,
-                            player_hull.dying,
-                            em,
-                            &mut weapon_inventory,
-                            &mut player_craft,
-                        );
+                        // motion since its previous call, only on a body with
+                        // a weapon (a possessed Type17 has none).
+                        if !possessed_at_entry {
+                            apply_gameplay_input_edges(
+                                GameplayInputEdges {
+                                    weapon_cycle: wheel_weapon_step(wheel_away),
+                                    ..GameplayInputEdges::default()
+                                },
+                                has_player,
+                                player_hull.dying,
+                                em,
+                                &mut weapon_inventory,
+                                &mut player_craft,
+                            );
+                        }
                         MotionChannels::from_frame(
                             &craft_frame,
                             AnalogInput {
@@ -8399,6 +8938,9 @@ fn run_game(
                         if player_hull.dying {
                             return VehicleFrameForces::DyingCommon;
                         }
+                        if possessed_at_entry {
+                            return player_craft.passive_forces(elapsed_micros, player);
+                        }
                         player_craft.integrate_configured_micros_forces(
                             elapsed_micros,
                             &channels,
@@ -8406,34 +8948,8 @@ fn run_game(
                             config.self_righting,
                         )
                     });
-                    // FUN_00444F60 -> FUN_00420A50 ends the mode controller
-                    // with the lock's advance outside network play.
-                    if !player_hull.dying && network_game.is_none() {
-                        if let Some(player) = em.player() {
-                            let lock = mind_control_lock.for_body(player.id);
-                            let shooter = LockShooter {
-                                body: player,
-                                basis: player_body_basis(&player_craft, player),
-                            };
-                            let elapsed = elapsed_micros
-                                .min(v2k_game::hover::RETAIL_FRAME_DELTA_MAX_US)
-                                as i32;
-                            let bodies: Vec<_> = em.iter_all().collect();
-                            match lock.advance(shooter, bodies.iter().copied(), elapsed) {
-                                Ok(LockAdvance::Continue) => {}
-                                Ok(LockAdvance::TakeOver { target }) => {
-                                    if !std::mem::replace(&mut mind_control_takeover_reported, true)
-                                    {
-                                        eprintln!("{POSSESSION_TAKEOVER_HELD} (body {target})");
-                                    }
-                                }
-                                Err(block) => {
-                                    eprintln!("Possession Ray lock stopped: {block:?}");
-                                    lock.stop();
-                                }
-                            }
-                        }
-                    }
+                    // The lock advanced, and any takeover ran, at the craft's
+                    // place before the actor pass.
                     // FUN_00444F60 fires at the end of the mode controller, so
                     // FUN_00424650 reads the heading it turned and the pitch
                     // and roll the environment phase has not yet changed.
@@ -8729,7 +9245,64 @@ fn run_game(
                     // true during the three-second dying dwell: retail does
                     // not test the dying bit here and the controller remains
                     // bound until the player allocation is removed.
-                    let controlled_player_callback_active = frame_forces.is_some();
+                    let controlled_player_callback_active =
+                        frame_forces.is_some() && !possessed_at_entry;
+                    // FUN_00446FC0's tail: a craft (capability bit 0) under
+                    // 20000 health at entry smokes behind itself at random.
+                    if possessed_at_entry && !player_hull.dying {
+                        let source = em
+                            .player()
+                            .filter(|player| player.capability_flags & 1 != 0)
+                            .map(|player| {
+                                (
+                                    player.position_raw(),
+                                    player_body_basis(&player_craft, player).forward,
+                                    player.id,
+                                )
+                            });
+                        if let Some((position_raw, body_forward_q31, source_id)) = source {
+                            if v2k_game::possession::passive_player_smokes(
+                                hull_health_at_controller_entry_raw,
+                                || world_fx.next_shared_retail_random_u16(),
+                            ) {
+                                let sea_level_raw = session
+                                    .cache
+                                    .terrain()
+                                    .map(|terrain| terrain.sea_level_raw());
+                                world_fx.emit_player_low_hull_smoke_raw(
+                                    position_raw,
+                                    body_forward_q31,
+                                    source_id,
+                                    sea_level_raw,
+                                );
+                            }
+                        }
+                    }
+                    // The possessed body's Player Control, then the MindBall,
+                    // at the tail of the live list.
+                    if specialized_actor_tasks.possession.is_some()
+                        || specialized_actor_tasks.possession_released.is_some()
+                        || mind_ball.is_some()
+                    {
+                        advance_possession(PossessionFrame {
+                            em,
+                            tasks: &mut specialized_actor_tasks,
+                            cache: &mut session.cache,
+                            static_damage: &mut static_damage,
+                            notifications: &mut gameplay_notifications,
+                            world_fx: &mut world_fx,
+                            mind_ball: &mut mind_ball,
+                            followed_body: &mut followed_body,
+                            chase_camera: &mut chase_camera,
+                            stops: &mut possession_stops_reported,
+                            channels: &channels,
+                            craft_live: !player_hull.dying,
+                            tab_pressed: std::mem::take(&mut possession_tab_pressed),
+                            beam_expiry,
+                            elapsed_micros,
+                            retail_tick,
+                        });
+                    }
                     if controlled_player_callback_active
                         && hull_warning_cadence
                             .poll(hull_health_at_controller_entry_raw, retail_tick as i32)
@@ -9014,7 +9587,33 @@ fn run_game(
                         log!("Out of fuel — forced back to Hover");
                     }
 
-                    if let Some(player) = em.player() {
+                    // The session's followed body (+2A8): a possessed body or
+                    // a MindBall's flight while one runs, else the craft
+                    // (`None` is the craft).
+                    let followed = followed_body
+                        .and_then(|id| em.iter_all().find(|entity| entity.id == id))
+                        .and_then(|body| match body.physical_body_basis_q31() {
+                            RetailRuntimeValue::Known(basis) => Some((body.position_raw(), basis)),
+                            RetailRuntimeValue::Unresolved => None,
+                        });
+                    if let Some((position_raw, basis)) = followed {
+                        chase_camera
+                            .update(
+                                ChaseCameraTarget {
+                                    position_raw,
+                                    body_basis: ChaseBodyBasis::from_vectors([
+                                        basis.lateral,
+                                        basis.up,
+                                        basis.forward,
+                                    ]),
+                                    active_camera: config.active_camera,
+                                    parameters: pad_bindings.camera_parameters(controller),
+                                },
+                                gameplay_chase_terrain(&session.cache),
+                                elapsed_micros,
+                            )
+                            .apply_to(&mut camera);
+                    } else if let Some(player) = em.player() {
                         // The eye keeps retail's fixed -Z compass bearing while
                         // FUN_0044FFA0's terrain clearance probe adjusts its Y/Z
                         // target. Independent signed-word eye/focus springs
@@ -9105,7 +9704,8 @@ fn run_game(
                             || joystick.is_some_and(JoystickSample::fire)),
                     source_b: fire_allowed && mouse_buttons_down.contains(&MouseButton::Right),
                 };
-                if let Some(player) = em.player() {
+                // Passive Player runs no weapon (FUN_00424E70 is Player Control's).
+                if let Some(player) = em.player().filter(|_| !possessed_at_entry) {
                     let origin = player.position;
                     let descriptor = *weapon_inventory.selected_descriptor();
                     let direction_q31 =
@@ -9222,8 +9822,60 @@ fn run_game(
                 );
 
                 world_fx.process_pending();
+                // FUN_0041BEB0's mouth walk: a dying Hive swallows the bodies
+                // that fall into its mouth; the possessed body is released.
+                let swallows = em.apply_hive_mouth_swallows(
+                    specialized_actor_tasks
+                        .possession
+                        .map(|custody| custody.state.body),
+                );
+                for swallow in swallows {
+                    match swallow {
+                        v2k_game::entity::HiveMouthSwallow::Controlled(id) => {
+                            if let Some(custody) = specialized_actor_tasks.possession.as_mut() {
+                                custody.state.swallowed();
+                            }
+                            log!("Hive mouth: the possessed body {id} is released");
+                        }
+                        v2k_game::entity::HiveMouthSwallow::Staged(id) => {
+                            specialized_actor_tasks.retire_swallowed_body(id);
+                            log!("Hive mouth: body {id} swallowed");
+                        }
+                    }
+                }
+                // A live Hive kills (FUN_00410C10) and throws out (FUN_0041C830)
+                // the bodies in its mouth.
+                let live_mouths = v2k_game::hive_mouth::apply_live_hive_mouths(
+                    v2k_game::hive_mouth::LiveHiveMouthFrame {
+                        entities: em,
+                        resources: &mut session.cache,
+                        static_damage: &mut static_damage,
+                        player_hull: &mut player_hull,
+                        world_fx: &mut world_fx,
+                        scheduler: &mut specialized_actor_tasks,
+                        notifications: &mut gameplay_notifications,
+                        retail_tick,
+                        elapsed_us: elapsed_micros,
+                        extra_lives: player_campaign_progress.extra_lives(),
+                    },
+                );
+                if live_mouths.terrain_changed {
+                    renderer.invalidate_terrain_cache();
+                }
+                for event in live_mouths.events {
+                    match event {
+                        v2k_game::hive_mouth::LiveHiveMouthEvent::Blocked { hive, body, block } => {
+                            if hive_mouth_stops_reported.insert(format!("{block:?}")) {
+                                eprintln!(
+                                    "Hive mouth blocked: Hive {hive}, body {body}: {block:?}"
+                                );
+                            }
+                        }
+                        event => log!("Hive mouth: {event:?}"),
+                    }
+                }
                 // Controlled-player movement precedes the Hive's no-RNG wreck
-                // contact phase; its component clock already ran in13500.
+                // contact phase; its component clock already ran in 13500.
                 pending_failed_world_interior_request |= em
                     .apply_authored_hive_wreck_player_contacts(
                         v2k_game::hive_controller::HiveWreckPlayerContactFrame {
@@ -9746,38 +10398,65 @@ fn run_game(
                             );
                             return ParticleCollisionCacheRefresh::Unchanged;
                         };
-                        // FUN_00415040's filter, then FUN_00414E90's first
-                        // branch: a peer's body takes the damage on its
-                        // owner's machine (kind 9).
-                        if let Some(target) = em
-                            .network_entity(entity_impact.target_entity_id)
-                            .filter(|target| target.is_network_remote())
+                        // A peer's craft: the hit wrapper runs on its copy,
+                        // whose jolt (kind 10) and damage (kind 9) go to the
+                        // owner.
                         {
-                            let admitted = target
-                                .collision
-                                .state_flags_at_0x08
-                                .masked(v2k_game::entity_collision_state::CHECKED_DAMAGE_ENABLED_STATE_BIT)
-                                != RetailRuntimeValue::Known(0);
-                            if let (true, Some(delivery), RetailRuntimeValue::Known(profile)) =
-                                (admitted, entity_impact.damage_delivery_record(), target.collision.damage_profile)
-                            {
-                                let amount = delivery.packet.filtered_raw_with_ratio(Some(&profile), 0, 0);
-                                let modifier = target.collision.pair_callbacks.damage_modifier_address;
-                                if amount != 0 && modifier != RetailRuntimeValue::Known(None) {
-                                    // FUN_00415040 runs the body's +44 first.
-                                    network_play::report_held(format!(
-                                        "a peer's Type{} damage modifier {modifier:x?}",
-                                        target.entity_type
-                                    ));
-                                } else if amount != 0 {
-                                    world_fx.send_network_damage(
-                                        target.id,
-                                        amount as u16,
-                                        delivery.source_entity_type_raw as u16,
+                            use v2k_game::intro2_flyer_impact::PeerCraftImpactOutcome as Peer;
+                            match v2k_game::intro2_flyer_impact::apply_peer_craft_particle_hit(
+                                em, cache, world_fx, &mut gameplay_notifications, retail_tick, entity_impact,
+                            ) {
+                                Peer::NotApplicable => {}
+                                Peer::Applied { filtered_damage_raw } => {
+                                    log!(
+                                        "Particle class {} hit peer craft {}: {filtered_damage_raw} to its owner",
+                                        entity_impact.source_particle_class,
+                                        entity_impact.target_entity_id,
                                     );
+                                    return ParticleCollisionCacheRefresh::Unchanged;
+                                }
+                                Peer::Blocked { reason, .. } => {
+                                    network_play::report_held(format!("a hit on a peer's craft ({reason})"));
+                                    return ParticleCollisionCacheRefresh::Unchanged;
                                 }
                             }
-                            return ParticleCollisionCacheRefresh::Unchanged;
+                        }
+                        // A particle hit on any other peer's copy: the
+                        // wrapper's stamp and cue, FUN_00411030's jolt (kind
+                        // 10) and FUN_00415040's checked damage (kind 9) go
+                        // to the owner, and the copy's type hit hook stays
+                        // held (a separate port per class).
+                        match v2k_game::peer_copy_impact::apply_peer_copy_particle_hit(
+                            em, cache, world_fx, retail_tick, entity_impact,
+                        ) {
+                            v2k_game::peer_copy_impact::PeerCopyImpactOutcome::NotApplicable => {}
+                            v2k_game::peer_copy_impact::PeerCopyImpactOutcome::Applied {
+                                filtered_damage_raw,
+                                held,
+                            } => {
+                                for reason in held {
+                                    network_play::report_held(reason);
+                                }
+                                log!(
+                                    "Particle class {} hit peer copy {}: {filtered_damage_raw} to its owner",
+                                    entity_impact.source_particle_class,
+                                    entity_impact.target_entity_id,
+                                );
+                                return ParticleCollisionCacheRefresh::Unchanged;
+                            }
+                            v2k_game::peer_copy_impact::PeerCopyImpactOutcome::Blocked {
+                                reason,
+                                held,
+                                ..
+                            } => {
+                                for reason in held {
+                                    network_play::report_held(reason);
+                                }
+                                network_play::report_held(format!(
+                                    "a hit on a peer's copy ({reason})"
+                                ));
+                                return ParticleCollisionCacheRefresh::Unchanged;
+                            }
                         }
                         let cleansing = v2k_game::cleansing_vehicle::impact::apply_cleansing_vehicle_particle_hit(
                             v2k_game::cleansing_vehicle::impact::CleansingVehicleImpactFrame {
@@ -10436,7 +11115,13 @@ fn run_game(
                     .cache
                     .global_entity_type(9)
                     .map(EntityTypeRuntimeMetadata::from_section12);
+                specialized_actor_tasks.possession_pair_pass_ended = false;
                 for id in contact_ids {
+                    // A non-null 11AD0 (the possessed craft's 0x4C20C0) ends
+                    // FUN_00411A80's pass: no later body's phases or pairs.
+                    if specialized_actor_tasks.possession_pair_pass_ended {
+                        break;
+                    }
                     use v2k_game::intro2_type17::contact::{
                         resolve_type17_static_contact, Type17ContactOutcome,
                     };
@@ -10471,6 +11156,38 @@ fn run_game(
                         retail_tick,
                         actor_tasks: &mut specialized_actor_tasks,
                     };
+                    // FUN_00411AD0 runs a body's surface and static phases
+                    // only without state 0x88000000: a peer's body (bit 31)
+                    // goes straight to its pairs.
+                    if contact_frame
+                        .entities
+                        .network_entity(id)
+                        .is_some_and(|entity| entity.is_network_remote())
+                    {
+                        use v2k_game::intro2_type17::pair::{
+                            resolve_type17_active_contacts_with_playing, CaptureFeedbackPolicy,
+                            Type17PairOutcome,
+                        };
+                        let pairs = resolve_type17_active_contacts_with_playing(
+                            &mut contact_frame,
+                            id,
+                            CaptureFeedbackPolicy::Gameplay,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        report_active_pair_stops(&pairs, &mut active_pair_stops_reported);
+                        if matches!(&pairs, Type17PairOutcome::Blocked { .. })
+                            || matches!(&pairs, Type17PairOutcome::Resolved { visits } if !visits.is_empty())
+                        {
+                            log!("Shared contacts at peer body {id}: {pairs:?}");
+                        }
+                        continue;
+                    }
                     // The Autobot's 11AD0 (its living body lacks 0x8000): the
                     // shared class11 tumble's terrain, water and static phases.
                     if contact_frame
@@ -10522,7 +11239,7 @@ fn run_game(
                             },
                             native_ground_actor::contact::NativeGroundContactOutcome,
                         };
-                        // The same11AD0 prefix owns Intro2 and native Hive children:
+                        // The same 11AD0 prefix owns Intro2 and native Hive children:
                         // solid/water, then static using the retained entry model.
                         let outcome = resolve_native_flyer_contacts_with_playing(
                             &mut contact_frame,
@@ -10629,6 +11346,36 @@ fn run_game(
                                 continue;
                             }
                         }
+                    }
+                    if contact_frame
+                        .actor_tasks
+                        .possession
+                        .is_some_and(|custody| custody.state.body == id)
+                    {
+                        // Its static response ran in its Player Control visit;
+                        // its pairs take Player Control's FUN_00447D70.
+                        let pairs = v2k_game::intro2_type17::pair::resolve_type17_active_contacts_with_playing(
+                            &mut contact_frame,
+                            id,
+                            v2k_game::intro2_type17::pair::CaptureFeedbackPolicy::Gameplay,
+                            Some(v2k_game::native_actor_capture::pair::PlayingPlayerContact {
+                                craft: Some(&player_craft),
+                                hull: &mut player_hull,
+                                extra_lives: RetailRuntimeValue::Known(
+                                    player_campaign_progress.extra_lives(),
+                                ),
+                            }),
+                        );
+                        report_active_pair_stops(&pairs, &mut active_pair_stops_reported);
+                        if let v2k_game::intro2_type17::pair::Type17PairOutcome::Blocked {
+                            reason,
+                            ..
+                        } = &pairs
+                        {
+                            possession_stop(&mut possession_stops_reported, POSSESSION_PAIRS_HELD);
+                            log!("Possessed body {id} contacts stopped: {reason:?}");
+                        }
+                        continue;
                     }
                     let result = resolve_type17_static_contact(&mut contact_frame, id);
                     if !matches!(
@@ -10850,7 +11597,7 @@ fn run_game(
                             continue;
                         }
                     }
-                    //11AD0 retains the peasant's entry admission, runs its
+                    // 11AD0 retains the peasant's entry admission, runs its
                     // fence response, then visits successor actor pairs.
                     if contact_frame
                         .entities
@@ -11678,6 +12425,9 @@ fn run_game(
                         specialized_actor_tasks: &mut specialized_actor_tasks,
                         pending_player_shots: &mut pending_player_shots,
                         mind_control_lock: &mut mind_control_lock,
+                        mind_ball: mind_ball.as_ref(),
+                        mind_ball_spin: &mut mind_ball_spin,
+                        frame_us: elapsed_micros,
                         entity_weapon_error_reported: &mut native_entity_weapon_error_reported,
                         player_craft: &player_craft,
                         player_hull: &player_hull,
@@ -11941,17 +12691,20 @@ fn run_game(
                 if let Some(shell) = network_pause.as_ref() {
                     // FUN_004514A0 draws the menu over this frame's world.
                     let world = renderer.capture_frame(FrameCaptureSource::CurrentScene);
-                    render_pause_menu(
-                        &mut *renderer,
-                        shell,
-                        &system_strings,
-                        &menu_resources,
-                        menu_fonts.as_ref(),
-                        &session.cache,
-                        &face_colors,
-                        retail_tick,
-                        world.as_ref(),
-                    );
+                    world_fx.with_process_random(|random| {
+                        render_pause_menu(
+                            &mut *renderer,
+                            shell,
+                            &system_strings,
+                            &menu_resources,
+                            menu_fonts.as_ref(),
+                            &session.cache,
+                            &face_colors,
+                            retail_tick,
+                            world.as_ref(),
+                            random,
+                        )
+                    });
                 } else {
                     renderer.present();
                 }
@@ -12019,6 +12772,7 @@ fn write_probe_events(
     level: Option<u32>,
     delta_us: u32,
     tick: u32,
+    rng: u32,
     manager: Option<&v2k_game::entity::EntityManager>,
     craft: &PlayerCraft,
     hull: &PlayerHull,
@@ -12035,7 +12789,7 @@ fn write_probe_events(
         GameState::ReturningToFrontend => "returning_to_frontend",
         GameState::Playing => "playing",
     };
-    log.frame(frame, state_name, level, delta_us, tick)?;
+    log.frame(frame, state_name, level, delta_us, tick, rng)?;
     let Some(manager) = manager else {
         census.clear();
         return Ok(());
@@ -12385,6 +13139,9 @@ struct GameplayWorldFrame<'a> {
     specialized_actor_tasks: &'a mut SpecializedActorTaskScheduler,
     pending_player_shots: &'a mut Vec<PendingPlayerShot>,
     mind_control_lock: &'a mut PlayerMindControlLock,
+    mind_ball: Option<&'a (u32, MindBallFlight)>,
+    mind_ball_spin: &'a mut MindBallSpin,
+    frame_us: u32,
     entity_weapon_error_reported: &'a mut bool,
     player_craft: &'a PlayerCraft,
     player_hull: &'a PlayerHull,
@@ -12398,8 +13155,8 @@ struct GameplayWorldFrame<'a> {
 }
 
 /// 11720 visits attached allocations too: 11400 tests body bit800, not
-/// relation bit1000. 18440 clears800 for a hidden Sub-J slot, whereas the
-/// spider's authored policy1 slot retains it. Keep the existing unparented
+/// relation bit1000. 18440 clears 800 for a hidden Sub-J slot, whereas the
+/// spider's authored policy 1 slot retains it. Keep the existing unparented
 /// admission until the complete body/effect presentation gate is owned.
 fn world_body_submission_eligible(entity: &Entity) -> bool {
     entity.attached_to.is_none()
@@ -12482,6 +13239,9 @@ fn draw_gameplay_world(
         specialized_actor_tasks,
         pending_player_shots,
         mind_control_lock,
+        mind_ball,
+        mind_ball_spin,
+        frame_us,
         entity_weapon_error_reported,
         player_craft,
         player_hull,
@@ -12521,6 +13281,13 @@ fn draw_gameplay_world(
             projection_effect,
         ),
     );
+    let root_lens = WorldProjection::root_lens(
+        world_projection,
+        native_viewport.is_some() && matches!(camera_mode, GameplayWorldCameraMode::RetailChase),
+        renderer.viewport_size(),
+    );
+    // The game's root test is always the authored frame's, whatever the frame shown.
+    let authored_lens = world_projection.map(WorldProjection::authored_words);
     renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
     draw_authored_sky_model(
         renderer,
@@ -12529,6 +13296,8 @@ fn draw_gameplay_world(
         face_colors,
         camera,
         retail_tick,
+        native_viewport,
+        root_lens,
     );
 
     // 530D0/53570 and pre-actor light writers precede 53760. Actor
@@ -12602,13 +13371,16 @@ fn draw_gameplay_world(
     while let Some(entity_id) = actor_cursor {
         if Some(entity_id) == player_entity_id {
             // The live craft uses its morph/fan child policy. The authored
-            // dying flag switches type 46 to model slot 1 (play4ded), whose
+            // dying flag switches type 46 to model slot 1 (play 4ded), whose
             // own linked hierarchy must be drawn without grafting live
             // player4 fan/gun transforms onto the wreck pieces.
             {
                 if let Some(player) = em.player() {
                     let draw_pos = camera_relative(camera, player.position);
                     let player_orientation = player_model_orientation(player_craft, player);
+                    // The aura's root test (below) needs the raw origin after
+                    // the player adapter's mutable pass; retain it up front.
+                    let player_position_raw = player.position_raw();
                     let resolved = player
                         .model_index
                         .or(player_model_id)
@@ -12623,6 +13395,19 @@ fn draw_gameplay_world(
                         } else {
                             PlayerCraftDrawAnimation::Live(player_craft)
                         };
+                        draw_mind_ball(
+                            renderer,
+                            cache,
+                            face_colors,
+                            camera,
+                            em,
+                            mind_ball,
+                            mind_ball_spin,
+                            frame_us,
+                            retail_tick,
+                            native_viewport,
+                            root_lens,
+                        );
                         draw_mind_control_reticle(
                             renderer,
                             cache,
@@ -12632,6 +13417,8 @@ fn draw_gameplay_world(
                             player_craft,
                             mind_control_lock,
                             retail_tick,
+                            native_viewport,
+                            root_lens,
                         );
                         let origins = draw_player_craft(
                             renderer,
@@ -12686,25 +13473,42 @@ fn draw_gameplay_world(
                             if cache.global_model(PLAYER_SHIELD_MODEL_ID).is_some()
                                 && cache.global_sprite(sprite_id).is_some()
                             {
-                                ModelTreeRenderer::new_world(
-                                    renderer,
-                                    cache,
-                                    face_colors,
-                                    GAMEPLAY_MODEL_SCALE,
-                                    Some(MenuSceneLight::NEUTRAL),
-                                    retail_tick as i32,
-                                )
-                                .with_submission_buffer(&mut model_submissions)
-                                .with_view(camera.into())
-                                .with_shade_shift(player_shade_shift.unwrap_or(0))
-                                .draw_linked(
-                                    PLAYER_SHIELD_MODEL_ID,
-                                    shield.orientation(player_orientation),
-                                    draw_pos,
-                                    0,
-                                    None,
-                                    &shield.animation_vars(),
-                                );
+                                // `FUN_004136C0`'s root test on the craft's
+                                // wrapped origin with model 245's radius; a
+                                // rejected aura submits nothing.
+                                let admitted = match native_viewport {
+                                    Some(viewport) => {
+                                        let point = viewport.actor_origin_view(player_position_raw);
+                                        world_model_root_in_view(
+                                            cache,
+                                            PLAYER_SHIELD_MODEL_ID,
+                                            point,
+                                            root_lens,
+                                        )
+                                    }
+                                    None => true,
+                                };
+                                if admitted {
+                                    ModelTreeRenderer::new_world(
+                                        renderer,
+                                        cache,
+                                        face_colors,
+                                        GAMEPLAY_MODEL_SCALE,
+                                        Some(MenuSceneLight::NEUTRAL),
+                                        retail_tick as i32,
+                                    )
+                                    .with_submission_buffer(&mut model_submissions)
+                                    .with_view(camera.into())
+                                    .with_shade_shift(player_shade_shift.unwrap_or(0))
+                                    .draw_linked(
+                                        PLAYER_SHIELD_MODEL_ID,
+                                        shield.orientation(player_orientation),
+                                        draw_pos,
+                                        0,
+                                        None,
+                                        &shield.animation_vars(),
+                                    );
+                                }
                             } else {
                                 static REPORTED: std::sync::Once = std::sync::Once::new();
                                 REPORTED.call_once(|| {
@@ -12775,6 +13579,22 @@ fn draw_gameplay_world(
             if !within_scan {
                 break 'draw_actor;
             }
+            // 4138F0's tail (the wreck rings) runs whatever the root test says.
+            let walk = match native_viewport {
+                Some(viewport) => world_model_walk(
+                    cache,
+                    model_id,
+                    viewport.actor_origin_view(world_position_raw(entity.position)),
+                    authored_lens,
+                    root_lens,
+                ),
+                None => ModelWalk::Game,
+            };
+            if walk == ModelWalk::Skipped {
+                wreck_ids.push(entity_id);
+                break 'draw_actor;
+            }
+            let pixels_only = walk == ModelWalk::PixelsOnly;
             let orientation = cache
                 .global_model(model_id)
                 .filter(|model| model_is_camera_facing_actor(model))
@@ -12830,6 +13650,9 @@ fn draw_gameplay_world(
             let mut drawn_muzzles = [None; 2];
             let mut stamp_origin =
                 |point: v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePoint| {
+                    if pixels_only {
+                        return;
+                    }
                     if let Some(muzzle) = drawn_muzzles.get_mut(usize::from(point.emitter_index)) {
                         *muzzle = Some(point.position_words);
                     }
@@ -12846,7 +13669,20 @@ fn draw_gameplay_world(
                     last_boundary: &mut emitter_boundary, current_node_owned: true, current_source_points_view: None,
                 })
             });
-            let mut random_u16 = || world_fx.next_shared_retail_random_u16();
+            // The terminal fallback and tf3 vertices draw from one stream; a
+            // pixels-only walk draws from a copy of it.
+            let mut detached_random = world_fx.shared_retail_random_state();
+            let process_random = std::cell::RefCell::new(|| {
+                if pixels_only {
+                    v2k_game::retail_rng::retail_random_u16(&mut detached_random)
+                } else {
+                    world_fx.next_shared_retail_random_u16()
+                }
+            });
+            let next_random = || (&mut *process_random.borrow_mut())();
+            let mut random_u16 = || next_random();
+            let mut detached_sub_h =
+                pixels_only.then(|| entity.sub_h_external_frame_runtime.clone());
             // Only absent joint/M/G components authenticate the terminal domain.
             // An authored G descriptor alone cannot prove its live callback owner.
             let fallback = type_record.filter(|record| record.subsection("I").is_none()
@@ -12873,6 +13709,10 @@ fn draw_gameplay_world(
             )
             .with_submission_buffer(&mut model_submissions)
             .with_view(camera.into())
+            .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+                &next_random,
+                camera,
+            ))
             .with_shade_shift(shade_shift);
             // A plain body keeps 4138F0's integer frame for its VIEW points.
             // Sub-H/M presentations below install their own frame owners.
@@ -12910,7 +13750,9 @@ fn draw_gameplay_world(
             if let (Some(descriptor), Some(model), RetailRuntimeValue::Known(Some(runtime))) = (
                 descriptor.as_ref(),
                 cache.global_model(model_id),
-                &mut entity.sub_h_external_frame_runtime,
+                detached_sub_h
+                    .as_mut()
+                    .unwrap_or(&mut entity.sub_h_external_frame_runtime),
             ) {
                 tree = tree.with_sub_h_presentation(
                     v2k_game::sub_h_external_frame::SubHPresentation {
@@ -12952,7 +13794,7 @@ fn draw_gameplay_world(
             }
             drop(random_u16);
             drop(queen_stamp);
-            for (selector, position_raw) in queen_stamps {
+            for (selector, position_raw) in queen_stamps.into_iter().filter(|_| !pixels_only) {
                 v2k_game::queen::stamp_drawn_muzzle(&mut entity.queen, selector, position_raw);
             }
             if let Some(boundary) = queen_boundary {
@@ -12965,7 +13807,7 @@ fn draw_gameplay_world(
                 eprintln!("Entity {entity_id} draw muzzle stamp stopped: {reason:?}");
             }
             wreck_ids.push(entity_id);
-            if let Some(write) = sub_m_product_write {
+            if let Some(write) = sub_m_product_write.filter(|_| !pixels_only) {
                 em.apply_sub_m_product_marker_write(write);
             }
         }
@@ -12989,7 +13831,7 @@ fn draw_gameplay_world(
                 _ => {}
             }
         }
-        //11720 reloads the current body's successor after11400, allowing
+        // 11720 reloads the current body's successor after 11400, allowing
         // bodies appended by the player's transient drain to draw at age zero.
         actor_cursor = em
             .retail_live_order_ids()
@@ -13022,6 +13864,7 @@ fn draw_gameplay_world(
         GameplayWorldParticles::Live => prepare_particle_presentation(
             renderer,
             camera,
+            world_projection,
             world_fx,
             em,
             // D410's far word is the view's fog far plane (0x004D0560), the
@@ -13035,17 +13878,20 @@ fn draw_gameplay_world(
         ),
         GameplayWorldParticles::Frozen(frame) => {
             let (width, height) = renderer.viewport_size();
-            frame.reprojected([width, height], |particle| {
-                project_particle_center(
-                    camera,
-                    [width, height],
-                    camera_relative(camera, particle.position),
-                )
-            })
+            ParticlePresentation {
+                game: None,
+                shown: frame.reprojected([width, height], |particle| {
+                    project_particle_center(
+                        camera,
+                        [width, height],
+                        camera_relative(camera, particle.position),
+                    )
+                }),
+            }
         }
     };
     if let Some(terrain) = cache.terrain() {
-        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation);
+        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation.shown);
     }
     // 536A0 runs the world's weather (42DB70) before terrain and statics.
     if let Some(weather) = cache.level_desc().map(LevelWeather::from_level) {
@@ -13079,6 +13925,8 @@ fn draw_gameplay_world(
         retail_tick,
         world_fx,
         native_viewport,
+        authored_lens,
+        root_lens,
     );
     model_submissions.flush(
         renderer,
@@ -13088,7 +13936,16 @@ fn draw_gameplay_world(
     );
     for entity_id in wreck_ids {
         if let Some(entity) = em.iter_all().find(|entity| entity.id == entity_id) {
-            draw_hive_wreck_rings(renderer, cache, face_colors, camera, entity, retail_tick);
+            draw_hive_wreck_rings(
+                renderer,
+                cache,
+                face_colors,
+                camera,
+                entity,
+                retail_tick,
+                native_viewport,
+                root_lens,
+            );
         }
     }
 
@@ -13114,6 +13971,8 @@ fn draw_gameplay_world(
         targetter.enabled,
         elapsed_micros,
         retail_tick,
+        native_viewport,
+        root_lens,
     );
 
     // Sea: wave-displaced, per-level height from the Section 10
@@ -13138,7 +13997,7 @@ fn draw_gameplay_world(
         world_fx.note_spray_presented(0);
         return GameplayWorldPresentation {
             shield: presented_shield,
-            particles: particle_presentation,
+            particles: particle_presentation.shown,
         };
     };
     let particle_fog = ParticleSpriteFogPlanes::gameplay(
@@ -13150,16 +14009,20 @@ fn draw_gameplay_world(
         cache,
         face_colors,
         camera,
-        &particle_presentation,
+        &particle_presentation.shown,
         particle_fog,
     );
     if live_particles {
-        world_fx.mark_particles_on_screen(&on_screen);
+        world_fx.mark_particles_on_screen(&particle_presentation.on_screen(
+            cache,
+            face_colors,
+            on_screen,
+        ));
     }
     world_fx.note_spray_presented(spray_presented);
     GameplayWorldPresentation {
         shield: presented_shield,
-        particles: particle_presentation,
+        particles: particle_presentation.shown,
     }
 }
 
@@ -13249,8 +14112,24 @@ fn render_opening_cinematic(
             projection_effect,
         ),
     );
+    let root_lens = WorldProjection::root_lens(
+        world_projection,
+        native_viewport.is_some(),
+        renderer.viewport_size(),
+    );
+    // The game's root test is always the authored frame's, whatever the frame shown.
+    let authored_lens = world_projection.map(WorldProjection::authored_words);
     renderer.set_native_world_viewport(native_viewport.map(|viewport| viewport.words()));
-    draw_authored_sky_model(renderer, cache, None, face_colors, camera, retail_tick);
+    draw_authored_sky_model(
+        renderer,
+        cache,
+        None,
+        face_colors,
+        camera,
+        retail_tick,
+        native_viewport,
+        root_lens,
+    );
 
     // 530D0/53570 and pre-actor light writers precede 53760. Actor
     // commands capture this field; 53A60 adds particle light before terrain.
@@ -13325,6 +14204,21 @@ fn render_opening_cinematic(
                 )
             };
             let draw_position = camera_relative(camera, position);
+            let walk = match native_viewport {
+                Some(viewport) => world_model_walk(
+                    cache,
+                    model_id,
+                    viewport.actor_origin_view(world_position_raw(position)),
+                    authored_lens,
+                    root_lens,
+                ),
+                None => ModelWalk::Game,
+            };
+            if walk == ModelWalk::Skipped {
+                wreck_ids.push(entity_id);
+                break 'draw_actor;
+            }
+            let pixels_only = walk == ModelWalk::PixelsOnly;
             let orientation = cache
                 .global_model(model_id)
                 .filter(|model| model_is_camera_facing_actor(model))
@@ -13371,6 +14265,9 @@ fn render_opening_cinematic(
             let mut drawn_muzzles = [None; 2];
             let mut stamp_origin =
                 |point: v2k_game::actor_emitter_external_frame::ActorEmitterExternalFramePoint| {
+                    if pixels_only {
+                        return;
+                    }
                     if let Some(muzzle) = drawn_muzzles.get_mut(usize::from(point.emitter_index)) {
                         *muzzle = Some(point.position_words);
                     }
@@ -13387,7 +14284,20 @@ fn render_opening_cinematic(
                     last_boundary: &mut emitter_boundary, current_node_owned: true, current_source_points_view: None,
                 })
             });
-            let mut random_u16 = || world_fx.next_shared_retail_random_u16();
+            // The terminal fallback and tf3 vertices draw from one stream; a
+            // pixels-only walk draws from a copy of it.
+            let mut detached_random = world_fx.shared_retail_random_state();
+            let process_random = std::cell::RefCell::new(|| {
+                if pixels_only {
+                    v2k_game::retail_rng::retail_random_u16(&mut detached_random)
+                } else {
+                    world_fx.next_shared_retail_random_u16()
+                }
+            });
+            let next_random = || (&mut *process_random.borrow_mut())();
+            let mut random_u16 = || next_random();
+            let mut detached_sub_h =
+                pixels_only.then(|| entity.sub_h_external_frame_runtime.clone());
             // Only absent joint/M/G components authenticate the terminal domain.
             // An authored G descriptor alone cannot prove its live callback owner.
             let fallback = type_record.filter(|record| record.subsection("I").is_none()
@@ -13414,6 +14324,10 @@ fn render_opening_cinematic(
             )
             .with_submission_buffer(&mut model_submissions)
             .with_view(camera.into())
+            .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+                &next_random,
+                camera,
+            ))
             .with_shade_shift(world_model_shade_shift(
                 position,
                 cache.terrain(),
@@ -13435,7 +14349,9 @@ fn render_opening_cinematic(
                 live_actor_pose,
                 descriptor.as_ref(),
                 cache.global_model(model_id),
-                &mut entity.sub_h_external_frame_runtime,
+                detached_sub_h
+                    .as_mut()
+                    .unwrap_or(&mut entity.sub_h_external_frame_runtime),
             ) {
                 tree = tree.with_sub_h_presentation(
                     v2k_game::sub_h_external_frame::SubHPresentation {
@@ -13488,7 +14404,7 @@ fn render_opening_cinematic(
                 eprintln!("Entity {entity_id} draw muzzle stamp stopped: {reason:?}");
             }
             wreck_ids.push(entity_id);
-            if let Some(write) = sub_m_product_write {
+            if let Some(write) = sub_m_product_write.filter(|_| !pixels_only) {
                 entities.apply_sub_m_product_marker_write(write);
             }
         }
@@ -13519,12 +14435,13 @@ fn render_opening_cinematic(
     let particle_presentation = prepare_particle_presentation(
         renderer,
         camera,
+        world_projection,
         world_fx,
         entities,
         INTRO2_PARTICLE_FAR_DEPTH_RAW,
     );
     if let Some(terrain) = cache.terrain() {
-        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation);
+        accumulate_particle_terrain_lights(terrain_lights, terrain, &particle_presentation.shown);
     }
     if let Some(terrain) = cache.terrain() {
         let colors = cache
@@ -13551,6 +14468,8 @@ fn render_opening_cinematic(
         retail_tick,
         world_fx,
         native_viewport,
+        authored_lens,
+        root_lens,
     );
     model_submissions.flush(
         renderer,
@@ -13560,7 +14479,16 @@ fn render_opening_cinematic(
     );
     for entity_id in wreck_ids {
         if let Some(entity) = entities.iter_all().find(|entity| entity.id == entity_id) {
-            draw_hive_wreck_rings(renderer, cache, face_colors, camera, entity, retail_tick);
+            draw_hive_wreck_rings(
+                renderer,
+                cache,
+                face_colors,
+                camera,
+                entity,
+                retail_tick,
+                native_viewport,
+                root_lens,
+            );
         }
     }
 
@@ -13591,10 +14519,14 @@ fn render_opening_cinematic(
         cache,
         face_colors,
         camera,
-        &particle_presentation,
+        &particle_presentation.shown,
         ParticleSpriteFogPlanes::INTRO2,
     );
-    world_fx.mark_particles_on_screen(&on_screen);
+    world_fx.mark_particles_on_screen(&particle_presentation.on_screen(
+        cache,
+        face_colors,
+        on_screen,
+    ));
     finish_opening_cinematic_frame(
         renderer,
         cache,
@@ -13693,16 +14625,52 @@ fn configure_opening_world_camera(camera: &mut Camera) {
     camera.left_handed = true;
 }
 
+fn project_particles(
+    camera: &Camera,
+    viewport: [u32; 2],
+) -> impl Fn(&v2k_game::world_fx::WorldParticle) -> v2k_render::ParticleCenterProjection + '_ {
+    move |particle| {
+        project_particle_center(camera, viewport, camera_relative(camera, particle.position))
+    }
+}
+
+/// The particle gate's records: those shown, and, when the frame shown is
+/// wider than the authored one, the game's own in the authored frame.
+struct ParticlePresentation {
+    game: Option<(Camera, ParticlePresentationFrame)>,
+    shown: ParticlePresentationFrame,
+}
+
+impl ParticlePresentation {
+    /// The live slots whose `+1D` bit `0x10` the frame sets: the authored
+    /// frame's, whatever the frame shown.
+    fn on_screen(
+        &self,
+        cache: &v2k_game::resource_cache::ResourceCache,
+        materials: &v2k_game::model_color::ModelMaterialCache,
+        shown: Vec<usize>,
+    ) -> Vec<usize> {
+        match &self.game {
+            Some((camera, frame)) => particle_on_screen_slots(cache, materials, camera, frame),
+            None => shown,
+        }
+    }
+}
+
 /// Run the destructive retail particle gate once for the presented world
 /// frame. The resulting owned list is shared by terrain lighting and the later
 /// sprite pass so neither phase can observe a different particle lifetime.
+/// The gate's deletions are the game's, so they run in the authored frame
+/// (its lens at its logical size) whatever the frame shown; a wider frame
+/// shown reprojects the admitted records.
 fn prepare_particle_presentation(
     renderer: &dyn v2k_render::Renderer,
     camera: &Camera,
+    world_projection: Option<WorldProjection>,
     world_fx: &mut WorldFx,
     entities: &EntityManager,
     far_depth_raw: i32,
-) -> ParticlePresentationFrame {
+) -> ParticlePresentation {
     static ATTACHED_MODEL_REPORTED: std::sync::atomic::AtomicBool =
         std::sync::atomic::AtomicBool::new(false);
     if world_fx
@@ -13712,10 +14680,35 @@ fn prepare_particle_presentation(
         eprintln!("Particle draw0x00442CB0: the model an attached class 83/84/86 particle shows on a detailed owner is not presented yet; the particle keeps its retail life and damage.");
     }
     let (width, height) = renderer.viewport_size();
-    let viewport = [width, height];
-    world_fx.prepare_presentation(viewport, far_depth_raw, |particle| {
-        project_particle_center(camera, viewport, camera_relative(camera, particle.position))
-    })
+    let shown_viewport = [width, height];
+    let authored = world_projection
+        .map(|projection| {
+            let words = projection.authored_words();
+            (projection, [words[2] as u32, words[3] as u32])
+        })
+        .filter(|(_, viewport)| *viewport != shown_viewport);
+    let Some((projection, viewport)) = authored else {
+        return ParticlePresentation {
+            game: None,
+            shown: world_fx.prepare_presentation(
+                shown_viewport,
+                far_depth_raw,
+                project_particles(camera, shown_viewport),
+            ),
+        };
+    };
+    let mut game_camera = Camera { ..*camera };
+    projection.apply_to(&mut game_camera, (viewport[0], viewport[1]));
+    let game = world_fx.prepare_presentation(
+        viewport,
+        far_depth_raw,
+        project_particles(&game_camera, viewport),
+    );
+    let shown = game.reprojected(shown_viewport, project_particles(camera, shown_viewport));
+    ParticlePresentation {
+        game: Some((game_camera, game)),
+        shown,
+    }
 }
 
 /// Clear/position 530D0/53570 before actor model callbacks and light reads.
@@ -13760,7 +14753,11 @@ fn rebuild_particle_terrain_lights(
 
 /// Submit the acquired Targetter's ring and crosshair Section-8 models.
 /// `FUN_00453710` runs the draw only with the Targetter setting (`+0x34`) on;
-/// the controller keeps updating either way.
+/// the controller keeps updating either way. The ring's animation channels
+/// are `FUN_0044DDD0`'s: 0 the frame counter, 1 the target model radius's
+/// scale, 2 the target's health fraction. Each takes the root test
+/// (`FUN_00465840` at `0x44DC8C` for the ring, `0x44DDAF` for the crosshair);
+/// a rejected one is skipped.
 #[allow(clippy::too_many_arguments)]
 fn draw_targetter_overlay(
     renderer: &mut dyn v2k_render::Renderer,
@@ -13773,6 +14770,8 @@ fn draw_targetter_overlay(
     enabled: bool,
     elapsed_micros: u32,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     if !enabled || !renderer.supports_models() {
         return;
@@ -13809,34 +14808,46 @@ fn draw_targetter_overlay(
             ) = (active_model, entity_pair_to_world(target), health_channel)
             {
                 targetter.advance_ring_spin(elapsed_micros);
-                let spin =
-                    f32::from(targetter.ring_spin_raw() as u16) * std::f32::consts::TAU / 65_536.0;
-                let orientation = mat3_mul(
-                    base_orientation,
-                    orientation_from_ypr(spin, 0.0, spin * 0.5),
-                );
-                let mut vars = AnimVars::default();
-                vars.dynamic[0] = (retail_tick & 0xffff) as i32;
-                let scale_raw = targetter_model_scale_raw(active_model.collision_radius_raw);
-                vars.dynamic[1] = i32::from(scale_raw);
-                vars.dynamic[2] = i32::from(health_channel);
-                ModelTreeRenderer::new_world(
-                    renderer,
-                    cache,
-                    colors,
-                    GAMEPLAY_MODEL_SCALE,
-                    Some(MenuSceneLight::NEUTRAL),
-                    retail_tick as i32,
-                )
-                .with_view(camera.into())
-                .draw_linked(
-                    ring.model_id,
-                    orientation,
-                    camera_relative(camera, target.position),
-                    8,
-                    None,
-                    &vars,
-                );
+                // The ring's root test runs on the target's wrapped origin;
+                // the spin advanced above regardless, as retail advances
+                // `0x4F7184` before its test.
+                let admitted = match native_viewport {
+                    Some(viewport) => {
+                        let point = viewport.actor_origin_view(target.position_raw());
+                        world_model_root_in_view(cache, ring.model_id, point, root_lens)
+                    }
+                    None => true,
+                };
+                if admitted {
+                    let spin = f32::from(targetter.ring_spin_raw() as u16) * std::f32::consts::TAU
+                        / 65_536.0;
+                    let orientation = mat3_mul(
+                        base_orientation,
+                        orientation_from_ypr(spin, 0.0, spin * 0.5),
+                    );
+                    let mut vars = AnimVars::default();
+                    vars.dynamic[0] = (retail_tick & 0xffff) as i32;
+                    let scale_raw = targetter_model_scale_raw(active_model.collision_radius_raw);
+                    vars.dynamic[1] = i32::from(scale_raw);
+                    vars.dynamic[2] = i32::from(health_channel);
+                    ModelTreeRenderer::new_world(
+                        renderer,
+                        cache,
+                        colors,
+                        GAMEPLAY_MODEL_SCALE,
+                        Some(MenuSceneLight::NEUTRAL),
+                        retail_tick as i32,
+                    )
+                    .with_view(camera.into())
+                    .draw_linked(
+                        ring.model_id,
+                        orientation,
+                        camera_relative(camera, target.position),
+                        8,
+                        None,
+                        &vars,
+                    );
+                }
             }
         }
     }
@@ -13868,6 +14879,13 @@ fn draw_targetter_overlay(
     };
     let mut vars = AnimVars::default();
     vars.dynamic[0] = (retail_tick & 0xffff) as i32;
+    // The crosshair's root test runs on its own wrapped raw position.
+    if let Some(viewport) = native_viewport {
+        let point = viewport.actor_origin_view(crosshair.position_raw);
+        if !world_model_root_in_view(cache, crosshair.model_id, point, root_lens) {
+            return;
+        }
+    }
     let position = crosshair
         .position_raw
         .map(|component| f32::from(component) / 256.0);
@@ -14012,23 +15030,13 @@ fn draw_world_fx(
     for presented in presentation.particles() {
         let particle = &presented.particle;
         let frame = particle.current_frame();
-        let Some((width, height)) = materials.sprite_dimensions(cache, frame.sprite_id) else {
+        let Some((size, half_extent)) =
+            particle_sprite_extent(cache, materials, camera, viewport, presented)
+        else {
             continue;
         };
         let draw_scale_raw = prepared_particle_draw_scale_raw(presented);
-        let size = [
-            particle_sprite_world_dimension(width, draw_scale_raw, frame.scale_raw),
-            particle_sprite_world_dimension(height, draw_scale_raw, frame.scale_raw),
-        ];
         let descriptor = particle_descriptor(particle.source_class);
-        let clamp_half_extent = descriptor.is_some_and(|descriptor| descriptor.flags() & 0x08 != 0);
-        let half_extent = particle_sprite_screen_half_extent(
-            camera,
-            viewport,
-            size,
-            presented.projection.depth_raw,
-            clamp_half_extent,
-        );
         if !presentation.sprite_visible(presented, half_extent) {
             continue;
         }
@@ -14097,6 +15105,60 @@ fn draw_world_fx(
     (spray_presented, on_screen)
 }
 
+/// A particle sprite's world size and its D410 screen half extent.
+fn particle_sprite_extent(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    materials: &v2k_game::model_color::ModelMaterialCache,
+    camera: &Camera,
+    viewport: [u32; 2],
+    presented: &v2k_game::world_fx::PreparedParticle,
+) -> Option<([f32; 2], [i32; 2])> {
+    let particle = &presented.particle;
+    let frame = particle.current_frame();
+    let (width, height) = materials.sprite_dimensions(cache, frame.sprite_id)?;
+    let draw_scale_raw = prepared_particle_draw_scale_raw(presented);
+    let size = [
+        particle_sprite_world_dimension(width, draw_scale_raw, frame.scale_raw),
+        particle_sprite_world_dimension(height, draw_scale_raw, frame.scale_raw),
+    ];
+    let clamp_half_extent = particle_descriptor(particle.source_class)
+        .is_some_and(|descriptor| descriptor.flags() & 0x08 != 0);
+    let half_extent = particle_sprite_screen_half_extent(
+        camera,
+        viewport,
+        size,
+        presented.projection.depth_raw,
+        clamp_half_extent,
+    );
+    Some((size, half_extent))
+}
+
+/// The live records D410 shows in the game's (authored) frame: the `+1D`
+/// bit `0x10` the weather and shell callbacks read next tick.
+fn particle_on_screen_slots(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    materials: &v2k_game::model_color::ModelMaterialCache,
+    camera: &Camera,
+    presentation: &ParticlePresentationFrame,
+) -> Vec<usize> {
+    presentation
+        .particles()
+        .filter(|presented| {
+            presented.draw_record_address
+                == v2k_game::world_fx::ParticleDrawRecordAddress::LivePoolSlot
+                && particle_sprite_extent(
+                    cache,
+                    materials,
+                    camera,
+                    presentation.viewport(),
+                    presented,
+                )
+                .is_some_and(|(_, half_extent)| presentation.sprite_visible(presented, half_extent))
+        })
+        .map(|presented| presented.slot)
+        .collect()
+}
+
 /// `FUN_0043DB60` for a drawn particle: the terrain height under it,
 /// bilinear between the four surrounding cells.
 fn particle_ground_raw(terrain: &v2k_formats::terrain::TerrainGrid, x_raw: i16, z_raw: i16) -> i16 {
@@ -14157,6 +15219,7 @@ fn particle_shadow_colour(cache: &v2k_game::resource_cache::ResourceCache) -> u3
 /// `LAB_0041CB10` continues after the admitted hive's ordinary body draw.
 /// Its ring model uses the global palette and its own callback parameters;
 /// the body's Sub-K words, terrain shade shift and attachment do not carry over.
+/// Each ring takes the root test; a rejected one is skipped.
 fn draw_hive_wreck_rings(
     renderer: &mut dyn v2k_render::Renderer,
     cache: &v2k_game::resource_cache::ResourceCache,
@@ -14164,6 +15227,8 @@ fn draw_hive_wreck_rings(
     camera: &Camera,
     entity: &v2k_game::entity::Entity,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     use v2k_game::hive_wreck_presentation::{
         HiveWreckPresentationRequest, HIVE_WRECK_RING_MODEL_ID,
@@ -14175,6 +15240,12 @@ fn draw_hive_wreck_rings(
         return;
     };
     for ring in request.ring_submissions(terrain) {
+        if let Some(viewport) = native_viewport {
+            let point = viewport.actor_origin_view(ring.position_raw);
+            if !world_model_root_in_view(cache, HIVE_WRECK_RING_MODEL_ID, point, root_lens) {
+                continue;
+            }
+        }
         let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
         let draw_position = ring
             .unwrapped_position_raw(camera_raw)
@@ -14200,6 +15271,7 @@ fn draw_hive_wreck_rings(
 }
 
 /// `FUN_00421590`'s suffix: the craft's lock reticle (`FUN_00421230`).
+/// Each instance takes the root test; a rejected one is skipped.
 #[allow(clippy::too_many_arguments)]
 fn draw_mind_control_reticle(
     renderer: &mut dyn v2k_render::Renderer,
@@ -14210,6 +15282,8 @@ fn draw_mind_control_reticle(
     craft: &PlayerCraft,
     lock: &mut PlayerMindControlLock,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     let Some(player) = em.player() else {
         return;
@@ -14247,6 +15321,12 @@ fn draw_mind_control_reticle(
     };
     let camera_raw = camera.position.map(|world| (world * 256.0) as i32);
     for point in points {
+        if let Some(viewport) = native_viewport {
+            let view = viewport.actor_origin_view(point.position_raw);
+            if !world_model_root_in_view(cache, RETICLE_MODEL_ID, view, root_lens) {
+                continue;
+            }
+        }
         let draw_position = point
             .unwrapped_position_raw(camera_raw)
             .map(|raw| raw as f32 / 256.0);
@@ -14418,9 +15498,9 @@ struct WorldAudioFrame<'a> {
     positional_masked: bool,
 }
 
-/// Map454EE0 and pause4513E0 enter44F3E0's mask8. Stop retained physical
+/// Map 454EE0 and pause 4513E0 enter 44F3E0's mask8. Stop retained physical
 /// loops while preserving their logical owners; disposable one-shots already
-/// playing and independent UI voices are not handles owned by44CE70.
+/// playing and independent UI voices are not handles owned by 44CE70.
 /// Retail FUN_0044CE70: the mask's first nonzero value stops the world's voices.
 fn suspend_world_audio(
     world_fx: &mut WorldFx,
@@ -14432,7 +15512,7 @@ fn suspend_world_audio(
     player_audio.suspend_physical_voices(sound_manager.as_mut());
     world_fx.garbage_collect_disposable_positional_sounds();
     // Modal branches skip world mixing/RNG. The next gameplay update admits
-    // fresh physical voices, matching4556A0/4512E0 clearing the mask.
+    // fresh physical voices, matching 4556A0/4512E0 clearing the mask.
 }
 
 fn world_sound_listener(camera: &Camera) -> PositionalSoundListener {
@@ -14834,9 +15914,10 @@ fn draw_fullscreen_map(
 
     renderer.begin_scene(RenderScene::Menu);
     // The map mode's tick (FUN_004542E0) clears only its first two frames, to
-    // colour 85; later frames draw the same opaque map, icons over it and the
-    // same panel text over that clear. The port redraws onto a fresh buffer
-    // each frame, so it repeats the clear: the frames shown are the same.
+    // colour 85, counting them with FUN_00453FD0; later frames draw the same
+    // opaque map, icons over it and the same panel text over that clear. The
+    // port redraws onto a fresh buffer each frame, so it repeats the clear:
+    // the frames shown are the same.
     clear_to_palette_colour(renderer, request.cache, 85);
     renderer.set_sprite_clip(None);
 
@@ -15994,6 +17075,7 @@ fn render_menu(
     colors: &v2k_game::model_color::ModelMaterialCache,
     billboard: &BillboardRenderFrame,
     retail_tick: u32,
+    random: &dyn Fn() -> u16,
 ) {
     render_menu_scene(
         renderer,
@@ -16007,6 +17089,7 @@ fn render_menu(
         retail_tick,
         MenuPresentation::Frontend,
         None,
+        random,
     );
 }
 
@@ -16021,6 +17104,7 @@ fn render_pause_menu(
     colors: &v2k_game::model_color::ModelMaterialCache,
     retail_tick: u32,
     frozen_world: Option<&CapturedFrame>,
+    random: &dyn Fn() -> u16,
 ) {
     render_menu_scene(
         renderer,
@@ -16034,6 +17118,7 @@ fn render_pause_menu(
         retail_tick,
         MenuPresentation::GameplayPause,
         frozen_world,
+        random,
     );
 }
 
@@ -16050,6 +17135,7 @@ fn render_menu_scene(
     retail_tick: u32,
     presentation: MenuPresentation,
     frozen_world: Option<&CapturedFrame>,
+    random: &dyn Fn() -> u16,
 ) {
     renderer.begin_scene(RenderScene::Menu);
     debug_assert_eq!(
@@ -16146,6 +17232,7 @@ fn render_menu_scene(
             colors,
             billboard.expect("frontend ring requires its render snapshot"),
             retail_tick,
+            random,
         ),
         MenuLayout::Carousel => {
             render_carousel(renderer, shell, menu, system_strings, menu_resources)
@@ -16162,6 +17249,7 @@ fn render_menu_scene(
             billboard,
             retail_tick,
             presentation,
+            random,
         ),
     }
 
@@ -16630,6 +17718,8 @@ fn draw_static_terrain_objects(
     retail_tick: u32,
     world_fx: &mut WorldFx,
     native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    authored_lens: Option<[i32; 6]>,
+    root_lens: Option<[i32; 6]>,
 ) {
     let (Some(terrain), Some(objects)) = (cache.terrain(), cache.terrain_objects()) else {
         return;
@@ -16680,32 +17770,60 @@ fn draw_static_terrain_objects(
                 viewport,
             )
         });
-        ModelTreeRenderer::new_world(
-            renderer,
-            cache,
-            colors,
-            GAMEPLAY_MODEL_SCALE,
-            Some(MenuSceneLight::NEUTRAL),
-            retail_tick as i32,
-        )
-        .with_view(camera.into())
-        .with_native_external_frame(
-            ExternalFrameMode::WorldPoint(object.external_frame_world_point()),
-            native,
-        )
-        .with_shade_shift(world_model_shade_shift(
-            object.position,
-            cache.terrain(),
-            terrain_lights,
-        ))
-        .draw_linked(
-            usize::from(object.model_id),
-            orientation,
-            object.position,
-            8,
-            None,
-            &vars,
-        );
+        let walk = native.as_ref().map_or(ModelWalk::Game, |(frame, _)| {
+            world_model_walk(
+                cache,
+                usize::from(object.model_id),
+                frame.origin_view_raw,
+                authored_lens,
+                root_lens,
+            )
+        });
+        if walk == ModelWalk::Skipped {
+            continue;
+        }
+        let draw = |random: &dyn Fn() -> u16| {
+            ModelTreeRenderer::new_world(
+                renderer,
+                cache,
+                colors,
+                GAMEPLAY_MODEL_SCALE,
+                Some(MenuSceneLight::NEUTRAL),
+                retail_tick as i32,
+            )
+            .with_view(camera.into())
+            .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+                random, camera,
+            ))
+            .with_native_external_frame(
+                ExternalFrameMode::WorldPoint(object.external_frame_world_point()),
+                native,
+            )
+            .with_shade_shift(world_model_shade_shift(
+                object.position,
+                cache.terrain(),
+                terrain_lights,
+            ))
+            .draw_linked(
+                usize::from(object.model_id),
+                orientation,
+                object.position,
+                8,
+                None,
+                &vars,
+            );
+        };
+        if walk == ModelWalk::PixelsOnly {
+            let detached = std::cell::Cell::new(world_fx.shared_retail_random_state());
+            draw(&|| {
+                let mut word = detached.get();
+                let sample = v2k_game::retail_rng::retail_random_u16(&mut word);
+                detached.set(word);
+                sample
+            });
+        } else {
+            world_fx.with_process_random(draw);
+        }
     }
 }
 
@@ -17523,12 +18641,29 @@ fn draw_authored_sky_model(
     colors: &v2k_game::model_color::ModelMaterialCache,
     camera: &Camera,
     retail_tick: u32,
+    native_viewport: Option<v2k_game::native_model_frame::NativeWorldViewport>,
+    root_lens: Option<[i32; 6]>,
 ) {
     let Some(model_id) = v2k_game::sky::submitted_sky_model_id(cache, frame_request) else {
         return;
     };
     let x = camera.position[0] * 0.5;
     for draw_x in [x, x - 128.0] {
+        // `FUN_0042F270` tests each copy through `FUN_00465840`; the port
+        // gates each on its wrapped raw origin with the sky model's radius.
+        // The radius (32256 raw units) dwarfs every camera-relative offset,
+        // so reachable poses always pass; the gate guards only the absurd.
+        if let Some(viewport) = native_viewport {
+            let origin_raw = [
+                (draw_x * 256.0).round() as i32 as i16,
+                0,
+                (camera.position[2] * 256.0).round() as i32 as i16,
+            ];
+            let point = viewport.actor_origin_view(origin_raw);
+            if !world_model_root_in_view(cache, model_id, point, root_lens) {
+                continue;
+            }
+        }
         ModelTreeRenderer::new_world(
             renderer,
             cache,
@@ -17568,6 +18703,7 @@ fn draw_prop(
     depth_fade: ModelDepthFade,
     retail_tick: u32,
     fly_anim_raw: u16,
+    random: &dyn Fn() -> u16,
 ) {
     let orientation = menu_model_orientation(rotation_y);
     let mut vars = AnimVars::default();
@@ -17585,6 +18721,9 @@ fn draw_prop(
     .with_view(camera.into())
     .with_depth_fade(depth_fade)
     .with_near_clip(ModelNearClip::RetailFrontend)
+    .with_process_random(v2k_game::model_tree::ModelTreeProcessRandom::new(
+        random, camera,
+    ))
     .draw_linked(model_id, orientation, position, depth, None, &vars);
 }
 
@@ -17889,6 +19028,14 @@ const MENU_MODEL_LOCAL_X_BASIS: [[f32; 3]; 3] =
 /// the port-basis equivalent of the retail menu renderer's angle-zero basis.
 const MENU_OPTIONS_PANEL_ROTATION_Y: f32 = std::f32::consts::PI;
 
+/// The spin word `DAT_004DCEB0` as the renderer's angle. `FUN_0042A2E0`
+/// builds `[sin a, 0, -cos a; 0, 1, 0; cos a, 0, sin a]` from it, a quarter
+/// turn ahead of the port's yaw basis at every angle (the lab's New Game ring
+/// at pass 395, word 0x69A7, matches only at +0x4000).
+fn menu_spin_radians(spin: u16) -> f32 {
+    f32::from(spin.wrapping_add(0x4000)) * std::f32::consts::TAU / 65536.0
+}
+
 fn menu_model_orientation(rotation_y: f32) -> [[f32; 3]; 3] {
     mat3_mul(
         orientation_from_ypr(rotation_y, 0.0, 0.0),
@@ -18154,6 +19301,76 @@ fn draw_menu_backdrop(
     );
 }
 
+/// `FUN_00465870`'s root test for a menu prop (`FUN_0043B410`): the
+/// display block's focals and frame, with the row's projection centre.
+fn menu_prop_root_in_view(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    model_id: usize,
+    point: [i32; 3],
+    centre: [i32; 2],
+) -> bool {
+    let (Some(model), Some(projection)) = (
+        cache.global_model(model_id),
+        v2k_game::world_projection::WorldProjection::from_cache(cache),
+    ) else {
+        return true;
+    };
+    let [focal_x, focal_y, width, height, ..] = projection.authored_words();
+    v2k_game::game_state::native_root_in_view(
+        point,
+        model.radius,
+        [focal_x, focal_y, width, height, centre[0], centre[1]],
+    )
+}
+
+/// `FUN_00465870`'s root test for a world model (an actor through
+/// `FUN_004138F0`, a static object through `FUN_00465390`'s copy of it): a
+/// model whose sphere misses the authored frame is not walked, so its
+/// callbacks write nothing and its tf3 vertices draw no words. Without a
+/// root lens (Free, the widescreen adapter) every scanned model is drawn.
+fn world_model_root_in_view(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    model_id: usize,
+    point: [i32; 3],
+    lens: Option<[i32; 6]>,
+) -> bool {
+    let (Some(lens), Some(model)) = (lens, cache.global_model(model_id)) else {
+        return true;
+    };
+    v2k_game::game_state::native_root_in_view(point, model.radius, lens)
+}
+
+/// How a world model with game-writing callbacks is walked this frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ModelWalk {
+    /// Retail walks it: its callbacks write the game.
+    Game,
+    /// Outside the authored frame but inside the wider frame shown (the
+    /// widescreen adapter): drawn, with every game write kept out, so the
+    /// game is the authored frame's whatever the display.
+    PixelsOnly,
+    /// Outside the authored frame, and the frame shown is the authored one.
+    Skipped,
+}
+
+/// `FUN_00465870`'s root test over the authored lens (the game's) and the
+/// lens of the frame shown (`None` when it is wider than the authored one).
+fn world_model_walk(
+    cache: &v2k_game::resource_cache::ResourceCache,
+    model_id: usize,
+    point: [i32; 3],
+    authored_lens: Option<[i32; 6]>,
+    shown_lens: Option<[i32; 6]>,
+) -> ModelWalk {
+    if world_model_root_in_view(cache, model_id, point, authored_lens) {
+        ModelWalk::Game
+    } else if shown_lens.is_none() {
+        ModelWalk::PixelsOnly
+    } else {
+        ModelWalk::Skipped
+    }
+}
+
 /// Render the main menu as the original 3D prop ring: the seven props
 /// (player4 vehicle, slopt, screenop, sfxopt, psjoypad, optexit, multipc)
 /// on the ring; the selected one sits at θ=0 — closest and lowest —
@@ -18170,9 +19387,16 @@ fn render_ring_3d(
     colors: &v2k_game::model_color::ModelMaterialCache,
     billboard: &BillboardRenderFrame,
     retail_tick: u32,
+    random: &dyn Fn() -> u16,
 ) {
     clear_to_frontend_colour(renderer, cache);
     let (vw, vh) = renderer.viewport_size();
+    // FUN_0042B040 draws the bottom sprites straight to the surface in the
+    // UI pass, before FUN_0042AA90 drains the sorted queue, so every model
+    // (a fly-out's approaching craft included) paints over them.
+    if shell.frontend_branding_visible() {
+        draw_menu_branding(renderer, system_strings, menu_resources, vw, vh);
+    }
     let ui_request = UiMappingRequest {
         viewport: [vw, vh],
         authored_canvas: fonts
@@ -18215,25 +19439,48 @@ fn render_ring_3d(
         .or_else(|| v2k_game::menu_text::layout_point(cache, 0))
         .map(|(_, y)| y)
         .unwrap_or(virtual_h * 155.0 / 240.0);
-    let prop_camera = menu_camera_for_projection_y(projection_y, ui_request);
-    renderer.set_camera(&prop_camera);
+    let selected_camera = menu_camera_for_projection_y(projection_y, ui_request);
+    // A receding prop's centre drops during a fly-out (FUN_0043AA40).
+    let receding_drop = v2k_game::game_state::fly_receding_centre_drop(shell.phase);
+    let receding_camera = menu_camera_for_projection_y(projection_y + receding_drop, ui_request);
+    let centre_x = fonts
+        .and_then(|f| f.layout_point(0))
+        .or_else(|| v2k_game::menu_text::layout_point(cache, 0))
+        .map_or(0, |(x, _)| x as i32);
 
-    let sel = menu.selected as f32;
     let depth_fade_color = menu_depth_fade_color(cache);
     for (i, item) in menu.items.iter().enumerate() {
         let Some(model_id) = item.model_id else {
             continue;
         };
-        // θ = (idx − sel + scroll/200) · step; selected lands at θ=0 (front).
-        let theta = (i as f32 - sel + menu.scroll / 200.0) * RING_STEP_RAD;
         let selected = i == menu.selected;
         let y_in = RING_Y_IN + if selected { sel_off } else { other_off };
-        // Raw units → port world units (÷100); camera looks down −Z.
-        let local_y_raw = -320.0 * theta.cos();
-        let depth_raw = y_in - 1200.0 * theta.cos();
+        let (prop_camera, centre_y) = if selected {
+            (&selected_camera, projection_y)
+        } else {
+            (&receding_camera, projection_y + receding_drop)
+        };
+        let angle = v2k_game::game_state::ring_prop_angle(
+            menu.items.len(),
+            menu.scroll,
+            i as i32 - menu.selected as i32,
+        );
+        let view_point = v2k_game::game_state::ring_prop_view_point(angle, y_in as i32 as i16);
+        if !menu_prop_root_in_view(
+            cache,
+            model_id as usize,
+            view_point,
+            [centre_x, centre_y as i32],
+        ) {
+            continue;
+        }
+        renderer.set_camera(prop_camera);
+        // FUN_0043B410's integer VIEW point, raw units → port world units
+        // (÷100); camera looks down −Z.
+        let depth_raw = view_point[2] as f32;
         let pos = [
-            800.0 * theta.sin() / 100.0,
-            local_y_raw / 100.0,
+            view_point[0] as f32 / 100.0,
+            view_point[1] as f32 / 100.0,
             -depth_raw / 100.0,
         ];
         // ALL props spin about one axis at 3.436 s/rev (DAT_004DCEB0);
@@ -18243,10 +19490,10 @@ fn render_ring_3d(
             renderer,
             cache,
             colors,
-            &prop_camera,
+            prop_camera,
             model_id as usize,
             pos,
-            menu.spin,
+            menu_spin_radians(menu.spin),
             1.0,
             2,
             MenuSceneLight::NEUTRAL,
@@ -18257,6 +19504,7 @@ fn render_ring_3d(
             ),
             retail_tick,
             v2k_game::game_state::fly_model_anim_raw(shell.phase),
+            random,
         );
     }
 
@@ -18296,10 +19544,6 @@ fn render_ring_3d(
             let label_x = (vw as i32 - label_w as i32) / 2;
             renderer.draw_sprite(&label_rgba, label_w, label_h, label_x, vh as i32 * 11 / 12);
         }
-    }
-
-    if shell.frontend_branding_visible() {
-        draw_menu_branding(renderer, system_strings, menu_resources, vw, vh);
     }
 }
 
@@ -18628,7 +19872,7 @@ fn render_carousel(
     // Compute carousel layout (fallback path): rotation from the original
     // scroll interpolator; selected item lands at the front.
     let n = menu.items.len().max(1) as f32;
-    let angle = (menu.scroll / 200.0 - menu.selected as f32) * (std::f32::consts::TAU / n);
+    let angle = (menu.scroll as f32 / 200.0 - menu.selected as f32) * (std::f32::consts::TAU / n);
     let slots = compute_carousel_layout(menu.items.len(), angle, cx, cy, rx, ry);
     let (selected_offset, other_offset) = v2k_game::game_state::fly_offsets(shell.phase);
 
@@ -18650,8 +19894,8 @@ fn render_carousel(
         // projected displacement as well as the icon makes the selected prop
         // approach the lens while all other props recede, without inventing a
         // separate software-only transition.
-        let theta =
-            (slot.item_index as f32 - menu.selected as f32 + menu.scroll / 200.0) * RING_STEP_RAD;
+        let theta = (slot.item_index as f32 - menu.selected as f32 + menu.scroll as f32 / 200.0)
+            * RING_STEP_RAD;
         let base_depth = RING_Y_IN - 1200.0 * theta.cos();
         let offset = if slot.item_index == menu.selected {
             selected_offset
@@ -18716,6 +19960,7 @@ fn render_list(
     billboard: Option<&BillboardRenderFrame>,
     retail_tick: u32,
     presentation: MenuPresentation,
+    random: &dyn Fn() -> u16,
 ) {
     use v2k_game::menu_text;
 
@@ -18815,6 +20060,7 @@ fn render_list(
                     panel_depth_fade,
                     retail_tick,
                     v2k_game::game_state::fly_model_anim_raw(shell.phase),
+                    random,
                 );
             }
         }
@@ -18824,36 +20070,51 @@ fn render_list(
         if let Some(model_id) = menu.backdrop_model {
             if cache.global_model(model_id as usize).is_some() {
                 let virtual_h = fonts.map(|f| f.virtual_h).unwrap_or(240.0);
-                let (_, projection_y) = fonts
+                let (centre_x, projection_y) = fonts
                     .and_then(|f| f.layout_point(6))
                     .or_else(|| menu_text::layout_point(cache, 6))
                     .unwrap_or((virtual_h * 2.0 / 3.0, virtual_h * 170.0 / 240.0));
+                // It recedes as an unselected prop (FUN_0043AA40).
+                let projection_y =
+                    projection_y + v2k_game::game_state::fly_receding_centre_drop(shell.phase);
                 let depth_raw = 2500.0 + other_off;
+                let in_view = menu_prop_root_in_view(
+                    cache,
+                    model_id as usize,
+                    v2k_game::game_state::ring_prop_view_point(
+                        0,
+                        (RING_Y_IN + other_off) as i32 as i16,
+                    ),
+                    [centre_x as i32, projection_y as i32],
+                );
                 let prop_camera = menu_camera_for_projection_y(projection_y, ui_request);
                 renderer.set_camera(&prop_camera);
                 let row_near_raw = frontend_frame
                     .map(|frame| frame.row_depth_fade_near_raw)
                     .unwrap_or(MENU_PROP_ROW_NEUTRAL_NEAR_RAW);
-                draw_prop(
-                    renderer,
-                    cache,
-                    colors,
-                    &prop_camera,
-                    model_id as usize,
-                    [0.0, -0x140 as f32 / 100.0, -depth_raw / 100.0],
-                    menu.spin,
-                    1.0,
-                    2,
-                    // Screen-specific foreground decoration (the monitor on
-                    // Display, speaker on Sound, etc.) keeps authored colour.
-                    MenuSceneLight::NEUTRAL,
-                    // This one-prop row has flags 0x03, so AA40 rebuilds its
-                    // band before B410. Frontend uses the post-pin world near;
-                    // pause retains a capped neutral band without S7[55] red.
-                    menu_prop_row_depth_fade(row_near_raw, depth_raw, depth_fade_color),
-                    retail_tick,
-                    v2k_game::game_state::fly_model_anim_raw(shell.phase),
-                );
+                if in_view {
+                    draw_prop(
+                        renderer,
+                        cache,
+                        colors,
+                        &prop_camera,
+                        model_id as usize,
+                        [0.0, -0x140 as f32 / 100.0, -depth_raw / 100.0],
+                        menu_spin_radians(menu.spin),
+                        1.0,
+                        2,
+                        // Screen-specific foreground decoration (the monitor on
+                        // Display, speaker on Sound, etc.) keeps authored colour.
+                        MenuSceneLight::NEUTRAL,
+                        // This one-prop row has flags 0x03, so AA40 rebuilds its
+                        // band before B410. Frontend uses the post-pin world near;
+                        // pause retains a capped neutral band without S7[55] red.
+                        menu_prop_row_depth_fade(row_near_raw, depth_raw, depth_fade_color),
+                        retail_tick,
+                        v2k_game::game_state::fly_model_anim_raw(shell.phase),
+                        random,
+                    );
+                }
             }
         }
     }
@@ -20697,6 +21958,75 @@ mod menu_visual_tests {
     fn particle_draw_scale_matches_retail_projection_algebra() {
         assert_eq!(particle_sprite_world_dimension(16, 0x0500, 0x0100), 0.3125);
         assert_eq!(particle_sprite_world_dimension(32, 0x0f00, 0x0100), 1.875);
+    }
+
+    /// The remaining model roots that call `FUN_00465840` (the MindBall draw
+    /// `FUN_004097A0`, the Hive rings of `FUN_0041CB10`, the lock reticle
+    /// `FUN_00421230`, the Targetter ring and crosshair of `FUN_0044DB10`,
+    /// the shield aura of `FUN_004136C0`, the sky copies of `FUN_0042F270`)
+    /// wrap the raw origin exactly as actor bodies do, then test the header
+    /// radius against the authored display block. A centered model passes;
+    /// one behind the camera or far off-axis does not. The sky's radius
+    /// (32256) dwarfs every camera-relative offset, so every reachable pose
+    /// passes and only the absurd fails.
+    #[v2k_test_support::retail_test]
+    fn off_screen_model_roots_share_the_wrapped_view_point() {
+        use v2k_game::native_model_frame::NativeWorldViewport;
+        let root = v2k_test_support::retail_dir();
+        let mut session = v2k_game::session::GameSession::init(&root).unwrap();
+        session.load_auxiliary_ovl(3, 1).unwrap();
+        let viewport = NativeWorldViewport {
+            origin_raw: [0, 0, 0],
+            axes_q31: [[i32::MAX, 0, 0], [0, i32::MAX, 0], [0, 0, i32::MAX]],
+            identity: true,
+        };
+        let lens = [512, 512, 640, 480, 320, 240];
+        let gate = |model: usize, raw: [i16; 3]| {
+            world_model_root_in_view(
+                &session.cache,
+                model,
+                viewport.actor_origin_view(raw),
+                Some(lens),
+            )
+        };
+        for model in [
+            MIND_BALL_MODEL_ID,
+            v2k_game::hive_wreck_presentation::HIVE_WRECK_RING_MODEL_ID,
+            RETICLE_MODEL_ID,
+            v2k_game::player_shield::PLAYER_SHIELD_MODEL_ID,
+            v2k_game::targetter::TARGETTER_RING_EXACT_MODEL_ID,
+            v2k_game::targetter::TARGETTER_RING_NEAR_MODEL_ID,
+            v2k_game::targetter::TARGETTER_TERRAIN_CROSSHAIR_MODEL_ID,
+            v2k_game::targetter::TARGETTER_EXACT_CROSSHAIR_MODEL_ID,
+            v2k_game::targetter::TARGETTER_NEAR_CROSSHAIR_MODEL_ID,
+        ] {
+            // The header radius (zero for model 76) enters the same test.
+            assert!(
+                session.cache.global_model(model).is_some(),
+                "authored model {model}"
+            );
+            // Retail VIEW depth is positive in front: the port's identity
+            // viewport keeps the raw words, so a centered near point passes
+            // while a point behind the camera fails the 0x3F near test.
+            assert!(gate(model, [0, 0, 5000]), "model {model} centered");
+            assert!(!gate(model, [0, 0, -5000]), "model {model} behind");
+            assert!(!gate(model, [30000, 0, 5000]), "model {model} off-axis");
+        }
+        for model in [305, 306] {
+            assert!(
+                session.cache.global_model(model).is_some(),
+                "authored sky {model}"
+            );
+            assert!(gate(model, [64, 0, 64]), "sky {model} near the camera");
+            assert!(
+                gate(model, [30000, 0, 30000]),
+                "sky {model} at a wrapped extreme"
+            );
+            assert!(
+                !gate(model, [0, 0, -32200]),
+                "sky {model} behind the view plane"
+            );
+        }
     }
 
     #[test]

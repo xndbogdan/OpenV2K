@@ -202,7 +202,7 @@ fn resolve(
     Ok(true)
 }
 
-/// Continue the static suffix of a living11AD0 visit after its terrain/water
+/// Continue the static suffix of a living 11AD0 visit after its terrain/water
 /// phases, retaining the original selected model. This does not replay solid
 /// contact, water classification, or the source entry gates after callbacks.
 pub(crate) fn resolve_intro2_type57_tumble_static_continuation(

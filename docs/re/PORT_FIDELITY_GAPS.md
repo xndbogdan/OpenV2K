@@ -1444,8 +1444,8 @@ Last observation pass: 2026-09-07 (first-world lighting/lens and peasant animati
     The [hive wreck authority](HIVE_WRECK.md) owns controller states 2/0,
     stopped class-5 spit, marker/timer admission, signed suction arithmetic
     and separate ring presentation. Source arithmetic and focused tests do not
-    close matched ring appearance or interactive pull/exit acceptance. Live
-    fall-in yank `FUN_0041c830` stays fail-closed.
+    close matched ring appearance or interactive pull/exit acceptance. A live
+    Hive's mouth kills and throws out its bodies (`FUN_0041C830`).
     Overlay-51 sprites 3763/3764 follow `FUN_00454520` from overlay-3
     Section-14 record 3 when `FUN_0042edc0` bits 9..=15 are set.
     `FUN_0042DD10` selector 0 now writes those bits for flag-`0x10`

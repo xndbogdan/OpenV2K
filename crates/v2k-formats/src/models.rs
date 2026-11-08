@@ -47,10 +47,10 @@ mod vertex;
 pub use native_spatial::ModelNativeSpatialGenerator;
 use vertex::SlotResolver;
 pub use vertex::{
-    LinkedModelSlots, ModelEdgeConstructorClip, ModelEdgeEndpointSnapshot, ModelNativeEdgeBoundary,
-    ModelNativeEdgeEndpoint, ModelNativeEdgeFailure, ModelNativeVertexBoundary,
-    ModelNativeVertexFailure, ModelSlotClip, ModelSurfaceOrigin, ModelVertexKind,
-    ModelVertexResolver, ResolvedModelSlot,
+    retail_tf3_offset, LinkedModelSlots, ModelEdgeConstructorClip, ModelEdgeEndpointSnapshot,
+    ModelNativeEdgeBoundary, ModelNativeEdgeEndpoint, ModelNativeEdgeFailure,
+    ModelNativeVertexBoundary, ModelNativeVertexFailure, ModelSlotClip, ModelSurfaceOrigin,
+    ModelVertexJitter, ModelVertexKind, ModelVertexResolver, ResolvedModelSlot,
 };
 
 mod painter;
@@ -1309,11 +1309,12 @@ fn interpret(
                 }
             }
 
-            // Jump if imm32 <= view_dist; static dist = 0, imm > 0 → fall
-            // through.
+            // Jump if imm32 <= view_dist (LOD select, FUN_004670D0);
+            // static dist = 0, imm > 0 → fall through to the near branch.
             0x13 => pc += 4,
 
-            // Jump if view_dist < imm32; static dist = 0 → take the jump.
+            // Jump if view_dist < imm32 (FUN_00467100); static dist = 0 →
+            // take the jump to the near branch.
             0x14 => {
                 if pc + 4 > n {
                     break;
@@ -1353,9 +1354,9 @@ fn interpret(
                 pc += 4;
             }
 
-            // FUN_004669E0/00466A70 open an unsorted child queue at the
+            // FUN_004669E0/FUN_00466A70 open an unsorted child queue at the
             // maximum/minimum referenced camera Z. 0x38 is the optional
-            // FUN_004689D0 vertex-number diagnostic: with4FEEF4 clear it skips
+            // FUN_004689D0 vertex-number diagnostic: with 4FEEF4 clear it skips
             // resolution entirely. Nothing writes that word, so normal
             // materialization ignores it.
             0x06 | 0x26 | 0x38 => {
@@ -1460,6 +1461,15 @@ fn interpret(
                 out.painter_program.push(ModelPainterOp::EndGroup);
                 pc += 1;
             }
+            // Mount publish (FUN_00467010): retail copies the composed basis
+            // (ctx+0xC4, the target of every mount op) to the current mount
+            // (ctx+0x18) and its global copy at 0x004FEEA0, and clears +0x3C.
+            // Every shipped 0x10 immediately follows an 0x0F mount reset
+            // (guarded by model_mount_policy::every_restore_follows_a_reset
+            // over the full corpus), so the composed basis is Q1.31 identity
+            // here and the publish is a fixed point: skipping it keeps the
+            // exact mount state. The port holds no global copy (the collision
+            // projector block at that address is set up by its own walk).
             0x10 => pc += 1,
             // Mount reset (FUN_00466fc0): restore the current mount frame to
             // Q1.31 identity. The Level-1 `lifter` uses this between its
@@ -2359,7 +2369,7 @@ impl<P: CollisionModelPool + ?Sized> StagedEffectInterpreter<'_, P> {
                     pc = payload + 2;
                 }
 
-                //19D90 is a linear effect walk, not the sphere-query
+                // 19D90 is a linear effect walk, not the sphere-query
                 // interpreter. Convex faces and control records only advance
                 // its cursor; their slot references are never materialized.
                 0x36 | 0x89 | 0x8A | 0x90 => {
@@ -3507,7 +3517,8 @@ impl ModelEntry {
     ) -> Option<ResolvedModelSlot> {
         let mut stats = StreamStats::default();
         let mut resolver = SlotResolver::with_linked(&self.records, context.vars, context.linked)
-            .with_vertex_resolver(context.vertex_resolver);
+            .with_vertex_resolver(context.vertex_resolver)
+            .after_command_walk();
         resolver.resolve(slot, &mut stats)
     }
 
@@ -3740,7 +3751,8 @@ impl ModelEntry {
         );
         let mut resolver =
             SlotResolver::with_linked(&self.records, &evaluated_vars, context.linked)
-                .with_vertex_resolver(context.vertex_resolver);
+                .with_vertex_resolver(context.vertex_resolver)
+                .after_command_walk();
         let ResolvedGeometry {
             mut vertices,
             mut vertex_type_flags,
@@ -4188,7 +4200,7 @@ mod tests {
 
     #[test]
     fn collision_convex_fence493_uses_planes_after_both_sphere_gates() {
-        // Exact Section-8 fence2 (global493) program/records. Slots8,18,22
+        // Exact Section-8 fence2 (global 493) program/records. Slots8,18,22
         // depend on parallelogram and intrinsic alias materialization.
         let fence = collision_entry(
             vec![
@@ -4292,7 +4304,7 @@ mod tests {
             .unwrap()
             .is_none());
 
-        // A preceding ungated sphere penetrates by5+10-floor(sqrt(5))=13.
+        // A preceding ungated sphere penetrates by 5+10-floor(sqrt(5))=13.
         let mut with_sphere = vec![0x8E, 0, 0, 0, 10, 0, 0, 0, 0, 0];
         with_sphere.extend(program);
         let model = collision_entry(records, with_sphere);
@@ -4521,7 +4533,7 @@ mod tests {
             vec![0x90, 0, 0, 0, 100, 0, 0, 0, 200, 0, 0, 0, 0, 0, 0x88, 0],
         );
         let vars = AnimVars::default();
-        // reach110, length isqrt(10000)=100; Q12 quotients truncate.
+        // reach 110, length isqrt(10000)=100; Q12 quotients truncate.
         let hit = model
             .collide_sphere_raw([60.0, 10.0, 80.0], 10, &vars, &())
             .unwrap()
@@ -5250,17 +5262,17 @@ mod tests {
 
     #[test]
     fn staged_effect_convex_records_skip_linearly_without_resolving_face_slots() {
-        //19D90's cursor lengths differ from6AF20, especially8A and8D.
+        // 19D90's cursor lengths differ from 6AF20, especially 8A and 8D.
         let mut program = vec![0xFF; 55];
         program[0] = 0x8C;
         program[2..4].copy_from_slice(&i16::MIN.to_le_bytes());
-        program[4] = 0x89; // align2+8 ->14
-        program[14] = 0x8A; // align2 only ->16
+        program[4] = 0x89; // align2+8 -> 14
+        program[14] = 0x8A; // align2 only -> 16
         program[16] = 0x01; // source default advances one byte
         program[17] = 0x8D; // one-byte group terminator
-        program[18] = 0x8B; // align2+2 ->22
-        program[22] = 0x90; // align4+10 ->34
-        program[34] = 0x36; // align2+8 ->44
+        program[18] = 0x8B; // align2+2 -> 22
+        program[22] = 0x90; // align4+10 -> 34
+        program[34] = 0x36; // align2+8 -> 44
         program[44] = 0x8E;
         program[48..52].copy_from_slice(&77u32.to_le_bytes());
         program[52..54].copy_from_slice(&0u16.to_le_bytes());
@@ -5470,9 +5482,9 @@ mod tests {
     #[test]
     fn register_sine_ops_keep_authored_newant_antenna_phase_words() {
         // Model302: r1=clock<<decode(11); r2=cos/sin(r1)*0x8000+0x8000.
-        // Packed11 decodes12, so the authored clock repeats every16 ticks.
-        // Original466870/466900 machine outputs on all32 clock phases.
-        // The positive peak is65535; floating sin formerly wrapped it to0.
+        // Packed11 decodes 12, so the authored clock repeats every 16 ticks.
+        // Original 466870/466900 machine outputs on all 32 clock phases.
+        // The positive peak is 65535; floating sin formerly wrapped it to 0.
         let dd: [u16; 32] = [
             0, 12539, 23170, 30273, 32767, 30268, 23161, 12528, 0, 52996, 42365, 35262, 32768,
             35267, 42374, 53007, 0, 12539, 23170, 30273, 32767, 30268, 23161, 12528, 0, 52996,

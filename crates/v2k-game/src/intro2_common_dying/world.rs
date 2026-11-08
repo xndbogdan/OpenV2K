@@ -166,7 +166,7 @@ fn run_frame(
         .resources
         .level_terrain()
         .ok_or(Block::Metadata("terrain"))?;
-    // 01280/E640 reads global4FECE4 from the active descriptor's +84.
+    // 01280/E640 reads global 4FECE4 from the active descriptor's +84.
     // Terrain water geometry and authored wave animation are independent.
     let wave_clock = crate::common_mover::sub_c::SubCWaveClock {
         wave_tick_50hz: frame.retail_tick as i32,
@@ -378,8 +378,8 @@ fn run_frame(
     let entity = manager.entity_mut(id).unwrap();
     if detailed {
         // DCA0: A800 and its terminal callback return before DD2E reads the
-        // current health. The A0 low-health cue is independent of dying4000;
-        // 94/96 apply only at/above half health and with visible800 set.
+        // current health. The A0 low-health cue is independent of dying 4000;
+        // 94/96 apply only at/above half health and with visible 800 set.
         // E870 has no corresponding sound phase.
         let record = frame
             .resources

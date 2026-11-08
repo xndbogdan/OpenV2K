@@ -215,7 +215,7 @@ fn run<P: NativeGroundActorProfile>(
         && crate::native_actor_capture::carry_tasks::carrying_variant(entity).is_some();
     let policy = if P::completed_terminal_authenticates(manager, id) {
         // The exact completed Class2/18 contexts have null+20/+24/+28; the body
-        // remains linked until14990 and415040 still accepts its buffer.
+        // remains linked until 14990 and 415040 still accepts its buffer.
         ImpactCallbackPolicy::None
     } else if carrying {
         crate::native_actor_capture::NativeCaptorProfile::authenticate(manager, id)
@@ -242,8 +242,8 @@ fn run<P: NativeGroundActorProfile>(
             ActiveBehaviorStyle::Audited(style)
                 if matches!(
                     style.frame_address,
-                    // Retail4C7930 and4C7738: +20/+24/+28 all40C690.
-                    // Class5 variant1 at4C7978 instead has all three null;
+                    // Retail4C7930 and 4C7738: +20/+24/+28 all 40C690.
+                    // Class5 variant1 at 4C7978 instead has all three null;
                     // it is not the ordinary native Class5 task graph.
                     0x004C_7930
                         | 0x004C_7738

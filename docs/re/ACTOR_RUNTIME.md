@@ -601,6 +601,13 @@ against a working factory, Type9 peers, Type40 and the Type12 family against
 people, Hive impact, and the Type74 remote beam. These fail closed: a block
 parks the visit's committed prefix and ends the subject's walk.
 
+A possessed body (the Possession Ray's) takes the general visit through
+Player Control's `447D70`, whose null branch the preflight admits; its
+pickup is held. The craft's pairs while a body is possessed return
+`0x4C20C0`, which ends the whole pass after the pair; those with weapons,
+sharks and `0xC00` bodies are held
+([mind control](PLAYER_CRAFT.md#mind-control)).
+
 Every other touching pair takes the **general visit**: the same sounds,
 behaviours, task hooks, response and damage, in the order above. A preflight
 runs first and writes nothing. It admits the pair when:
@@ -620,7 +627,10 @@ runs first and writes nothing. It admits the pair when:
   Ball's `40C800`, against another Type63 (`0x004BE320`'s A300, which
   cancels the response) or against a body with a native owner, which takes
   its checked `{1, 40000}` attributed to the ball before the visit goes on;
-- every body the response would move has a native owner;
+  and a resting Rolling Boulder's `40C730`, which wakes it under its owner
+  ([Rolling Boulder](ROLLING_BOULDER.md#port-status));
+- every body the response would move has a native owner (a Rolling
+  Boulder's included: its collision damage runs the player pair's deaths);
 - every body with a native owner lends its completed owner (the same custody
   the family lanes check), and every other body's tasks keep a null contact
   hook. The Main Base's Primary (`25CD0`) keeps `01020`'s null `+0x18`, as the
@@ -678,10 +688,26 @@ for that one pair, in the walk's order: its held ball, Type17 contact
 plans, rolling-boulder wake, descriptor contacts and deaths commit with the
 pair, and the walk goes on from the successor it read before the pair. A
 pair the adapter stops is reported as a general visit's stop
-(`PlayerPair(...)`); so is a pair touching the craft's wreck, whose pairs
-the port does not model, and a touching pair with a body no lane owns
+(`PlayerPair(...)`); so is a touching pair with a body no lane owns
 (`NoBodyOwner`, a Type61 outside its Power-Up style, say), which retail's
 walk visits too.
+
+`11AD0` has no dying test, so the craft's wreck pairs on through its three
+seconds of Dying bounce (`447280`'s alternate, model slot 1 or 3). That
+style's `+18` is `447D70` too, whose controller branch still runs
+(the capability word stays `5`), and `447280` rebuilds Primary as the
+`BB8`/`4476F0` timed task from a template with a null `+18`, clearing the
+other two slots, so the wreck's A900 calls nothing. `15040` reaches the
+dying hull, where `14E90` only drains the pre-health buffer. The adapter
+pairs only the living craft, so the walk visits the wreck's pairs with
+every native-owned body, those the adapter visits included, as it visits
+the living craft's unadmitted ones. A wreck touching a body without a
+native owner stops as `PlayerPair(ResumeAfterPlayerDeath)`. World 22's
+idle player dies under a Type25 at frame 2,033 and its wreck rests on a
+Type7: the walk now visits that pair 52 times before the wreck goes, where
+the build before stopped. The retail lab's world 22 run died the same way
+(a Type25, about 2,400 ticks after arrival) and logged no pair damage to
+the wreck, which `14D30` skips when the capped damage is zero.
 
 Pairs still resolved apart from the walk, after it: the Main Base's
 conversion of `0x800` bodies, the factory's intake of `0x400` workers, and
@@ -1211,6 +1237,21 @@ The proven evaluator ids are:
 | 11 | Beacon Nearby | `FUN_00416570` |
 | 12 | Base Nearby | `FUN_004165B0` |
 | 13 | Job Nearby | `FUN_004165C0` |
+
+Rule ids 3, 4 and 14 have no evaluator use in shipped data: a scan of all
+130 global entity types (auxiliary OVL 3,
+`EntityTypeRuntimeMetadata::from_section12`; every weighted
+`behavior_choices` entry) finds only rule ids 1, 2 and 5--13, and the port
+rejects unknown ids (`BehaviorWeightRule::from_raw`). `FUN_00416430`
+(rule 4: 1 when the handle does not resolve or `+08` bit `0x2000` is
+clear) and `FUN_00416530` (rule 14: 1 when `+08` bit `0x4000000` is
+clear) are therefore excluded from the port's coverage denominator
+(`status.csv`): a whole-image scan finds zero E8/E9 code xrefs to either,
+with one DWORD reference each in the rule-evaluator table (`0x4BE488`,
+`0x4BE4D8`). ("Rule 3" in type notes means the `behavior_rule_ref`
+authentication tag, not a weight rule.) If future evidence shows a rule
+3/4/14 choice, remove those exclusions and port the two one-line
+predicates.
 
 The nearby rules 6, 7, 10, 11 and 12 all call `FUN_004164D0` with their
 capability mask (1, 8, `0xC00`, `0x100`, `0x20`). It searches the live list

@@ -75,6 +75,8 @@ pub enum SharedActorImpactOutcome {
     RollingBoulder(crate::rolling_boulder::impact::RollingBoulderImpactOutcome),
     PortableRadar(crate::portable_radar::impact::PortableRadarImpactOutcome),
     Class0(crate::class0_impact::Class0ImpactOutcome),
+    /// The possessed body, whose owner is the possession.
+    Possessed(crate::possession::live::PossessedHitOutcome),
 }
 
 impl SharedActorImpactOutcome {
@@ -90,6 +92,7 @@ impl SharedActorImpactOutcome {
             };
         }
         applied!(
+            Possessed,
             GunTurret,
             NativeWeapon,
             Peasant,
@@ -181,6 +184,15 @@ pub fn apply_playing_actor_particle_hit(
         return Some(SharedActorImpactOutcome::UnsupportedStaticRouteTarget {
             entity_type: entity.entity_type,
         });
+    }
+    if let Some(custody) = frame
+        .scheduler
+        .possession
+        .filter(|custody| custody.state.body == impact.target_entity_id)
+    {
+        return Some(SharedActorImpactOutcome::Possessed(
+            crate::possession::live::possessed_particle_hit(frame, impact, custody),
+        ));
     }
     // Type124's class63 terminal needs BAF0's mutable static world and the
     // lent player; the other fish keep the shared frame below.

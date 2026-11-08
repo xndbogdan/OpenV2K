@@ -517,6 +517,7 @@ impl GameplayHudCargoFrame {
 }
 
 /// Values returned by retail's cargo-model callback (`FUN_0042A520`).
+/// Companion cleanup helper `FUN_0042A560` zeroes all three cargo words.
 ///
 /// Keeping these values on the presentation request makes the distinction
 /// between live cargo materialization and the separately recovered static

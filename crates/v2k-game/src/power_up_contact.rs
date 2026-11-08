@@ -82,7 +82,7 @@ pub struct PlayerCampaignProgress {
 
 impl PlayerCampaignProgress {
     /// Exact native 42ECC0 (FUN_0042ECC0 copies all 37 words)/42E3B0 restoration.
-    /// Keep every bit of all37 dwords, including pair links and fields beyond
+    /// Keep every bit of all 37 dwords, including pair links and fields beyond
     /// the currently decoded trophy bits; loading does not replay acquisition events.
     pub fn from_native_snapshot(
         current_control_slot: usize,

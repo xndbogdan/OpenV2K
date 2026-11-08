@@ -9,22 +9,22 @@ and RE notes cite by address (for example `FUN_0042D030`).
 
 | Measure | Functions | Share |
 |---|---:|---:|
-| Game functions in retail `V2000.EXE` | 2,399 | |
-| Marked not needed (excluded below) | 628 | |
-| **Referenced by port code** | **1,685** | **95.1%** |
-| Referenced by code or RE notes | 1,771 | 100.0% |
+| Game functions in retail `V2000.EXE` | 2,403 | |
+| Marked not needed (excluded below) | 642 | |
+| **Referenced by port code** | **1,761** | **100.0%** |
+| Referenced by code or RE notes | 1,761 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
 
 | Status | Functions |
 |---|---:|
-| implemented | 458 |
-| approximated | 8 |
-| documented | 25 |
-| not-needed | 628 |
+| implemented | 499 |
+| approximated | 9 |
+| documented | 20 |
+| not-needed | 642 |
 
-11 `FUN_` citations don't match a retail function
+0 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
 
 ## Map
@@ -41,16 +41,7 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Actor task programs](../re/ACTOR_TASK_PROGRAMS.md) | 23 | 3 | 99 |
-| [Controls](../re/CONTROLS.md) | 17 | 1 | 53 |
-| [Player craft](../re/PLAYER_CRAFT.md) | 12 | 0 | 122 |
-| [Multiplayer](../re/MULTIPLAYER.md) | 8 | 0 | 144 |
-| [Platform](../re/PLATFORM_RUNTIME.md) | 7 | 0 | 27 |
-| [Menu system](../re/MENU_SYSTEM.md) | 5 | 1 | 159 |
-| [Format documentation](../re/FORMAT_DOCUMENTATION.md) | 4 | 0 | 140 |
-| [Hud rendering](../re/HUD_RENDERING.md) | 2 | 1 | 43 |
-| [Actor](../re/ACTOR_RUNTIME.md) | 1 | 0 | 48 |
-| [Class0](../re/CLASS0_RUNTIME.md) | 1 | 1 | 26 |
+
 
 ## Omitted
 
@@ -81,18 +72,28 @@ denominator, each with its reason: the never-installed
 | dead: installed at Graph2D +0x1068..+0x107C by FUN_00480D10, but no queue thunk or call site reads those slots (docs/re/SOFTWARE_RASTER.md) | 6 |
 | dead: only in the default game-channel descriptor 004D4A00, which FUN_0046BED0 uses when its caller passes none; both callers (FUN_0046CAC0, FUN_0046CB50) pass the game's 004CAFA8 (docs/re/MULTIPLAYER.md#player-slots) | 4 |
 | dead: stored in software fill slots +0x10B0..+0x10BC, which no thunk or call site calls (docs/re/SOFTWARE_RASTER.md) | 4 |
+| dead: behavior class 27 (Destroy Furniture) has no selector; no shipped type selects it (scan of all 130 global entity types' weighted and alternate choices) and no note records a runtime transition into it (docs/re/ACTOR_TASK_PROGRAMS.md) | 3 |
 | dead: no Section-12 type selects class 52 (Lightning Shield) as a behavior or alternate (docs/re/PLAYER_CRAFT.md#special-weapons) | 3 |
 | dead: no shipped model vertex has type 10 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: no shipped model vertex has type 4 (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | dead: only in the value-op table 0x004CDF08, which no code or data references (docs/re/FORMAT_DOCUMENTATION.md) | 3 |
 | replaced: the port's UDP transport (DirectPlay 3's connection enumeration; docs/re/MULTIPLAYER.md#the-port) | 3 |
+| dead: behavior class 57 (Fire Monster) has no selector; no shipped type selects it (scan of all 130 global entity types' weighted and alternate choices) and no note records a runtime transition or direct caller into it (docs/re/ACTOR_TASK_PROGRAMS.md) | 2 |
 | dead: sea table 0x004C92B8 is installed by FUN_004129B0 but never walked (docs/re/TERRAIN_COLLISION.md) | 2 |
+| dead: weight-rule evaluator with no selector; rules 3/4/14 never appear in any authored choice (scan of all 130 global entity types) and the port rejects unknown rule ids; whole-image scan finds zero E8/E9 code xrefs, one DWORD ref in the rule-evaluator table (docs/re/ACTOR_RUNTIME.md) | 2 |
 | replaced: the port's SDL platform (the debug log file, debugger output and fatal-error exit; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 2 |
+| dead: behavior class 57 (Fire Monster) has no selector; whole-image scan finds zero E8/E9 code xrefs and one DWORD ref at the class-57 initial style initializer slot (docs/re/ACTOR_TASK_PROGRAMS.md) | 1 |
+| dead: debug body selector setter called only by unreferenced in-play debug action FUN_00456590 (docs/re/CONTROLS.md) | 1 |
+| dead: debug craft-type getter called only by unreferenced in-play debug action FUN_004564E0 (docs/re/CONTROLS.md) | 1 |
+| dead: debug craft-type switcher called only by unreferenced in-play debug action FUN_004564E0 (docs/re/CONTROLS.md) | 1 |
+| dead: in-play debug action (step body selector); zero code xrefs and single data ref at 0x004D06F0 is never bound to any key in table 0x004C26D0 or anywhere in retail (docs/re/CONTROLS.md) | 1 |
+| dead: in-play debug action (step craft type); zero code xrefs and single data ref at 0x004D06E8 is never bound to any key in table 0x004C26D0 or anywhere in retail (docs/re/CONTROLS.md) | 1 |
 | dead: its body runs only when the load-progress callback DAT_004F7310 is set, which nothing writes (FUN_00433BD0 and FUN_0044AB20 call it to no effect) | 1 |
 | dead: only stored as the first word of the FUN_00433130 render request at 0x004DB250, which no code reads or calls | 1 |
 | dead: projector-table slot +0xBC of 0x004D4A78, which no instruction calls (docs/re/FORMAT_DOCUMENTATION.md) | 1 |
 | dead: projector-table slot +0xC8 of 0x004D4A78, which no instruction calls (docs/re/FORMAT_DOCUMENTATION.md) | 1 |
 | dead: stored in software fill slot +0x101C, which no thunk or call site calls (docs/re/SOFTWARE_RASTER.md) | 1 |
+| dead: task installer in unreferenced style block 0x004C9628; zero E8/E9 code xrefs and single data ref at 0x004C9628 is never pointed to by any table or code (docs/re/SMALL_FUNCTIONS.md) | 1 |
 | dead: the module's default callback for the full-frame request (004DB250), which FUN_00433130 copies but nothing ever calls | 1 |
 | dead: the undefined model opcode trap, an endless loop; no shipped model stream holds an undefined opcode (docs/re/FORMAT_DOCUMENTATION.md) | 1 |
 | no effect: its only caller FUN_0042B870 passes the word it reads to FUN_0040F350, which ignores that argument (docs/re/SMALL_FUNCTIONS.md) | 1 |

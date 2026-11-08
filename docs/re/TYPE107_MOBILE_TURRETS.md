@@ -66,6 +66,30 @@ alternate muzzle word being zero) names runtime `+04`, bound to bank word 4.
 Search's own Aim fires through `FUN_00424650` and appends the same pair; its
 target path writes no joint. Both share the allocation's one command queue.
 
+### The muzzle slot is past its node
+
+E's muzzle word is source slot 16, but model 24's only type-14 records are in
+model 27, three levels down (24 -> 25 -> 26 -> 27, twice). They are selector
+0 (`FUN_00424F20`) and selector 1 (the terminal suffix). Model 27 has 16 slots,
+so slot 16 is outside that node, but `FUN_00424FA0` still reads it.
+
+`FUN_00464E60` stores each node's data back to back in the 0x4000-byte
+scratch stack at `DAT_004F7428` (`FUN_0046D4B0`): the 20-byte slot cache, then
+the face-normal cache, then a saved stack word. So slot 16 is the start of the
+node's face-normal cache:
+
+- Its X and Z words are the light words that `FUN_0046D5A0` writes to normal
+  entries 0 and 1.
+- Only the low half of its Y word is reset.
+- Its valid byte is the low byte of normal entry 2, which nothing resets.
+
+With the valid bit set, those words are the point. With it clear, the vertex
+handler runs on "record 8", which is the first word of model 27's normal pool.
+The transform pass (`FUN_00413BE0`) evaluates no normals, so the valid byte
+is left over from earlier draws in the same stack. The port does not model
+that scratch stack, so an undrawn Type107's queued shots stay held with
+`TransformPass(Pass(Emitter(UnownedSourceSlot(16))))`.
+
 `FUN_0044E770` sends methods 13, 15 and 18 through `FUN_004410B0`: method 18's
 class2 and method 13's class56 bolts (class82 below the sea), and method 15's
 class32, which the sea plane drops. Class32 starts at the shooter's position

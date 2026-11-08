@@ -120,7 +120,7 @@ fn native_type66_death_revives_both_births_without_reconstructing_factory_or_pos
         entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(37);
         entity.collision.last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(712);
         // The interrupted production callback may have private history. Only
-        // the replaced Primary's age/latch is reset by257C0, not Sub-M.
+        // the replaced Primary's age/latch is reset by 257C0, not Sub-M.
         let primary = entity
             .actor_tasks
             .task_in_slot(ActorTaskSlot::Primary)
@@ -293,7 +293,7 @@ fn native_type66_terminal_template_precedes_status_and_replaces_executing_factor
             panic!()
         };
         factory.progressive_death.elapsed_micros_raw = -1;
-        // Preserve live staff until after37390, regardless of how it was
+        // Preserve live staff until after 37390, regardless of how it was
         // accumulated before this death. Initializer+BC does not reconstruct M.
         factory.production.as_mut().unwrap().current_scientists_raw = 2;
         factory.current_scientists = 2;

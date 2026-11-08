@@ -519,8 +519,8 @@ fn publish_acquiring(
         SearchAttackTaskSetupRequest::Acquiring,
         |preparation| {
             let prepared = prepare(preparation, position, axis)?;
-            // Each successful6030 enters06070: G1B970(0), G1B940(0)
-            // draws one word, G1B980(0), then24380(0). E/K/L untouched.
+            // Each successful 6030 enters 06070: G1B970(0), G1B940(0)
+            // draws one word, G1B980(0), then 24380(0). E/K/L untouched.
             let word = next_random() as u16;
             sub_g.apply_shared_06070_sub_g_branch(
                 profile.sub_g_randomized_target_base() + i32::from(word >> 8),

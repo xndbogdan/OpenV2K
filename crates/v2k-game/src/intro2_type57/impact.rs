@@ -2,7 +2,7 @@
 //!
 //! Both Search styles authenticate C690 independently at +20/+28; Search
 //! completion, fallback and the two Tumble styles have null hit callbacks.
-//! Lethal checked damage publishes the exact alternate11 owner synchronously.
+//! Lethal checked damage publishes the exact alternate 11 owner synchronously.
 
 use super::{intro2_type57_allocation_authenticates, Intro2Type57Block, Intro2Type57Owner};
 use crate::{

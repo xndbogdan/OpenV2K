@@ -1,4 +1,4 @@
-//! Native modeled44E770 births:438080 ->104B0/D4A0 ->D720, then source+60.
+//! Native modeled 44E770 births:438080 -> 104B0/D4A0 ->D720, then source+60.
 //! A meteor's record already carries 44E770's Y+300 and vertical floor.
 
 use super::*;
@@ -88,7 +88,7 @@ impl RocketClass22InitHost for RocketInitializerHost<'_> {
 impl EntityManager {
     /// Construct a real live allocation, preserving the common-body stamp,
     /// process RNG and three-slot custody. The successful D720 wrapper links
-    /// the actor before building its matrix and setting bit4;44E770 assigns
+    /// the actor before building its matrix and setting bit4; 44E770 assigns
     /// the shooter's relation only after that constructor returns zero.
     pub fn construct_entity_weapon(
         &mut self,
@@ -145,8 +145,8 @@ impl EntityManager {
             })
             .transpose()?;
         // Creation consumes the current source allocation, rather than granting
-        // a type/model fixture native shooter custody.14870 serializes source
-        // bit31 into packet+28;44E770 rejects that remote request before438080.
+        // a type/model fixture native shooter custody. 14870 serializes source
+        // bit31 into packet+28; 44E770 rejects that remote request before 438080.
         // The dying bit4000 is not a launch gate: a queued transient may still
         // drain while its current source allocation remains linked.
         if source.is_some_and(|source| {
@@ -175,7 +175,7 @@ impl EntityManager {
             return Err(EntityWeaponBlock::Allocation);
         }
 
-        // Host admission is complete;104B0 consumes this before allocation.
+        // Host admission is complete; 104B0 consumes this before allocation.
         let stamp = self.begin_common_body_attempt();
         let mut entity =
             Entity::unresolved_port_entity(id, EntityKind::from_type(entity_type), entity_type);
@@ -244,10 +244,10 @@ impl EntityManager {
         // As for fresh Type9, the host starts this transient contribution
         // empty so an immediate first callback has defined mass. This is an
         // allocation approximation, not a retail constructor invariant or
-        // acceptance claim. Native animation/task writers and13500's clear
+        // acceptance claim. Native animation/task writers and 13500's clear
         // own all later values; follow-up owner:PLAYER_CRAFT.md.
         entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
-        // Both templates have null inner component-contact hooks and104B0's
+        // Both templates have null inner component-contact hooks and 104B0's
         // modifier/type-hit pointers are null. Rolling owns a live matrix, so
         // an Euler-only orientation policy would invent later reconstruction.
         entity.collision.pair_callbacks =

@@ -146,7 +146,7 @@ fn native_type102_birth_publishes_one_word_tertiary_and_real_model_bindings() {
         assert_eq!(runtime.sub_e_runtime.direct_mode, 0);
     }
     let record = session.cache.global_entity_type(102).unwrap();
-    //09A80 allocates type+110 words, and A950 maps selectors1..3 into them.
+    // 09A80 allocates type+110 words, and A950 maps selectors1..3 into them.
     assert_eq!(record.raw_header[0x110], 3);
     assert_eq!(metadata[102].model_slots, [162; 4]);
     assert_eq!(EMITTER.variable_bindings, [0, 3, 0, 0]);

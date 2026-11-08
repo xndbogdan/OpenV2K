@@ -15,7 +15,7 @@ pub(super) fn effective_flags(entity: &Entity) -> Result<u32, Intro2Type58Block>
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Graph);
     };
-    // Follow/Furniture have zero masks. Search clears21080 or80;
+    // Follow/Furniture have zero masks. Search clears 21080 or 80;
     // all admitted styles preserve Type58's authored C8=39.
     if !matches!(
         context.active_style().style_address(),

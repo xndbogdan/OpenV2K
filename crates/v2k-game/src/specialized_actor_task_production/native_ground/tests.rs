@@ -18,7 +18,7 @@ fn cursor_registered_child_receives_real_mover_visit_without_historical_id_snaps
     let (mut session, mut manager, mut fx) =
         crate::native_type122::construction_tests::native_fixture_with_player(19);
     // This is the cursor's actual pre-constructor snapshot. The new tail can
-    // never qualify through this list, even though13500 must visit it.
+    // never qualify through this list, even though 13500 must visit it.
     let remaining_live_ids = manager.retail_live_order_ids().collect::<Vec<_>>();
     let mut publication = None;
     for _ in 0..128 {

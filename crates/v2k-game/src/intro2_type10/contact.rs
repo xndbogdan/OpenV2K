@@ -1,7 +1,7 @@
 //! Class11's late `11AD0` terrain -> water -> static contact and physical tails.
 //!
 //! C750/BAC0 destroys tasks and schedules the actor's later splice. It does
-//! not invalidate its handle: D7F0/D860 still run141D0, and D920 runs11760.
+//! not invalidate its handle: D7F0/D860 still run 141D0, and D920 runs 11760.
 //! The entry model and outer scan gates survive those synchronous callbacks.
 //!
 //! Every class11 host shares it: Type10's family under its native owner and
@@ -250,7 +250,7 @@ fn resolve(
     Ok(true)
 }
 
-/// Continue the static suffix of a living11AD0 visit after its terrain/water
+/// Continue the static suffix of a living 11AD0 visit after its terrain/water
 /// phases, retaining the original selected model. This does not replay solid
 /// contact, water classification, or the source entry gates after callbacks.
 pub(crate) fn resolve_intro2_type10_tumble_static_continuation(
@@ -333,7 +333,7 @@ fn resolve_static_phase(
 ) -> Result<(), Intro2Type10ContactBlock> {
     use Intro2Type10ContactBlock as Block;
     // Static eligibility uses the ENTRY flags. BAC0's pending-splice write
-    // cannot cancel this scan in the same11AD0 invocation.
+    // cannot cancel this scan in the same 11AD0 invocation.
     let entity = frame
         .entities
         .iter_all()
@@ -366,8 +366,8 @@ fn resolve_static_phase(
     .map_err(Block::StaticScan)?;
     if let Some(contact) = contact {
         report.static_contact = Some(contact);
-        //12CF0: own +8A,27E20(no player capability),A8B0(Tumble task+20
-        // remains405FF0-null),D920(no effective400),then own style+1C.
+        // 12CF0: own +8A,27E20(no player capability),A8B0(Tumble task+20
+        // remains 405FF0-null),D920(no effective 400),then own style+1C.
         queue_type_cue(frame, id, 0x8a)?;
         let entity = frame
             .entities

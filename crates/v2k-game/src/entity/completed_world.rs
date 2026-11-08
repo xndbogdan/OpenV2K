@@ -1,4 +1,4 @@
-//! `42E440` runs after each complete authored birth, before the next allocation.
+//! `FUN_0042E440` runs after each complete authored birth, before the next allocation.
 //! Loading a completed world still constructs actors and consumes their RNG.
 
 use super::*;

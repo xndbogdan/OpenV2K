@@ -238,7 +238,7 @@ fn all_six_authored_442240_descriptors_draw_the_native_live_and_backward_trail()
         .map(|(class, _)| class as u8)
         .collect();
     assert_eq!(family, [52, 53, 68, 69, 87, 89]);
-    // These are independent44230B/442350/4423A8 source positions, not a
+    // These are independent 44230B/442350/4423A8 source positions, not a
     // fixture assembled by calling the production sampling helper.
     let positions = [
         [1000, 512, -1000],
@@ -263,7 +263,7 @@ fn all_six_authored_442240_descriptors_draw_the_native_live_and_backward_trail()
         ];
         let mut fx = WorldFx::new();
         let slot = birth(&mut fx, class, positions[0], [3, 4, 0]);
-        //53/69 have authored constructor velocity bias. This is a controlled
+        // 53/69 have authored constructor velocity bias. This is a controlled
         //presentation case: set the current packed velocity after real birth,
         //matching the independent PE callback's actual input record.
         fx.particles.slots[slot].as_mut().unwrap().velocity = raw_velocity_to_world([3, 4, 0]);

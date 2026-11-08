@@ -1,4 +1,4 @@
-//! 12760 physical suffix with genuine ground allocations and bare15040 delivery.
+//! 12760 physical suffix with genuine ground allocations and bare 15040 delivery.
 use super::*;
 use crate::{
     gameplay_notifications::GameplayNotifications,

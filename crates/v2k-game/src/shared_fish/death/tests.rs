@@ -59,7 +59,7 @@ fn quiet_death_stages_then_sweeps_without_motion_sound_or_rng_and_repeated_entry
         RetailRuntimeValue::Known(0x0010_4000)
     );
     let before = entity.collision.clone();
-    // A second10C10 reaches its already-dying return before it needs a live task.
+    // A second 10C10 reaches its already-dying return before it needs a live task.
     let repeated = begin_shared_fish_standard_death(
         &mut manager,
         id,

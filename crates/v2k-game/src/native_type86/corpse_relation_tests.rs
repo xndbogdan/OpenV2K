@@ -87,7 +87,7 @@ fn fixture(level: u32, kind: u32) -> (GameSession, EntityManager, WorldFx, u32, 
         .unwrap()
         .id;
     let parent = manager.player().unwrap().id;
-    // These are the production18440/16700 prefix and the actual type-owned
+    // These are the production 18440/16700 prefix and the actual type-owned
     // callback, using the player's constructor-owned Sub-J storage.
     let attach_person = (kind != 123).then(|| cargo::prepare_attach(&manager, id, parent).unwrap());
     let attach123 =
@@ -125,7 +125,7 @@ fn fixture(level: u32, kind: u32) -> (GameSession, EntityManager, WorldFx, u32, 
     };
     assert_eq!(actor(&manager, id).attached_to, Some(parent));
     let entity = manager.entity_mut(id).unwrap();
-    // First isolate the relation prefix through12DA0's real callback gate;
+    // First isolate the relation prefix through 12DA0's real callback gate;
     // the next continuing visit re-enables the complete Class14 callback.
     entity.collision.state_flags_at_0x08.overwrite(
         COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT | SCHEDULER_RANDOM_WAIT_DISABLED_STATE_BIT,
@@ -142,7 +142,7 @@ fn carried_person_class14_keeps_or_releases_existing_parent_then_advances_own_ta
         for compacted in [false, true] {
             let (session, mut manager, mut fx, id, parent, owner) = fixture(level, kind);
             if compacted {
-                // Explicit fixture for18640's already-completed dying-row
+                // Explicit fixture for 18640's already-completed dying-row
                 // compaction. It leaves the child's1000/backlink untouched.
                 let RetailRuntimeValue::Known(Some(rows)) =
                     &mut manager.entity_mut(parent).unwrap().sub_j_attachment_runtime

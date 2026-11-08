@@ -1,4 +1,4 @@
-//!451C00's Type68 miss: zero-record438080 ->104B0/D4A0/C490, then publication.
+//! 451C00's Type68 miss: zero-record438080 -> 104B0/D4A0/C490, then publication.
 
 use super::*;
 
@@ -8,7 +8,7 @@ mod tests;
 pub(crate) struct NativeType68ZeroRecordConstruction<'a> {
     pub resources: EntityConstructionResources<'a>,
     pub retail_tick: u32,
-    /// Loaded controller+A4/descriptor84, independently of water visibility.
+    /// Loaded controller+A4/descriptor 84, independently of water visibility.
     pub waves_enabled: bool,
 }
 
@@ -51,7 +51,7 @@ impl EntityManager {
             return Err(Class0ActorError::Allocation);
         }
 
-        // Host metadata/resource admission precedes the actual104B0 attempt.
+        // Host metadata/resource admission precedes the actual 104B0 attempt.
         // Once entered, a later construction failure does not refund B4.
         let stamp = self.begin_common_body_attempt();
         let mut entity = native_instance_body(

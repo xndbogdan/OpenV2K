@@ -349,7 +349,7 @@ pub fn apply_search_attack_c7d0_c6b0_without_mover(
     .ok_or(SearchAttackLiveAcquisitionBlock::PursuingStyleUnavailable)?;
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(pursuing));
     // C6B0 -> EA10 publishes the style masks before ADE0. Class7 variant1
-    // has +34=0 and +38=0x80: reversed D440 sets entity bit0x8000. This
+    // has +34=0 and +38=0x80: reversed D440 sets entity bit 0x8000. This
     // remains committed even when the subsequent initializer cannot finish.
     entity
         .collision

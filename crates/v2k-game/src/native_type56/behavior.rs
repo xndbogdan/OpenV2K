@@ -1,4 +1,4 @@
-//! Source-selected7/4/10 initializers; no assumed class4 birth branch.
+//! Source-selected 7/4/10 initializers; no assumed class4 birth branch.
 
 use super::*;
 use crate::{

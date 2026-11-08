@@ -1152,7 +1152,7 @@ pub struct ParticleUpdateOutcome {
 
 #[derive(Clone, Copy)]
 pub struct ParticleBirthContext<'a> {
-    ///440A60 stores the current terrain/wave classification at allocation.
+    /// 440A60 stores the current terrain/wave classification at allocation.
     pub environment: ParticleEnvironment<'a>,
     pub retail_tick: u32,
 }
@@ -1254,7 +1254,7 @@ impl ParticleEntityImpact {
         }
     }
     /// Complete packet selected by the actual entity-hit callback. F780/F7C0
-    /// select static004CBFD0/004CBFE8 with zero trailing words; the other
+    /// select static 004CBFD0/004CBFE8 with zero trailing words; the other
     /// supported callbacks copy immutable particle birth provenance instead.
     pub fn damage_delivery_record(self) -> Option<DamageDeliveryRecord> {
         let damage = self.damage?;
@@ -1390,10 +1390,10 @@ impl PositionalSoundEvent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum WorldEvent {
     ParticleBurst(ParticleBurst),
-    ///443B50's complete transfer packet. Playing's early controller adapter
+    /// 443B50's complete transfer packet. Playing's early controller adapter
     /// submits it before the particle pass, although the retail entity
     /// callback allocates after that pass. Materialization has an explicit
-    /// end-of-pass boundary and consumes no RNG for descriptor33.
+    /// end-of-pass boundary and consumes no RNG for descriptor 33.
     DeferredCargoTransfer {
         position_raw: [i16; 3],
         parent_id: u32,
@@ -1752,6 +1752,11 @@ pub struct ParticlePresentationFrame {
 impl ParticlePresentationFrame {
     pub fn particles(&self) -> impl ExactSizeIterator<Item = &PreparedParticle> {
         self.particles.iter()
+    }
+
+    /// The logical viewport the records were projected into.
+    pub fn viewport(&self) -> [u32; 2] {
+        self.viewport
     }
 
     /// Reproject the exact draw records admitted by the live traversal for a
@@ -2393,6 +2398,9 @@ pub enum NetworkSend {
         amount: u16,
         attacker_type: u16,
     },
+    /// `FUN_00411030`'s kind 10 after a particle hit jolted a peer's body
+    /// here: its velocity deltas, then those of `+A2`, `+A4` and `+A6`.
+    Impact { entity_id: u32, deltas: [i16; 6] },
     /// `FUN_00414AE0`'s kind 10 for a blast's impulse on a peer's body. Its
     /// handle is read from a stack slot written only after the send (the
     /// previous target's, or older), so it is not sent.
@@ -2496,8 +2504,8 @@ impl WorldFx {
         self.rng_state = state;
     }
 
-    #[cfg(test)]
-    pub(crate) fn shared_retail_random_state(&self) -> u32 {
+    /// The process word `004F7308`, as the event log reports it.
+    pub fn shared_retail_random_state(&self) -> u32 {
         self.rng_state
     }
 
@@ -2595,6 +2603,13 @@ impl WorldFx {
                 x_raw: target_raw[0],
                 z_raw: target_raw[2],
             });
+        }
+    }
+
+    /// `FUN_00411030` on a peer's body: its owner adds the same deltas.
+    pub fn send_network_impact(&mut self, entity_id: u32, deltas: [i16; 6]) {
+        if let Some(sends) = self.network_sends.as_mut() {
+            sends.push(NetworkSend::Impact { entity_id, deltas });
         }
     }
 
@@ -2782,6 +2797,21 @@ impl WorldFx {
     /// scheduler stateless without accidentally giving it a private seed.
     pub fn next_shared_retail_random_u16(&mut self) -> u16 {
         retail_random_u16(&mut self.rng_state)
+    }
+
+    /// Lend the process word to a scope that draws through a shared reference
+    /// (a model draw's tf3 vertices); the scope's words advance this stream.
+    pub fn with_process_random<R>(&mut self, scope: impl FnOnce(&dyn Fn() -> u16) -> R) -> R {
+        let state = std::cell::Cell::new(self.rng_state);
+        let next = || {
+            let mut word = state.get();
+            let sample = retail_random_u16(&mut word);
+            state.set(word);
+            sample
+        };
+        let result = scope(&next);
+        self.rng_state = state.get();
+        result
     }
 
     /// Disjoint process state for the legacy Intro2 constructor's RNG callback.
@@ -3885,7 +3915,7 @@ impl WorldFx {
         }
     }
 
-    /// Finish the443B50 transfer presentation at the end of the entity pass,
+    /// Finish the 443B50 transfer presentation at the end of the entity pass,
     /// or immediately after campaign loading. Ordinary pending processing
     /// deliberately leaves these records newborn until this named boundary.
     pub fn process_deferred_cargo_transfers(&mut self, birth: ParticleBirthContext<'_>) {
@@ -5980,7 +6010,7 @@ fn fun_0043f6e0_damage_request(particle: &WorldParticle) -> Option<BallisticDama
     })
 }
 
-/// F780/F7C0 skip their11250/11320 entry when `+0x1D` bit0 is set.
+/// F780/F7C0 skip their 11250/11320 entry when `+0x1D` bit0 is set.
 fn model_switch_particle_damage_request(
     particle: &WorldParticle,
 ) -> Option<BallisticDamageRequest> {
@@ -6558,11 +6588,11 @@ fn static_collision_anim_vars(retail_tick: u32) -> AnimVars {
     vars
 }
 
-/// F920/F950 call27DE0/27E00 (`FUN_00427E00`) with probe+1C/+20 tile-center
+/// F920/F950 call 27DE0/27E00 (`FUN_00427E00`) with probe+1C/+20 tile-center
 /// words.
 ///
 /// Those words are `FUN_00427410`'s tile-center 8.8 pair (`cell<<8|0x7F`).
-/// Matched C closes27DE0/27E00 as33720(x,z,1/0); the extra cdecl
+/// Matched C closes 27DE0/27E00 as 33720(x,z,1/0); the extra cdecl
 /// `0x7D0` and `g_default_param` arguments are unused. Same-state writes stay
 /// off the deferred overlay, matching the helper's change-only notify path.
 fn queue_static_model_switch_infection(
@@ -9806,7 +9836,7 @@ mod tests {
         fx.rng_state = seed;
 
         // 10C10 submits a nonzero header+90 cue before entering BD20/BAF0.
-        // Type83's recovered cue is62, also used independently by440950.
+        // Type83's recovered cue is 62, also used independently by 440950.
         fx.emit_fixed_positional_sound_raw(62, position);
         assert_eq!(fx.rng_state, seed);
         assert_eq!(fx.particle_count(), 0);

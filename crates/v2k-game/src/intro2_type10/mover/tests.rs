@@ -177,7 +177,7 @@ fn native_type10_direct_zero_mass_keeps_g_animation_prefix_without_output_dispat
     let mut manager = generic(&session, &metadata);
     let id = publish(&mut manager, &metadata, 55);
     let entity = manager.entity_mut(id).unwrap();
-    // Exercise the detached B210 error boundary explicitly. The outer12DA0
+    // Exercise the detached B210 error boundary explicitly. The outer 12DA0
     // scheduler clamps a wrapped zero to one, so B2 cannot reach this error.
     entity.mass_raw = 0;
     let RetailRuntimeValue::Known(Some(sub_g)) = &mut entity.sub_g_06070_runtime else {

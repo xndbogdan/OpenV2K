@@ -1,4 +1,4 @@
-//! Type6's resource-independent first10C10 ->19750 ->AC60 ->25730 entry.
+//! Type6's resource-independent first 10C10 -> 19750 ->AC60 -> 25730 entry.
 use super::*;
 use crate::{
     base_factory_progression::{ProgressiveDeathBegin, PROGRESSION_REVIVE_HEALTH_RAW},
@@ -60,7 +60,7 @@ pub fn publish_main_base_standard_death(
             selector_word: None,
         });
     }
-    //10C68/10C6B are committed before sound/attachment/context consumers.
+    // 10C68/10C6B are committed before sound/attachment/context consumers.
     entity.collision.health_raw = RetailRuntimeValue::Known(0);
     entity
         .collision

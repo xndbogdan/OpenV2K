@@ -3,7 +3,7 @@
 //!
 //! Every style's hit hooks reselect the authenticated current graph before
 //! reaction and filtering. Alternate2 owns quiet death, not a falling corpse;
-//! Type14's alternate1 explodes through the class-1 terminal, which needs
+//! Type14's alternate 1 explodes through the class-1 terminal, which needs
 //! Playing's lent static world and player. Native Hive births retain this
 //! same constructor/task custody.
 
@@ -65,7 +65,7 @@ enum HitEntry {
 
 fn callback_policy(style: ActiveBehaviorStyle, entry: HitEntry) -> Option<ImpactCallbackPolicy> {
     // Authenticated executable style words, independent +20/+28 hooks.
-    // Completed alternate2 has null hooks; no class11 publication is borrowed.
+    // Completed alternate 2 has null hooks; no class11 publication is borrowed.
     let (_, infected, cured, primary) = [
         (0x004C_7A50, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search acquiring
         (0x004C_7A98, 0x0040_C690, 0x0040_C690, 0x0040_C690), // Search pursuing
@@ -453,6 +453,311 @@ fn run(
         }
     }
     Ok(checked)
+}
+
+/// A particle's hit on a peer's craft, run on its copy here.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PeerCraftImpactOutcome {
+    /// Not a peer's craft built by its constructor.
+    NotApplicable,
+    /// `FUN_00415040`'s return, which went to the owner as kind 9.
+    Applied { filtered_damage_raw: i32 },
+    Blocked {
+        reason: String,
+        committed_prefix: bool,
+    },
+}
+
+/// A particle hit on a peer's craft (type 51) or on a peer's copy of a
+/// flyer the port builds natively: the wrapper its class takes
+/// (`FUN_00410EB0`, the static route's `FUN_00411180`, an infection's
+/// `FUN_00411250` or a cure's `FUN_00411320`) runs on the copy. Its style's
+/// hit hook is `FUN_0040C690` (class 7's among others), which chooses the copy's
+/// behavior again with shared draws; `FUN_00411030` then jolts the copy with
+/// three more and sends the owner the same deltas (kind 10), and
+/// `FUN_00415040`'s damage goes to the owner (kind 9).
+pub fn apply_peer_craft_particle_hit(
+    manager: &mut crate::entity::EntityManager,
+    resources: &crate::resource_cache::ResourceCache,
+    world_fx: &mut crate::world_fx::WorldFx,
+    notifications: &mut crate::gameplay_notifications::GameplayNotifications,
+    retail_tick: u32,
+    impact: ParticleEntityImpact,
+) -> PeerCraftImpactOutcome {
+    let Some(entity_type) = manager
+        .iter_all()
+        .find(|entity| {
+            entity.id == impact.target_entity_id
+                && entity.is_network_remote()
+                && entity.intro2_flyer_frame_owner.is_some()
+        })
+        .map(|entity| entity.entity_type)
+        .filter(|&entity_type| {
+            entity_type == crate::intro2_flyers_live::TYPE51_ENTITY_TYPE
+                || crate::intro2_flyers_live::native_flyer_model_id(entity_type).is_some()
+        })
+    else {
+        return PeerCraftImpactOutcome::NotApplicable;
+    };
+    let mut committed = false;
+    match run_peer_craft(
+        manager,
+        entity_type,
+        resources,
+        world_fx,
+        notifications,
+        retail_tick,
+        impact,
+        &mut committed,
+    ) {
+        Ok(filtered_damage_raw) => PeerCraftImpactOutcome::Applied {
+            filtered_damage_raw,
+        },
+        Err(reason) => PeerCraftImpactOutcome::Blocked {
+            reason,
+            committed_prefix: committed,
+        },
+    }
+}
+
+/// `FUN_0040AC60` on a dying peer's craft: `FUN_00425660` installs the
+/// type's alternate, class 25 (`FUN_00438340`, `FUN_0040C6B0`, whose style
+/// install `FUN_0040EA10` has null state policies), and its initializer
+/// `FUN_00447280` finds no controller for a body the local controller does
+/// not hold (`FUN_00443AF0`'s `0x8802`). So it leaves no power-ups, cargo,
+/// burst or text and draws nothing: it clears task slots 2 and 1, zeroes
+/// model word 7 and puts a 3-second timed object (`FUN_004476F0`) in slot 0.
+/// `FUN_00412DA0` never visits a copy's tasks, so the port leaves slot 0
+/// empty, as it does for the local player, whose timer its host owns.
+fn publish_peer_craft_dying(
+    entity: &mut crate::entity::Entity,
+    metadata: &crate::entity_collision_state::EntityTypeRuntimeMetadata,
+) -> Result<(), String> {
+    if metadata
+        .initializer
+        .as_ref()
+        .map(|initializer| initializer.alternate_behavior_class_ref)
+        != Some(25)
+    {
+        return Err("the craft's alternate".into());
+    }
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return Err("the copy's style".into());
+    };
+    let program = crate::entity_behavior::audited_behavior_program(25).ok_or("class 25")?;
+    let context = context
+        .reselect_audited_type_default(program, 0, program.initial_style)
+        .ok_or("class 25 on the copy")?;
+    entity.current_behavior_context = RetailRuntimeValue::Known(Some(context));
+    for slot in [
+        crate::actor_task_owner::ActorTaskSlot::Tertiary,
+        crate::actor_task_owner::ActorTaskSlot::Secondary,
+        crate::actor_task_owner::ActorTaskSlot::Primary,
+    ] {
+        entity.actor_tasks.clear_slot(slot);
+    }
+    entity.zero_peer_model_word(7);
+    Ok(())
+}
+
+fn run_peer_craft(
+    manager: &mut crate::entity::EntityManager,
+    entity_type: u32,
+    resources: &crate::resource_cache::ResourceCache,
+    world_fx: &mut crate::world_fx::WorldFx,
+    notifications: &mut crate::gameplay_notifications::GameplayNotifications,
+    retail_tick: u32,
+    impact: ParticleEntityImpact,
+    committed: &mut bool,
+) -> Result<i32, String> {
+    let id = impact.target_entity_id;
+    let delivery = impact
+        .packet_delivery()
+        .map_err(|()| "particle provenance".to_owned())?;
+    if !crate::intro2_flyers_live::flyer_manager_identity_authenticates(manager, id) {
+        return Err("the copy's allocation".into());
+    }
+    let metadata = manager
+        .type_runtime_metadata(entity_type)
+        .cloned()
+        .ok_or("the type's record")?;
+    let bits = |manager: &crate::entity::EntityManager, mask: u32| {
+        manager
+            .iter_all()
+            .find(|entity| entity.id == id)
+            .and_then(
+                |entity| match entity.collision.state_flags_at_0x08.masked(mask) {
+                    RetailRuntimeValue::Known(bits) => Some(bits),
+                    RetailRuntimeValue::Unresolved => None,
+                },
+            )
+            .ok_or("state bits")
+    };
+    let static_route =
+        crate::world_fx::particle_uses_static_route_entity_hit(impact.source_particle_class);
+    let hit_entry = impact.entity_hit_entry();
+    let infected = hit_entry == crate::damage::EntityHitEntry::Infected;
+    let cured = hit_entry == crate::damage::EntityHitEntry::Cured;
+    let RetailRuntimeValue::Known(accepted_sound) = metadata.accepted_hit_presentation_sound_id
+    else {
+        return Err("accepted-hit sound".into());
+    };
+    if infected || cured {
+        // 11250 sets 0x2000 and plays +82 unless dying; 11320 clears it and
+        // plays +84 either way.
+        let applied = manager
+            .apply_model_switch_particle_hit_prefix(id, hit_entry)
+            .ok_or("model-switch prefix")?;
+        *committed = true;
+        if let Some(sound) = applied.sound_id {
+            world_fx.queue_fixed_positional_sound_raw(sound, applied.position_raw);
+        }
+    } else {
+        // 10EB0 and 11180 stamp +34; 11180 plays +80 before the callback.
+        let dying = bits(manager, DYING_STATE_BIT)? != 0;
+        let entity = manager.entity_mut(id).unwrap();
+        entity.collision.last_hit_presentation_tick_at_0x34 =
+            RetailRuntimeValue::Known(retail_tick);
+        *committed = true;
+        if static_route && !dying {
+            if let Some(sound) = accepted_sound {
+                world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+            }
+        }
+    }
+    let entity = manager.entity_mut(id).unwrap();
+    let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
+        return Err("the copy's style".into());
+    };
+    let entry = if cured {
+        HitEntry::Cured
+    } else if infected {
+        HitEntry::Infected
+    } else {
+        HitEntry::Primary
+    };
+    match callback_policy(context.active_style(), entry).ok_or("unaudited style hit slot")? {
+        ImpactCallbackPolicy::None => {}
+        // C690 -> AC60: the copy's behavior is chosen again; a dying craft
+        // takes its alternate, class 25.
+        ImpactCallbackPolicy::ReselectBehavior
+            if entity_type == crate::intro2_flyers_live::TYPE51_ENTITY_TYPE
+                && entity
+                    .collision
+                    .state_flags_at_0x08
+                    .masked(0x1000 | DYING_STATE_BIT)
+                    == RetailRuntimeValue::Known(DYING_STATE_BIT) =>
+        {
+            publish_peer_craft_dying(entity, &metadata)?;
+        }
+        ImpactCallbackPolicy::ReselectBehavior => {
+            reselect_flyer(entity, &metadata, retail_tick, &mut || {
+                u32::from(world_fx.next_shared_retail_random_u16())
+            })
+            .map_err(|reason| format!("C690 on the copy: {reason:?}"))?;
+        }
+        other => return Err(format!("the copy's hit callback {other:?}")),
+    }
+    // A no-packet infect or cure skips 11030 and 15040.
+    let Some(delivery) = delivery else {
+        return Ok(0);
+    };
+    let flags = bits(
+        manager,
+        IMPACT_REACTION_ENABLED_STATE_BIT
+            | IMPACT_REACTION_SUPPRESSED_STATE_BIT
+            | IMPACT_REACTION_NETWORKED_STATE_BIT,
+    )?;
+    let entity = manager.entity_mut(id).unwrap();
+    let velocity = entity
+        .network_body()
+        .map_or(entity.velocity_raw(), |body| body.velocity_raw);
+    let mut body = ImpactReactionBody {
+        state_flags_at_0x08: flags,
+        mass_raw_at_0xb0: entity.mass_raw,
+        linear_velocity_xyz_raw: velocity,
+        angular_heading_pitch_roll_raw: entity.rotation_heading_pitch_roll_raw(),
+    };
+    // 11180 strikes with eight times the packet's sum.
+    let strength = if static_route {
+        delivery.packet.impact_sum_raw().wrapping_mul(8)
+    } else {
+        delivery.packet.impact_sum_raw()
+    };
+    let reaction = apply_impact_reaction(&mut body, id, strength, impact.velocity_raw, || {
+        u32::from(world_fx.next_shared_retail_random_u16())
+    })
+    .map_err(|_| "zero impact mass")?;
+    entity.set_peer_velocity_raw(body.linear_velocity_xyz_raw);
+    entity.set_rotation_heading_pitch_roll_raw(body.angular_heading_pitch_roll_raw);
+    if let crate::impact_reaction::ImpactReactionOutcome::Applied(applied) = reaction {
+        if applied.network_request.is_some() {
+            let [x, y, z] = applied.linear_delta_xyz_raw;
+            let [heading, pitch, roll] = applied.angular_delta_heading_pitch_roll_raw;
+            world_fx.send_network_impact(id, [x, y, z, heading, pitch, roll]);
+        }
+    }
+    let checked = apply_live_actor_checked_damage(
+        manager,
+        world_fx,
+        LiveActorDamageRequest {
+            ratio_numerator: 0,
+            ratio_denominator: 0,
+            feedback: Some(crate::live_actor_checked_damage::LiveActorDamageFeedback {
+                notifications,
+                retail_tick,
+            }),
+            entity_id: id,
+            delivery,
+            entry: LiveActorDamageEntry::Checked,
+        },
+        // 14E90 sends a peer's damage on before any death.
+        |_, _, _| -> Result<crate::live_actor_checked_damage::LiveActorDeathResult<()>, ()> {
+            Err(())
+        },
+    )
+    .map_err(|error| {
+        *committed |= error.committed_prefix;
+        format!("15040 on the copy: {:?} {:?}", error.phase, error.reason)
+    })?;
+    // 10EB0's suffix after a nonzero 15040: +80 unless dying, then
+    // capability 8's class-5 particle. 11180, 11250 and 11320 have none.
+    if !infected && !cured && !static_route && checked.filtered_damage_raw != 0 {
+        let entity = manager.entity_mut(id).unwrap();
+        let RetailRuntimeValue::Known(flags) = entity
+            .collision
+            .state_flags_at_0x08
+            .masked(DYING_STATE_BIT | 0x2000 | 0x4000 | 0x8000_0000)
+        else {
+            return Err("state bits".into());
+        };
+        if flags & DYING_STATE_BIT == 0 {
+            if let Some(sound) = accepted_sound {
+                world_fx.queue_fixed_positional_sound_raw(sound, entity.position_raw());
+            }
+        }
+        if entity.capability_flags & 8 != 0 {
+            let slot = active_model_slot_from_state_flags(flags);
+            let model = entity.model_slots[slot].ok_or("accepted-hit model")?;
+            let extent = resources
+                .global_model(model)
+                .ok_or("accepted-hit model extent")?
+                .radius;
+            let mut position = entity.position_raw();
+            position[2] = position[2].wrapping_sub(extent as i16);
+            world_fx.emit_primary_hit_capability_follow_up_raw(PrimaryHitCapabilityEmission {
+                target_handle: id,
+                target_allocation_identity: u64::from(id),
+                selected_model_slot: slot,
+                selected_global_model_id: model as u16,
+                position_raw: position,
+                particle_class: 5,
+                particle_scale_raw: 0x800,
+                owner_sign: flags >> 31,
+            });
+        }
+    }
+    Ok(checked.filtered_damage_raw)
 }
 
 #[cfg(test)]

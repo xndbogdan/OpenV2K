@@ -1,4 +1,4 @@
-//! Type49 binds A/B/C/D to the shared01430 machine with its authored water lift.
+//! Type49 binds A/B/C/D to the shared 01430 machine with its authored water lift.
 use super::*;
 use crate::{
     common_mover::component_dispatch::CommonMoverDispatchMode,

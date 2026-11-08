@@ -276,6 +276,8 @@ fn native_live_normal_gate_uses_wrapping_raw_plane_and_strict_sign() {
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
         admit_every_face: false,
+        jitter: super::super::ModelJitterOwner::unlent(),
+        fixed_world_point_raw: None,
     };
     assert!(
         !resolver.admit_face_raw([0; 3], [1, 0, 0]),
@@ -448,6 +450,8 @@ fn native_shadow_consumes_the_cached_view_quantization_without_changing_direct_w
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
         admit_every_face: false,
+        jitter: super::super::ModelJitterOwner::unlent(),
+        fixed_world_point_raw: None,
     };
     let vars = AnimVars::default();
     let context = ModelMaterializationContext {
@@ -511,6 +515,8 @@ fn native_callback_rebases_all_words_to_viewport_image_before_q31_projection() {
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
         admit_every_face: false,
+        jitter: super::super::ModelJitterOwner::unlent(),
+        fixed_world_point_raw: None,
     };
     let point = resolver
         .resolve_external_frame_raw(0, [0; 3], &mut |_| None)
@@ -660,6 +666,8 @@ fn actual_newant_antenna_tail_retains_zero_cosine_before_final_sine_registers() 
         external_points: RefCell::new(HashMap::new()),
         native_vertex_failures: RefCell::new(Vec::new()),
         admit_every_face: false,
+        jitter: super::super::ModelJitterOwner::unlent(),
+        fixed_world_point_raw: None,
     };
     let geometry = model.materialize_with_context(ModelMaterializationContext {
         vertex_resolver: Some(&resolver),
@@ -728,7 +736,7 @@ fn native_missing_surface_receipt_survives_empty_geometry_and_preserves_other_fa
                 [0, 0, 0, 0],
                 [0, 100, 0, 0],
                 [0, 0, 100, 0],
-                [3, 0, 0, 0],
+                [10, 0, 0, 0],
                 [13, 6, 0, 0],
             ],
             commands,
@@ -789,7 +797,7 @@ fn native_missing_surface_receipt_survives_empty_geometry_and_preserves_other_fa
                     source_slot: 6,
                     boundary: ModelNativeVertexBoundary::UnsupportedGenerator {
                         slot: 6,
-                        type_flag: 3
+                        type_flag: 10
                     },
                 },
             }]

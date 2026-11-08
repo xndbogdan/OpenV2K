@@ -119,6 +119,45 @@ impl SpecializedActorTaskScheduler {
                     .nth(1);
                 continue;
             }
+            if let Some(custody) = self.possession.filter(|custody| custody.state.body == id) {
+                let mut native_outcome = DynamicRadialLiveOutcome::default();
+                let mut callbacks = crate::possession::live::PossessedRadialCallbacks {
+                    scheduler: self,
+                    resources,
+                    custody,
+                    released: None,
+                };
+                let result = entities.apply_native_playing_radial_target(
+                    id,
+                    &mut DynamicRadialLiveRequest {
+                        origin_raw,
+                        template,
+                        world_fx,
+                        retail_tick,
+                        notifications,
+                        callbacks: &mut callbacks,
+                    },
+                    &mut native_outcome,
+                );
+                if let Some(released) = callbacks.released.take() {
+                    self.possession = None;
+                    self.possession_released = Some(released);
+                }
+                outcome.accepted_targets += native_outcome.accepted_targets;
+                match result {
+                    Ok(true) => outcome.completed_target_ids.push(id),
+                    Ok(false) => {}
+                    Err(block) => {
+                        outcome.blocked = Some(PlayingRadialBlock::Native(block));
+                        break;
+                    }
+                }
+                current = entities
+                    .retail_live_order_ids()
+                    .skip_while(|candidate| *candidate != id)
+                    .nth(1);
+                continue;
+            }
             let native = match entity.entity_type {
                 6 => entity.main_base_runtime.is_some(),
                 type_id if NativeWorkerProfile::from_entity_type(type_id).is_some() => {

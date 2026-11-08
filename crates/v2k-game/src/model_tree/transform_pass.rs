@@ -22,8 +22,8 @@
 
 use super::external_frame::ModelTreeExternalFrame;
 use super::{
-    build_child_linked_slots, inherited_child_vars, ModelTreeRootLinkPolicy, ModelTreeView,
-    WorldModelVertexResolver,
+    build_child_linked_slots, inherited_child_vars, ModelJitterOwner, ModelTreeRootLinkPolicy,
+    ModelTreeView, WorldModelVertexResolver,
 };
 use crate::actor_emitter_external_frame::{
     ActorEmitterExternalFrameBoundary, ActorEmitterExternalFramePoint,
@@ -201,15 +201,16 @@ impl TransformWalk<'_> {
                 .borrow_mut()
                 .resolve_parameter_world(parameters, surface, node_view)
         };
+        // Only the callbacks and the native frames are kept; the float
+        // placement of the resolved vertices is never used.
+        let transform = ModelTransform {
+            orientation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            position: self.origin_world,
+            scale: 1.0,
+        };
         let resolver = WorldModelVertexResolver {
             surface,
-            // Only the callbacks and the native frames are kept; the float
-            // placement of the resolved vertices is never used.
-            transform: ModelTransform {
-                orientation: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
-                position: self.origin_world,
-                scale: 1.0,
-            },
+            transform,
             view: Some(ModelTreeView {
                 position: [0.0; 3],
                 forward: [0.0, 0.0, 1.0],
@@ -222,6 +223,10 @@ impl TransformWalk<'_> {
             external_points: RefCell::new(HashMap::new()),
             native_vertex_failures: RefCell::new(Vec::new()),
             admit_every_face: true,
+            // FUN_0046DF70 would draw words here; no pass is lent the
+            // generator yet, so a reached tf3 slot stops with its type.
+            jitter: ModelJitterOwner::new(model_id, None, transform),
+            fixed_world_point_raw: None,
         };
         let context = ModelMaterializationContext {
             vars,

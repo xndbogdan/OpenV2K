@@ -373,7 +373,7 @@ pub fn emit_rocket_trail<H: RocketTrailHost>(
         outcome.attempted_particles += 1;
         outcome.allocated_particles += u32::from(allocation.is_some());
         remaining_micros = remaining_micros.wrapping_sub(ROCKET_TRAIL_STEP_MICROS);
-        //40629D/4062C7/4062D8 occur after 40A60, including its failure and
+        // 40629D/4062C7/4062D8 occur after 40A60, including its failure and
         //the final iteration. Updated Y selects the next iteration's class.
         for axis in 0..3 {
             let jitter_raw = ((host.next_shared_retail_random_u16() >> 11) as i16) - 16;

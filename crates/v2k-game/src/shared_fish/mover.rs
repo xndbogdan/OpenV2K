@@ -1,4 +1,4 @@
-//! B/D/F adapter for retail01430/018A0. The callback retains the incoming
+//! B/D/F adapter for retail 01430/018A0. The callback retains the incoming
 //! physical matrix; DCA0 publishes the next matrix only after all task visits.
 
 use super::live::{bits, SharedFishBlock as Block};
@@ -127,9 +127,9 @@ pub(super) fn run(
                     target_position_raw,
                     ..
                 }) => {
-                    // Type62 uses center-depth classifier20; other neutral
+                    // Type62 uses center-depth classifier 20; other neutral
                     // fish use flags0. Both retain native cache maintenance.
-                    // 41F660 defaults probe direction to1 without Sub-A,
+                    // 41F660 defaults probe direction to 1 without Sub-A,
                     // independently of the private task's reversal direction.
                     let evidence = fish.sub_d_owner.evidence_for_frame_with_descriptor(
                         d,

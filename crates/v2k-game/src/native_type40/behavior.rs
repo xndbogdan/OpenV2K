@@ -1,4 +1,4 @@
-//! Type40 B6C0 exact class7/9 acquisition, each publication owns406070.
+//! Type40 B6C0 exact class7/9 acquisition, each publication owns 406070.
 use super::*;
 use crate::{
     actor_task_dispatcher::{

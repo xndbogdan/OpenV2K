@@ -65,7 +65,7 @@ pub(crate) fn reselect<P: NativeGroundActorProfile>(
             .iter()
             .any(|choice| BehaviorWeightRule::from_raw(choice.weight_rule_id) == Some(rule))
     };
-    //425680 evaluates only rules present in the actual choice list. An
+    // 425680 evaluates only rules present in the actual choice list. An
     // unrelated candidate or last-hit field cannot block an unused rule.
     let under_attack = if needs(BehaviorWeightRule::UnderAttack) {
         let RetailRuntimeValue::Known(last_hit) =

@@ -31,7 +31,7 @@ pub struct HiveComponentDeathRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HiveComponentDeathPlan {
-    /// `4568B0(3) -> 1D050(hostile) -> 4567B0` if the helper returns zero.
+    /// `4568B0(3) -> 0041D050(hostile) -> 4567B0` if the helper returns zero.
     /// A forced death while objective actors remain skips all three calls.
     pub completion_prefix: bool,
     pub objective_hostile_present: bool,

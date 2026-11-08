@@ -65,7 +65,7 @@ pub fn begin_type56_standard_death(
         RetailRuntimeValue::Known(value) => Ok(value),
         _ => Err(Block::Runtime("terminal entry state")),
     };
-    //10C10 checks remote first; an authentic already-completed class2 returns1
+    // 10C10 checks remote first; an authentic already-completed class2 returns 1
     //without a second sound, selector, task clear or deferred publication.
     if bits(REMOTE_OWNED_STATE_BIT)? != 0 {
         return Ok(LiveActorDeathResult {
@@ -131,7 +131,7 @@ pub fn begin_type56_standard_death(
     if let Some(sound) = sound {
         fx.emit_networked_positional_sound_raw(sound, position);
     }
-    //Alternate rule1/class2 is selected directly after dying; no425680 draw.
+    //Alternate rule1/class2 is selected directly after dying; no 425680 draw.
     entity.current_behavior_context = RetailRuntimeValue::Known(Some(terminal));
     for slot in ActorTaskSlot::IN_RETAIL_TICK_ORDER {
         entity.actor_tasks.clear_slot(slot);

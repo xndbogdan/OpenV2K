@@ -13,8 +13,6 @@
 //! camera, and is only as exact as the materializer's world point. The
 //! constructors themselves are byte-exact.
 
-use std::collections::HashMap;
-
 use v2k_formats::models::{
     ModelEdgeEndpointSnapshot, ModelEdgeStyle, ModelFaceCull, ModelFaceShading, ModelFaceVertices,
     ModelPainterDepthKey, ModelSlotClip, ModelVertexProjection,
@@ -315,6 +313,30 @@ fn screen_midpoints(
 
 /// One model body's constructor inputs, owned so that its painter program
 /// can run them after the draw returns: the warm vertex cache, normal
+/// One face command's words: `[material, normal, vertices.., gouraud refs..]`,
+/// at most 2 + 4 + 4 (`FaceOp::words`). Inline so building a face's command
+/// allocates nothing; `emit_face` hands the filled prefix on as a slice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct FaceWords {
+    buf: [i16; 10],
+    len: u8,
+}
+
+impl FaceWords {
+    fn push(&mut self, word: i16) {
+        self.buf[self.len as usize] = word;
+        self.len += 1;
+    }
+
+    fn set_last(&mut self, word: i16) {
+        self.buf[self.len as usize - 1] = word;
+    }
+
+    fn as_slice(&self) -> &[i16] {
+        &self.buf[..self.len as usize]
+    }
+}
+
 /// cache, palette and sprite operands, and one command per source polygon
 /// and edge.
 pub(crate) struct PreparedNode {
@@ -333,7 +355,8 @@ pub(crate) struct PreparedNode {
     /// Sprite record sizes, parallel to `sprites` (edges read them).
     sizes: Vec<(u16, u16)>,
     /// The command of each source polygon, by its first triangle.
-    faces: HashMap<usize, (u8, Vec<i16>)>,
+    /// Dense triangle ids: direct indexing, no hashing.
+    faces: Vec<Option<(u8, FaceWords)>>,
     /// Polygon first triangles in mesh order.
     face_order: Vec<usize>,
     /// The command of each edge, by edge index.
@@ -361,7 +384,7 @@ impl PreparedNode {
         queue: &mut PrimitiveQueue,
         first: usize,
     ) -> Result<(), QueueError> {
-        let Some((opcode, words)) = self.faces.get(&first) else {
+        let Some(Some((opcode, words))) = self.faces.get(first) else {
             return Ok(());
         };
         let palette = |index: i16| self.colours.get(index as usize).copied().unwrap_or(0);
@@ -371,7 +394,7 @@ impl PreparedNode {
             &self.context(&palette, &sprite),
             self.pass,
             *opcode,
-            words,
+            words.as_slice(),
         )?;
         Ok(())
     }
@@ -459,44 +482,49 @@ pub(crate) fn prepare_model_body(
     let eye = scene.eye_near(draw.transform.position);
     let resolved = resolve_model_vertices(draw, eye, scene.camera_basis);
     let node = draw.transform.position;
-    let mut corners: Vec<ModelCorner> = resolved
-        .world
-        .iter()
-        .zip(&resolved.admitted)
-        .enumerate()
-        .map(|(index, (world, &admitted))| match world {
-            // A native scene rejects through the native depth's 0x40
-            // outcode; the floating camera may sit in another torus image.
-            Some(world) if admitted || scene.native.is_some() => {
-                // A source-owned VIEW point is the vertex cache itself.
-                // Otherwise callback world points are projected on their own.
-                // Every corner is projected here; retail projects a mirror
-                // slot only when a face fetches it (FUN_0045B320).
-                let native = scene.native_vertex_view(mesh.vertex_view_raw, index);
-                let view = match (native, mesh.vertex_projection.get(index)) {
-                    (Some(view), _) => view,
-                    (None, Some(ModelVertexProjection::WorldPoint(_))) => scene.view_raw(*world),
-                    (None, _) => scene.node_view_raw(node, *world),
-                };
-                let point = lens.project_view(view);
-                ModelCorner {
-                    view,
-                    screen: point.screen,
-                    clip: point.clip | 0x80,
-                    fade: point.fade,
+    let mut corners: Vec<ModelCorner> = Vec::with_capacity(mesh.vertices.len());
+    corners.extend(
+        resolved
+            .world
+            .iter()
+            .zip(&resolved.admitted)
+            .enumerate()
+            .map(|(index, (world, &admitted))| match world {
+                // A native scene rejects through the native depth's 0x40
+                // outcode; the floating camera may sit in another torus image.
+                Some(world) if admitted || scene.native.is_some() => {
+                    // A source-owned VIEW point is the vertex cache itself.
+                    // Otherwise callback world points are projected on their own.
+                    // Every corner is projected here; retail projects a mirror
+                    // slot only when a face fetches it (FUN_0045B320).
+                    let native = scene.native_vertex_view(mesh.vertex_view_raw, index);
+                    let view = match (native, mesh.vertex_projection.get(index)) {
+                        (Some(view), _) => view,
+                        (None, Some(ModelVertexProjection::WorldPoint(_))) => {
+                            scene.view_raw(*world)
+                        }
+                        (None, _) => scene.node_view_raw(node, *world),
+                    };
+                    let point = lens.project_view(view);
+                    ModelCorner {
+                        view,
+                        screen: point.screen,
+                        clip: point.clip | 0x80,
+                        fade: point.fade,
+                    }
                 }
-            }
-            _ => REJECTED_CORNER,
-        })
-        .collect();
+                _ => REJECTED_CORNER,
+            }),
+    );
     screen_midpoints(&mut corners, mesh.vertex_projection, lens.bounds);
 
     // One command per source face: consecutive triangles of a quad share it.
-    let mut normals: Vec<ModelNormal> = Vec::new();
-    let mut colours: Vec<u32> = Vec::new();
-    let mut sprites: Vec<MaterialId> = Vec::new();
-    let mut faces: HashMap<usize, (u8, Vec<i16>)> = HashMap::new();
-    let mut face_order = Vec::new();
+    let triangles = mesh.triangles.len();
+    let mut normals: Vec<ModelNormal> = Vec::with_capacity(triangles * 2);
+    let mut colours: Vec<u32> = Vec::with_capacity(triangles);
+    let mut sprites: Vec<MaterialId> = Vec::with_capacity(triangles);
+    let mut faces: Vec<Option<(u8, FaceWords)>> = vec![None; triangles];
+    let mut face_order: Vec<usize> = Vec::with_capacity(triangles);
     let mut previous: Option<(ModelFaceVertices, usize)> = None;
     // A node with its integer frame shades from the raw pool normals and
     // its model-space light; slot 0 is the face normal, 1..=3 its corners.
@@ -537,14 +565,13 @@ pub(crate) fn prepare_model_body(
                         .unwrap_or(ModelFaceShading::Flat),
                     mesh.face_corner_normals.get(index),
                 ) {
-                    if let Some((_, words)) = faces.get_mut(&first) {
-                        let at = words.len() - 1;
+                    if let Some(Some((_, words))) = faces.get_mut(first) {
                         let reference = normals.len() as i16;
                         normals.push(ModelNormal {
                             shade: shade_dword(index, 3, corner[2]),
                             culled: false,
                         });
-                        words[at] = reference;
+                        words.set_last(reference);
                     }
                 }
                 continue;
@@ -581,10 +608,22 @@ pub(crate) fn prepare_model_body(
             shade: lighting.map_or(0, |normals| shade_dword(index, first_slot, normals[0])),
             culled,
         });
-        let vertices: Vec<i16> = match source {
-            ModelFaceVertices::Triangle(v) => v.iter().map(|&v| v as i16).collect(),
-            ModelFaceVertices::Quad(v) => v.iter().map(|&v| v as i16).collect(),
+        let mut raw_vertices = [0i16; 4];
+        let vertex_count = match source {
+            ModelFaceVertices::Triangle(v) => {
+                for (slot, vertex) in v.iter().enumerate() {
+                    raw_vertices[slot] = *vertex as i16;
+                }
+                3
+            }
+            ModelFaceVertices::Quad(v) => {
+                for (slot, vertex) in v.iter().enumerate() {
+                    raw_vertices[slot] = *vertex as i16;
+                }
+                4
+            }
         };
+        let vertices = &raw_vertices[..vertex_count];
         let mut opcode = if vertices.len() == 4 { 0x04 } else { 0x03 };
         let material_index = match (texture, material) {
             (Some(texture), Some(material)) => {
@@ -608,8 +647,14 @@ pub(crate) fn prepare_model_body(
                 colours.len() as i16 - 1
             }
         };
-        let mut words = vec![material_index, normal_index];
-        words.extend_from_slice(&vertices);
+        let mut words = FaceWords {
+            buf: [0; 10],
+            len: 0,
+        };
+        words.push(material_index);
+        words.push(normal_index);
+        words.buf[2..2 + vertices.len()].copy_from_slice(vertices);
+        words.len += vertices.len() as u8;
         match shading {
             ModelFaceShading::Flat => {}
             ModelFaceShading::FlatLit => opcode |= 0x40,
@@ -627,7 +672,7 @@ pub(crate) fn prepare_model_body(
                 }
             }
         }
-        faces.insert(index, (opcode, words));
+        faces[index] = Some((opcode, words));
         face_order.push(index);
     }
 
@@ -784,27 +829,23 @@ pub(crate) fn prepare_model_billboards(
         ..scene.lens
     };
     let raw_scale = draw.transform.scale / 100.0;
-    let world: Vec<Option<[f32; 3]>> = draw
-        .vertices
-        .iter()
-        .enumerate()
-        .map(|(index, anchor)| {
-            if draw
-                .vertex_clip
-                .get(index)
-                .is_some_and(|clip| *clip != v2k_formats::models::ModelSlotClip::Clear)
-            {
-                return None;
-            }
-            let local = anchor.map(|value| value as f32 * raw_scale);
-            Some(std::array::from_fn(|axis| {
-                draw.transform.position[axis]
-                    + (0..3)
-                        .map(|k| draw.transform.orientation[axis][k] * local[k])
-                        .sum::<f32>()
-            }))
-        })
-        .collect();
+    let mut world: Vec<Option<[f32; 3]>> = Vec::with_capacity(draw.vertices.len());
+    world.extend(draw.vertices.iter().enumerate().map(|(index, anchor)| {
+        if draw
+            .vertex_clip
+            .get(index)
+            .is_some_and(|clip| *clip != v2k_formats::models::ModelSlotClip::Clear)
+        {
+            return None;
+        }
+        let local = anchor.map(|value| value as f32 * raw_scale);
+        Some(std::array::from_fn(|axis| {
+            draw.transform.position[axis]
+                + (0..3)
+                    .map(|k| draw.transform.orientation[axis][k] * local[k])
+                    .sum::<f32>()
+        }))
+    }));
     let admitted = crate::model_near::vertex_admission(
         draw.near_clip,
         &world,
@@ -813,30 +854,32 @@ pub(crate) fn prepare_model_billboards(
         scene.camera_basis[2],
     );
     let node = draw.transform.position;
-    let mut corners: Vec<ModelCorner> = world
-        .iter()
-        .zip(&admitted)
-        .enumerate()
-        .map(|(index, (world, &admitted))| match world {
-            Some(world) if admitted || scene.native.is_some() => {
-                let view = scene
-                    .native_vertex_view(draw.vertex_view_raw, index)
-                    .unwrap_or_else(|| scene.node_view_raw(node, *world));
-                let point = lens.project_view(view);
-                ModelCorner {
-                    view,
-                    screen: point.screen,
-                    clip: point.clip | 0x80,
-                    fade: point.fade,
+    let mut corners: Vec<ModelCorner> = Vec::with_capacity(world.len());
+    corners.extend(
+        world
+            .iter()
+            .zip(&admitted)
+            .enumerate()
+            .map(|(index, (world, &admitted))| match world {
+                Some(world) if admitted || scene.native.is_some() => {
+                    let view = scene
+                        .native_vertex_view(draw.vertex_view_raw, index)
+                        .unwrap_or_else(|| scene.node_view_raw(node, *world));
+                    let point = lens.project_view(view);
+                    ModelCorner {
+                        view,
+                        screen: point.screen,
+                        clip: point.clip | 0x80,
+                        fade: point.fade,
+                    }
                 }
-            }
-            _ => REJECTED_CORNER,
-        })
-        .collect();
+                _ => REJECTED_CORNER,
+            }),
+    );
     screen_midpoints(&mut corners, draw.vertex_projection, lens.bounds);
-    let mut colours = Vec::new();
-    let mut sprites = Vec::new();
-    let mut sizes = Vec::new();
+    let mut colours = Vec::with_capacity(draw.billboards.len());
+    let mut sprites = Vec::with_capacity(draw.billboards.len());
+    let mut sizes = Vec::with_capacity(draw.billboards.len());
     let mut commands = Vec::with_capacity(draw.billboards.len());
     for (billboard, material) in draw.billboards.iter().zip(draw.materials) {
         commands.push(None);
@@ -914,7 +957,7 @@ fn queue_native_particle(
 /// Derived sprite materials, keyed by texture and face flags.
 #[derive(Default)]
 pub(crate) struct DerivedMaterials {
-    pub(crate) by_flags: HashMap<(u32, u16), MaterialId>,
+    pub(crate) by_flags: rustc_hash::FxHashMap<(u32, u16), MaterialId>,
 }
 
 impl DerivedMaterials {
@@ -1028,7 +1071,7 @@ impl PreparedNode {
         };
         let mut corners = Vec::new();
         let mut colours = Vec::new();
-        let mut map = HashMap::new();
+        let mut slots: Vec<Option<(u8, FaceWords)>> = Vec::new();
         let mut order = Vec::new();
         for &(first, colour, depth) in faces {
             let base = corners.len() as i16;
@@ -1041,8 +1084,17 @@ impl PreparedNode {
                 });
             }
             colours.push(colour);
-            let words = vec![colours.len() as i16 - 1, 0, base, base + 1, base + 2];
-            map.insert(first, (0x03, words));
+            let mut words = FaceWords {
+                buf: [0; 10],
+                len: 0,
+            };
+            for word in [colours.len() as i16 - 1, 0, base, base + 1, base + 2] {
+                words.push(word);
+            }
+            while slots.len() <= first {
+                slots.push(None);
+            }
+            slots[first] = Some((0x03, words));
             order.push(first);
         }
         Self {
@@ -1068,7 +1120,7 @@ impl PreparedNode {
             colours,
             sprites: Vec::new(),
             sizes: Vec::new(),
-            faces: map,
+            faces: slots,
             face_order: order,
             edges: Vec::new(),
         }

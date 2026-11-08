@@ -1,7 +1,7 @@
 //! Native class19's bounded F780 -> 11250 -> 11030 -> 15040 delivery.
 //!
 //! EXE style4C7858 has null +20/+28 hooks. The static F780 packet's channel6
-//! has zero impact and zero filtered damage on Type34, but an enabled11030
+//! has zero impact and zero filtered damage on Type34, but an enabled 11030
 //! still consumes three random words and changes the Euler words. This does
 //! not admit primary packets or their nonzero/death continuation.
 
@@ -128,7 +128,7 @@ fn run(
     }
 
     // 11250 sets the infected model before DA00's authenticated null +20.
-    // All four model slots remain560; no +34 stamp or task reinitialization.
+    // All four model slots remain 560; no +34 stamp or task reinitialization.
     manager
         .apply_fun_00411250_infected_model_bit(id)
         .ok_or(Block::Owner)?;
@@ -160,7 +160,7 @@ fn run(
     entity.set_rotation_heading_pitch_roll_raw(body.angular_heading_pitch_roll_raw);
     if matches!(reaction, ImpactReactionOutcome::Applied(_)) {
         // 11030 reads the network flag after committing all six reaction
-        // words. Even an unavailable469200 suffix retains the three draws.
+        // words. Even an unavailable 469200 suffix retains the three draws.
         match entity
             .collision
             .state_flags_at_0x08

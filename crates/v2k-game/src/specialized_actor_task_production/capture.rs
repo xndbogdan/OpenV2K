@@ -719,8 +719,8 @@ fn retire_delivered_child(
             .mark_actor_deferred_destroy_pending();
         manager.queue_actor_deferred_destroy(id);
     }
-    // 10B70 clears ordinary callback flags but retains the completed16750
-    // graph until14990. Preserve the genuine Type9 publication for a later
+    // 10B70 clears ordinary callback flags but retains the completed 16750
+    // graph until 14990. Preserve the genuine Type9 publication for a later
     // contact in this same walk, without advancing its newborn release task.
     let retained = owners.remove(index);
     if let Some(allocation) = retained.type9_actor_lease() {

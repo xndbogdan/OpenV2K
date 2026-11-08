@@ -91,7 +91,7 @@ pub struct GrenadePrimaryStepRequest {
     pub model_extent_raw: u16,
     /// Already selected by the native common-update frame; no extra clamp.
     pub elapsed_micros: u32,
-    /// Native 404690 parameter4 == 0.
+    /// Native 404690 parameter 4 == 0.
     pub detailed: bool,
     /// Result of the wrapper's 416410 owner-transition gate.
     pub owner_transition_suppressed: bool,

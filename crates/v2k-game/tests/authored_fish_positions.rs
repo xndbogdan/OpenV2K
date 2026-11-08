@@ -77,7 +77,7 @@ fn aquatic_fish_keep_authored_y_including_zero_and_above_static_sea() {
         } else {
             // The accepted fish-movement-Reef trace loaded gameplay overlay30.
             // These two coarse pinkfish retain their authored Y3840 in retail;
-            // the static sea is3768. An underwater clamp would corrupt them.
+            // the static sea is 3768. An underwater clamp would corrupt them.
             assert_eq!(terrain.sea_level_raw(), 3768);
             for (index, position) in [(25, [2048, 3840, -11520]), (30, [-2304, 3840, 23552])] {
                 let entity = fish

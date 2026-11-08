@@ -51,6 +51,15 @@ impl NativeWorldViewport {
         std::array::from_fn(|axis| self.origin_raw[axis].wrapping_add(displacement[axis]))
     }
 
+    /// 465870's VIEW point for an actor's origin (`actor_world_image` less
+    /// the viewport origin, through the viewport's rows).
+    pub fn actor_origin_view(self, origin_raw: [i16; 3]) -> [i32; 3] {
+        let world_image = self.actor_world_image(origin_raw);
+        self.world_vector_to_view(std::array::from_fn(|axis| {
+            world_image[axis].wrapping_sub(self.origin_raw[axis])
+        }))
+    }
+
     /// 4138F0 forms each wrapped signed-short delta before 465870 subtracts
     /// the viewport origin. Preserve the same selected toroidal world image.
     pub fn actor_world_image(self, origin_raw: [i16; 3]) -> [i32; 3] {
@@ -89,11 +98,8 @@ impl NativeModelFrame {
         origin_raw: [i16; 3],
         body_axes_q31: [[i32; 3]; 3],
     ) -> Self {
-        let world_image = viewport.actor_world_image(origin_raw);
-        let delta =
-            std::array::from_fn(|axis| world_image[axis].wrapping_sub(viewport.origin_raw[axis]));
         Self {
-            origin_view_raw: viewport.world_vector_to_view(delta),
+            origin_view_raw: viewport.actor_origin_view(origin_raw),
             axes_view_q31: body_axes_q31.map(|axis| viewport.world_vector_to_view(axis)),
             // 4138F0 sets the submitted actor identity word to zero even when
             // its retained body basis happens to resemble identity.

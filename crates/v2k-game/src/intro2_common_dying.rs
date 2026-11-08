@@ -288,7 +288,7 @@ fn authenticate_components(
     Ok(())
 }
 
-/// 10C10 -> common vtable DB80 -> null current death hook -> AC60 alternate12
+/// 10C10 -> common vtable DB80 -> null current death hook -> AC60 alternate 12
 /// -> C620. All fallible constructor checks precede this helper's first write.
 pub fn publish_intro2_common_standard_death(
     manager: &mut EntityManager,

@@ -1,6 +1,6 @@
 //! FUN_00442420 projectile surface replacement and its same-visit E3D0 tail.
 //!
-//! Decision matrix: source52/53 -> 74, source68/69 -> 76, source87 -> 88;
+//! Decision matrix: source 52/53 -> 74, source 68/69 -> 76, source 87 -> 88;
 //! selector6 -> 73, selector0..5/8..12 -> the source replacement, all other
 //! selectors -> delete. A water replacement continues the originating mode3
 //! visit's ground tail. Replacement descriptors are mode0, so future visits

@@ -25,7 +25,7 @@ pub(crate) struct TerrainCraterRequest {
     pub radius_raw: i32,
     /// Signed height-byte units, not raw world Y (one unit is 32 raw Y).
     pub depth_height_units: i32,
-    /// `2EC30`: world style4 ->1, style5 ->none, every other style ->4.
+    /// `2EC30`: world style4 -> 1, style5 ->none, every other style -> 4.
     /// `36E00` caller param4==0 also selects None.
     pub replacement_material: Option<u8>,
 }
@@ -279,7 +279,7 @@ pub(crate) fn apply_terrain_crater(
 
 /// `16AC0` (`FUN_00416AC0`) uses forward terrain differences, not Euler rotation or a central
 /// gradient. It normalizes Q12 tangents, crosses them, expands then normalizes
-/// each Q31 column through the existing exact57960 implementation.
+/// each Q31 column through the existing exact 57960 implementation.
 pub(crate) fn terrain_aligned_actor_basis(
     terrain: &TerrainGrid,
     position_raw: [i16; 3],

@@ -373,7 +373,7 @@ pub(crate) fn plan_sub_g_frame_with_prefix(
         } = request;
 
         // 41A6AA tests +3F before reading any normal-controller state. Its
-        // nonzero branch tests +40 at41A9CB, then41AA36 clears dwords+20/+24.
+        // nonzero branch tests +40 at 41A9CB, then 41AA36 clears dwords+20/+24.
         // B210's force predicates now both fail: no terrain, mass division,
         // retained basis, animation, sound, velocity or Euler write occurs.
         let (RetailRuntimeValue::Known(mode), RetailRuntimeValue::Known(override_mode)) =

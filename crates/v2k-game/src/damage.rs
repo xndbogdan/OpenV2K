@@ -164,7 +164,7 @@ pub const DRAGON_FIREBALL_DAMAGE_PACKET: DamagePacket = DamagePacket {
     amounts_raw: [500, 6000],
 };
 
-/// Class49/80's F590/F800 packet at retail0x004CC078. Method12 uses
+/// Class49/80's F590/F800 packet at retail 0x004CC078. Method12 uses
 ///this bolt row; it is distinct from method14's class55/81 packet.
 pub const CLASS49_TURRET_BOLT_DAMAGE_PACKET: DamagePacket = DamagePacket {
     channels: [2, 3],

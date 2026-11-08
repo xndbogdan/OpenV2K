@@ -148,7 +148,7 @@ pub(super) fn authenticate_metadata(
     }
 }
 
-/// 416FF0 uses the common104B0/C490 constructor, with only SubK allocated.
+/// 416FF0 uses the common 104B0/C490 constructor, with only SubK allocated.
 /// Model slots remain authored data and are retained by the allocation receipt.
 fn gate_metadata_matches(metadata: &EntityTypeRuntimeMetadata) -> bool {
     use crate::entity_collision_state::{CommonMoverGklPayloads, CommonWorldEffectProfile};
@@ -615,8 +615,8 @@ fn publish_class0_graph(entity: &mut Entity, context: BehaviorContextRuntime) {
         .collision
         .state_flags_at_0x08
         .overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
-    // C490 clears S then T before replacing P through02800/05F80. There are
-    // no06070 component branches for these profiles, hence no extra RNG draw.
+    // C490 clears S then T before replacing P through 02800/05F80. There are
+    // no 06070 component branches for these profiles, hence no extra RNG draw.
     entity.actor_tasks.clear_slot(ActorTaskSlot::Secondary);
     entity.actor_tasks.clear_slot(ActorTaskSlot::Tertiary);
     entity.actor_tasks.replace_prepared(
@@ -660,13 +660,13 @@ pub(super) fn reselect_class0_actor(
     Ok(())
 }
 
-/// Inputs to the shared104B0/D4A0/C490 birth before its caller publishes
+/// Inputs to the shared 104B0/D4A0/C490 birth before its caller publishes
 /// the allocation. Surface bits come from that caller's proven world clock or
 /// dry-terrain comparison; task and grounding semantics do not depend on scene.
 #[derive(Clone, Copy)]
 pub(super) enum Class0SpawnInput<'a> {
     Authored(&'a EntitySpawn),
-    ///451C00 zeros the instance record before setting its requested type.
+    /// 451C00 zeros the instance record before setting its requested type.
     ZeroRecord {
         entity_type: u32,
     },
@@ -827,7 +827,7 @@ pub(super) fn construct_class0_actor(
     debug_assert_eq!(selected, Some(initial_selection));
     entity.set_position_raw(grounded);
     entity.collision.state_flags_at_0x08 = state;
-    // Explicit native policy for104B0's unwritten transient mass word.
+    // Explicit native policy for 104B0's unwritten transient mass word.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     // D720/13F70 retains the spawn Euler-derived basis, including 0x38's
     // player +0xA2/+0xA4/+0xA6 copy.

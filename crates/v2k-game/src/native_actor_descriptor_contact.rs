@@ -129,7 +129,7 @@ fn admit_slot(
         .task_state(task_id)
         .ok_or(Error::Runtime("component task"))?;
     if entity.native_entity_weapon_runtime.is_some() {
-        //404580,403840,4069E0 and401F80 all retain05FF0's null+18;
+        // 404580, 403840, 4069E0 and 401F80 all retain 05FF0's null+18;
         //the mine's 406B00/406E90 templates write it null too.
         //Only the constructor lease and completed current owner establish
         //this program; a coincidental task enum cannot authorize it.
@@ -149,7 +149,7 @@ fn admit_slot(
         return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::Intro2GunTurret(_)) {
-        //4086D0 writes the template+18 null explicitly at408721. A native
+        // 4086D0 writes the template+18 null explicitly at 408721. A native
         //receipt and completed current Class29 graph authorize that null;
         //a task enum by itself does not confer body mutation custody.
         // The mobile Type107/121 run the same class29 task on the ground host,
@@ -169,7 +169,7 @@ fn admit_slot(
             ActorTaskRuntime::BoulderRolling(_) | ActorTaskRuntime::BoulderResting(_)
         )
     {
-        //00404580 and404B40 both build their Primary through05FF0, which
+        //FUN_00404580 and 404B40 both build their Primary through 05FF0, which
         //zeroes the task+18. Only the boulder's completed owner lends custody.
         if !crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(entities, id)
             || !tasks.prepare_native_actor_mutation(entities, id)
@@ -179,7 +179,7 @@ fn admit_slot(
         return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::TumbleOutOfSky(_)) {
-        //04360/Class11 retains05FF0's null task+18.
+        // 04360/Class11 retains 05FF0's null task+18.
         if !native_insect_allocation_authenticates(entities, id)
             || !completed_contact_owner(entities, tasks, id)
         {
@@ -188,7 +188,7 @@ fn admit_slot(
         return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::Queen) {
-        //40D210 builds the Queen's class67 Primary through 01020 with a zeroed
+        // 40D210 builds the Queen's class67 Primary through 01020 with a zeroed
         //template+18. Only her completed class0 host owner lends custody.
         if entity.entity_type != 110 || !entities.defender_ball_owner_completed(id) {
             return Err(Error::Runtime("completed Queen contact owner"));
@@ -196,7 +196,7 @@ fn admit_slot(
         return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::WorkingFactory(_)) {
-        //25BD0 retains01020's template+18 null. Only the native Factory
+        // 25BD0 retains 01020's template+18 null. Only the native Factory
         //receipt and its completed owner authenticate that task layout.
         if !crate::intro2_type66::intro2_type66_allocation_authenticates(entity)
             || !tasks.prepare_native_actor_mutation(entities, id)
@@ -206,8 +206,8 @@ fn admit_slot(
         return Ok(SlotAdmission::Null);
     }
     if matches!(task, ActorTaskRuntime::MainBase(_)) {
-        //25CD0 builds the Primary through01020 with template+18 zero, as
-        //25BD0 does for the factory. The native Main Base receipt and its
+        // 25CD0 builds the Primary through 01020 with template+18 zero, as
+        // 25BD0 does for the factory. The native Main Base receipt and its
         //completed owner authenticate that task layout.
         if !crate::main_base_runtime::main_base_manager_allocation_authenticates(entities, id)
             || !tasks.prepare_native_actor_mutation(entities, id)
@@ -532,7 +532,7 @@ pub(crate) fn commit_slot_plan(
 
 /// Resolve only the component shapes whose retained allocations this adapter
 /// owns. A/D/I people, A/D insects, B/D/G flyers and B/D/F fish retain
-/// their distinct01A20 branches; unrelated components are not consumed here.
+/// their distinct 01A20 branches; unrelated components are not consumed here.
 fn contact_topology(
     entity: &Entity,
     metadata: &EntityTypeRuntimeMetadata,
@@ -575,7 +575,7 @@ fn contact_topology(
     if !topology.sub_d
         || topology.sub_g != flying
         // Type30 retains its constructor-owned K/L alongside A/B/C/D/E/H.
-        //01A20 uses its A/D branch without advancing or reinterpreting K/L.
+        // 01A20 uses its A/D branch without advancing or reinterpreting K/L.
         || (topology.sub_l
             && !flying
             && !matches!(entity.entity_type, 30 | 33 | 38 | 129 | 119 | 32 | 2 | 107 | 121 | 12 | 127))
@@ -655,7 +655,7 @@ fn contact_topology(
         sub_i: topology.sub_i,
         sub_f: topology.sub_f,
         sub_g: flying,
-        //02DA0 ->01A20 writes A/F/G direction only, not the Sub-L target.
+        // 02DA0 -> 01A20 writes A/F/G direction only, not the Sub-L target.
         sub_l: false,
     })
 }
@@ -710,6 +710,14 @@ pub(crate) fn completed_contact_owner(
     let Some(entity) = manager.iter_all().find(|entity| entity.id == id) else {
         return false;
     };
+    // The possession owns a possessed body; Player Control's task
+    // (FUN_00446530's template) has a null contact hook.
+    if tasks
+        .possession
+        .is_some_and(|custody| custody.state.body == id)
+    {
+        return true;
+    }
     // 11AD0 has no dying test, and BC90 never calls A860: until 14990 a class63
     // carrier's retained tasks still take their contact hooks. Only its Finished
     // receipt stands in for the owner the terminal retired.
@@ -849,9 +857,9 @@ pub(crate) fn slot_contact_needs_no_owner(entity: &Entity, slot: ActorTaskSlot) 
 pub(crate) fn task_has_null_contact(task: &ActorTaskRuntime) -> bool {
     // These constructors retain 05FF0's null task+18: 03230; acquisition
     // 01F80/02050/02100/02190; cue 02A10; Aim 02220; and dying 04120.
-    // TrashFurniture401CA0 retains405FF0's null+18 (406013): it writes
-    // only template+00/+04/+10/+14 before406030, never the contact slot.
-    // Infect/cleanse02820 and the class68 timer02800 both retain05F80's null +18.
+    // TrashFurniture401CA0 retains 405FF0's null+18 (406013): it writes
+    // only template+00/+04/+10/+14 before 406030, never the contact slot.
+    // Infect/cleanse 02820 and the class68 timer02800 both retain 05F80's null +18.
     // Hive's independent
     // 25E10/25F60 templates also zero +18 explicitly
     // (425E59/425FA9); their live/dying radial tick is not a contact callback.
@@ -893,10 +901,10 @@ pub(crate) fn task_has_descriptor_contact(task: &ActorTaskRuntime) -> bool {
         task,
         ActorTaskRuntime::OrdinaryType9Wander(_)
             | ActorTaskRuntime::SharedRetarget(_)
-            // 032A0 differs from02B10 only by the Sub-A reset at creation;
-            // 4032F3 installs the identical02DA0 callback in task+18.
+            // 032A0 differs from 02B10 only by the Sub-A reset at creation;
+            // 4032F3 installs the identical 02DA0 callback in task+18.
             | ActorTaskRuntime::DefecateVirusWander(_)
-            // 02FB0 installs the same02DA0 in the cleansing movement task.
+            // 02FB0 installs the same 02DA0 in the cleansing movement task.
             | ActorTaskRuntime::CleansingLandscape(_)
             | ActorTaskRuntime::AttractAttentionTargetRoute(_)
             | ActorTaskRuntime::CapturePeoplePursuit(_)

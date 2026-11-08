@@ -292,17 +292,17 @@ fn run_frame(
     };
     entity.mass_raw = mass;
     // PE DCA0/E870 latch entry effective flags before tasks. Every admitted
-    // fish style preserves2004/200C; Wander's21000 clear mask clears neither.
+    // fish style preserves 2004/200C; Wander's21000 clear mask clears neither.
     let environment = effective_flags(entity)? & 0x2000 != 0;
     if !detailed && environment {
-        // 40E8AF ->40E9C0: environment2000 skips A800 AND the complete outer
+        // 40E8AF -> 40E9C0: environment 2000 skips A800 AND the complete outer
         // tail. Stored velocity, task clocks, F state and basis remain parked.
         entity.collision.state_flags_at_0x08.overwrite(0x40000, 0);
         commit_motion(entity, dt)?;
         return Ok(advanced);
     }
     if environment {
-        // 40DCFC..40DD06: detailed2000&&!1000 enables master motion before A800.
+        // 40DCFC..40DD06: detailed 2000&&!1000 enables master motion before A800.
         entity
             .collision
             .state_flags_at_0x08
@@ -577,7 +577,7 @@ fn finish(
             .queue_networked_positional_sound_raw(sound, entity.position_raw());
     }
     // Entry2004/200C skips E640(10), DF70(2), and hot-terrain damage(800).
-    // DCA0 still publishes13F70; E100 rereads the current style. Bit4 skips
+    // DCA0 still publishes 13F70; E100 rereads the current style. Bit4 skips
     // gravity/buoyancy; bit8 alone admits the independent wind/drag callback.
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     entity.physical_body_basis_q31 =
@@ -603,7 +603,7 @@ fn finish(
     commit_motion(entity, dt)
 }
 
-/// E100's bit8-gated44EC60 call. Types23/62 never enter this callback;
+/// E100's bit8-gated 44EC60 call. Types23/62 never enter this callback;
 /// Sub-F's own velocity damping remains in the preceding component update.
 pub(super) fn apply_environment(
     manager: &mut EntityManager,

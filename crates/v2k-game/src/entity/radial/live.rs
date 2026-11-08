@@ -158,6 +158,8 @@ pub enum DynamicRadialLiveBlockReason {
     RollingBoulder(crate::rolling_boulder::death::RollingBoulderDeathBlock),
     NativeFlyer(crate::native_flying_surface_contact::NativeFlyingSurfaceDeathBlock),
     Autobot(crate::entity::Class0ActorError),
+    /// The possessed body's death, which releases it.
+    Possessed(crate::possession::live::PossessedContactBlock),
     UnsupportedDeath {
         entity_type: u32,
         alternate_class: Option<u32>,

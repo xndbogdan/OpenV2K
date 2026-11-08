@@ -88,7 +88,7 @@ pub(crate) fn publish_native_flying_standard_death(
 
 /// The call site lends the complete synchronous radial context. Type13
 /// completes BAC0 before checked damage returns; no synthetic dying owner is
-/// published. Type10/57 and quiet15/87 retain their distinct native receipts.
+/// published. Type10/57 and quiet 15/87 retain their distinct native receipts.
 pub(crate) fn run_native_flying_standard_death(
     frame: crate::class49_terminal::Class49TerminalFrame<'_>,
     id: u32,
@@ -140,7 +140,7 @@ pub(crate) fn register_native_flying_death(
     }
 }
 
-/// Native15/87 authors alternate2, not a falling corpse task. 10C10 stops
+/// Native15/87 authors alternate 2, not a falling corpse task. 10C10 stops
 /// sound11 before DB80/AC60 enters the zero-policy C470 terminal initializer.
 fn publish_native_flyer_quiet_death(
     manager: &mut crate::entity::EntityManager,

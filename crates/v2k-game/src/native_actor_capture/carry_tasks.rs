@@ -563,7 +563,7 @@ pub(crate) fn acquire(
         axis.raw_word_at_0x04 = 0x100;
         entity.actor_common_axis_descriptor = RetailRuntimeValue::Known(axis);
         if let Some(target) = select_beacon(manager, id, axis, world_fx)? {
-            // C7D0 records +08 and advances3→4 before AFD0 clears this visit.
+            // C7D0 records +08 and advances 3→4 before AFD0 clears this visit.
             publish_style(
                 manager,
                 id,

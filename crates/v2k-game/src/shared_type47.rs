@@ -406,7 +406,7 @@ pub(crate) fn publish_authored_type47(
         _ => return Err(Intro2Type47PublicationError::Setup),
     };
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
-    // The successful104B0 wrapper uses actual authored Euler words, including
+    // The successful 104B0 wrapper uses actual authored Euler words, including
     // the nonzero headings in ordinary worlds and Intro2's third allocation.
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     entity.physical_body_basis_q31 =

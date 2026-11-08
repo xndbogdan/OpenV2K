@@ -406,7 +406,7 @@ fn real_grenade_active_pair_kills_type30_and_publishes_class49_ring_and_class12(
         fx.advance_frame_pacing(20_000);
     }
     // The authored Type30 precedes the fresh grenade in the intrusive list,
-    // so its actual11AD0 visit owns this unordered pair. Keep the production
+    // so its actual 11AD0 visit owns this unordered pair. Keep the production
     // static-before-active order and provide the real Playing terminal host.
     let mut frame = Intro2ContactFrame {
         entities: &mut manager,

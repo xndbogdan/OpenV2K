@@ -139,7 +139,7 @@ fn native_world_entry_resets_stamps_while_cache_load_and_effect_clear_do_not() {
         let ordinal = manager.next_common_body_ordinal();
         let player_stamp = manager.player().unwrap().construction_stamp_at_0xb4;
         // These operations manage resources/effects. They do not represent
-        // the source451710 load entry and cannot reset a still-live manager.
+        // the source 451710 load entry and cannot reset a still-live manager.
         session.load_level_by_id(13, 1).unwrap();
         fx.clear();
         assert_eq!(manager.next_common_body_ordinal(), ordinal);

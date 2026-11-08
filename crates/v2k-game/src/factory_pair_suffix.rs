@@ -339,7 +339,7 @@ pub fn apply_factory_pair_suffix(
     })
 }
 
-/// Revalidate before delivery emits operation33 or changes staffing, as well
+/// Revalidate before delivery emits operation 33 or changes staffing, as well
 /// as immediately before the component suffix after deferred destruction.
 pub(crate) fn validate_factory_pair_suffix_plan(
     entities: &EntityManager,

@@ -1,4 +1,4 @@
-//! Native Gun Turret private state and the exact408770/408BD0 task visit.
+//! Native Gun Turret private state and the exact 408770/408BD0 task visit.
 
 use super::{aim, host::GunTurretHost, intro2_gun_turret_allocation_authenticates};
 use crate::{
@@ -11,10 +11,10 @@ use crate::{
 
 pub(crate) mod math;
 
-const NORMAL_PRIORITIES: [i32; 3] = [0x20000, 0x10000, 0]; //4C7098
-const INFECTED_PRIORITIES: [i32; 3] = [0, 0x30000, 0x20000]; //4C70A8
+const NORMAL_PRIORITIES: [i32; 3] = [0x20000, 0x10000, 0]; // 4C7098
+const INFECTED_PRIORITIES: [i32; 3] = [0, 0x30000, 0x20000]; // 4C70A8
 
-/// The0x2C private block plus the independent01120 wrapper age.
+/// The0x2C private block plus the independent 01120 wrapper age.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GunTurretTaskState {
     elapsed_ms: u32,
@@ -251,7 +251,7 @@ pub(crate) fn tick_gun_turret_task<H: GunTurretHost>(
     if !survived {
         return Ok(TurretTaskOutcome::Continue);
     }
-    //01120/16410 evaluates transition suppression after the callback unwinds.
+    // 01120/16410 evaluates transition suppression after the callback unwinds.
     if outcome == TurretTaskOutcome::RetargetRequired && bits(entity, 0x1000)? != 0 {
         return Ok(TurretTaskOutcome::Continue);
     }

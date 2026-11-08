@@ -4,8 +4,8 @@ use super::*;
 
 impl WorldFx {
     /// BAF0 detects Type10's allocated Sub-G and selects ten class37
-    /// attempts. Capability8 has no relation-owner bit40, so16F90 retains
-    /// the dragon's own type/handle; the independent40950 sea/audio tail
+    /// attempts. Capability8 has no relation-owner bit40, so 16F90 retains
+    /// the dragon's own type/handle; the independent 40950 sea/audio tail
     /// follows even when the direction scatter stops at allocator failure.
     pub(crate) fn emit_intro2_type10_terminal_raw(
         &mut self,

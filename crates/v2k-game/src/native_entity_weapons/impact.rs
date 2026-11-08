@@ -1,9 +1,9 @@
 //! Native Type42/59/34 particle hits, retaining their synchronous class1/49
 //! death.
 //!
-//! 10EB0 and411180 share the type-vtable+14 trampoline40DAC0, but11180
-//! queues the living +80 cue before the hook and multiplies the11030 impulse
-//! by eight.11250/11320 retain their own model-switch prefix. Current class22,
+//! 10EB0 and 411180 share the type-vtable+14 trampoline 40DAC0, but 11180
+//! queues the living +80 cue before the hook and multiplies the 11030 impulse
+//! by eight. 11250/11320 retain their own model-switch prefix. Current class22,
 //! class35, class19 and completed class1/49 have null +20/+24/+28 style hooks.
 
 use crate::{
@@ -148,7 +148,7 @@ fn run(
             .last_hit_presentation_tick_at_0x34 = RetailRuntimeValue::Known(frame.retail_tick);
         *committed = true;
     }
-    // 11180's pre-hook sound is independent of415040's accepted result.
+    // 11180's pre-hook sound is independent of 415040's accepted result.
     if static_route && bits(frame.entities.entity_mut(id).unwrap(), DYING_STATE_BIT)? == 0 {
         let RetailRuntimeValue::Known(sound) = metadata.accepted_hit_presentation_sound_id else {
             return Err(Block::Runtime("accepted-hit sound"));

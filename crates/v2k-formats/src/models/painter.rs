@@ -1,6 +1,6 @@
 //! Deferred model-queue commands, before any camera or presentation policy.
 
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::ops::Range;
 
 use super::{
@@ -84,8 +84,8 @@ pub(super) fn signed_offset(low: u16, high: u16) -> i32 {
 /// independent geometry resolver's existing interpretation.
 #[derive(Default)]
 pub(super) struct PainterSlotCache {
-    points: HashMap<u16, Option<ResolvedModelSlot>>,
-    busy: HashSet<u16>,
+    points: FxHashMap<u16, Option<ResolvedModelSlot>>,
+    busy: FxHashSet<u16>,
 }
 
 impl PainterSlotCache {
@@ -108,6 +108,7 @@ impl PainterSlotCache {
             vertex_resolver,
             cache: std::mem::take(&mut self.points),
             busy: std::mem::take(&mut self.busy),
+            command_visit: true,
         };
         let output = resolve(&mut resolver);
         self.points = resolver.cache;
@@ -149,6 +150,12 @@ fn edge_endpoint_snapshot(
     };
     let native = owner.owns_native_view();
     if !native && !owner.owns_external_frame_slots() {
+        if owner.owns_process_random() {
+            // 458C60/459000 visit endpoint1, then endpoint2, at the command.
+            for slot in slots {
+                resolver.resolve(slot, stats);
+            }
+        }
         return ModelEdgeEndpointSnapshot::Compatibility;
     }
     let required = owner.requires_native_edge_endpoints();

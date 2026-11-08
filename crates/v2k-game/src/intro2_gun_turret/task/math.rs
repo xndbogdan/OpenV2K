@@ -11,8 +11,8 @@ pub(crate) fn q31(a: i32, b: i32) -> i32 {
 
 pub(crate) fn displacement(owner: [i16; 3], target: [i16; 3]) -> ([i16; 3], i32) {
     let vector = std::array::from_fn(|axis| target[axis].wrapping_sub(owner[axis]));
-    //425370 uses the largest absolute component plus half of the other
-    //two. Only the subsequent angle normalization calls457730's sqrt.
+    // 425370 uses the largest absolute component plus half of the other
+    //two. Only the subsequent angle normalization calls 457730's sqrt.
     let absolute = vector.map(|value| i32::from(value).abs());
     let largest = *absolute.iter().max().expect("three components");
     let distance = largest + ((absolute.into_iter().sum::<i32>() - largest) >> 1);
@@ -145,7 +145,7 @@ pub(super) fn track(frame: TrackingFrame) -> TrackingResult {
     if frame.gravity {
         vector[1] = vector[1].wrapping_add(q31(lead.wrapping_mul(lead), 0x180000) as i16);
     }
-    // Retail narrows the recomputed length to a signed word before457680.
+    // Retail narrows the recomputed length to a signed word before 457680.
     let magnitude = i32::from(length(vector) as i16);
     let mut body = frame.body;
     rotate(&mut body.lateral, &mut body.forward, frame.yaw);

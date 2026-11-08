@@ -1,4 +1,4 @@
-//! Type57's 10C10 -> alternate11 -> C660/404360, then 404460 and C750/BAC0.
+//! Type57's 10C10 -> alternate 11 -> C660/404360, then 404460 and C750/BAC0.
 //! A falling Primary has lifetime zero. Only the contact callbacks select the
 //! explosion variant; neither elapsed time nor a guessed ground Y ends it.
 

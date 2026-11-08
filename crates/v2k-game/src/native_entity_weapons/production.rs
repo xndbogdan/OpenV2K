@@ -1,8 +1,8 @@
-//! One authenticated13500 body visit, with synchronous terminal dispatch.
+//! One authenticated 13500 body visit, with synchronous terminal dispatch.
 //!
 //! The host lends its current world damage/death context at the callback's
-//! actual slot. It must finish410C10 before this visit resumes the common
-//! environment and master-motion suffix. Contacts belong to the later11A80
+//! actual slot. It must finish 410C10 before this visit resumes the common
+//! environment and master-motion suffix. Contacts belong to the later 11A80
 //! phase and do not run here.
 
 use super::*;
@@ -55,7 +55,7 @@ pub enum EntityWeaponTickOutcome {
         /// The mine's armed style replaced its tasks: the owner's new custody.
         restyled: Option<NativeEntityWeaponOwner>,
     },
-    ///410C10 completed synchronously; the source's common suffix also ran.
+    /// 410C10 completed synchronously; the source's common suffix also ran.
     Terminal,
 }
 
@@ -519,7 +519,7 @@ pub fn tick_entity_weapon<E>(
                 .is_some_and(|entity| entity.actor_tasks.finish_exact_visit(visit));
             callback_result?;
             ended = terminal_in_callback;
-            //401120 clears in_callback before tag9C00/+04 or timeout/+00.
+            // 401120 clears in_callback before tag9C00/+04 or timeout/+00.
             // A callback that retired its wrapper has no such suffix.
             if terminal_after_unwind && survived {
                 terminal(manager, frame.resources, frame.world_fx, id)
@@ -556,8 +556,8 @@ pub fn tick_entity_weapon<E>(
             } else {
                 0
             };
-        // DCA0/E870 rebuild13F70 after tasks and before E100 when the
-        // effective0x4000 mask is clear.
+        // DCA0/E870 rebuild 13F70 after tasks and before E100 when the
+        // effective 0x4000 mask is clear.
         if flags & 0x4000 == 0 {
             entity.apply_d720_euler_body_basis();
             let RetailRuntimeValue::Known(rebuilt) = entity.physical_body_basis_q31() else {

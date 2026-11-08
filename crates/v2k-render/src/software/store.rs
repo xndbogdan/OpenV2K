@@ -101,8 +101,11 @@ impl OwnedMaterial {
         extra_flags: u16,
     ) -> Option<Self> {
         let texels = width as usize * height as usize;
-        let mut palette = vec![0u16];
-        let mut lookup = std::collections::HashMap::new();
+        // Index 0 stays reserved for transparent texels; pre-size for the
+        // 256-entry cap so the table never rehashes.
+        let mut palette = Vec::with_capacity(257);
+        palette.push(0u16);
+        let mut lookup = rustc_hash::FxHashMap::with_capacity_and_hasher(256, Default::default());
         let mut indices = Vec::with_capacity(texels);
         let mut keyed = false;
         for pixel in rgba.chunks_exact(4).take(texels) {

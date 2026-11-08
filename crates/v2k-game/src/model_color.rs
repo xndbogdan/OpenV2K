@@ -12,7 +12,8 @@
 //! average colour: Klaus's bones and wing membranes are painted into them.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+
+use rustc_hash::FxHashMap;
 
 use v2k_formats::models::{face_material, Billboard};
 use v2k_formats::sprites::SpriteTexelFormat;
@@ -33,8 +34,12 @@ const FALLBACK: [f32; 3] = [0.6, 0.6, 0.6];
 /// vector is rebuilt; decoded/uploaded sprite textures are reused.
 #[derive(Default)]
 pub struct ModelMaterialCache {
-    sprite_textures: RefCell<HashMap<u16, TextureId>>,
-    sprite_dimensions: RefCell<HashMap<u16, (u16, u16)>>,
+    sprite_textures: RefCell<FxHashMap<u16, TextureId>>,
+    sprite_dimensions: RefCell<FxHashMap<u16, (u16, u16)>>,
+    /// Low-byte Section-3 render flags per sprite, so the per-face lookup
+    /// does not rescan the global pool (`ResourceCache::global_sprite`)
+    /// for every face entry of every model every frame.
+    sprite_flags: RefCell<FxHashMap<u16, Option<u8>>>,
 }
 
 impl ModelMaterialCache {
@@ -288,9 +293,14 @@ impl ModelMaterialCache {
     /// Low-byte Section-3 render flags used by the retail fixed-billboard
     /// fillers to select shade row and framebuffer blend mode.
     pub fn sprite_render_flags(&self, cache: &ResourceCache, sprite_id: u16) -> Option<u8> {
-        cache
+        if let Some(flags) = self.sprite_flags.borrow().get(&sprite_id).copied() {
+            return flags;
+        }
+        let flags = cache
             .global_sprite(sprite_id)
-            .map(|(_, entry)| entry.pal_size as u8)
+            .map(|(_, entry)| entry.pal_size as u8);
+        self.sprite_flags.borrow_mut().insert(sprite_id, flags);
+        flags
     }
 
     /// Authored dimensions of a global sprite, used to retain its aspect when

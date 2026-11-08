@@ -698,6 +698,28 @@ Face, edge and billboard opcodes have a near and a fog constructor each
 ([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); the 186
 undefined opcodes reach `FUN_00466150`, an endless loop.
 
+**Opcode-`0x10` corpus (2026-11-07 scan, now a guard test).** `0x10` is live:
+80 commands in 20 shipped models (5,366 Section-8 streams across all Overlay
+tiers plus `PRELOAD.DAT`, walked with the canonical dispatch including both
+sides of every conditional branch; zero unknown-opcode or truncation stops).
+Every use is the pair `0x0F, 0x10` — mount reset to identity, then restore
+of the node's saved basis: `player3`, `man2`, `lev1sci2`, `rockman2`,
+`lev2sci2`, `caveman2`, `lev3sci2`, `eskimo2`, `ressci2`, `vulc2`, `diver2`
+at stream offset 1, and `grock`/`grock2`/`grock3`, `boulder`/`boulder2`/
+`boulder3`, `lavarock`/`lavarock2`/`lavarock3` mid-stream after an
+`0xFFFF`-terminated slot list. Read from retail (`FUN_00467010`):
+the `0x10` handler copies the composed basis (`ctx+0xC4`, the target of
+every mount op: `0x0F` reset, `0x1C` rotation, `0x3C`/`0x5C` composition)
+to the current mount (`ctx+0x18`) and its global copy at `0x004FEEA0`,
+and clears `+0x3C`. The port's `v2k-formats::models` skips `0x10`, which is
+exact on shipped data precisely because every `0x10` immediately follows
+an `0x0F`: the composed basis is Q1.31 identity there, so the publish is a
+fixed point. `model_mount_policy::every_restore_follows_a_reset` asserts
+that precondition (and a live `0x10` count) over the full corpus; if any
+stream ever uses `0x10` elsewhere, implement the real restore. The port
+holds no global copy (the collision projector block at that address is set
+up by its own walk).
+
 **Variable ops** `[dst][a][b]` decode both operands with `FUN_00470840` and
 store a 16-bit result in register `dst`:
 
@@ -880,7 +902,7 @@ refs are slot indices XOR'd with the requesting slot's mirror bit):
 | 0 | 73,404 | plain vertex (a,b,c); mirror slot = (-a, b, c) |
 | 1 | 0 | screen-space midpoint of slots b and c (avg screen X/Y, min depth; always uses far-pass transforms for its refs) |
 | 2 | 4 | point reflection of slot c through the model origin (= model -v) |
-| 3 | 72 | slot c + per-frame random jitter; magnitude = rand i16 >> a (LCG FUN_00457930) — flicker effects |
+| 3 | 72 | slot c's VIEW point plus one process word per axis: `((word << 16) as i32) >> (a & 0x1F)` (`FUN_00457930`, X then Y then Z) — the sparks' flicker; see below |
 | 4 | 0 | plain vertex; mirror slot = (0, b, c) (pinned to symmetry plane) |
 | 5 | 2,132 | 3-D midpoint of slots b and c |
 | 6 | 620 | parallelogram completion: slot a + slot b − slot c |
@@ -912,6 +934,23 @@ The handlers by pass (table `0x4D4A78`):
 | 12 | `FUN_0046EAE0` | `FUN_0046EA60` | `FUN_0046E9F0` |
 | 13 | `FUN_0046EC60` | `FUN_0046EBD0` | `FUN_0046EB60` |
 | 14 | `FUN_0046F010` | `FUN_0046EE70` | `FUN_0046ECF0` |
+
+Type 3's handlers visit source slot `c` through the pass-3 table when it is
+not cached, then draw three process words and add each, shifted into the high
+half and arithmetically right by the low byte of `a` (`SAR CL` masks it to
+five bits), to one VIEW axis; the far and near handlers then project the
+point. Only the requested slot is written, so a mirrored reference draws its
+own three words. The slot cache keeps it for the rest of the node, so each
+reached type-3 slot draws three words once a draw. Every shipped type-3 slot
+is an endpoint of `0x22` sprite-608 sparks (`multipc` in the frontend;
+`factory6`, `factory7`, `factory9`, `chenobyl`, `chernobylpowerup`,
+`nukesubbit` and `lightnin` in the worlds), reached when their command is.
+OpenV2K's draws take the words from the process generator in command order
+(the walk visits both endpoints of every edge) and offset both the native
+VIEW point and the raw-local point; a draw not lent the generator, or a slot
+first reached after the command walk, skips the vertex with the logged stop
+"model jitter vertex blocked". The actor transform-only pass
+(`FUN_00413BE0`, handler `FUN_0046DF70`) is not lent it yet.
 
 A plain-vertex handler computes both slots of a pair and projects only the
 one asked for; the other keeps its view point with the bare `0x80` outcode,

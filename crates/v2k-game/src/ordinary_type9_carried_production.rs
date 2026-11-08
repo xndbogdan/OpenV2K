@@ -119,6 +119,66 @@ struct CarriedDeepSurface<'a> {
     extent_raw: u16,
 }
 
+enum CarriedRelationPrelude {
+    /// The parent admitted the child: a remote-owned parent lent its
+    /// position and set the carried bit with no Sub-J check, or a local
+    /// parent lists the child in its ordered Sub-J.
+    Continuing,
+    /// The parent is gone, or a local parent lacks the ordered Sub-J
+    /// membership. Retail answers with a synchronous release and reselect;
+    /// this adapter has no None tick to substitute.
+    Blocked,
+}
+
+/// 12DA0's relation prelude for the carried child. A remote-owned parent
+/// lends its position and sets the carried bit, with no Sub-J check (Sub-J
+/// membership applies to local parents only); a local parent must list the
+/// child in its ordered Sub-J.
+fn resolve_carried_relation(
+    manager: &mut EntityManager,
+    entity_id: u32,
+    linked_owner: u32,
+) -> CarriedRelationPrelude {
+    let Some(parent) = manager.iter_all().find(|parent| parent.id == linked_owner) else {
+        return CarriedRelationPrelude::Blocked;
+    };
+    if !parent.active {
+        return CarriedRelationPrelude::Blocked;
+    }
+    if parent
+        .collision
+        .state_flags_at_0x08
+        .masked(REMOTE_OWNED_STATE_BIT)
+        == RetailRuntimeValue::Known(REMOTE_OWNED_STATE_BIT)
+    {
+        let position = parent.position_raw();
+        let Some(child) = manager.entity_mut(entity_id) else {
+            return CarriedRelationPrelude::Blocked;
+        };
+        child.set_position_raw(position);
+        child.collision.state_flags_at_0x08.overwrite(0x20, 0x20);
+        return CarriedRelationPrelude::Continuing;
+    }
+    if parent
+        .collision
+        .state_flags_at_0x08
+        .masked(REMOTE_OWNED_STATE_BIT)
+        != RetailRuntimeValue::Known(0)
+    {
+        return CarriedRelationPrelude::Blocked;
+    }
+    let holds = matches!(
+        &parent.sub_j_attachment_runtime,
+        RetailRuntimeValue::Known(Some(runtime))
+            if runtime.ordered_entity_ids().contains(&entity_id)
+    );
+    if holds {
+        CarriedRelationPrelude::Continuing
+    } else {
+        CarriedRelationPrelude::Blocked
+    }
+}
+
 pub(crate) fn tick_type9_carried_owner(
     manager: &mut EntityManager,
     owner: Type9CarriedOwner,
@@ -141,10 +201,15 @@ pub(crate) fn tick_type9_carried_owner(
     let Some(entity) = manager.iter_all().find(|entity| entity.id == entity_id) else {
         return dropped(Type9CarriedProductionDrop::EntityUnavailable);
     };
-    if manager.ordinary_type9_selected_actor_lease(entity_id) != Some(owner.actor) {
+    let lease_ok = manager.ordinary_type9_selected_actor_lease(entity_id) == Some(owner.actor);
+    let authenticates = owner.authenticates(entity);
+    // The custody reads above are `entity`'s last use; the relation prelude
+    // below may lend the parent's position and reborrows the manager
+    // mutably, so the immutable borrow must end here.
+    if !lease_ok {
         return dropped(Type9CarriedProductionDrop::AllocationChanged);
     }
-    if !owner.authenticates(entity) {
+    if !authenticates {
         return dropped(Type9CarriedProductionDrop::CarryingStateChanged);
     }
     let blocked = |owner, reason| Type9CarriedProductionTick {
@@ -152,6 +217,22 @@ pub(crate) fn tick_type9_carried_owner(
         class14_task_lease: None,
         outcome: Type9CarriedProductionOutcome::Blocked { entity_id, reason },
     };
+    // 12DA0's relation prelude runs before the child's callback: a
+    // remote-owned parent lends its position and sets the carried bit with
+    // no Sub-J check (membership applies to local parents only), while a
+    // local parent must list the child in its ordered Sub-J. A gone parent
+    // or missing membership would synchronously release and reselect the
+    // child in retail; this adapter has no None tick to substitute.
+    if matches!(
+        resolve_carried_relation(manager, entity_id, owner.linked_owner),
+        CarriedRelationPrelude::Blocked
+    ) {
+        return blocked(owner, Type9CarriedProductionBlock::UnsupportedRelation);
+    }
+    let entity = manager
+        .iter_all()
+        .find(|entity| entity.id == entity_id)
+        .expect("custody validated the carried entity above");
     let mask = REMOTE_OWNED_STATE_BIT
         | 0x1000
         | COMMON_SCHEDULER_CALLBACK_ENABLED_STATE_BIT
@@ -167,18 +248,6 @@ pub(crate) fn tick_type9_carried_owner(
     if flags & (REMOTE_OWNED_STATE_BIT | 0x1000) != 0x1000
         || entity.attached_to != Some(owner.linked_owner)
     {
-        return blocked(owner, Type9CarriedProductionBlock::UnsupportedRelation);
-    }
-    // 12DA0 checks the live parent's ordered Sub-J list before invoking the
-    // child. Missing membership would synchronously release and reselect it;
-    // this adapter cannot substitute another None tick for that boundary.
-    let parent_valid = manager.iter_all().find(|parent| parent.id == owner.linked_owner)
-        .is_some_and(|parent| parent.active
-            && parent.collision.state_flags_at_0x08.masked(REMOTE_OWNED_STATE_BIT)
-                == RetailRuntimeValue::Known(0)
-            && matches!(&parent.sub_j_attachment_runtime, RetailRuntimeValue::Known(Some(runtime))
-                if runtime.ordered_entity_ids().contains(&entity_id)));
-    if !parent_valid {
         return blocked(owner, Type9CarriedProductionBlock::UnsupportedRelation);
     }
     if entity.collision.constructor_sound_attachment_id_at_0x8c != RetailRuntimeValue::Known(None) {

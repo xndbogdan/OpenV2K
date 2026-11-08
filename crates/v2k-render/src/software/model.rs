@@ -235,10 +235,11 @@ fn emit(
     if normal.culled {
         return Ok(());
     }
-    let corners: Vec<ModelCorner> = words[2..2 + op.corners]
-        .iter()
-        .map(|&word| context.corners[index(word)])
-        .collect();
+    let mut corners = [ModelCorner::default(); 4];
+    for (slot, &word) in words[2..2 + op.corners].iter().enumerate() {
+        corners[slot] = context.corners[index(word)];
+    }
+    let corners = &corners[..op.corners];
     let outcode = corners.iter().fold(0u8, |code, corner| code | corner.clip);
     if OUTCODE_VISIBLE[usize::from(outcode)] == 0 {
         return Ok(());
@@ -320,8 +321,8 @@ fn product_word(a: i32, b: i32) -> i16 {
     super::fixed::mul_q31(a, b) as i16
 }
 
-/// The billboard constructors (`FUN_00467840`/`00467C60` near,
-/// `004680F0`/`00468520` fog): a quad rotated by the angle about the
+/// The billboard constructors (`FUN_00467840`/`FUN_00467C60` near,
+/// `FUN_004680F0`/`FUN_00468520` fog): a quad rotated by the angle about the
 /// anchor's screen point, half the projected size on each side. Sprite
 /// billboards scale the rotation by the sprite's aspect (`1 / max(w, h)`
 /// times `1/sqrt(2)`). Anchors behind the near plane, and in the fog table

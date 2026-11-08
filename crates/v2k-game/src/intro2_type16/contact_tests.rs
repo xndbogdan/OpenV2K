@@ -131,7 +131,7 @@ fn native_defecate_wander_pair_uses_shared_descriptor_without_advancing_task() {
         entity.rotation_heading_pitch_roll_raw()[0],
         heading.wrapping_sub(step)
     );
-    // The simultaneously installed02820 emitter has no descriptor callback.
+    // The simultaneously installed 02820 emitter has no descriptor callback.
     assert_eq!(
         invoke(
             &mut entities,

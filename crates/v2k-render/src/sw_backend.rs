@@ -20,8 +20,9 @@
 
 use sdl2::pixels::{Color, PixelFormatEnum};
 use sdl2::rect::Rect;
-use sdl2::render::Canvas;
+use sdl2::render::{Canvas, Texture, TextureCreator};
 use sdl2::video::Window;
+use sdl2::video::WindowContext;
 
 use v2k_formats::system::PaletteEntry;
 use v2k_formats::terrain::{TerrainGrid, WaterAnimation};
@@ -120,6 +121,18 @@ pub struct SoftwareRenderer {
     ordered_run: Option<i32>,
     /// Materials bound only until the queue next drains.
     transient: Vec<MaterialId>,
+    /// The streaming texture `present` uploads to, reused across frames.
+    /// `Texture` borrows its creator, so the creator (an owned `Rc` clone
+    /// holding no GPU resources of its own) is intentionally leaked once:
+    /// one small process-lifetime allocation instead of a driver
+    /// alloc+free every present.
+    present_texture: Option<PresentTexture>,
+}
+
+struct PresentTexture {
+    texture: Texture<'static>,
+    width: u32,
+    height: u32,
 }
 
 /// What `FUN_00431A60` shares with the frame's ground scan: the light
@@ -196,7 +209,37 @@ impl SoftwareRenderer {
             painter: PainterStack::default(),
             ordered_run: None,
             transient: Vec::new(),
+            present_texture: None,
         })
+    }
+
+    /// Streaming texture for the current surface size, created once and
+    /// reused: `create_texture_streaming` is a driver allocation.
+    /// Takes the pieces separately so the caller can keep borrowing the
+    /// surface for the upload alongside it.
+    fn present_texture<'slot>(
+        canvas: &Canvas<Window>,
+        slot: &'slot mut Option<PresentTexture>,
+        width: u32,
+        height: u32,
+    ) -> Option<&'slot mut Texture<'static>> {
+        let fresh = match slot {
+            Some(present) if present.width == width && present.height == height => false,
+            _ => true,
+        };
+        if fresh {
+            let creator: &'static TextureCreator<WindowContext> =
+                Box::leak(Box::new(canvas.texture_creator()));
+            let texture = creator
+                .create_texture_streaming(PixelFormatEnum::RGB565, width, height)
+                .ok()?;
+            *slot = Some(PresentTexture {
+                texture,
+                width,
+                height,
+            });
+        }
+        slot.as_mut().map(|present| &mut present.texture)
     }
 
     /// The surface is always an authored retail frame: the world producers
@@ -668,19 +711,20 @@ impl Renderer for SoftwareRenderer {
             }
         }
         let (width, height) = (self.surface.width, self.surface.height);
-        let creator = self.canvas.texture_creator();
-        let Ok(mut texture) =
-            creator.create_texture_streaming(PixelFormatEnum::RGB565, width, height)
-        else {
+        let texture = Self::present_texture(&self.canvas, &mut self.present_texture, width, height);
+        let Some(texture) = texture else {
             return;
         };
-        let bytes: Vec<u8> = self
-            .surface
-            .pixels
-            .iter()
-            .flat_map(|pixel| pixel.to_le_bytes())
-            .collect();
-        if texture.update(None, &bytes, self.surface.pitch).is_err() {
+        // The surface pixels are already contiguous RGB565 words: retype
+        // the slice instead of copying it into a fresh byte `Vec` a frame.
+        // SAFETY: a `Vec<u16>` buffer is 2-aligned, `u8` needs 1, and 2 is
+        // a multiple of 1, so the retype always covers the whole slice;
+        // the empty prefix/suffix check below fails closed regardless.
+        let (prefix, bytes, suffix) = unsafe { self.surface.pixels.align_to::<u8>() };
+        if !prefix.is_empty() || !suffix.is_empty() {
+            return;
+        }
+        if texture.update(None, bytes, self.surface.pitch).is_err() {
             return;
         }
         self.canvas.set_draw_color(Color::BLACK);

@@ -126,8 +126,8 @@ fn native_type10_both_births_reselect_on_every_primary_or_infected_hit_in_source
                 before_health.map(|health| health - if infected { 0 } else { 1000 })
             );
             assert_eq!(fx.particle_count() > particles, !infected);
-            // Singleton selector, two successful6030 initializers, then
-            //11030's three Euler words even for the filtered-zero F780 hit.
+            // Singleton selector, two successful 6030 initializers, then
+            // 11030's three Euler words even for the filtered-zero F780 hit.
             for _ in 0..6 {
                 oracle.next_shared_retail_random_u16();
             }
@@ -468,7 +468,7 @@ fn native_type10_late_hit_failure_parks_the_committed_reaction_for_both_entries(
             assert!(scheduler.intro2_type10_has_pending_prefix(id));
             assert_eq!(manager.entity_mut(id).unwrap().collision.health_raw, health);
             // Living C690 consumes three initializer/selection words; every
-            // admitted11030 reaction consumes its three Euler words before the
+            // admitted 11030 reaction consumes its three Euler words before the
             // late network field is consumed. Tumble's hit slots are null.
             for _ in 0..if dying { 3 } else { 6 } {
                 oracle.next_shared_retail_random_u16();

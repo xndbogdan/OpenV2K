@@ -1,7 +1,7 @@
 //! Late11AD0/12CF0 static contact for shared Type17 living and Class12 allocations.
 //!
-//! This runs after particles, outside12DA0 and its body-basis rebuild. It
-//! preserves the original selected plane across02CA0 and delivers11760's
+//! This runs after particles, outside 12DA0 and its body-basis rebuild. It
+//! preserves the original selected plane across 02CA0 and delivers 11760's
 //! collision packet to the static cell before the actor.
 
 use super::*;
@@ -145,7 +145,7 @@ fn resolve(
         return Ok(Type17ContactOutcome::Miss);
     };
     // A8B0 is reached only after the static scan hits. The living styles
-    // and Class12 have null+1C. Class12's2015 disable mask still excludes400.
+    // and Class12 have null+1C. Class12's2015 disable mask still excludes 400.
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Runtime("current style"));
     };
@@ -252,9 +252,9 @@ fn apply_contact(
         entity.sub_a_propulsion_runtime = RetailRuntimeValue::Known(plan.sub_a_runtime);
         entity.set_heading_raw(plan.heading_raw);
     }
-    // Class12's404120 retains05FF0's null+20: no task, Sub-A or RNG writes.
-    // These styles have null+1C and their effective policy excludes400. The common
-    // D920 callback therefore reaches11760 without replacing the graph. The
+    // Class12's404120 retains 05FF0's null+20: no task, Sub-A or RNG writes.
+    // These styles have null+1C and their effective policy excludes 400. The common
+    // D920 callback therefore reaches 11760 without replacing the graph. The
     // body basis belongs to the next DCA0/E870 rebuild, not this contact hook.
     let position_before_raw = entity.position_raw();
     let velocity_before_raw = entity.velocity_raw();
@@ -397,8 +397,8 @@ fn contact_task_hook(entity: &Entity) -> Result<Type17StaticTaskHook, Type17Cont
     if entity.actor_task_state(ActorTaskSlot::Tertiary).is_some() {
         return Err(Block::Runtime("contact task graph"));
     }
-    //2050/2100 call05F80/05FF0 and leave task+20 null.02B10,
-    //03650,03B70 and03E20 each explicitly replace it with02CA0.
+    // 2050/2100 call 05F80/05FF0 and leave task+20 null. 02B10,
+    // 03650, 03B70 and 03E20 each explicitly replace it with 02CA0.
     match (context.active_style().style_address(), primary, secondary) {
         (0x4c7b28, Some(Task::SharedRetarget(task)), Some(Task::FollowBeaconAcquisition(_))) => {
             Ok(Type17StaticTaskHook::WanderPrivate(task.private_state()))

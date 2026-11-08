@@ -345,7 +345,7 @@ fn run_frame(
         .ok_or(Block::Metadata)?;
     authenticate_metadata(row, &metadata).map_err(|_| Block::Metadata)?;
     if callback_enabled {
-        // 12DA0 follows its callback with18640 for the one authored J slot and
+        // 12DA0 follows its callback with 18640 for the one authored J slot and
         // later updates the attached voice, which these births never own.
         if !matches!(&entity.sub_j_attachment_runtime,
             RetailRuntimeValue::Known(Some(j)) if j.authored_slot_count() == 1
@@ -740,7 +740,7 @@ fn tick_defecate_primary(
         WanderNearCommonMoverReturn::Zero
     };
     // Class4 style4C7E88 has C690 at BOTH root+00 and+04. Tagged zero
-    // precedes strict age>2000; the caller applies16410's1000 suppression.
+    // precedes strict age>2000; the caller applies 16410's1000 suppression.
     Ok(matches!(
         defecate_virus_wander_after_unwind(
             visit,

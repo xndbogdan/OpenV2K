@@ -1,4 +1,4 @@
-//! Release world evidence must close before18500 changes parent/child custody.
+//! Release world evidence must close before 18500 changes parent/child custody.
 use super::*;
 use crate::{
     entity_relation_release::relation_attach_state_word_after,
@@ -132,7 +132,7 @@ fn type7_release_preflights_job_capacity_at_the_actual_release_position_without_
         );
 
         // The same unresolved component is irrelevant outside the exact
-        // strict3072 cube; materialiser preflight uses its future pose.
+        // strict 3072 cube; materialiser preflight uses its future pose.
         manager.entity_mut(factory).unwrap().set_position_raw([
             release_raw[0].wrapping_add(3072),
             y,

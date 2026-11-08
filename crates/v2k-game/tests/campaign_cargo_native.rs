@@ -1,4 +1,4 @@
-//!451C00 over real ordinary-world constructors and native Type68 task owners.
+//! 451C00 over real ordinary-world constructors and native Type68 task owners.
 
 use v2k_game::{
     actor_task_dispatcher::ActorTaskRuntime,

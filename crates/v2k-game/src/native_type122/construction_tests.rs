@@ -32,7 +32,7 @@ const BIRTHS: [(u32, usize, [i16; 3], [u16; 3], u32); 10] = [
     (50, 21, [-29952, 0, -29184], [52792, 0, 0], 1),
 ];
 
-// Original Section12 bytes, before410090 patches allocation size/vtable.
+// Original Section12 bytes, before 410090 patches allocation size/vtable.
 // Descriptor offsets are evidence in this invariant corpus, not runtime VAs.
 const HEADER_WORDS: [u32; 74] = [
     0x000000cc, 0x00000064, 0x00000008, 0x01120112, 0x01120112, 0x00001b58, 0x00000000, 0x00000fa0,
@@ -673,7 +673,7 @@ fn type122_four_word_order_arbitrary_authored_pose_and_real_strict_nearby_prefix
             .wrapping_add(50),
         z,
     ];
-    // People and player predicates are independent, strict4608 along each axis;
+    // People and player predicates are independent, strict 4608 along each axis;
     // the unindexed persistent player is a real predecessor, not an index rule.
     for (capability, offset, selector, param, class, choice) in [
         (0, 0, 0xffff, 0, 33, 0),

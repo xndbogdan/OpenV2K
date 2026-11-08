@@ -133,10 +133,13 @@ Level-15 input writer and post-Space destination remain unclassified.
 interactive menu. **There is NO palette/alpha fade during state 1**: the 3D
 scene, background flash, fog animation and Klaus actor all run normally, but
 FUN_0042BA30 skips the screen renderer (FUN_0043AA40) and FUN_0042B5D0 skips
-menu input/animation (FUN_0043C7F0). At tick counter `DAT_004FED60 > 150`
-(= 3.0 s at 50 Hz) state → 2 and the main ring appears via the normal
-fly-in transition. The perceived "fade-in" = 3 s of live scene, then the UI
-flies in over 0.63 s.
+menu input/animation (FUN_0043C7F0, so the props' spin `DAT_004DCEB0` stands
+still too). The draw FUN_0042BA30 sets state 2 once the 50-Hz clock
+`DAT_004FED60` passes 150 and draws that pass without the screen; the next
+pass's tick starts the ring's fly-in and its draw shows the ring. In the lab
+the clock passes 150 at pass 152 and the ring is first drawn at pass 153; the
+port ends the intro in the same draw (`MenuShell::end_cold_entry`). The
+perceived "fade-in" = 3 s of live scene, then the UI flies in over 0.63 s.
 
 ## Layer 2 — Global resource pools (cumulative ids)
 
@@ -245,13 +248,21 @@ screen of the stack is rendered (no parents behind).
 - `DAT_004DCEDC` = depth in the screen stack; slots at `0x4DCA10 + depth*8`
   = `{screen_ptr, s16 sel_index, s16 window_scroll}` (max 10 deep).
 - `DAT_004DCEBC` (ring/horizontal) / `DAT_004DCEC0` (list/vertical) =
-  selection scroll interpolators: cursor moves add ±200/step; each tick both
-  decay `val -= (dt_µs · val·5/4) >> 18` → **time constant τ ≈ 0.21 s**
-  (min step 1). Lists shift by `step.dy × val/200` px (whole list slides;
+  selection scroll interpolators: cursor moves add ±200/step; each tick
+  `FUN_0043C7F0` takes `((dt << 13) * (val * 5 / 4)) >> 31` off each, at
+  least one unit toward zero → **time constant τ ≈ 0.21 s**. The lab's watch
+  after Right at pass 300 reads 200, then 181, 164, 149 … 2, 1 and 0 at pass
+  345; the port keeps both as these integers (`scroll_decay_step`). Lists shift by `step.dy × val/200` px (whole list slides;
   the highlight itself snaps instantly via font swap). Ring:
   `x_angle = floor(65535/(count·200)) · (val + (idx−sel)·200)`.
-- `DAT_004DCEB0` = ring prop spin angle: `+= (dt_µs·20000·2^12)>>32` ≈
-  19,073 units/s → **one revolution per 3.436 s** (single axis; b4/b8 = 0).
+- `DAT_004DCEB0` = ring prop spin angle, a 16-bit word:
+  `+= ((dt << 11) * 20000) >> 31` (0x17D at 20 ms) ≈ 19,073 units/s → **one
+  revolution per 3.436 s** (single axis; b4/b8 = 0). The lab's watch: 0 until
+  the first tick after the cold entry (pass 153, 0x17D), 0x69A7 after pass
+  395; the port's word (`prop_spin_step`) matches. `FUN_0042A2E0` turns it
+  into `[sin a, 0, -cos a; 0, 1, 0; cos a, 0, sin a]`, a quarter turn ahead of
+  the port's yaw basis: the port draws the props at `a + 0x4000`, the only
+  offset (in steps of 0x100) whose ring at pass 395 matches the lab's.
 - `DAT_004DCEC4/C8` = ms since screen open / since last scroll (typewriter).
 - `_DAT_004CB4E0` = **fly transition clock**: armed to 0x7000 by
   `FUN_0043A8E0` on a push or pop, from the flags of the screen on top
@@ -262,8 +273,22 @@ screen of the stack is rendered (no parents behind).
   Options and every other pause submenu switch at once (the lab's Cheats
   screen types in two passes after Return). Decays ≈ 45,776/s → **0.6264 s per leg**. While nonzero the stack
   does NOT switch (tick early-outs) and prop labels/typewriter are held.
+  Each pass takes `((dt << 11) * 48000) >> 31` off the clock (915 at
+  20 ms, so a leg is 32 passes), which stops at zero; the port keeps it as
+  that integer (`fly_clock_step`).
   Fly-out: selected prop depth y = 0xDAC − (0x7000−clk)/16 (pulls toward
-  camera), others y = 0xDAC + (0x7000−clk)/2 (recede). Then the stack
+  camera), others y = 0xDAC + (0x7000−clk)/2 (recede), each a 16-bit word,
+  and `FUN_0043AA40` also lowers a receding prop's projection centre by
+  (0x7000−clk)/64 pixels, so the rest of the ring sinks out of the bottom of
+  the frame as it recedes. The model draw's root test (`FUN_00465870`) then
+  rejects a prop whose sphere has left the frame: near depth `z + radius`
+  must pass 0x3F, and with `c = z + radius` both
+  `-radius·c <= cx·c + x·focal_x < (width + radius)·c` and
+  `-radius·c <= cy·c - y·focal_y < (height + radius)·c` must hold, over the
+  display block (`DAT_004FEED0`: focals, width, height, the row's centre). A
+  rejected prop's model is not walked, so its type-3 vertices draw no words.
+  At 640x480 `multipc` (radius 192, item 6 of the idle ring) is drawn through
+  the 24th pass of a fly-out and rejected from the 25th. Then the stack
   switches, DCEC4 resets, clock re-arms for fly-in: props at y = 0xDAC +
   clk/2. Full ring↔submenu transition ≈ 1.25 s, then text types on.
   Prop-draw anim channels (`FUN_0043B610`): ch0 = DAT_004FED60 (50 Hz tick),
@@ -647,6 +672,15 @@ near/far −0x200/0x200, +0x7C terminal depth-fade color.
   (Grolier logo, right), each at y = screen_h − sprite_h. Variant-0 dimensions
   are 54×33 / 155×14 / 46×22; variants 1–3 are 110×68 / 309×28 / 115×56.
   `FUN_0042B040` submits those native dimensions in the selected framebuffer;
+  it writes them straight to the surface in the UI pass, before
+  `FUN_0042AA90` drains the sorted queue, so every model paints over them
+  (New Game's approaching craft covers the copyright line in the lab's pass
+  420). They stay through the game start's fly-out, New Game's and the
+  attract demo's alike (the lab's snapshots to pass 3031; the port's frames
+  3005 and 3031 and New Game's 395 equal the lab's in the bottom 40 rows).
+  The pass whose tick starts the game skips its draw chain, and the next
+  drawn frame (the lab's snapshot at 3032 and 431, the port's frames 3033
+  and 432) has none.
   any later monitor stretch scales the complete row with the framebuffer.
   The port's High Native footer independently uses the readability scale above
   the original outputs (1.8 at 1080p, 3.6 at 4K), keeping the actual left/centre/right
@@ -1122,25 +1156,76 @@ the frontend's init follows one pass later, again with no Klaus leg.
 - Idle frontend: the countdown expires at pass 3000 (word `0x91AD`: mode 4),
   the row word `0x8BBF` picks row 6 (world 11) and the world loads at 3033;
   `+290` is consumed at 5885 after 2852 ticks, the frontend's init is at
-  5886, and the second demo loads at 6418 (row 3, world 3). The port, with
-  row 6 forced (its frontend's random words are not in lockstep with
-  retail's, whose model draws there call `FUN_0046E020` and `FUN_0046E0E0`,
-  the type-3 vertex handlers, three words a call),
-  loads at 3033, returns at 5885 and 5886, and loads the second demo at 6418.
+  5886, and the second demo loads at 6418 (row 3, world 3). The port, from
+  a cold start, draws the same mode word at 3000 and row word at 3032 (its
+  frontend stream is in lockstep, below), loads world 11 at 3033, returns at
+  5885 and 5886, and loads the second demo at 6418 (its row differs: the
+  demo world's own stream is not in lockstep, below).
   Klaus's cover and the emblem at 3040 and 3060 match up to his twitch, as
   does the "Demo" caption; the camera's subjects are random draws and differ.
-- **Held: the frontend's random stream.** Every idle frontend pass in the
-  lab draws one word for Klaus's visit and then three from the near-pass
-  type-3 vertex handler (`FUN_0046E020`, its three `FUN_00457930` calls in
-  turn): one jittered vertex is evaluated each frame. Each word, shifted
-  left 16 and right by the record's `+2` byte, offsets one axis of slot
-  `c`'s view point, so the vertex flickers. The port draws Klaus's word but
-  evaluates type-3 vertices as their source slot, without the jitter or the
-  draws (its native vertex path stops on them as unsupported), so after the
-  first frontend frame its stream parts from retail's and the attract
-  demo's mode and row are not retail's. Porting it needs the frontend's
-  model draw to take its words from the process generator, in the order
-  and number retail's lazy vertex evaluation asks for them.
+- **The frontend's random stream.** Every idle frontend pass in the lab draws
+  one word for Klaus's visit and then three from `multipc`'s type-3 vertex
+  (slot 40, record `[3, 26, 0, 38]`): the far-pass handler `FUN_0046E0E0` or
+  the near-pass `FUN_0046E020`, alternating in a 48-pass cycle, three
+  `FUN_00457930` calls either way. The vertex is the shared first endpoint of
+  the prop's three `0x22` sprite-608 sparks, so it is visited once a draw (the
+  slot cache), at the first spark. The port's ring draws now take those words
+  from the process generator (see
+  [type 3](FORMAT_DOCUMENTATION.md#per-vertex-type_flag-transform-table--decoded-2026-06-10)).
+- **The frontend's stream from a cold start.** The port's process word after
+  every frame from 1 to 3032 equals the lab's after the same pass (the idle
+  frontend run, `--skip-intro`, 20-ms steps): the mode word `0x91AD` at 3000
+  and the row word `0x8BBF` at 3032 are retail's, so the first demo is mode 4,
+  row 6, world 11. Frame 3033 builds the world, whose stream is not yet in
+  lockstep. The pieces, each from the lab:
+  - The init's pass. `FUN_0042B230` builds the frontend's two actors (the
+    class-1 proxy and Klaus) only while fewer than two actors live
+    (`FUN_00468D00` over `004DB090`), so only the process's first entry
+    draws their two `FUN_00425680` words. Its pass runs no frontend tick.
+  - The card's pass. The lab's stub counts the card callback's message pump
+    as a pass, so the next pass holds the callback (its 7,800-us clock step
+    and Klaus visit) and the init's pump call going on to the first frontend
+    tick and draw, with that call's 20,000-us delta but without
+    `FUN_0042AA10`'s clock step (the clock stays 0, `004DB20C` keeps its
+    last value). The next pump call's delta spans both passes: 40,000 us for
+    the clock, the idle countdown, the emblem and Klaus. A return from a
+    world runs the same way (the lab's re-entry at 5886: the card and first
+    tick at 5887, 40,000 us at 5888). The port draws the card, then that
+    frame's own frontend draw (the lab's snapshot keeps the first present),
+    and carries the card frame's delta into the next.
+  - The cold entry ends in the draw at the clock's 151, pass 152; the ring
+    is first drawn at 153 (above, `FUN_0042BA30`).
+  - The game start's fly-out. The receding props sink by `(0x7000-clk)/64`
+    and the root test rejects them once they leave the frame (above, under
+    the fly clock): `multipc` takes its last words at 3024.
+  - The game start's pass. `FUN_004942E0` skips the draw chain of the pass
+    whose tick switched descriptors (3032), so the emblem does not advance
+    there; that tick's depth-fade evolution still runs.
+  The New Game path matches the lab the same way through frame 431 (Return at
+  400; Intro2 loads at 432 in both). After a return from a demo world the
+  emblem's sound falls on the lab's passes; Klaus's twitches part, as the
+  stream does in the world.
+- **Held: the demo world's stream.** The second demo's row word is drawn
+  after 2,852 world ticks, so it is retail's only if every draw of the demo
+  world is. From 3033 the port parts at once (the lab's idle run to 6450,
+  `rng` logged with callers; the port's word per frame):
+  - The world's construction (3033) draws 46,117 words in the lab and 46,116
+    in the port. The radar's 45,898 (`0044A6B6`) and the 48 fish's
+    `FUN_00425680` and `FUN_00424220` words match; the actors are built in
+    another order (retail interleaves the Type18s and Type28s as authored, the
+    port builds the four Type28s first); each Type28 draws three words in the
+    lab (`FUN_00425680`, then `00406146` twice) and two in the port, and the
+    port's other construction words (its Type111s and Type61s) come to 11
+    against the lab's 8 lone `FUN_00425680` words.
+  - The first tick (3034) draws 249 words in the lab, 128 of them from
+    `FUN_00433530` at its end; the port draws 122 and has no such block.
+  - Every later tick in the lab opens with `FUN_00412DA0`'s random gate, two
+    words for each of 45 to 47 actors (`00412E44`, `00412E9D`), and the
+    actors' own visits follow; the port's demo world draws from its owners
+    in its own order (fish, ground actors, Defecate Virus) without that gate.
+  Matching the second row needs the world's whole visit order in lockstep
+  with retail's one process word, so the port's second and later demos keep
+  their own rows.
 - Mode 1 (`004DB224` written to 1 before the ring's pop): Intro2 loads at
   3033, the frontend's init is at 7336 and the next demo loads at 7868, in
   the lab and in the port; the last Intro2 frames (7330, 7334) are identical.
@@ -1149,7 +1234,7 @@ the frontend's init follows one pass later, again with no Klaus leg.
 - On the first pass after the frontend's init retail draws its load card
   (Klaus, "Loading" and the branding over the last presented frame, the
   world's emblem included); the port draws the same card there, on every
-  return to the frontend (see
+  frontend entry, and then the frame's first frontend draw (see
   [the frontend's card](LOADING_TRANSITIONS.md#the-frontends-card)). The
   card's pixels outside Klaus's edges and shading cover the same 35,000
   pixels as retail's; the world beneath is the last frame, unchanged.
@@ -1202,14 +1287,13 @@ where retail's draw pass has spent 129 more words on `FUN_00456AF0` and
 `FUN_00433530`): the craft's position, velocity and attitude match the lab's
 every tick through tick 8, and within one raw unit through tick 175 once its
 view-detail bits are held as retail's (the port's phase-4 camera classifies it
-coarse from the third tick, so its scheduler waits). They part where retail's
-craft kills its target and the port's craft cannot fire (below).
+coarse from the third tick, so its scheduler waits). They parted where
+retail's craft kills its target, at a time when the port's craft could not
+fire undrawn. Its transform-only pass (`FUN_0040A9F0` with Sub-G) now runs,
+and that comparison has not been run again.
 
 **Held, each with a logged stop:**
 
-- its shots, whenever their muzzle is not stamped: the transform-only pass
-  (`FUN_0040A9F0`) for a body with Sub-G is not ported ("shot drain stopped:
-  TransformPass(UnportedSelectorOwner)");
 - damage to it (`FUN_004484A0`, type 46's modifier) and its death into class
   25, which park it ("Attract demo craft N stopped");
 - a demo after a played world: the session record then holds that world's

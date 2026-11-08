@@ -962,8 +962,8 @@ fn dispatch(
             MainBaseAbortActorDisposition::Type53Death
         }
         NativeActor::Type58 => {
-            // Type58's null death hook enters the same native10C10/C620
-            // common12 publisher used by its checked lethal damage.
+            // Type58's null death hook enters the same native 10C10/C620
+            // common 12 publisher used by its checked lethal damage.
             let owner = crate::intro2_common_dying::publish_intro2_common_standard_death(
                 entities, id, world_fx,
             )

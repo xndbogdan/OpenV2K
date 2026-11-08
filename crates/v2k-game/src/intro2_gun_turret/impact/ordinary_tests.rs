@@ -31,7 +31,7 @@ impl World {
         for current in ids {
             let entity = manager.entity_mut(current).unwrap();
             // Isolate contact geometry without undoing the authored infection
-            // that408EA0 already used to publish this task and live capability.
+            // that 408EA0 already used to publish this task and live capability.
             entity
                 .collision
                 .state_flags_at_0x08
@@ -200,8 +200,8 @@ fn ordinary_type97_playing_lethal_hit_finishes_class49_and_rehit_cannot_replay_b
                 .count(),
             1
         );
-        //10EB0's independent live capability8 suffix survives dying. Full-rate
-        //40DC0 emits exactly two class5 carriers, advancing directions, not RNG.
+        // 10EB0's independent live capability8 suffix survives dying. Full-rate
+        // 40DC0 emits exactly two class5 carriers, advancing directions, not RNG.
         assert_eq!(f.fx.particle_count(), particles + suffix_count);
         assert!(f.fx.test_particles_in_virgin_birth_order()[particles..]
             .iter()

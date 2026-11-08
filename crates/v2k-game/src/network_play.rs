@@ -157,9 +157,6 @@ pub fn advance_network_world(
         retail_tick,
         removals,
     } = frame;
-    // FUN_00411030's impact on a peer's body (kind 10) runs inside the
-    // particle hit wrappers, which the port does not run on peers' bodies.
-    report_held("FUN_00411030's kind 10".into());
     // This frame's sends from the effects, in call order: FUN_00440A60's
     // kind 1, FUN_00440950's kind 2 and FUN_0044F480's kinds 22 and 23.
     for send in world_fx.take_network_sends() {
@@ -184,6 +181,14 @@ pub fn advance_network_world(
                 rate: (rate_q16 != 0x1_0000).then_some(rate_q16),
                 gain: None,
             }),
+            NetworkSend::Impact { entity_id, deltas } => {
+                if let Some(handle) = net.handle_of(entity_id) {
+                    verbose(format_args!(
+                        "Network: peer body {entity_id} jolted by {deltas:?} (kind 10)"
+                    ));
+                    net.send(GameRecord::Impact { handle, deltas });
+                }
+            }
             NetworkSend::BlastImpulse { .. } => {
                 report_held("FUN_00414AE0's kind 10 (the previous target's handle)".into())
             }
@@ -264,17 +269,19 @@ pub fn advance_network_world(
         shield: hull.pre_health_damage_buffer_raw.max(0) as u32,
     };
     {
-        let mut random = || u32::from(world_fx.next_shared_retail_random_u16());
+        let model_extent = |id: usize| cache.global_model(id).map(|model| model.radius);
         let mut world_frame = WorldFrame {
             entities: em,
             world,
             world_active: true,
             elapsed_us: elapsed_micros,
             ticks: retail_tick,
-            random: &mut random,
+            fx: &mut *world_fx,
+            model_extent_raw: Some(&model_extent),
             profile: (&name, &initials),
             player,
             terrain: cache.level_terrain(),
+            terrain_objects: cache.terrain_objects(),
         };
         net.world_frame(&mut world_frame);
     }
@@ -394,6 +401,9 @@ pub fn advance_network_world(
             NetworkEvent::Impact { entity_id, deltas } => {
                 // FUN_00417EB0: velocity (+9C..+A0) and attitude (+A2..+A6)
                 // deltas, wrapping words, as FUN_00411030 writes them.
+                verbose(format_args!(
+                    "Network: a peer's kind 10 on owned body {entity_id}: {deltas:?}"
+                ));
                 if let Some(entity) = em.entity_mut(entity_id) {
                     let velocity = entity.velocity_raw();
                     entity.velocity = std::array::from_fn(|axis| {
@@ -461,13 +471,75 @@ pub fn advance_network_world(
                 verbose(format_args!(
                     "Network: a peer's static program at {cell:?}: {outcome:?}"
                 ));
-                if let Outcome::UnsupportedKind { kind_index }
-                | Outcome::NullProgram { kind_index } = outcome
-                {
-                    report_held(format!("a peer's kind 6 for a static of kind {kind_index}"));
+                match outcome {
+                    Outcome::UnsupportedKind { kind_index } => report_held(format!(
+                        "a peer's kind 6 for a static of kind {kind_index}, outside the admitted kinds"
+                    )),
+                    // FUN_004281A0 would read the null program: a retail crash.
+                    Outcome::NullProgram { kind_index } => report_held(format!(
+                        "a peer's kind 6 for a static of kind {kind_index}, whose program is null"
+                    )),
+                    _ => {}
+                }
+            }
+            NetworkEvent::PeerAttach {
+                entity_id,
+                parent,
+                flags,
+            } => {
+                let Some(parent) = parent else {
+                    report_held("a peer's kind 13 naming a parent unknown here".into());
+                    continue;
+                };
+                match em.attach_owned_body_to_peer(
+                    entity_id,
+                    parent,
+                    flags,
+                    &mut *scheduler,
+                    &mut *world_fx,
+                ) {
+                    Ok(true) => verbose(format_args!(
+                        "Network: owned body {entity_id} attached to peer body {parent}, flags {flags} (kind 13)"
+                    )),
+                    Ok(false) => {}
+                    Err(reason) => report_held(format!("a peer's kind 13 for {reason}")),
+                }
+            }
+            NetworkEvent::PeerDrop {
+                entity_id,
+                parent,
+                x_raw,
+                z_raw,
+            } => {
+                let Some(terrain) = cache.level_terrain() else {
+                    continue;
+                };
+                match em.drop_owned_body_for_peer(
+                    entity_id,
+                    parent,
+                    x_raw,
+                    z_raw,
+                    v2k_game::entity::RemoteBeamFrame {
+                        scheduler: &mut *scheduler,
+                        world_fx: &mut *world_fx,
+                        notifications: &mut *notifications,
+                        retail_tick,
+                        terrain,
+                    },
+                ) {
+                    Ok(Some(proxy)) => verbose(format_args!(
+                        "Network: owned body {entity_id} set down at ({x_raw}, {z_raw}) by Type93 {proxy} (kind 15)"
+                    )),
+                    Ok(None) => {}
+                    Err(reason) => report_held(format!("a peer's kind 15 for {reason}")),
                 }
             }
             NetworkEvent::Held { kind } => report_held(format!("record kind {kind}")),
+            NetworkEvent::HollowPeerBody {
+                entity_type,
+                reason,
+            } => report_held(format!("a peer's Type{entity_type} copy ({reason})")),
+            NetworkEvent::HeldPeerBodyPass(what) => report_held(what.into()),
             NetworkEvent::UnknownAttachmentList => {
                 report_held("a peer's body named by an unresolved attachment list".into())
             }

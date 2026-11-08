@@ -1,4 +1,4 @@
-//! 11400/13BE0 model callbacks ->424F20 muzzle stamps ->14870/4E770 FIFO.
+//! 11400/13BE0 model callbacks -> 424F20 muzzle stamps -> 14870/4E770 FIFO.
 
 use super::*;
 use crate::{
@@ -25,7 +25,7 @@ pub enum Intro2GunTurretShotDrainError {
 }
 
 /// Queues outlive the task which authored them. Model callbacks stamp every
-/// matching selector before11400 drains in FIFO order; no callback restarts
+/// matching selector before 11400 drains in FIFO order; no callback restarts
 /// the task or consumes actor RNG. A rejected particle birth still consumes
 /// the corresponding command, as in the other native presentation drains.
 pub fn drain_intro2_gun_turret_shots(
@@ -76,8 +76,8 @@ pub fn drain_intro2_gun_turret_shots(
         RetailRuntimeValue::Unresolved => return Err(Intro2GunTurretShotDrainError::State),
     };
     let muzzles = entity.emitter_muzzles;
-    // EXE4D0380: method12={leading1,speed6000,particle49,entity0}.
-    // Type97's command retains its explicit4000 override during the drain.
+    // EXE4D0380: method12={leading 1,speed6000,particle 49,entity0}.
+    // Type97's command retains its explicit 4000 override during the drain.
     let method = projectile_class_row(u32::from(descriptor.projectile_method))
         .ok_or(Intro2GunTurretShotDrainError::Queue)?;
     let mut solutions = Vec::with_capacity(queue.queued_shot_count());
@@ -106,7 +106,7 @@ pub fn drain_intro2_gun_turret_shots(
         {
             return Err(Intro2GunTurretShotDrainError::MalformedRequest { index });
         }
-        // An unstamped offline command follows11400's explicit marker1
+        // An unstamped offline command follows 11400's explicit marker1
         // source-position branch. Missing/unsupported models on a required
         // detailed traversal remain errors instead of changing that branch.
         let position =
@@ -134,7 +134,7 @@ pub fn drain_intro2_gun_turret_shots(
         materialized_particle_classes: Vec::new(),
     };
     for (source_class, solution) in solutions {
-        //40A60 cannot invoke an actor callback; the allocated source/queue
+        // 40A60 cannot invoke an actor callback; the allocated source/queue
         //remains the same across this materialization and list-node removal.
         let particle_request = DescriptorParticleRequest {
             source_class,
@@ -146,8 +146,8 @@ pub fn drain_intro2_gun_turret_shots(
             }),
             suppresses_impact_damage: suppression,
         };
-        //4E770 method16 reaches410B0's unchanged-class50 fallthrough to
-        //40A60, with no defensive-bolt underwater descriptor replacement.
+        // 4E770 method16 reaches 410B0's unchanged-class50 fallthrough to
+        // 40A60, with no defensive-bolt underwater descriptor replacement.
         let particle_class = if descriptor.projectile_method == 16 && source_class != 32 {
             world_fx
                 .materialize_descriptor_particle_request(particle_request, environment, retail_tick)

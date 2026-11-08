@@ -93,7 +93,7 @@ impl Fixture {
             .state_flags_at_0x08
             .overwrite(u32::MAX, 0x0747_8825);
         entity.collision.pre_health_damage_buffer_raw = RetailRuntimeValue::Known(0);
-        // July22 own bee allocation, lifecycle line52008. These are retained
+        // July22 own bee allocation, lifecycle line 52008. These are retained
         // body axes, not a fresh Euler approximation to the recorded matrix.
         entity.physical_body_basis_q31 = RetailRuntimeValue::Known(Type9BodyBasis {
             lateral: [-1787953152, 43712512, -1187971072],

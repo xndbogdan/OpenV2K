@@ -1087,7 +1087,7 @@ impl FactoryProductionMachine {
                 FactoryProductionStage::ApplyAnimationTransition(transition),
                 FactoryProductionResume::Acknowledged { .. },
             ) => {
-                // The acknowledged18F60 callback also changed C8E0 controls.
+                // The acknowledged 18F60 callback also changed C8E0 controls.
                 // Retain them in later prefixes instead of restoring the
                 // pre-callback gain/rate over the live component.
                 self.production.retune_voices_from_animation_state(

@@ -47,7 +47,7 @@ pub(crate) fn apply_native_actor_checked_damage(
         .iter_all()
         .find(|entity| entity.id == id)
         .map_or(0, |entity| entity.entity_type);
-    // Preserve explicit14E90 feedback's sink/tick and the death callback's
+    // Preserve explicit 14E90 feedback's sink/tick and the death callback's
     // existing frame sink/tick. A radial/direct request without feedback
     // binds its real frame sink once and lends it to synchronous death.
     let (feedback, mut death_notifications) = match request.feedback {
@@ -475,7 +475,7 @@ fn dispatch_standard_death(
 }
 
 /// Radial and direct attachment share native fish custody, including the
-/// completed class2 allocation until14990. 14AE0 visits every live actor, so
+/// completed class2 allocation until 14990. 14AE0 visits every live actor, so
 /// Type57 takes both; Type16 remains direct-only here.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NativeMutationCaller {

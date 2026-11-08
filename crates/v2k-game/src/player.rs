@@ -464,6 +464,13 @@ impl MotionChannels {
         }
     }
 
+    /// The Hovering style's turn word for a body at `heading_raw` and
+    /// `body_pitch_raw` (Joystick Absolute steers toward a bearing from it).
+    pub fn hover_turn_raw(&self, heading_raw: i16, body_pitch_raw: i16) -> i16 {
+        self.reader_words(heading_raw, body_pitch_raw, SteeringStyle::Ground)
+            .turn
+    }
+
     fn throttle_normalized(self) -> f32 {
         self.throttle_q16 as f32 / 65_536.0
     }
@@ -701,6 +708,29 @@ impl PlayerCraft {
         self.mode_joint_5 = step_mode_joint(self.mode_joint_5, deployed, elapsed_micros);
         self.mode_joint_6 = step_mode_joint(self.mode_joint_6, deployed, elapsed_micros);
         frame_forces
+    }
+
+    /// Passive Player (`FUN_00446FC0`), the craft's task while the Possession
+    /// Ray's takeover holds its controller: no reader, heading or weapon; the
+    /// Sub-O fan channels ease toward full, and Sub-C lift (with the hold's
+    /// mass), the surface effect and Sub-B run as the Hovering style's do,
+    /// with no Sub-A. It reads no Sub-G attitude flag (retail clears the old
+    /// body's flag through `FUN_0041B9B0` on takeover) and runs no weapon
+    /// (retail clears the fire-enable word through `FUN_00424F10`). Its style
+    /// (`0x4CD8F8`) has the Hovering environment mask, so the craft's common
+    /// tail is the Hover one. Retail installs this task around its update
+    /// (`FUN_00446F30`); the port runs it as the craft's forces while the
+    /// takeover holds the controller.
+    pub fn passive_forces(&mut self, elapsed_micros: u32, player: &Entity) -> VehicleFrameForces {
+        let elapsed_micros = elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
+        self.mode = VehicleMode::Hover;
+        self.mode_joint_5 = step_mode_joint(self.mode_joint_5, true, elapsed_micros);
+        self.mode_joint_6 = step_mode_joint(self.mode_joint_6, true, elapsed_micros);
+        VehicleFrameForces::Hover(HoverFrameForces::new(
+            self.previous_force_basis(player),
+            0.0,
+            self.hover_target_speed_raw,
+        ))
     }
 
     /// Current fixed-point requests for the two retail fan loops.
@@ -1008,9 +1038,9 @@ impl PlayerCraft {
         ]
     }
 
-    /// Restore native443560 or portable-save attitude words without a lossy
+    /// Restore native 443560 or portable-save attitude words without a lossy
     /// intermediate policy. The native caller also rebuilds the entity basis
-    /// through413F70 before publishing authored actors.
+    /// through 413F70 before publishing authored actors.
     pub fn restore_body_angle_words(&mut self, [pitch_raw, roll_raw]: [i16; 2]) {
         self.body_pitch = angle_word_to_rad(pitch_raw);
         self.body_roll = angle_word_to_rad(roll_raw);
@@ -1076,7 +1106,7 @@ impl PlayerCraft {
     /// `up*sin(barrel) + forward*cos(barrel)`. Applying the shared retail body
     /// matrix to local `[0, sin(barrel), cos(barrel)]` keeps the projectile
     /// aligned with the visible craft in Hover and VTOL. Launch position is
-    /// owned separately by411400's draw-stamped transient or centre fallback.
+    /// owned separately by 411400's draw-stamped transient or centre fallback.
     pub fn primary_fire_direction(&self, heading: f32) -> [f32; 3] {
         let body = self.model_orientation(heading);
         let barrel = self.gun_barrel_rad();
@@ -1092,7 +1122,7 @@ impl PlayerCraft {
     /// supplies the independent global clock in callback word 0 (40D320).
     pub fn anim_vars(&self) -> AnimVars {
         let mut v = AnimVars::default();
-        //40A950 selector1 aliases Sub-E's barrel joint. PLAYER4's authored
+        // 40A950 selector1 aliases Sub-E's barrel joint. PLAYER4's authored
         //op5C consumes this WORD before each side-gun instance.
         v.dynamic[1] = i32::from(self.gun_barrel as i16 as u16);
         v.dynamic[2] = i32::from(self.primary_joint_pulses[0]);

@@ -1,4 +1,4 @@
-//! The real native Class12 graph has null A8B0/D920 callbacks, then11760.
+//! The real native Class12 graph has null A8B0/D920 callbacks, then 11760.
 
 use super::*;
 use crate::{

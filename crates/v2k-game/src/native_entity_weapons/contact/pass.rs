@@ -1,4 +1,4 @@
-//! One native11AD0 visit: latch admission/model, surface, static, then active.
+//! One native 11AD0 visit: latch admission/model, surface, static, then active.
 
 use super::static_objects::{
     resolve_entity_weapon_static_contact_at_entry, EntityWeaponStaticError,

@@ -166,7 +166,7 @@ pub fn begin_type40_standard_death(
         .state_flags_at_0x08
         .overwrite(DYING_STATE_BIT, DYING_STATE_BIT);
     // Type40 header+90 and+8C are null. AC60 chooses rule1/class18 directly
-    // once dying, so this alternate publication consumes no425680 RNG word.
+    // once dying, so this alternate publication consumes no 425680 RNG word.
     e.current_behavior_context = RetailRuntimeValue::Known(Some(terminal));
     e.native_type40_runtime.as_mut().unwrap().split_terminal = Some(Type40SplitTerminalState {
         context: terminal,
@@ -229,8 +229,8 @@ impl SplitAndExplodeHost for Type40SplitHost<'_, '_> {
             .and_then(|m| self.frame.resources.global_model(m))
             .ok_or(Self::Block::Metadata)?
             .radius;
-        // C080 Sub-F/H/N/G test chooses37 because this real type owns H;
-        // source WORDburstcount2 and both class bytes37 are distinct from49.
+        // C080 Sub-F/H/N/G test chooses 37 because this real type owns H;
+        // source WORDburstcount2 and both class bytes37 are distinct from 49.
         self.frame
             .world_fx
             .emit_explode_with_ring_burst_raw(ExplodeWithRingBurstRequest {
@@ -247,7 +247,7 @@ impl SplitAndExplodeHost for Type40SplitHost<'_, '_> {
                 scatter_classes: [37; 2],
                 suppresses_impact_damage: flags & 0x80000000 != 0,
             });
-        // The source solo network path returns0. No radial delivery occurs in440950.
+        // The source solo network path returns 0. No radial delivery occurs in 440950.
         Ok(0)
     }
     fn clear_source_tasks(&mut self, id: u32) -> Result<(), Self::Block> {
@@ -277,8 +277,8 @@ impl SplitAndExplodeHost for Type40SplitHost<'_, '_> {
         }
     }
     fn native_entity_list_count_raw(&mut self) -> Result<i32, Self::Block> {
-        //468D00 skips first actor/counts sentinel: full allocation count,
-        //including deferred actors and cargo, numerically without an extra1.
+        // 468D00 skips first actor/counts sentinel: full allocation count,
+        //including deferred actors and cargo, numerically without an extra 1.
         Ok(self.manager.iter_all().count() as u32 as i32)
     }
     fn current_launch_source(&mut self, id: u32) -> Result<SplitLaunchSource, Self::Block> {

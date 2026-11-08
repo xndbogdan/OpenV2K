@@ -1,9 +1,9 @@
-//! Native Hive child:438080's zero0x4C request ->104B0 ->class7 acquiring.
+//! Native Hive child:438080's zero 0x4C request -> 104B0 ->class7 acquiring.
 //!
 //! The manager owns the common body, position/objective bit, allocation stamp,
 //! and sound11. This phase consumes exactly four shared words:1B8C0, then
-//! the actual203D0 process allocation,25680, and06070/B940 for both tasks.
-//! 1BEB0 owns the later child+60 source/FIFO/count and1C830 ejection writes.
+//! the actual 203D0 process allocation, 25680, and 06070/B940 for both tasks.
+//! 1BEB0 owns the later child+60 source/FIFO/count and 1C830 ejection writes.
 
 use super::*;
 
@@ -33,7 +33,7 @@ pub(crate) const fn native_flyer_model_id(entity_type: u32) -> Option<u16> {
     }
 }
 
-/// Metadata admission is query/RNG-free and can run before the104B0 attempt.
+/// Metadata admission is query/RNG-free and can run before the 104B0 attempt.
 pub(crate) fn authenticate_native_flyer_metadata(
     entity_type: u32,
     metadata: &EntityTypeRuntimeMetadata,
@@ -83,8 +83,8 @@ pub(crate) fn publish_native_flyer(
     let authored_spawn_index = authored.map(|(spawn_index, _)| spawn_index);
     authenticate_native_flyer_metadata(entity.entity_type, metadata)?;
     authenticate_native_flyer_body(entity, allocation, metadata, authored_spawn_index)?;
-    //09A80 reaches G before D: a successful1B8C0 consumes its word before
-    //203D0 advances the independent process byte. Both precede25680/C6B0.
+    // 09A80 reaches G before D: a successful 1B8C0 consumes its word before
+    // 203D0 advances the independent process byte. Both precede 25680/C6B0.
     let descriptor = authenticate_flyer_mover_metadata(entity.entity_type, metadata)
         .map_err(|_| Intro2FlyerPublicationError::MetadataMismatch)?;
     entity.sub_g_06070_runtime =

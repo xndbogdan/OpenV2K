@@ -1,4 +1,4 @@
-//! Type40's native10EB0/11250 impact entry and own class18 death publisher.
+//! Type40's native 10EB0/11250 impact entry and own class18 death publisher.
 pub use crate::native_ground_actor::impact::{
     NativeGroundImpactBlock as Type40ImpactBlock, NativeGroundImpactOutcome as Type40ImpactOutcome,
 };

@@ -310,7 +310,7 @@ fn type92_model171_single_muzzle_queues_and_drains_without_alternation_or_joint_
     let expected_second = std::array::from_fn(|axis| {
         expected_muzzle[axis].wrapping_add(((i64::from(direction[axis]) * 1525) >> 31) as i16)
     });
-    // 40A60 allocates virgin slots199 then198 and prepends each to its
+    // 40A60 allocates virgin slots199 then 198 and prepends each to its
     // priority list. Presentation therefore completes the second command's
     // streak before the first command's; it does not iterate the birth FIFO.
     assert!(particles[..10].iter().all(|p| p.slot == 198));

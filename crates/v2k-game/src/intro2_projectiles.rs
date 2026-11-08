@@ -52,9 +52,15 @@ pub enum MuzzlePassError {
     ModelUnavailable,
     BodyBasisUnresolved,
     SubHRuntimeUnavailable,
-    /// A Sub-M or live joint owner would take selectors after Sub-E; no
-    /// firing type has one, and the port does not run it here.
-    UnportedSelectorOwner,
+    /// The type has Sub-M (type `+104`): its selector runs `FUN_004198E0`,
+    /// which moves the factory's product and clears every queued shot's
+    /// mark. Sub-M types (6, 66, 82, 125) queue only through
+    /// `FUN_00419010` in a network game, which the port does not run.
+    SubMSelectorOwner,
+    /// The component table's `+3C` record is live: two selectors run
+    /// `FUN_00421AE0`, the Queen's gun stamps. Only her `FUN_00421B40`
+    /// fills it, and her guns fire without queued shots.
+    LiveJointRecord,
     Pass(crate::model_tree::ActorTransformPassBoundary),
 }
 
@@ -249,10 +255,14 @@ pub fn stamp_unstamped_muzzles(
     let record = resources
         .global_entity_type(entity.entity_type as usize)
         .ok_or(MuzzlePassError::ModelUnavailable)?;
-    // FUN_0040A9F0: Sub-H, Sub-E, then +104 (Sub-M) and a live joint record
-    // before the terminal suffix.
-    if record.subsection("M").is_some() || record.subsection("G").is_some() {
-        return Err(MuzzlePassError::UnportedSelectorOwner);
+    // FUN_0040A9F0: Sub-H, Sub-E, then +104 (Sub-M) and the component
+    // table's +3C record before the terminal suffix. It never reads the
+    // authored Sub-G at +E8; FUN_00409A80 zeroes +3C for every actor.
+    if record.subsection("M").is_some() {
+        return Err(MuzzlePassError::SubMSelectorOwner);
+    }
+    if entity.queen.record.is_some() {
+        return Err(MuzzlePassError::LiveJointRecord);
     }
     let emitter = record.projectile_emitter_descriptor();
     let sub_h_descriptor = record.sub_h_external_frame_descriptor();
@@ -731,6 +741,73 @@ mod tests {
             }
         }
         panic!("native cadence did not append a transient");
+    }
+
+    /// World 19's Type55 guard: authored Sub-G (+E8) but no Sub-H or Sub-M.
+    /// 40A9F0 sends selector 0 of model 1028's root to Sub-E slot 46
+    /// `(0, 15, 125)`; the component table's +3C stays null, so its other
+    /// selectors reach the terminal suffix.
+    #[v2k_test_support::retail_test]
+    fn undrawn_sub_g_guard_stamps_its_sub_e_muzzle() {
+        use crate::entity_view_detail::BROADER_DETAIL_STATE_BIT;
+        use crate::generic_projectile_emitter::{
+            GenericEmitterAppendRequest, GenericEmitterSpeedField,
+        };
+        let (session, mut entities, mut fx) =
+            crate::native_type122::construction_tests::native_fixture_with_player(19);
+        let id = entities
+            .iter_all()
+            .find(|entity| entity.entity_type == 55)
+            .unwrap()
+            .id;
+        let record = session.cache.global_entity_type(55).unwrap();
+        assert!(record.subsection("G").is_some());
+        assert!(record.subsection("M").is_none());
+        let metadata = entities.type_runtime_metadata(55).cloned();
+        let entity = entities.entity_mut(id).unwrap();
+        crate::intro2_type10::aim::ensure_intro2_type10_aim_runtime(entity, metadata.as_ref())
+            .unwrap();
+        entity
+            .intro2_type10_aim_runtime
+            .as_mut()
+            .unwrap()
+            .transient_shots_mut()
+            .push(GenericEmitterAppendRequest {
+                source_handle: id,
+                owner_handle: id,
+                projectile_method: 10,
+                emitter_selector: 0,
+                direction_raw: [0, 0, i32::MAX],
+                time_offset_raw: 0,
+                speed_field: GenericEmitterSpeedField::Explicit(0),
+                auxiliary: false,
+            });
+        entity.set_position_raw([1000, 2000, 3000]);
+        entity.physical_body_basis_q31 = RetailRuntimeValue::Known(Type9BodyBasis {
+            lateral: [i32::MAX, 0, 0],
+            up: [0, i32::MAX, 0],
+            forward: [0, 0, i32::MAX],
+        });
+        entity
+            .collision
+            .state_flags_at_0x08
+            .overwrite(BROADER_DETAIL_STATE_BIT, BROADER_DETAIL_STATE_BIT);
+        entity.emitter_muzzles = [None; 2];
+        stamp_unstamped_muzzles(&mut entities, &mut fx, &session.cache, 4794, id).unwrap();
+        // Each Q31 identity product loses one unit: 15 -> 14, 125 -> 124.
+        assert_eq!(
+            entities.entity_mut(id).unwrap().emitter_muzzles,
+            [Some([1000, 2014, 3124]), None]
+        );
+
+        // The Queen's record is the only live +3C owner; with it the pass holds.
+        let entity = entities.entity_mut(id).unwrap();
+        entity.emitter_muzzles = [None; 2];
+        entity.queen.record = Some(Box::new(crate::queen::QueenRecord::new()));
+        assert_eq!(
+            stamp_unstamped_muzzles(&mut entities, &mut fx, &session.cache, 4794, id),
+            Err(MuzzlePassError::LiveJointRecord)
+        );
     }
 
     #[v2k_test_support::retail_test]

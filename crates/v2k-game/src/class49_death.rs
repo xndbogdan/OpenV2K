@@ -150,14 +150,14 @@ impl NativeExplosionSourceProfile {
                                 == self.policy().behavior_class()
                     })
             }
-            // The row's own authentication already pins alternate63.
+            // The row's own authentication already pins alternate 63.
             Self::Type10Carrier(profile) => {
                 crate::intro2_type10::authenticate_metadata(profile, metadata).is_ok()
             }
             Self::Type16Carrier(row) => {
                 crate::intro2_type16::authenticate_metadata(row, metadata).is_ok()
             }
-            // The row's own authentication already pins alternate1.
+            // The row's own authentication already pins alternate 1.
             Self::Type43 => crate::native_type43::authenticate_metadata(metadata).is_ok(),
             // The row's own authentication pins its alternate class.
             Self::Type38Family(row) => {
@@ -171,20 +171,20 @@ impl NativeExplosionSourceProfile {
                 metadata,
             )
             .is_ok(),
-            // The gunner authentication pins Type71's alternate63.
+            // The gunner authentication pins Type71's alternate 63.
             Self::Type71Gunner => crate::intro2_type47_live::authenticate_gunner_metadata(
                 crate::shared_type47::GunnerRow::Type71,
                 metadata,
             )
             .is_ok(),
-            // The flyer authentication pins alternate1 for these types.
+            // The flyer authentication pins alternate 1 for these types.
             Self::ExplodingFlyer(entity_type) => {
                 crate::intro2_flyers_live::authenticate_native_flyer_metadata(entity_type, metadata)
                     .is_ok()
             }
-            // The row's authentication pins alternate49.
+            // The row's authentication pins alternate 49.
             Self::PortableRadar => crate::portable_radar::authenticate_metadata(metadata).is_ok(),
-            // The row pins alternate1.
+            // The row pins alternate 1.
             Self::Class0Host(entity_type) => {
                 crate::main_base_type54_abort::class0_host_class1_metadata(entity_type, metadata)
             }
@@ -526,7 +526,7 @@ pub(crate) fn terminal_is_pending(entity: &Entity) -> bool {
 }
 
 /// BD20 finishes before the physical particle walker advances. Its10B70
-/// request leaves8000 intact, and43FA3D does not exclude deferred removal,
+/// request leaves 8000 intact, and 43FA3D does not exclude deferred removal,
 /// so another particle can reach the same class49 allocation before the sweep.
 /// Only the completed receipt can replace the source's live task custody here;
 /// an issued, claimed or partially finished continuation remains parked.

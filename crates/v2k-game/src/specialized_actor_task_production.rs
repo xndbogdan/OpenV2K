@@ -233,8 +233,8 @@ pub enum SpecializedActorTaskFamily {
 
 #[derive(Debug, PartialEq, Eq)]
 enum SpecializedActorTaskOwner {
-    /// A real443D10 release completed before10B70 retired ordinary visits.
-    /// Contact may borrow its exact graph until14990 removes the allocation.
+    /// A real 443D10 release completed before 10B70 retired ordinary visits.
+    /// Contact may borrow its exact graph until 14990 removes the allocation.
     DeliveredType9Contact {
         allocation: MainBaseAbortActorLease,
         retained: Box<SpecializedActorTaskOwner>,
@@ -1312,6 +1312,14 @@ pub struct SpecializedActorTaskScheduler {
     owners: Vec<SpecializedActorTaskOwner>,
     terminal_abort_origins: Vec<crate::main_base_abort::MainBaseTerminalAbortOrigin>,
     hive_diagnostics: Vec<String>,
+    /// The possessed body's owner (`FUN_004480E0` to `FUN_00446D70`).
+    pub possession: Option<crate::possession::PossessionCustody>,
+    /// A release the possessed body's death ran inside a damage call, for
+    /// the session's MindBall and view.
+    pub possession_released: Option<crate::possession::live::Released>,
+    /// The possessed craft's pair hook returned `0x4C20C0` this tick, which
+    /// ends `FUN_00411A80`'s whole pair pass.
+    pub possession_pair_pass_ended: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1333,7 +1341,7 @@ impl SpecializedActorTaskScheduler {
             }
         }
     }
-    /// Move each completed native19750 Base origin once into the host's
+    /// Move each completed native 19750 Base origin once into the host's
     /// synchronous level-abort owner. This receipt deliberately is not Clone.
     pub fn take_main_base_terminal_abort_origins(
         &mut self,
@@ -1548,6 +1556,9 @@ impl SpecializedActorTaskScheduler {
             owners: Vec::new(),
             terminal_abort_origins: Vec::new(),
             hive_diagnostics: Vec::new(),
+            possession: None,
+            possession_released: None,
+            possession_pair_pass_ended: false,
         }
     }
 
@@ -1568,6 +1579,9 @@ impl SpecializedActorTaskScheduler {
             terminal_abort_origins: self.terminal_abort_origins.iter()
                 .map(crate::main_base_abort::MainBaseTerminalAbortOrigin::fork_for_main_base_abort_transaction)
                 .collect(),
+            possession: self.possession,
+            possession_released: self.possession_released.clone(),
+            possession_pair_pass_ended: self.possession_pair_pass_ended,
         }
     }
 
@@ -1710,6 +1724,69 @@ impl SpecializedActorTaskScheduler {
     /// Cold New-Game spawn 18 publishes class 33. Capture People/Run Away and
     /// direct `--level 13` stay out of custody. Variant-one first `FUN_00403CE0`
     /// starts `FUN_00401430` and fails closed at type 17's first `FUN_0041FCB0`.
+    /// `FUN_004480E0` replaces a Follow Beacons Type17's behavior with
+    /// Player Control: its owner leaves custody. False when the body has no
+    /// such owner, which the takeover then holds.
+    pub fn release_type17_for_possession(&mut self, entity_id: u32) -> bool {
+        let Some(index) = self.owners.iter().position(|owner| match owner {
+            SpecializedActorTaskOwner::Type17FollowBeacons(owner) => owner.entity_id() == entity_id,
+            SpecializedActorTaskOwner::Intro2Type17(owner) => owner.entity_id() == entity_id,
+            _ => false,
+        }) else {
+            return false;
+        };
+        self.owners.remove(index);
+        true
+    }
+
+    /// A body a dying Hive's mouth staged for the sweep (`FUN_00410B70` in
+    /// `FUN_0041BEB0`) leaves its owner's custody; the sweep removes it.
+    pub fn retire_swallowed_body(&mut self, entity_id: u32) {
+        self.owners.retain(|owner| owner.entity_id() != entity_id);
+    }
+
+    /// `FUN_00446D70`'s `FUN_0040AC60` on a released Type17 the native
+    /// owner held before the takeover: its own behavior chosen afresh
+    /// (`FUN_0040C690`'s path), and the new task back in custody.
+    pub fn release_possessed_intro2_type17(
+        &mut self,
+        manager: &mut EntityManager,
+        entity_id: u32,
+        retail_tick: u32,
+        world_fx: &mut WorldFx,
+    ) -> Result<(), crate::intro2_type17::Intro2Type17Block> {
+        crate::intro2_type17::behavior::reselect(
+            manager,
+            entity_id,
+            retail_tick,
+            world_fx,
+            crate::intro2_type17::behavior::ReselectionEntry::Impact,
+        )?;
+        let owner = crate::intro2_type17::Intro2Type17Owner::adopt(manager, entity_id)?;
+        self.register_intro2_type17(owner);
+        Ok(())
+    }
+
+    /// A released Type17's fresh Follow Beacons publication returns to
+    /// custody.
+    pub fn adopt_released_type17(&mut self, manager: &EntityManager, entity_id: u32) -> bool {
+        let Some(metadata) = manager.type_runtime_metadata(TYPE17_IMPACT_ENTITY_TYPE) else {
+            return false;
+        };
+        let Some(owner) = manager
+            .iter_all()
+            .find(|entity| entity.id == entity_id)
+            .and_then(|entity| {
+                Type17FollowBeaconsSchedulerOwner::adopt_published(entity, metadata).ok()
+            })
+        else {
+            return false;
+        };
+        self.owners
+            .push(SpecializedActorTaskOwner::Type17FollowBeacons(owner));
+        true
+    }
+
     pub fn adopt_fresh_level1_type17_follow_beacons(&mut self, manager: &EntityManager) -> usize {
         let metadata = match manager.type_runtime_metadata(TYPE17_IMPACT_ENTITY_TYPE) {
             Some(metadata) => metadata.clone(),
@@ -1751,7 +1828,7 @@ impl SpecializedActorTaskScheduler {
         };
         let mut adopted = 0;
         for entity in manager.iter_all() {
-            if entity.intro2_type8_runtime.is_some() {
+            if entity.intro2_type8_runtime.is_some() || entity.is_network_remote() {
                 continue;
             }
             if self
@@ -1785,6 +1862,7 @@ impl SpecializedActorTaskScheduler {
         }
         let Some(owner) = manager
             .iter_all()
+            .filter(|entity| !entity.is_network_remote())
             .find_map(|entity| LevelOneFactoryArrivalOwner::adopt_published(entity).ok())
         else {
             return 0;
@@ -2013,6 +2091,7 @@ impl SpecializedActorTaskScheduler {
     pub fn adopt_intro2_type8(&mut self, manager: &mut EntityManager) -> usize {
         let ids: Vec<_> = manager
             .iter_all()
+            .filter(|entity| !entity.is_network_remote())
             .map(|entity| entity.id)
             .filter(|id| !self.owners.iter().any(|owner| owner.entity_id() == *id))
             .collect();
@@ -2217,6 +2296,7 @@ impl SpecializedActorTaskScheduler {
     pub fn adopt_native_type86(&mut self, manager: &mut EntityManager) -> usize {
         let ids: Vec<_> = manager
             .iter_all()
+            .filter(|entity| !entity.is_network_remote())
             .map(|entity| entity.id)
             .filter(|id| !self.owners.iter().any(|owner| owner.entity_id() == *id))
             .collect();
@@ -3237,7 +3317,7 @@ impl SpecializedActorTaskScheduler {
             }
         }
     }
-    /// Attached direct15040 admits two living flyer families outside the old
+    /// Attached direct 15040 admits two living flyer families outside the old
     /// radial custody matrix. Their completed prefix cannot resume an old task.
     pub(crate) fn park_attached_damage_prefix(&mut self, entity_id: u32) {
         self.park_intro2_type57_external_prefix(entity_id);
@@ -4328,6 +4408,8 @@ impl SpecializedActorTaskScheduler {
     /// clear.
     pub fn clear_after_manager_reset(&mut self) {
         self.owners.clear();
+        self.possession = None;
+        self.possession_released = None;
     }
 
     pub fn is_empty(&self) -> bool {
@@ -4728,6 +4810,13 @@ impl SpecializedActorTaskScheduler {
                 break;
             };
             previous_id = Some(entity_id);
+            // FUN_00412DA0 runs none of a peer's body's callbacks (state bit 31).
+            if manager
+                .network_entity(entity_id)
+                .is_some_and(crate::entity::Entity::is_network_remote)
+            {
+                continue;
+            }
             if let Some(context) = hive_components.as_mut() {
                 let hive_pass = hive::tick_hive_component(
                     manager,
@@ -7480,7 +7569,7 @@ fn prepare_intro2_radial_actor_mutation(
         return false;
     };
     if crate::native_type61::has_native_allocation(entity) {
-        //256C0/class23 is infallible and creates no task. A different or
+        // 256C0/class23 is infallible and creates no task. A different or
         //suspended owner cannot stand in for that authored absence.
         return crate::native_type61::allocation_authenticates(manager, entity_id)
             && !owners.iter().any(|owner| owner.entity_id() == entity_id)

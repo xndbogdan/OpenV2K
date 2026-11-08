@@ -61,7 +61,7 @@ impl SharedRetargetTaskState {
         self.private_state
     }
 
-    ///02B10 installs02CA0 at task+20. Its contact write set changes only
+    /// 02B10 installs 02CA0 at task+20. Its contact write set changes only
     /// WanderPrivate, preserving this wrapper's elapsed and lifetime words.
     pub(crate) fn apply_static_contact_private_state(&mut self, state: WanderNearPrivateState) {
         self.private_state = state;

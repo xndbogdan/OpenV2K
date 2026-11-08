@@ -5,7 +5,7 @@
 //! an arbitrary style with a similar callback is not an equivalent owner.
 //!
 //! 11180 requests the alive+80 cue before DAC0, applies eightfold impact force
-//! and ignores15040's result. It has no primary capability8 presentation tail.
+//! and ignores 15040's result. It has no primary capability8 presentation tail.
 
 use super::*;
 use crate::{
@@ -169,7 +169,7 @@ fn run(
             RetailRuntimeValue::Known(retail_tick);
         *committed = true;
         // 411180 stamps+34, then requests the alive target's+80 cue before
-        // vtable+14 DAC0. It ignores15040's return and has no primary suffix.
+        // vtable+14 DAC0. It ignores 15040's return and has no primary suffix.
         if static_route && state_bits(entity, DYING_STATE_BIT)? == 0 {
             let RetailRuntimeValue::Known(sound) = metadata.accepted_hit_presentation_sound_id
             else {

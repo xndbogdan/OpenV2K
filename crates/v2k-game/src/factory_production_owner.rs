@@ -1337,7 +1337,7 @@ impl FactoryProductionOwnerMachine {
                 transition,
                 completes_frame,
             } => {
-                //18F60's acknowledged C8E0 writes belong to the retained
+                // 18F60's acknowledged C8E0 writes belong to the retained
                 // production component as well as its animation state.
                 self.production.retune_voices_from_animation_state(
                     transition.next_state_raw,

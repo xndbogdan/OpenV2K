@@ -18,7 +18,8 @@ pub const ANNOUNCE_PERIOD_TICKS: u32 = 150;
 pub struct LineTable(pub Vec<String>);
 
 impl LineTable {
-    /// `FUN_004394F0`'s reading: each line loses its leading blanks and its
+    /// `FUN_004394F0`'s reading (calling retail buffer accessor `FUN_004493C0`):
+    /// each line loses its leading blanks and its
     /// line break; empty lines and lines starting with `#` are skipped; at
     /// most `limit` lines (10, or 2 for `Names.txt`). Without a line,
     /// `FUN_004393C0` keeps the built-in text as the only one.

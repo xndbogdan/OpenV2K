@@ -66,8 +66,8 @@ pub enum PlayerSurfaceStyle {
     Null,
 }
 
-/// Actual contact-slot matrix: frames0..4 use448280/NULL/447C90, frame5
-/// uses447AF0/447AF0/447C90, and frame6 has all three NULL. Class25 owns
+/// Actual contact-slot matrix: frames0..4 use 448280/NULL/447C90, frame5
+/// uses 447AF0/447AF0/447C90, and frame6 has all three NULL. Class25 owns
 /// exactly frame5; an unaudited active record never inherits its class slots.
 pub fn player_surface_style(context: BehaviorContextRuntime) -> Option<PlayerSurfaceStyle> {
     if is_player_style(context, 25) {

@@ -1,6 +1,6 @@
 //! Type25's class12 "Flip Over And Die" on its B/D/F allocation.
 //!
-//! `10C10 -> DB80 -> AC60` alternate12 runs `C620`: clear slots 1/2, then
+//! `10C10 -> DB80 -> AC60` alternate 12 runs `C620`: clear slots 1/2, then
 //! `04120`'s 9,000-ms task, whose `06070` resets Sub-F, and vertical velocity
 //! 500. `04220` on a coarse visit takes `4BE170` (tag 9C01, the terminal); on
 //! a detailed one it flips the body (`1EC70`, no Sub-C so mode 0), runs
@@ -50,7 +50,7 @@ pub(crate) fn dying_graph(entity: &crate::entity::Entity) -> bool {
                     == COMMON_ACTOR_DYING_ACTIVE_STYLE.frame_address)
 }
 
-/// 10C10's prefix and AC60's alternate12 for a living shark. Remote and
+/// 10C10's prefix and AC60's alternate 12 for a living shark. Remote and
 /// already-dying entries are 10C10's no-ops.
 pub(crate) fn publish_shark_death(
     manager: &mut EntityManager,

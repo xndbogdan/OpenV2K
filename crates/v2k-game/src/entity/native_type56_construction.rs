@@ -1,4 +1,4 @@
-//! Real438080 ->104B0/09A80/D4A0 ->D720 Type56 allocations for class18.
+//! Real438080 -> 104B0/09A80/D4A0 ->D720 Type56 allocations for class18.
 
 use super::*;
 use crate::{
@@ -11,7 +11,7 @@ impl EntityManager {
     /// Each successful child is appended synchronously before D720 returns.
     /// The source birth record has no authored index, relation, health buffer,
     /// score or model overrides. Birth+00 must be the actual null/default
-    /// handle value;104B0 selects43A290 for a fresh native handle.
+    /// handle value; 104B0 selects 43A290 for a fresh native handle.
     pub fn construct_native_type56(
         &mut self,
         request: SplitChildRequest,
@@ -22,7 +22,7 @@ impl EntityManager {
         if request.entity_type != 56 {
             return Err(Type56Block::Identity);
         }
-        //104B0 null handle selects43A290. A nonzero43A3C0 override requires
+        // 104B0 null handle selects 43A290. A nonzero 43A3C0 override requires
         //the native handle registry; this fresh-allocation owner cannot borrow it.
         if request.requested_entity_handle_raw != 0 {
             return Err(Type56Block::Runtime("nonzero requested native handle"));
@@ -96,7 +96,7 @@ impl EntityManager {
             base_factory_runtime_from_constructor(56, Some(&metadata), None);
         entity.actor_animation_runtime = actor_animation_runtime_from_constructor(Some(&metadata));
         entity.sub_g_06070_runtime = sub_g_06070_runtime_from_constructor(Some(&metadata));
-        //09A80 H,D,A,E order: H and process-wide D exist before20450 consumes RNG.
+        // 09A80 H,D,A,E order: H and process-wide D exist before 20450 consumes RNG.
         entity.sub_h_external_frame_runtime =
             sub_h_external_frame_runtime_from_constructor(Some(&metadata));
         let RetailRuntimeValue::Known(Some(d)) = metadata.sub_d_steering_descriptor else {
@@ -123,7 +123,7 @@ impl EntityManager {
         flags.overwrite(policy.set_bits | policy.clear_bits, policy.set_bits);
         flags.overwrite(4, 0);
         entity.collision = EntityCollisionRuntimeState::from_constructor(Some(&metadata), 0, flags);
-        //13500 builds02DA0 on every real shared Wander/Chase/RunAway primary.
+        // 13500 builds 02DA0 on every real shared Wander/Chase/RunAway primary.
         //H and the remaining task slots have null component contacts.
         entity.collision.pair_callbacks = EntityPairCallbackRuntimeState::audited_local(
             Some(0x0040_2DA0),
@@ -149,7 +149,7 @@ impl EntityManager {
         )?;
         assert_eq!(self.allocate_live_entity_id(), id);
         self.append_live_entity(entity);
-        //104B0 links first; the successful D720 wrapper builds13F70 and bit4.
+        // 104B0 links first; the successful D720 wrapper builds 13F70 and bit4.
         let entity = self.entities.last_mut().unwrap();
         let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
         entity.physical_body_basis_q31 =

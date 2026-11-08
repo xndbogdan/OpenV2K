@@ -281,6 +281,35 @@ pub fn publish_fresh_level_one_type17_standard_death(
     )
 }
 
+/// `FUN_0040AC60` on a fresh-Level-1 Type17 already dying with no source
+/// (`FUN_00446D70` releasing a possessed body that died): class 12's
+/// alternate initialization without the death prefix, which the caller ran.
+pub fn publish_fresh_level_one_type17_dying_alternate(
+    manager: &mut EntityManager,
+    entity_id: u32,
+    metadata: &EntityTypeRuntimeMetadata,
+    world_fx: &mut WorldFx,
+) -> Result<LevelOneType17CommonDyingOwner, Type17CommonDyingPublicationError> {
+    let retail_first_world = manager.is_fresh_new_game_first_world();
+    let entity = manager
+        .common_actor_dying_entity_mut(entity_id)
+        .ok_or(Type17CommonDyingPublicationError::EntityUnavailable { entity_id })?;
+    let authored_spawn_index =
+        authenticate_type17_common_dying_owner(entity, metadata, retail_first_world)?;
+    let suffix = preflight_type17_common_dying_publication_after_owner_auth(
+        entity,
+        metadata,
+        authored_spawn_index,
+        Type17DeathPrefixState::AlreadyCommitted,
+    )?;
+    match apply_type17_common_dying_publication(entity, suffix, world_fx, &mut |task| Ok(task)) {
+        Type17CommonDyingPublicationOutcome::Published { owner, .. } => Ok(owner),
+        Type17CommonDyingPublicationOutcome::InitializerFallbackPublished(_) => {
+            unreachable!("the prepared production task has no fallible allocation step")
+        }
+    }
+}
+
 fn publish_fresh_level_one_type17_standard_death_with_provenance(
     manager: &mut EntityManager,
     entity_id: u32,

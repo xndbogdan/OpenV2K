@@ -1,7 +1,7 @@
-//! Turret-only425160 firing, distinct from the2300/24650 Aim transaction.
+//! Turret-only 425160 firing, distinct from the 2300/24650 Aim transaction.
 //!
 //! Native E owns cadence and the alternating joint selector. The queue owns
-//! immutable allocation/descriptor custody and4147A0 commands; presentation
+//! immutable allocation/descriptor custody and 4147A0 commands; presentation
 //! resolves their actual model muzzle later, never at the actor centre here.
 
 use super::{intro2_gun_turret_allocation_authenticates, profile_for_entity};
@@ -67,7 +67,7 @@ pub enum Intro2GunTurretAimError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Intro2GunTurretAimTickOutcome {
     pub queued_shots: usize,
-    ///425160 dispatches4147A0 failure and continues alternation/catch-up/audio.
+    /// 425160 dispatches 4147A0 failure and continues alternation/catch-up/audio.
     pub rejected_appends: usize,
 }
 
@@ -247,7 +247,7 @@ pub(crate) fn tick_gun_turret_aim<H: super::host::GunTurretHost>(
         if emitter.projectile_method == 0 {
             return Ok(Intro2GunTurretAimTickOutcome::default());
         }
-        //425160 submits every method through4147A0. Type115's method16, Type100's
+        // 425160 submits every method through 4147A0. Type115's method16, Type100's
         //method19 and the turrets' methods 12, 13, 14 and 18 keep their own rows.
         if emitter.projectile_method != u32::from(descriptor.projectile_method)
             || !matches!(emitter.projectile_method, 12 | 13 | 14 | 16 | 18 | 19)
@@ -262,8 +262,8 @@ pub(crate) fn tick_gun_turret_aim<H: super::host::GunTurretHost>(
                           outcome: &mut Intro2GunTurretAimTickOutcome| {
             if shots.try_append(request) {
                 outcome.queued_shots += 1;
-                //41483C follows each successful append.1B9D0 finds no Sub-G
-                //in these allocations;4568B0(9) uses the actual controller
+                // 41483C follows each successful append. 1B9D0 finds no Sub-G
+                //in these allocations; 4568B0(9) uses the actual controller
                 //phase and retains the session's deduplicated resource slot.
                 if firing_feedback && notification_phase == GameplayNotificationPhase::Playing {
                     notifications.queue_infected_firing_hint(retail_tick as i32);
@@ -273,7 +273,7 @@ pub(crate) fn tick_gun_turret_aim<H: super::host::GunTurretHost>(
             }
         };
         loop {
-            //24EE0: selector zero writes runtime+04's binding, otherwise +00.
+            // 24EE0: selector zero writes runtime+04's binding, otherwise +00.
             let binding_index = if emitter.emitter_selector == 0 { 1 } else { 0 };
             if let Some(binding) = emitter.joint_bindings[binding_index] {
                 if !joint(binding) {

@@ -11,3 +11,12 @@ repository = "https://github.com/xndbogdan/OpenV2K"
 # Keep file/line backtraces without emitting the oversized type/local debug data.
 [profile.test]
 debug = "line-tables-only"
+
+# The shipped game (scripts/release.ps1, build-pgo.ps1): whole-program
+# optimisation, for a slower build. `--release` stays the quick one for
+# tests and probes. Rust never contracts or reassociates floating point
+# unasked, so replays match.
+[profile.ship]
+inherits = "release"
+lto = "fat"
+codegen-units = 1

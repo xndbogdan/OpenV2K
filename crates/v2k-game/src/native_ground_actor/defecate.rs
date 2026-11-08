@@ -1,4 +1,4 @@
-//! Class4's032D0/02850 callbacks, with401120's wrapper-unwind boundary.
+//! Class4's032D0/02850 callbacks, with 401120's wrapper-unwind boundary.
 use super::*;
 use crate::{
     actor_task_dispatcher::ActorTaskRuntime, actor_task_owner::ActorTaskVisit,

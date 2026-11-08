@@ -21,6 +21,13 @@ fn metadata() -> Vec<EntityTypeRuntimeMetadata> {
     let mut metadata = vec![EntityTypeRuntimeMetadata::default(); 62];
     metadata[51].model_slots = [301; 4];
     metadata[51].capability_flags = 5;
+    // Type 51's Sub-O: the fan FUN_00412DA0 runs for a peer's craft.
+    metadata[51].common_mover_topology = crate::entity_collision_state::RetailRuntimeValue::Known(
+        crate::entity_collision_state::CommonMoverComponentTopology {
+            sub_o: true,
+            ..Default::default()
+        },
+    );
     metadata[61].model_slots = [302; 4];
     metadata
 }
@@ -84,20 +91,22 @@ impl Pair {
         ] {
             game.poll(Instant::now());
             game.advance_timer(20_000);
-            let mut random = || 0x1234;
+            let mut fx = crate::world_fx::WorldFx::new();
             let mut frame = WorldFrame {
                 entities,
                 world: 13,
                 world_active: true,
                 elapsed_us: 20_000,
                 ticks: self.ticks,
-                random: &mut random,
+                fx: &mut fx,
+                model_extent_raw: None,
                 profile: (name, name),
                 player: LocalBodyState {
                     model_variables: vec![1, 2, 3],
                     shield: 0,
                 },
                 terrain: None,
+                terrain_objects: None,
             };
             game.world_frame(&mut frame);
             out.push(std::mem::take(&mut game.events));
@@ -153,6 +162,24 @@ fn two_machines_see_each_others_craft_and_names() {
     assert_eq!(pair.host.scoring.names[2], "Bob");
     assert_eq!(pair.guest.scoring.names[1], "Ann");
     assert_eq!(pair.host.scoring.frag_limit, 50);
+}
+
+/// A peer craft's birth reports its held fan loops (`FUN_00412DA0`'s
+/// bit-31 branch runs `FUN_00420920` for it).
+#[test]
+fn a_peer_crafts_birth_holds_its_fan() {
+    let mut pair = Pair::new();
+    let mut held = false;
+    for _ in 0..400 {
+        let (_, guest) = pair.frame();
+        held |= guest.iter().any(|event| {
+            matches!(event, NetworkEvent::HeldPeerBodyPass(what) if what.contains("FUN_00420920"))
+        });
+        if !peer_crafts(&pair.guest_world).is_empty() {
+            break;
+        }
+    }
+    assert!(held);
 }
 
 /// The guest's hit on the host's craft reaches the host as damage from slot
@@ -269,4 +296,51 @@ fn a_power_up_a_peer_picks_up_leaves_the_host_too() {
         pair.frame();
     }
     assert_eq!(proxy(&pair.guest_world), None);
+}
+
+/// A peer carrying one of this machine's bodies asks for it (kind 13,
+/// `FUN_00418030`) and drops it (kind 15, `FUN_00418290`): the owner gets
+/// its own body and the peer's craft as the parent, and the drop point.
+#[test]
+fn a_peers_attach_and_drop_name_the_owners_body_and_the_peers_craft() {
+    let mut pair = Pair::new();
+    pair.run_until(|p| {
+        peer_crafts(&p.guest_world).len() == 1 && peer_crafts(&p.host_world).len() == 1
+    });
+    let host_craft = peer_crafts(&pair.guest_world)[0].id;
+    let body = pair.guest.handle_of(host_craft).unwrap();
+    let guest_craft = pair.guest.handle_of(1).unwrap();
+    let carrier = peer_crafts(&pair.host_world)[0].id;
+    pair.guest.send(GameRecord::Attach([guest_craft, body, 1]));
+    pair.guest
+        .send(GameRecord::Dropped([guest_craft, body, 0x1200_0340]));
+    let mut events = Vec::new();
+    for _ in 0..100 {
+        let (host_events, _) = pair.frame();
+        events.extend(host_events.into_iter().filter(|event| {
+            matches!(
+                event,
+                NetworkEvent::PeerAttach { .. } | NetworkEvent::PeerDrop { .. }
+            )
+        }));
+        if events.len() == 2 {
+            break;
+        }
+    }
+    assert_eq!(
+        events,
+        [
+            NetworkEvent::PeerAttach {
+                entity_id: 1,
+                parent: Some(carrier),
+                flags: 1,
+            },
+            NetworkEvent::PeerDrop {
+                entity_id: 1,
+                parent: Some(carrier),
+                x_raw: 0x340,
+                z_raw: 0x1200,
+            },
+        ]
+    );
 }

@@ -1,16 +1,16 @@
-//! Player branch of14AE0, before its synchronous15040/14E10 damage entry.
+//! Player branch of 14AE0, before its synchronous 15040/14E10 damage entry.
 //!
-//! The old retained-player matrix is preserved: bit8000 then800/1000, strict
-//! outer radius, mass>=2 and clear8000000 for optional impulse,25430's wrapped
+//! The old retained-player matrix is preserved: bit8000 then 800/1000, strict
+//! outer radius, mass>=2 and clear 8000000 for optional impulse, 25430's wrapped
 //! damage/impulse return gate, and type35's impulse exemption. The helper owns
 //! full-radius versus signed-Q15 falloff and carries both provenance words.
 //! An accepted zero impulse still precedes damage. Checked15040 owns the extra
-//! admission and zero-filter feedback; falloff14E10 still filters through255E0
+//! admission and zero-filter feedback; falloff 14E10 still filters through 255E0
 //! but has neither gate. Dying players consume only the buffer and keep health
-//! and cues. A new death queues hit/death cues then447280's model/burst/CA-or-D9
-//! and constructor seed before14AE0 reads this target's next live-list link.
+//! and cues. A new death queues hit/death cues then 447280's model/burst/CA-or-D9
+//! and constructor seed before 14AE0 reads this target's next live-list link.
 //!
-//!14E10 forwards packet+10 but substitutes process DAT_004F7378 for14E90's
+//! 14E10 forwards packet+10 but substitutes process DAT_004F7378 for 14E90's
 //! fourth argument. The complete packet+14 is retained here as packet data;
 //! the admitted empty modifier/null hit/local death path never consumes that
 //! argument. An owner-dependent continuation must authenticate the live
@@ -58,7 +58,7 @@ pub enum PlayerRadialBlockReason {
 pub struct PlayerRadialBlock {
     pub target_id: u32,
     pub phase: DynamicRadialLivePhase,
-    ///25430 returned nonzero, even if a later phase blocks.
+    /// 25430 returned nonzero, even if a later phase blocks.
     pub accepted_target: bool,
     /// A radial impulse can precede a later checked-damage rejection.
     pub target_prefix_committed: bool,

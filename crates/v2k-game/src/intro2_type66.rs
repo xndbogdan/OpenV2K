@@ -93,7 +93,7 @@ pub struct Intro2Type66Runtime {
     pub(super) model_slots: [Option<usize>; 4],
     pub(super) config: crate::factory_production::FactorySection13Config,
     pub(super) factory_allocation_identity: u64,
-    //18A90/C830 copies position before D4A0 grounds the body.18F60 passes
+    // 18A90/C830 copies position before D4A0 grounds the body. 18F60 passes
     // null to C8E0, so production retunes never move this emitter.
     pub(super) voice_position_raw: [i16; 3],
 }

@@ -20,8 +20,7 @@
 //! to the dying ramp. Marker-backed Sub-N `+0x4C` arms the `-6_000_000`
 //! suction delay. Normal campaign routing consumes actual static-model contact;
 //! `1BEB0`'s direct `456D10` interior request is gated by Main Base abort mode.
-//! Live fall-in yank `FUN_0041c830` / pair-restore
-//! `FUN_0041ca90` stay fail-closed. Sub-N / Sub-K / infection / radial state
+//! A live Hive's mouth is `crate::hive_mouth`'s. Sub-N / Sub-K / infection / radial state
 //! stay on the component table; this module owns only the 8-byte wrapper
 //! identity.
 

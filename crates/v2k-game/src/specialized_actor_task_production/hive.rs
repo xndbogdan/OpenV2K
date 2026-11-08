@@ -190,9 +190,8 @@ pub(super) fn tick_hive_component(
             } else {
                 Vec::new()
             };
-            // Wreck suction runs after the staged controlled-player movement.
-            // Live people-consume/eject contact remains a separate
-            // unowned feature; its absence never suppresses final1CA90.
+            // The mouth walk and the wreck suction run after the staged
+            // controlled-player movement (crate::hive_mouth), after this 1CA90.
             let ejection_blocks = birth_runtime.advance_ejections(elapsed_us, &mut host);
             pass.newborn_owners = host.take_newborn_owners();
             pass.diagnostics.extend(

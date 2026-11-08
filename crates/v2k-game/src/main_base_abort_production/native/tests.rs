@@ -153,7 +153,7 @@ fn later_world_abort_adopts_shared_worker_peasant_and_factory_death_graphs() {
             .main_base_abort_successor_after_callback(id)
             .unwrap();
         let mut oracle = fixture.fx.fork_for_main_base_abort_transaction();
-        oracle.next_shared_retail_random_u16(); // C3A0 Sub-A or257C0 selector, exactly once.
+        oracle.next_shared_retail_random_u16(); // C3A0 Sub-A or 257C0 selector, exactly once.
         let (result, publications) = invoke(&mut fixture, id);
         let result = require_success(result);
         assert!(result.successor_available);

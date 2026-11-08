@@ -550,7 +550,7 @@ pub(crate) fn reselect_after_task_result(
 }
 
 /// Direct C690/AC60 entry from a style callback. Unlike task-result dispatch,
-/// this does not first call416410 or suppress selection for attachment bit1000.
+/// this does not first call 416410 or suppress selection for attachment bit1000.
 pub(crate) fn reselect_behavior(
     manager: &mut EntityManager,
     id: u32,

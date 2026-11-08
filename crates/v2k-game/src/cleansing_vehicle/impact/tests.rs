@@ -117,7 +117,7 @@ fn recorded_player_class55_hit_finishes_class49_before_a_second_physical_hit() {
         fx.advance_frame_pacing(20_000);
     }
     // NoCD02 49FB4F:369, tick644: packet4CC0A8 from class55, player46.
-    // 415040 computes4800: 2000 -> -2800, then10C10 zeroes health.
+    // 415040 computes 4800: 2000 -> -2800, then 10C10 zeroes health.
     let packet = DamagePacket {
         channels: [2, 3],
         amounts_raw: [3000, 1000],

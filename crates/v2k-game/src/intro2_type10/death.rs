@@ -1,4 +1,4 @@
-//! Type10's10C10 -> alternate11 -> C660/404360, then404460 and C750/BAC0.
+//! Type10's10C10 -> alternate 11 -> C660/404360, then 404460 and C750/BAC0.
 //! A falling Primary has lifetime zero. Only the contact callbacks select the
 //! explosion variant; neither elapsed time nor a guessed ground Y ends it.
 //!
@@ -239,7 +239,7 @@ pub fn publish_intro2_type10_standard_death(
     let RetailRuntimeValue::Known(Some(sub_g)) = &mut entity.sub_g_06070_runtime else {
         unreachable!("authenticated native G allocation")
     };
-    // Successful6030/06070 before404360-specific G1B970(1). E/K/L/D and
+    // Successful6030/06070 before 404360-specific G1B970(1). E/K/L/D and
     // transient B2 survive; there is no class12 +500 vertical-velocity write.
     let word = world_fx.next_shared_retail_random_u16();
     sub_g.apply_shared_06070_sub_g_branch(700 + i32::from(word >> 8), 0);
@@ -447,7 +447,7 @@ fn tick_detailed_components(
 ) -> Result<(), Intro2Type10DeathBlock> {
     use Intro2Type10DeathBlock as Block;
     tumble_spin(entity, multiplier, dt);
-    // Direct018A0 has no target prelude, Sub-D, 019C0 or14E0/1780 writes.
+    // Direct018A0 has no target prelude, Sub-D, 019C0 or 14E0/1780 writes.
     let RetailRuntimeValue::Known(Some(sub_g)) = &mut entity.sub_g_06070_runtime else {
         return Err(Block::Runtime("Sub-G"));
     };

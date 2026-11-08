@@ -503,7 +503,9 @@ impl Record for GameRecord {
             Self::Terrain(b) => out.bytes(b)?,
             Self::Cell(b) | Self::CellRequest(b) => out.bytes(b)?,
             // One dword: the body's handle for kinds 8 and 11 (FUN_00417D70),
-            // the wanted slot for kind 19 (FUN_00439700).
+            // the wanted slot for kind 19 (FUN_00439700). Kind 6's cell word
+            // goes the same way through FUN_00428900, which writes its third
+            // argument through its first and returns 4.
             Self::StaticDestroyed(w)
             | Self::Removed(w)
             | Self::Resend(w)
@@ -520,6 +522,9 @@ impl Record for GameRecord {
                 out.u16(*kind_slot)?;
             }
             Self::Impact { handle, deltas } => {
+                // FUN_00417E70: copies a 16-byte record into the caller's
+                // buffer (16, or -1 when the buffer is too small). `Out`
+                // reports the same bound through `None`.
                 out.u32(*handle)?;
                 out.i16s(deltas)?;
             }
@@ -528,6 +533,9 @@ impl Record for GameRecord {
                 handles.iter().try_for_each(|h| out.u32(*h))?;
             }
             Self::Attach(words) | Self::Dropped(words) => {
+                // FUN_004182C0: copies its 12-byte attach/drop record into the
+                // caller's buffer (kinds 13 and 15 share this pack routine:
+                // parent, body, then flags or the X/Z point word).
                 words.iter().try_for_each(|w| out.u32(*w))?
             }
             Self::Release { child, parent } => {

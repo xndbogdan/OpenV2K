@@ -1,4 +1,4 @@
-//! Native fish 10EB0/11180/11250/11320 hits: style C690,11030, then15040.
+//! Native fish 10EB0/11180/11250/11320 hits: style C690, 11030, then 15040.
 //!
 //! Aimless7930, Wander79C0 and both Flocking7DF8/7E40 styles have C690 in
 //! primary+28 and infected+20. Their selector draw and three reaction draws
@@ -246,7 +246,7 @@ fn run(
         }
     } else if cured {
         // 11320 clears the infected model bit and requests type+84 even
-        // for a dying target. It preserves10EB0's presentation timestamp.
+        // for a dying target. It preserves 10EB0's presentation timestamp.
         let applied = manager
             .apply_fun_00411320_cured_model_bit(id)
             .ok_or(Block::Runtime("cured model prefix"))?;
@@ -263,7 +263,7 @@ fn run(
         *committed = true;
     }
     // PE4111C1..411219 stamps +34, requests the living type+80 cue,
-    // then invokes the same DAC0/style+28 callback as10EB0. Fish author
+    // then invokes the same DAC0/style+28 callback as 10EB0. Fish author
     // a zero cue, but the ordering and pre-filter gate remain explicit.
     if static_route {
         let entity = manager.entity_mut(id).unwrap();
@@ -289,8 +289,8 @@ fn run(
     let ActiveBehaviorStyle::Audited(style) = context.active_style() else {
         return Err(Block::Runtime("hit style"));
     };
-    // PE tables4C7930/79C0/7DF8/7E40, the shark's 4C7D20 and Search &
-    // Attack's 4C7A50/4C7A98: +20,+24 and +28 are40C690. This direct style
+    // PE tables 4C7930/79C0/7DF8/7E40, the shark's 4C7D20 and Search &
+    // Attack's 4C7A50/4C7A98: +20,+24 and +28 are 40C690. This direct style
     // call omits task-result dispatch's 416410 suppression.
     // Run Away's 4C7618/4C7660 hold C690 at +20/+24 but a null +28.
     match style.frame_address {
@@ -365,8 +365,8 @@ fn run(
     apply_impact_reaction(
         &mut body,
         id,
-        // 41121E multiplies only the11030 force by eight.15040 still
-        // receives the original packet, including wrapping32-bit amounts.
+        // 41121E multiplies only the 11030 force by eight. 15040 still
+        // receives the original packet, including wrapping 32-bit amounts.
         delivery
             .packet
             .impact_sum_raw()
@@ -598,7 +598,7 @@ mod tests {
                 panic!("state")
             };
             let mut expected = self.fx.fork_for_main_base_abort_transaction();
-            expected.next_shared_retail_random_u16(); // C690 selector before11030.
+            expected.next_shared_retail_random_u16(); // C690 selector before 11030.
             let mut body = ImpactReactionBody {
                 state_flags_at_0x08: flags,
                 mass_raw_at_0xb0: entity.mass_raw,
@@ -1028,8 +1028,8 @@ mod tests {
     #[v2k_test_support::retail_test]
     fn static_route_wraps_only_reaction_force_and_keeps_unscaled_health_damage() {
         for class in [52, 68, 85] {
-            // A filtered-zero control and a32-bit overflow distinguish11180
-            // force from packet filtering and the ordinary10EB0 wrapper.
+            // A filtered-zero control and a32-bit overflow distinguish 11180
+            // force from packet filtering and the ordinary 10EB0 wrapper.
             // The large packet also wraps its independent Q8 filter product:
             // (0x20000010 -2000)*256 narrows to-507904, then>>8 gives-1984.
             for (amount, filtered) in [(0_i32, 0), (2_500, 500), (0x2000_0010, -1_984)] {

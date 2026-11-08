@@ -582,7 +582,7 @@ fn native_type26_world_surface_death_transfers_new_primary_after_current_motion_
             let x = (x * 256 + 128) as i16;
             let z = (z * 256 + 128) as i16;
             // Authored Sub-C raises a penetrating body to terrain+75. Start
-            // above its whole75-unit lift range at a real deep-water point,
+            // above its whole 75-unit lift range at a real deep-water point,
             // so neither correction can invalidate E370's deep test.
             let y = i32::from(terrain.bilinear_height_raw(x, z)) + 75 + 100;
             (y < i32::from(terrain.sea_level_raw()) - i32::from(extent >> 2))

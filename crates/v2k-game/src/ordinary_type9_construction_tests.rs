@@ -168,7 +168,7 @@ impl CargoWorld {
             "level{} materialiser: {blocked:?}",
             self.level
         );
-        // Main's presentation pass publishes11400 after simulation. The
+        // Main's presentation pass publishes 11400 after simulation. The
         // fixture camera follows the carrier with a level horizon; omitting
         // this phase leaves every distant actor permanently detailed and
         // changes the shared RNG stream consumed by the next root selection.

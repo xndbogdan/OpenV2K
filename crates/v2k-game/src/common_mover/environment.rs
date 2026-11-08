@@ -11,8 +11,8 @@ use crate::entity::CommonEnvironmentPhysics;
 use crate::hover::q31_mul;
 use v2k_formats::{levels::LevelDescriptor, terrain::TerrainGrid};
 
-/// Retail .data at VA4D04C8 (file offsetCECC8), not a zero-initialized BSS
-/// word. Level initialization44EB40 deliberately leaves this phase alone.
+/// Retail .data at VA4D04C8 (file offset CECC8), not a zero-initialized BSS
+/// word. Level initialization 44EB40 deliberately leaves this phase alone.
 pub(crate) const INITIAL_WIND_PHASE_RAW: u32 = 0x1234_5678;
 
 #[derive(Debug, Clone, Copy)]

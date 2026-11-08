@@ -207,6 +207,21 @@ impl ModelTreeExternalFrame<'_> {
         }
     }
 
+    /// `FUN_00427090` lends static objects `FUN_00427050`: the node request's
+    /// own X/Z words (the image `FUN_0042F650` chose) and world Y zero.
+    pub(super) fn native_fixed_world_point_raw(&self) -> Option<[i32; 3]> {
+        let Self::NativeFixed {
+            mode: ExternalFrameMode::WorldPoint(world),
+            native_context: Some((_, viewport)),
+        } = self
+        else {
+            return None;
+        };
+        let word = |value: f32| (value * 256.0).round() as i32 as i16;
+        let image = viewport.actor_world_image([word(world[0]), 0, word(world[2])]);
+        Some([image[0], 0, image[2]])
+    }
+
     pub(super) fn native_view_selection(&self) -> Option<v2k_formats::models::ModelViewSelection> {
         match self {
             Self::SubM(presentation) => presentation.native_view_selection(),

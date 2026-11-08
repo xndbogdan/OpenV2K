@@ -122,8 +122,8 @@ fn preflight_suffix(
 ) -> Result<(), Intro2FlyerWorldBlock> {
     authenticate_flyer_mover_metadata(entity.entity_type, metadata)
         .map_err(|_| Intro2FlyerWorldBlock::UnsupportedMetadata)?;
-    // 1BEB0 writes a Hive child's source handle to+60 after104B0 returns.
-    // It is not the+80 attachment route. With state1000 already excluded,
+    // 1BEB0 writes a Hive child's source handle to+60 after 104B0 returns.
+    // It is not the+80 attachment route. With state 1000 already excluded,
     // 12DA0's admitted flight suffix does not dereference this source word.
     let relation_supported = match entity
         .intro2_flyer_frame_owner
@@ -391,7 +391,7 @@ pub(super) fn tick_world(
             .state_flags_at_0x08
             .overwrite(BODY_BASIS_REBUILT_STATE_BIT, BODY_BASIS_REBUILT_STATE_BIT);
     }
-    // The shared no-SubC effective8 profile has no type-specific constants:
+    // The shared no-SubC effective 8 profile has no type-specific constants:
     // gravity, then 44EC60's drag, with the current wind in modes 1 and 2.
     if apply_effective8_flyer_environment(
         entity,

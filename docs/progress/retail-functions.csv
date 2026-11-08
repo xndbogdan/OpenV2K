@@ -148,6 +148,7 @@ address,size,region
 0x004093B0,111,game
 0x00409420,64,game
 0x00409460,791,game
+0x004097A0,419,game
 0x00409950,270,game
 0x00409A60,14,game
 0x00409A70,14,game
@@ -782,6 +783,7 @@ address,size,region
 0x0042EB00,80,game
 0x0042EB50,24,game
 0x0042EB70,75,game
+0x0042EBE0,42,game
 0x0042EC30,52,game
 0x0042EC80,14,game
 0x0042EC90,14,game
@@ -1452,6 +1454,8 @@ address,size,region
 0x00455EB0,160,game
 0x00455F50,115,game
 0x00455FD0,23,game
+0x00455FF0,34,game
+0x00456020,34,game
 0x00456050,27,game
 0x00456070,130,game
 0x00456100,104,game

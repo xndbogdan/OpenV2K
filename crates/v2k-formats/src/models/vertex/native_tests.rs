@@ -220,9 +220,11 @@ fn every_native_spatial_family_consumes_owned_external_caches_and_mirrors() {
 fn unsupported_native_dependency_reports_first_reached_boundary_without_callback_replay() {
     use ModelNativeVertexBoundary as B;
     for (unsupported, expected) in [
+        // Tf3 needs an owner of the process generator; this one keeps the
+        // static source, which has no VIEW point.
         (
             [3, 0, 0, 0],
-            B::UnsupportedGenerator {
+            B::ViewUnavailable {
                 slot: 2,
                 type_flag: 3,
             },

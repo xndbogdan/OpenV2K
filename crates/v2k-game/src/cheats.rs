@@ -157,8 +157,10 @@ fn strncmp_eq(code: &[u8; 8], typed: &[u8; 9], count: usize) -> bool {
 /// One in-play key record (`0x004C25E0`) whose callback a cheat gates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InPlayCheatKey {
-    /// `FUN_00455AB0`..`FUN_00455BB0`: LSHIFT with C E R A T H S O Q types
-    /// digits 1 to 9 (`FUN_00455BD0`).
+    /// LSHIFT with C E R A T H S O Q types digits 1 to 9 (`FUN_00455BD0`), one
+    /// callback per key: C `FUN_00455AB0`, E `FUN_00455AD0`, R `FUN_00455AF0`,
+    /// A `FUN_00455B10`, T `FUN_00455B30`, H `FUN_00455B50`, S `FUN_00455B70`,
+    /// O `FUN_00455B90`, Q `FUN_00455BB0`.
     Digit(u8),
     /// `FUN_00455DB0`, LSHIFT+D, cheat 0: the session's body `+2A8` takes
     /// [`SELF_DAMAGE_PACKET`] through checked damage (`FUN_00415040`).

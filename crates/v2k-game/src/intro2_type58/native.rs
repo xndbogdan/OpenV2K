@@ -164,7 +164,7 @@ pub(crate) fn publish_intro2_type58(
     }
     let sub_d_owner = intro2_type58_first_query_owner_for_birth(spawn, sub_d_seed)
         .ok_or(Intro2Type58Error::Prefix)?;
-    // D4A0's type-default bit0x20 terrain snap precedes the AC60 range reads.
+    // D4A0's type-default bit 0x20 terrain snap precedes the AC60 range reads.
     let RetailRuntimeValue::Known(position) = crate::entity_initializer::constructor_position_raw(
         metadata,
         entity.position_raw(),
@@ -218,7 +218,7 @@ pub(super) fn publish_birth(
         unreachable!()
     };
     // 09A80 constructs H, D, then A20450. Only A consumes a word. E24E30
-    // subsequently zeroes all0x3c bytes and copies method/sound; its four
+    // subsequently zeroes all 0x3c bytes and copies method/sound; its four
     // bindings (+18..1B) are null. Descriptor+12=150 is not a binding.
     let sub_a = SubAPropulsionRuntime::from_20450_constructor(descriptor, next_random() as u16);
     let (selection, selector_word) = evaluators.select(next_random)?;

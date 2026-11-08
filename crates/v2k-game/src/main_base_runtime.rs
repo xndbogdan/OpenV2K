@@ -1,7 +1,7 @@
 //! Authored Type6 `104B0/18A90 -> AC60 -> 25730/25CD0` and Primary25D60.
 //!
 //! The singleton selector is shared process RNG. 25730 clears T then S and
-//! publishes an actual01020 task; it has no06070 component-reset suffix.
+//! publishes an actual 01020 task; it has no 06070 component-reset suffix.
 
 mod death;
 pub mod impact;

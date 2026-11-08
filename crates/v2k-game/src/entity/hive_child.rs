@@ -1,4 +1,4 @@
-//! 1BEB0's populated zero0x4C creature request ->438080/104B0/D4A0.
+//! 1BEB0's populated zero 0x4C creature request -> 438080/104B0/D4A0.
 
 use super::*;
 use crate::{
@@ -91,22 +91,22 @@ pub enum HiveNativeBirthBlock {
     },
     Runtime(&'static str),
     Metadata(Intro2FlyerPublicationError),
-    /// Defensive failure after104B0 entry. The body ordinal/SubD allocation
+    /// Defensive failure after 104B0 entry. The body ordinal/SubD allocation
     /// and any reached family words remain consumed; never replay this prefix
     /// or reinterpret it as a proven retail allocator-error return.
     Publication {
         reason: Intro2FlyerPublicationError,
         committed_constructor_prefix: bool,
     },
-    /// A ground family's metadata refused before104B0 entry.
+    /// A ground family's metadata refused before 104B0 entry.
     GroundMetadata(HiveGroundFamilyError),
-    /// A ground family's construction or task adoption failed after104B0
+    /// A ground family's construction or task adoption failed after 104B0
     /// entry: a committed prefix, as `Publication`.
     GroundConstruction(HiveGroundFamilyError),
     GroundAdoption(NativeGroundActorBlock),
-    /// Type57's metadata or body refused before104B0 entry.
+    /// Type57's metadata or body refused before 104B0 entry.
     Type57Metadata(crate::intro2_type57::Intro2Type57Error),
-    /// Type57's construction failed after104B0 entry: a committed prefix.
+    /// Type57's construction failed after 104B0 entry: a committed prefix.
     Type57Construction(crate::intro2_type57::Intro2Type57Error),
     Type57Adoption(crate::intro2_type57::Intro2Type57Block),
     /// A Type10-family metadata or body refused before 104B0 entry.
@@ -684,9 +684,9 @@ impl EntityManager {
             ));
         }
         // Stage the intrinsic body without publishing it or advancing the
-        // process owner. This validates every feature dependency before104B0.
+        // process owner. This validates every feature dependency before 104B0.
         // B4 remains unresolved until the actual entry below: the ordinal is
-        // distinct from456C20's encoded logical-world/body stamp.
+        // distinct from 456C20's encoded logical-world/body stamp.
         let mut entity = native_instance_body(
             id,
             RetailRuntimeValue::Unresolved,
@@ -749,7 +749,7 @@ impl EntityManager {
         assert_eq!(self.allocate_live_entity_id(), id);
         self.append_live_entity(entity);
         // +60, FIFO/count, ejection and scheduler same-walk registration are
-        // the1BEB0 caller's successive phases, not constructor side effects.
+        // the 1BEB0 caller's successive phases, not constructor side effects.
         Ok(owner)
     }
 

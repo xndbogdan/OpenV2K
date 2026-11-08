@@ -158,7 +158,7 @@ fn retail_type8_and_type9_admit_only_the_exact_shared_route() {
 fn type7_metadata() -> EntityTypeRuntimeMetadata {
     let overlay = high_resolution_first_world_overlay();
     let collision = v2k_formats::sections::parse_collision(&overlay).unwrap();
-    // PRELOAD contributes two records: the diver's cumulative Type7 is local5.
+    // PRELOAD contributes two records: the diver's cumulative Type7 is local 5.
     EntityTypeRuntimeMetadata::from_section12(&collision.entries[5])
 }
 

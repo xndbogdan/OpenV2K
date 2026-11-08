@@ -282,8 +282,8 @@ pub(crate) fn prepare_system_layout(
             });
         }
     }
-    // Fixed retail high sources: System2 has six lens/scalar words and13
-    // points; System3 has18 mixed scalars and35 points. parse_fixup_table
+    // Fixed retail high sources: System2 has six lens/scalar words and 13
+    // points; System3 has 18 mixed scalars and 35 points. parse_fixup_table
     // alone silently drops trailing bytes, so validate headers/shape first.
     let lengths = if system_level == 2 { [6, 13] } else { [18, 35] };
     for (section, words) in lengths.into_iter().enumerate() {

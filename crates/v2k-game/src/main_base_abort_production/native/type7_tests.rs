@@ -50,7 +50,7 @@ fn type7_abort_replaces_each_real_owner_once_and_rejects_foreign_or_parked_recei
             let seed = fx.next_sub_d_allocation_seed();
             let mut oracle = fx.fork_for_main_base_abort_transaction();
             if invalid.is_none() {
-                // C3A0's one shared06070 draw belongs to this death publication.
+                // C3A0's one shared 06070 draw belongs to this death publication.
                 oracle.next_shared_retail_random_u16();
             }
             let observation = manager.main_base_abort_actor_observation(id).unwrap();

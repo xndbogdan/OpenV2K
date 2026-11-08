@@ -1,8 +1,8 @@
 //! Native Type16/17/18/26/28/58/122 `11AD0 -> D7F0/D860 -> 141D0` terrain/water contact.
 //! D860 is FUN_0040D860: the style +14 hook, then `141D0(...,0,5,0)`.
 //!
-//! Living C8=39/439 clears10000; Class12's reverse mask2015 restores it and yields
-//! effective policy28 (428 for Type122), with null solid/water style hooks.
+//! Living C8=39/439 clears 10000; Class12's reverse mask2015 restores it and yields
+//! effective policy 28 (428 for Type122), with null solid/water style hooks.
 //! Rolling Boulder Type3/27 style0 reverses 1005 into the same admission and
 //! also carries null `+10`/`+14` hooks, so its contact is the bare 141D0 pair;
 //! resting style1 clears the bit and never reaches this walk. The outer walk retains
@@ -38,8 +38,8 @@ use v2k_formats::models::ModelCollisionError;
 /// Shared source phases retain each allocation's constructor and death owner.
 /// Values consumed by 141D0 come from its current type record/model/body:
 /// Type17 has cues +86/+88=0/27 and model256 radius300; Type58 has 0/91 and
-/// model273 radius250. Type122 has cues0/0, model274 radius250 and policy439.
-/// All three authored masses are100; Type17/58 default policies are39.
+/// model273 radius250. Type122 has cues0/0, model274 radius250 and policy 439.
+/// All three authored masses are 100; Type17/58 default policies are 39.
 #[derive(Debug, Clone, Copy)]
 enum NativeSurfaceProfile {
     Type16,
@@ -561,7 +561,7 @@ fn resolve(
     *committed = true;
     frame.world_fx.note_water_entry();
     // 11AD0's type+88 cue precedes D860. Class12's style+14 is null, so
-    // D860 then reaches141D0 without changing the surviving body or task.
+    // D860 then reaches 141D0 without changing the surviving body or task.
     if water_sound != 0 {
         frame
             .world_fx

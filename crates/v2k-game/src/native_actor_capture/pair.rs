@@ -1,5 +1,5 @@
 //! The 11AD0 pair walk, after the same subject's static contact: native
-//! captor17/122, independent58 and bounded insect/Type66 lanes, and the
+//! captor 17/122, independent 58 and bounded insect/Type66 lanes, and the
 //! general visit for every other pair.
 //!
 //! The intrusive next chain and actual oriented Section-8 query select contacts.
@@ -72,6 +72,8 @@ impl PlayingPlayerContact<'_> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeCaptorPairBlock {
     Runtime(&'static str),
+    /// The possessed body's checked collision damage or its death stopped.
+    PossessedDamage(String),
     /// The Autobot's checked hit or its class11 death stopped.
     AutobotPairDamage,
     /// `FUN_0040CAF0` past its receiver: the Type93 or its attach stopped.
@@ -155,10 +157,16 @@ pub enum NativeCaptorPairBlock {
         style: u32,
     },
     HiveImpact(crate::hive_impact::HiveImpactBlock),
-    /// Native Type3/27 Rolling Boulders own construction, motion, contact,
-    /// hits, deaths and the player's own pair pass, but no pair walk with
-    /// other actors. A Hive latch alone cannot authorize that actor's
-    /// remaining 11AD0 physical/damage suffix.
+    /// A Rolling Boulder's pair damage or its class1/class18 death stopped.
+    RollingBoulderPairDamage(
+        crate::live_actor_checked_damage::LiveActorDamageError<
+            crate::rolling_boulder::impact::RollingBoulderDeathProgramBlock,
+            (),
+        >,
+    ),
+    /// A Hive's impact on a body without a native owner (a Rolling Boulder
+    /// among them: the Hive ram's wreck path is not ported). A Hive latch
+    /// alone cannot authorize that actor's remaining 11AD0 suffix.
     UnsupportedHiveImpactCounterpart {
         entity_id: u32,
         entity_type: u32,
@@ -242,6 +250,15 @@ pub enum ActivePairHoldReason {
     /// The player adapter's pair stopped before its commit (or came after
     /// the craft's death, whose wreck's pairs the port does not model).
     PlayerPair(crate::player_active_contact::PlayerActivePairError),
+    /// The craft while a body is possessed: Passive Player's `447D70` fails
+    /// `443AF0` and returns `4C20C0` against a body without `0xC00`, which
+    /// skips the other body's hook and ends the walk after the response.
+    PassivePlayer,
+    /// The possessed body's `447D70` would pick this body up (`443B50`
+    /// into its own hold, with the player's row callbacks).
+    PossessedPickup {
+        entity_type: u32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -336,8 +353,8 @@ pub fn resolve_native_captor_active_contacts_with_playing(
     )
 }
 
-/// The caller snapshots11AD0's subject admission before its static prefix.
-/// Only eligibility, domain, model and+70 remain latched;12530 and callbacks
+/// The caller snapshots 11AD0's subject admission before its static prefix.
+/// Only eligibility, domain, model and+70 remain latched; 12530 and callbacks
 /// still read the current body, relations, basis and task slots.
 pub(crate) struct NativeActorPairRequest<'a> {
     pub id: u32,
@@ -471,14 +488,21 @@ fn is_native_type29_player_pair(manager: &EntityManager, first: &Entity, second:
 /// The player and a native-owned body the player adapter does not visit
 /// (its pair identity is not closed: Types 5, 10, 15, 39, 87 and more): this
 /// lane visits the pair in live order, from whichever body comes first.
+/// 11AD0 has no dying test, so the craft's wreck (Dying bounce, whose `+18`
+/// is 447D70 too) pairs on; this lane also takes the wreck's pairs with the
+/// native-owned bodies the adapter visits for the living craft.
 fn is_native_player_walk_pair(manager: &EntityManager, first: &Entity, second: &Entity) -> bool {
     let player = manager.player().map(|player| player.id);
     [(first, second), (second, first)]
         .into_iter()
         .any(|(body, other)| {
             Some(other.id) == player
-                && requires_body_custody(body)
-                && crate::player_active_contact::player_pair_left_to_walk(manager, body)
+                && ((requires_body_custody(body)
+                    && crate::player_active_contact::player_pair_left_to_walk(manager, body))
+                    || (other.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)
+                        == RetailRuntimeValue::Known(DYING_STATE_BIT)
+                        && general_body_custody(body)
+                        && crate::player_active_contact::player_adapter_visits(manager, body)))
         })
 }
 
@@ -706,7 +730,7 @@ fn resolve(
     // subject in the same live order, so each unordered pair is visited
     // exactly once from its earlier participant's pass.
     while let Some(candidate_id) = candidate_cursor {
-        //11AD0 caches this candidate's successor before its callbacks. A new
+        // 11AD0 caches this candidate's successor before its callbacks. A new
         //tail can become visible through a later candidate's current next,
         //but a birth during the old terminal candidate does not extend it.
         candidate_cursor = frame
@@ -718,52 +742,19 @@ fn resolve(
         let pair_weapon = [subject, candidate]
             .into_iter()
             .any(owns_native_weapon_contact);
-        if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player) {
-            let types = [subject.entity_type, candidate.entity_type];
-            let dying = playing_player
-                .as_ref()
-                .is_some_and(|playing| playing.hull.dying);
-            let reason = if dying {
-                // The port does not pair the craft's wreck: a stop where it touches.
-                matches!(
-                    classify_oriented_active_pair_contact(
-                        crate::player_active_contact::OrientedActivePairContactRequest {
-                            subject,
-                            candidate,
-                            subject_entry,
-                            retail_tick: frame.retail_tick,
-                        },
-                        frame.resources,
-                    ),
-                    Ok(Some(_))
-                )
-                .then_some(ActivePairHoldReason::PlayerPair(
-                    crate::player_active_contact::PlayerActivePairError::ResumeAfterPlayerDeath {
-                        entity_id: other,
-                    },
-                ))
-            } else {
-                visit_player_adapter_pair(frame, playing_player.as_mut(), other)
-            };
-            if let Some(reason) = reason {
-                visits.push(NativeCaptorPairVisit {
-                    candidate_id,
-                    contact: ActivePairContact {
-                        normal_q12: [0; 3],
-                        penetration_raw: 0,
-                    },
-                    stages: vec![NativeCaptorPairStage::Held(reason)],
-                    physical_suppressed: true,
-                    general_types: Some(types),
-                });
-            }
-            continue;
-        }
-        if let Some(other) = ownerless_player_pair(frame.entities, subject, candidate, player) {
-            // Retail visits it too; the port has no owner for the body's
-            // callbacks, so a touching pair is a stop.
-            let types = [subject.entity_type, candidate.entity_type];
-            let entity_type = actor(frame.entities, other)?.entity_type;
+        let possession = frame.actor_tasks.possession.map(|custody| custody.state);
+        let craft_pair =
+            possession.is_some_and(|state| state.craft == id || state.craft == candidate_id);
+        // Passive Player's `447D70` fails `443AF0` and returns `0x4C20C0`
+        // against a body without `0xC00`: the other hook is skipped, the
+        // response and collision damage run, and the walk ends there. Weapon
+        // and shark pairs keep the held stop: their lanes assume the craft's
+        // own controller.
+        if craft_pair
+            && (pair_weapon
+                || is_native_shark_player_pair(frame.entities, subject, candidate)
+                || is_native_type29_player_pair(frame.entities, subject, candidate))
+        {
             if let Ok(Some(contact)) = classify_oriented_active_pair_contact(
                 crate::player_active_contact::OrientedActivePairContactRequest {
                     subject,
@@ -777,24 +768,104 @@ fn resolve(
                     candidate_id,
                     contact,
                     stages: vec![NativeCaptorPairStage::Held(
-                        ActivePairHoldReason::NoBodyOwner { entity_type },
+                        ActivePairHoldReason::PassivePlayer,
                     )],
                     physical_suppressed: true,
-                    general_types: Some(types),
+                    general_types: Some([subject.entity_type, candidate.entity_type]),
                 });
             }
             continue;
+        }
+        let possessed = possession.map(|state| state.body);
+        // A possessed craft's pairs take the general visit below with
+        // Passive Player's `447D70`, not the player adapter (which assumes
+        // the craft's own controller) nor the ownerless stop.
+        // The wreck's pairs with native-owned bodies take this walk below.
+        if !craft_pair {
+            if let Some(other) = player_adapter_pair(frame.entities, subject, candidate, player)
+                .filter(|_| !is_native_player_walk_pair(frame.entities, subject, candidate))
+            {
+                let types = [subject.entity_type, candidate.entity_type];
+                let dying = playing_player
+                    .as_ref()
+                    .is_some_and(|playing| playing.hull.dying);
+                let reason = if dying {
+                    // The wreck against a body without a native owner (the
+                    // adapter's census-only bodies): a stop where it touches.
+                    matches!(
+                        classify_oriented_active_pair_contact(
+                            crate::player_active_contact::OrientedActivePairContactRequest {
+                                subject,
+                                candidate,
+                                subject_entry,
+                                retail_tick: frame.retail_tick,
+                            },
+                            frame.resources,
+                        ),
+                        Ok(Some(_))
+                    )
+                    .then_some(ActivePairHoldReason::PlayerPair(
+                        crate::player_active_contact::PlayerActivePairError::ResumeAfterPlayerDeath {
+                            entity_id: other,
+                        },
+                    ))
+                } else {
+                    visit_player_adapter_pair(frame, playing_player.as_mut(), other)
+                };
+                if let Some(reason) = reason {
+                    visits.push(NativeCaptorPairVisit {
+                        candidate_id,
+                        contact: ActivePairContact {
+                            normal_q12: [0; 3],
+                            penetration_raw: 0,
+                        },
+                        stages: vec![NativeCaptorPairStage::Held(reason)],
+                        physical_suppressed: true,
+                        general_types: Some(types),
+                    });
+                }
+                continue;
+            }
+        }
+        if !craft_pair {
+            if let Some(other) = ownerless_player_pair(frame.entities, subject, candidate, player) {
+                // Retail visits it too; the port has no owner for the body's
+                // callbacks, so a touching pair is a stop.
+                let types = [subject.entity_type, candidate.entity_type];
+                let entity_type = actor(frame.entities, other)?.entity_type;
+                if let Ok(Some(contact)) = classify_oriented_active_pair_contact(
+                    crate::player_active_contact::OrientedActivePairContactRequest {
+                        subject,
+                        candidate,
+                        subject_entry,
+                        retail_tick: frame.retail_tick,
+                    },
+                    frame.resources,
+                ) {
+                    visits.push(NativeCaptorPairVisit {
+                        candidate_id,
+                        contact,
+                        stages: vec![NativeCaptorPairStage::Held(
+                            ActivePairHoldReason::NoBodyOwner { entity_type },
+                        )],
+                        physical_suppressed: true,
+                        general_types: Some(types),
+                    });
+                }
+                continue;
+            }
         }
         let player_walk = is_native_player_walk_pair(frame.entities, subject, candidate);
         let pair_shark = is_native_shark_player_pair(frame.entities, subject, candidate)
             || is_native_type29_player_pair(frame.entities, subject, candidate)
             || player_walk;
-        if player == Some(id) && !pair_weapon && !pair_shark {
+        if player == Some(id) && !pair_weapon && !pair_shark && !craft_pair {
             continue;
         }
+        // A possessed captor runs Player Control: its pairs take 447D70.
         let pair_captors = [subject, candidate]
             .into_iter()
-            .filter(|entity| owns_captor_contact(entity))
+            .filter(|entity| owns_captor_contact(entity) && Some(entity.id) != possessed)
             .map(|entity| entity.id)
             .collect::<Vec<_>>();
         let pair_type58 = [subject, candidate]
@@ -813,8 +884,10 @@ fn resolve(
             || hive_impact_counterpart(subject, candidate).is_some()
             || native_remote_beam_pair(frame.entities, subject, candidate).is_some();
         // The player adapter owns the player's other pairs, and the Main Base
-        // conversion and factory intake passes their deliveries.
+        // conversion and factory intake passes their deliveries. A possessed
+        // craft's pairs belong to the general visit below instead.
         if !listed
+            && !craft_pair
             && (player == Some(candidate_id) || delivery_pair_owned_elsewhere(subject, candidate))
         {
             continue;
@@ -899,7 +972,7 @@ fn resolve(
         // callback or physical write, including a parked Class12 counterpart.
         for owner in [id, candidate_id] {
             let entity = actor(frame.entities, owner)?;
-            if requires_body_custody(entity)
+            if general_body_custody(entity)
                 && !crate::native_actor_descriptor_contact::completed_contact_owner(
                     frame.entities,
                     frame.actor_tasks,
@@ -908,7 +981,7 @@ fn resolve(
             {
                 return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
             }
-            if requires_body_custody(entity) && !participants.contains(&owner) {
+            if general_body_custody(entity) && !participants.contains(&owner) {
                 participants.push(owner);
             }
         }
@@ -924,14 +997,22 @@ fn resolve(
         // D780 resolves the current behavior context for each directional call.
         for (owner, opposite) in [(id, candidate_id), (candidate_id, id)] {
             let style = style_address(actor(frame.entities, owner)?)?;
-            let result = behavior(
-                frame,
-                owner,
-                opposite,
-                feedback,
-                playing_player.as_mut().map(PlayingPlayerContact::reborrow),
-                committed,
-            )?;
+            // The craft's 0x4C20C0 as subject skips the candidate's hook.
+            let result = if craft_pair
+                && possession.is_some_and(|state| state.craft == id)
+                && owner == candidate_id
+            {
+                NativeCaptorPairBehaviorResult::Null
+            } else {
+                behavior(
+                    frame,
+                    owner,
+                    opposite,
+                    feedback,
+                    playing_player.as_mut().map(PlayingPlayerContact::reborrow),
+                    committed,
+                )?
+            };
             visit.stages.push(NativeCaptorPairStage::Behavior {
                 owner,
                 style,
@@ -993,7 +1074,8 @@ fn resolve(
                 });
             }
         }
-        if !visit.physical_suppressed {
+        let physical_suppressed = visit.physical_suppressed;
+        if !physical_suppressed {
             physical(
                 frame,
                 id,
@@ -1014,8 +1096,44 @@ fn resolve(
                 adopt_captor(frame, captor)?;
             }
         }
+        // Passive Player's `0x4C20C0` ends 11AD0 after the response, and
+        // 11A80's whole pass with it (the lab's pass ran 3 walks, not ~40).
+        if craft_pair {
+            if physical_suppressed {
+                // 11AD0 keeps the 0x4C20C0 and walks on; not ported.
+                return Err(NativeCaptorPairBlock::Runtime(
+                    "possessed craft pair after an A300",
+                ));
+            }
+            frame.actor_tasks.possession_pair_pass_ended = true;
+            break;
+        }
     }
     Ok(true)
+}
+
+/// `447D70` on the possessed body (a body without capability bit 0): it
+/// picks up (`443B50`) a body with a nonzero state word, without the dying
+/// bit and with capability `0xC00`, while `18410` finds room in its hold;
+/// against any other body it returns null. True for null.
+fn possessed_pair_hook_is_null(
+    entity: &Entity,
+    opposite: &Entity,
+) -> Result<bool, NativeCaptorPairBlock> {
+    if entity.capability_flags & 1 != 0 {
+        return Err(NativeCaptorPairBlock::Runtime("possessed body capability"));
+    }
+    let full = match &entity.sub_j_attachment_runtime {
+        RetailRuntimeValue::Known(Some(hold)) => hold.len() >= hold.capacity(),
+        RetailRuntimeValue::Known(None) => true,
+        RetailRuntimeValue::Unresolved => {
+            return Err(NativeCaptorPairBlock::Runtime("possessed body hold"))
+        }
+    };
+    Ok(opposite.capability_flags & 0xc00 == 0
+        || bits(opposite, DYING_STATE_BIT)? != 0
+        || opposite.collision.state_flags_at_0x08.masked(u32::MAX) == RetailRuntimeValue::Known(0)
+        || full)
 }
 
 /// Preflight of an unlisted pair, before any sound, callback or body write.
@@ -1038,7 +1156,41 @@ fn general_pair_hold(
                 entity_type: entity.entity_type,
             }));
         }
-        if let Some(reason) = general_behavior_hold(entity, actor(frame.entities, opposite)?)? {
+        let opposite = actor(frame.entities, opposite)?;
+        if frame
+            .actor_tasks
+            .possession
+            .is_some_and(|custody| custody.state.body == owner)
+        {
+            if !possessed_pair_hook_is_null(entity, opposite)? {
+                return Ok(Some(ActivePairHoldReason::PossessedPickup {
+                    entity_type: opposite.entity_type,
+                }));
+            }
+            continue;
+        }
+        // Passive Player's `447D70` fails `443AF0` (the controller's `+68`
+        // is the possessed body) and returns `0x4C20C0` against a body
+        // without `0xC00`. The other body's hook is skipped. A body with
+        // `0xC00` keeps the held stop: that branch is not ported.
+        if let Some(craft) = frame
+            .actor_tasks
+            .possession
+            .map(|custody| custody.state.craft)
+        {
+            if owner == craft {
+                if opposite.capability_flags & 0xc00 != 0 {
+                    return Ok(Some(ActivePairHoldReason::PassivePlayer));
+                }
+                continue;
+            }
+            // Only a subject craft's 0x4C20C0 skips the other hook; a
+            // candidate craft's comes after the subject's own.
+            if opposite.id == craft && craft == id {
+                continue;
+            }
+        }
+        if let Some(reason) = general_behavior_hold(entity, opposite)? {
             return Ok(Some(reason));
         }
     }
@@ -1075,12 +1227,22 @@ fn general_pair_hold(
             }
         }
     }
+    let possessed = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.body);
+    let craft = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.craft);
     for body in [&plan.subject, &plan.candidate] {
         let current = actor(frame.entities, body.id)?;
         if !suppressed
             && (current.position_raw() != body.position_raw
                 || current.velocity_raw() != body.velocity_raw)
-            && !requires_body_custody(current)
+            && !general_body_custody(current)
+            && Some(current.id) != possessed
+            && Some(current.id) != craft
         {
             return Ok(Some(ActivePairHoldReason::NoBodyOwner {
                 entity_type: current.entity_type,
@@ -1093,7 +1255,7 @@ fn general_pair_hold(
         // An owned body lends its completed owner; any other body's tasks
         // must all keep a null contact hook, which A900 skips. The Main Base's
         // null-hook Primary still needs its completed owner, as in A900.
-        let owned = if requires_body_custody(entity)
+        let owned = if general_body_custody(entity)
             || crate::main_base_runtime::main_base_manager_allocation_authenticates(
                 frame.entities,
                 owner,
@@ -1195,6 +1357,11 @@ fn general_behavior_hold(
             is_native_defender_ball(entity)
                 && (opposite.entity_type == DEFENDER_BALL || requires_body_custody(opposite))
         }
+        // 40C730, a resting boulder's +18: C6B0 wakes it under its owner,
+        // whatever the opposite body.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_c730) => {
+            crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
+        }
         _ => false,
     };
     Ok((!null).then_some(ActivePairHoldReason::UnportedBehavior {
@@ -1250,6 +1417,18 @@ fn behavior(
     committed: &mut bool,
 ) -> Result<NativeCaptorPairBehaviorResult, NativeCaptorPairBlock> {
     let entity = actor(frame.entities, owner)?;
+    // Passive Player's `447D70` while a body is possessed: `443AF0` fails
+    // (the controller's `+68` is the body), so it returns `0x4C20C0`
+    // without feedback against a body without `0xC00`. The general
+    // preflight holds the `0xC00` branch; the caller skips the candidate's
+    // hook after a subject craft's.
+    if frame
+        .actor_tasks
+        .possession
+        .is_some_and(|custody| custody.state.craft == owner)
+    {
+        return Ok(NativeCaptorPairBehaviorResult::Null);
+    }
     if frame
         .entities
         .player()
@@ -1267,8 +1446,8 @@ fn behavior(
             )
             || is_native_player_walk_pair(frame.entities, entity, actor(frame.entities, opposite)?))
     {
-        //447D70: the actual local controller bound to this player satisfies
-        //43AF0. A body without capability c00 leaves the two bodies'
+        // 447D70: the actual local controller bound to this player satisfies
+        // 43AF0. A body without capability c00 leaves the two bodies'
         //relative-speed feedback; a c00 body returns null with none. It neither
         //changes body/task state nor returns an A300 suppression.
         let body = actor(frame.entities, opposite)?;
@@ -1286,6 +1465,20 @@ fn behavior(
             }
         }
         return Ok(NativeCaptorPairBehaviorResult::Null);
+    }
+    if frame
+        .actor_tasks
+        .possession
+        .is_some_and(|custody| custody.state.body == owner)
+    {
+        return if possessed_pair_hook_is_null(entity, actor(frame.entities, opposite)?)? {
+            Ok(NativeCaptorPairBehaviorResult::Null)
+        } else {
+            Err(NativeCaptorPairBlock::UnsupportedBehavior {
+                entity_id: owner,
+                style: style_address(entity)?,
+            })
+        };
     }
     let context = match entity.current_behavior_context {
         RetailRuntimeValue::Known(Some(context)) => context,
@@ -1352,8 +1545,8 @@ fn behavior(
                 }
             *committed = true;
             run_weapon_pair_terminal(frame, owner, playing_player)?;
-            //CEF0 always discards10C10's result and returns null. The
-            //opposing D780 call, both current A900 chains and12760 remain.
+            //CEF0 always discards 10C10's result and returns null. The
+            //opposing D780 call, both current A900 chains and 12760 remain.
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         // C910 rejects a non-person before reading any captor state. Other
@@ -1391,9 +1584,9 @@ fn behavior(
             }
             // 418410 (FUN_00418410, the Sub-J full test) returns full for the
             // genuine null J. C910 invokes the
-            // contact person's10C10 and discards it at40CAC5: no attachment,
+            // contact person's10C10 and discards it at 40CAC5: no attachment,
             // transport task or A300 return. Opposing behavior/components and
-            // the12760 physical suffix still execute after this null result.
+            // the 12760 physical suffix still execute after this null result.
             let result = capture::kill_capture_contact(
                 frame.entities,
                 opposite,
@@ -1493,9 +1686,9 @@ fn behavior(
             {
                 return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
             }
-            //CD50 forwards selector1 toCD70. The callback reads its owner's
+            //CD50 forwards selector1 to CD70. The callback reads its owner's
             //capabilities, not the opposite actor's: native Type30 has neither
-            //C00 nor1000, so both branches reachCE62's zero return. No task,
+            //C00 nor 1000, so both branches reach CE62's zero return. No task,
             //component, body or process-RNG mutation precedes that return.
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
@@ -1534,7 +1727,7 @@ fn behavior(
             }
         }
         // 259F0 reads the opposing capability words before any hive-owned state.
-        // Its consuming operation33/deferred-destroy branch stays explicit;
+        // Its consuming operation 33/deferred-destroy branch stays explicit;
         // it must never fall through to 1CE10 when both masks match.
         PairContactCallbackPolicy::Hive => {
             use crate::hive_impact::{hive_pair_callback_branch, HivePairCallbackBranch};
@@ -1621,6 +1814,34 @@ fn behavior(
                 playing_player,
                 committed,
             )?;
+            Ok(NativeCaptorPairBehaviorResult::Null)
+        }
+        // 40C730 -> C6B0(0): reinstall rolling style0 and its Primary under
+        // the boulder's completed owner, then return null. The opposite body
+        // is never read.
+        PairContactCallbackPolicy::UnknownAddress(0x0040_c730)
+            if crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                frame.entities,
+                owner,
+            ) =>
+        {
+            if !frame
+                .actor_tasks
+                .prepare_native_actor_mutation(frame.entities, owner)
+            {
+                return Err(NativeCaptorPairBlock::BodyCustody { entity_id: owner });
+            }
+            let woken = crate::rolling_boulder::wake_resting_boulder(
+                frame.entities.entity_mut(owner).unwrap(),
+            )
+            .map_err(|_| NativeCaptorPairBlock::Runtime("rolling boulder pair wake"))?;
+            if woken {
+                *committed = true;
+                let replaced =
+                    crate::rolling_boulder::RollingBoulderOwner::adopt(frame.entities, owner)
+                        .map_err(|_| NativeCaptorPairBlock::Runtime("rolling boulder owner"))?;
+                frame.actor_tasks.register_rolling_boulder(replaced);
+            }
             Ok(NativeCaptorPairBehaviorResult::Null)
         }
         _ => Err(NativeCaptorPairBlock::UnsupportedBehavior {
@@ -1767,11 +1988,21 @@ fn physical(
         contact,
     )
     .map_err(NativeCaptorPairBlock::Geometry)?;
+    let possessed = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.body);
+    let craft = frame
+        .actor_tasks
+        .possession
+        .map(|custody| custody.state.craft);
     for body in [&plan.subject, &plan.candidate] {
         let current = actor(frame.entities, body.id)?;
         if (current.position_raw() != body.position_raw
             || current.velocity_raw() != body.velocity_raw)
-            && !requires_body_custody(current)
+            && !general_body_custody(current)
+            && Some(current.id) != possessed
+            && Some(current.id) != craft
             && !((weapon_pair || shark_pair)
                 && frame
                     .entities
@@ -1806,7 +2037,16 @@ fn physical(
                 source_entity_type_raw: source_type,
                 owner_handle: source,
             };
-            if weapon_pair || shark_pair {
+            if Some(target) == possessed {
+                crate::possession::live::possessed_pair_damage(frame, delivery).map_err(
+                    |block| {
+                        *committed = true;
+                        NativeCaptorPairBlock::PossessedDamage(format!("{block:?}"))
+                    },
+                )?;
+            } else if weapon_pair || shark_pair || Some(target) == craft {
+                // A possessed craft's own damage takes the player path, as
+                // every other player-involved general pair does.
                 apply_native_pair_checked_damage(
                     frame,
                     target,
@@ -1972,6 +2212,15 @@ fn is_native_queen(entity: &Entity) -> bool {
         )
 }
 
+/// A body whose owner takes a pair visit's response and collision damage:
+/// the native owners, and a native Rolling Boulder, whose 15040 runs its own
+/// class1 or class18 death. Callbacks that reach the opposite body (the
+/// Hive's impact, a ball's hit) still ask [`requires_body_custody`].
+fn general_body_custody(entity: &Entity) -> bool {
+    requires_body_custody(entity)
+        || crate::rolling_boulder::rolling_boulder_allocation_authenticates(entity)
+}
+
 fn requires_body_custody(entity: &Entity) -> bool {
     is_native_defender_ball(entity)
         || is_native_autobot(entity)
@@ -2024,6 +2273,41 @@ fn apply_pair_checked_damage(
     committed: &mut bool,
 ) -> Result<(), NativeCaptorPairBlock> {
     let kind = actor(frame.entities, target)?.entity_type;
+    // A boulder's 15040 is the player pair's: class1 for a Type3, class18's
+    // split for a Type27. Both deaths need the Playing world's craft.
+    if let Some(runtime) = actor(frame.entities, target)?
+        .rolling_boulder_runtime
+        .filter(|_| {
+            crate::rolling_boulder::rolling_boulder_manager_allocation_authenticates(
+                frame.entities,
+                target,
+            )
+        })
+    {
+        let player = playing_player
+            .ok_or(NativeCaptorPairBlock::MissingPlayingContext { entity_id: target })?;
+        return crate::rolling_boulder::death::apply_rolling_boulder_pair_damage(
+            frame.entities,
+            target,
+            delivery,
+            runtime.profile,
+            crate::rolling_boulder::death::RollingBoulderPairDeathWorld {
+                resources: frame.resources,
+                static_damage: frame.static_damage,
+                world_fx: frame.world_fx,
+                notifications: frame.notifications,
+                scheduler: frame.actor_tasks,
+                player_hull: player.hull,
+                extra_lives: player.extra_lives,
+                retail_tick: frame.retail_tick,
+            },
+        )
+        .map(|_| ())
+        .map_err(|error| {
+            *committed |= error.committed_prefix;
+            NativeCaptorPairBlock::RollingBoulderPairDamage(error)
+        });
+    }
     if (kind == 40
         && crate::native_type40::manager_allocation_authenticates(frame.entities, target))
         || (kind == 56

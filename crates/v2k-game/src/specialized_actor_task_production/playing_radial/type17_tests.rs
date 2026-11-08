@@ -337,3 +337,111 @@ fn native_type17_radial_and_particles_reject_missing_foreign_and_pending_custody
         );
     }
 }
+
+/// `FUN_004480E0` on the fixture's native Type17: its owner leaves custody,
+/// Player Control's context is installed and the scheduler owns the body.
+fn possess(f: &mut Fixture) -> u32 {
+    let craft = f.manager.player().expect("craft").id;
+    let previous_context = match f
+        .manager
+        .entity_mut(f.target)
+        .unwrap()
+        .current_behavior_context
+    {
+        RetailRuntimeValue::Known(Some(context)) => context,
+        _ => panic!("a context"),
+    };
+    let context = f.manager.player_control_context(f.target).expect("context");
+    assert!(f.scheduler.release_type17_for_possession(f.target));
+    f.manager.possess_body_tasks(f.target, context);
+    f.scheduler.possession = Some(crate::possession::PossessionCustody {
+        state: crate::possession::Possession::take_over(craft, f.target),
+        native_owner: true,
+        previous_context,
+    });
+    craft
+}
+
+fn shot(id: u32, amount_raw: i32) -> crate::world_fx::ParticleEntityImpact {
+    crate::world_fx::ParticleEntityImpact {
+        no_packet: false,
+        source_particle_class: 16,
+        impact_position_argument_va: 0,
+        target_entity_id: id,
+        position_world: [0.0; 3],
+        velocity_raw: [0, 0, 8192],
+        damage: Some(crate::world_fx::BallisticDamageRequest {
+            packet: DamagePacket {
+                channels: [1, 0],
+                amounts_raw: [amount_raw, 0],
+            },
+            source_entity_type_at_birth: Some(10),
+            source_owner_id: Some(0),
+        }),
+    }
+}
+
+/// A blast and a shot reach the possessed body through its possession
+/// owner: no behavior hook runs (Player Control's styles have none), so its
+/// own owner is not re-adopted; a lethal one runs its death inside the
+/// damage call, which releases it into its own dying alternate.
+#[v2k_test_support::retail_test]
+fn a_possessed_type17_takes_blasts_and_shots_and_a_lethal_one_releases_it() {
+    let mut f = fixture();
+    let craft = possess(&mut f);
+    let before = f.manager.entity_mut(f.target).unwrap().collision.health_raw;
+    let outcome = deliver(&mut f, false);
+    assert!(outcome.blocked.is_none(), "{outcome:?}");
+    assert_eq!(outcome.completed_target_ids, [f.target]);
+    let entity = f.manager.entity_mut(f.target).unwrap();
+    assert_ne!(entity.collision.health_raw, before);
+    assert_eq!(f.scheduler.family_for(f.target), None);
+    assert!(f.scheduler.possession.is_some());
+
+    let hit = crate::shared_actor_impact::apply_playing_actor_particle_hit(
+        crate::shared_actor_impact::PlayingActorImpactFrame {
+            resources: &mut f.session.cache,
+            entities: &mut f.manager,
+            world_fx: &mut f.fx,
+            scheduler: &mut f.scheduler,
+            notifications: &mut GameplayNotifications::new(),
+            static_damage: &mut crate::static_damage::StaticDamageScheduler::new(),
+            player_hull: &mut PlayerHull::default(),
+            extra_lives: RetailRuntimeValue::Unresolved,
+            retail_tick: 78,
+        },
+        shot(f.target, 10),
+    )
+    .expect("the possessed body's owner takes it");
+    assert!(
+        matches!(
+            hit,
+            crate::shared_actor_impact::SharedActorImpactOutcome::Possessed(
+                crate::possession::live::PossessedHitOutcome::Applied(false)
+            )
+        ),
+        "{hit:?}"
+    );
+    let entity = f.manager.entity_mut(f.target).unwrap();
+    assert_eq!(
+        entity.collision.last_hit_presentation_tick_at_0x34,
+        RetailRuntimeValue::Known(78)
+    );
+    assert_eq!(f.scheduler.family_for(f.target), None);
+
+    let outcome = deliver(&mut f, true);
+    assert!(outcome.blocked.is_none(), "{outcome:?}");
+    assert!(f.scheduler.possession.is_none());
+    let released = f.scheduler.possession_released.take().expect("released");
+    assert_eq!((released.body, released.craft), (f.target, craft));
+    assert_eq!(released.behavior_stop, None);
+    assert!(released.mind_ball.is_ok());
+    let entity = f.manager.entity_mut(f.target).unwrap();
+    assert_eq!(entity.collision.health_raw, RetailRuntimeValue::Known(0));
+    assert_eq!(
+        f.scheduler.family_for(f.target),
+        Some(
+            crate::specialized_actor_task_production::SpecializedActorTaskFamily::Intro2CommonDying
+        )
+    );
+}

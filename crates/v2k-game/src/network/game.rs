@@ -19,7 +19,8 @@ use super::scoring::{LineTables, Scoring, ScoringEffect};
 use super::slots::{SlotRecord, SlotTable, SLOTS};
 use super::transport::{NetSession, NetSessionError, Received, SessionInfo, SystemMessage};
 use crate::entity::network_body::{
-    basis_rows, NetworkRelationRepair, PLAYER_CRAFT_TYPE, REMOTE_CRAFT_TYPE,
+    basis_rows, NetworkRelationRepair, PeerBirth, PeerBirthWorld, PLAYER_CRAFT_TYPE,
+    REMOTE_CRAFT_TYPE,
 };
 use crate::entity::EntityManager;
 use crate::entity_collision_state::{RetailRuntimeValue, BODY_BASIS_REBUILT_STATE_BIT};
@@ -65,7 +66,24 @@ pub enum NetworkEvent {
     /// Kind 6: a static object's destruction starts here too
     /// (`FUN_00428910`): the cell's X and Z.
     StaticDestroyed([u8; 2]),
-    /// Kinds 13..=15: records whose world owners the port holds.
+    /// Kind 13 for a body this machine owns (`FUN_00418030`): attach it to
+    /// the peer's body that carries it (`None`: a handle unknown here).
+    PeerAttach {
+        entity_id: u32,
+        parent: Option<u32>,
+        flags: u32,
+    },
+    /// Kind 15 for a body this machine owns (`FUN_00418290` ->
+    /// `FUN_004180F0`): set it down at X and Z.
+    PeerDrop {
+        entity_id: u32,
+        parent: Option<u32>,
+        x_raw: i16,
+        z_raw: i16,
+    },
+    /// Kind 14, which retail never sends (`FUN_004180A0` would release the
+    /// named parent's hold through `FUN_00416750`; its pack `FUN_004182F0`
+    /// has no caller but the message table).
     Held { kind: u8 },
     /// `FUN_00438CB0` could not tell whether a body rests: its state word's
     /// bits `0x08000080` are unknown, so it resends on the moving period.
@@ -73,6 +91,10 @@ pub enum NetworkEvent {
     /// `FUN_00417680` could not tell whether this machine's body lists a
     /// peer's body: its Sub-J is unresolved.
     UnknownAttachmentList,
+    /// A peer's body the port built without its constructor.
+    HollowPeerBody { entity_type: u32, reason: String },
+    /// A part of `FUN_00412DA0`'s bit-31 branch the port does not run.
+    HeldPeerBodyPass(&'static str),
     /// `FUN_00456750`: a winner was named.
     WinnerFlash,
     /// `FUN_00450CC0`: the session was lost, or this machine became the host
@@ -114,13 +136,18 @@ pub struct WorldFrame<'a> {
     pub elapsed_us: u32,
     /// `DAT_004FED60`, the 50 Hz tick count.
     pub ticks: u32,
-    pub random: &'a mut dyn FnMut() -> u32,
+    /// The shared random word (`FUN_00457930`) and the effects a peer's
+    /// birth reaches.
+    pub fx: &'a mut crate::world_fx::WorldFx,
+    /// The models' Section-8 extents, for a peer's birth.
+    pub model_extent_raw: Option<&'a dyn Fn(usize) -> Option<u16>>,
     /// The profile's name and initials (`FUN_00449270`).
     pub profile: (&'a str, &'a str),
     /// The local player's extra sync fields.
     pub player: LocalBodyState,
     /// The level's terrain, which the host's kind 3 describes.
     pub terrain: Option<&'a v2k_formats::terrain::TerrainGrid>,
+    pub terrain_objects: Option<&'a v2k_formats::anim_frames::TerrainObjectTable>,
 }
 
 /// `004DC9E0`: where the host's next kind 3 starts. Retail never resets it,
@@ -498,7 +525,7 @@ impl NetworkGame {
             self.send(GameRecord::LiveList(detailed));
             if self.is_host() {
                 let tables = self.tables.clone();
-                let random = (frame.random)();
+                let random = u32::from(frame.fx.next_shared_retail_random_u16());
                 if let Some(line) = self.scoring.host_announcement(frame.ticks, &tables, random) {
                     self.send(GameRecord::Line(line.into_bytes()));
                 }
@@ -549,9 +576,9 @@ impl NetworkGame {
                 }
             };
             body.sync_timer_us = if resting {
-                ((frame.random)() & 0xFFFF) + 1_000_000
+                u32::from(frame.fx.next_shared_retail_random_u16()) + 1_000_000
             } else if entity.capability_flags & 1 == 0 {
-                ((frame.random)() & 0xFFF) + 70_000
+                (u32::from(frame.fx.next_shared_retail_random_u16()) & 0xFFF) + 70_000
             } else {
                 35_000
             };
@@ -859,6 +886,33 @@ impl NetworkGame {
                 let line = String::from_utf8_lossy(&text[..text.len().min(79)]).into_owned();
                 self.scoring.add_line(&line);
             }
+            GameRecord::Attach([parent, child, flags]) => {
+                if let Some(id) = self
+                    .handles
+                    .lookup(child)
+                    .filter(|id| self.local.contains_key(id))
+                {
+                    self.events.push(NetworkEvent::PeerAttach {
+                        entity_id: id,
+                        parent: self.handles.lookup(parent),
+                        flags,
+                    });
+                }
+            }
+            GameRecord::Dropped([parent, child, point]) => {
+                if let Some(id) = self
+                    .handles
+                    .lookup(child)
+                    .filter(|id| self.local.contains_key(id))
+                {
+                    self.events.push(NetworkEvent::PeerDrop {
+                        entity_id: id,
+                        parent: self.handles.lookup(parent),
+                        x_raw: point as u16 as i16,
+                        z_raw: (point >> 16) as u16 as i16,
+                    });
+                }
+            }
             other => self.events.push(NetworkEvent::Held {
                 kind: other.kind_of(),
             }),
@@ -885,9 +939,45 @@ impl NetworkGame {
                 } else {
                     sync.entity_type
                 };
-                let Some(id) = frame.entities.append_network_body(entity_type) else {
+                let position = (sync.flags & 0x20 != 0).then_some(sync.position);
+                let world = frame.terrain.map(|terrain| PeerBirthWorld {
+                    terrain,
+                    terrain_objects: frame.terrain_objects,
+                    model_extent_raw: frame.model_extent_raw,
+                    world_fx: &mut *frame.fx,
+                    retail_tick: frame.ticks,
+                });
+                let Some(birth) = frame
+                    .entities
+                    .append_network_body(entity_type, position, world)
+                else {
                     return;
                 };
+                let id = birth.id();
+                // FUN_00412DA0's bit-31 branch steps Sub-H (FUN_0041D0A0)
+                // and runs Sub-O's fan loops (FUN_00420920).
+                if let Some(RetailRuntimeValue::Known(parts)) = frame
+                    .entities
+                    .type_runtime_metadata(entity_type)
+                    .map(|metadata| metadata.common_mover_topology)
+                {
+                    if parts.sub_h {
+                        self.events.push(NetworkEvent::HeldPeerBodyPass(
+                            "a peer's Sub-H frames (FUN_0041D0A0)",
+                        ));
+                    }
+                    if parts.sub_o {
+                        self.events.push(NetworkEvent::HeldPeerBodyPass(
+                            "a peer craft's fan loops (FUN_00420920)",
+                        ));
+                    }
+                }
+                if let PeerBirth::Hollow { reason, .. } = birth {
+                    self.events.push(NetworkEvent::HollowPeerBody {
+                        entity_type,
+                        reason,
+                    });
+                }
                 if !self.handles.register(sync.handle, id) {
                     frame.entities.remove_network_body(id);
                     return;
@@ -899,6 +989,12 @@ impl NetworkGame {
         let parent = (sync.flags & 0x1000 != 0)
             .then(|| self.handles.lookup(sync.parent))
             .flatten();
+        // FUN_00412DA0 reads +84's bit 8 (plume) and 0x30 (FUN_004061A0).
+        if sync.flags & 2 != 0 && sync.extras & 0x38 != 0 {
+            self.events.push(NetworkEvent::HeldPeerBodyPass(
+                "a peer's change word (FUN_00412DA0's +84 bits 8, 0x10 and 0x20)",
+            ));
+        }
         match frame.entities.apply_network_sync(id, &sync, parent) {
             // The tail's kind 15: the parent, the body, the parent's X and Z.
             Some(NetworkRelationRepair::Dropped { x_raw, z_raw }) => {

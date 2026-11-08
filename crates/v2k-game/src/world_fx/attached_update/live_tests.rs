@@ -298,7 +298,7 @@ fn enabled_attached_filtered_zero_keeps_buffer_and_graph_but_still_clamps_age() 
         let tasks = task_snapshot(entity);
         // Positive buffer chooses lifetime-age. At the authored lifetime255,
         // the exact ratio is zero for every descriptor's unchanged packet.
-        //15040 cannot enter a mutating callback and needs no scheduler lease.
+        // 15040 cannot enter a mutating callback and needs no scheduler lease.
         let mut scheduler = SpecializedActorTaskScheduler::new();
         let mut fx = WorldFx::new();
         let slot = parent(&mut fx, id, class, 255);

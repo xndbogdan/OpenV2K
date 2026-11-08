@@ -1,6 +1,6 @@
-//! 443B50: player Sub-J append,16700 callback, then collection success suffix.
+//! 443B50: player Sub-J append, 16700 callback, then collection success suffix.
 //!
-//! Type93's08F00 calls16700 directly and deliberately does not use this owner.
+//! Type93's08F00 calls 16700 directly and deliberately does not use this owner.
 
 use super::*;
 
@@ -23,7 +23,7 @@ pub enum PlayerCargoAttachmentError {
     AllocationUnavailable,
     /// A retained, unfinished host callback cannot be entered a second time.
     PendingCallback,
-    /// The source has already published18440 and16700 when this is true.
+    /// The source has already published 18440 and 16700 when this is true.
     CallbackUnavailable {
         reason: String,
         prefix_committed: bool,
@@ -174,8 +174,8 @@ pub(super) fn attach_native_class0(
         }
         Ok(owner)
     })();
-    //18440 checks capacity before duplicate identity.16700 then unconditionally
-    // writes1000/+80, even for an already attached first identity match.
+    // 18440 checks capacity before duplicate identity. 16700 then unconditionally
+    // writes 1000/+80, even for an already attached first identity match.
     manager.commit_player_sub_j_append(append);
     project_relation_attach(manager.entity_mut(cargo).unwrap(), parent);
     let owner = callback.map_err(|reason| PlayerCargoAttachmentError::CallbackUnavailable {

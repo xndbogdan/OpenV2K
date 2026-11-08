@@ -19,9 +19,9 @@ pub(crate) fn effective_flags<P: NativeGroundActorProfile>(
         return Err(Block::Graph);
     };
     // Follow/Capture, Class5 row4C7930, Furniture26 row4C7738 and
-    // Buildings15 row4C76F0 have zero +34/+38 masks; Search clears21080/80. These source masks
+    // Buildings15 row4C76F0 have zero +34/+38 masks; Search clears 21080/80. These source masks
     // preserve each admitted profile's own authored C8. Class5 row4C7978
-    // instead sets80/clears2 and is not this ordinary living task graph.
+    // instead sets 80/clears 2 and is not this ordinary living task graph.
     let carrying = P::CAPTURE_POLICY == NativeCapturePolicy::Transport
         && crate::native_actor_capture::carry_tasks::carrying_variant(entity).is_some();
     // Wander Near Location 4C79C0 clears 21000; both Guard styles are zero.
@@ -237,8 +237,8 @@ pub(crate) fn finish<P: NativeGroundActorProfile>(
             &frame.resources,
         )?;
     }
-    // 413135..413149 runs18640 with the rebuilt basis and pre-integration
-    // parent origin, after the complete type callback and before12DA0 motion.
+    // 413135..413149 runs 18640 with the rebuilt basis and pre-integration
+    // parent origin, after the complete type callback and before 12DA0 motion.
     P::update_attachment(manager, id)?;
     let entity = manager.entity_mut(id).ok_or(Block::Allocation)?;
     super::live::commit_motion(entity, dt)?;

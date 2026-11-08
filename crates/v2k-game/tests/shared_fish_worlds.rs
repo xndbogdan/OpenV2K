@@ -214,7 +214,7 @@ fn level_one_zebrafish_swim_animate_and_resume_after_coarse_parking() {
         let authored = session.cache.level_desc().unwrap().entities[spawn_index].position_raw();
         assert_eq!(entity.entity_type, 62);
         assert_eq!(entity.model_index, Some(38));
-        // Model38 derives fin-morph register1 from callback0. Sub-F's
+        // Model38 derives fin-morph register 1 from callback0. Sub-F's
         // changing bank alone cannot animate it while that clock is zero.
         assert_eq!(entity.presentation_anim_vars(0x1_2345).dynamic[0], 0x2345);
         let model = session.cache.global_model(38).unwrap();

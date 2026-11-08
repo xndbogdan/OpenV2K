@@ -1,4 +1,4 @@
-//! Shared authored104B0/09A80/D4A0 entry with actual process Sub-D custody.
+//! Shared authored 104B0/09A80/D4A0 entry with actual process Sub-D custody.
 
 use super::tasks;
 use super::*;
@@ -166,7 +166,7 @@ pub(crate) fn publish_authored_type30(
 }
 
 /// 09A80 builds H/D/K/L/A/E, then D4A0/AC60 publishes the weighted task.
-/// A20450, selector25680 and each selected6070 suffix consume separate words.
+/// A20450, selector25680 and each selected 6070 suffix consume separate words.
 fn publish_birth(
     entity: &mut Entity,
     metadata: &EntityTypeRuntimeMetadata,

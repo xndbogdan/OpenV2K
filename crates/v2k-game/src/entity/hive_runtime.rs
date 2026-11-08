@@ -137,8 +137,8 @@ impl EntityManager {
             return Ok(());
         };
         // The 1BEB0 forced branch emits at retained Sub-N+54 before its later
-        // state0 visit enters10C10. Keep that pending until the complete nested
-        // effect host exists; a damage packet/instant25F60 would change ordering.
+        // state 0 visit enters 10C10. Keep that pending until the complete nested
+        // effect host exists; a damage packet/instant 25F60 would change ordering.
         if matches!(self.entities[index].sub_n_runtime,
             RetailRuntimeValue::Known(Some(runtime)) if runtime.forced_death_requested())
         {
@@ -290,7 +290,7 @@ impl EntityManager {
 
 impl EntityManager {
     /// Source1BEB0 wreck contact, after the controlled-player integration.
-    /// The port stages that integration separately from13500; retain this
+    /// The port stages that integration separately from 13500; retain this
     /// complete no-RNG contact phase at the proven post-player boundary.
     /// Its clock was advanced exactly once by the Hive's component visit.
     /// Return456D10's interior request without selecting an authored marker;
@@ -347,6 +347,128 @@ impl EntityManager {
         }
         retry_requested
     }
+}
+
+/// One body `FUN_0041BEB0`'s mouth walk takes into a dying Hive.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HiveMouthSwallow {
+    /// The controller's body: `FUN_00448760` releases it on its next Player
+    /// Control visit.
+    Controlled(u32),
+    /// Any other body: staged for the deferred sweep (`FUN_00410B70`).
+    Staged(u32),
+}
+
+/// `FUN_0041BEB0`'s mouth walk takes a body this far below the mouth.
+const HIVE_MOUTH_DEPTH_RAW: i32 = -0x20;
+/// ... and within this squared horizontal radius of it.
+const HIVE_MOUTH_RADIUS_SQUARED: i32 = 0x24000;
+/// The walk's outer octagonal bound, as the wreck's suction.
+const HIVE_MOUTH_REACH_RAW: i32 = 8_000;
+
+impl EntityManager {
+    /// `FUN_0041BEB0`'s mouth walk on each dying Hive whose Sub-N `+4C`
+    /// marker gate is set: a body in its mouth ([`Self::body_in_hive_mouth`])
+    /// without capability bit 0 and without the carried bit `0x1000` is
+    /// swallowed: the controller's body (`FUN_00443AF0`) other than a Type98
+    /// is released (`FUN_00448760`), any other is staged for the sweep
+    /// (`FUN_00410B70`), which this commits. A live Hive's mouth is
+    /// [`crate::hive_mouth::apply_live_hive_mouths`].
+    pub fn apply_hive_mouth_swallows(
+        &mut self,
+        controlled_body: Option<u32>,
+    ) -> Vec<HiveMouthSwallow> {
+        let mut swallows = Vec::new();
+        for index in 0..self.entities.len() {
+            let hive = &self.entities[index];
+            if hive.collision.state_flags_at_0x08.masked(DYING_STATE_BIT)
+                != RetailRuntimeValue::Known(DYING_STATE_BIT)
+            {
+                continue;
+            }
+            let Some(mouth) = hive_wreck_contact_origin(hive) else {
+                continue;
+            };
+            let restored = self.take_hive_restored_this_visit(index);
+            for body in &self.entities {
+                if !in_hive_mouth(mouth, body) || restored.contains(&Some(body.id)) {
+                    continue;
+                }
+                if body.capability_flags & 1 != 0
+                    || body.collision.state_flags_at_0x08.masked(0x1000)
+                        != RetailRuntimeValue::Known(0)
+                {
+                    continue;
+                }
+                swallows.push(if controlled_body == Some(body.id) {
+                    HiveMouthSwallow::Controlled(body.id)
+                } else {
+                    HiveMouthSwallow::Staged(body.id)
+                });
+            }
+        }
+        for swallow in &swallows {
+            let HiveMouthSwallow::Staged(id) = *swallow else {
+                continue;
+            };
+            let Some(entity) = self.entities.iter_mut().find(|entity| entity.id == id) else {
+                continue;
+            };
+            // FUN_00410B70 stages a body once.
+            if entity
+                .collision
+                .state_flags_at_0x08
+                .masked(crate::entity_collision_state::DEFERRED_DESTROY_PENDING_STATE_BIT)
+                == RetailRuntimeValue::Known(0)
+            {
+                entity.mark_actor_deferred_destroy_pending();
+                self.queue_actor_deferred_destroy(id);
+            }
+        }
+        swallows
+    }
+
+    /// The mouth of a live Hive: Sub-N `+4C` set and the dying bit clear.
+    pub(crate) fn live_hive_mouth(&self, hive_id: u32) -> Option<[i16; 3]> {
+        let hive = self.entities.iter().find(|entity| entity.id == hive_id)?;
+        (hive.collision.state_flags_at_0x08.masked(DYING_STATE_BIT) == RetailRuntimeValue::Known(0))
+            .then(|| hive_wreck_contact_origin(hive))
+            .flatten()
+    }
+
+    /// Whether `body_id` lies in `mouth` as the walk tests it.
+    pub(crate) fn body_in_hive_mouth(&self, mouth: [i16; 3], body_id: u32) -> bool {
+        self.entities
+            .iter()
+            .find(|entity| entity.id == body_id)
+            .is_some_and(|body| in_hive_mouth(mouth, body))
+    }
+
+    /// The Hive's [`crate::hive_birth::HiveBirthRuntime::take_restored_this_visit`].
+    pub(crate) fn take_hive_restored_this_visit(&mut self, index: usize) -> [Option<u32>; 2] {
+        self.entities[index]
+            .authored_radial_emitter
+            .as_mut()
+            .and_then(|emitter| emitter.birth_runtime_mut())
+            .map_or([None; 2], |runtime| runtime.take_restored_this_visit())
+    }
+}
+
+/// `FUN_0041BEB0`'s mouth test: an admitted (`0x8000`) body within the outer
+/// bound whose offset from the mouth (Sub-N `+54`) lies more than `0x20`
+/// below it and within `0x24000` squared horizontally.
+fn in_hive_mouth(mouth: [i16; 3], body: &Entity) -> bool {
+    if body.collision.state_flags_at_0x08.masked(0x8000) != RetailRuntimeValue::Known(0x8000) {
+        return false;
+    }
+    let at = body.position_raw();
+    if crate::radial_damage::radial_distance_raw(mouth, at) >= HIVE_MOUTH_REACH_RAW {
+        return false;
+    }
+    let [dx, dy, dz] =
+        std::array::from_fn::<i32, 3, _>(|axis| i32::from(at[axis].wrapping_sub(mouth[axis])));
+    dy < HIVE_MOUTH_DEPTH_RAW
+        && dx.wrapping_mul(dx).wrapping_add(dz.wrapping_mul(dz)) < HIVE_MOUTH_RADIUS_SQUARED
 }
 
 /// Why `FUN_00410C10` could not run on a Hive.

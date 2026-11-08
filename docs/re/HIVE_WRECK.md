@@ -417,9 +417,72 @@ subtype3 marker, whereas its subtype1 marker is elsewhere. Neither Hive death
 nor a positive suction timer creates a normal route; the contacted marker's
 subtype and terrain state select the authored campaign record.
 
-The separate live-hive player fall-in/ejection branch remains an unimplemented
-boundary. Child-birth `FUN_0041C830` ejection and `FUN_0041CA90` restoration are
-owned by the birth host above; neither replaces the wreck's suction law.
+A live Hive's mouth ([below](#the-mouth-walk)) throws bodies out through the
+same `FUN_0041C830` ejection and `FUN_0041CA90` restoration as the births
+above; neither replaces the wreck's suction law.
+
+## The mouth walk
+
+The same live-list walk first tests each body against the Hive's mouth, on
+every Hive whose Sub-N `+4C` marker gate is set (a Hive born beside a kind
+22..26 object, alive or dead): an admitted (`0x8000`) body within the
+three-axis `< 8000` bound whose signed word offset from the mouth (Sub-N
+`+54`) has `dy < -0x20` and `dx*dx + dz*dz < 0x24000`.
+
+- On a dying Hive, a body without capability bit 0 and without the carried
+  bit `0x1000` is swallowed: the controller's own body (`FUN_00443AF0`), other
+  than a Type98, is released (`FUN_00448760` sets `+70` to 1 while it is
+  nonzero, and the next Player Control visit releases it), and any other body
+  is staged for the deferred sweep (`FUN_00410B70`). The port runs this for
+  every body after the controlled visits, before the craft's suction; a
+  staged body leaves its owner's custody.
+- On a live Hive, a body without capability bit 3 dies (`FUN_00410C10`, which
+  does nothing to a remote or already dying body), and then every body in the
+  mouth, bit 3 or not, is thrown back out by the births' ejection
+  (`FUN_0041C830`): recorded in a free slot for 500 000 us with `0x8000`
+  clear (so the walk skips it until `FUN_0041CA90` restores it), set beside
+  the mouth on the terrain and launched at 850 upward. With both slots held
+  it stays where it is. The craft is such a body (capability 5): it dies
+  where it falls in, is thrown out, and the player's death follows 3 s
+  later, as for any lethal hit. A possessed body always has bit 3, so it is
+  only thrown out.
+
+The retail lab confirmed the dying branch on world 13 (`0x04A30001`, mouth
+`(BB80, FF00, 8180)`, its `+4C` set from birth): with the Hive killed
+(`FUN_00410C10` at pass 2100) and two bodies moved `0x80` below the mouth at
+pass 2301, the next Hive visit (tick 1800) staged the free one and called
+`FUN_00448760` for the possessed Type17 (`+70` 53040 -> 1); at tick 1801 its
+Player Control visit released it (the MindBall born at it) and the same
+tick's walk staged it, now without a controller. A retail-backed test
+replays the gate on the port's world 13 Hive.
+
+The lab confirmed the live branch on the same Hive, alive (pass 1900 and
+2199, the walk on visits of 60 000 us):
+
+| Body moved `0x80` below the mouth | `FUN_00410C10` | Thrown out to | Velocity |
+| --- | --- | --- | --- |
+| Type9 (no bit 3), at `+0x40` | yes, one word | `(BB32, 00B0, 8364)`, yaw `0x8000` | `(-237, 850, 173)` |
+| Type17 (bit 3), the next body in the walk | no, health kept | `(BAFA, 00AF, 8364)`, yaw `0x8000` | `(-97, 850, 135)` |
+| The craft (Type46), alone | yes, two words (burst, death seed) | `(BBFF, 00B0, 8364)`, yaw 0 | `(149, 850, 181)` |
+
+Each X is the mouth's `BB80` less or plus the side word modulo the Hive
+model's extent `0x180`, Z is `8180 + 0x180 + 100`, and Y the terrain plus
+400. The same visit's `FUN_0041CA90` aged each slot to 440 000; the dying
+craft then fell under gravity (Y speed down 30 a tick) and the player's death
+(`FUN_00450980`) came 151 ticks after the kill. The craft written there on a
+tick without a Hive visit instead touched the Hive's marker (its static
+contact) and left the world first. Two retail-backed tests replay both
+visits on the port's world 13 from retail's process words and reach the same
+positions, speeds, deaths, slots and final word; a port run that starts the
+craft in the mouth kills and throws it out on its first frame, and its world
+ends 151 ticks later.
+
+The port runs the walk after the actor pass and the craft's movement, so it
+tests the craft where retail's walk sees it (the craft leads retail's live
+list), and its draws come after the rest of the actor pass. The Hive's own
+visit has already run its `FUN_0041CA90` by then: the walk still treats the
+bodies that visit restored as held (their slots occupied, the bodies not yet
+admitted), and a new launch ages by the visit's time at once, as in retail.
 
 ## Player and hive update order
 
@@ -472,7 +535,9 @@ Do not gate presentation on suction being active.
 At the Sub-N anchor X/Z, the callback bilinearly samples the four signed
 Section-10 height bytes with the two arithmetic-shift interpolation stages,
 then adds 200 raw units. This is the ring's base Y; Sub-N anchor Y and the sea
-surface are not used. For phase `p` in milliseconds, the height above that
+surface are not used. Each ring takes the model-root test (`FUN_00465840`
+at `0x41CDD9`, skipping a rejected ring) with the ring's wrapped raw
+position and model 243's radius, as the port does. For phase `p` in milliseconds, the height above that
 base and the private model output are:
 
 | Phase | Height above base, raw | Model callback output 1 |

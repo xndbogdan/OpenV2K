@@ -100,7 +100,10 @@ pub(super) fn flyer_sub_g_descriptor(entity_type: u32) -> Option<&'static [u8; 1
         TYPE14_ENTITY_TYPE => Some(&TYPE14_SUB_G_DESCRIPTOR),
         TYPE39_ENTITY_TYPE => Some(&TYPE39_SUB_G_DESCRIPTOR),
         TYPE41_ENTITY_TYPE => Some(&TYPE41_SUB_G_DESCRIPTOR),
-        super::TYPE46_ENTITY_TYPE => Some(&super::TYPE46_SUB_G_DESCRIPTOR),
+        // Type 51 authors type 46's flight table.
+        super::TYPE46_ENTITY_TYPE | super::TYPE51_ENTITY_TYPE => {
+            Some(&super::TYPE46_SUB_G_DESCRIPTOR)
+        }
         _ => None,
     }
 }

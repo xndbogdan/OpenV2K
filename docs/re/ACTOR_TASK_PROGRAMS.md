@@ -646,6 +646,14 @@ after slot 1 has been cleared. Variant 2 clears slots 2 and 1 and installs
 event entry/task semantics remain unresolved. Its `FUN_0040CE90` completion
 marks `0x8000`, finishes the component route, and reselects behavior.
 
+`FUN_0040AEA0` (install a 5000-ms task through `FUN_00402780` with tick
+`FUN_004027A0`; on failure clear slots 1 and 0) has no direct code caller:
+a whole-image scan finds zero E8/E9 xrefs, with two DWORD refs at
+`0x4C7DA8` and `0x4C7DF0` (style records whose frames are `0x4C7DB0` and
+class-13's initial `0x4C7DF8`). The port cites `FUN_0040AEA0`, `FUN_00402780`,
+and `FUN_004027A0` at class 13 Flocking (`crates/v2k-game/src/entity_behavior.rs`),
+which authenticates initial style `0x004C7DF8`.
+
 ### Shared Aim And Fire slot-2 task (STATICALLY CONFIRMED)
 
 `FUN_00402220(owner, slot, lifetime_ms, target, optional_sound, sound_period)`
@@ -1386,6 +1394,30 @@ selects; "detailed visits" are those of a body with the detail bit.
 | 27 Destroy Furniture | `FUN_0040B800` | initializer: plays the type's sound (`+0x9A`) at the body, clears Tertiary and Secondary, then builds the 5,000-ms Primary `FUN_00402430` with the type's sound `+0x9C` and period `+0xA8` |
 | 27 Destroy Furniture | `FUN_00402430` | builds the Primary as `FUN_00401CA0` does, with tick `FUN_004024E0`, then stores the caller's sound id and period at record `+0x1C` and `+0x20` |
 | 27 Destroy Furniture | `FUN_004024E0` | tick: without furniture (or on a 1-in-16 retry) asks `FUN_004230C0` for one and keeps its X/Z with the bilinear ground height; moves through `FUN_00401430`; while alive, plays the record's sound at its period on detailed visits and fires the type's emitter (`+0x18`) at the furniture through `FUN_00424650` |
+
+Class 27 is unreachable in shipped `V2000.EXE` data: a scan of all 130
+global entity types (auxiliary OVL 3, `EntityTypeRuntimeMetadata::from_section12`;
+every weighted `behavior_choices` entry plus `alternate_behavior_class_ref`)
+finds no class-27 reference, and no note records a runtime transition into
+it. `FUN_0040B800`, `FUN_00402430` and `FUN_004024E0` are therefore excluded
+from the port's coverage denominator (`status.csv`), alongside the other dead
+retail paths. The exclusion survives style sharing: each 0x48-byte style
+record carries its task installer at `+0x40` (`B800` at class 27's initial
+style `0x4C7780`, like `B7C0` at class 26's `0x4C7738`), and a whole-image
+scan finds zero E8/E9 code xrefs to all three routines with single data
+refs consistent with the one dead chain (`B800` calls `00402430`, whose
+word immediate is the `004024E0` tick). Initial selection is always variant
+0 (no program overrides `initial_style_table_index_raw`), and the shared
+class-15/26 tick `FUN_00401DA0` (read via REA) performs no variant
+selection — it scans, moves, and returns continue/reselect, with
+`FUN_0040C690` reselecting behavior (variant 0 of the new class) — while no
+documented variant selector (CD50/CE70/C470/C7B0/`47AC`/C910) targets a
+`B800`-holding style. The port audits neither `0x4C7780` nor any alias, so
+any such selection would fail closed with a logged stop; none has been
+observed. If future evidence shows a selector, remove that exclusion and
+port the owner: the class-26 Trash Furniture module (`trash_furniture.rs`)
+is the template (same 0x24-byte record and `FUN_00401430` mover, plus the
+`+0x1C/+0x20` sound words and the `FUN_00424650` emitter fire).
 | 28 Guided Missile | `FUN_00407F20` | builds the Primary through `FUN_00401020`: record `FUN_00408610`, tick `FUN_00407FB0`, destructor `FUN_004086A0` |
 | 28 Guided Missile | `FUN_00408610` | allocates the zeroed 12-byte record (target, flight time, speed), rebuilds the basis (`FUN_00413F70`) and starts at the speed of its current velocity |
 | 28 Guided Missile | `FUN_00407FB0` | tick: dies through `FUN_00410C10` after 15 s; rolls its basis; with a live target it turns toward it (500 above when far), each turn capped at the elapsed time over 32, the larger turn whole and the other halved; without one it searches (`FUN_004083F0`); accelerates by its steering descriptor's word 0 up to a quarter of word 2 and flies along its forward axis, climbing by an eighth when untargeted or far |
@@ -1410,6 +1442,30 @@ selects; "detailed visits" are those of a body with the detail bit.
 | 55 Megablast | `FUN_004078C0` | tick: sits on its owner, spins, and charges (mode 0) or drains and blasts (mode 1); see [special weapons](PLAYER_CRAFT.md#special-weapons) |
 | 55 Megablast | `FUN_00407800` | builds the Primary through `FUN_00401020` with tick `FUN_004078C0`, stores the caller's word in Sub-K variable 2 and clears variable 1 |
 | 57 Fire Monster | `FUN_00406740` | tick (installed by `FUN_004066B0`): on nearly every visit (all but a random one in 10,000,000/elapsed) emits a class-47 particle at the body's X/Z, on the higher of the ground and the waved sea |
+
+Class 57 is unreachable in shipped `V2000.EXE` data: a scan of all 130
+global entity types (auxiliary OVL 3, `EntityTypeRuntimeMetadata::from_section12`;
+every weighted `behavior_choices` entry plus `alternate_behavior_class_ref`)
+finds no class-57 reference, and no note records a runtime transition into
+it. `FUN_004066B0` and `FUN_00406740` are therefore excluded from the
+port's coverage denominator (`status.csv`), alongside the other dead retail
+paths. `FUN_0040B8E0` is excluded with them: a whole-image scan
+(`v2000/decompiled/tools/scan_callers.py`, tested by
+`test_scan_callers.py`) finds zero E8/E9 code xrefs to it, and its single
+DWORD reference is the class-57 initial style's initializer slot — style
+`0x4C7810` holds `FUN_0040B8E0` at `+0x40`, exactly as class 26's
+`0x4C7738` holds `FUN_0040B7C0` and dead class 27's `0x4C7780` holds
+`FUN_0040B800` (class table `0x4C8AA0` names all three). Its one code
+caller is `FUN_004066B0`'s installer, called from `0x0040B902` inside
+`FUN_0040B8E0` itself, whose tick immediate `0x00406740` sits at
+`0x004066F1`: the whole chain is dead with class 57. As with class 27,
+initial selection is always variant 0, the shared class-15/26 tick
+performs no variant selection, and no documented variant selector targets
+a `B8E0`-holding style; the port audits neither `0x4C7810` nor any alias,
+so any such selection would fail closed with a logged stop. If future
+evidence shows a selector, remove those exclusions and port the owner:
+the class-26 Trash Furniture module (`trash_furniture.rs`) is the template
+(same `FUN_004230C0` furniture scan and `FUN_00401430` mover).
 | 58 Tractor Beam | `FUN_00405240` | tick, detailed visits: sits on its target (record `+8`; gone or dying takes `4BE160`) and measures the target against the beam's owner (`+60`): beyond 2,560 units the beam dies through `FUN_00410C10`; beyond 1,024 it pulls the two together, with an impulse that grows as the gap closes toward 1,024 |
 | 59 Remote Beamer | `FUN_00405420` | builds the Primary: tick `FUN_004054C0` and destructor `FUN_004054A0` |
 | 59 Remote Beamer | `FUN_004054C0` | tick: while the body is not held (state `0x1000`), advances Sub-K variable 1 by the elapsed microseconds over 16, saturating at `0xFFFF`; a held body resets it to 0 |

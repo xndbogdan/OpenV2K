@@ -37,7 +37,7 @@ pub struct NativeSaveSnapshot<'a> {
 }
 
 impl NativeSaveSnapshot<'_> {
-    /// `42E270 ->FUN_00448070` stages flags0xF and the route's arrival. After body
+    /// `42E270 ->FUN_00448070` stages flags 0xF and the route's arrival. After body
     /// teardown, `443440` applies those overrides: XYZ, zero velocity, heading
     /// 4000/zero attitude, and health40000. Fuel, mode and shield are retained.
     pub fn encode_campaign_arrival(
@@ -175,7 +175,7 @@ impl NativeSaveSnapshot<'_> {
     }
 }
 
-/// 451FB0 copies at most31 bytes and terminates the 32-byte name field.
+/// 451FB0 copies at most 31 bytes and terminates the 32-byte name field.
 fn with_display_name(
     mut native: NativeCompatibilityPreview,
     display_name: &str,

@@ -147,7 +147,7 @@ fn method24_class68_fifo_and_sound70_survive_c690_and_class12_then_drain_in_mana
         .collect();
     assert_eq!(ids.len(), 2);
     let mut counts = Vec::new();
-    // Queue in reverse allocation order;11400 still follows manager order.
+    // Queue in reverse allocation order; 11400 still follows manager order.
     for &id in ids.iter().rev() {
         counts.push((id, queue_shot(&mut manager, &mut fx, id)));
         fx.process_pending();

@@ -51,6 +51,9 @@ enum FlyerEmitterProfile {
     /// the attract row on every visit (method, sound, cadence, auxiliary
     /// command and gate mode 1).
     Craft,
+    /// A peer's craft, type 51: its record's Sub-E (method 0, no sound). The
+    /// copy never fires: `FUN_00412DA0` runs none of a peer's callbacks.
+    PeerCraft,
 }
 
 impl FlyerEmitterProfile {
@@ -68,6 +71,7 @@ impl FlyerEmitterProfile {
             108 => Some(Self::Type108),
             39 => Some(Self::Type39),
             46 => Some(Self::Craft),
+            51 => Some(Self::PeerCraft),
             _ => None,
         }
     }
@@ -79,6 +83,7 @@ impl FlyerEmitterProfile {
             Self::Deathwas | Self::Type39 => 20,
             Self::Type108 => 24,
             Self::Craft => 18,
+            Self::PeerCraft => 0,
         }
     }
     fn sound(self) -> u16 {
@@ -87,6 +92,7 @@ impl FlyerEmitterProfile {
             Self::Deathwas => 92,
             Self::Type108 | Self::Type39 => 105,
             Self::Craft => 88,
+            Self::PeerCraft => 0,
         }
     }
     /// Sub-E random interval and target-axis tolerance.
@@ -96,6 +102,7 @@ impl FlyerEmitterProfile {
             Self::Type108 => (400_000, 3_072),
             Self::Type39 => (2_000_000, 2_560),
             Self::Craft => (75_000, 5_120),
+            Self::PeerCraft => (75_000, 0),
         }
     }
     /// Sub-E `+0x0C`; zero takes the method's table speed.
@@ -129,6 +136,9 @@ impl FlyerEmitterProfile {
         }
     }
     fn accepts(self, descriptor: ProjectileEmitterDescriptor) -> bool {
+        if self == Self::PeerCraft {
+            return descriptor == PEER_CRAFT_SUB_E;
+        }
         if self == Self::Craft {
             // Type 46's record; cadence, gate mode and auxiliary command are
             // the attract row's writes.
@@ -160,6 +170,22 @@ impl FlyerEmitterProfile {
 /// `DAT_004D0B30 + 0x1C`: the boot session record's first weapon, selector
 /// 1 (slot byte `+0x122` is 0).
 const CRAFT_BOOT_RECORD_SELECTOR: u32 = 1;
+
+/// Type 51's authored Sub-E.
+const PEER_CRAFT_SUB_E: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {
+    projectile_method: 0,
+    random_interval_us: 75_000,
+    spread_raw: 0,
+    aim_threshold_raw: 0,
+    speed_override_raw: 0,
+    target_axis_tolerance_raw: 0,
+    sound_id: 0,
+    raw_word_at_0x12: 0,
+    alternate_emitter_raw: 0,
+    stochastic_gate_mode: 0,
+    auxiliary_command: 1,
+    variable_bindings: [1, 2, 3, 4],
+};
 
 /// Type 46's authored Sub-E.
 const CRAFT_SUB_E: ProjectileEmitterDescriptor = ProjectileEmitterDescriptor {

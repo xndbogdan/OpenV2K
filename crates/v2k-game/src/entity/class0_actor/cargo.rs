@@ -1,8 +1,8 @@
 //! Type68's null class0 attach and D1C0 terrain-align/reselection release,
 //! which Type74's class59 style `4C72B8` shares (+08 null, +0C D1C0).
 //!
-//! DC50 at40DC76/40DC85 passes entity+C0 as the second callback argument;
-//! the packaged parent is the third argument. D1C0 at40D1CB/40D1D2 reads
+//! DC50 at 40DC76/40DC85 passes entity+C0 as the second callback argument;
+//! the packaged parent is the third argument. D1C0 at 40D1CB/40D1D2 reads
 //! that second argument's context[0], so AC60 receives the type-default
 //! choice source. No packed handle is interpreted as a choice-list address.
 
@@ -91,6 +91,82 @@ pub(crate) fn prepare_attach(
     })
 }
 
+/// A body of Type68 or Type74 this machine owns, for a peer's request.
+fn peer_relation_owner(
+    manager: &EntityManager,
+    cargo: u32,
+) -> Result<Class0ActorOwner, Class0ActorError> {
+    let owner = Class0ActorOwner::adopt(manager, cargo)?;
+    let entity = manager
+        .iter_all()
+        .find(|entity| entity.id == cargo)
+        .ok_or(Class0ActorError::Allocation)?;
+    if !matches!(entity.entity_type, 68 | 74) {
+        return Err(Class0ActorError::Runtime("class0 cargo type"));
+    }
+    authenticate_metadata(
+        entity.entity_type,
+        manager
+            .type_runtime_metadata(entity.entity_type)
+            .ok_or(Class0ActorError::Metadata)?,
+    )?;
+    if entity
+        .collision
+        .state_flags_at_0x08
+        .masked(REMOTE_OWNED_STATE_BIT)
+        != RetailRuntimeValue::Known(0)
+    {
+        return Err(Class0ActorError::Runtime("local class0 relation"));
+    }
+    Ok(owner)
+}
+
+/// `FUN_00418030`'s `FUN_00416700` on an unattached body this machine owns,
+/// with a peer's body as the parent: the relation bit and handle, then
+/// `FUN_0040DBF0`'s null style `+08` (styles `4C7468` and `4C72B8`). Nothing
+/// joins the parent's Sub-J.
+pub(crate) fn attach_to_peer(
+    manager: &mut EntityManager,
+    cargo: u32,
+    parent: u32,
+) -> Result<(), Class0ActorError> {
+    peer_relation_owner(manager, cargo)?;
+    let entity = manager.entity_mut(cargo).unwrap();
+    if entity.attached_to.is_some()
+        || entity.collision.state_flags_at_0x08.masked(0x1000) != RetailRuntimeValue::Known(0)
+    {
+        return Err(Class0ActorError::Runtime("class0 attach relation"));
+    }
+    project_relation_attach(entity, parent);
+    Ok(())
+}
+
+/// `FUN_004180F0`'s `FUN_00416750` for a peer's kind 15: the body this
+/// machine owns is released from whatever it rides (a peer's body, or
+/// nothing), keeping its position, through D1C0.
+pub(crate) fn prepare_peer_release(
+    manager: &EntityManager,
+    cargo: u32,
+    terrain: &TerrainGrid,
+) -> Result<Class0ReleasePlan, Class0ActorError> {
+    let owner = peer_relation_owner(manager, cargo)?;
+    let entity = manager
+        .iter_all()
+        .find(|entity| entity.id == cargo)
+        .unwrap();
+    let metadata = manager
+        .type_runtime_metadata(entity.entity_type)
+        .unwrap()
+        .clone();
+    Ok(Class0ReleasePlan {
+        cargo,
+        owner,
+        metadata,
+        position: Type9CargoReleasePosition::Retained,
+        body_basis: terrain_aligned_actor_basis(terrain, entity.position_raw()),
+    })
+}
+
 pub(crate) fn commit_attach(
     manager: &mut EntityManager,
     plan: Class0AttachPlan,
@@ -148,7 +224,7 @@ pub(crate) fn commit_release(
     assert_eq!(Class0ActorOwner::adopt(manager, plan.cargo), Ok(plan.owner));
     if let Type9CargoReleasePosition::Materialiser(raw) = plan.position {
         // 409030 copies the proxy's current XYZ into both child+96 and+90,
-        // then enables master motion before entering16750.
+        // then enables master motion before entering 16750.
         manager
             .entity_mut(plan.cargo)
             .unwrap()
@@ -176,7 +252,7 @@ pub(crate) fn commit_release(
         relation_release_state_word_after(entity.collision.state_flags_at_0x08, defaults);
     entity.collision.default_state_flags_at_0xc8 = RetailRuntimeValue::Known(defaults);
     entity.attached_to = None;
-    // 16AC0 changes the physical columns and sets28, preserving Euler words
+    // 16AC0 changes the physical columns and sets 28, preserving Euler words
     // and position. D1C0 then takes AC60's living singleton selector once.
     entity.physical_body_basis_q31 = RetailRuntimeValue::Known(plan.body_basis);
     entity.collision.state_flags_at_0x08.overwrite(0x28, 0x28);

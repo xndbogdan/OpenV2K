@@ -55,7 +55,7 @@ fn controlled_terrain(session: &GameSession, furniture: bool) -> TerrainGrid {
     }
     if furniture {
         assert!(session.cache.terrain_objects().unwrap().records.len() > 1);
-        // Spawn40 is BC00/0D00. Its first4230C0 corner is BB00/0C00.
+        // Spawn40 is BC00/0D00. Its first 4230C0 corner is BB00/0C00.
         let cell = &mut terrain.cells[0xbb * 256 + 0x0c];
         cell.attribute = 1;
         cell.terrain_type &= !8;

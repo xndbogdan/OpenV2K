@@ -111,6 +111,26 @@ pub const TYPE46_BEHAVIOR_LIST_TYPE: u32 = 51;
 /// `player4` and its infected model.
 pub const TYPE46_MODEL_SLOTS: [u16; 4] = [41, 67, 41, 67];
 
+/// A peer's craft: `FUN_00417680` births a player's craft (type 46) as type
+/// 51, whose own record has type 46's C/D/E/G/J/O but neither Sub-A nor
+/// Sub-B, the same flight table and steering, its class-7 list and Sub-E
+/// method 0. The copy is built but never run ([MULTIPLAYER.md]).
+pub const TYPE51_ENTITY_TYPE: u32 = 51;
+pub const TYPE51_MODEL_SLOTS: [u16; 4] = [41, 67, 41, 41];
+
+pub const TYPE51_COMMON_MOVER_TOPOLOGY: CommonMoverComponentTopology =
+    CommonMoverComponentTopology {
+        sub_a: false,
+        sub_b: false,
+        ..TYPE46_COMMON_MOVER_TOPOLOGY
+    };
+
+/// Range 25,600 and capability mask 8.
+pub const TYPE51_COMMON_AXIS: CommonAxisDescriptor = CommonAxisDescriptor {
+    strict_axis_limit_raw: 25_600,
+    raw_word_at_0x04: 8,
+};
+
 pub const TYPE46_COMMON_MOVER_TOPOLOGY: CommonMoverComponentTopology =
     CommonMoverComponentTopology {
         sub_a: true,
@@ -208,6 +228,7 @@ pub(crate) const fn flyer_common_axis(entity_type: u32) -> Option<CommonAxisDesc
         TYPE39_ENTITY_TYPE => Some(TYPE39_COMMON_AXIS),
         TYPE41_ENTITY_TYPE => Some(TYPE41_COMMON_AXIS),
         TYPE46_ENTITY_TYPE => Some(TYPE46_COMMON_AXIS),
+        TYPE51_ENTITY_TYPE => Some(TYPE51_COMMON_AXIS),
         _ => None,
     }
 }
@@ -216,6 +237,7 @@ pub(crate) const fn flyer_common_axis(entity_type: u32) -> Option<CommonAxisDesc
 pub(crate) const fn flyer_model_slots(entity_type: u32) -> Option<[u16; 4]> {
     match entity_type {
         TYPE46_ENTITY_TYPE => Some(TYPE46_MODEL_SLOTS),
+        TYPE51_ENTITY_TYPE => Some(TYPE51_MODEL_SLOTS),
         _ => match birth::native_flyer_model_id(entity_type) {
             Some(model) => Some([model; 4]),
             None => None,
@@ -226,7 +248,7 @@ pub(crate) const fn flyer_model_slots(entity_type: u32) -> Option<[u16; 4]> {
 /// Section-12 capability: the craft's 5 (bit 1, the player's projection).
 pub(crate) const fn flyer_capability(entity_type: u32) -> u32 {
     match entity_type {
-        TYPE46_ENTITY_TYPE => 5,
+        TYPE46_ENTITY_TYPE | TYPE51_ENTITY_TYPE => 5,
         _ => 8,
     }
 }
@@ -300,6 +322,7 @@ pub(crate) const fn flyer_topology(entity_type: u32) -> CommonMoverComponentTopo
         TYPE39_ENTITY_TYPE => TYPE39_COMMON_MOVER_TOPOLOGY,
         TYPE41_ENTITY_TYPE => TYPE41_COMMON_MOVER_TOPOLOGY,
         TYPE46_ENTITY_TYPE => TYPE46_COMMON_MOVER_TOPOLOGY,
+        TYPE51_ENTITY_TYPE => TYPE51_COMMON_MOVER_TOPOLOGY,
         _ => FLYER_COMMON_MOVER_TOPOLOGY,
     }
 }
@@ -307,7 +330,7 @@ pub(crate) const fn flyer_topology(entity_type: u32) -> CommonMoverComponentTopo
 /// The authored Sub-B; Sub-G suppresses its tail either way.
 pub(crate) const fn flyer_sub_b(entity_type: u32) -> Option<SubBLateralDescriptor> {
     match entity_type {
-        TYPE41_ENTITY_TYPE => None,
+        TYPE41_ENTITY_TYPE | TYPE51_ENTITY_TYPE => None,
         TYPE46_ENTITY_TYPE => Some(TYPE46_SUB_B),
         _ => Some(FLYER_SUB_B),
     }
@@ -317,7 +340,7 @@ pub(crate) const fn flyer_sub_d(entity_type: u32) -> SubDSteeringDescriptor {
     match entity_type {
         TYPE14_ENTITY_TYPE => TYPE14_SUB_D,
         TYPE41_ENTITY_TYPE => crate::common_mover::sub_d::TYPE41_SUB_D,
-        TYPE46_ENTITY_TYPE => TYPE46_SUB_D,
+        TYPE46_ENTITY_TYPE | TYPE51_ENTITY_TYPE => TYPE46_SUB_D,
         _ => FLYER_SUB_D,
     }
 }
@@ -354,7 +377,7 @@ pub(crate) const fn flyer_alternate_class(entity_type: u32) -> u32 {
         1
     } else if entity_type == TYPE41_ENTITY_TYPE {
         12
-    } else if entity_type == TYPE46_ENTITY_TYPE {
+    } else if entity_type == TYPE46_ENTITY_TYPE || entity_type == TYPE51_ENTITY_TYPE {
         // Type 51's list's alternate, class 25.
         25
     } else {
@@ -677,9 +700,9 @@ fn publish_flyer_behavior_phase(
     // initialize the transient callback-mass offset deterministically once.
     // Later animation/contact writers and scheduler resets retain ownership.
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
-    //10090 sets every Section12 type+7C to4C8A30;438080's special patches
-    // admit67/46/51, not15/87. Original4C8A30+30 is null. This generic
-    //14E90 hook is distinct from Search's primary/infected style hooks.
+    // 10090 sets every Section12 type+7C to 4C8A30; 438080's special patches
+    // admit 67/46/51, not 15/87. Original 4C8A30+30 is null. This generic
+    // 14E90 hook is distinct from Search's primary/infected style hooks.
     entity.collision.pair_callbacks.type_hit_callback_address = RetailRuntimeValue::Known(None);
     if flyer_has_emitter(entity.entity_type) {
         crate::intro2_flyer_aim::ensure_intro2_flyer_aim_runtime(entity, Some(metadata))

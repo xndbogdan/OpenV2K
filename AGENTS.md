@@ -87,8 +87,9 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
 - With `--fixed-step-micros` (whole milliseconds, at least 8000) frames run
   as fast as they draw, and the same arguments give the same frames and logs.
   Take pixel evidence with `--renderer software`.
-- `--event-log` writes JSON lines: each frame's state, level, delta and world
-  tick; the player's position, velocity, heading, attitude (pitch, roll),
+- `--event-log` writes JSON lines: each frame's state, level, delta, world
+  tick and process random word after the frame (`rng`, as the retail lab's
+  field); the player's position, velocity, heading, attitude (pitch, roll),
   mode and health, and its mind-control lock while one runs; and the
   entities that appeared (`spawn`) or went (`dispose`).
 - `--actor-log FILE` writes every live entity each frame, one JSON line a

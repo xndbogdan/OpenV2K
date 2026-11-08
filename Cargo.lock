@@ -3243,19 +3243,21 @@ dependencies = [
 name = "v2k-formats"
 version = "0.1.0"
 dependencies = [
+ "rustc-hash 2.1.3",
  "v2k-core",
  "v2k-test-support",
 ]
 
 [[package]]
 name = "v2k-game"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "clap",
  "eframe",
  "egui_kittest",
  "png 0.17.16",
  "rfd",
+ "rustc-hash 2.1.3",
  "sdl2",
  "serde",
  "serde_json",
@@ -3283,6 +3285,7 @@ dependencies = [
  "gl_generator",
  "lewton",
  "png 0.17.16",
+ "rustc-hash 2.1.3",
  "sdl2",
  "serde",
  "serde_json",

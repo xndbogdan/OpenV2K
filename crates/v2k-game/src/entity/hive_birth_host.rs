@@ -197,7 +197,7 @@ impl HiveBirthHost for HiveBirthManagerHost<'_, '_> {
         child.collision.state_flags_at_0x08.overwrite(0x8000, 0);
         child.set_motion_raw(ejection.position_raw, ejection.velocity_raw);
         child.set_rotation_heading_pitch_roll_raw(ejection.rotation_raw.map(|word| word as i16));
-        // 1C830 changes the three angle words but has no13F70/D720 call.
+        // 1C830 changes the three angle words but has no 13F70/D720 call.
         // Keep the constructor's physical matrix until an actual owner writes it.
     }
 

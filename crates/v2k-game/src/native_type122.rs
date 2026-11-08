@@ -1,4 +1,4 @@
-//! Native ice-ant Type122 construction through104B0/09A80/D4A0/381F0.
+//! Native ice-ant Type122 construction through 104B0/09A80/D4A0/381F0.
 //!
 //! The allocation retains its actual process Sub-D history and owns A/B/C/D/E/H/J.
 //! Constructor selection sees the successful intrusive prefix, never captured
@@ -413,7 +413,7 @@ fn publish_birth(
     entity.collision.animation_offset_at_0xb2 = RetailRuntimeValue::Known(0);
     entity.initial_behavior = RetailRuntimeValue::Known(Some(selection));
     let succeeded = publish_acquiring(entity, metadata, selection, context, next_random);
-    // The successful common104B0 wrapper constructs the body matrix only after
+    // The successful common 104B0 wrapper constructs the body matrix only after
     // the initializer, preserving every authored Euler word.
     let [heading, pitch, roll] = entity.rotation_heading_pitch_roll_raw();
     entity.physical_body_basis_q31 = RetailRuntimeValue::Known(

@@ -281,6 +281,10 @@ impl AuthoredRadialEmitterController {
         self.birth_runtime.as_ref()
     }
 
+    pub fn birth_runtime_mut(&mut self) -> Option<&mut HiveBirthRuntime> {
+        self.birth_runtime.as_mut()
+    }
+
     pub const fn birth_decode_error(&self) -> Option<HiveBirthDecodeError> {
         self.birth_decode_error
     }
@@ -308,7 +312,7 @@ impl AuthoredRadialEmitterController {
             && self.suction_timer_us > 0
     }
 
-    /// Explicit fixture setup; production enters state2 in the shared callback.
+    /// Explicit fixture setup; production enters state 2 in the shared callback.
     #[cfg(test)]
     pub fn enter_vulnerable(&mut self) {
         if self.dying_slot0 || self.controller_state != HIVE_CONTROLLER_LOCKED {
@@ -447,7 +451,7 @@ impl AuthoredRadialEmitterController {
                 effects,
             );
             // 1BEB0 advances infection first, then the live lock/unlock, then
-            // decides whether state1 still permits this callback's class5.
+            // decides whether state 1 still permits this callback's class5.
             if let HiveComponentHealth::Live(live) = health {
                 if let Some(transition) = advance_live_health(
                     &mut self.controller_state,

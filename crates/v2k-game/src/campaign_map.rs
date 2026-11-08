@@ -11,6 +11,7 @@
 //! menu is up, loads after Continue (`+297`), and otherwise gives command 1
 //! and model argument 1, then returns to the map after 1001 ms.
 //!
+//! Exit `FUN_004556A0` takes the map entry snapshot; exit `FUN_00455990` frees the save mode.
 //! A switch selects the next descriptor; its entry runs on the next frame.
 
 use crate::game_state::{KlausEffects, MenuShell};

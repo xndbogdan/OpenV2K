@@ -15,7 +15,7 @@ pub(super) fn effective_flags(entity: &Entity) -> Result<u32, Intro2Type94Block>
     let RetailRuntimeValue::Known(Some(context)) = entity.current_behavior_context else {
         return Err(Block::Graph);
     };
-    // Follow/Capture have zero masks. Search clears21080 or80;
+    // Follow/Capture have zero masks. Search clears 21080 or 80;
     // all admitted styles preserve Type94's authored C8=439.
     if !matches!(
         context.active_style().style_address(),

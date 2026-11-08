@@ -270,7 +270,7 @@ pub fn publish_intro2_type47(
                     next_random() as u16,
                 ),
             ));
-            // D4A0's type bit0x20 snaps current Y before copying +90 and
+            // D4A0's type bit 0x20 snaps current Y before copying +90 and
             // entering the weighted behavior constructor.
             entity.set_position_raw(anchor);
             select_initial_behavior(
@@ -612,7 +612,7 @@ pub enum Intro2Type47SchedulerProductionOutcome {
         entity_id: u32,
         visit: Intro2Type47PrimaryVisit,
     },
-    /// Primary returned9C01 or exceeded5000ms; C690 runs after unwind.
+    /// Primary returned 9C01 or exceeded5000ms; C690 runs after unwind.
     /// A replacement Primary waits, while new later physical slots run now.
     RootTransition {
         entity_id: u32,

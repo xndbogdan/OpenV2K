@@ -1,20 +1,20 @@
 //! Late11AD0/12CF0 static contact for separately owned A/D insect allocations.
 //!
-//! This runs after particles, outside12DA0 and its body-basis rebuild. It
-//! preserves the original selected plane across02CA0 and delivers11760's
+//! This runs after particles, outside 12DA0 and its body-basis rebuild. It
+//! preserves the original selected plane across 02CA0 and delivers 11760's
 //! collision packet to the static cell before the actor. The owner mirrors
 //! [`crate::intro2_type17::contact`] with the Type53 style allowlist,
 //! no-Sub-I Sub-A topology and the shared class12 death publisher.
 //!
-//! Before sharing: Type53 living39 and Class12-28 skip D9B0; Type122
-//! living439 and Class12-428 execute it. Each retains its own receipt, metadata
+//! Before sharing: Type53 living 39 and Class12-28 skip D9B0; Type122
+//! living 439 and Class12-428 execute it. Each retains its own receipt, metadata
 //! and task graph. Class26 Furniture owns the C890 style+1C callback; the
 //! remaining admitted style+1C hooks are null. Carrying styles retain their
 //! separately authenticated native relation and actual task graph.
 //!
-//! Wander-based living Primary constructors install02CA0 at task `+0x20`, including
+//! Wander-based living Primary constructors install 02CA0 at task `+0x20`, including
 //! the Chase installer `0x403360` (which builds the `0x403490` Chase behavior
-//! with its 423030/01430/0x380/0x400 controller and stores02CA0 at site
+//! with its 423030/01430/0x380/0x400 controller and stores 02CA0 at site
 //! `0x4033C3`). A coexisting Tertiary Aim carries no WanderPrivate record, so
 //! only the Primary's shared private state is committed; any other Tertiary
 //! graph stays fail-closed.
@@ -79,7 +79,7 @@ pub struct NativeGroundContactApplied {
     pub velocity_before_raw: [i16; 3],
     pub velocity_after_raw: [i16; 3],
     pub impact_raw: i32,
-    /// D9B0 generic crush precedes11760 and never invokes C690.
+    /// D9B0 generic crush precedes 11760 and never invokes C690.
     pub crushing_damage: Option<StaticDamageOutcome>,
     /// Class26 C890 delivery/reselection follows the generic D9B0 crush.
     pub furniture_damage: Option<StaticDamageOutcome>,
@@ -550,7 +550,7 @@ fn common_death_result(
     }
 }
 
-/// Living G-flight families share static geometry and02CA0/019C0, while their
+/// Living G-flight families share static geometry and 02CA0/019C0, while their
 /// actual allocation, completed task owner and alternate death remain distinct.
 pub fn resolve_flying_static_contact(
     frame: &mut Intro2ContactFrame<'_>,
@@ -568,7 +568,7 @@ pub fn resolve_flying_static_contact_with_playing(
     resolve_flying_static_contact_entry(frame, id, None, playing)
 }
 
-/// Suffix of the same admitted living11AD0 surface visit. The source model
+/// Suffix of the same admitted living 11AD0 surface visit. The source model
 /// and entry gates survive a synchronous C470 quiet-death callback.
 pub(crate) fn resolve_flying_static_contact_continuation(
     frame: &mut Intro2ContactFrame<'_>,
@@ -1121,7 +1121,7 @@ fn apply_contact(
         entity.set_heading_raw(plan.heading_raw);
     }
     // D920 consumes the current effective policy after A8B0. The admitted
-    // living styles have zero set masks; Class12 removes2015. Type122 keeps
+    // living styles have zero set masks; Class12 removes 2015. Type122 keeps
     // bit400 in both cases (439 / 428), unlike Type53 (39 / 28).
     let RetailRuntimeValue::Known(Some(style)) = entity.current_behavior_context else {
         return Err(Block::Runtime("post-task static style"));
@@ -1149,7 +1149,7 @@ fn apply_contact(
     };
     let crushing_damage = if effective_flags & 0x400 != 0 {
         // D9B0 (FUN_0040D9B0, the generic crush: 40,000 on channel 1 to the
-        // touched static) ->27950 uses source -5/owner0; static damage consumes only
+        // touched static) -> 27950 uses source -5/owner0; static damage consumes only
         // the packet. Retain this provenance rather than substituting the
         // actor's ordinary collision source. The selected plane is unchanged.
         let delivery = DamageDeliveryRecord {
@@ -1195,7 +1195,7 @@ fn apply_contact(
     }
     // C890 has completed above; all other admitted style+1C hooks are null.
     // Re-resolve the survivor after D9B0,
-    // then11760 uses the retained plane with the current motion and mass.
+    // then 11760 uses the retained plane with the current motion and mass.
     let entity = frame
         .entities
         .entity_mut(id)
@@ -1339,9 +1339,9 @@ fn contact_task_hook(
     if !chase_tertiary {
         return Err(Block::Runtime("contact task graph"));
     }
-    // 02B10/03650/03B70/03E20 install the identical02CA0 callback at the
+    // 02B10/03650/03B70/03E20 install the identical 02CA0 callback at the
     // Primary's +0x20, as does the Chase installer 0x403360 at site 0x4033C3;
-    // their acquisition Secondaries retain05FF0's null hook. Only the
+    // their acquisition Secondaries retain 05FF0's null hook. Only the
     // Primary's shared private record is written; typed task owners preserve
     // their own lifetime, route and audio records when committing this result.
     match (context.active_style().style_address(), primary, secondary) {

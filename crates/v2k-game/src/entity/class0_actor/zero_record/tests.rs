@@ -188,8 +188,8 @@ fn campaign_miss_constructs_zero_record_weight_with_its_own_body_and_task_custod
             entity.position_raw()
         );
 
-        //451DFC overwrites only B4 after success. It does not replace the
-        // allocation/task owner or rewind the ordinal consumed by104B0.
+        // 451DFC overwrites only B4 after success. It does not replace the
+        // allocation/task owner or rewind the ordinal consumed by 104B0.
         world
             .manager
             .entity_mut(id)
@@ -320,7 +320,7 @@ fn admission_is_inert_and_type68_grounding_has_no_model_height_dependency() {
     );
     assert_eq!(world.next_ordinal(), ordinal);
 
-    // D4A0 only resolves model+08 inside bit20 && bit40. Type68 lacks40;
+    // D4A0 only resolves model+08 inside bit20 && bit40. Type68 lacks 40;
     // zero model words do not justify inventing a host model-height failure.
     world.manager.type_metadata[68].model_slots = [0; 4];
     let zero_model_owner = world.append().unwrap();

@@ -283,7 +283,7 @@ fn authenticate_scheduler_style(
     slot: Type47C690Slot,
 ) -> Result<BehaviorStyle, Type47ImpactC690Error> {
     let style = authenticate_audited_style(current_style)?;
-    // EXE4C79C0 (Wander) and4C7BB8 (Guard) both store C690 at+00.
+    // EXE4C79C0 (Wander) and 4C7BB8 (Guard) both store C690 at+00.
     // Guard+04 is C7D0 acquisition handoff, while Pursuing4C7C00 and
     // Wander+04 contain C690. Do not generalize by class resemblance.
     if !matches!(
