@@ -14,9 +14,10 @@ mod launcher;
 mod launcher_startup;
 mod live_display;
 mod network_play;
+mod play;
 use network_play::{advance_network_world, NetworkWorldFrame};
 mod probe;
-use v2k_game::{launcher_preferences, setup};
+use v2k_game::{launcher_preferences, session_log, setup};
 mod paused_gameplay;
 use paused_gameplay::{
     setting_requires_paused_redraw, GameplayOverlayFrame, PausedGameplayDraw, PausedGameplayScene,
@@ -294,6 +295,33 @@ fn replace_renderer(
     drop(std::mem::replace(renderer, replacement));
     renderer.set_world_model_fog(world_model_fog);
     Ok(backend)
+}
+
+/// Keep `config`, the settings this run loaded, in `dir` as a portable
+/// settings folder for its replay. A copy that reads back otherwise (an
+/// unconverted legacy config.json's finer values) is named in the log.
+fn keep_settings(config: &GameConfig, dir: &Path) -> std::io::Result<()> {
+    let mut kept = config.clone();
+    kept.portable = true;
+    kept.try_save(dir)?;
+    let reloaded = GameConfig::load_portable(dir);
+    if serde_json::to_value(&reloaded).ok() != serde_json::to_value(config).ok() {
+        eprintln!(
+            "Session recording: the settings kept in {} read back otherwise than this run's; its replay may part from it",
+            dir.display()
+        );
+    }
+    Ok(())
+}
+
+/// The display a settings change asks for. A hidden run (a replay, say)
+/// keeps its window and never takes the display.
+fn run_display(config: &GameConfig, hidden: bool) -> v2k_render::DisplayRequest {
+    let mut request = config.display_request();
+    if hidden {
+        request.mode = WindowMode::Window;
+    }
+    request
 }
 
 /// Startup display search (`FUN_0044E2E0` -> `FUN_0042D340`). From the saved
@@ -1641,8 +1669,9 @@ struct Cli {
 
     /// Keep the game window hidden: silent, windowed and deaf to controllers.
     /// Requires --frames and --settings, so a test run ends and never
-    /// changes the registry.
-    #[arg(long, requires_all = ["frames", "settings"])]
+    /// changes the registry; a --replay-session without --resume needs
+    /// neither.
+    #[arg(long)]
     hidden: bool,
 
     /// Stop after this many frames.
@@ -1686,6 +1715,32 @@ struct Cli {
     /// one JSON line a frame, to FILE.
     #[arg(long, value_name = "FILE")]
     actor_log: Option<PathBuf>,
+
+    /// Log this session for a bug report: everything the game prints goes
+    /// to DIR/run-<local time>.log (default: logs beside the executable).
+    /// Beside it: run-<time>.replay (every input, for --replay-session) and
+    /// copies of the settings and saves the session started from.
+    #[arg(long, value_name = "DIR", num_args = 0..=1)]
+    session_log: Option<Option<PathBuf>>,
+
+    /// Replay a recorded run-<time>.replay: its command line, clock, keys,
+    /// mouse and controllers, from copies of its settings and saves. This
+    /// run's --hidden, --frames, --snapshot, --snapshot-at, --event-log,
+    /// --actor-log, --session-log, --data-dir and a non-auto --renderer
+    /// still apply. The game ends where the recording does.
+    #[arg(long, value_name = "FILE")]
+    replay_session: Option<PathBuf>,
+
+    /// With --replay-session: when the recording ends, the game goes on with
+    /// the live clock, keys and controllers, so a crashed session can be
+    /// played on from where it ended. Saves go to the replay's own copy.
+    #[arg(long, requires = "replay_session")]
+    resume: bool,
+
+    /// A deliberate panic once the run's settings are kept, before it reads
+    /// any save: a check of the crash log and the crash reports.
+    #[arg(long, hide = true)]
+    crash_test: bool,
 }
 
 impl Cli {
@@ -1703,10 +1758,15 @@ impl Cli {
             || self.start.is_some()
             || self.event_log.is_some()
             || self.actor_log.is_some()
+            || self.replay_session.is_some()
     }
 
     fn probe_run(&self) -> Result<probe::ProbeRun, Box<dyn std::error::Error>> {
         Ok(probe::ProbeRun {
+            crash_test: self.crash_test,
+            new_game_after_ticks: std::env::var(NEW_GAME_AFTER_TICKS)
+                .ok()
+                .and_then(|value| value.parse::<u32>().ok()),
             settings: self.settings.clone(),
             size: self.width.zip(self.height),
             hidden: self.hidden,
@@ -1733,10 +1793,16 @@ impl Cli {
                 .as_deref()
                 .map(probe::EventLog::create)
                 .transpose()?,
-            entities: probe::EntityCensus::default(),
+            ..probe::ProbeRun::default()
         })
     }
 }
+
+/// `V2K_NEW_GAME_AFTER_TICKS`: headless diagnostics confirm the frontend
+/// ring's default New Game after this many frontend ticks, so a capture
+/// takes the production Begin-Intro path rather than the generic debug load
+/// of `--level 50`. A recording keeps it.
+const NEW_GAME_AFTER_TICKS: &str = "V2K_NEW_GAME_AFTER_TICKS";
 
 /// Single-run overrides of saved port preferences; none is written back.
 #[derive(Clone, Copy, Debug, Default)]
@@ -1942,7 +2008,7 @@ fn append_port_vtol_trace(
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> std::process::ExitCode {
     // Before the launcher creates its first window.
     v2k_render::declare_dpi_awareness();
     launcher::prepare_console();
@@ -1951,24 +2017,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Set global verbose flag for the log! macro
     VERBOSE.store(cli.verbose, std::sync::atomic::Ordering::Relaxed);
 
-    let data_dir = if cli.command.is_none() {
-        let selection = launcher_startup::prepare(&cli).map_err(|error| {
-            if cli.launcher
-                || cli.launcher_smoke_ms.is_some()
-                || (!cli.no_launcher && !cli.direct_run())
-            {
-                launcher::show_error(&error.to_string());
-            }
-            error
-        })?;
-        let Some(root) = selection else {
-            return Ok(());
-        };
-        root
-    } else {
-        cli.data_dir.clone().unwrap_or_else(|| PathBuf::from("."))
-    };
+    if cli.command.is_none() {
+        return play::play(cli);
+    }
+    match run_command(cli) {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("Error: {error}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
 
+/// Run the game as `cli` asks, from `data_dir`.
+fn run_cli_game(
+    cli: &Cli,
+    data_dir: &Path,
+    probe: probe::ProbeRun,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let enter_world_immediately = cli.level.is_some() || cli.start.is_some();
+    run_game(
+        data_dir,
+        cli.level.unwrap_or(FIRST_WORLD_LEVEL_ID),
+        &cli.renderer,
+        cli.skip_intro || enter_world_immediately,
+        enter_world_immediately,
+        cli.vtol_trace.as_deref(),
+        cli.overlay_depth_policy
+            .unwrap_or(OverlayDepthPolicyArg::TerrainRecede)
+            .to_policy(),
+        RunOverrides {
+            controller_layout: cli.controller_layout.map(ControllerLayoutArg::to_layout),
+            beam_commands: cli.beam_commands,
+        },
+        probe,
+    )
+}
+
+/// The tool subcommands.
+fn run_command(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Some(Command::Verify { data_dir }) => {
             let report = setup::validate_installation(&data_dir);
@@ -2115,36 +2202,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!();
             print!("{}", session.system_coverage_report());
         }
-        // No subcommand → run the game
-        None => {
-            let enter_world_immediately = cli.level.is_some() || cli.start.is_some();
-            let outcome = cli.probe_run().and_then(|probe| {
-                run_game(
-                    &data_dir,
-                    cli.level.unwrap_or(FIRST_WORLD_LEVEL_ID),
-                    &cli.renderer,
-                    cli.skip_intro || enter_world_immediately,
-                    enter_world_immediately,
-                    cli.vtol_trace.as_deref(),
-                    cli.overlay_depth_policy
-                        .unwrap_or(OverlayDepthPolicyArg::TerrainRecede)
-                        .to_policy(),
-                    RunOverrides {
-                        controller_layout: cli
-                            .controller_layout
-                            .map(ControllerLayoutArg::to_layout),
-                        beam_commands: cli.beam_commands,
-                    },
-                    probe,
-                )
-            });
-            if let Err(error) = outcome {
-                if cli.launcher || (!cli.no_launcher && !cli.direct_run()) {
-                    launcher::show_error(&error.to_string());
-                }
-                return Err(error);
-            }
-        }
+        None => unreachable!("play::play runs the game"),
     }
 
     Ok(())
@@ -2242,13 +2300,7 @@ fn run_game(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Load/create config
     let mut diagnostic_console = diagnostic_console::DiagnosticConsole::new();
-    // `V2K_NEW_GAME_AFTER_TICKS`: headless diagnostics confirm the frontend
-    // ring's default New Game after this many frontend ticks, so a capture
-    // takes the production Begin-Intro path rather than the generic debug
-    // load of `--level 50`.
-    let mut auto_new_game_tick = std::env::var("V2K_NEW_GAME_AFTER_TICKS")
-        .ok()
-        .and_then(|value| value.parse::<u32>().ok());
+    let mut auto_new_game_tick = probe.new_game_after_ticks;
     let settings_dir = probe.settings.clone();
     let settings_dir = settings_dir.as_deref().unwrap_or(data_dir);
     let mut config = if probe.settings.is_some() {
@@ -2256,6 +2308,31 @@ fn run_game(
     } else {
         GameConfig::load(data_dir)
     };
+    // --session-log and every desktop start: the inputs this run reads, and
+    // the settings and saves it starts from; --replay-session: a recording's.
+    let recorded = probe.record.take();
+    let replay_display = probe.replay.as_ref().and_then(|replay| replay.display);
+    let mut tape = session_log::Tape::new(
+        recorded
+            .as_ref()
+            .map(|record| {
+                let env: Vec<_> = auto_new_game_tick
+                    .map(|ticks| (NEW_GAME_AFTER_TICKS.to_string(), ticks.to_string()))
+                    .into_iter()
+                    .collect();
+                session_log::SessionRecorder::create(&record.path, &record.args, &env)
+            })
+            .transpose()?,
+        probe.replay.take(),
+        probe.resume,
+    );
+    let recorded = recorded.map(|record| session_log::SessionFiles::from_replay(&record.path));
+    if let Some(files) = &recorded {
+        keep_settings(&config, &files.settings)?;
+    }
+    if probe.crash_test {
+        panic!("--crash-test: a deliberate crash, to check the crash log and crash reports");
+    }
     if let Some((width, height)) = probe.size {
         (config.width, config.height) = (width, height);
     }
@@ -2335,6 +2412,16 @@ fn run_game(
         log!("Overlay depth diagnosis policy active: {overlay_depth_policy:?} (presentation only)");
     }
     let mut display_modes = start_display(&game_window, renderer.as_mut(), &mut config);
+    tape.display(config.resolution());
+    if let Some(recorded) = replay_display.filter(|&size| size != config.resolution()) {
+        eprintln!(
+            "Session replay: the display started at {}x{}, not the recording's {}x{}; the replay may part from it",
+            config.resolution().0,
+            config.resolution().1,
+            recorded.0,
+            recorded.1
+        );
+    }
 
     log!("Renderer: {}", renderer.backend_name());
 
@@ -2450,11 +2537,15 @@ fn run_game(
     // --- Save manager ---
     let retail_save_directory = v2k_render::config::retail_save_directory();
     let executable = std::env::current_exe()?;
-    let save_paths = SavePathContext::beside_executable(
-        &executable,
-        data_dir,
-        retail_save_directory.as_deref(),
-    )?;
+    let save_paths = match &probe.saves {
+        // A replay reads and writes its copy of the recording's saves alone.
+        Some(copy) => SavePathContext::replay_copy(copy),
+        None => SavePathContext::beside_executable(
+            &executable,
+            data_dir,
+            retail_save_directory.as_deref(),
+        )?,
+    };
     log!("Save directory: {}", save_paths.save_directory().display());
     // FUN_004393C0 reads the network line files from FUN_004493D0's Save
     // Path, else the data path; a --settings run reads no registry.
@@ -2463,6 +2554,9 @@ fn run_game(
         _ => data_dir.to_path_buf(),
     };
     let mut save_manager = SaveManager::load_paths(save_paths);
+    if let Some(files) = &recorded {
+        save_manager.keep_loadable(&files.saves)?;
+    }
     // 448E30 owns a retained controller checkpoint, not a live-world dump.
     let mut save_baseline = [0u8; v2k_formats::saves::STATE_PAYLOAD_SIZE];
     let mut map_save_checkpoint: Option<v2k_game::save::NativeCompatibilityPreview> = None;
@@ -3045,7 +3139,7 @@ fn run_game(
                 match id {
                     SettingId::FullScreen | SettingId::Resolution => {
                         if let Err(error) =
-                            renderer.set_display(config.display_request())
+                            renderer.set_display(run_display(&config, probe.hidden))
                         {
                             eprintln!(
                                 "Display change failed ({error}); keeping the previous display"
@@ -3064,7 +3158,7 @@ fn run_game(
                                 actual_backend = backend;
                                 renderer.set_overlay_depth_policy(overlay_depth_policy);
                                 if let Err(error) =
-                                    renderer.set_display(config.display_request())
+                                    renderer.set_display(run_display(&config, probe.hidden))
                                 {
                                     eprintln!(
                                         "Display unavailable for the new renderer ({error})"
@@ -3206,9 +3300,29 @@ fn run_game(
                 break 'main_loop;
             }
         }
-        let frame_delta_micros = match probe.fixed_step_micros {
-            Some(step) => u64::from(step),
-            None => frame_pump.wait_for_frame(),
+        v2k_game::crash_log::note_game(v2k_game::crash_log::GameState {
+            state: state_name(&state),
+            level: current_level_id,
+            player: entity_manager
+                .as_ref()
+                .and_then(|manager| manager.player())
+                .map(|player| (player.position_raw(), player_hull.health_raw)),
+        });
+        // A network game's peers and session list come from other machines.
+        if network_game.is_some() || network_search.is_some() {
+            tape.stop_recording("network play, whose peers a replay cannot reproduce");
+        }
+        v2k_game::crash_log::heartbeat(frames_done + 1);
+        let frame_delta_micros = loop {
+            let live = || match probe.fixed_step_micros {
+                Some(step) => u64::from(step),
+                None => frame_pump.wait_for_frame(),
+            };
+            match tape.frame(live) {
+                session_log::TapeFrame::Delta(delta) => break delta,
+                session_log::TapeFrame::Resumed => frame_pump.restart(),
+                session_log::TapeFrame::Ended => break 'main_loop,
+            }
         };
         let uncapped_elapsed_micros = frame_delta_micros.min(u64::from(u32::MAX)) as u32;
         let elapsed_micros = uncapped_elapsed_micros.min(RETAIL_FRAME_DELTA_MAX_US);
@@ -3265,14 +3379,20 @@ fn run_game(
             polled.extend(scripted_events);
             key_events
         };
+        // Recorded as the game reads them, or a replay's instead.
+        let (polled, frame_key_events) =
+            tape.frame_input(polled, frame_key_events, |id| debug_panel.owns_window(id));
         for event in polled {
             match event {
                 // Backquote/tilde owns the text console in every state and
                 // must not skip the intro, activate a menu or move the camera.
                 // The pointer policy below frees the mouse while it is open.
+                // A hidden run (a replay, say) opens no window.
                 GameEvent::KeyDown(Keycode::Backquote) => {
-                    if let Err(error) = diagnostic_console.toggle() {
-                        eprintln!("Console visibility error: {error}");
+                    if !probe.hidden {
+                        if let Err(error) = diagnostic_console.toggle() {
+                            eprintln!("Console visibility error: {error}");
+                        }
                     }
                 }
                 GameEvent::KeyUp(Keycode::Backquote) => {}
@@ -3284,8 +3404,10 @@ fn run_game(
                     if !(matches!(state, GameState::Playing)
                         && InPlayCheatKey::Fuel.enabled(session_cheats)) =>
                 {
-                    if let Err(error) = debug_panel.toggle(&game_window.video) {
-                        eprintln!("Debug panel error: {error}");
+                    if !probe.hidden {
+                        if let Err(error) = debug_panel.toggle(&game_window.video) {
+                            eprintln!("Debug panel error: {error}");
+                        }
                     }
                 }
                 GameEvent::AuxiliaryWindowClick { window_id, x, y }
@@ -3368,7 +3490,7 @@ fn run_game(
             }
         }
         // The active pad or joystick, as of this frame's poll.
-        let controller = game_window.controller_sample();
+        let controller = tape.controller(game_window.controller_sample());
         // The network pause's menu keys replace the craft's (0x4C45B0).
         let joystick = controller
             .filter(|_| network_pause.is_none())
@@ -3395,11 +3517,14 @@ fn run_game(
                 // Retail's intro movie mode (FUN_0042AAE0) plays it, then the menu.
 
                 if let Some(ref mut player) = avi_player {
-                    let elapsed = intro_start_time
-                        .map(|start| start.elapsed().as_secs_f64())
-                        .unwrap_or(0.0);
-                    let frame_duration = 1.0 / f64::from(player.info.fps);
-                    let frame_idx = (elapsed / frame_duration) as usize;
+                    // The movie runs on its own clock, which a recording keeps.
+                    let frame_idx = tape.intro_frame(|| {
+                        let elapsed = intro_start_time
+                            .map(|start| start.elapsed().as_secs_f64())
+                            .unwrap_or(0.0);
+                        let frame_duration = 1.0 / f64::from(player.info.fps);
+                        (elapsed / frame_duration) as usize
+                    });
 
                     if frame_idx >= player.frame_count() || skip {
                         // Intro finished or skipped: the movie mode's update switches
@@ -3467,7 +3592,7 @@ fn run_game(
                         let delta = card
                             .timer
                             .map_or(LOADING_CARD_CALLBACK_MIN_MICROS, |mut timer| {
-                                timer.wait_for_callback()
+                                timer.wait_for_callback(&mut tape)
                             });
                         let tick = retail_clock.advance(u64::from(delta));
                         shell.visit_klaus(
@@ -4889,6 +5014,7 @@ fn run_game(
                 entity_positional_audio.reset_after_audio_stop();
                 campaign_warp.reset_after_audio_stop();
                 log!("Loading level {}...", lid);
+                v2k_game::crash_log::step(v2k_game::crash_log::Step::Loading);
                 // The card's callbacks (FUN_00456FB0) advance the 50-Hz clock
                 // from its value here; the next world's first 44FE20 resets it.
                 let mut card_clock = retail_clock;
@@ -4904,7 +5030,7 @@ fn run_game(
                     .then(LoadingCardTimer::arm);
                 macro_rules! closed_card_callback {
                     ($timer:expr) => {{
-                        let delta = $timer.wait_for_callback();
+                        let delta = $timer.wait_for_callback(&mut tape);
                         let tick = card_clock.advance(u64::from(delta));
                         let mut klaus = loading_klaus(&mut purpose, &mut replay_world_cover);
                         if let Some(shell) = klaus.as_deref_mut() {
@@ -4944,9 +5070,12 @@ fn run_game(
                 // on a worker while the timer runs here.
                 macro_rules! card_yield {
                     ($step:literal) => {
-                        if let Some(timer) = card_timer.as_mut().filter(|timer| timer.is_due()) {
+                        if let Some(timer) = card_timer
+                            .as_mut()
+                            .filter(|timer| tape.card_due(|| timer.is_due()))
+                        {
                             let late = timer.due.elapsed();
-                            if late >= Duration::from_millis(1) {
+                            if late >= Duration::from_millis(1) && !tape.is_replaying() {
                                 eprintln!(
                                     "Loading card: a callback ran {} us late, after world {lid}'s {}",
                                     late.as_micros(),
@@ -4966,15 +5095,11 @@ fn run_game(
                                 scope.spawn(move || {
                                     let _ = sender.send($work);
                                 });
+                                let worker = format!("world {lid}'s construction worker");
                                 loop {
-                                    match receiver.recv_timeout(timer.until_due()) {
-                                        Ok(done) => break done,
-                                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                                            closed_card_callback!(timer)
-                                        }
-                                        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                                            panic!("world {lid}'s construction worker stopped")
-                                        }
+                                    match timer.wait_beside(&mut tape, &receiver, &worker) {
+                                        Some(done) => break done,
+                                        None => closed_card_callback!(timer),
                                     }
                                 }
                             }),
@@ -4994,17 +5119,11 @@ fn run_game(
                                     startup_world_variant,
                                 ));
                             });
+                            let reader = format!("level {lid}'s overlay reader");
                             loop {
-                                match receiver.recv_timeout(timer.until_due()) {
-                                    Ok(prepared) => break prepared,
-                                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                                        closed_card_callback!(timer)
-                                    }
-                                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                                        panic!(
-                                            "level {lid}'s overlay reader stopped without a result"
-                                        )
-                                    }
+                                match timer.wait_beside(&mut tape, &receiver, &reader) {
+                                    Some(prepared) => break prepared,
+                                    None => closed_card_callback!(timer),
                                 }
                             }
                         })
@@ -6098,7 +6217,7 @@ fn run_game(
                 // to 7,800..125,000 us. A fixed-step run takes the lab's: the
                 // scripted clock stands still, so the minimum.
                 let card_callback_micros = match card_timer.as_mut() {
-                    Some(timer) => timer.wait_for_callback(),
+                    Some(timer) => timer.wait_for_callback(&mut tape),
                     None => LOADING_CARD_CALLBACK_MIN_MICROS,
                 };
                 log!("Loading card: final callback {card_callback_micros} us");
@@ -6164,6 +6283,7 @@ fn run_game(
                         }
                     }
                 }
+                v2k_game::crash_log::step(v2k_game::crash_log::Step::Frame);
                 // Loading is synchronous. Its wall time is neither a retail
                 // simulation tick nor part of Klaus's opening callback, so
                 // the next frame must begin from this boundary.
@@ -12762,6 +12882,21 @@ fn save_snapshot(
     Ok(())
 }
 
+/// The main loop's state as `--event-log` and the crash log name it.
+fn state_name(state: &GameState) -> &'static str {
+    match state {
+        GameState::Intro => "intro",
+        GameState::Menu(_) => "menu",
+        GameState::Loading { .. } => "loading",
+        GameState::OpeningCinematic { .. } => "opening_cinematic",
+        GameState::PostIntro { .. } => "post_intro",
+        GameState::ClosingSceneLeg { .. } => "closing_scene_leg",
+        GameState::Paused { .. } => "paused",
+        GameState::ReturningToFrontend => "returning_to_frontend",
+        GameState::Playing => "playing",
+    }
+}
+
 /// `--event-log`: the lines of one completed frame.
 #[allow(clippy::too_many_arguments)]
 fn write_probe_events(
@@ -12778,18 +12913,7 @@ fn write_probe_events(
     hull: &PlayerHull,
     mind_control_lock: &PlayerMindControlLock,
 ) -> std::io::Result<()> {
-    let state_name = match state {
-        GameState::Intro => "intro",
-        GameState::Menu(_) => "menu",
-        GameState::Loading { .. } => "loading",
-        GameState::OpeningCinematic { .. } => "opening_cinematic",
-        GameState::PostIntro { .. } => "post_intro",
-        GameState::ClosingSceneLeg { .. } => "closing_scene_leg",
-        GameState::Paused { .. } => "paused",
-        GameState::ReturningToFrontend => "returning_to_frontend",
-        GameState::Playing => "playing",
-    };
-    log.frame(frame, state_name, level, delta_us, tick, rng)?;
+    log.frame(frame, state_name(state), level, delta_us, tick, rng)?;
     let Some(manager) = manager else {
         census.clear();
         return Ok(());
@@ -18963,16 +19087,49 @@ impl LoadingCardTimer {
     }
 
     /// Sleep to the next callback; its delta since the last, clamped as the
-    /// callback clamps it.
-    fn wait_for_callback(&mut self) -> u32 {
-        std::thread::sleep(self.until_due());
-        let now = Instant::now();
-        let delta = now.duration_since(self.last).as_micros();
+    /// callback clamps it. A replay takes the recording's at once.
+    fn wait_for_callback(&mut self, tape: &mut session_log::Tape) -> u32 {
+        let mut now = Instant::now();
+        let delta = tape.card_delta(|| {
+            std::thread::sleep(self.until_due());
+            now = Instant::now();
+            let delta = now.duration_since(self.last).as_micros();
+            (delta.min(u128::from(u32::MAX)) as u32).clamp(
+                LOADING_CARD_CALLBACK_MIN_MICROS,
+                LOADING_CARD_CALLBACK_MAX_MICROS,
+            )
+        });
         self.last = now;
-        (delta.min(u128::from(u32::MAX)) as u32).clamp(
-            LOADING_CARD_CALLBACK_MIN_MICROS,
-            LOADING_CARD_CALLBACK_MAX_MICROS,
-        )
+        delta
+    }
+
+    /// Wait for a worker's result or the next callback, whichever comes
+    /// first: the result, or None when the callback is due. A replay takes
+    /// the recording's order, waiting for the result when it came first.
+    fn wait_beside<T>(
+        &self,
+        tape: &mut session_log::Tape,
+        receiver: &std::sync::mpsc::Receiver<T>,
+        worker: &str,
+    ) -> Option<T> {
+        let mut done = None;
+        let due = tape.card_due(|| match receiver.recv_timeout(self.until_due()) {
+            Ok(result) => {
+                done = Some(result);
+                false
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => true,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                panic!("{worker} stopped without a result")
+            }
+        });
+        (!due).then(|| {
+            done.unwrap_or_else(|| {
+                receiver
+                    .recv()
+                    .unwrap_or_else(|_| panic!("{worker} stopped without a result"))
+            })
+        })
     }
 
     /// Re-arm after a callback's redraw, which began at `self.last`.

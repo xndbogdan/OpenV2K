@@ -342,6 +342,20 @@ unsafe extern "system" {
     pub fn SetWindowTheme(window: Handle, app: *const u16, classes: *const u16) -> i32;
 }
 
+/// `TTTOOLINFOW`.
+#[repr(C)]
+pub struct ToolInfo {
+    pub size: u32,
+    pub flags: u32,
+    pub window: Handle,
+    pub id: usize,
+    pub rect: Rect,
+    pub instance: Handle,
+    pub text: *mut u16,
+    pub lparam: isize,
+    pub reserved: *mut c_void,
+}
+
 /// `INITCOMMONCONTROLSEX`.
 #[repr(C)]
 pub struct InitCommonControls {

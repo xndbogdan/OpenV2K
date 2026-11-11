@@ -4,7 +4,10 @@ param(
     # only built, under target/dist/v<version>.
     [switch]$Publish,
     # Build only the Windows package, for example when Docker isn't available.
-    [switch]$SkipLinux
+    [switch]$SkipLinux,
+    # Where the game sends crash reports (crates/v2k-game/src/crash_reports.rs);
+    # else the ignored .sentry-dsn file. A published release needs one.
+    [string]$SentryDsn = $env:OPENV2K_SENTRY_DSN
 )
 
 # Builds the release packages that the Release workflow used to build on GitHub
@@ -52,6 +55,18 @@ try {
         }
     }
 
+    if (-not $SentryDsn -and (Test-Path '.sentry-dsn')) {
+        $SentryDsn = (Get-Content -Raw '.sentry-dsn').Trim()
+    }
+    if (-not $SentryDsn) {
+        if ($Publish) {
+            throw 'No Sentry DSN: pass -SentryDsn, set OPENV2K_SENTRY_DSN or write it to .sentry-dsn.'
+        }
+        Write-Warning 'No Sentry DSN: these packages cannot send crash reports.'
+    }
+    # Both builds read it as they compile (option_env!).
+    $env:OPENV2K_SENTRY_DSN = $SentryDsn
+
     $out = Join-Path $repositoryRoot "target/dist/$tag"
     if (Test-Path $out) { Remove-Item -Recurse -Force $out }
     New-Item -ItemType Directory -Force $out | Out-Null
@@ -95,6 +110,7 @@ try {
             '-v', 'openv2k-release-cargo:/root/.cargo',
             '-v', 'openv2k-release-target:/target',
             '-e', 'CARGO_TARGET_DIR=/target',
+            '-e', "OPENV2K_SENTRY_DSN=$SentryDsn",
             '-e', "RELEASE_NAME=OpenV2K-$tag-linux-x64",
             '-e', "RELEASE_OUT=/src/target/dist/$tag",
             'ubuntu:22.04',

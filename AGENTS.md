@@ -97,6 +97,21 @@ cargo run --release -- --data-dir retail --settings .tmp/probe/settings \
   detailed-update state bit null while unresolved.
 - `scripts/level-sweep.ps1` plays every world this way and lists each one's
   notable log lines; `-Baseline TAG` compares with an earlier sweep.
+- `--session-log [DIR]` writes `run-<time>.log` (everything printed) and
+  `run-<time>.replay` (every input the game read: frame clock, keys with
+  their in-frame times, mouse, controllers, focus, the intro movie's clock
+  and the loading card's timer) to DIR, default `logs` beside the
+  executable, with the settings (`run-<time>.settings`) and loadable saves
+  (`run-<time>.saves`) it started from. Every desktop start keeps one in
+  `logs/replays` (the newest ten); a crash log names it. A recording stops
+  where network play begins.
+- `--replay-session FILE` plays a recording again from copies of its
+  settings and saves, with this run's `--hidden`, `--frames`, `--snapshot`,
+  `--snapshot-at`, `--event-log`, `--actor-log`, `--session-log`,
+  `--data-dir` and a non-auto `--renderer`; `--hidden` needs no `--frames`
+  or `--settings` here. It ends where the recording does; `--resume` plays
+  on live. Its `--event-log` matches the recorded run's line for line after
+  the header (which holds each run's own command line).
 
 Retail-backed tests use `#[v2k_test_support::retail_test]` and are reported as
 **ignored** when no retail corpus is configured. Once any payload is present,
@@ -157,7 +172,9 @@ bumps `crates/v2k-game`'s version. GitHub Actions workflows run only when
 started by hand, because the free plan's Actions minutes aren't enough, so
 validate the milestone with `scripts/check.ps1` too. After the merge, publish the
 `v<version>` release with the Windows and Linux packages from a clean checkout
-of `main` with `scripts/release.ps1 -Publish`; the Linux package needs Docker.
+of `main` with `scripts/release.ps1 -Publish`; the Linux package needs Docker,
+and both need the Sentry DSN (`-SentryDsn`, `OPENV2K_SENTRY_DSN` or the
+ignored `.sentry-dsn`), which must never be committed or printed.
 
 Merge by rebase, never with a merge commit, so the history stays linear:
 

@@ -25,6 +25,7 @@ use v2k_render::music::SoundtrackAvailability;
 
 use super::{
     music_description, popup_description, report_description, LaunchSelection, LauncherRequest,
+    CRASH_REPORTS_DETAIL, CRASH_REPORTS_LABEL, CRASH_REPORTS_UNAVAILABLE,
 };
 use crate::setup::{DiscImage, InstallRequest, InstallResult, SetupProgress, ValidationReport};
 use win32::*;
@@ -46,6 +47,16 @@ const TBM_SETRANGE: u32 = 0x0406;
 const TBS_AUTOTICKS: u32 = 0x0001;
 const TBS_TOOLTIPS: u32 = 0x0100;
 const ICC_BAR_CLASSES: u32 = 0x0004;
+const EX_TOPMOST: u32 = 0x0000_0008;
+const WS_POPUP: u32 = 0x8000_0000;
+/// `TTS_ALWAYSTIP | TTS_NOPREFIX`.
+const TIP_STYLE: u32 = 0x0003;
+const TTF_IDISHWND: u32 = 0x0001;
+const TTF_SUBCLASS: u32 = 0x0010;
+const TTM_SETDELAYTIME: u32 = 0x0403;
+const TTM_SETMAXTIPWIDTH: u32 = 0x0418;
+const TTM_ADDTOOLW: u32 = 0x0432;
+const TTDT_AUTOPOP: usize = 2;
 const DPI_AWARENESS_CONTEXT_SYSTEM_AWARE: isize = -2;
 const ENUM_CURRENT_SETTINGS: u32 = u32::MAX;
 const MONITOR_DEFAULTTOPRIMARY: u32 = 1;
@@ -77,6 +88,7 @@ const ID_EFFECTS_VOLUME: usize = 209;
 const ID_SKIP: usize = 210;
 const ID_CONTROLLER: usize = 211;
 const ID_FIX_BEAM: usize = 212;
+const ID_CRASH_REPORTS: usize = 213;
 const WORKER_TIMER: usize = 1;
 const HEADER_TIMER: usize = 2;
 
@@ -111,6 +123,7 @@ struct OptionControls {
     controller: Handle,
     fix_beam: Handle,
     skip: Handle,
+    crash_reports: Handle,
     save: Handle,
     install: Handle,
     verify: Handle,
@@ -609,6 +622,46 @@ impl WindowState {
         let control = self.control(parent, "BUTTON", label, WS_TABSTOP | 3, id, x, y, width, 23);
         SendMessageW(control, 0x00f1, usize::from(checked), 0);
         control
+    }
+
+    /// A tooltip over `control`, or over `rect` of `window` (a disabled
+    /// control gets no mouse messages, so its window shows the tip).
+    unsafe fn tooltip(&self, window: Handle, control: Handle, rect: Rect, text: &str) {
+        let tip = CreateWindowExW(
+            EX_TOPMOST,
+            wide("tooltips_class32").as_ptr(),
+            null(),
+            WS_POPUP | TIP_STYLE,
+            0,
+            0,
+            0,
+            0,
+            window,
+            0,
+            GetModuleHandleW(null()),
+            null_mut(),
+        );
+        SendMessageW(tip, WM_SETFONT, self.font as usize, 0);
+        SendMessageW(tip, TTM_SETMAXTIPWIDTH, 0, self.pixel(380) as isize);
+        SendMessageW(tip, TTM_SETDELAYTIME, TTDT_AUTOPOP, 30_000);
+        let mut text = wide(text);
+        let mut tool = ToolInfo {
+            // Without `lpReserved`, which comctl32 before 6 refuses.
+            size: (size_of::<ToolInfo>() - size_of::<usize>()) as u32,
+            flags: TTF_SUBCLASS,
+            window,
+            id: ID_CRASH_REPORTS,
+            rect,
+            instance: 0,
+            text: text.as_mut_ptr(),
+            lparam: 0,
+            reserved: null_mut(),
+        };
+        if control != 0 {
+            tool.flags |= TTF_IDISHWND;
+            tool.id = control as usize;
+        }
+        SendMessageW(tip, TTM_ADDTOOLW, 0, &tool as *const ToolInfo as isize);
     }
 
     unsafe fn combo(
@@ -1321,7 +1374,7 @@ impl WindowState {
             OPTIONS_CLASS,
             "V2K Options",
             560,
-            730,
+            758,
             self.window,
             self.host,
             self.scale,
@@ -1478,21 +1531,43 @@ impl WindowState {
             510,
             20,
         );
-        self.group(window, " Installation tools ", 12, 528, 536, 132);
-        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 552, 248, 30);
-        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 552, 252, 30);
+        let reporting = v2k_game::crash_reports::available();
+        let crash_reports = self.checkbox(
+            window,
+            CRASH_REPORTS_LABEL,
+            ID_CRASH_REPORTS,
+            16,
+            522,
+            528,
+            reporting && self.request.preferences.send_crash_reports,
+        );
+        if reporting {
+            self.tooltip(window, crash_reports, Rect::default(), CRASH_REPORTS_DETAIL);
+        } else {
+            EnableWindow(crash_reports, 0);
+            let row = Rect {
+                left: self.pixel(16),
+                top: self.pixel(522),
+                right: self.pixel(16 + 528),
+                bottom: self.pixel(522 + 23),
+            };
+            self.tooltip(window, 0, row, CRASH_REPORTS_UNAVAILABLE);
+        }
+        self.group(window, " Installation tools ", 12, 556, 536, 132);
+        let verify = self.button(window, "&Verify files", ID_VERIFY, 24, 580, 248, 30);
+        let extract = self.button(window, "E&xtract music...", ID_EXTRACT, 284, 580, 252, 30);
         let install = self.button(
             window,
             "&Install from disc image...",
             ID_INSTALL,
             24,
-            594,
+            622,
             512,
             30,
         );
-        let progress = self.label(window, "", 24, 633, 512, 22);
-        let save = self.button(window, "&Save", ID_SAVE, 308, 680, 112, 32);
-        self.button(window, "Cancel", ID_CANCEL, 436, 680, 112, 32);
+        let progress = self.label(window, "", 24, 661, 512, 22);
+        let save = self.button(window, "&Save", ID_SAVE, 308, 708, 112, 32);
+        self.button(window, "Cancel", ID_CANCEL, 436, 708, 112, 32);
         self.option_controls = OptionControls {
             resolution,
             renderer,
@@ -1506,6 +1581,7 @@ impl WindowState {
             controller,
             fix_beam,
             skip,
+            crash_reports,
             save,
             install,
             verify,
@@ -1594,6 +1670,7 @@ impl WindowState {
             ControllerLayout::from_index(combo_selection(controls.controller) as u32);
         config.fixes.beam_commands = checked(controls.fix_beam);
         let skip = checked(controls.skip);
+        let crash_reports = checked(controls.crash_reports);
         if let Err(error) = config.try_save(&self.root) {
             notice(
                 self.options_window,
@@ -1604,6 +1681,9 @@ impl WindowState {
             return;
         }
         self.request.preferences.skip_launcher = skip;
+        if v2k_game::crash_reports::available() {
+            self.request.preferences.send_crash_reports = crash_reports;
+        }
         if let Err(error) = self
             .request
             .preferences

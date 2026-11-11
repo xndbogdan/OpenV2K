@@ -48,6 +48,18 @@ impl SavePathContext {
         })
     }
 
+    /// A replay's copy of a session's saves ([`super::SaveManager::keep_loadable`]):
+    /// read and written there alone, its retail imports from `dir/retail`.
+    pub fn replay_copy(dir: &Path) -> Self {
+        Self {
+            save_directory: dir.to_path_buf(),
+            // Absent: its legacy and parent lookups land back in `dir`.
+            data_directory: dir.join("data"),
+            retail_save_directory: Some(dir.join("retail")),
+            storage_policy: SaveStoragePolicy::BesideExecutable,
+        }
+    }
+
     pub fn save_directory(&self) -> &Path {
         &self.save_directory
     }

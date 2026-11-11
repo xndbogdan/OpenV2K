@@ -68,6 +68,13 @@ pub fn run(request: LauncherRequest) -> Result<Option<LaunchSelection>, String> 
     }
 }
 
+/// Options' crash reports row ([`v2k_game::crash_reports`]).
+pub(super) const CRASH_REPORTS_LABEL: &str = "Send crash reports";
+/// Its tooltip: what a report carries.
+pub(super) const CRASH_REPORTS_DETAIL: &str = "When the game crashes or freezes, the next start sends the developers its crash log, with that game's recording, settings and saves, so the crash can be replayed and fixed. Nothing is sent while this is off.";
+/// Its tooltip in a build without a crash report address.
+pub(super) const CRASH_REPORTS_UNAVAILABLE: &str = "Crash reporting is unavailable in this build. Reports go to the project's Sentry service, and this copy of the game was built without its address (the Sentry DSN). Official releases include it.";
+
 pub(super) fn music_description(report: &ValidationReport) -> String {
     let count = report.music.available_count();
     if report.music.directory_missing {

@@ -167,10 +167,18 @@ D beam commands work at high frame rates** fires a C or D beam command whose
 countdown lands exactly on zero, which retail ignores at its 125-fps cap
 ([beam timing](docs/re/PLAYER_CRAFT.md#beam-attachment-and-weight-interaction-resolved-2026-07-13)).
 `--beam-commands <BOOL>` overrides it for a single run.
+**Send crash reports** is off until ticked. With it on, each desktop start
+sends the crash logs the last runs left in `logs` beside the executable to the
+project's Sentry, each with its run's recording, settings and saves, so the
+crash can be replayed; one failure goes once a version from each machine
+([bug reports](README.md#bug-reports)). Its tooltip says what goes. A build
+made without the project's Sentry DSN greys the row out, and its tooltip says
+why.
 The game is per-monitor DPI aware. The launcher's own windows keep their
 system-DPI layout.
-The launcher remembers its data directory, last image and automatic-launch
-preference separately under `%LOCALAPPDATA%/V2000 Port/launcher.json`.
+The launcher remembers its data directory, last image, automatic-launch and
+crash report preferences separately under
+`%LOCALAPPDATA%/V2000 Port/launcher.json`.
 `--launcher-state <path>` selects another preference file for a portable or
 test session.
 

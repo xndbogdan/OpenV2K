@@ -231,6 +231,26 @@ pub struct ProbeRun {
     /// `--actor-log`: every live entity each frame, in the event log's format.
     pub actor_log: Option<EventLog>,
     pub entities: EntityCensus,
+    /// `--crash-test`: panic before the game starts.
+    pub crash_test: bool,
+    /// `V2K_NEW_GAME_AFTER_TICKS`, or a replay's recorded value.
+    pub new_game_after_ticks: Option<u32>,
+    /// `--session-log` and desktop starts: record this run.
+    pub record: Option<SessionRecord>,
+    /// `--replay-session`: the recording this run plays.
+    pub replay: Option<v2k_game::session_log::SessionReplay>,
+    /// `--resume`: play on live when the replay ends.
+    pub resume: bool,
+    /// A replay's copy of the recorded saves, the only saves it reads.
+    pub saves: Option<PathBuf>,
+}
+
+/// Where a run's recording goes, and the command line its replay runs.
+pub struct SessionRecord {
+    /// The `.replay` file; the settings and saves go beside it
+    /// ([`v2k_game::session_log::SessionFiles`]).
+    pub path: PathBuf,
+    pub args: Vec<String>,
 }
 
 /// The entities alive at the end of the previous frame, so `--event-log` can

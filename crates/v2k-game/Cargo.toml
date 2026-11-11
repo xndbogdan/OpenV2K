@@ -20,6 +20,8 @@ sha2 = "0.10"
 rustc-hash = "2"
 # The launcher's header flipbook (indexed PNG atlas).
 png = "0.17.16"
+# Crash reports gzip their recordings and saves.
+flate2 = "1"
 
 # The setup window must start even when the EXE is alone in an empty folder.
 # Avoid a Windows loader dependency on SDL2.dll before our launcher can run.

@@ -127,7 +127,10 @@ cargo test -p v2k-game --test menu_pools
 ```
 
 The game binary is `target/release/v2k-game.exe`. Release builds rename it to
-`OpenV2K.exe`.
+`OpenV2K.exe`. `scripts/release.ps1` builds the release packages. Each build
+takes the Sentry DSN its crash reports go to from `-SentryDsn`,
+`OPENV2K_SENTRY_DSN` or the ignored `.sentry-dsn` file; a build without one
+cannot send them, and `-Publish` refuses to go without one.
 
 On `x86_64-pc-windows-gnu`, the repository
 [Cargo configuration](.cargo/config.toml) selects a
@@ -444,6 +447,24 @@ cargo run --release -- --no-launcher --data-dir retail --skip-intro --vtol-trace
 This writes into the repository's ignored `.tmp/` directory. The stage split makes a mismatch
 attributable without inferring intermediate force values from the final
 rendered pose.
+
+### Bug reports
+
+Start the game with `--session-log` to write `logs/run-<time>.log` beside the
+executable, with everything the game prints, plus a `.replay` beside it: every
+input the game read (the frame clock, keys, mouse, controllers, window focus,
+the intro movie's clock and the loading card's timer), with copies of the
+settings and saves the session started from. `--replay-session PATH` replays
+that run exactly; `--resume` plays on live from where it ends. Every desktop
+start keeps a replay of its own in `logs/replays/` (the newest ten). A
+recording stops where network play begins, since its peers are other
+machines. When the game stops on a failure, or a frame hangs for 15 seconds,
+it writes `v2k-crash-log-<time>.txt` in the log folder, naming the failure,
+the run's replay, the game state and the last 300 lines printed. Attach the
+crash log and replay to a report. With Options' **Send crash reports** ticked
+(off until you tick it; its tooltip says what goes), the next start sends
+each new crash log to the project's Sentry with its run's replay, settings and
+saves; the same failure goes once a version.
 
 ## Verification harness
 
