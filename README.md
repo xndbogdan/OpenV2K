@@ -490,3 +490,12 @@ license, is dual licensed as above, without any additional terms or conditions.
 This license does not cover V2000 itself. The original game's data,
 executable, audio and video remain the property of their respective owners and
 are not distributed with this project.
+
+### A note to Frontier Developments
+
+OpenV2K is modelled on Frontier Developments' own retail code. If Frontier
+wants to make use of anything here, for example to polish it up and release a
+remaster of V2000, they are welcome to do whatever they like with it, without
+asking and without the conditions of the licences above. Third-party
+components (listed in each release's `THIRD_PARTY_LICENSES.html`) keep their
+own terms.
