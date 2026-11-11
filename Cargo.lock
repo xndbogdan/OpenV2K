@@ -3255,6 +3255,7 @@ dependencies = [
  "clap",
  "eframe",
  "egui_kittest",
+ "flate2",
  "png 0.17.16",
  "rfd",
  "rustc-hash 2.1.3",

@@ -11,9 +11,7 @@ pub use native_snapshot::{NativeSaveSnapshot, NativeSaveSnapshotError};
 
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
-use std::path::Path;
-#[cfg(test)]
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use v2k_formats::saves::{
@@ -185,6 +183,26 @@ impl SaveManager {
             *entry = load_slot(&paths, index);
         }
         Self { slots, paths }
+    }
+
+    /// Copy the file each slot loads from into `dir`, as
+    /// [`SavePathContext::replay_copy`] reads them: a session's saves, which
+    /// its replay starts from. Retail imports go in `dir/retail`.
+    pub fn keep_loadable(&self, dir: &Path) -> std::io::Result<()> {
+        fs::create_dir_all(dir)?;
+        for index in 0..NUM_SAVE_SLOTS {
+            let (_, Some((source, retail))) = load_slot_from(&self.paths, index) else {
+                continue;
+            };
+            let into = if retail {
+                dir.join("retail")
+            } else {
+                dir.to_path_buf()
+            };
+            fs::create_dir_all(&into)?;
+            fs::copy(&source, into.join(source.file_name().unwrap_or_default()))?;
+        }
+        Ok(())
     }
 
     /// Save to a specific slot.
@@ -499,41 +517,52 @@ fn replace_native_checkpoint(path: &Path, encoded: &[u8]) -> std::io::Result<()>
 }
 
 fn load_slot(paths: &SavePathContext, index: usize) -> SaveSlotEntry {
+    load_slot_from(paths, index).0
+}
+
+/// A slot's entry and the file it came from, `true` for a retail import.
+fn load_slot_from(
+    paths: &SavePathContext,
+    index: usize,
+) -> (SaveSlotEntry, Option<(PathBuf, bool)>) {
+    let found = |entry: SaveSlotEntry, path: PathBuf, retail: bool| {
+        let source = (!matches!(entry, SaveSlotEntry::Missing)).then_some((path, retail));
+        (entry, source)
+    };
+    let native_name = format!("Slot{index:02}");
+    let portable_name = format!("slot_{index}.json");
     if paths.storage_policy == SaveStoragePolicy::BesideExecutable {
-        let native = load_native_slot(
-            &paths.save_directory.join(format!("Slot{index:02}")),
-            "checkpoint",
-        );
+        let path = paths.save_directory.join(&native_name);
+        let native = load_native_slot(&path, "checkpoint");
         if !matches!(native, SaveSlotEntry::Missing) {
-            return native;
+            return found(native, path, false);
         }
         let portable = load_portable_slot(&paths.save_directory, index);
         if !matches!(portable, SaveSlotEntry::Missing) {
-            return portable;
+            return found(portable, paths.save_directory.join(&portable_name), false);
         }
     }
 
     // Preserve legacy import precedence and framing, including an occupied
     // corrupt native checkpoint that cannot fall through to an older save.
     let legacy_directory = paths.data_directory.join("saves");
-    let checkpoint = load_native_slot(
-        &legacy_directory.join(format!("Slot{index:02}")),
-        "checkpoint",
-    );
+    let path = legacy_directory.join(&native_name);
+    let checkpoint = load_native_slot(&path, "checkpoint");
     if !matches!(checkpoint, SaveSlotEntry::Missing) {
-        return checkpoint;
+        return found(checkpoint, path, false);
     }
     let portable = load_portable_slot(&legacy_directory, index);
+    let portable_path = legacy_directory.join(&portable_name);
     if matches!(portable, SaveSlotEntry::Valid(_)) {
-        return portable;
+        return found(portable, portable_path, false);
     }
     match load_retail_slot(
         &paths.data_directory,
         paths.retail_save_directory.as_deref(),
         index,
     ) {
-        SaveSlotEntry::Missing => portable,
-        retail => retail,
+        (SaveSlotEntry::Missing, _) => found(portable, portable_path, false),
+        (retail, path) => found(retail, path, true),
     }
 }
 
@@ -553,20 +582,22 @@ fn load_retail_slot(
     data_dir: &Path,
     retail_save_dir: Option<&Path>,
     index: usize,
-) -> SaveSlotEntry {
+) -> (SaveSlotEntry, PathBuf) {
     // A source checkout may run beside the install, with user-owned retail
     // saves one directory above it. A packaged data directory may carry them
     // directly.
+    let mut path = PathBuf::new();
     for root in [data_dir.to_path_buf(), data_dir.join("..")]
         .into_iter()
         .chain(retail_save_dir.map(Path::to_path_buf))
     {
-        let entry = load_native_slot(&root.join(format!("Slot{index:02}")), "retail");
+        path = root.join(format!("Slot{index:02}"));
+        let entry = load_native_slot(&path, "retail");
         if !matches!(entry, SaveSlotEntry::Missing) {
-            return entry;
+            return (entry, path);
         }
     }
-    SaveSlotEntry::Missing
+    (SaveSlotEntry::Missing, path)
 }
 
 /// `FUN_00456EF0` over a saved state: the worlds saved in its 37 control
@@ -880,6 +911,42 @@ mod tests {
         assert_eq!(native.logical_level_id, 18);
         assert_eq!(native.state_payload.len(), STATE_PAYLOAD_SIZE);
 
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// A session keeps the files its slots load from, and its replay loads
+    /// the same rows from that copy alone, retail imports still as imports.
+    #[test]
+    fn a_replay_copy_loads_the_session_slots_alone() {
+        let root = env::temp_dir().join("v2k_save_test_replay_copy");
+        let install = root.join("install");
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&install).unwrap();
+        fs::write(install.join("Slot01"), make_retail_slot("Peasant", 13)).unwrap();
+        fs::write(root.join("Slot03"), make_retail_slot("Cistern", 18)).unwrap();
+        let paths =
+            SavePathContext::beside_executable(&install.join("v2k.exe"), &install, None).unwrap();
+        let session = SaveManager::load_paths(paths);
+        let kept = root.join("run.saves");
+        session.keep_loadable(&kept).unwrap();
+        assert!(kept.join("Slot01").is_file() && kept.join("retail/Slot03").is_file());
+
+        // The copy sits where an empty slot's parent lookup would land.
+        fs::write(
+            kept.join("..").join("Slot05"),
+            make_retail_slot("Stray", 20),
+        )
+        .unwrap();
+        let replay = SaveManager::load_paths(SavePathContext::replay_copy(&kept));
+        for index in 0..NUM_SAVE_SLOTS {
+            let row = |manager: &SaveManager| {
+                manager
+                    .slot(index)
+                    .map(|slot| (slot.level_name.clone(), slot.timestamp.clone()))
+            };
+            assert_eq!(row(&replay), row(&session), "slot {index}");
+        }
+        assert_eq!(replay.slot(3).unwrap().timestamp, "retail");
         let _ = fs::remove_dir_all(&root);
     }
 

@@ -151,6 +151,7 @@ struct Pending {
     controller: usize,
     fix_beam: bool,
     skip: bool,
+    crash_reports: bool,
 }
 
 struct Launcher {
@@ -507,6 +508,8 @@ impl Launcher {
             controller: config.controller_layout.index() as usize,
             fix_beam: config.fixes.beam_commands,
             skip: self.request.preferences.skip_launcher,
+            crash_reports: v2k_game::crash_reports::available()
+                && self.request.preferences.send_crash_reports,
             config,
         });
     }
@@ -546,6 +549,7 @@ impl Launcher {
         config.controller_layout = ControllerLayout::from_index(pending.controller as u32);
         config.fixes.beam_commands = pending.fix_beam;
         let skip = pending.skip;
+        let crash_reports = pending.crash_reports;
         let dir = self
             .settings_dir
             .clone()
@@ -557,6 +561,9 @@ impl Launcher {
             );
         }
         self.request.preferences.skip_launcher = skip;
+        if v2k_game::crash_reports::available() {
+            self.request.preferences.send_crash_reports = crash_reports;
+        }
         if let Err(error) = self
             .request
             .preferences
@@ -750,6 +757,12 @@ impl Launcher {
                 "Skip the launcher when this installation is ready",
             );
             ui.weak("Start with --launcher to open it again. Missing game files still open it.");
+            ui.add_enabled(
+                v2k_game::crash_reports::available(),
+                egui::Checkbox::new(&mut p.crash_reports, super::CRASH_REPORTS_LABEL),
+            )
+            .on_hover_text(super::CRASH_REPORTS_DETAIL)
+            .on_disabled_hover_text(super::CRASH_REPORTS_UNAVAILABLE);
             group(ui, |ui| {
                 ui.strong("Installation tools");
                 ui.horizontal(|ui| {
