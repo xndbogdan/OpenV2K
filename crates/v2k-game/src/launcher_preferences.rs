@@ -10,6 +10,9 @@ pub struct LauncherPreferences {
     pub data_dir: Option<PathBuf>,
     pub last_image: Option<PathBuf>,
     pub skip_launcher: bool,
+    /// Options' Send crash reports ([`crate::crash_reports`]); off until
+    /// ticked.
+    pub send_crash_reports: bool,
 }
 
 impl LauncherPreferences {
@@ -93,6 +96,7 @@ mod tests {
             data_dir: Some(PathBuf::from("Game Files/Ω")),
             last_image: Some(PathBuf::from("Disc/V2000.cue")),
             skip_launcher: true,
+            send_crash_reports: true,
         };
         state.save(&path).unwrap();
         assert_eq!(LauncherPreferences::load(&path), state);

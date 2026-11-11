@@ -1,3 +1,6 @@
+# The crash reports' Sentry DSN, read by scripts/release.ps1; never commit it.
+/.sentry-dsn
+
 # Rust build artifacts
 /target/
 /.sdl2/
