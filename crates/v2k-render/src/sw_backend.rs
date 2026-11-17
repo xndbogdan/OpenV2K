@@ -122,15 +122,19 @@ pub struct SoftwareRenderer {
     /// Materials bound only until the queue next drains.
     transient: Vec<MaterialId>,
     /// The streaming texture `present` uploads to, reused across frames.
-    /// `Texture` borrows its creator, so the creator (an owned `Rc` clone
-    /// holding no GPU resources of its own) is intentionally leaked once:
-    /// one small process-lifetime allocation instead of a driver
-    /// alloc+free every present.
+    /// The owner of that texture is `present_creator`, declared after it:
+    /// Rust drops fields in declaration order, so the texture is destroyed
+    /// while the renderer is still alive, and the creator then releases the
+    /// renderer and window without leaking either.
     present_texture: Option<PresentTexture>,
+    /// The creator behind `present_texture`. It holds the renderer and
+    /// window references; keeping it here (instead of leaking it) lets the
+    /// renderer switch destroy the old window.
+    present_creator: TextureCreator<WindowContext>,
 }
 
 struct PresentTexture {
-    texture: Texture<'static>,
+    texture: Texture,
     width: u32,
     height: u32,
 }
@@ -165,6 +169,7 @@ impl SoftwareRenderer {
         // Present the logical surface with nearest-neighbour scaling.
         sdl2::hint::set("SDL_RENDER_SCALE_QUALITY", "0");
         let canvas = window.into_canvas().build().map_err(|e| e.to_string())?;
+        let present_creator = canvas.texture_creator();
         let viewport =
             RenderViewport::for_output(width, height, width, height, ScalingMode::Native);
         let surface = Surface565::new(viewport.logical_width, viewport.logical_height);
@@ -210,6 +215,7 @@ impl SoftwareRenderer {
             ordered_run: None,
             transient: Vec::new(),
             present_texture: None,
+            present_creator,
         })
     }
 
@@ -218,21 +224,21 @@ impl SoftwareRenderer {
     /// Takes the pieces separately so the caller can keep borrowing the
     /// surface for the upload alongside it.
     fn present_texture<'slot>(
-        canvas: &Canvas<Window>,
+        creator: &TextureCreator<WindowContext>,
         slot: &'slot mut Option<PresentTexture>,
         width: u32,
         height: u32,
-    ) -> Option<&'slot mut Texture<'static>> {
+    ) -> Option<&'slot mut Texture> {
         let fresh = match slot {
             Some(present) if present.width == width && present.height == height => false,
             _ => true,
         };
         if fresh {
-            let creator: &'static TextureCreator<WindowContext> =
-                Box::leak(Box::new(canvas.texture_creator()));
             let texture = creator
                 .create_texture_streaming(PixelFormatEnum::RGB565, width, height)
                 .ok()?;
+            // Replacing a resized texture drops the old one here, before the
+            // creator, so its `SDL_DestroyTexture` still has a live renderer.
             *slot = Some(PresentTexture {
                 texture,
                 width,
@@ -711,19 +717,40 @@ impl Renderer for SoftwareRenderer {
             }
         }
         let (width, height) = (self.surface.width, self.surface.height);
-        let texture = Self::present_texture(&self.canvas, &mut self.present_texture, width, height);
+        let texture = Self::present_texture(
+            &self.present_creator,
+            &mut self.present_texture,
+            width,
+            height,
+        );
         let Some(texture) = texture else {
             return;
         };
         // The surface pixels are already contiguous RGB565 words: retype
         // the slice instead of copying it into a fresh byte `Vec` a frame.
-        // SAFETY: a `Vec<u16>` buffer is 2-aligned, `u8` needs 1, and 2 is
-        // a multiple of 1, so the retype always covers the whole slice;
-        // the empty prefix/suffix check below fails closed regardless.
-        let (prefix, bytes, suffix) = unsafe { self.surface.pixels.align_to::<u8>() };
-        if !prefix.is_empty() || !suffix.is_empty() {
-            return;
-        }
+        // That retype is a native-endian view, which is little-endian on the
+        // port's x86-64 targets; other targets convert explicitly so the
+        // uploaded words stay little-endian RGB565.
+        #[cfg(target_endian = "little")]
+        let bytes = {
+            // SAFETY: a `Vec<u16>` buffer is 2-aligned, `u8` needs 1, and 2
+            // is a multiple of 1, so the middle span covers the whole slice
+            // (the prefix/suffix check is a defensive fail-closed guard).
+            let (prefix, bytes, suffix) = unsafe { self.surface.pixels.align_to::<u8>() };
+            if !prefix.is_empty() || !suffix.is_empty() {
+                return;
+            }
+            bytes
+        };
+        #[cfg(not(target_endian = "little"))]
+        let converted: Vec<u8> = self
+            .surface
+            .pixels
+            .iter()
+            .flat_map(|pixel| pixel.to_le_bytes())
+            .collect();
+        #[cfg(not(target_endian = "little"))]
+        let bytes = converted.as_slice();
         if texture.update(None, bytes, self.surface.pitch).is_err() {
             return;
         }
