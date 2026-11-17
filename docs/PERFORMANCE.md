@@ -339,10 +339,11 @@ divergence. `intro2_flyer_aim` and `ordinary_type47_live` now read the
 drained position from the resolved origin in the no-correction case
 instead of carrying the helper's copy. After the fix the two builds are
 byte-identical on level 20 at 640x480 (software `7F9A8D53…`, OpenGL
-`D435E515…`), 1920x1080 (software `19CA408E…`, OpenGL `5E393B81…`) and
-3840x2160 (OpenGL `D47F2647…`), with frame-2971 `rng` `82bfe7cb` in every
-pair. [BUILD_DETERMINISM.md](re/BUILD_DETERMINISM.md) owns the evidence and
-acceptance.
+`D435E515…`, `rng` `82bfe7cb`), 1920x1080 (software `19CA408E…`, OpenGL
+`5E393B81…`, `rng` `82bfe7cb`) and 3840x2160 (OpenGL `D47F2647…`; software
+`19CA408E…` with `rng` `d7db27cc`, its 1024x768 logical surface upscaled
+from the 4K frame). [BUILD_DETERMINISM.md](re/BUILD_DETERMINISM.md) owns
+the evidence and acceptance.
 
 The divergence was resolution-dependent (the old PGO binary was clean at
 1920x1080 and 3840x2160 and diverged only at 640x480); after the fix every
