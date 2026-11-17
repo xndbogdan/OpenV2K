@@ -12,10 +12,11 @@ repository = "https://github.com/xndbogdan/OpenV2K"
 [profile.test]
 debug = "line-tables-only"
 
-# The shipped game (scripts/release.ps1, build-pgo.ps1): whole-program
-# optimisation, for a slower build. `--release` stays the quick one for
-# tests and probes. Rust never contracts or reassociates floating point
-# unasked, so replays match.
+# The shipped game (scripts/release.ps1) and the PGO experiment
+# (scripts/build-pgo.ps1): whole-program optimisation, for a slower build.
+# `--release` stays the quick one for tests and probes. Rust never contracts
+# or reassociates floating point unasked; PGO still changes level-20 pixels
+# (docs/re/BUILD_DETERMINISM.md).
 [profile.ship]
 inherits = "release"
 lto = "fat"

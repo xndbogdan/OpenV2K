@@ -6,13 +6,17 @@ Times headless gameplay runs for compiler-build comparison.
 Runs each level hidden at 640x480 with a 20 ms fixed step for -Frames
 frames, -Repeats times, and records wall seconds, fps and the end snapshot
 under .tmp/perf/<Tag>/. The executable is copied there first, so cargo can
-rebuild between runs. -Baseline compares a later tag against an earlier one
-and checks the end snapshots are byte-identical (compiler builds must not
-change results). Run one tag per build (release, ship, PGO).
+rebuild between runs. `fps` includes process startup and level load (the
+whole run's wall time); it is a build-to-build comparison, not a frame-time
+average. Run one tag per build (release, ship, PGO). -Baseline compares an
+already-run tag against an earlier one and checks that every end snapshot
+exists and is byte-identical (compiler builds must not change results).
+Run the new tag first, then compare it.
 
 .EXAMPLE
-pwsh -NoProfile -File scripts/perf-bench.ps1 -Tag release-before
-pwsh -NoProfile -File scripts/perf-bench.ps1 -Tag ship-after -Baseline release-before
+pwsh -NoProfile -File scripts/perf-bench.ps1 -Tag ship-before
+pwsh -NoProfile -File scripts/perf-bench.ps1 -Tag ship-after
+pwsh -NoProfile -File scripts/perf-bench.ps1 -Tag ship-after -Baseline ship-before
 #>
 [CmdletBinding()]
 param(
@@ -20,7 +24,7 @@ param(
     [int]$Frames = 3000,
     [int]$Repeats = 3,
     [string]$Tag = (Get-Date -Format 'yyyyMMdd-HHmmss'),
-    [string]$Exe = 'target/release/v2k-game.exe',
+    [string]$Exe = 'target/ship/v2k-game.exe',
     [string]$Levels = '13,20,30,40',
     [string]$Renderers = 'opengl,software',
     [int]$Width = 640,
@@ -38,7 +42,12 @@ $rendererList = @($Renderers -split ',' | ForEach-Object { $_.Trim() })
 
 if (-not $Baseline) {
     $exeCopy = Join-Path $out 'v2k-game.exe'
-    Copy-Item -LiteralPath (Join-Path $root $Exe) -Destination $exeCopy -Force
+    $exeSource = Join-Path $root $Exe
+    Copy-Item -LiteralPath $exeSource -Destination $exeCopy -Force
+    $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exeCopy).Hash
+    Set-Content -LiteralPath (Join-Path $out 'exe.txt') -Encoding ascii `
+        -Value ("source: $exeSource`nsha256: $exeHash")
+    Write-Host "executable: $exeSource ($exeHash)"
     $data = if ([IO.Path]::IsPathRooted($DataDir)) { $DataDir } else { Join-Path $root $DataDir }
     $summary = @()
     foreach ($renderer in $rendererList) {
@@ -58,7 +67,11 @@ if (-not $Baseline) {
                     '--frames', $Frames, '--snapshot', "`"$(Join-Path $out "end$name.png")`"",
                     '--event-log', "`"$(Join-Path $out "events$name.jsonl")`"")
                 $seconds = ((Get-Date) - $began).TotalSeconds
-                $fps = if ($process.ExitCode -eq 0) { [math]::Round($Frames / $seconds, 1) } else { 0 }
+                if ($process.ExitCode -ne 0) {
+                    throw ("level {0} {1} rep {2} exited {3}; see err{4}.txt and out{4}.txt" -f `
+                            $level, $renderer, $rep, $process.ExitCode, $name)
+                }
+                $fps = [math]::Round($Frames / $seconds, 1)
                 $fpsRuns += $fps
                 Write-Host ('level {0} {1} rep {2}: exit {3}, {4} s, {5} fps' -f `
                         $level, $renderer, $rep, $process.ExitCode, [math]::Round($seconds, 1), $fps)
@@ -73,11 +86,19 @@ if (-not $Baseline) {
     $summary | ForEach-Object { Write-Host ('  level {0} {1}: {2}' -f $_.level, $_.renderer, $_.median_fps) }
 }
 else {
+    $newSummary = Join-Path $out 'summary.json'
+    if (-not (Test-Path -LiteralPath $newSummary)) {
+        throw "No summary for tag '$Tag'; run that tag once before using -Baseline."
+    }
     $old = Get-Content -Raw -LiteralPath (Join-Path $perf "$Baseline/summary.json") | ConvertFrom-Json
-    $new = Get-Content -Raw -LiteralPath (Join-Path $out 'summary.json') | ConvertFrom-Json
+    $new = Get-Content -Raw -LiteralPath $newSummary | ConvertFrom-Json
     $mismatched = @()
+    $missing = @()
     foreach ($row in $new) {
         $before = @($old | Where-Object { $_.level -eq $row.level -and $_.renderer -eq $row.renderer })[0]
+        if (-not $before) {
+            throw "Baseline '$Baseline' has no level $($row.level) $($row.renderer) row."
+        }
         $gain = if ($before.median_fps -gt 0) {
             [math]::Round(100.0 * ($row.median_fps - $before.median_fps) / $before.median_fps, 1)
         } else { 0 }
@@ -88,17 +109,20 @@ else {
             $name = '{0:D2}_{1}_{2}' -f $row.level, $row.renderer, $rep
             $a = Join-Path $perf "$Baseline/end$name.png"
             $b = Join-Path $out "end$name.png"
-            if ((Test-Path -LiteralPath $a) -and (Test-Path -LiteralPath $b)) {
-                $ha = (Get-FileHash -Algorithm SHA256 -LiteralPath $a).Hash
-                $hb = (Get-FileHash -Algorithm SHA256 -LiteralPath $b).Hash
-                if ($ha -ne $hb) { $mismatched += $name }
+            if (-not (Test-Path -LiteralPath $a) -or -not (Test-Path -LiteralPath $b)) {
+                $missing += $name
+                continue
             }
+            $ha = (Get-FileHash -Algorithm SHA256 -LiteralPath $a).Hash
+            $hb = (Get-FileHash -Algorithm SHA256 -LiteralPath $b).Hash
+            if ($ha -ne $hb) { $mismatched += $name }
         }
     }
+    if ($missing.Count -gt 0) {
+        throw ('missing end snapshots: ' + ($missing -join ', '))
+    }
     if ($mismatched.Count -gt 0) {
-        Write-Warning ('snapshots differ: ' + ($mismatched -join ', '))
+        throw ('snapshots differ: ' + ($mismatched -join ', '))
     }
-    else {
-        Write-Host 'all end snapshots byte-identical.' -ForegroundColor Green
-    }
+    Write-Host 'all end snapshots byte-identical.' -ForegroundColor Green
 }
