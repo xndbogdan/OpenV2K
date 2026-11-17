@@ -646,13 +646,22 @@ after slot 1 has been cleared. Variant 2 clears slots 2 and 1 and installs
 event entry/task semantics remain unresolved. Its `FUN_0040CE90` completion
 marks `0x8000`, finishes the component route, and reselects behavior.
 
+### Class 17 Shoot Randomly initializer (DEAD: no selector)
+
 `FUN_0040AEA0` (install a 5000-ms task through `FUN_00402780` with tick
 `FUN_004027A0`; on failure clear slots 1 and 0) has no direct code caller:
 a whole-image scan finds zero E8/E9 xrefs, with two DWORD refs at
-`0x4C7DA8` and `0x4C7DF0` (style records whose frames are `0x4C7DB0` and
-class-13's initial `0x4C7DF8`). The port cites `FUN_0040AEA0`, `FUN_00402780`,
-and `FUN_004027A0` at class 13 Flocking (`crates/v2k-game/src/entity_behavior.rs`),
-which authenticates initial style `0x004C7DF8`.
+`0x4C7DA8` and `0x4C7DF0`. Those are the `+0x40` initializer slots of the
+two 0x48-byte styles at `0x4C7D68` and `0x4C7DB0`, which are behavior class
+17 `Shoot Randomly`'s style base (name-table entry 17 at `0x4C8B28`,
+descriptor `0x4C88B0`); they are **not** class 13's initial style. Class 13's
+initial style `0x4C7DF8` has `+0x40 FUN_0040B640`, and its route style
+`0x4C7E40` has `+0x40 FUN_0040AF50`, both implemented by the port. The port's
+`REACHABLE_BEHAVIOR_PROGRAMS` table, built from all 130 global entity types'
+weighted and alternate choices, contains no class 17, and no note records a
+runtime transition into it. `FUN_0040AEA0`, `FUN_00402780` and
+`FUN_004027A0` are therefore class 17's dead initializer path. The earlier
+citation of these addresses at class 13 was a misattribution.
 
 ### Shared Aim And Fire slot-2 task (STATICALLY CONFIRMED)
 
