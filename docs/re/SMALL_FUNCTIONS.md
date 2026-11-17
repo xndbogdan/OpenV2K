@@ -28,9 +28,10 @@ These census entries are not functions; the progress report omits them.
   and return tail of `FUN_0044E090`; both fall through from the census
   body's last instruction. `census_tails.py` now extends such tails before
   the census is written: `FUN_0042BBF0` is 362 bytes (to `0x42BD5A`) and
-  `FUN_0044E090` is 78 (to `0x44E0DE`). `FUN_0044E090`'s decompiled C still
-  follows the fallthrough and includes its call/return, while
-  `FUN_0042BBF0` has no tracked bulk body.
+  `FUN_0044E090` is 78 (to `0x44E0DE`). Both bodies are in the regenerated
+  `v2000/decompiled/bulk_clean/game_logic.c`; the only decompiler failures in
+  that export are the two 2-byte census artifacts `0x00441E7A` and
+  `0x0044256E`.
 
 Six of them (`0x004167BA`, `0x0042776E`, `0x0043B3D5`, `0x0046C5F1`,
 `0x0048D159` and `0x0048FADE`) are values of the span-reciprocal table at
