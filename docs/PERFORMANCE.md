@@ -2,12 +2,14 @@
 
 Compiler-build optimisation ported from OpenInfestation, measured on this
 machine (Windows, NVIDIA, 640x480 hidden, 20 ms fixed step, 3000 frames,
-median of three; `scripts/perf-bench.ps1`). Raw runs under
-`.tmp/perf/<tag>/` (ignored); `summary.json` holds each tag's medians.
+median of three; `scripts/perf-bench.ps1`). A table whose text says
+otherwise uses the method it names (the present-path table uses six
+interleaved old/new pairs). Raw runs under `.tmp/perf/<tag>/` (ignored);
+`summary.json` holds each tag's medians.
 
 ## Sampling profiler (2026-11-07)
 
-`scripts/perf-sample.py` suspends each busy thread ~60 times a second and
+`scripts/perf-sample.py` suspends each busy thread ~100 times a second and
 walks its RBP chain (no administrator rights needed for our own child);
 `scripts/perf-bucket.py` attributes PCs to functions via `llvm-nm`
 (MinGW addr2line 2.39 cannot parse rustc's DWARF) and prints shares.
@@ -25,7 +27,9 @@ cargo build --profile ship -p v2k-game
 then e.g. `python3 scripts/perf-sample.py --out .tmp/perf/prof-soft30
 --warmup 8 --duration 60 --rate 100 -- target/prof/ship/v2k-game.exe
 ...` (game flags after `--`) and `python3 scripts/perf-bucket.py --dir
-.tmp/perf/prof-soft30 --ms 2.7`. Caveats: the walker records every frame
+.tmp/perf/prof-soft30 --ms 2.7`. `perf-bucket.py` needs `llvm-nm` from the
+`llvm-tools-preview` component (or `LLVM_TOOLS_BIN`); `build-pgo.ps1`
+installs it for its toolchain. Caveats: the walker records every frame
 it can validate and drops the rest (frameless leaves, misaligned links),
 so leaf-heavy entries are the most trustworthy; shares turn into ms at
 the unsampled frame time (`perf-bench` median).
@@ -46,13 +50,19 @@ handling dominate the CPU frame.
 
 ## Method
 
-`scripts/perf-bench.ps1 -Tag <name>` copies the executable aside, then runs
-levels 13, 20, 30 and 40 on the OpenGL and software renderers, three times
-each, recording wall seconds and fps plus an end snapshot and an event log.
-`-Baseline <old>` compares medians and checks the end snapshots are
-byte-identical: compiler builds must not change results. Note the event
-logs always differ run to run (frame lines carry the process random word),
-even for the same binary, so snapshots are the fidelity check.
+Build the measured binary first (`cargo build --profile ship -p v2k-game`).
+`scripts/perf-bench.ps1 -Tag <name>` copies the executable aside (by default
+`target/ship/v2k-game.exe`; `-Exe` selects another build), then runs levels
+13, 20, 30 and 40 on the OpenGL and software renderers, three times each,
+recording wall seconds and fps plus an end snapshot and an event log.
+The tag records the copied executable's path and SHA-256 in `exe.txt`.
+`fps` covers the whole process, including startup and level load, so it is a
+build-to-build comparison rather than a frame-time average. Run each tag once;
+`-Baseline <old>` then compares an already-run tag's medians and requires every
+end snapshot to exist and be byte-identical: compiler builds must not change
+results. Note the event logs always differ run to run (frame lines carry the
+process random word), even for the same binary, so snapshots are the fidelity
+check.
 
 ## The shipped build (2026-11-07)
 
@@ -130,9 +140,11 @@ Now (`v2k-render/src/sw_model.rs`, `software/model.rs`): faces live in a
 `Vec<Option<(u8, FaceWords)>>` indexed by triangle — no hashing, since
 lookups are always by triangle id and the map is never iterated; each
 face's words are an inline `[i16; 10]` (`FaceOp::words` maxes at 2+4+4);
-`emit` fills a `[ModelCorner; 4]` on the stack; all Vecs carry their
-final capacities. Same values, no new behaviour: 288 `v2k-render` tests
-pass and every end snapshot is byte-identical.
+`emit` fills a `[ModelCorner; 4]` on the stack; every Vec reserves its
+worst case (the normal list four per triangle when the mesh has Gouraud
+faces, one otherwise), so none grows during a draw. Same values, no new
+behaviour: 288 `v2k-render` tests pass and every end snapshot is
+byte-identical.
 
 `ship-opt` vs `ship-after`, 640x480, median of three:
 
@@ -247,28 +259,35 @@ ntdll share is not our logging.
 `SoftwareRenderer::present` built a fresh streaming texture every frame
 (a driver alloc+free per present) and copied the whole RGB565 surface
 through a fresh byte `Vec`. It now keeps one streaming texture across
-frames (recreated only on surface resize; the `Texture` borrows its
-creator, so the creator — an owned `Rc` clone holding no GPU resources —
-is intentionally leaked once, documented at the field) and uploads via a
-zero-copy `align_to::<u8>` retype of the surface pixels (fail-closed on a
+frames (recreated only on surface resize; the renderer owns the texture
+creator, declared after the texture so the texture drops first and the
+creator then releases the renderer and window) and uploads via a
+zero-copy `align_to::<u8>` retype of the surface pixels (little-endian;
+other targets convert explicitly, and the retype fails closed on a
 nonempty prefix/suffix).
 
-Alternating old/new A/B, 640x480, median of three, all end snapshots
-byte-identical across both binaries and all reps:
+Re-measured 2026-11-17: six interleaved old/new pairs per cell (before
+`c8e1c65`, after `280d6cd`), 640x480, 3000 frames, same end snapshots.
+The earlier table was not from this change: its level-30 software row is
+identical to the material-map A/B above (390.1 -> 441.1), and its OpenGL
+baselines (502/556) are a different machine state from the 222 fps rows in
+the other tables. The interleaved medians:
 
 | Level | Renderer | Before (fps) | After (fps) |
 | --- | --- | --- | --- |
-| 13 | OpenGL | 502.4 | 456.0 (noise*) |
-| 30 | OpenGL | 556.1 | 551.2 (-0.9%) |
-| 13 | Software | 413.5 | 449.3 (+8.7%) |
-| 30 | Software | 390.1 | 441.1 (+13.1%) |
+| 30 | OpenGL | 559.6 | 563.2 (+0.6%, control) |
+| 13 | Software | 423.1 | 452.8 (+7.0%) |
+| 30 | Software | 466.8 | 504.7 (+8.1%) |
 
-Software wins in all 6 per-rep pairings (+7–9% on the medians).
-*Level-13 OpenGL scattered ±10% in *both* binaries (old 448–522, new
-445–519), so its -9.2% median is session noise, not signal; level 30's
-tight ±1% reads -0.9%. OpenGL's present path is untouched by this change.
+Software wins in every interleaved pairing (medians +7.0% and +8.1%).
+OpenGL's present path is untouched, and its level-30 control is flat within
+run-to-run noise. Level 13 OpenGL was not re-measured; the control is the
+level-30 row.
 
 ## Profile-guided builds (blocked: level 20 diverges)
+
+[BUILD_DETERMINISM.md](re/BUILD_DETERMINISM.md) owns the defect, its probe and
+its acceptance. This section records the measurements.
 
 `scripts/build-pgo.ps1` ports the Infestation PGO pipeline: an instrumented
 `ship` build plays a silent training run (eight campaign levels on OpenGL

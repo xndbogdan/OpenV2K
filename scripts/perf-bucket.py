@@ -83,12 +83,28 @@ def main():
     import shutil
 
     def find_nm():
-        for cand in [shutil.which('llvm-nm'),
-                     'C:/Users/bogdan/.rustup/toolchains/1.95-x86_64-pc-windows-msvc'
-                     '/lib/rustlib/x86_64-pc-windows-msvc/bin/llvm-nm.exe']:
+        import glob
+        candidates = []
+        tools = os.environ.get('LLVM_TOOLS_BIN')
+        if tools:
+            candidates.append(os.path.join(tools, 'llvm-nm.exe'))
+            candidates.append(os.path.join(tools, 'llvm-nm'))
+        candidates.append(shutil.which('llvm-nm'))
+        try:
+            sysroot = subprocess.run(
+                ['rustc', '--print', 'sysroot'],
+                capture_output=True, text=True, check=True).stdout.strip()
+            for name in ('llvm-nm.exe', 'llvm-nm'):
+                candidates.extend(sorted(glob.glob(os.path.join(
+                    sysroot, 'lib', 'rustlib', '*', 'bin', name))))
+        except (OSError, subprocess.CalledProcessError):
+            pass
+        for cand in candidates:
             if cand and os.path.exists(cand):
                 return cand
-        raise SystemExit('llvm-nm not found (needs the 1.95 MSVC toolchain)')
+        raise SystemExit(
+            'llvm-nm not found; run `rustup component add llvm-tools-preview` '
+            'or set LLVM_TOOLS_BIN')
 
     # Symbolize by nearest function start: MinGW addr2line (2.39) cannot
     # parse rustc's DWARF, but llvm-nm demangles the text symbols fine.

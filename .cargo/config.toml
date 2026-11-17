@@ -4,7 +4,8 @@
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
 
 [target.x86_64-unknown-linux-gnu]
-# x86-64-v2 (SSE4.2, POPCNT: Intel since 2008, AMD since 2011).
+# x86-64-v2 (SSE4.2, POPCNT: Intel since 2008, AMD since 2011). This is a
+# hard requirement of every build and release; README.md states it.
 rustflags = ["-C", "target-cpu=x86-64-v2"]
 
 [target.x86_64-pc-windows-gnu]
