@@ -10,9 +10,9 @@ and RE notes cite by address (for example `FUN_0042D030`).
 | Measure | Functions | Share |
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
-| Marked not needed (excluded below) | 642 | |
-| **Referenced by port code** | **1,761** | **100.0%** |
-| Referenced by code or RE notes | 1,761 | 100.0% |
+| Marked not needed (excluded below) | 645 | |
+| **Referenced by port code** | **1,757** | **99.9%** |
+| Referenced by code or RE notes | 1,758 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
 Manual statuses from [`status.csv`](status.csv):
@@ -21,8 +21,8 @@ Manual statuses from [`status.csv`](status.csv):
 |---|---:|
 | implemented | 499 |
 | approximated | 9 |
-| documented | 20 |
-| not-needed | 642 |
+| documented | 21 |
+| not-needed | 645 |
 
 0 `FUN_` citations don't match a retail function
 start. Run `scripts/progress.ps1 -ListUnresolved` to list them.
@@ -41,7 +41,7 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-
+| [Controls](../re/CONTROLS.md) | 1 | 1 | 64 |
 
 ## Omitted
 
@@ -82,7 +82,10 @@ denominator, each with its reason: the never-installed
 | dead: sea table 0x004C92B8 is installed by FUN_004129B0 but never walked (docs/re/TERRAIN_COLLISION.md) | 2 |
 | dead: weight-rule evaluator with no selector; rules 3/4/14 never appear in any authored choice (scan of all 130 global entity types) and the port rejects unknown rule ids; whole-image scan finds zero E8/E9 code xrefs, one DWORD ref in the rule-evaluator table (docs/re/ACTOR_RUNTIME.md) | 2 |
 | replaced: the port's SDL platform (the debug log file, debugger output and fatal-error exit; docs/re/PLATFORM_RUNTIME.md#what-the-port-replaces) | 2 |
+| dead: behavior class 17 (Shoot Randomly) initializer (styles 0x4C7D68/0x4C7DB0, descriptor 0x4C88B0); class 13's initial style 0x4C7DF8 carries FUN_0040B640, and no shipped type selects class 17 (docs/re/ACTOR_TASK_PROGRAMS.md) | 1 |
 | dead: behavior class 57 (Fire Monster) has no selector; whole-image scan finds zero E8/E9 code xrefs and one DWORD ref at the class-57 initial style initializer slot (docs/re/ACTOR_TASK_PROGRAMS.md) | 1 |
+| dead: class 17 (Shoot Randomly)'s 5000-ms task constructor, called only by FUN_0040AEA0; no shipped type selects class 17 (docs/re/ACTOR_TASK_PROGRAMS.md) | 1 |
+| dead: class 17 (Shoot Randomly)'s 5000-ms task tick, referenced only by FUN_0040AEA0's install; no shipped type selects class 17 (docs/re/ACTOR_TASK_PROGRAMS.md) | 1 |
 | dead: debug body selector setter called only by unreferenced in-play debug action FUN_00456590 (docs/re/CONTROLS.md) | 1 |
 | dead: debug craft-type getter called only by unreferenced in-play debug action FUN_004564E0 (docs/re/CONTROLS.md) | 1 |
 | dead: debug craft-type switcher called only by unreferenced in-play debug action FUN_004564E0 (docs/re/CONTROLS.md) | 1 |
@@ -122,9 +125,11 @@ denominator, each with its reason: the never-installed
   the retail executable. It comes from a Ghidra census that combines
   auto-analysis with seeding from callback tables, already-cited addresses and
   uncovered code gaps, plus a few handlers seeded by hand. Functions
-  cover 96% of `.text`, and most of the rest is padding. Everything from the
-  first linker-placed library import stub (`0x004AC5A0`) onward counts as
-  library code.
+  cover 96% of `.text`; most of the rest is padding or data tables, and a
+  few fallthrough tails remain unassigned (see
+  [SMALL_FUNCTIONS.md](../re/SMALL_FUNCTIONS.md#census-artifacts)). Everything
+  from the first linker-placed library import stub (`0x004AC5A0`) onward
+  counts as library code.
 - A function counts as *referenced* when a Rust source file under `crates/`
   (for code) or a note under `docs/re/` cites its start address. A citation
   means the port or the notes deal with that function. It doesn't prove that

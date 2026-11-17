@@ -26,12 +26,12 @@ between port machines over the port's own transport; its held parts are in
 [`WATER_WORLD_TODO.md`](WATER_WORLD_TODO.md) track known gaps.
 
 <!-- progress:start -->
-[![RE coverage](https://img.shields.io/badge/RE%20coverage-100.0%25%20code%20%2F%20100.0%25%20notes-orange)](docs/progress/README.md)
+[![RE coverage](https://img.shields.io/badge/RE%20coverage-99.9%25%20code%20%2F%20100.0%25%20notes-orange)](docs/progress/README.md)
 
-Of the **1,761** game functions in retail `V2000.EXE` the port
-covers ([642 omitted](docs/progress/README.md#omitted)),
-**1,761 (100.0%)** are referenced by the port's code and
-**1,761 (100.0%)** by its code or RE notes.
+Of the **1,758** game functions in retail `V2000.EXE` the port
+covers ([645 omitted](docs/progress/README.md#omitted)),
+**1,757 (99.9%)** are referenced by the port's code and
+**1,758 (100.0%)** by its code or RE notes.
 [How this is measured](docs/progress/README.md).
 
 [![Map of the retail functions by RE note and state](docs/progress/treemap.svg)](docs/progress/README.md#map)
@@ -117,7 +117,10 @@ gives the proof and maps the shared parts.
 ## Building
 
 Requirements: Rust (`stable-x86_64-pc-windows-gnu`), MinGW-w64 GCC and CMake on
-`PATH`. Run everything from the repository root.
+`PATH`. The repository's Cargo configuration targets `x86-64-v2` (SSE4.2 and
+POPCNT: Intel since 2008, AMD since 2011) for every build, including the
+released packages; older CPUs and VM CPU models without those features cannot
+run the binary. Run everything from the repository root.
 
 ```bash
 cargo build --release --workspace
@@ -126,11 +129,13 @@ cargo test --workspace
 cargo test -p v2k-game --test menu_pools
 ```
 
-The game binary is `target/release/v2k-game.exe`. Release builds rename it to
-`OpenV2K.exe`. `scripts/release.ps1` builds the release packages. Each build
-takes the Sentry DSN its crash reports go to from `-SentryDsn`,
-`OPENV2K_SENTRY_DSN` or the ignored `.sentry-dsn` file; a build without one
-cannot send them, and `-Publish` refuses to go without one.
+`cargo build --release` writes `target/release/v2k-game.exe`. Release packages
+build `--profile ship` (fat LTO, `target/ship/`) through
+[`scripts/release.ps1`](scripts/release.ps1) and rename the binary to
+`OpenV2K.exe` on Windows or `openv2k` on Linux. Each release build takes the
+Sentry DSN its crash reports go to from `-SentryDsn`, `OPENV2K_SENTRY_DSN` or
+the ignored `.sentry-dsn` file; a build without one cannot send them, and
+`-Publish` refuses to go without one.
 
 On `x86_64-pc-windows-gnu`, the repository
 [Cargo configuration](.cargo/config.toml) selects a

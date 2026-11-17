@@ -1171,3 +1171,7 @@ address,status,note
 0x00447C70,not-needed,dead: debug body selector setter called only by unreferenced in-play debug action FUN_00456590 (docs/re/CONTROLS.md)
 0x004564E0,not-needed,dead: in-play debug action (step craft type); zero code xrefs and single data ref at 0x004D06E8 is never bound to any key in table 0x004C26D0 or anywhere in retail (docs/re/CONTROLS.md)
 0x00456590,not-needed,dead: in-play debug action (step body selector); zero code xrefs and single data ref at 0x004D06F0 is never bound to any key in table 0x004C26D0 or anywhere in retail (docs/re/CONTROLS.md)
+0x00402780,not-needed,dead: class 17 (Shoot Randomly)'s 5000-ms task constructor, called only by FUN_0040AEA0; no shipped type selects class 17 (docs/re/ACTOR_TASK_PROGRAMS.md)
+0x004027A0,not-needed,dead: class 17 (Shoot Randomly)'s 5000-ms task tick, referenced only by FUN_0040AEA0's install; no shipped type selects class 17 (docs/re/ACTOR_TASK_PROGRAMS.md)
+0x0040AEA0,not-needed,dead: behavior class 17 (Shoot Randomly) initializer (styles 0x4C7D68/0x4C7DB0, descriptor 0x4C88B0); class 13's initial style 0x4C7DF8 carries FUN_0040B640, and no shipped type selects class 17 (docs/re/ACTOR_TASK_PROGRAMS.md)
+0x004577D0,documented,retail's signed 64-bit integer square root; the port's consumers all use the 32-bit FUN_00457730, so no 64-bit implementation is present (docs/re/SMALL_FUNCTIONS.md)
