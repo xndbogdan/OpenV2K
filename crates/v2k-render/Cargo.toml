@@ -9,7 +9,10 @@ description = "OpenV2K — renderer abstraction with OpenGL and software backend
 [dependencies]
 v2k-core = { path = "../v2k-core" }
 v2k-formats = { path = "../v2k-formats" }
-sdl2 = "0.38"
+# `unsafe_textures` lets the software presenter keep one streaming texture
+# and its creator in the same struct: the texture is declared first so it
+# drops before the creator destroys the renderer (see `sw_backend`).
+sdl2 = { version = "0.38", features = ["unsafe_textures"] }
 lewton = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
