@@ -299,7 +299,13 @@ impl ModelMaterialCache {
         let flags = cache
             .global_sprite(sprite_id)
             .map(|(_, entry)| entry.pal_size as u8);
-        self.sprite_flags.borrow_mut().insert(sprite_id, flags);
+        // Only resolved flags are cached. A miss can be a sprite whose layer
+        // is not resident yet (the cache is process-scoped and levels load
+        // later), so caching `None` would keep the fallback blend/row for the
+        // rest of the run; `sprite_dimensions` likewise caches successes only.
+        if flags.is_some() {
+            self.sprite_flags.borrow_mut().insert(sprite_id, flags);
+        }
         flags
     }
 
