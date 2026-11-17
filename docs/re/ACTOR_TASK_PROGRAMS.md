@@ -650,7 +650,7 @@ marks `0x8000`, finishes the component route, and reselects behavior.
 
 `FUN_0040AEA0` (install a 5000-ms task through `FUN_00402780` with tick
 `FUN_004027A0`; on failure clear slots 1 and 0) has no direct code caller:
-a whole-image scan finds zero E8/E9 xrefs, with two DWORD refs at
+a direct E8/E9 scan of `.text` finds zero xrefs, with two DWORD refs at
 `0x4C7DA8` and `0x4C7DF0`. Those are the `+0x40` initializer slots of the
 two 0x48-byte styles at `0x4C7D68` and `0x4C7DB0`, which are behavior class
 17 `Shoot Randomly`'s style base (name-table entry 17 at `0x4C8B28`,
@@ -1412,8 +1412,8 @@ it. `FUN_0040B800`, `FUN_00402430` and `FUN_004024E0` are therefore excluded
 from the port's coverage denominator (`status.csv`), alongside the other dead
 retail paths. The exclusion survives style sharing: each 0x48-byte style
 record carries its task installer at `+0x40` (`B800` at class 27's initial
-style `0x4C7780`, like `B7C0` at class 26's `0x4C7738`), and a whole-image
-scan finds zero E8/E9 code xrefs to all three routines with single data
+style `0x4C7780`, like `B7C0` at class 26's `0x4C7738`), and a direct E8/E9 scan
+of `.text` finds zero code xrefs to all three routines with single data
 refs consistent with the one dead chain (`B800` calls `00402430`, whose
 word immediate is the `004024E0` tick). Initial selection is always variant
 0 (no program overrides `initial_style_table_index_raw`), and the shared
@@ -1458,7 +1458,7 @@ every weighted `behavior_choices` entry plus `alternate_behavior_class_ref`)
 finds no class-57 reference, and no note records a runtime transition into
 it. `FUN_004066B0` and `FUN_00406740` are therefore excluded from the
 port's coverage denominator (`status.csv`), alongside the other dead retail
-paths. `FUN_0040B8E0` is excluded with them: a whole-image scan
+paths. `FUN_0040B8E0` is excluded with them: a direct E8/E9 scan of `.text`
 (`v2000/decompiled/tools/scan_callers.py`, tested by
 `test_scan_callers.py`) finds zero E8/E9 code xrefs to it, and its single
 DWORD reference is the class-57 initial style's initializer slot — style
