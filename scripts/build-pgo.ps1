@@ -68,10 +68,16 @@ try {
             '--width', '1920', '--height', '1080', '--fixed-step-micros', '16000',
             '--frames', "$Frames")
         if ($Keys) { $arguments += @('--input-replay', (Join-Path $runs "$Keys.json")) }
-        # Piped, so PowerShell waits for the GUI program.
-        & $instrumented @arguments 2>&1 | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            throw "Training run level $Level $Renderer exited $LASTEXITCODE."
+        # Redirect both streams to files, so the game's normal stderr (the
+        # OpenGL banner and diagnostics) cannot become a PowerShell error
+        # record, and a failed run leaves its log behind.
+        $stem = "training-$Level-$Renderer"
+        $process = Start-Process -FilePath $instrumented -ArgumentList $arguments `
+            -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput (Join-Path $runs "$stem.out.txt") `
+            -RedirectStandardError (Join-Path $runs "$stem.err.txt")
+        if ($process.ExitCode -ne 0) {
+            throw "Training run level $Level $Renderer exited $($process.ExitCode); see $stem.err.txt."
         }
     }
     Write-Host "`n== training run" -ForegroundColor Cyan
