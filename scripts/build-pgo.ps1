@@ -12,9 +12,10 @@ param(
 # and the software raster, one with throttle, steering and fire), its profile
 # is merged, and the `ship` build is made again from it, the C runtime linked
 # in (no Visual C++ redistributable). This is an experiment, not the release
-# path: PGO changes level-20 pixels and is blocked
-# (docs/re/BUILD_DETERMINISM.md). Needs Visual Studio's C++ build tools and
-# CMake. Prints the game's path last.
+# path. Its level-20 divergence is fixed and covered by
+# docs/re/BUILD_DETERMINISM.md; keep the snapshot check there in mind when
+# changing the shot drain. Needs Visual Studio's C++ build tools and CMake.
+# Prints the game's path last.
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot

@@ -669,7 +669,17 @@ pub fn drain_intro2_flyer_shots(
                 .map_err(Intro2FlyerShotDrainError::ShotMath)?;
                 FlyerShot::Primary {
                     class: row.particle_class,
-                    position_raw: solution.position_raw,
+                    // A zero time offset applies no reanchor, so retail's
+                    // drained word is the resolved source unchanged. Take
+                    // that word from the origin directly instead of the
+                    // helper's copy: the two are equal, and the explicit
+                    // choice keeps the no-correction case independent of
+                    // the carried array (docs/re/BUILD_DETERMINISM.md).
+                    position_raw: if request.time_offset_raw == 0 {
+                        origin
+                    } else {
+                        solution.position_raw
+                    },
                     velocity_raw: solution.velocity_raw,
                 }
             } else {
@@ -678,7 +688,13 @@ pub fn drain_intro2_flyer_shots(
                         .map_err(Intro2FlyerShotDrainError::ShotMath)?;
                 FlyerShot::Primary {
                     class: profile.particle_class(),
-                    position_raw: solution.position_raw,
+                    // See the Craft branch above: no time offset means the
+                    // source word, not a helper copy.
+                    position_raw: if request.time_offset_raw == 0 {
+                        origin
+                    } else {
+                        solution.position_raw
+                    },
                     velocity_raw: solution.velocity_raw,
                 }
             });

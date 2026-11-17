@@ -284,7 +284,7 @@ OpenGL's present path is untouched, and its level-30 control is flat within
 run-to-run noise. Level 13 OpenGL was not re-measured; the control is the
 level-30 row.
 
-## Profile-guided builds (blocked: level 20 diverges)
+## Profile-guided builds
 
 [BUILD_DETERMINISM.md](re/BUILD_DETERMINISM.md) owns the defect, its probe and
 its acceptance. This section records the measurements.
@@ -299,12 +299,10 @@ with SDL2 bundled and the CRT statically linked; the main thread keeps its
 is not ported yet.
 
 Stage 2 against stage 1 (the incremental value of PGO over ship): OpenGL
-+0.5/+0.5/+0.4/+3.1%, software -5.2/-5.4/-3.8/+1.5% — no reliable gain at
-640x480. Level 20 excluded from that sentence: stage 2 diverges there
-(0.45% of pixels, central bbox, both renderers), while every other
-level/renderer is byte-identical across all three builds. Each build is
-self-consistent (three reps byte-identical), so this is systematic, not
-flakiness.
++0.5/+0.5/+0.4/+3.1%, software -5.2/-5.4/-3.8/+1.5% - no reliable gain at
+640x480. At the time of that measurement stage 2 also diverged on level 20
+(0.45% of pixels, central bbox, both renderers); the cause and fix are
+recorded below, and level 20 now matches exactly.
 
 A plain MSVC `ship` build without profile data (`target/pgo/msvc-control`)
 is byte-identical to the MinGW builds on level 20, both renderers — so the
@@ -324,16 +322,36 @@ draw 0x00442240` stack-address warning comes from
 `prepared_particle_draw_scale_raw` (`main.rs:14996`) via
 `native_effective_draw_scale_raw` (`world_fx.rs:1701`), which is
 deterministic (owned pool-VA math or an owned captured address, else the
-explicit unadjusted-scale fallback) and presentation-only sprite scale — it
+explicit unadjusted-scale fallback) and presentation-only sprite scale - it
 cannot move actors. Float perturbation is also out as a direct mechanism:
 no FMA on x86-64-v2, no fast-math anywhere, so PGO cannot change a scalar
 FP result. Wall-clock timing is out too: a level-20 run under eight busy
-cores is byte-identical (snapshot and full event log) to the idle run.
-Standing hypothesis: an uninitialized/padding read whose garbage follows
-PGO's changed layout, feeding the shared-stream draw cadence or an
-impulse/branch condition at frame ~2971. PGO is therefore **not** the
-release path: `release.ps1` ships plain `ship`. `build-pgo.ps1` stays as
-the reproducer.
+cores is byte-identical (snapshot and full event log) to the idle run, and
+the divergence is deterministic per binary.
 
-The divergence is resolution-dependent: the same PGO binary is clean at
-1920x1080 and 3840x2160 (below), diverging only at 640x480.
+Localized 2026-11-17 by a frame-by-frame particle-pool trace: the first
+difference is at frame 2949, where a class-87 shot sits at
+`[-18995, 273, 264]` in the plain build and at `[0, 0, 0]` in PGO. The
+drain's resolved origin, absent muzzle and `time_offset_raw == 0` were
+identical and correct in both builds, but PGO's materialization received a
+zeroed position; adding the trace changed layout and removed the
+divergence. `intro2_flyer_aim` and `ordinary_type47_live` now read the
+drained position from the resolved origin in the no-correction case
+instead of carrying the helper's copy. After the fix the two builds are
+byte-identical on level 20 at 640x480 (software `7F9A8D53…`, OpenGL
+`D435E515…`), 1920x1080 (software `19CA408E…`, OpenGL `5E393B81…`) and
+3840x2160 (OpenGL `D47F2647…`), with frame-2971 `rng` `82bfe7cb` in every
+pair. [BUILD_DETERMINISM.md](re/BUILD_DETERMINISM.md) owns the evidence and
+acceptance.
+
+The divergence was resolution-dependent (the old PGO binary was clean at
+1920x1080 and 3840x2160 and diverged only at 640x480); after the fix every
+tested resolution matches. PGO remains a performance experiment:
+`release.ps1` ships plain `ship`.
+
+## PGO at higher resolutions
+
+The old in-run data recorded here before 2026-11-17 (1080p/4K PGO rows and
+the 640x480-divergence note) is kept in the profile tables above; the fix's
+acceptance hashes are in
+[BUILD_DETERMINISM.md](re/BUILD_DETERMINISM.md#acceptance).
