@@ -317,8 +317,8 @@ $omittedRows
   the retail executable. It comes from a Ghidra census that combines
   auto-analysis with seeding from callback tables, already-cited addresses and
   uncovered code gaps, plus a few handlers seeded by hand. Functions
-  cover 96% of ``.text``; most of the rest is padding or data tables, and a
-  few fallthrough tails remain unassigned (see
+  cover 96% of ``.text``; most of the rest is padding or data tables, and the
+  census extends fallthrough tails before sizing them (see
   [`SMALL_FUNCTIONS.md`](../re/SMALL_FUNCTIONS.md#census-artifacts)). Everything
   from the first linker-placed library import stub (``0x004AC5A0``) onward
   counts as library code.
