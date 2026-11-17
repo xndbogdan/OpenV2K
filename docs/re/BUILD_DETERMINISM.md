@@ -2,32 +2,40 @@
 
 This note owns the port's build-to-build reproducibility defect. It is not a
 retail-fidelity claim: the plain `ship` build is the shipped binary, and its
-output is deterministic. The defect is that one alternative code layout
-(profile-guided optimisation) changes simulation state on level 20, which means
-the port still has a layout-sensitive read that a future allocator, codegen or
-platform change could reach in a shipped build.
+output is deterministic. The defect was that one alternative code layout
+(profile-guided optimisation) changed simulation state on level 20, which
+meant the port had a layout-sensitive handoff that a future allocator, codegen
+or platform change could reach in a shipped build.
 
 The measurements and the surrounding optimization history are in
-[PERFORMANCE.md](../PERFORMANCE.md#profile-guided-builds-blocked-level-20-diverges).
+[PERFORMANCE.md](../PERFORMANCE.md#profile-guided-builds).
 
 ## Observed
 
 - A plain MSVC `ship` build without profile data is byte-identical to the
-  MinGW `ship` build on level 20, both renderers. The divergence is caused by
-  the profile-guided step, not the toolchain or the C runtime.
-- PGO changes 0.45% of level-20 pixels (a central bounding box) at 640x480 on
-  both renderers. Every other tested level/renderer is byte-identical across
+  MinGW `ship` build on level 20, both renderers. The divergence was caused
+  by the profile-guided step, not the toolchain or the C runtime.
+- PGO changed 0.45% of level-20 pixels (a central bounding box) at 640x480 on
+  both renderers. Every other tested level/renderer was byte-identical across
   the plain, MSVC-control and PGO builds.
-- The divergence is resolution-dependent: the same PGO binary is clean at
-  1920x1080 and 3840x2160, and only diverges at 640x480.
-- Snapshots are identical at 500 and 1500 frames. The actor logs match
+- The divergence was resolution-dependent: the same PGO binary was clean at
+  1920x1080 and 3840x2160, and only diverged at 640x480.
+- Snapshots were identical at 500 and 1500 frames. The actor logs matched
   exactly through frame 2971. At about frame 2972 five actors (types 14, 16,
-  94, 94 and 29) jump at once by up to tens of units, with no spawn,
+  94, 94 and 29) jumped at once by up to tens of units, with no spawn,
   disposal, weapon event or health change around the jump. The same frame's
-  shared-stream RNG word reads `82bfe7cb` vs `d227ccec`, then reads equal
-  again at frame 2972. A pure LCG advance cannot re-converge, so the
-  hypothesis is a conditional assignment or draw-count branch, not a
-  different RNG draw count alone.
+  shared-stream RNG word read `82bfe7cb` vs `d227ccec`, then read equal again
+  at frame 2972.
+- A frame-by-frame trace of the particle pool put the first difference at
+  frame 2949: slot 127 held a class-87 shot at `[-18995, 273, 264]` in the
+  plain build and at `[0, 0, 0]` in the PGO build. Entity 14 (type 15) fires
+  that shot in the same draw phase. Instrumenting the draw and drain showed
+  the resolved origin, the (absent) muzzle and `time_offset_raw == 0` were
+  identical and correct in both builds, yet the PGO materialization received
+  `[0, 0, 0]`.
+- Adding those traces changed code layout and removed the PGO divergence;
+  both traced builds then agreed. That is the signature of a layout-sensitive
+  copy or select in the shot drain, not of a value error in its inputs.
 
 ## Cleared
 
@@ -38,14 +46,20 @@ The measurements and the surrounding optimization history are in
 - Scalar floating-point reassociation: the port does not enable fast-math and
   x86-64-v2 has no FMA contraction; Rust does not reassociate unasked.
 - Wall-clock scheduling: a level-20 run under eight busy cores is
-  byte-identical (snapshot and full event log) to the idle run.
+  byte-identical (snapshot and full event log) to the idle run, and the
+  divergence reproduces deterministically per binary.
+- MSVC versus MinGW: a current MSVC `ship` build without profile data matches
+  the current MinGW `ship` build byte-for-byte (frame-2971 word `82bfe7cb`,
+  same end-snapshot SHA-256), so the CRT and compiler are not the cause.
 
-## Standing hypothesis
+## Fix
 
-An uninitialized or padding byte is read, and PGO's changed code layout gives
-it a different value. That value feeds the shared-stream draw cadence or an
-impulse/branch condition at frame ~2971. This is a hypothesis, not a proven
-cause.
+`intro2_flyer_aim` and `ordinary_type47_live` now take a drained shot's
+position from the resolved origin when `time_offset_raw == 0`. That is the
+case where retail's reanchor applies no correction, so the drained word is
+the source itself; reading the origin directly makes the no-correction case
+explicit at the call site instead of carrying the helper's copy. The
+velocity words are unchanged.
 
 ## Probe
 
@@ -60,22 +74,18 @@ pwsh -NoProfile -File scripts/perf-bench.ps1 -Tag pgo-level20 `
   -Levels 20 -Renderers opengl,software -Frames 3000 -Repeats 1
 ```
 
-Then:
-
-1. Compare the frame-2971/2972 event-log lines (actor positions, the `rng`
-   word, draw counts) between the plain and PGO binaries.
-2. Run the plain `ship` build with a poisoning allocator (a feature-gated
-   fill of fresh allocations with a non-zero pattern) and diff the same
-   snapshot. A value-dependent difference points at the uninitialized read;
-   an identical frame rules out the simple poison hypothesis.
-3. If poisoning does not reproduce it, bisect the first divergent read by
-   instrumenting the frame-2971 draw cadence and the five actors' task
-   inputs, not by adding a level-20 special case.
+For a regression, compare the frame-2971/2972 event-log lines (actor
+positions, the `rng` word) and the end snapshots between the plain and PGO
+binaries, then trace the particle pool's first differing slot as above.
 
 ## Acceptance
 
 - Level-20 snapshots are byte-identical between plain `ship` and PGO at
-  640x480, 1920x1080 and 3840x2160, both renderers.
-- The plain `ship` build is byte-identical under two different poison fills.
-- `scripts/build-pgo.ps1` may then be described as a performance experiment;
-  it does not become the release path without this acceptance.
+  640x480, 1920x1080 and 3840x2160, both renderers. **Met on 2026-11-17**:
+  640x480 software `7F9A8D53…`, 640x480 OpenGL `D435E515…`, 1920x1080
+  software `19CA408E…`, 1920x1080 OpenGL `5E393B81…`, 3840x2160 OpenGL
+  `D47F2647…`; frame-2971 RNG word `82bfe7cb` in every pair.
+- The fix keeps the drained velocity and the zero-offset position
+  equivalent to the helper's result by construction.
+- `scripts/build-pgo.ps1` remains a performance experiment; it does not
+  become the release path.

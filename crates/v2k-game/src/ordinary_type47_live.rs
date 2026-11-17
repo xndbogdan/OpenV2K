@@ -68,6 +68,7 @@ use crate::{
     ordinary_type47_shot_math::{
         drain_type47_transient_request, evaluate_type47_aim_error,
         evaluate_type47_forward_half_space, resolve_ballistic_target_launch, Type47ShotMathError,
+        Type47TransientDrainSolution,
     },
     projectile_emitter::{FIRST_WORLD_SHOOTER_PROJECTILE_METHOD, FIRST_WORLD_SHOOTER_SOUND_ID},
     shared_type47::GunnerRow,
@@ -843,16 +844,23 @@ pub fn drain_fresh_level1_ordinary_type47_shots(
             if !is_exact_transient_request(row, source_entity_id, shot.request) {
                 return Err(OrdinaryType47LiveError::MalformedTransientRequest { index });
             }
-            solutions.push(
-                drain_type47_transient_request(
-                    shot.request,
-                    shot.draw_origin_raw
-                        .or(entity.emitter_muzzles[usize::from(shot.request.emitter_selector)])
-                        .unwrap_or_else(|| entity.position_raw()),
-                    entity.velocity_raw(),
-                )
-                .map_err(OrdinaryType47LiveError::ShotMath)?,
-            );
+            let drain_origin = shot
+                .draw_origin_raw
+                .or(entity.emitter_muzzles[usize::from(shot.request.emitter_selector)])
+                .unwrap_or_else(|| entity.position_raw());
+            let solution =
+                drain_type47_transient_request(shot.request, drain_origin, entity.velocity_raw())
+                    .map_err(OrdinaryType47LiveError::ShotMath)?;
+            solutions.push(Type47TransientDrainSolution {
+                // A zero time offset applies no reanchor; the drained word
+                // is the resolved source itself (docs/re/BUILD_DETERMINISM.md).
+                position_raw: if shot.request.time_offset_raw == 0 {
+                    drain_origin
+                } else {
+                    solution.position_raw
+                },
+                velocity_raw: solution.velocity_raw,
+            });
         }
         (solutions, suppression, row, entity.entity_type)
     };
