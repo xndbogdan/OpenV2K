@@ -1246,7 +1246,7 @@ rejects unknown ids (`BehaviorWeightRule::from_raw`). `FUN_00416430`
 (rule 4: 1 when the handle does not resolve or `+08` bit `0x2000` is
 clear) and `FUN_00416530` (rule 14: 1 when `+08` bit `0x4000000` is
 clear) are therefore excluded from the port's coverage denominator
-(`status.csv`): a whole-image scan finds zero E8/E9 code xrefs to either,
+(`status.csv`): a direct E8/E9 scan of `.text` finds zero code xrefs to either,
 with one DWORD reference each in the rule-evaluator table (`0x4BE488`,
 `0x4BE4D8`). ("Rule 3" in type notes means the `behavior_rule_ref`
 authentication tag, not a weight rule.) If future evidence shows a rule

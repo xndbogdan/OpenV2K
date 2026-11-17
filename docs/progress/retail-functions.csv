@@ -1,6 +1,7 @@
 # Retail V2000.EXE function starts (SHA-256 E9BE7A83...B4BA), from a complete
 # Ghidra census: auto-analysis plus callback-table, cited-address and gap seeding.
 # region=library starts at the first linker-placed import stub (0x004AC5A0).
+# Sizes include fallthrough tails (census_tails.py; 0x0042BBF0 and 0x0044E090).
 # Seeded by hand: the seven Direct3D fill handlers 0x00486BA0..0x00489A60, named only by
 # FUN_00480D10's table-1 branch; each runs to its last instruction, as Ghidra sizes them.
 # Seeded by hand: the frontend digit-key setters 0x0042D250..0x0042D290 (table 004CA720) and
@@ -723,7 +724,7 @@ address,size,region
 0x0042BB60,46,game
 0x0042BB90,46,game
 0x0042BBC0,46,game
-0x0042BBF0,342,game
+0x0042BBF0,362,game
 0x0042BD60,39,game
 0x0042BD90,331,game
 0x0042BEE0,53,game
@@ -1301,7 +1302,7 @@ address,size,region
 0x0044DB10,696,game
 0x0044DDD0,291,game
 0x0044DF00,389,game
-0x0044E090,60,game
+0x0044E090,78,game
 0x0044E0E0,263,game
 0x0044E1F0,230,game
 0x0044E2E0,238,game
