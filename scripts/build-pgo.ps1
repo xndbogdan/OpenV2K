@@ -7,13 +7,14 @@ param(
     [string]$Toolchain = '1.95-x86_64-pc-windows-msvc'
 )
 
-# Builds the shipped Windows game with profile-guided optimisation: an
-# instrumented `ship` build plays a silent training run (eight campaign
-# levels on OpenGL and the software raster, one with throttle, steering and
-# fire), its profile is merged, and the `ship` build is made again from it,
-# the C runtime linked in (no Visual C++ redistributable). Replays unchanged
-# (docs/PERFORMANCE.md). Needs Visual Studio's C++ build tools and CMake.
-# Prints the game's path last.
+# Builds a Windows game with profile-guided optimisation: an instrumented
+# `ship` build plays a silent training run (eight campaign levels on OpenGL
+# and the software raster, one with throttle, steering and fire), its profile
+# is merged, and the `ship` build is made again from it, the C runtime linked
+# in (no Visual C++ redistributable). This is an experiment, not the release
+# path: PGO changes level-20 pixels and is blocked
+# (docs/re/BUILD_DETERMINISM.md). Needs Visual Studio's C++ build tools and
+# CMake. Prints the game's path last.
 
 $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
@@ -69,6 +70,9 @@ try {
         if ($Keys) { $arguments += @('--input-replay', (Join-Path $runs "$Keys.json")) }
         # Piped, so PowerShell waits for the GUI program.
         & $instrumented @arguments 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Training run level $Level $Renderer exited $LASTEXITCODE."
+        }
     }
     Write-Host "`n== training run" -ForegroundColor Cyan
     foreach ($level in $levels) {

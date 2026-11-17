@@ -88,7 +88,7 @@ jobs:
           CFLAGS: -std=gnu17
         run: |
           rustup default stable-x86_64-pc-windows-gnu
-          cargo build --release -p v2k-game
+          cargo build --profile ship -p v2k-game
 
       # ── Linux: bundled static SDL2 so players need no SDL install ────────
       - if: runner.os == 'Linux'
@@ -106,7 +106,7 @@ jobs:
 
       - if: runner.os == 'Linux'
         name: Build (Linux)
-        run: cargo build --release -p v2k-game --features sdl2/bundled,sdl2/static-link
+        run: cargo build --profile ship -p v2k-game --features sdl2/bundled,sdl2/static-link
 
       # ── Shared: licenses and packaging ────────────────────────────────────
       - name: Third-party licenses
@@ -123,10 +123,10 @@ jobs:
           mkdir "$name"
           cp README.md LAUNCHER.md LICENSE-MIT LICENSE-APACHE THIRD_PARTY_LICENSES.html "$name/"
           if [ "$RUNNER_OS" = "Windows" ]; then
-            cp target/release/v2k-game.exe "$name/OpenV2K.exe"
+            cp target/ship/v2k-game.exe "$name/OpenV2K.exe"
             7z a -tzip "$name.zip" "$name" > /dev/null
           else
-            cp target/release/v2k-game "$name/openv2k"
+            cp target/ship/v2k-game "$name/openv2k"
             chmod +x "$name/openv2k"
             tar -czf "$name.tar.gz" "$name"
           fi
