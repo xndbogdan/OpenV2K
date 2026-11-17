@@ -311,8 +311,6 @@ fn screen_midpoints(
     }
 }
 
-/// One model body's constructor inputs, owned so that its painter program
-/// can run them after the draw returns: the warm vertex cache, normal
 /// One face command's words: `[material, normal, vertices.., gouraud refs..]`,
 /// at most 2 + 4 + 4 (`FaceOp::words`). Inline so building a face's command
 /// allocates nothing; `emit_face` hands the filled prefix on as a slice.
@@ -337,6 +335,8 @@ impl FaceWords {
     }
 }
 
+/// One model body's constructor inputs, owned so that its painter program
+/// can run them after the draw returns: the warm vertex cache, normal
 /// cache, palette and sprite operands, and one command per source polygon
 /// and edge.
 pub(crate) struct PreparedNode {
@@ -520,7 +520,19 @@ pub(crate) fn prepare_model_body(
 
     // One command per source face: consecutive triangles of a quad share it.
     let triangles = mesh.triangles.len();
-    let mut normals: Vec<ModelNormal> = Vec::with_capacity(triangles * 2);
+    // A face pushes its own normal and, when Gouraud, one per corner (plus
+    // the quad's fourth reference on its second triangle): at most four per
+    // triangle. Flat faces need only the face normal.
+    let has_gouraud = mesh
+        .face_shading
+        .iter()
+        .any(|shading| matches!(shading, ModelFaceShading::Gouraud));
+    let normal_capacity = if has_gouraud {
+        triangles * 4
+    } else {
+        triangles
+    };
+    let mut normals: Vec<ModelNormal> = Vec::with_capacity(normal_capacity);
     let mut colours: Vec<u32> = Vec::with_capacity(triangles);
     let mut sprites: Vec<MaterialId> = Vec::with_capacity(triangles);
     let mut faces: Vec<Option<(u8, FaceWords)>> = vec![None; triangles];
