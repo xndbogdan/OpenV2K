@@ -39,7 +39,7 @@ pub struct ModelMaterialCache {
     /// Low-byte Section-3 render flags per sprite, so the per-face lookup
     /// does not rescan the global pool (`ResourceCache::global_sprite`)
     /// for every face entry of every model every frame.
-    sprite_flags: RefCell<FxHashMap<u16, Option<u8>>>,
+    sprite_flags: RefCell<FxHashMap<u16, u8>>,
 }
 
 impl ModelMaterialCache {
@@ -294,19 +294,17 @@ impl ModelMaterialCache {
     /// fillers to select shade row and framebuffer blend mode.
     pub fn sprite_render_flags(&self, cache: &ResourceCache, sprite_id: u16) -> Option<u8> {
         if let Some(flags) = self.sprite_flags.borrow().get(&sprite_id).copied() {
-            return flags;
+            return Some(flags);
         }
-        let flags = cache
-            .global_sprite(sprite_id)
-            .map(|(_, entry)| entry.pal_size as u8);
         // Only resolved flags are cached. A miss can be a sprite whose layer
         // is not resident yet (the cache is process-scoped and levels load
-        // later), so caching `None` would keep the fallback blend/row for the
+        // later), so a cached miss would keep the fallback blend/row for the
         // rest of the run; `sprite_dimensions` likewise caches successes only.
-        if flags.is_some() {
-            self.sprite_flags.borrow_mut().insert(sprite_id, flags);
-        }
-        flags
+        let flags = cache
+            .global_sprite(sprite_id)
+            .map(|(_, entry)| entry.pal_size as u8)?;
+        self.sprite_flags.borrow_mut().insert(sprite_id, flags);
+        Some(flags)
     }
 
     /// Authored dimensions of a global sprite, used to retain its aspect when
