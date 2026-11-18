@@ -1094,12 +1094,63 @@ pub(crate) fn model_lighting_normals(
     }
 }
 
+/// Per-corner Section-6 shades for one model face.
+///
+/// An owned integer frame supplies `FUN_00466160`'s light in model axes and
+/// the raw pool normals behind `FUN_0046D3F0`'s face/corner references. Dot
+/// those exactly as the software raster does, instead of rotating a
+/// floating-point normal into VIEW space and risking a neighbouring shade
+/// bin. Producers without an owned frame keep the float fallback.
+#[allow(clippy::too_many_arguments)]
+fn model_face_shades<'a>(
+    table: Option<&'a [FogGradientEntry]>,
+    light_direction_raw: [i32; 3],
+    native_light_raw: Option<[i32; 3]>,
+    raw_normals: Option<&[[i32; 3]; 4]>,
+    shading: ModelFaceShading,
+    camera_basis: [[f32; 3]; 3],
+    orientation: [[f32; 3]; 3],
+    face_normal: [f32; 3],
+    corner_normals: [[f32; 3]; 3],
+    shade_shift: i32,
+) -> [Option<&'a FogGradientEntry>; 3] {
+    if let (Some(light), Some(raw)) = (native_light_raw, raw_normals) {
+        return match shading {
+            ModelFaceShading::Flat => [None; 3],
+            ModelFaceShading::FlatLit => {
+                [retail_model_shade_raw(table, raw[0], light, shade_shift); 3]
+            }
+            ModelFaceShading::Gouraud => [
+                retail_model_shade_raw(table, raw[1], light, shade_shift),
+                retail_model_shade_raw(table, raw[2], light, shade_shift),
+                retail_model_shade_raw(table, raw[3], light, shade_shift),
+            ],
+        };
+    }
+    model_lighting_normals(shading, face_normal, corner_normals)
+        .map(|normals| {
+            normals.map(|normal| {
+                retail_model_shade(
+                    table,
+                    view_light_normal(camera_basis, orientation, normal),
+                    light_direction_raw,
+                    shade_shift,
+                )
+            })
+        })
+        .unwrap_or([None; 3])
+}
+
 /// The VIEW-space normal `FUN_0046D3F0` effectively dots with the light.
 ///
 /// `FUN_00466160` brings the context's light into model space through the
 /// node's VIEW axes (camera rows times model basis), so the light is fixed to
 /// the camera. `basis` holds the camera's GL rows (x right, y up, z toward
 /// the viewer); retail VIEW Z looks forward.
+///
+/// This is the fallback for producers without an owned integer frame.
+/// [`model_face_shades`] prefers the raw model-space light/normal dot when the
+/// mesh carries one.
 pub(crate) fn view_light_normal(
     basis: [[f32; 3]; 3],
     orientation: [[f32; 3]; 3],
@@ -1574,25 +1625,21 @@ unsafe fn draw_tris_gl(
             .map(|material| material.emissive)
             .unwrap_or([0.0, 0.0, 0.0]);
 
-        let shades = model_lighting_normals(
+        let shades = model_face_shades(
+            shade_table,
+            light_direction_raw,
+            mesh.native_light_raw,
+            mesh.face_normals_raw.get(tri_idx),
             shading,
+            camera_basis,
+            orientation,
             normal,
             face_corner_normals
                 .get(tri_idx)
                 .copied()
                 .unwrap_or([normal; 3]),
-        )
-        .map(|normals| {
-            normals.map(|normal| {
-                retail_model_shade(
-                    shade_table,
-                    view_light_normal(camera_basis, orientation, normal),
-                    light_direction_raw,
-                    shade_shift,
-                )
-            })
-        })
-        .unwrap_or([None; 3]);
+            shade_shift,
+        );
         let gouraud_channels = if shading == ModelFaceShading::Gouraud && textured.is_none() {
             material.and_then(|material| {
                 let palette = material.palette_rgb555?;
@@ -5097,7 +5144,7 @@ mod tests {
         edge_endpoint_fade_bytes, edge_endpoint_world, edge_quad_fade_bytes,
         fixed_function_fog_far, fixed_function_model_texture, flat_lit_palette_color,
         flip_rgba_rows, indexed_model_rgba_at_row, infection_corner_mask, infection_quad_vertices,
-        model_face_opacity, model_face_palette_row, model_face_writes_depth,
+        model_face_opacity, model_face_palette_row, model_face_shades, model_face_writes_depth,
         model_lighting_normals, overlay_sprite_filter, painter_group_window_depth,
         perspective_ndc_depth, resolve_model_depth_fade, retail_flat_lit_rgb565,
         retail_model_shade_index, retail_model_shade_raw, retail_view_pin_vertex,
@@ -5450,6 +5497,88 @@ mod tests {
         assert_eq!(level([0, 0, 0], light, 0), Some(0));
         // The slot is the dot's four bits, not a clamped bin.
         assert_eq!(level([32_767, 0, 0], [8_000, 0, 0], 0), Some(3));
+    }
+
+    #[test]
+    fn owned_model_frames_shade_from_the_raw_model_space_dot() {
+        let table: Vec<FogGradientEntry> = (0..8)
+            .map(|shade_level| FogGradientEntry {
+                r: 0,
+                g: 0,
+                b: 0,
+                shade_level,
+            })
+            .collect();
+        let light = RETAIL_ORDINARY_MODEL_LIGHT_DIRECTION_RAW;
+        let raw = [
+            [32_767, 0, 0],
+            [32_767, 0, 0],
+            [16_384, 0, 0],
+            [-32_767, 0, 0],
+        ];
+        let identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+        let levels = |shades: [Option<&FogGradientEntry>; 3]| {
+            shades.map(|entry| entry.map(|entry| entry.shade_level))
+        };
+
+        // The float normals deliberately point elsewhere: an owned frame must
+        // use raw[1..=3] and the model-space light, not rotate the float ones.
+        let gouraud = model_face_shades(
+            Some(&table),
+            light,
+            Some(light),
+            Some(&raw),
+            ModelFaceShading::Gouraud,
+            identity,
+            identity,
+            [0.0, 0.0, 1.0],
+            [[0.0, 0.0, 1.0]; 3],
+            0,
+        );
+        assert_eq!(levels(gouraud), [Some(4), Some(2), Some(0)]);
+
+        let flat_lit = model_face_shades(
+            Some(&table),
+            light,
+            Some(light),
+            Some(&raw),
+            ModelFaceShading::FlatLit,
+            identity,
+            identity,
+            [0.0, 0.0, 1.0],
+            [[0.0, 0.0, 1.0]; 3],
+            0,
+        );
+        assert_eq!(levels(flat_lit), [Some(4), Some(4), Some(4)]);
+
+        let unlit = model_face_shades(
+            Some(&table),
+            light,
+            Some(light),
+            Some(&raw),
+            ModelFaceShading::Flat,
+            identity,
+            identity,
+            [1.0, 0.0, 0.0],
+            [[1.0, 0.0, 0.0]; 3],
+            0,
+        );
+        assert_eq!(levels(unlit), [None, None, None]);
+
+        // Without an owned frame the float VIEW-normal path still applies.
+        let fallback = model_face_shades(
+            Some(&table),
+            light,
+            None,
+            Some(&raw),
+            ModelFaceShading::FlatLit,
+            identity,
+            identity,
+            [1.0, 0.0, 0.0],
+            [[0.0, 0.0, 1.0]; 3],
+            0,
+        );
+        assert_eq!(levels(fallback), [Some(4), Some(4), Some(4)]);
     }
 
     #[test]
