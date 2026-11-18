@@ -1488,10 +1488,11 @@ In integers, each model-light component is a sum of three separately
 shifted Q31 products of the context vector with one node axis (an identity
 context copies the vector), the dot uses the raw pool normal (X negated for
 an odd reference) in wrapping 32-bit arithmetic, and the slot is the dot's
-low four bits after the shift, not a clamped bin. The software renderer
-shades that way whenever the node's integer frame is owned
-([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); rotating a
-floating-point normal instead lands some faces on a neighbouring bin.
+low four bits after the shift, not a clamped bin. Both the software raster
+and the OpenGL model path shade that way whenever the node's integer frame is
+owned ([SOFTWARE_RASTER.md](SOFTWARE_RASTER.md#model-constructors)); producers
+without an owned frame keep the floating VIEW-normal fallback, which can land
+some faces on a neighbouring bin.
 
 `FUN_0046D5A0` initializes reserved normal-cache references 0/1 from the
 current table's slot 0. A stored zero normal also resolves slot 0 through

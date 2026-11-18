@@ -252,8 +252,8 @@ pub struct ModelMesh<'a> {
     /// authored `(-100,50,-50)`. Backends shade with VIEW-space normals.
     pub light_direction_raw: [i32; 3],
     /// `FUN_00466160`'s light in the node's model axes, when the producer
-    /// owns the node's integer frame. Backends shading with the native
-    /// viewport dot it with `face_normals_raw` instead of rotating normals.
+    /// owns the node's integer frame. Both the software and OpenGL backends
+    /// dot it with `face_normals_raw` instead of rotating normals.
     pub native_light_raw: Option<[i32; 3]>,
     /// Signed contextual shift applied to the 16-slot model-light table.
     /// World entity draws use terrain light minus the 0..8 underwater
