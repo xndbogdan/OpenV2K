@@ -59,11 +59,10 @@
 <rect x="735.1" y="596.6" width="146.7" height="2.5" fill="#8c959f"/>
 <text x="737.1" y="449.8" fill="#1f2328">Hud rendering 100.0%</text>
 </g>
-<g><title>Controls (CONTROLS.md): 64 code, 1 notes, 25 omitted</title>
-<rect x="735.1" y="601" width="107.7" height="118" fill="#2da44e"/>
-<rect x="842.8" y="601" width="39" height="10.3" fill="#d4a72c"/>
-<rect x="842.8" y="611.4" width="39" height="107.6" fill="#8c959f"/>
-<text x="737.1" y="613" fill="#1f2328">Controls 98.5%</text>
+<g><title>Controls (CONTROLS.md): 65 code, 25 omitted</title>
+<rect x="735.1" y="601" width="111.1" height="118" fill="#2da44e"/>
+<rect x="846.2" y="601" width="35.6" height="118" fill="#8c959f"/>
+<text x="737.1" y="613" fill="#1f2328">Controls 100.0%</text>
 </g>
 <g><title>Loading transitions (LOADING_TRANSITIONS.md): 58 code, 8 omitted</title>
 <rect x="883.8" y="258.4" width="124.4" height="120.8" fill="#2da44e"/>

@@ -2459,6 +2459,9 @@ impl<P: CollisionModelPool + ?Sized> StagedEffectInterpreter<'_, P> {
                         .ok_or(StagedEffectError::Truncated { pc, opcode })?;
                 }
                 // 0x31 (a mount from three slots) occurs in no shipped program.
+                // Its two 64-bit edge normalizations call FUN_004577D0 (the
+                // signed 64-bit square root); the 32-bit FUN_00457730 every
+                // live path uses would overflow that product.
                 0x31 => return Err(StagedEffectError::UnsupportedOpcode { pc, opcode }),
                 // Source initializes next=opcode+1 before its switch. This
                 // includes the one-byte8D convex terminator and inert bytes;
