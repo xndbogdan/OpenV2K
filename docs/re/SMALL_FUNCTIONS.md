@@ -170,7 +170,7 @@ Six of them (`0x004167BA`, `0x0042776E`, `0x0043B3D5`, `0x0046C5F1`,
 | `FUN_004725C0` | stores a callback and its argument at `0x004FBD70` and `0x004FBDB8`, and calls it once with `0x004FBD78` |
 | `FUN_00471280` / `FUN_00471510` | add a record through `FUN_004712B0` to the lists at `0x004FB858` (`0x30` bytes, `FUN_004713A0`) and `0x004FB830` (`0x24` bytes, `FUN_00471540`) |
 | `FUN_00493B70` | closes a handle (`FUN_00493AF0`) and clears it |
-| `FUN_004577D0` | the integer square root of a signed 64-bit value (zero for values not above zero), bit by bit from the highest power of four not above it; `FUN_00457730` is the 32-bit one, which returns `0xFFFF` for every input from `0x4000_0000` (lab calls: `0x40000000` and `0x7FFFFFFF` both give `0xFFFF`), and the port's copies all go through `retail_integer_sqrt`; no port consumer needs the 64-bit entry yet |
+| `FUN_004577D0` | the integer square root of a signed 64-bit value (zero for values not above zero), bit by bit from the highest power of four not above it; `FUN_00457730` is the 32-bit one, which returns `0xFFFF` for every input from `0x4000_0000` (lab calls: `0x40000000` and `0x7FFFFFFF` both give `0xFFFF`), and the port's copies all go through `retail_integer_sqrt`; no port consumer needs the 64-bit entry yet; both retail call sites (`0x419F83` and `0x41A141`) are inside `FUN_00419D90`'s `0x31` mount branch, which no shipped collision program uses |
 | `FUN_00418960` | the dword at `+8` of a table's 12-byte entry `i` (`[table] + 8 + 12i`), unchecked |
 | `FUN_00471370` | finds the record of a list whose `+0x0C` and `+0x10` equal its two arguments, or none |
 

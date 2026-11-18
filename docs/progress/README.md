@@ -11,7 +11,7 @@ and RE notes cite by address (for example `FUN_0042D030`).
 |---|---:|---:|
 | Game functions in retail `V2000.EXE` | 2,403 | |
 | Marked not needed (excluded below) | 645 | |
-| **Referenced by port code** | **1,757** | **99.9%** |
+| **Referenced by port code** | **1,758** | **100.0%** |
 | Referenced by code or RE notes | 1,758 | 100.0% |
 | Library functions (CRT, DirectX stubs; not counted) | 408 | |
 
@@ -41,7 +41,7 @@ Where the code's references are thinnest:
 
 | Note | Not referenced by code | Of them, its neighbours | Referenced |
 |---|---:|---:|---:|
-| [Controls](../re/CONTROLS.md) | 1 | 1 | 64 |
+
 
 ## Omitted
 
